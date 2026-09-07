@@ -22,9 +22,9 @@
           labels, format dedupe across bands, unpadded hour labels, and a today line that only draws inside
           the scale range.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
+          <span>slice: S5</span>
           <span>src: time/scale.ts · time/presets.ts · render/dom/</span>
           <span>open <a href="../zoom.html">zoom.html</a> while you read this</span>
         </div>
@@ -228,8 +228,8 @@
             >
               <title id="tl-bar-title">Shipped minTickWidthPx by preset</title>
               <desc id="tl-bar-desc">
-                Bar chart of the density floor in pixels for eight shipped presets. The day preset is
-                the tallest at 96 pixels because its lone band shows a full date.
+                Bar chart of the density floor in pixels for the nine zoom-ladder presets. The day
+                preset is the tallest at 96 pixels because its lone band shows a full date.
               </desc>
               <line x1="80" y1="40" x2="80" y2="420" stroke="rgba(28,30,38,0.25)" stroke-width="1" />
               <line x1="80" y1="420" x2="960" y2="420" stroke="rgba(28,30,38,0.25)" stroke-width="1" />
@@ -248,45 +248,51 @@
                 minTickWidthPx
               </text>
 
-              <!-- hour 48 → h=182 -->
-              <rect x="99" y="238" width="72" height="182" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="135" y="230" text-anchor="middle">48</text>
-              <text class="s" x="135" y="440" text-anchor="middle">hour</text>
-
-              <!-- day 96 focal → h=365 -->
-              <rect x="209" y="55" width="72" height="365" fill="var(--hot-bg)" stroke="var(--hot-line)" />
-              <text class="xs hotink" x="245" y="47" text-anchor="middle">96</text>
-              <text class="s" x="245" y="440" text-anchor="middle">day</text>
-
-              <!-- week 96 -->
-              <rect x="319" y="55" width="72" height="365" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="355" y="47" text-anchor="middle">96</text>
-              <text class="s" x="355" y="440" text-anchor="middle">week</text>
-
-              <!-- month 72 → h=274 -->
-              <rect x="429" y="146" width="72" height="274" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="465" y="138" text-anchor="middle">72</text>
-              <text class="s" x="465" y="440" text-anchor="middle">month</text>
-
-              <!-- year 40 → h=152 -->
-              <rect x="539" y="268" width="72" height="152" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="575" y="260" text-anchor="middle">40</text>
-              <text class="s" x="575" y="440" text-anchor="middle">year</text>
-
-              <!-- dayAndWeek 32 → h=122 -->
-              <rect x="649" y="298" width="72" height="122" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="685" y="290" text-anchor="middle">32</text>
-              <text class="s" x="685" y="440" text-anchor="middle">dayAndWeek</text>
+              <!-- ZOOM_PRESETS, finest first. height = minTickWidthPx * 3.8 -->
+              <!-- hour 48 -->
+              <rect x="96" y="238" width="64" height="182" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="128" y="230" text-anchor="middle">48</text>
+              <text class="xs" x="128" y="440" text-anchor="middle">hour</text>
 
               <!-- hourDayWeek 48 -->
-              <rect x="759" y="238" width="72" height="182" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="795" y="230" text-anchor="middle">48</text>
-              <text class="s" x="795" y="440" text-anchor="middle">hourDayWeek</text>
+              <rect x="188" y="238" width="64" height="182" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="220" y="230" text-anchor="middle">48</text>
+              <text class="xs" x="220" y="440" text-anchor="middle">h+d+w</text>
 
-              <!-- dayWeekMonth 28 → h=106 -->
-              <rect x="869" y="314" width="72" height="106" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
-              <text class="xs" x="905" y="306" text-anchor="middle">28</text>
-              <text class="s" x="905" y="440" text-anchor="middle">dayWeekMonth</text>
+              <!-- day 96 focal -->
+              <rect x="280" y="55" width="64" height="365" fill="var(--hot-bg)" stroke="var(--hot-line)" />
+              <text class="xs hotink" x="312" y="47" text-anchor="middle">96</text>
+              <text class="xs" x="312" y="440" text-anchor="middle">day</text>
+
+              <!-- dayAndWeek 32 -->
+              <rect x="372" y="298" width="64" height="122" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="404" y="290" text-anchor="middle">32</text>
+              <text class="xs" x="404" y="440" text-anchor="middle">d+w</text>
+
+              <!-- dayWeekMonth 28 -->
+              <rect x="464" y="314" width="64" height="106" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="496" y="306" text-anchor="middle">28</text>
+              <text class="xs" x="496" y="440" text-anchor="middle">d+w+m</text>
+
+              <!-- weekAndMonth 40 -->
+              <rect x="556" y="268" width="64" height="152" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="588" y="260" text-anchor="middle">40</text>
+              <text class="xs" x="588" y="440" text-anchor="middle">w+m</text>
+
+              <!-- weekMonthYear 40 -->
+              <rect x="648" y="268" width="64" height="152" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="680" y="260" text-anchor="middle">40</text>
+              <text class="xs" x="680" y="440" text-anchor="middle">w+m+y</text>
+
+              <!-- monthAndYear 50 -->
+              <rect x="740" y="230" width="64" height="190" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="772" y="222" text-anchor="middle">50</text>
+              <text class="xs" x="772" y="440" text-anchor="middle">m+y</text>
+
+              <!-- year 40 -->
+              <rect x="832" y="268" width="64" height="152" fill="rgba(90,106,154,0.15)" stroke="var(--dom-line)" />
+              <text class="xs" x="864" y="260" text-anchor="middle">40</text>
+              <text class="xs" x="864" y="440" text-anchor="middle">year</text>
 
               <line x1="30" y1="464" x2="970" y2="464" stroke="var(--line-soft)" />
               <text class="xs" x="30" y="484">LEGEND</text>
@@ -304,9 +310,11 @@
             </svg>
           </div>
           <figcaption>
-            The floor measures the finest band. Multi-band presets sit lower because
-            <code>dedupeHeaderFormats</code> leaves the day band as a bare number. <code>day</code> and
-            <code>week</code> still need 96&nbsp;px: nothing coarser sits above them.
+            The floor measures the finest band of each zoom-ladder preset
+            (<code>ZOOM_PRESETS</code>). Multi-band presets sit lower because
+            <code>dedupeHeaderFormats</code> leaves the day band as a bare number. Standalone
+            <code>week</code> and <code>month</code> still ship (96&nbsp;px / 72&nbsp;px) but are not
+            zoom steps.
           </figcaption>
         </figure>
       </section>

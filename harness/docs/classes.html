@@ -6,6 +6,7 @@
     <title>FreeGantt — Class map, layer by layer</title>
     <link rel="stylesheet" href="./doc.css" />
     <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
   </head>
   <body>
     <div class="wrap">
@@ -13,22 +14,24 @@
         <nav class="harness-site-nav" aria-label="Harness pages"></nav>
         <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
         <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
         <h1>Class map, layer by layer</h1>
         <p class="tagline">
           What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
           first. For when these run, read <a href="./lifecycle.html">Lifecycle</a>; for the file each one
           lives in, read <a href="./files.html">File inventory</a>.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
-          <span>layout/ · view/ · time/ · model/ · render/ · api/</span>
+          <span>slice: S5</span>
+          <span>layout/ · view/ · time/ · model/ · render/ · api/ · extensions/</span>
           <span>harness/main.ts reviewed every commit</span>
         </div>
         <nav aria-label="Sections on this page">
           <a href="#s1"><b>1</b><code>layout/</code> &amp; <code>view/</code></a>
           <a href="#s2"><b>2</b><code>time/</code> &amp; <code>model/</code></a>
           <a href="#s3"><b>3</b><code>render/</code> &amp; <code>api/</code></a>
+          <a href="#s4"><b>4</b><code>extensions/</code></a>
         </nav>
       </header>
 
@@ -295,7 +298,7 @@
             <div class="path">view/gantt-shell.ts</div>
             <p>
               The composition root, and the only class in <code>src/</code> that holds references to the
-              backend, viewport, layout, gesture pipeline, collapse state, and the event bus.
+              backend, viewport, layout, gesture pipeline, plugin runtime, collapse state, and the event bus.
             </p>
             <dl>
               <dt>#phase: 'constructing' | 'live'</dt>
@@ -317,8 +320,11 @@
               <dt>live properties</dt>
               <dd>
                 Every config key a live-reconfigurable property: preset, range, gridColumns, rowSource,
-                collapsed, selection, locale, theme, todayLine, interactions, viewportGestures, …
+                collapsed, selection, locale, theme, todayLine, interactions, plugins, commands,
+                viewportGestures, …
               </dd>
+              <dt>installPlugin / uninstallPlugin</dt>
+              <dd>Forwards to <code>PluginRuntime</code>. One occupant per plugin id.</dd>
               <dt>destroy()</dt>
               <dd>
                 Idempotent. Detaches the attachments, unbinds the viewport, destroys the backend, clears the
@@ -1035,17 +1041,19 @@
                 <code>container</code>, <code>dataset</code>, optional shared <code>scale</code> <em>or</em>
                 <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>,
                 <code>gridColumns</code>, <code>rowSource</code>, <code>interactions</code>,
-                <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>, <code>todayLine</code>,
+                <code>plugins</code>, <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>,
+                <code>todayLine</code>,
                 …
               </dd>
               <dt>live properties</dt>
               <dd>
                 <code>preset</code>, <code>range</code>, <code>fit</code>, <code>zoomIn</code>/<code
                   >zoomOut</code
-                >, <code>zoomPresets</code>, <code>panToDate</code>/<code>panToToday</code>,
+                >, <code>zoomPresets</code>, <code>panToInstant</code>/<code>panToToday</code>,
                 <code>gridColumns</code>, <code>rowSource</code>, <code>collapsed</code>,
                 <code>collapse</code>/<code>expand</code>, <code>selection</code>,
-                <code>selectionEntries</code>, <code>interactions</code>, <code>viewportGestures</code>,
+                <code>selectionEntries</code>, <code>interactions</code>, <code>plugins</code>,
+                <code>commands</code>, <code>viewportGestures</code>,
                 <code>theme</code>, <code>locale</code>, <code>todayLine</code>, <code>gridWidth</code>, …
               </dd>
               <dt>destroy()</dt>
@@ -1070,7 +1078,7 @@
               <dt>fields</dt>
               <dd><code>field(key)</code>, <code>fields.all</code>, <code>fieldTypes</code>, <code>aggregators</code>.</dd>
               <dt>serialization</dt>
-              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators })</code>.</dd>
+              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators, plugins })</code>.</dd>
               <dt>undo / redo</dt>
               <dd><code>undo()</code>, <code>redo()</code>, <code>canUndo</code>, <code>canRedo</code>, <code>replay(changeSet)</code>.</dd>
               <dt>implements DatasetContract</dt>
@@ -1086,22 +1094,81 @@
         <p>
           <code>harness/main.ts</code> is the library's first consumer and gets reviewed on every commit,
           changed or not: code there that re-derives what the library already computes is an API gap even when
-          no lint fires. At S4 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
-          switching, selection, and timeline controls; <code>harness/data.html</code> demos transactions and
-          undo. It still reads clean —
+          no lint fires. At S5 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
+          switching, selection, timeline controls, shipped plugins, and Dataset plugins;
+          <code>harness/plugins.html</code> is the plugin playground;
+          <code>harness/data.html</code> demos transactions and undo. It still reads clean —
         </p>
-        <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
-import { sampleEntries } from '../fixtures/sample-dataset.js';
+        <pre><code>import { Gantt, Dataset, tooltips, contextMenu, inlineEditing } from '../src/api/index.js';
+import { demoTreeEntryInputs, demoFieldOptions } from '../fixtures/demo-dataset.js';
 
-const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+const dataset = new Dataset({
+  entries: demoTreeEntryInputs,
+  timeZone: 'UTC',
+  ...demoFieldOptions,
+});
 
-const gantt = new Gantt({ container: '#gantt', dataset });
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  plugins: [tooltips(), contextMenu(), inlineEditing()],
+});
 gantt.rowSource = { source: 'entries', tree: true };</code></pre>
         <p>
           — no restated <code>rowHeight</code>, no hand-built <code>TimeScaleModel</code> standing in for
           <code>range: 'fitDataset'</code>. <code>harness/scroll-sync.ts</code> is the S1.5 e2e fixture: two
           Gantts sharing one <code>ScrollModel</code> and one <code>TimeScaleModel</code>.
         </p>
+      </section>
+
+      <section id="s4">
+        <h2><span class="num">4</span><code>extensions/</code></h2>
+        <p class="src"><b>derived from</b> src/extensions/**</p>
+        <p class="lede">
+          The plugin runtime and the three shipped built-ins. This layer may import only
+          <code>api/</code> and <code>model/</code> (D-S5-5). The shell constructs the runtime; a built-in
+          never imports <code>view/</code>.
+        </p>
+        <div class="cards">
+          <div class="card">
+            <h5>PluginRuntime <span class="tag dom">class</span></h5>
+            <div class="path">extensions/plugin-runtime.ts</div>
+            <p>
+              Installs and uninstalls Gantt plugins, builds each <code>PluginContext</code>, and runs
+              <code>setup()</code>. One occupant per plugin id.
+            </p>
+          </div>
+          <div class="card">
+            <h5>CommandRegistry <span class="tag dom">class</span></h5>
+            <div class="path">extensions/commands.ts</div>
+            <p>
+              Core commands and plugin commands share one registry. Generic over its Gantt type so
+              <code>view/</code> can construct it without importing <code>api/</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h5>Keymap <span class="tag dom">class</span></h5>
+            <div class="path">extensions/keymap.ts</div>
+            <p>Newest-first chord resolver. The innermost popup wins Escape (D-S5-9).</p>
+          </div>
+          <div class="card">
+            <h5>createPopup() <span class="tag dom">function</span></h5>
+            <div class="path">extensions/popup.ts</div>
+            <p>
+              Anchoring, flipping, clamping, dismissal. Tooltips and the context menu build on this.
+              Inline editing does not — it needs a live input node.
+            </p>
+          </div>
+          <div class="card">
+            <h5>tooltips() / contextMenu() / inlineEditing() <span class="tag api">factories</span></h5>
+            <div class="path">extensions/features/</div>
+            <p>
+              The three shipped built-ins. Values a consumer imports
+              (<code>plugins: [tooltips(), contextMenu(), inlineEditing()]</code>), never names in a config
+              table. Each is an ordinary <code>GanttPlugin</code>.
+            </p>
+          </div>
+        </div>
       </section>
 
       <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>

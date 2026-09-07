@@ -6,6 +6,7 @@
     <title>FreeGantt — Construction, render, notification</title>
     <link rel="stylesheet" href="./doc.css" />
     <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
   </head>
   <body>
     <div class="wrap">
@@ -13,15 +14,16 @@
         <nav class="harness-site-nav" aria-label="Harness pages"></nav>
         <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
         <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
         <h1>Construction, render, notification</h1>
         <p class="tagline">
           Three passes, in the order they run: what <code>new Gantt(…)</code> builds, what one
           <code>render()</code> does, and how an edit reaches the screen. Counts on this page are measured,
           not estimated — <a href="./maintaining.html">Maintaining</a> holds the recipe that re-measures them.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
+          <span>slice: S5</span>
           <span>construction: 1 computeFrame call</span>
           <span>render: class toggles + transforms on the hot path</span>
         </div>
@@ -39,7 +41,8 @@
           <code>new Gantt({ container, dataset })</code> forwards into one long <code>GanttShell</code>
           constructor. Everything below happens synchronously, in this order, before that constructor returns.
           Beyond the diagram's steps, the shell also builds the capability resolver, the gesture pipeline,
-          the collapse state, and the keyboard and wheel navigation attachments.
+          the plugin runtime, the command registry, the keymap, the collapse state, and the keyboard and
+          wheel navigation attachments.
         </p>
         <p class="src">
           <b>derived from</b> harness/main.ts, api/gantt.ts, view/gantt-shell.ts, layout/viewport/viewport.ts,

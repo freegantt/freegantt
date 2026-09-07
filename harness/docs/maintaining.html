@@ -20,9 +20,9 @@
           Instructions for an agent, or a person, who keeps <code>harness/docs/</code> true as
           <code>src/</code> changes. Read this before you edit any page here.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
+          <span>slice: S5</span>
           <span>8 pages, one nav module</span>
           <span>no build step, no external requests</span>
         </div>
@@ -93,7 +93,10 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
           </tr>
           <tr>
             <td class="mono">.dependency-cruiser.cjs or eslint/rules/</td>
-            <td><a href="./layers.html">Layers</a> — the import table and the lint-rule note</td>
+            <td>
+              <a href="./layers.html">Layers</a> — the import table and the lint-rule note. There are
+              thirteen custom rules, not five.
+            </td>
           </tr>
           <tr>
             <td class="mono">view/gantt-shell.ts constructor</td>
@@ -129,7 +132,7 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
             <td>
               <a href="./layers.html">Layers</a> (the import table),
               <a href="./files.html">File inventory</a>, and
-              <a href="./classes.html">Class map</a> §3's consumer boundary if the reader or the
+              <a href="./classes.html">Class map</a> §3 if the reader, the plugin store, or the
               transaction flow changed
             </td>
           </tr>
@@ -159,11 +162,11 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
             </td>
           </tr>
           <tr>
-            <td class="mono">api/*</td>
+            <td class="mono">api/* or extensions/*</td>
             <td>
-              <a href="./classes.html">Class map</a> §3, <a href="./layers.html">Layers</a> if the public
-              surface's allowed imports moved, and <a href="./index.html">Overview</a> §2 if the consumer
-              call site changed
+              <a href="./classes.html">Class map</a> §3–§4, <a href="./layers.html">Layers</a> if the
+              public surface's allowed imports moved, <a href="./files.html">File inventory</a>, and
+              <a href="./index.html">Overview</a> §2 if the consumer call site changed
             </td>
           </tr>
           <tr>

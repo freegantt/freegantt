@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — Plugin lifecycle</title>
+    <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
+        <h1>Plugin lifecycle</h1>
+        <p class="tagline">
+          What <code>installPlugin</code> does, when a plugin's own <code>setup()</code> may call a
+          <code>register*</code>, and what <code>uninstallPlugin</code> tears down. Two contracts share this
+          shape — a <code>GanttPlugin</code> and a <code>DatasetPlugin</code> — and §4 is where they differ.
+        </p>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
+        <div class="meta">
+          <span>slice: S5.1–S5.10</span>
+          <span>one <code>PluginRuntime</code> per Gantt, one install per Dataset</span>
+          <span>a plugin's gate is open for exactly one call: its own setup()</span>
+        </div>
+        <nav aria-label="Sections on this page">
+          <a href="#s1"><b>1</b>Two plugin contracts</a>
+          <a href="#s2"><b>2</b>Install, setup, dispose</a>
+          <a href="#s3"><b>3</b>Diffing by id — <code>install()</code></a>
+          <a href="#s4"><b>4</b>A Dataset plugin installs once</a>
+        </nav>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════ 1 -->
+      <section id="s1">
+        <h2><span class="num">1</span>Two plugin contracts</h2>
+        <p class="lede">
+          A <code>GanttPlugin</code> sees panes, the overlay and gestures. A <code>DatasetPlugin</code> sees
+          only what a document holds, so it stays DOM-free and runs wherever a <code>Dataset</code> runs —
+          the same core-vs-view split every other layer keeps. Nothing else is shared between them: two
+          different context shapes, two different runtimes, on purpose.
+        </p>
+        <p class="src">
+          <b>derived from</b> api/plugin.ts, api/dataset-plugin.ts, extensions/plugin-runtime.ts,
+          extensions/install-dataset-plugins.ts
+        </p>
+
+        <div class="scroller" style="padding: 0">
+          <table style="margin: 0; min-width: 700px">
+            <tr>
+              <th class="mono">question</th>
+              <th><code>GanttPlugin</code></th>
+              <th><code>DatasetPlugin</code></th>
+            </tr>
+            <tr>
+              <td>installed through</td>
+              <td class="mono">GanttOptions.plugins, gantt.installPlugin, gantt.plugins =</td>
+              <td class="mono">DatasetOptions.plugins — read-only after construction</td>
+            </tr>
+            <tr>
+              <td>when <code>setup()</code> runs</td>
+              <td>once, after the Gantt mounts</td>
+              <td>once, while the Dataset constructs</td>
+            </tr>
+            <tr>
+              <td>can it be added or removed later?</td>
+              <td>yes — <code>installPlugin</code>/<code>uninstallPlugin</code>, live, no remount</td>
+              <td>
+                no — a Field a plugin declares must exist before the first Rollup, so a different plugin
+                set means a new <code>Dataset</code>
+              </td>
+            </tr>
+            <tr>
+              <td>setup order</td>
+              <td>array order — later entries setup after earlier ones</td>
+              <td>
+                resolved from <code>requires</code> alone (§4) — <code>[a, b]</code> and <code>[b, a]</code>
+                install identically
+              </td>
+            </tr>
+            <tr>
+              <td>what it registers into</td>
+              <td>
+                renderers, decorations, item producers, kind defaults, grid columns, commands, keybindings
+                (§3 table)
+              </td>
+              <td>fields, field types, aggregators, the mutation extension hook, its own store</td>
+            </tr>
+            <tr>
+              <td>runtime that installs it</td>
+              <td class="mono">PluginRuntime&lt;TContext&gt;</td>
+              <td class="mono">installDatasetPlugins()</td>
+            </tr>
+          </table>
+        </div>
+
+        <p>
+          Both share the same three-part shape underneath, which is why the rest of this page reads almost
+          the same for either one: a plugin names an <code>id</code>; its <code>setup(ctx)</code> runs
+          exactly once and may return a <code>Disposer</code>; every <code>register*</code> it calls is
+          legal only while that one call is on the stack (D-S5-4). What differs is what triggers install,
+          whether it can be undone, and what order plugins see each other in.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 2 -->
+      <section id="s2">
+        <h2><span class="num">2</span>Install, setup, dispose — one <code>GanttPlugin</code></h2>
+        <p class="lede">
+          <code>gantt.installPlugin(plugin)</code> forwards into <code>PluginRuntime.install</code>, which
+          builds one fresh context, calls <code>setup()</code> once, then closes that plugin's own
+          registration gate the moment <code>setup()</code> returns. Nothing the plugin registered survives
+          past its own <code>uninstallPlugin</code> call — <code>PluginRuntime</code> disposes it for the
+          plugin, whether or not the plugin returned a <code>Disposer</code> of its own.
+        </p>
+        <p class="src">
+          <b>derived from</b> api/gantt.ts, view/gantt-shell.ts, extensions/plugin-runtime.ts,
+          view/plugin-ports.ts
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 960 660"
+              role="img"
+              aria-labelledby="pl-seq-title pl-seq-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="pl-seq-title">One plugin's install, setup and dispose</title>
+              <desc id="pl-seq-desc">
+                Sequence diagram: a page calls gantt.installPlugin, which reaches GanttShell then
+                PluginRuntime, which builds a context, calls the plugin's setup, closes its registration
+                gate, and later disposes it on uninstallPlugin.
+              </desc>
+              <defs>
+                <marker
+                  id="pa1"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                </marker>
+              </defs>
+
+              <!-- lifeline heads -->
+              <g>
+                <rect class="bx api" x="10" y="14" width="126" height="36" />
+                <text class="t" x="73" y="30" text-anchor="middle">harness page</text>
+                <text class="s" x="73" y="43" text-anchor="middle">e.g. harness/plugins.ts</text>
+
+                <rect class="bx api" x="160" y="14" width="128" height="36" />
+                <text class="t" x="224" y="30" text-anchor="middle">Gantt</text>
+                <text class="s" x="224" y="43" text-anchor="middle">api/gantt.ts</text>
+
+                <rect class="bx dom" x="312" y="14" width="146" height="36" />
+                <text class="t" x="385" y="30" text-anchor="middle">GanttShell</text>
+                <text class="s" x="385" y="43" text-anchor="middle">view/gantt-shell.ts</text>
+
+                <rect class="bx dom" x="482" y="14" width="180" height="36" />
+                <text class="t" x="572" y="30" text-anchor="middle">PluginRuntime</text>
+                <text class="s" x="572" y="43" text-anchor="middle">extensions/plugin-runtime.ts</text>
+
+                <rect class="bx pure" x="686" y="14" width="140" height="36" />
+                <text class="t" x="756" y="30" text-anchor="middle">RegistrationGate</text>
+                <text class="s" x="756" y="43" text-anchor="middle">one per plugin</text>
+
+                <rect class="bx api" x="850" y="14" width="100" height="36" />
+                <text class="t" x="900" y="30" text-anchor="middle">the plugin</text>
+                <text class="s" x="900" y="43" text-anchor="middle">setup(ctx)</text>
+              </g>
+
+              <!-- lifelines -->
+              <g class="life">
+                <line x1="73" y1="52" x2="73" y2="640" />
+                <line x1="224" y1="52" x2="224" y2="640" />
+                <line x1="385" y1="52" x2="385" y2="640" />
+                <line x1="572" y1="52" x2="572" y2="640" />
+                <line x1="756" y1="52" x2="756" y2="640" />
+                <line x1="900" y1="52" x2="900" y2="640" />
+              </g>
+
+              <!-- 1 -->
+              <g class="num"><circle cx="8" cy="84" r="8" /><text x="8" y="87" text-anchor="middle">1</text></g>
+              <line class="edge" x1="73" y1="84" x2="218" y2="84" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="146" y="78" text-anchor="middle">gantt.installPlugin(plugin)</text>
+
+              <!-- 2 -->
+              <g class="num"><circle cx="8" cy="116" r="8" /><text x="8" y="119" text-anchor="middle">2</text></g>
+              <line class="edge" x1="224" y1="116" x2="379" y2="116" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="302" y="110" text-anchor="middle">#shell.installPlugin(plugin)</text>
+
+              <!-- 3 -->
+              <g class="num"><circle cx="8" cy="148" r="8" /><text x="8" y="151" text-anchor="middle">3</text></g>
+              <line class="edge" x1="385" y1="148" x2="566" y2="148" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="475" y="142" text-anchor="middle">install([...plugins, plugin])</text>
+
+              <!-- 4 self -->
+              <g class="num"><circle cx="8" cy="184" r="8" /><text x="8" y="187" text-anchor="middle">4</text></g>
+              <path class="edge" d="M572,178 h44 v14 h-38" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="624" y="182">assertNoDuplicateIds; partition #installed by id → kept / removed</text>
+              <text class="s" x="624" y="196">this plugin's id is new, so it lands in toAdd</text>
+
+              <!-- 5 -->
+              <g class="num"><circle cx="8" cy="228" r="8" /><text x="8" y="231" text-anchor="middle">5</text></g>
+              <line class="edge" x1="572" y1="228" x2="750" y2="228" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="661" y="222" text-anchor="middle">new RegistrationGate(plugin.id)</text>
+              <text class="s" x="661" y="242" text-anchor="middle">#buildContext(plugin.id) also builds ctx + disposables</text>
+
+              <!-- 6 -->
+              <g class="num"><circle cx="8" cy="272" r="8" /><text x="8" y="275" text-anchor="middle">6</text></g>
+              <line class="edge" x1="572" y1="272" x2="894" y2="272" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="733" y="266" text-anchor="middle">plugin.setup(ctx)</text>
+
+              <!-- 7 self on plugin -->
+              <g class="num"><circle cx="8" cy="308" r="8" /><text x="8" y="311" text-anchor="middle">7</text></g>
+              <path class="edge" d="M900,302 h44 v14 h-38" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="470" y="306" text-anchor="middle">
+                ctx.view.registerRenderer(…), ctx.view.registerDecoration(…), ctx.commands.register(…) — any
+                register*, any number of times
+              </text>
+              <path class="edge soft" d="M756,308 H900" style="color: var(--line)" />
+              <text class="xs" x="828" y="322" text-anchor="middle">each call reads gate.assertOpen() first</text>
+
+              <!-- 8 return -->
+              <g class="num"><circle cx="8" cy="352" r="8" /><text x="8" y="355" text-anchor="middle">8</text></g>
+              <line class="edge ret" x1="894" y1="352" x2="578" y2="352" marker-end="url(#pa1)" style="color: var(--smell-line)" />
+              <text class="warnink" x="733" y="346" text-anchor="middle">returns a Disposer, or nothing (review P4)</text>
+
+              <!-- 9 -->
+              <g class="num"><circle cx="8" cy="388" r="8" /><text x="8" y="391" text-anchor="middle">9</text></g>
+              <line class="edge" x1="572" y1="388" x2="750" y2="388" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="661" y="382" text-anchor="middle">gate.close()</text>
+              <text class="s" x="661" y="402" text-anchor="middle">a register* reached after this throws RegistrationClosedError</text>
+
+              <!-- 10 self -->
+              <g class="num"><circle cx="8" cy="432" r="8" /><text x="8" y="435" text-anchor="middle">10</text></g>
+              <rect class="bx" x="482" y="416" width="270" height="34" />
+              <text class="t" x="494" y="430">#installed = [...kept, ...justInstalled]</text>
+              <text class="s" x="494" y="443">the plugin is live — its registrations paint on the next frame</text>
+
+              <!-- divider -->
+              <line x1="16" y1="480" x2="944" y2="480" stroke="var(--line)" stroke-dasharray="2 5" />
+              <text class="xs" x="16" y="474">— later, on the same Gantt —</text>
+
+              <!-- 11 -->
+              <g class="num"><circle cx="8" cy="512" r="8" /><text x="8" y="515" text-anchor="middle">11</text></g>
+              <line class="edge" x1="73" y1="512" x2="218" y2="512" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="146" y="506" text-anchor="middle">gantt.uninstallPlugin(plugin.id)</text>
+
+              <!-- 12 -->
+              <g class="num"><circle cx="8" cy="548" r="8" /><text x="8" y="551" text-anchor="middle">12</text></g>
+              <line class="edge" x1="385" y1="548" x2="566" y2="548" marker-end="url(#pa1)" style="color: var(--sub)" />
+              <text x="475" y="542" text-anchor="middle">install(plugins.filter(id ≠ this one))</text>
+
+              <!-- 13 self -->
+              <g class="num"><circle cx="8" cy="596" r="8" /><text x="8" y="599" text-anchor="middle">13</text></g>
+              <rect class="bx warn" x="482" y="580" width="380" height="52" />
+              <text class="t" x="494" y="596">this plugin's id is now missing from next → removed</text>
+              <text class="s" x="494" y="610">dispose(): built.disposables.disposeAll() — every register*'s own</text>
+              <text class="s" x="494" y="624">removal fires, in reverse — then ownDispose?.() from step 8</text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 1 — one plugin, start to finish. Amber = the returned <code>Disposer</code> and the
+            teardown it feeds. The gate (column 5) is open for exactly one call: step 6. Every
+            <code>register*</code> reached after step 9 — including from a stray closure the plugin kept —
+            throws <code>RegistrationClosedError</code> instead of silently registering.
+          </figcaption>
+        </figure>
+
+        <h4>Why the gate closes the instant <code>setup()</code> returns</h4>
+        <p>
+          A plugin's registrations have exactly one lifetime: the plugin's own. If <code>setup()</code>
+          could keep registering after it returns — from a timer, a promise, a DOM callback it captured —
+          nothing would tell <code>PluginRuntime</code> to also retract that later registration when the
+          plugin is uninstalled, and a stray write could land after teardown started. Closing the gate
+          turns that gap into a thrown error at the call site instead of a silent leak. A plugin that needs
+          to add or remove something after <code>setup()</code> uses the seams built for exactly that:
+          <code>ctx.view.registerRenderer(...)</code>'s <em>returned</em> <code>Disposer</code> retracts a
+          registration early, and <code>ctx.interaction.registerKeyHandler</code> is ungated on purpose,
+          because a popup opens and closes its own handler for as long as the plugin runs — not once at
+          install.
+        </p>
+
+        <h4>The registration gate, as a timeline</h4>
+        <p>
+          The same three phases, drawn the way this library draws everything else — as bars against a time
+          axis. <code>register*</code> is legal only in the first bar.
+        </p>
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 760 170"
+              role="img"
+              aria-labelledby="pl-gate-title pl-gate-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="pl-gate-title">The registration gate over one plugin's lifetime</title>
+              <desc id="pl-gate-desc">
+                Three bars on a shared timeline: setup() running with the gate open, installed and live
+                with the gate closed, and disposed.
+              </desc>
+              <line x1="140" y1="20" x2="140" y2="150" class="life" />
+              <line x1="420" y1="20" x2="420" y2="150" class="life" />
+              <line x1="700" y1="20" x2="700" y2="150" class="life" />
+              <text class="xs" x="140" y="14" text-anchor="middle">install()</text>
+              <text class="xs" x="420" y="14" text-anchor="middle">setup() returns</text>
+              <text class="xs" x="700" y="14" text-anchor="middle">uninstallPlugin()</text>
+
+              <rect class="bx warn" x="140" y="34" width="280" height="30" />
+              <text class="t" x="150" y="54">setup(ctx) running — gate OPEN</text>
+
+              <rect class="bx pure" x="420" y="34" width="280" height="30" />
+              <text class="t" x="430" y="54">installed &amp; live — gate CLOSED</text>
+
+              <rect class="bx dom" x="140" y="84" width="280" height="30" />
+              <text class="t" x="150" y="104">register* — legal, files a Disposer</text>
+
+              <rect class="bx" x="420" y="84" width="280" height="30" />
+              <text class="s" x="430" y="104">register* — throws RegistrationClosedError</text>
+
+              <rect class="bx hot" x="700" y="34" width="50" height="80" />
+              <text class="t" x="705" y="54">dispose</text>
+              <text class="s" x="705" y="68">disposables</text>
+              <text class="s" x="705" y="80">.disposeAll()</text>
+              <text class="s" x="705" y="96">then own</text>
+              <text class="s" x="705" y="108">Disposer</text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 2 — the gate has exactly one open window per plugin, and it is the same window every
+            plugin gets: its own <code>setup()</code> call.
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 3 -->
+      <section id="s3">
+        <h2><span class="num">3</span>Diffing by id — what <code>install()</code> does with a whole list</h2>
+        <p class="lede">
+          <code>gantt.plugins = [...]</code> and <code>gantt.installPlugin(one)</code> both end at
+          <code>PluginRuntime.install(next)</code>. It never disposes and rebuilds everything: it diffs
+          <code>next</code> against what is already installed, by <code>id</code>, and only the difference
+          moves. A plugin present in both lists — even a fresh object for that <code>id</code> — is left
+          exactly as it was; <code>PluginRuntime</code> reports that as a dropped reconfigure rather than
+          silently ignoring it.
+        </p>
+        <p class="src"><b>derived from</b> extensions/plugin-runtime.ts <code>install()</code></p>
+
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 900 460"
+              role="img"
+              aria-labelledby="pl-diff-title pl-diff-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="pl-diff-title">install()'s diff, setup and rollback</title>
+              <desc id="pl-diff-desc">
+                Flow diagram: partition the current and next plugin lists by id into kept, removed and
+                toAdd; set up toAdd in order, rolling back on a throw; then dispose removed; then commit.
+              </desc>
+              <defs>
+                <marker id="pa2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                </marker>
+              </defs>
+
+              <rect class="bx api" x="20" y="16" width="200" height="40" />
+              <text class="t" x="32" y="34">install(next)</text>
+              <text class="s" x="32" y="48">#installed ← current list</text>
+
+              <line class="edge" x1="120" y1="56" x2="120" y2="76" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx pure" x="20" y="82" width="200" height="46" />
+              <text class="t" x="32" y="100">partition #installed by id</text>
+              <text class="s" x="32" y="114">nextIds.has(id) ? kept : removed</text>
+
+              <line class="edge" x1="120" y1="128" x2="120" y2="148" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx" x="20" y="154" width="200" height="40" />
+              <text class="t" x="32" y="172">#reportDroppedReconfigures</text>
+              <text class="s" x="32" y="186">next vs kept, same id different object</text>
+
+              <line class="edge" x1="120" y1="194" x2="120" y2="214" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx pure" x="20" y="220" width="200" height="40" />
+              <text class="t" x="32" y="238">toAdd = next − kept, by id</text>
+
+              <line class="edge" x1="220" y1="240" x2="256" y2="240" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx dom" x="262" y="140" width="230" height="200" />
+              <text class="t" x="274" y="160">try: for each plugin in toAdd</text>
+              <text class="s" x="274" y="178">1. #buildContext(id) → ctx, gate</text>
+              <text class="s" x="274" y="194">2. plugin.setup(ctx) → ownDispose?</text>
+              <text class="s" x="274" y="210">3. gate.close()</text>
+              <text class="s" x="274" y="226">4. justInstalled.push({{plugin, dispose}})</text>
+              <text class="xs" x="274" y="250">setup order = toAdd's own array order —</text>
+              <text class="xs" x="274" y="264">the order the caller's next list names them</text>
+
+              <line class="edge" x1="492" y1="200" x2="524" y2="200" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx hot" x="530" y="150" width="200" height="90" />
+              <text class="t hotink" x="542" y="170">catch (cause)</text>
+              <text class="s" x="542" y="188">unwind justInstalled, reverse:</text>
+              <text class="s" x="542" y="202">#disposeOne(each)</text>
+              <text class="s" x="542" y="220">throw PluginSetupError(failedId, cause)</text>
+              <text class="xs" x="542" y="234">#installed untouched — old set stands</text>
+
+              <line class="edge" x1="492" y1="300" x2="524" y2="300" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx pure" x="530" y="270" width="200" height="70" />
+              <text class="t" x="542" y="290">no throw</text>
+              <text class="s" x="542" y="306">for removed, reverse:</text>
+              <text class="s" x="542" y="320">#disposeOne(each)</text>
+              <text class="xs" x="542" y="334">removed AFTER toAdd's setup, so a</text>
+
+              <line class="edge" x1="630" y1="340" x2="630" y2="380" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx" x="530" y="386" width="200" height="46" />
+              <text class="t" x="542" y="404">commit</text>
+              <text class="s" x="542" y="418">#installed = [...kept, ...justInstalled]</text>
+
+              <text class="xs" x="20" y="420" style="max-width: 200px">
+                <tspan x="20" dy="0">Rollback only ever touches THIS</tspan>
+                <tspan x="20" dy="14">call's own toAdd. kept and removed</tspan>
+                <tspan x="20" dy="14">are never disposed on a throw — a</tspan>
+                <tspan x="20" dy="14">half-applied plugin list never reaches</tspan>
+                <tspan x="20" dy="14">a caller (issue #137 F4, C1).</tspan>
+              </text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 3 — <code>toAdd</code> is set up before any <code>removed</code> plugin is disposed, so a
+            plugin swapping in for another sees the outgoing one's resources still live during its own
+            <code>setup()</code>. A <code>setup()</code> throw unwinds only what this call just installed,
+            in reverse, then rethrows — the previous installed set, dropped plugins included, is untouched.
+          </figcaption>
+        </figure>
+
+        <h4>The five seams a Gantt plugin registers into</h4>
+        <p>
+          <code>ctx.view</code>/<code>ctx.layout</code> carry five distinct registration points, one module
+          (<code>view/plugin-registrations.ts</code>), each with the one thing that has to run again after a
+          registration changes. A sixth capability — <code>ctx.view.registerGridColumn</code> — shares the
+          shape but keeps its own refresh in <code>ColumnChrome</code>, not here.
+        </p>
+        <table>
+          <tr>
+            <th>seam</th>
+            <th>call</th>
+            <th>who wins when two plugins claim it</th>
+            <th>what re-runs</th>
+          </tr>
+          <tr>
+            <td class="mono">renderer</td>
+            <td class="mono">ctx.view.registerRenderer(point, fn)</td>
+            <td>
+              one slot per point (<code>cell</code>/<code>header</code>/<code>tooltip</code>); <code>bar</code>
+              holds one slot <em>per kind</em>, so two plugins defining different kinds both install
+            </td>
+            <td>next frame repaints (<code>requestFrame</code>)</td>
+          </tr>
+          <tr>
+            <td class="mono">decoration</td>
+            <td class="mono">ctx.view.registerDecoration(layer, fn)</td>
+            <td>every registration paints — the only seam where more than one wins at once</td>
+            <td>held provider list drops; next frame repaints</td>
+          </tr>
+          <tr>
+            <td class="mono">item producer</td>
+            <td class="mono">ctx.layout.registerItemProducer(kind, fn)</td>
+            <td>newest registration for that <code>EntryKind</code> wins</td>
+            <td>per-row Item cache invalidates; next frame repaints</td>
+          </tr>
+          <tr>
+            <td class="mono">kind defaults</td>
+            <td class="mono">ctx.interaction.registerKindDefaults(kind, defaults)</td>
+            <td>newest registration for that <code>EntryKind</code> wins</td>
+            <td>capabilities re-resolve (affordances, not paint)</td>
+          </tr>
+          <tr>
+            <td class="mono">grid column</td>
+            <td class="mono">ctx.view.registerGridColumn(column)</td>
+            <td>
+              a duplicate <code>field</code> the consumer's own <code>gridColumns</code> already names is
+              dropped — config beats a plugin
+            </td>
+            <td>column chrome rebinds; a stale field's baked-in copy is stripped first</td>
+          </tr>
+        </table>
+        <p>
+          Every one of these returns a <code>Disposer</code> that removes exactly its own registration
+          (#155), and every one is also filed in the plugin's own <code>ctx.disposables</code>, so a plugin
+          that never keeps the return value still tears down cleanly on <code>uninstallPlugin</code>.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 4 -->
+      <section id="s4">
+        <h2><span class="num">4</span>A Dataset plugin installs once</h2>
+        <p class="lede">
+          <code>installDatasetPlugins</code> runs while the <code>Dataset</code> constructs, never again.
+          There is no diff to compute, because <code>Dataset.plugins</code> is read-only — a plugin may
+          declare a Field, and a Field must exist before the first Rollup, so a different plugin set is a
+          different Dataset. What it does compute is <em>order</em>: <code>requires</code> resolves into a
+          setup sequence through a depth-first visit, the same shape a topological sort always takes.
+        </p>
+        <p class="src"><b>derived from</b> extensions/install-dataset-plugins.ts</p>
+
+        <figure>
+          <div class="scroller">
+            <svg
+              class="d"
+              viewBox="0 0 860 300"
+              role="img"
+              aria-labelledby="pl-order-title pl-order-desc"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <title id="pl-order-title">Resolving Dataset plugin setup order from requires</title>
+              <desc id="pl-order-desc">
+                Two Dataset plugins where one requires the other, resolved into one setup order, then
+                installed top to bottom with the same try/rollback shape as PluginRuntime.
+              </desc>
+              <defs>
+                <marker id="pa3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                </marker>
+              </defs>
+
+              <rect class="bx dom" x="20" y="20" width="150" height="40" />
+              <text class="t" x="32" y="38">plugins: [b, a]</text>
+              <text class="s" x="32" y="52">b.requires = ['a']</text>
+
+              <line class="edge" x1="170" y1="40" x2="206" y2="40" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx pure" x="212" y="20" width="230" height="72" />
+              <text class="t" x="224" y="38">resolveSetupOrder — DFS, visit(plugin)</text>
+              <text class="s" x="224" y="54">visit(b) → requires a → visit(a) first</text>
+              <text class="s" x="224" y="68">a settles, then b settles</text>
+              <text class="xs" x="224" y="84">a cycle in requires throws PluginRequirementCycleError</text>
+
+              <line class="edge" x1="442" y1="56" x2="478" y2="56" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx" x="484" y="36" width="150" height="40" />
+              <text class="t" x="496" y="56">ordered: [a, b]</text>
+              <text class="s" x="496" y="70">array order ≠ input order</text>
+
+              <line class="edge" x1="559" y1="76" x2="559" y2="112" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx dom" x="212" y="118" width="230" height="120" />
+              <text class="t" x="224" y="138">for plugin of ordered: try</text>
+              <text class="s" x="224" y="156">1. buildContext(id) → ctx, gate</text>
+              <text class="s" x="224" y="172">2. plugin.setup(ctx) → ownDispose?</text>
+              <text class="s" x="224" y="188">3. gate.close()</text>
+              <text class="s" x="224" y="204">4. installed.push({{id, dispose}})</text>
+              <text class="xs" x="224" y="222">a's fields exist before b's setup runs —</text>
+              <text class="xs" x="224" y="234">b may declare an Aggregator over a's Field</text>
+
+              <line class="edge" x1="442" y1="178" x2="478" y2="178" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx hot" x="484" y="118" width="200" height="60" />
+              <text class="t hotink" x="496" y="138">setup throws</text>
+              <text class="s" x="496" y="154">unwind installed, reverse</text>
+              <text class="s" x="496" y="168">throw PluginSetupError</text>
+              <text class="xs" x="496" y="182">the Dataset constructor throws, too —</text>
+              <text class="xs" x="496" y="194">no half-built Dataset reaches a caller</text>
+
+              <line class="edge" x1="580" y1="178" x2="580" y2="200" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx pure" x="484" y="206" width="200" height="46" />
+              <text class="t" x="496" y="224">no throw</text>
+              <text class="s" x="496" y="238">returns one Disposer for the whole set</text>
+
+              <line class="edge" x1="559" y1="238" x2="327" y2="252" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <text class="xs" x="327" y="268">Dataset.destroy() calls it once — every plugin</text>
+              <text class="xs" x="327" y="280">disposes, in reverse setup order</text>
+            </svg>
+          </div>
+          <figcaption>
+            Diagram 4 — <code>requires</code> decides order, not array position. A required id nobody
+            installs throws <code>MissingPluginError</code>; a cycle throws
+            <code>PluginRequirementCycleError</code> naming every plugin in it. The same reverse-order
+            unwind-on-throw and reverse-order dispose that <code>PluginRuntime</code> uses (§3) reappear
+            here — one shape, two runtimes.
+          </figcaption>
+        </figure>
+
+        <div class="note">
+          <strong>Why setup order matters for a Dataset plugin and not for a Gantt plugin.</strong> A
+          <code>DatasetPlugin</code> can declare a Field and wrap the mutation extension hook
+          (<code>setExtender</code>) — a second plugin's wrapper receives the first's output, so which one
+          ran first changes what the composed hook does. A <code>GanttPlugin</code> registers into slots
+          that resolve by <em>newest wins</em> or by <em>kind</em>, not by wrapping, so array order there is
+          only ever the order two plugins claiming the same kind or slot were installed in.
+        </div>
+      </section>
+
+      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+    </div>
+
+    <footer class="wrap">
+      A working example of every seam in §3's table is <a href="../plugins.html">the Plugins harness page</a>
+      (<code>harness/plugins.ts</code>, <code>harness/plugins/*</code>). The public contract itself is
+      <code>PluginContext</code> in <a href="../../README.md"><code>README.md</code></a> and
+      <code>etc/freegantt.api.md</code>.
+    </footer>
+  </body>
+</html>
