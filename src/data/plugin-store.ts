@@ -81,7 +81,7 @@ export class PluginStores {
   // close over one map. Each reader is an arrow bound to this instance — a method shorthand inside the
   // returned literal would bind `this` to the literal instead, which reaches no store at all.
   #buildView<T extends object>(name: PluginStoreName): PluginStoreView<T> {
-    const get = (id: EntryId): T | undefined => this.#read(name, entryId(id)) as T | undefined;
+    const get = (id: EntryId | string): T | undefined => this.#read(name, entryId(id)) as T | undefined;
     const readAll = (): ReadonlyMap<EntryId, T> => this.#visibleRows(name) as ReadonlyMap<EntryId, T>;
     return {
       get,
@@ -94,12 +94,12 @@ export class PluginStores {
   #buildStore<T extends object>(name: PluginStoreName): PluginStore<T> {
     const view = this.#buildView<T>(name);
     return {
-      get: (id: EntryId): T | undefined => view.get(id),
+      get: (id: EntryId | string): T | undefined => view.get(id),
       get all(): ReadonlyMap<EntryId, T> {
         return view.all;
       },
-      set: (id: EntryId, value: T): void => this.#write(name, entryId(id), value),
-      remove: (id: EntryId): void => this.#write(name, entryId(id), undefined),
+      set: (id: EntryId | string, value: T): void => this.#write(name, entryId(id), value),
+      remove: (id: EntryId | string): void => this.#write(name, entryId(id), undefined),
     };
   }
 

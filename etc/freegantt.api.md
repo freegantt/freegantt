@@ -1581,9 +1581,9 @@ export class PluginSetupError extends FreeGanttError {
 // @public
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
     // (undocumented)
-    remove(id: EntryId): void;
+    remove(id: EntryId | string): void;
     // (undocumented)
-    set(id: EntryId, value: T): void;
+    set(id: EntryId | string, value: T): void;
 }
 
 // @public
@@ -1594,7 +1594,7 @@ export interface PluginStoreView<T extends object> {
     // (undocumented)
     readonly all: ReadonlyMap<EntryId, T>;
     // (undocumented)
-    get(id: EntryId): T | undefined;
+    get(id: EntryId | string): T | undefined;
 }
 
 // @public
