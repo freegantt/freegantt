@@ -253,7 +253,11 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return this.#state.extraEditsFor(request);
   }
 
-  /** Call: `layout.computeFrame({ datasetRevision: dataset.datasetRevision })`. */
+  /** A counter that rises once per committed change. Call: `if (dataset.datasetRevision !== seen)`
+   *  — read it to answer "has anything changed since I last looked?" without diffing entries.
+   *
+   *  A consumer reads this and never passes it anywhere. The library keeps its own caches fresh
+   *  from it internally, so nothing an app author writes has to carry it. */
   get datasetRevision(): number {
     return this.#state.datasetRevision;
   }
