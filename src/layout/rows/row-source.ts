@@ -97,6 +97,17 @@ export function resolveRowSource(source: RowSource): ResolvedRowSource {
   return { ...source, heightMode, filterPolicy };
 }
 
+/** True when this source can put one row under another. The tree entries source does, and so does
+ *  the group source — a group header owns the rows below it. `'custom'` returns a flat list of
+ *  `CustomRow`, which carries no parent, so it never nests.
+ *
+ *  S5.11, D-S5-25 reads this to pick the grid pane's authoring pattern: a nesting source is a
+ *  `treegrid`, a flat one a `grid`, and only a `treegrid` row may carry `aria-level`. */
+export function nestsRows(source: RowSource): boolean {
+  if (source.source === 'entries') return source.tree === true;
+  return source.source === 'group';
+}
+
 /** Derived row classification — not `Entry.kind` (D-S4-23). */
 export type PlannedRowKind = 'entry' | 'header';
 

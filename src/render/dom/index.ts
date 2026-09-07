@@ -114,6 +114,9 @@ type CellItem = {
   key: string;
   text: string;
   first: boolean;
+  /** 1-based position among the configured Grid columns — `aria-colindex` (S5.11, D-S5-25). 1-based
+   *  because that is what the attribute counts in; a reorder moves it, which is the point. */
+  columnIndex: number;
   align: ColumnAlign;
   width?: number;
   flex?: number;
@@ -128,6 +131,7 @@ type CellItem = {
 type CellGeom = {
   text: string;
   first: boolean;
+  columnIndex: number;
   align: ColumnAlign;
   width: number;
   flex: number;
@@ -137,6 +141,7 @@ type CellGeom = {
 };
 type HeaderCellGeom = {
   text: string;
+  columnIndex: number;
   align: ColumnAlign;
   width: number;
   flex: number;
@@ -154,6 +159,9 @@ type RowGeom = {
   cells: readonly string[];
   index: number;
   rowCount: number;
+  /** S5.11, D-S5-25: `aria-level`, `aria-expanded`, `aria-posinset` and `aria-setsize` belong to a
+   *  `treegrid` row. A flat `grid` row takes `aria-rowindex` alone. */
+  tree: boolean;
   depth: number;
   expandable: boolean;
   expanded: boolean;
@@ -223,6 +231,7 @@ function cellItemsFor(
       key: column !== undefined ? String(column.field) : String(i),
       text,
       first: i === 0,
+      columnIndex: i + 1,
       align: column?.align ?? 'start',
       expandable: i === 0 && expandable,
       expanded,
@@ -250,6 +259,7 @@ function cellGeom(item: CellItem): CellGeom {
   return {
     text: item.text,
     first: item.first,
+    columnIndex: item.columnIndex,
     align: item.align,
     width: item.width ?? 0,
     flex: item.flex ?? 0,
@@ -737,6 +747,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
       node.dataset[FIELD_KEY] = key;
+      // S5.11, D-S5-25: one Grid column's box on one Row is a `gridcell`. `tabIndex` stays off the
+      // node here — `view/roving-focus.ts` owns which one cell in the pane is the tab stop.
+      node.setAttribute('role', 'gridcell');
       const twisty = document.createElement('button');
       twisty.type = 'button';
       twisty.className = ROW_TWISTY_CLASS;
@@ -750,6 +763,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     toGeom: (cell: CellItem): CellGeom => cellGeom(cell),
     patch: (node: HTMLElement, geom: CellGeom): void => {
       node.className = geom.first ? ROW_LABEL_CLASS : ROW_CELL_CLASS;
+      node.setAttribute('aria-colindex', String(geom.columnIndex));
       paintColumnBox(node, geom);
       const twisty = node.firstElementChild as HTMLButtonElement;
       const label = node.lastElementChild as HTMLElement;
@@ -766,10 +780,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       const node = document.createElement('div');
       node.className = COLUMN_HEADER_CLASS;
       node.dataset[FIELD_KEY] = key;
-      // S5.7, D-S5-18/D-S5-26: no `tabIndex` — D-S1.10-5 keeps the container the one honest tab stop
-      // until S5.11's roving pattern lands. A plain click still sets this cell "focused" for
-      // `Alt+Arrow`/`Shift+Arrow` (`interaction/column-gestures.ts`'s pointerup fallback), the same way
-      // clicking a bar sets the *selection* without moving real DOM focus off the container.
+      // S5.11, D-S5-25: one Grid column's header cell is a `columnheader`, inside the header row
+      // `view/pane-layout.ts` mounts it in. `tabIndex` stays off the node here — `view/roving-focus.ts`
+      // owns which one header cell is the pane's tab stop.
       const label = document.createElement('span');
       label.className = 'fg-col-header-label';
       const resizer = document.createElement('div');
@@ -780,6 +793,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     },
     toGeom: (cell: CellItem): HeaderCellGeom => ({
       text: cell.text,
+      columnIndex: cell.columnIndex,
       align: cell.align,
       width: cell.width ?? 0,
       flex: cell.flex ?? 0,
@@ -792,6 +806,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // spec's own twisty/label pair relies on just above.
       const label = node.firstElementChild as HTMLElement;
       applyElementDescription(label, geom.content ?? { text: geom.text });
+      node.setAttribute('aria-colindex', String(geom.columnIndex));
       paintColumnBox(node, geom);
       if (geom.resizable) node.removeAttribute('data-resizable-off');
       else node.setAttribute('data-resizable-off', '');
@@ -800,7 +815,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     },
   };
 
-  function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
+  function syncRows(
+    rows: readonly FrameRow[],
+    rowCount: number,
+    tree: boolean,
+    columns: readonly FrameColumn[],
+  ): void {
     if (!gridLayer) return;
     rowSegmentIds.clear();
     for (const row of rows) if (row.segmentIds.length > 0) rowSegmentIds.set(row.id, row.segmentIds);
@@ -809,7 +829,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       create: (row, key) => {
         const node = document.createElement('div');
         node.className = ROW_CLASS;
-        node.setAttribute('role', 'listitem');
+        // S5.11, D-S5-25: `row`, not `listitem`. A `listitem` has no `list` ancestor here and may
+        // not carry `aria-level`, which is what made axe red before this step.
+        node.setAttribute('role', 'row');
         node.dataset[TESTID_KEY] = ROW_TESTID;
         node.dataset[ROW_ID_KEY] = key;
         // The Entry this row's cells describe (#185) — the row's subject, not the set it owns. A
@@ -834,6 +856,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           cells: row.cells,
           index: row.index,
           rowCount,
+          tree,
           depth: row.depth,
           expandable: row.expandable,
           expanded: row.expanded,
@@ -845,9 +868,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
         node.style.setProperty('--fg-row-depth', String(geom.depth));
-        node.setAttribute('aria-posinset', String(geom.index + 1));
-        node.setAttribute('aria-setsize', String(geom.rowCount));
-        node.setAttribute('aria-level', String(geom.depth + 1));
+        // Only the windowed rows exist, so the row states where it sits in the whole set (I3). Every
+        // pattern takes `aria-rowindex`; the three tree attributes belong to a `treegrid` alone
+        // (S5.11, D-S5-25), and the header row above the body takes index 1.
+        node.setAttribute('aria-rowindex', String(geom.index + 2));
+        setTreeRowAttributes(node, geom);
         node.dataset['parity'] = rowParity(geom.index);
         if (geom.matched === false) node.dataset['matched'] = 'false';
         else delete node.dataset['matched'];
@@ -855,6 +880,25 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     });
 
     syncCellsForEachRow(rows, columns);
+  }
+
+  /** `aria-level`, `aria-posinset`, `aria-setsize` and `aria-expanded` describe a row's place in a
+   *  tree. A flat `grid` row has no such place, and carrying them there is what `aria-allowed-attr`
+   *  refuses (S5.11, D-S5-25, §0.1). `aria-expanded` comes off the row itself, not off the twisty:
+   *  the twisty is a button inside the row and states its own expanded status separately. */
+  function setTreeRowAttributes(node: HTMLElement, geom: RowGeom): void {
+    if (!geom.tree) {
+      node.removeAttribute('aria-posinset');
+      node.removeAttribute('aria-setsize');
+      node.removeAttribute('aria-level');
+      node.removeAttribute('aria-expanded');
+      return;
+    }
+    node.setAttribute('aria-posinset', String(geom.index + 1));
+    node.setAttribute('aria-setsize', String(geom.rowCount));
+    node.setAttribute('aria-level', String(geom.depth + 1));
+    if (geom.expandable) node.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
+    else node.removeAttribute('aria-expanded');
   }
 
   /** Each row owns a nested keyed list of cells (one per configured column), the same "keyed list
@@ -909,6 +953,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         key: String(column.field),
         text: column.header,
         first: i === 0,
+        columnIndex: i + 1,
         align: column.align,
         expandable: false,
         expanded: false,
@@ -1120,7 +1165,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       }
       syncHeader(frame.header.bands);
       syncGridHeader(frame.columns);
-      syncRows(frame.rows, frame.rowCount, frame.columns);
+      syncRows(frame.rows, frame.rowCount, frame.tree, frame.columns);
       syncRowBands(frame.rows, frame.contentWidth, frame.visible.width);
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but

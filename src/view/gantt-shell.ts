@@ -11,6 +11,7 @@ import {
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
+  nestsRows,
 } from '../layout/index.js';
 import type {
   DateLine,
@@ -1407,11 +1408,11 @@ export class GanttShell {
     return this.#a11yLabel;
   }
 
-  /** Live (S1.10, D-S1.10-4/5): sets `aria-label` on the container — the one honest tab stop this step
-   *  defines (`view/pane-layout.ts`'s `role="group"`/`tabindex="0"`). */
+  /** Live (S1.10, D-S1.10-4): the one name a screen reader reads for this Gantt. `PaneLayout` owns
+   *  where it lands — the container names the widget, the timeline pane names its region (D-S5-25). */
   set a11yLabel(value: string) {
     this.#a11yLabel = value;
-    this.#container.setAttribute('aria-label', value);
+    this.#paneLayout.accessibleName = value;
   }
 
   /** Always px: the consumer asked how wide the pane is, so the getter answers in the unit the
@@ -1714,6 +1715,11 @@ export class GanttShell {
         datasetRevision: this.#options.dataset.datasetRevision,
       }),
     );
+    // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are
+    // facts about the whole row set, so they are read here rather than per row — only the windowed
+    // rows reach `render/dom` at all (I3).
+    this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
+    this.#paneLayout.setGridSize(frame.rowCount, frame.columns.length);
     this.#backend.sync(frame);
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);

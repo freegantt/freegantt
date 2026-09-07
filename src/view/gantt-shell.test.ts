@@ -750,8 +750,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   });
 });
 
-describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
-  it('gives the container role="group", a live aria-label, and the only tabindex="0" in the whole render tree', () => {
+describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => {
+  it('names the whole Gantt on the container and the timeline region, live, and claims no tab stop of its own', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
     const shell = new GanttShell({
@@ -764,14 +764,36 @@ describe('a11y roles and the one honest tab stop (S1.10, D-S1.10-5)', () => {
 
     expect(container.getAttribute('role')).toBe('group');
     expect(container.getAttribute('aria-label')).toBe('Room bookings');
-    expect(container.getAttribute('tabindex')).toBe('0');
+    // D-S5-26 retires the container's own tab stop: each pane carries one now.
+    expect(container.hasAttribute('tabindex')).toBe(false);
 
-    // querySelectorAll only matches descendants, not container itself — container's own tabindex is asserted
-    // above; this proves nothing *inside* it claims a second tab stop.
-    expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    const timelinePane = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    expect(timelinePane.getAttribute('role')).toBe('region');
+    expect(timelinePane.getAttribute('aria-label')).toBe('Room bookings');
 
     shell.a11yLabel = 'Renamed plan';
     expect(container.getAttribute('aria-label')).toBe('Renamed plan');
+    expect(timelinePane.getAttribute('aria-label')).toBe('Renamed plan');
+
+    shell.destroy();
+  });
+
+  it('makes the grid pane a grid for a flat row source and a treegrid for a tree one, sized by the whole row set', () => {
+    const container = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
+    shell.render();
+
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
+    expect(gridPane.getAttribute('role')).toBe('grid');
+    expect(gridPane.getAttribute('aria-rowcount')).toBe(String(entries.length));
+    expect(gridPane.querySelector('.fg-grid-spacer')!.getAttribute('role')).toBe('rowgroup');
+    expect(gridPane.querySelector('.fg-grid-header')!.getAttribute('role')).toBe('row');
+    expect(gridPane.querySelector('.fg-rows')!.getAttribute('role')).toBe('rowgroup');
+
+    shell.rowSource = { source: 'entries', tree: true };
+    shell.render();
+    expect(gridPane.getAttribute('role')).toBe('treegrid');
 
     shell.destroy();
   });
