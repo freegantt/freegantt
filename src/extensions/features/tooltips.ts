@@ -63,10 +63,7 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.tooltips',
     setup(ctx: PluginContext) {
-      const popup: Popup = createPopup(ctx.view, {
-        registerHandler: (chord, handler, handlerOptions) =>
-          ctx.interaction.registerKeyHandler(chord, handler, handlerOptions),
-      });
+      const popup: Popup = createPopup(ctx.view, ctx.interaction.registerKeyHandler);
       let timer: ReturnType<typeof setTimeout> | undefined;
       let openTarget: DomTarget | undefined;
 
