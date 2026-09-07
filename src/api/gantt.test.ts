@@ -19,6 +19,7 @@ import {
   contextMenu,
 } from './index.js';
 import type {
+  DatasetPlugin,
   EditRequest,
   Entry,
   StoredEdits,
@@ -5080,20 +5081,19 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
   const X_START = instant('2026-09-05T00:00:00Z');
   const X_END = instant('2026-09-06T00:00:00Z');
 
-  /** Stands in for the S7 case: a Dataset whose hook gains an occupant after the Gantt exists.
-   *  `DatasetState.setExtender` composes exactly this way, but every public route to it shuts when
-   *  the Dataset's constructor returns (D-S5-4's registration gate), so this subclass overrides the
-   *  one public member `api/gantt.ts` reads. */
-  class LateHookDataset extends Dataset {
-    #occupant: ExtraEditsFor = () => new Map();
-
-    override extraEditsFor(request: EditRequest): StoredEdits {
-      return this.#occupant(request);
-    }
-
-    occupyHook(next: ExtraEditsFor): void {
-      this.#occupant = next;
-    }
+  /** Stands in for the S7 case: an occupant that changes after the Gantt exists. A plugin's own
+   *  wrapper installs once, at construction (D-S5-4's registration gate) — but nothing stops the
+   *  wrapper from deferring to a mutable reference, which is what a stateful engine does across its
+   *  own reconfiguration. `current.value` starts as a no-op and the test swaps it post-construction,
+   *  standing in for that later composition (#250 A2: `extraEditsFor` moved off `Dataset`, so a test
+   *  can no longer intercept it by subclassing and overriding a method that no longer exists). */
+  function lateHookPlugin(current: { value: ExtraEditsFor }): DatasetPlugin {
+    return {
+      id: 'test.late-hook',
+      setup(ctx) {
+        ctx.edits.setExtender(() => (request) => current.value(request));
+      },
+    };
   }
 
   /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
@@ -5106,22 +5106,28 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
     ]);
   };
 
-  function buildGantt(): { gantt: Gantt; dataset: LateHookDataset; container: HTMLElement } {
+  function buildGantt(): {
+    gantt: Gantt;
+    occupant: { value: ExtraEditsFor };
+    container: HTMLElement;
+  } {
     const container = document.createElement('div');
-    const dataset = new LateHookDataset({
+    const occupant = { value: (() => new Map()) as ExtraEditsFor };
+    const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
         { id: 'a', name: 'a', start: A_START, end: A_END },
         { id: 'x', name: 'x', start: X_START, end: X_END },
       ],
+      plugins: [lateHookPlugin(occupant)],
     });
-    return { gantt: new Gantt({ container, dataset }), dataset, container };
+    return { gantt: new Gantt({ container, dataset }), occupant, container };
   }
 
   it('ghosts an extender that occupies the hook after construction', async () => {
-    const { gantt, dataset, container } = buildGantt();
+    const { gantt, occupant, container } = buildGantt();
     // Composed after the Gantt is built — the case a stored occupant would miss.
-    dataset.occupyHook(cascadeOntoX);
+    occupant.value = cascadeOntoX;
 
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
