@@ -117,7 +117,7 @@ describe('computeFrame', () => {
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
+      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry)}`,
     );
   });
 

@@ -125,7 +125,7 @@ export function resolveColumns(
         ...column,
         format: (entry: Entry) => {
           const value = formatCtx.read(entry, field.key);
-          if (field.formatValue) return field.formatValue(value, formatCtx);
+          if (field.formatValue) return field.formatValue(value, formatCtx, entry);
           return stringifyPrimitive(value);
         },
       },
