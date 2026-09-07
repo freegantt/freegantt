@@ -210,9 +210,10 @@ export class DatasetState implements Dataset {
   }
 
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and hands back
-   *  what it returns. `api/Dataset.extraEditsFor` (the public method this mirrors) and
-   *  `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two — so `api/Dataset` never
-   *  had to expose the raw occupant to get either job done (#209 Q5, replacing the public
+   *  what it returns. `api/dataset.ts`'s `extraEditsFor(dataset, request)` (the friend function this
+   *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
+   *  so `api/Dataset` never had to expose the raw occupant to get either job done (#209 Q5, replacing
+   *  the public
    *  `editExtender` getter this file used to mirror). The commit path calls `readExtenderEdits`
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *

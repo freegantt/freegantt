@@ -177,8 +177,13 @@ reparentBtn.addEventListener('click', () => {
 
 // #248 S4-3: grouped and pack used to be local flags mirroring gantt.rowSource. Now that the
 // getter reads back resolved (S4-2), the page reads both off the Gantt instead of holding a
-// second copy. filterTeam and sortByName stay local — they are closures the Gantt cannot read
-// back, not state the library already holds.
+// second copy.
+//
+// filterTeam stays local for a narrower reason than "the Gantt cannot read it back". The Gantt reads
+// the filter closure back fine — ResolvedEntriesRowSource extends EntriesRowSource. What it cannot
+// read back is the team name captured *inside* that closure, and the button cycles through those
+// names. sortByName is a different case: gantt.rowSource.sort answers it, so it is a second copy of
+// what the library already holds. See #254.
 let filterTeam: 'core' | 'edge' | 'launch' | null = null;
 const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edge' | 'launch' | null> = {
   off: 'core',

@@ -506,7 +506,7 @@ gantt.hiddenGridColumns; // ['cost'] while it is hidden
 
 ### 4.3 Row sources, collapse, and tree
 
-A **Row** is a derived horizontal track — not an Entry. One Row may carry many Entries' items; a row source may produce Rows that stand for no Entry at all. **`gantt.rowSource`** names the config that decides what the Rows are for this Gantt. The name matches its type (`RowSource`) and leaves `rows` free for a future getter of the derived rows themselves.
+A **Row** is a derived horizontal track — not an Entry. One Row may carry many Entries' items; a row source may produce Rows that stand for no Entry at all. **`gantt.rowSource`** names the config that decides what the Rows are for this Gantt. It leaves `rows` free for a future getter of the derived rows themselves. The setter takes a `RowSource`; the getter reads back a `ResolvedRowSource`, which fills every key `layout/` defaults at consumption — `heightMode`, `filterPolicy`, and the entries source's `tree` (#248). So a consumer reads the value the library uses, and never has to know a default to read it.
 
 Default: `{ source: 'entries', tree: false }` — a flat list, exactly what S1 drew. Three occupants ship:
 
@@ -560,7 +560,7 @@ For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')`
 
 Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
 
-Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`, and the four the getter reads back — `ResolvedRowSource`, `ResolvedEntriesRowSource`, `ResolvedGroupRowSource`, `ResolvedCustomRowSource`.
 
 ### 4.4 Plugin registrations: one collision policy, one lifetime (#155)
 
