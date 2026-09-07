@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — s5-start, the issue wave (2026-09-06)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mass-iface { background: #cbd5e1; }
+      .mass-impl { background: #475569; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- ============ HEADER ============ -->
+      <header class="space-y-3">
+        <h1 class="text-3xl font-serif font-bold">Branch review — <span class="font-mono text-2xl">s5-start</span>, the issue wave</h1>
+        <p class="text-sm text-slate-600">
+          FreeGantt · 2026-09-06 · snapshot <span class="font-mono">6eb6da1...37b5f17</span> (14 commits) plus working-tree WIP
+        </p>
+        <p class="text-sm text-slate-600">
+          Scope: the last hour of the multi-lane issue wave — refusal diagnostics (#210, #234, #237),
+          dataset publishing (#226), focus trap (#228), <span class="font-mono">moveEntryTo</span> segments (#239, #241).
+          Other agents were still working during the review; every finding below was re-verified against HEAD
+          <span class="font-mono">37b5f17</span> and marked: <span class="font-mono text-emerald-700">fixed since snapshot</span> ·
+          <span class="font-mono text-amber-700">open</span> · <span class="font-mono text-slate-500">tracked</span> (status board / issue #).
+        </p>
+        <div class="flex gap-4 text-xs text-slate-500 pt-1">
+          <span><span class="inline-block w-3 h-3 border border-slate-500 bg-white align-middle"></span> module</span>
+          <span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#64748b" stroke-width="2" class="seam"/></svg> seam</span>
+          <span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle rounded-sm"></span> deep module</span>
+        </div>
+      </header>
+
+      <!-- ============ VERDICT ============ -->
+      <section class="grid grid-cols-4 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-500">Standards</p>
+          <p class="text-2xl font-bold mt-1">7 findings</p>
+          <p class="text-xs text-slate-500 mt-1">2 fixed since snapshot · 2 hard</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-500">Spec</p>
+          <p class="text-2xl font-bold mt-1">8 issues</p>
+          <p class="text-xs text-slate-500 mt-1">5 full · 1 remainder (#242) · 1 tracked line open</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-500">Simplify</p>
+          <p class="text-2xl font-bold mt-1">4 findings</p>
+          <p class="text-xs text-slate-500 mt-1">perf clean · 7 skipped with reasons</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-500">Architecture</p>
+          <p class="text-2xl font-bold mt-1">4 candidates</p>
+          <p class="text-xs text-slate-500 mt-1">3 Strong · 1 Worth exploring · 1 API gap</p>
+        </div>
+      </section>
+      <section class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+        <p><span class="font-semibold">Spot check at HEAD:</span> 412 tests pass (touched suites + styles WIP), <span class="font-mono">tsc --noEmit</span> clean, eslint clean on touched files. The wave's own work is green. The worst finding is not a defect — it is one un-migrated line in the first consumer.</p>
+      </section>
+
+      <!-- ============ STOP RULE / API GAP ============ -->
+      <section class="space-y-3">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Stop rule — API gap in <span class="font-mono">harness/</span></h2>
+        <article class="rounded-lg border-2 border-red-300 bg-white p-6 space-y-3">
+          <div class="flex gap-2">
+            <span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-semibold uppercase tracking-wider">API gap</span>
+            <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-semibold uppercase tracking-wider">tracked — status board line, one line to fix</span>
+          </div>
+          <h3 class="text-lg font-semibold"><span class="font-mono">harness/plugins/lock-entries.ts:87</span> — a hand-rolled refusal channel stands in for <span class="font-mono">refuse(reason)</span></h3>
+          <p class="text-sm">Core closed this in #210: <span class="font-mono">beforeChange</span> is <span class="font-mono">Refusable</span>, so a veto carries its words onto the <span class="font-mono">mutation-cancelled</span> report. The lock plugin still returns bare <span class="font-mono">false</span> and pages register <span class="font-mono">locks.onRefusal(...)</span> to toast by hand — <span class="font-mono">harness/editing.ts:80</span> admits it: "One <span class="font-mono">refuse(...)</span> there retires that callback". This is the evidence-hiding case the Stop rule exists for: the compensating path keeps the worse API alive.</p>
+          <p class="text-sm text-slate-600">Folded in: the veto reports <span class="font-mono">by: 'consumer'</span>, so the plugin's refusal reads as the page's own. ADR 0009 ruled the bus cannot know the refuser; the words on <span class="font-mono">refuse(reason)</span> are the mitigation — no ADR reopened.</p>
+          <div class="grid grid-cols-2 gap-4 pt-2">
+            <div class="rounded border border-slate-200 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — page-side compensation</p>
+              <pre class="font-mono text-xs bg-stone-100 rounded p-2 overflow-x-auto">return false;              // bare veto
+announceRefusal?.(id);     // page toast
+locks.onRefusal(handle);   // page wiring</pre>
+            </div>
+            <div class="rounded border border-emerald-300 p-3">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — the library's own record</p>
+              <pre class="font-mono text-xs bg-emerald-50 rounded p-2 overflow-x-auto">return refuse(`Entry ${id} is locked`);
+// words ride the mutation-cancelled
+// report; onRefusal deleted</pre>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ============ ARCHITECTURE CANDIDATES ============ -->
+      <section class="space-y-10">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Deepening candidates</h2>
+
+        <!-- C1 -->
+        <article id="c1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex gap-2">
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold uppercase tracking-wider">Strong</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">in-process</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">strengthens I14</span>
+          </div>
+          <h3 class="text-lg font-semibold">One public "can this Field be written on this Entry?" answer</h3>
+          <p class="font-mono text-sm text-slate-600">src/extensions/features/inline-editing.ts · src/data/entry-reader.ts · src/view/capability.ts</p>
+          <p class="text-sm"><span class="font-semibold">Problem.</span> The inline editor re-derives three core rules by hand — the several-Segments-refuse-an-envelope-write rule (<span class="font-mono">writesSegmentEnvelope</span>, restating <span class="font-mono">soleSegmentOf</span>/<span class="font-mono">reconcileEnvelope</span>), the Rollup refusal, and date-ness, twice in one file. Its own comment admits the owner is missing. The module is shallow where it touches core, and ADR 0010's refusal can drift between <span class="font-mono">data/</span> and <span class="font-mono">extensions/</span>.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Core answers write capability per Entry+Field from the capability resolver — the one resolution that already gates the gesture and the affordance (I14); <span class="font-mono">data/</span> keeps the Segment-envelope rule as its single owner.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — plugin re-derives core rules</p>
+              <pre class="mermaid">
+flowchart LR
+  ED[inline-editing plugin] --> S1["writesSegmentEnvelope"]
+  ED --> S2["isRollUpKind &amp;&amp; rollUp"]
+  ED --> S3["key === start / end (×2)"]
+  S1 -.reads internals.-> ER["entry-reader: soleSegmentOf, reconcileEnvelope"]
+  CAP["capability resolver (I14)"] -.write side unused.-> ED
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class S1,S2,S3 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — one answer, one owner</p>
+              <pre class="mermaid">
+flowchart LR
+  ED["inline-editing plugin"] -->|"can this Field be written on this Entry?"| CAP
+  CAP["Core write capability"] --> ER["entry-reader internals"]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#e2e8f0;
+  class CAP deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: the refusal rule lives in one module</li>
+            <li>leverage: the plugin's <span class="font-mono">openFor</span> ladder loses three predicates</li>
+            <li>tests hit one interface</li>
+          </ul>
+        </article>
+
+        <!-- C2 -->
+        <article id="c2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex gap-2">
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold uppercase tracking-wider">Strong</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">in-process</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">implements ADR 0009 / D-S5-40</span>
+          </div>
+          <h3 class="text-lg font-semibold">Concentrate the refusal-report rule behind one builder</h3>
+          <p class="font-mono text-sm text-slate-600">src/data/transaction.ts · src/view/gesture-pipeline.ts (#reportRefusal) · src/extensions/features/inline-editing.ts (#markInvalid, CellEditing.refuse) · src/model/errors.ts (MutationCancelledError)</p>
+          <p class="text-sm"><span class="font-semibold">Problem.</span> "A Refusal reports at <span class="font-mono">'info'</span>, <span class="font-mono">by</span> its reporter, quoting the handler's words verbatim" is restated at four raise sites, and the refusal sentence is built twice with words that already drifted: <span class="font-mono">errors.ts:518</span> says "refused this <em>change</em>", <span class="font-mono">gesture-pipeline.ts:319</span> says "refused this <em>${kind}</em>".</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> One refusal-report builder beside <span class="font-mono">raiseErrorOn</span> in <span class="font-mono">data/</span>, taking <span class="font-mono">{code, event, note, entryId, cause}</span>; error messages derive from it. Every new veto site becomes one call.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded border border-slate-200 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — 4 raise sites, 2 sentence framers</p>
+              <div class="space-y-2">
+                <div class="border border-red-300 rounded p-2 font-mono text-xs">transaction.ts — commit refusal</div>
+                <div class="border border-red-300 rounded p-2 font-mono text-xs">gesture-pipeline.ts — own sentence ("this ${kind}")</div>
+                <div class="border border-red-300 rounded p-2 font-mono text-xs">inline-editing.ts — #markInvalid words ×2 reads</div>
+                <div class="border border-red-300 rounded p-2 font-mono text-xs">errors.ts — own sentence ("this change")</div>
+              </div>
+            </div>
+            <div class="rounded border border-emerald-300 p-4">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-3">After — one builder, one sentence</p>
+              <div class="deep rounded p-4 text-slate-100 text-center">
+                <p class="text-xs uppercase tracking-wider">refusal report builder</p>
+                <p class="font-mono text-xs mt-2 text-slate-300">data/ — severity 'info', by, words verbatim</p>
+              </div>
+              <div class="mt-3 grid grid-cols-4 gap-1">
+                <div class="border border-slate-300 rounded p-1 text-center font-mono text-[10px]">tx</div>
+                <div class="border border-slate-300 rounded p-1 text-center font-mono text-[10px]">gesture</div>
+                <div class="border border-slate-300 rounded p-1 text-center font-mono text-[10px]">cell</div>
+                <div class="border border-slate-300 rounded p-1 text-center font-mono text-[10px]">msg</div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: wording changes in one place</li>
+            <li>leverage: one call per new veto site</li>
+            <li>interface shrinks; implementation absorbs the framers</li>
+          </ul>
+        </article>
+
+        <!-- C3 -->
+        <article id="c3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex gap-2">
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold uppercase tracking-wider">Strong (small)</span>
+            <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-semibold uppercase tracking-wider">tracked — #242 + handoff lane E item 2</span>
+          </div>
+          <h3 class="text-lg font-semibold">Make <span class="font-mono">toInstant</span>'s caller name required</h3>
+          <p class="font-mono text-sm text-slate-600">src/time/input.ts:107 · src/api/gantt.ts (five unnamed doors: range, dateLines, panToInstant, …)</p>
+          <p class="text-sm"><span class="font-semibold">Problem.</span> <span class="font-mono">operation?: string</span> leaves "which door was this?" to each caller. <span class="font-mono">api/gantt.ts</span> already omits it, so a bad <span class="font-mono">range</span> date reports no caller name — the exact wrong-door fault #237 closed in <span class="font-mono">data/</span>. The file's own header admits the gap; #237's remainder is filed as #242 (<span class="font-mono">InvalidInstantError</span> stays message-shaped — split it, or document the exception).</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Make <span class="font-mono">operation</span> required, so the compiler lists every unthreaded call site; consider one shared <span class="font-mono">ReadOrigin</span> shape beside <span class="font-mono">EditOrigin</span>.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded border border-slate-200 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — the compiler cannot help</p>
+              <pre class="font-mono text-xs bg-stone-100 rounded p-2">operation?: string
+gantt.ts: 5 doors pass nothing
+→ "a bad date reports no door"</pre>
+            </div>
+            <div class="rounded border border-emerald-300 p-3">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — the compiler lists the residue</p>
+              <pre class="font-mono text-xs bg-emerald-50 rounded p-2">operation: string
+tsc → exactly the 5 doors to name
+→ #242's split becomes mechanical</pre>
+            </div>
+          </div>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>locality: the caller-name rule holds on every door</li>
+            <li>deletion test passes: nothing left to centralize</li>
+          </ul>
+        </article>
+
+        <!-- C4 -->
+        <article id="c4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex gap-2">
+            <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-semibold uppercase tracking-wider">Worth exploring</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">in-process</span>
+          </div>
+          <h3 class="text-lg font-semibold">Bind <span class="font-mono">&lt;TMeta, TFields&gt;</span> once; derive the Dataset from the Gantt</h3>
+          <p class="font-mono text-sm text-slate-600">src/api/gantt.ts · src/api/plugin.ts</p>
+          <p class="text-sm"><span class="font-semibold">Problem.</span> #226 typed <span class="font-mono">gantt.dataset</span> with the caller's own Fields, so <span class="font-mono">TGantt['dataset']</span> now answers the binding — yet <span class="font-mono">GanttPlugin</span>, <span class="font-mono">PluginContext</span>, <span class="font-mono">Command</span>, <span class="font-mono">CommandContext</span>, <span class="font-mono">CommandRegistry</span>, <span class="font-mono">KeyBinding</span> each restate <span class="font-mono">&lt;TMeta, TFields&gt;</span>, and <span class="font-mono">GanttPluginOf</span> takes a second parameter that repeats the first. The binding is stated twice; the interface is wider than the implementation needs.</p>
+          <p class="text-sm"><span class="font-semibold">Solution.</span> Default <span class="font-mono">TDataset = TGantt['dataset']</span> in the <span class="font-mono">*Of</span> shapes and bind each alias once, the way <span class="font-mono">api/dataset-plugin.ts</span> already binds <span class="font-mono">DatasetPluginOf&lt;Dataset&gt;</span> once.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded border border-slate-200 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — interface nearly as wide as implementation</p>
+              <div class="flex gap-2 items-end h-40">
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="mass-iface border border-slate-400 h-28 rounded-t"></div>
+                  <p class="text-[10px] text-center mt-1">interface</p>
+                  <div class="mass-impl h-8 rounded-b"></div>
+                </div>
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="mass-iface border border-slate-400 h-28 rounded-t"></div>
+                  <p class="text-[10px] text-center mt-1">interface</p>
+                  <div class="mass-impl h-8 rounded-b"></div>
+                </div>
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="mass-iface border border-slate-400 h-28 rounded-t"></div>
+                  <p class="text-[10px] text-center mt-1">interface</p>
+                  <div class="mass-impl h-8 rounded-b"></div>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-1">6 aliases × &lt;TMeta, TFields&gt; restated</p>
+            </div>
+            <div class="rounded border border-emerald-300 p-4">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-3">After — bound once</p>
+              <div class="flex gap-2 items-end h-40">
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="mass-iface border border-emerald-400 h-8 rounded-t bg-emerald-200"></div>
+                  <p class="text-[10px] text-center mt-1">interface</p>
+                  <div class="mass-impl h-28 rounded-b"></div>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-1">TDataset defaults to TGantt['dataset']</p>
+            </div>
+          </div>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>interface shrinks: six aliases drop a parameter pair</li>
+            <li>no restatement at the plugin-author call site</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ STANDARDS ============ -->
+      <section class="space-y-3">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Standards <span class="text-sm font-sans font-normal text-slate-500">(7 findings · AGENTS.md, CONTEXT.md, naming skill, ADRs, Fowler baseline)</span></h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm bg-white border border-slate-200 rounded-lg">
+            <thead class="bg-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+              <tr><th class="p-2">#</th><th class="p-2">Severity</th><th class="p-2">Where</th><th class="p-2">Finding</th><th class="p-2">Status at HEAD</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="p-2">S1</td><td class="p-2"><span class="text-red-700 font-semibold">hard</span></td><td class="p-2 font-mono text-xs">lock-entries.ts:87</td><td class="p-2">Bare <span class="font-mono">false</span> + <span class="font-mono">onRefusal</span> = Stop-rule gap (see gap card above).</td><td class="p-2 text-amber-700">open · tracked on status board</td></tr>
+              <tr><td class="p-2">S2</td><td class="p-2"><span class="text-red-700 font-semibold">hard</span></td><td class="p-2 font-mono text-xs">gesture-pipeline.ts:246,257</td><td class="p-2">Dead conditionals: both forks identical.</td><td class="p-2 text-emerald-700">fixed — c96bee1</td></tr>
+              <tr><td class="p-2">S3</td><td class="p-2"><span class="text-red-700 font-semibold">hard</span></td><td class="p-2 font-mono text-xs">api/gantt.ts:652</td><td class="p-2"><span class="font-mono">reveal()</span> doc named <span class="font-mono">EntryNotFoundError</span>; the shell throws <span class="font-mono">RevealTargetNotFoundError</span>.</td><td class="p-2 text-emerald-700">fixed — c96bee1</td></tr>
+              <tr><td class="p-2">S4</td><td class="p-2">judgement</td><td class="p-2 font-mono text-xs">errors.ts:518 · gesture-pipeline.ts:319</td><td class="p-2">Duplicated Code: refusal sentence framed twice, already drifted ("this change" vs "this ${kind}").</td><td class="p-2 text-amber-700">open → candidate 2</td></tr>
+              <tr><td class="p-2">S5</td><td class="p-2">judgement</td><td class="p-2 font-mono text-xs">inline-editing.ts:170</td><td class="p-2">Mysterious Name: <span class="font-mono">CellEditorCommitRefusal</span> — "Commit" is the transaction-moment word ADR 0006 retired for write-refusal concepts; CONTEXT.md says Veto/Refusal. Rename with a refusal word.</td><td class="p-2 text-amber-700">open</td></tr>
+              <tr><td class="p-2">S6</td><td class="p-2">judgement</td><td class="p-2 font-mono text-xs">time/input.ts:107</td><td class="p-2">Primitive Obsession: free-form <span class="font-mono">operation?: string</span>; "operation" also collides with glossary wording. Five doors in api/gantt.ts pass nothing.</td><td class="p-2 text-amber-700">tracked → #242</td></tr>
+              <tr><td class="p-2">S7</td><td class="p-2">judgement</td><td class="p-2 font-mono text-xs">new comments throughout</td><td class="p-2">ASD-STE100: comment sentences routinely exceed the 25-word cap (focus-trap, Refusable doc). Repo-wide habit; one finding.</td><td class="p-2 text-amber-700">open, low priority</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-600">Clean bill elsewhere: <span class="font-mono">Refusable.refuse</span>-returns-false shape; members-not-spliced on <span class="font-mono">UnreadableCellValueError</span> per ADR 0009; <span class="font-mono">gantt.dataset</span> getter typing; the <span class="font-mono">moveEntryTo</span> cascade per D-S5-50; seam-question comments hold; no time/DOM rule breaches in changed code.</p>
+      </section>
+
+      <!-- ============ SPEC ============ -->
+      <section class="space-y-3">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Spec <span class="text-sm font-sans font-normal text-slate-500">(issues, quoted and checked)</span></h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm bg-white border border-slate-200 rounded-lg">
+            <thead class="bg-slate-100 text-left text-xs uppercase tracking-wider text-slate-500">
+              <tr><th class="p-2">Issue</th><th class="p-2">Ask (quote)</th><th class="p-2">Status</th><th class="p-2">Evidence</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="p-2 font-mono">#210</td><td class="p-2">"the demo needs no compensating code"</td><td class="p-2 text-amber-700">core full · demo bar unmet</td><td class="p-2"><span class="font-mono">Refusable</span> on the three reported before* events; tests pin the words. But the lock plugin still vetoes with bare <span class="font-mono">false</span> behind <span class="font-mono">onRefusal</span> — tracked on the status board.</td></tr>
+              <tr><td class="p-2 font-mono">#226</td><td class="p-2">"get dataset(): Dataset … whether the generic parameters flow through it"</td><td class="p-2 text-emerald-700">full</td><td class="p-2"><span class="font-mono">gantt.ts:334</span>; generics flow; toolbar drops its paired param; identity, I2 independence, generic retention, live <span class="font-mono">canUndo</span> all pinned.</td></tr>
+              <tr><td class="p-2 font-mono">#228</td><td class="p-2">"Pass preventScroll at all three .focus() sites"</td><td class="p-2 text-emerald-700">full</td><td class="p-2">All three sites; tests pin the options and keep Tab cycling scrolling. Note: tests witness the options object, not a popup-open-under-scroll run — mechanism pinned, not the defect.</td></tr>
+              <tr><td class="p-2 font-mono">#234</td><td class="p-2">"code, Field key and the text the user typed; the invalid editor's words"</td><td class="p-2 text-emerald-700">full</td><td class="p-2"><span class="font-mono">UnreadableCellValueError</span> carries entryId/field/text as members, never spliced; two reports on a vetoed commit with one shared cause; words on <span class="font-mono">title</span> and keyed by <span class="font-mono">data-reason</span>.</td></tr>
+              <tr><td class="p-2 font-mono">#236</td><td class="p-2">typed command ids</td><td class="p-2 text-slate-500">out of window</td><td class="p-2">Landed before this diff; the diff neither prepares nor undoes it.</td></tr>
+              <tr><td class="p-2 font-mono">#237</td><td class="p-2">"Scope: all 26 classes"</td><td class="p-2 text-amber-700">closed, remainder filed</td><td class="p-2"><span class="font-mono">time/input.ts</span> messages + caller-name threading landed; remainder is #242 (<span class="font-mono">InvalidInstantError</span> message-shaped), and five <span class="font-mono">api/gantt.ts</span> doors pass no caller name yet.</td></tr>
+              <tr><td class="p-2 font-mono">#239</td><td class="p-2"><span class="font-mono">moveEntryTo(entry, start): EntryEdit</span>, core derives the envelope</td><td class="p-2 text-emerald-700">base commit, verified</td><td class="p-2"><span class="font-mono">data/entry-reader.ts:360</span>; sign-off coherent.</td></tr>
+              <tr><td class="p-2 font-mono">#241</td><td class="p-2">"Rewrite the extender to build its cascade with moveEntryTo, and add a several-Segment Entry"</td><td class="p-2 text-emerald-700">full</td><td class="p-2">e2e pins all-bars-ghost, one shared rigid offset, and <span class="font-mono">moveEntryTo</span> in the extender (<span class="font-mono">lock-entries.ts:516</span>).</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-600">No scope creep found: each commit's behaviour maps to its issue. WIP drift (styles tokens, regenerated harness docs) matches the in-flight lanes.</p>
+      </section>
+
+      <!-- ============ SIMPLIFY ============ -->
+      <section class="space-y-3">
+        <h2 class="text-2xl font-serif font-bold border-b border-slate-300 pb-2">Simplify <span class="text-sm font-sans font-normal text-slate-500">(quality · performance · reuse)</span></h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Quality</p>
+            <p class="text-sm"><span class="font-mono text-xs">gesture-pipeline.ts:265–271</span> — second <span class="font-mono">kind === 'resize'</span> ternary re-derived a fact the first ternary already picked. <span class="text-emerald-700">fixed — c96bee1</span>.</p>
+            <p class="text-sm"><span class="font-mono text-xs">errors.ts:537</span> — <span class="font-mono">UnreadableCellValueError.field</span> typed <span class="font-mono">string</span>; its only caller passes a <span class="font-mono">FieldKey</span>, and <span class="font-mono">ErrorReport.field</span> is <span class="font-mono">FieldKey</span>. Same shape at <span class="font-mono">errors.ts:324</span> and <span class="font-mono">:474</span> — sweep all three in one change. <span class="text-amber-700">open</span>.</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Performance</p>
+            <p class="text-sm">Clean in this window. <span class="font-mono">RefusalNote</span> allocates once per commit, not per frame — fine. Known hot-path leak (<span class="font-mono">gantt-shell.ts:716</span> re-keys the dataset per preview frame, I5) is already ledgered as the 24h review's candidate 3 — not re-listed.</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Reuse</p>
+            <p class="text-sm"><span class="font-mono text-xs">errors.ts:517–519 + gesture-pipeline.ts:319–322</span> — one shared refusal-sentence builder beside <span class="font-mono">MutationCancelledError</span>; both call sites compose it. <span class="text-amber-700">open → candidate 2</span>.</p>
+            <p class="text-sm"><span class="font-mono text-xs">inline-editing.ts:405,410</span> — <span class="font-mono">#markInvalid</span> reads <span class="font-mono">COMMIT_REFUSAL_TEXT[reason]</span> twice; one local <span class="font-mono">const words</span>. <span class="text-amber-700">open, small</span>.</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Skipped (with reasons)</p>
+            <table class="w-full text-xs">
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">dead forks, reveal() doc</td><td class="text-emerald-700">fixed — c96bee1</td></tr>
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">gantt-shell allEntries per frame</td><td>already ledgered (24h candidate 3)</td></tr>
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">lock-entries bare false</td><td>Lane F owns it (gap card)</td></tr>
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">operation optional</td><td>deliberate deferral → #242</td></tr>
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">spread idiom ×2</td><td>exactOptionalPropertyTypes; repo idiom</td></tr>
+              <tr class="border-b border-slate-100"><td class="py-1 pr-2">harness stale snap / undo-redo</td><td>fixed — 37b5f17</td></tr>
+              <tr><td class="py-1 pr-2">readers map of one, TxToken, etc.</td><td>see earlier simplify ledgers</td></tr>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CHECKS ============ -->
+      <section class="rounded-lg border border-slate-200 bg-white p-4">
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Checks run at HEAD <span class="font-mono normal-case tracking-normal">37b5f17</span></p>
+        <p class="text-sm"><span class="font-mono text-xs">pnpm vitest run</span> on gesture-pipeline, transaction, time/input, entry-reader, inline-editing, focus-trap, api/gantt, model, styles: <span class="font-semibold text-emerald-700">412 passed, 0 failed</span>. <span class="font-mono text-xs">tsc --noEmit</span>: clean. eslint on touched files: clean. Full gate (<span class="font-mono text-xs">pnpm verify</span>, e2e) not run — the wave's lanes own that.</p>
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section class="rounded-lg border-2 border-slate-700 bg-white p-6">
+        <p class="text-xs uppercase tracking-wider text-slate-500">Top recommendation</p>
+        <h3 class="text-xl font-semibold mt-1"><a href="#c1" class="underline decoration-slate-400">Candidate 1 — one public "can this Field be written on this Entry?" answer</a></h3>
+        <p class="text-sm mt-2">It is the only finding where core rules are re-derived outside their owner, so drift is a correctness risk, not a style nit — and the seam core already owns (the I14 capability resolver) just gains its write half. Candidate 2 is the cheapest large win; the Stop-rule gap is a one-line commit the status board already tracks.</p>
+      </section>
+
+      <footer class="text-xs text-slate-400 pb-8">
+        Roll-up of four parallel reviews (Standards · Spec · Simplify · Architecture) over <span class="font-mono">6eb6da1...37b5f17</span> + WIP, 2026-09-06. Reviewers ran read-only; no code changed for this report.
+      </footer>
+    </main>
+  </body>
+</html>
