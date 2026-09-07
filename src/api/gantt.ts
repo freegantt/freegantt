@@ -11,8 +11,15 @@ import type {
   Theme,
   ViewportGestures,
 } from '../view/index.js';
-import { ScrollModel, TimeScaleModel, pickDefined } from '../layout/index.js';
-import type { PresetRef, SnapSetting, TimeScaleFit, ViewPreset, RowSource } from '../layout/index.js';
+import { ScrollModel, TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
+import type {
+  PresetRef,
+  SnapSetting,
+  TimeScaleFit,
+  ViewPreset,
+  RowSource,
+  ResolvedRowSource,
+} from '../layout/index.js';
 import type { DateLine } from '../layout/index.js';
 import type {
   BarRenderer,
@@ -212,6 +219,9 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   #shell: GanttShell;
   #dataset: Dataset<TMeta, TFields>;
   #destroyed = false;
+  /** `rowSource`'s resolve cache (#248 S4-2), keyed on the authored object the setter last stored —
+   *  not on the resolved value, which is rebuilt fresh and would never compare `===` to itself. */
+  #rowSourceCache?: { authored: RowSource; resolved: ResolvedRowSource };
 
   constructor(options: GanttOptions<TMeta, TFields>) {
     this.#dataset = options.dataset;
@@ -441,11 +451,24 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
-   *  (#187): assign a copy after a change, not the object already held. */
-  get rowSource(): RowSource {
-    return this.#shell.rowSource;
+   *  (#187): assign a copy after a change, not the object already held.
+   *
+   *  Reads back resolved (#248 S4-2): `heightMode`, `filterPolicy`, and `tree` (Entries sources)
+   *  come back filled, never omitted — a reader never has to know `layout/`'s own defaults. The
+   *  resolve runs here, cached against the setter's own authored object, so two reads with no write
+   *  between them stay `===` and the setter keeps assigning the plain `RowSource` the shell already
+   *  compares by identity (#187) — resolving inside that comparison would break it instead. */
+  get rowSource(): ResolvedRowSource {
+    const authored = this.#shell.rowSource;
+    if (this.#rowSourceCache === undefined || this.#rowSourceCache.authored !== authored) {
+      this.#rowSourceCache = { authored, resolved: resolveRowSource(authored) };
+    }
+    return this.#rowSourceCache.resolved;
   }
 
+  /** Loose on the way in, same as every other setter (#248 S4-2): stores the `RowSource` exactly as
+   *  authored, so the shell's own `Object.is` re-assignment check keeps comparing what the caller
+   *  actually passed. */
   set rowSource(next: RowSource) {
     this.#shell.rowSource = next;
   }

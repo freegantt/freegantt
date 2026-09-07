@@ -32,8 +32,13 @@ export type {
   RowSort,
   FilterPolicy,
   PlannedRowKind,
+  ResolvedRowSource,
+  ResolvedEntriesRowSource,
+  ResolvedGroupRowSource,
+  ResolvedCustomRowSource,
+  ResolvedRowSourceCommon,
 } from './rows/row-source.js';
-export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow } from './rows/row-source.js';
+export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, resolveRowSource } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
 export type { FrameLayoutView } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
