@@ -14,11 +14,11 @@ import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';
 // `./keymap.js` is a sibling `extensions/` module, not a `view/`/`render/` back door (D-S5-5 only
 // forbids those) — see `KeyHandlerRegistrar`'s own doc for why Escape folds into it (C3,
-// `plans/reviews/2026-09-02-s5-start-fixes.md`). The narrow structural type, not the concrete
-// `Keymap` class: a third-party plugin has no `Keymap` instance, only the one bound method
-// `ctx.interaction.registerKeyHandler` gives it, so requiring the whole class here would make
-// `createPopup` uncallable from `ctx.view` alone (D-S5-8).
-import type { KeyHandlerRegistrar } from './keymap.js';
+// `plans/reviews/2026-09-02-s5-start-fixes.md`). The one method, not the whole interface: a
+// third-party plugin has no `Keymap` instance, only the one bound method
+// `ctx.interaction.registerKeyHandler` gives it, so `createPopup` takes that function directly
+// instead of asking the caller to wrap it back into a one-field object (D-S5-8).
+import type { RegisterKeyHandler } from './keymap.js';
 
 export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
 /** Why a popup closed itself. `close()` called by the owner is not one of these — the owner already
@@ -158,7 +158,7 @@ interface DismissContext {
   readonly options: PopupOptions;
   readonly dom: PopupSurface['dom'];
   readonly onDomEvent: PopupSurface['onDomEvent'];
-  readonly keymap: KeyHandlerRegistrar;
+  readonly registerKeyHandler: RegisterKeyHandler;
   dismiss(trigger: DismissTrigger): void;
 }
 
@@ -178,7 +178,7 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
   // protect a popup's own `<input>` from its own close button. Without this flag, Escape typed
   // inside the popup's own input never reaches this handler at all.
   escape: (ctx) =>
-    ctx.keymap.registerHandler(
+    ctx.registerKeyHandler(
       'Escape',
       (event) => {
         event.stopPropagation();
@@ -241,14 +241,15 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
   },
 });
 
-/** `Popup`'s one implementation (D-S5-8). `view` and `keymap` are the only things this reaches
- *  past plain DOM APIs. Escape folds into `keymap` (C3, `plans/reviews/2026-09-02-s5-start-fixes.md`)
- *  instead of a bespoke document-capture listener + per-layer `WeakMap` LIFO stack: `Keymap`
- *  already resolves newest-registration-first (D-S5-7), so a popup registering its Escape handler on
- *  `open()` and unregistering it on `close()` gets "innermost open thing wins" (D-S5-9) for free, and
- *  the shared `isEditableTarget` gate (S5.2, issue #137 F7) restores the IME-composition rule this
- *  primitive was missing — a lone document listener with no gate closed a popup mid-IME-cancel too. */
-export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup {
+/** `Popup`'s one implementation (D-S5-8). `view` and `registerKeyHandler` are the only things this
+ *  reaches past plain DOM APIs. Escape folds into `registerKeyHandler` (C3,
+ *  `plans/reviews/2026-09-02-s5-start-fixes.md`) instead of a bespoke document-capture listener +
+ *  per-layer `WeakMap` LIFO stack: `Keymap` already resolves newest-registration-first (D-S5-7), so
+ *  a popup registering its Escape handler on `open()` and unregistering it on `close()` gets
+ *  "innermost open thing wins" (D-S5-9) for free, and the shared `isEditableTarget` gate (S5.2,
+ *  issue #137 F7) restores the IME-composition rule this primitive was missing — a lone document
+ *  listener with no gate closed a popup mid-IME-cancel too. */
+export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup {
   const { overlay, dom } = view;
   let wrapper: HTMLElement | undefined;
   let unmount: Disposer | undefined;
@@ -321,7 +322,7 @@ export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Po
         options,
         dom,
         onDomEvent: view.onDomEvent,
-        keymap,
+        registerKeyHandler,
         dismiss,
       };
       for (const trigger of new Set(options.dismissOn ?? DEFAULT_DISMISS_ON)) {

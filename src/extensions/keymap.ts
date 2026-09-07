@@ -94,6 +94,11 @@ export interface KeyHandlerRegistrar {
   ): () => void;
 }
 
+/** The one method `KeyHandlerRegistrar` exposes, named on its own — `createPopup` takes this
+ *  directly, so a caller with a bound method (`ctx.interaction.registerKeyHandler`) passes it
+ *  bare, instead of wrapping it in a one-field object. */
+export type RegisterKeyHandler = KeyHandlerRegistrar['registerHandler'];
+
 interface CommandBinding<TGantt> {
   kind: 'command';
   binding: KeyBindingOf<TGantt>;

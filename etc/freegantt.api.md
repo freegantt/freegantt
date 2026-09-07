@@ -210,7 +210,7 @@ export interface CoreFieldValues extends Omit<Entry, 'id'> {
 }
 
 // @public
-export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup;
+export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
 
 // @public
 export interface CustomRow {
@@ -1391,14 +1391,6 @@ export interface KeyEventLike {
 }
 
 // @public
-export interface KeyHandlerRegistrar {
-    // (undocumented)
-    registerHandler(chord: string, handler: (event: KeyEventLike) => void, options?: {
-        captureInEditable?: boolean;
-    }): () => void;
-}
-
-// @public
 export type KindDefaults = {
     [K in keyof Interactions]?: boolean;
 };
@@ -1529,9 +1521,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     // (undocumented)
     interaction: {
         registerKeybinding(binding: KeyBindingOf<TGantt, TDataset>): Disposer;
-        registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
-            captureInEditable?: boolean;
-        }): () => void;
+        registerKeyHandler: RegisterKeyHandler;
         canEdit(entry: Entry): boolean;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
@@ -1681,6 +1671,11 @@ export interface RangeBand {
 export interface Refusable {
     readonly refuse: (reason: string) => false;
 }
+
+// Warning: (ae-forgotten-export) The symbol "KeyHandlerRegistrar" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type RegisterKeyHandler = KeyHandlerRegistrar['registerHandler'];
 
 // @public
 export class RegistrationClosedError extends FreeGanttError {

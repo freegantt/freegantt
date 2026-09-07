@@ -33,10 +33,9 @@ export function popupDemo(): PopupDemoPlugin {
     setup(ctx) {
       // C3, plans/reviews/2026-09-02-s5-start-fixes.md: `createPopup`'s Escape dismissal folds into
       // the shared keymap now. So a plugin hands over `ctx.interaction.registerKeyHandler` — the one
-      // bound method it has, not a full `Keymap` instance — wrapped to the small structural shape
-      // `createPopup` asks for.
+      // bound method it has, not a full `Keymap` instance.
       view = {
-        popup: createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler }),
+        popup: createPopup(ctx.view, ctx.interaction.registerKeyHandler),
         dom: ctx.view.dom,
       };
       return () => {
