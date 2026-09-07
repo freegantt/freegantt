@@ -14,7 +14,7 @@ import type {
 } from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
+import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineSpec } from './date-line.js';
 import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
@@ -472,7 +472,7 @@ export function placeFrame(
   // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
   // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
 
-  const headerFormats = dedupeHeaderFormats(preset.headers);
+  const headerFormats = dropRepeatedGranularity(preset.headers);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
     const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
     return {

@@ -3,7 +3,7 @@ import { instant } from './instant.js';
 import { startOfDay } from './zone.js';
 import {
   DATE_TIME_FORMAT,
-  dedupeHeaderFormats,
+  dropRepeatedGranularity,
   formatDate,
   formatEndInclusive,
   formatWeekNumber,
@@ -48,7 +48,7 @@ describe('formatEndInclusive', () => {
   });
 });
 
-describe('dedupeHeaderFormats', () => {
+describe('dropRepeatedGranularity', () => {
   const at = instant('2026-09-21T12:00:00Z');
   const YEAR_MONTH_DAY: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
   const YEAR_MONTH: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short' };
@@ -58,9 +58,9 @@ describe('dedupeHeaderFormats', () => {
     return new Intl.DateTimeFormat(undefined, { ...format, timeZone: ZONE }).format(new Date(at));
   }
 
-  it('leaves a single-header preset untouched — nothing coarser to dedupe against', () => {
+  it('leaves a single-header preset untouched — nothing coarser to drop granularity against', () => {
     const headers: ViewPresetHeader[] = [{ unit: 'day', increment: 1, format: YEAR_MONTH_DAY }];
-    expect(dedupeHeaderFormats(headers)).toEqual([YEAR_MONTH_DAY]);
+    expect(dropRepeatedGranularity(headers)).toEqual([YEAR_MONTH_DAY]);
   });
 
   it('strips year and month from a finer band once a coarser band already states them', () => {
@@ -68,7 +68,7 @@ describe('dedupeHeaderFormats', () => {
       { unit: 'month', increment: 1, format: YEAR_MONTH },
       { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
     ];
-    const [month, day] = dedupeHeaderFormats(headers);
+    const [month, day] = dropRepeatedGranularity(headers);
     expect(label(month as Intl.DateTimeFormatOptions)).toBe('Sep 2026');
     expect(label(day as Intl.DateTimeFormatOptions)).toBe('21');
   });
@@ -78,16 +78,16 @@ describe('dedupeHeaderFormats', () => {
       { unit: 'year', increment: 1, format: YEAR },
       { unit: 'month', increment: 1, format: YEAR_MONTH },
     ];
-    const [, month] = dedupeHeaderFormats(headers);
+    const [, month] = dropRepeatedGranularity(headers);
     expect(label(month as Intl.DateTimeFormatOptions)).toBe('Sep');
   });
 
-  it('passes a callback format through untouched, and it still counts as showing nothing to dedupe', () => {
+  it('passes a callback format through untouched, and it still counts as showing nothing to drop', () => {
     const headers: ViewPresetHeader[] = [
       { unit: 'week', increment: 1, format: formatWeekNumber },
       { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
     ];
-    const [week, day] = dedupeHeaderFormats(headers);
+    const [week, day] = dropRepeatedGranularity(headers);
     expect(week).toBe(formatWeekNumber);
     expect(label(day as Intl.DateTimeFormatOptions)).toBe('Sep 21, 2026');
   });
@@ -98,7 +98,7 @@ describe('dedupeHeaderFormats', () => {
       { unit: 'week', increment: 1, format: YEAR_MONTH_DAY, repeatCoarserUnits: true },
       { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
     ];
-    const [, week, day] = dedupeHeaderFormats(headers);
+    const [, week, day] = dropRepeatedGranularity(headers);
     expect(label(week as Intl.DateTimeFormatOptions)).toBe('Sep 21, 2026');
     expect(label(day as Intl.DateTimeFormatOptions)).toBe('21');
   });
@@ -108,6 +108,6 @@ describe('dedupeHeaderFormats', () => {
       { unit: 'month', increment: 1, format: YEAR_MONTH },
       { unit: 'day', increment: 1, format: YEAR_MONTH_DAY },
     ];
-    expect(dedupeHeaderFormats(headers)).toBe(dedupeHeaderFormats(headers));
+    expect(dropRepeatedGranularity(headers)).toBe(dropRepeatedGranularity(headers));
   });
 });
