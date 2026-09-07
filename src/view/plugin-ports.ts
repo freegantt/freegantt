@@ -301,9 +301,9 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  this one. Call: `for (const column of ctx.view.resolvedColumns())`. */
     resolvedColumns(): readonly GridColumn[];
     /** S5.8, D-S5-19: whether the currently resolved Grid column for `field` allows inline editing.
-     *  That is `GridColumn.editable` merged with the Field's own `column.editable` default. It is
-     *  the same resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when
-     *  `field` names no column in the Gantt's current `gridColumns` (not shown right now). */
+     *  That is the Field's own `editable` (#142) — one home, no column-level override. It is the
+     *  same resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when `field`
+     *  names no column in the Gantt's current `gridColumns` (not shown right now). */
     isColumnEditable(field: FieldKey): boolean | undefined;
     /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
      *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4). Disposing this plugin

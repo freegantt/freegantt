@@ -168,14 +168,13 @@ describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5
           column: { width: 90, align: 'end', header: 'Cost', resizable: false },
         },
       },
-      fields: [{ key: 'cost', type: 'money' }],
+      fields: [{ key: 'cost', type: 'money', editable: true }],
     });
     const renderer = () => ({ text: 'x' });
-    const columns = resolveColumns(
-      [{ field: 'cost', cellRenderer: renderer, editable: true, movable: false }],
-      registry,
-      { timeZone: zone, locale },
-    );
+    const columns = resolveColumns([{ field: 'cost', cellRenderer: renderer, movable: false }], registry, {
+      timeZone: zone,
+      locale,
+    });
     expect(columns[0]?.cellRenderer).toBe(renderer);
     expect(columns[0]?.editable).toBe(true);
     // this Gantt's own gridColumns entry never set resizable — the Field's own column default (false) wins.

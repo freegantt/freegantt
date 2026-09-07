@@ -26,21 +26,17 @@ declare global {
   }
 }
 
-// S5.8, D-S5-19: `editable: true` on every column but `end` — an unedited default (`end` stays
-// read-only) is a deliberate demo of D-S3-10's "you pick which columns edit" default, not an
-// oversight; the harness page's own copy above says "Name, Start, End or Cost" only because End is
-// worth showing refused (double-click it and nothing opens).
+// S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
+// Name, Start and Cost stay open on `CORE_FIELDS`'/`hierarchyFieldOptions`'s own defaults; End is
+// worth showing refused (double-click it and nothing opens), so `hierarchyFieldOptions` states an
+// explicit `editable: false` override for it.
 const GRID_WITH_COST: readonly GridColumnInput[] = [
-  { field: 'name', editable: true },
-  { field: 'start', editable: true },
+  'name',
+  'start',
   'end',
-  { field: 'cost', header: 'Cost', editable: true },
+  { field: 'cost', header: 'Cost' },
 ];
-const GRID_WITHOUT_COST: readonly GridColumnInput[] = [
-  { field: 'name', editable: true },
-  { field: 'start', editable: true },
-  'end',
-];
+const GRID_WITHOUT_COST: readonly GridColumnInput[] = ['name', 'start', 'end'];
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 const rowsModeSelect = document.querySelector<HTMLSelectElement>('#rows-mode')!;

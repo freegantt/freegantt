@@ -32,15 +32,16 @@ import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 
-// S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
-// first editable column); End and Duration stay read-only (Duration is `compute`-sourced and has no
-// stored home to write back to — ADR 0005: the Rollup would overwrite an edit on the next commit).
+// S5.8, D-S5-19: Name, Start, End and Budget are editable (double-click, or Enter on the selected
+// row's first editable column) — `editable` is the Field's own answer now (#142), so no column
+// here restates it. Duration stays read-only: it is `compute`-sourced and has no stored home to
+// write back to (ADR 0005: the Rollup would overwrite an edit on the next commit).
 const GRID_COLUMNS: readonly GridColumnInput[] = [
-  { field: 'name', editable: true },
-  { field: 'start', editable: true },
+  'name',
+  'start',
   'end',
   { field: 'duration', align: 'start' },
-  { field: 'cost', header: 'Budget', editable: true },
+  { field: 'cost', header: 'Budget' },
 ];
 
 // S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below and the

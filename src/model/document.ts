@@ -39,6 +39,7 @@ export type SerializedField = {
   type?: FieldTypeName;
   source: { from: 'entry'; field: CoreFieldKey } | { from: 'meta'; key: string };
   rollUp?: AggregatorName;
+  editable?: boolean;
   // `Omit<GridColumn, …>` would flatten the sizing union and let a written document name both
   // `width` and `flex` (#249) — built from `GridColumnBase` directly, joined back to
   // `GridColumnSizing`, the same way `Field.column` (`model/field.ts`) stays exclusive.

@@ -146,6 +146,9 @@ export const demoFieldOptions = {
         const n = Number(text.replace(/[^0-9.-]/g, ''));
         return Number.isFinite(n) ? n : undefined;
       },
+      // #142: `editable` moved off the Grid column onto the Field — one home for whether the
+      // Budget cell (`main.ts`'s own header for this field) opens in the gallery demo.
+      editable: true,
       column: { align: 'end' as const, header: 'Cost' },
     },
   },

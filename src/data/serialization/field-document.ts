@@ -10,26 +10,43 @@ import { strategyFor } from '../fields/source-strategy.js';
 /** The code half a reader supplies. Same three keys `Dataset.fromJSON` already picks. */
 export type FromJSONOptions = Pick<DatasetStateOptions, 'fields' | 'fieldTypes' | 'aggregators'>;
 
+/** #142: before `editable` moved onto the Field, a written Document carried it on `column` instead
+ *  (`GridColumnBase.editable`, since removed). A Document written by that build still has the key
+ *  there at runtime, though `SerializedField.column`'s type no longer names it — the same legacy-key
+ *  cast `rollUpKindsFromSchema1` (`read.ts`) uses for a key a current schema no longer writes. Read
+ *  only when the row states no top-level `editable` of its own, so a current Document's answer never
+ *  loses to a stale one. */
+function editableFromLegacyColumn(row: SerializedField): boolean | undefined {
+  if (row.editable !== undefined) return row.editable;
+  const legacyColumn = row.column as
+    (NonNullable<SerializedField['column']> & { editable?: boolean }) | undefined;
+  return legacyColumn?.editable;
+}
+
 /** A `compute` source in JSON is not a schema-2 Field — drop it (D-S4-15). */
 function decodeDeclaredField(row: SerializedField): Field | undefined {
   const source = row.source;
   if (source !== undefined && source.from !== 'entry' && source.from !== 'meta') return undefined;
+  const editable = editableFromLegacyColumn(row);
   return {
     key: row.key,
     ...(row.type !== undefined ? { type: row.type } : {}),
     source: source ?? { from: 'meta', key: String(row.key) },
     ...(row.rollUp !== undefined ? { rollUp: row.rollUp } : {}),
+    ...(editable !== undefined ? { editable } : {}),
     ...(row.column !== undefined ? { column: row.column } : {}),
   };
 }
 
-/** Same-key merge (D-S4-15): Document wins `source` / `rollUp` / `type` / `column`; options win functions. */
+/** Same-key merge (D-S4-15): Document wins `source` / `rollUp` / `type` / `editable` / `column`;
+ *  options win functions. */
 function takeDocumentDataWithOptionFunctions(documentField: Field, optionField: Field): Field {
   return {
     key: documentField.key,
     ...(documentField.type !== undefined ? { type: documentField.type } : {}),
     ...(documentField.source !== undefined ? { source: documentField.source } : {}),
     ...(documentField.rollUp !== undefined ? { rollUp: documentField.rollUp } : {}),
+    ...(documentField.editable !== undefined ? { editable: documentField.editable } : {}),
     ...(documentField.column !== undefined ? { column: documentField.column } : {}),
     // eslint-disable-next-line @typescript-eslint/unbound-method -- Field callbacks are declaration values.
     ...(optionField.equals !== undefined ? { equals: optionField.equals } : {}),
@@ -109,6 +126,7 @@ function encodeDeclaredField(field: Field): SerializedField | undefined {
     ...(field.type !== undefined ? { type: field.type } : {}),
     source: stored,
     ...(field.rollUp !== undefined ? { rollUp: field.rollUp } : {}),
+    ...(field.editable !== undefined ? { editable: field.editable } : {}),
     ...(column !== undefined && Object.keys(column).length > 0 ? { column } : {}),
   };
 }

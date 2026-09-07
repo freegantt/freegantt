@@ -486,6 +486,8 @@ dataset.fields.all;                            // every declared Field, core inc
 
 An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
 
+**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142): `{ key: 'cost', editable: true }` opens both `inlineEditing()`'s cell editor for that field and a bar's drag-resize handle on it — one answer gates both (I14), so a consumer states it once. Default is `false`. Core's own `name`, `start` and `end` default to `true`, matching the resize a bar already allowed before this Field existed; overriding a core field's `editable` alone is legal (`{ key: 'end', editable: false }` closes it without redeclaring `end`'s source or rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name).
+
 **Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
 
 **Hiding one column is one call, not a restated list** (S5.7, D-S5-34, #184):

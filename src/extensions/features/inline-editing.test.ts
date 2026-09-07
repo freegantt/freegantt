@@ -102,13 +102,15 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
   },
 ];
 
+// #142: `editable` is the Field's own answer now, so no column here restates it — see the `fields`
+// declarations below for what opens and what refuses.
 const GRID_COLUMNS: readonly GridColumnInput[] = [
-  { field: 'name', editable: true },
-  { field: 'start', editable: true },
-  'end', // not editable — default false
-  { field: 'cost', editable: true }, // money, no parseValue — F12 refuses to open
-  { field: 'budget', editable: true }, // money, WITH parseValue — round-trips
-  { field: 'quantity', editable: true }, // no `type`, `inputType: 'number'` only
+  'name',
+  'start',
+  'end', // explicit override: not editable (see the `fields` array below)
+  { field: 'cost' }, // money, no parseValue — F12 refuses to open
+  { field: 'budget' }, // money, WITH parseValue — round-trips
+  { field: 'quantity' }, // no `type`, `inputType: 'number'` only
 ];
 
 function makeGantt(
@@ -141,9 +143,12 @@ function makeGantt(
       },
     },
     fields: [
-      { key: 'cost', type: 'money' },
-      { key: 'budget', type: 'budgetMoney' },
-      { key: 'quantity', inputType: 'number', column: { header: 'Quantity' } },
+      { key: 'cost', type: 'money', editable: true },
+      { key: 'budget', type: 'budgetMoney', editable: true },
+      { key: 'quantity', inputType: 'number', editable: true, column: { header: 'Quantity' } },
+      // #142: `name`/`start` are core Fields that already default to editable (`core-fields.ts`);
+      // `end` is the one demonstration this suite pins closed, so it states the override itself.
+      { key: 'end', editable: false },
     ],
   });
   const gantt = new Gantt({
@@ -263,7 +268,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      gridColumns: [{ field: 'name', editable: true }],
+      gridColumns: ['name'],
       interactions: { edit: false },
       plugins: [inlineEditing()],
     });
@@ -1051,7 +1056,7 @@ describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      gridColumns: [{ field: 'name', editable: true }],
+      gridColumns: ['name'],
       plugins: [inlineEditing(), contextMenu()],
     });
 

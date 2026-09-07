@@ -76,9 +76,6 @@ export interface GridColumnBase {
   align?: ColumnAlign;
   /** S5.7 — per-column, more specific than `GanttOptions.cellRenderer` (D-S5-11). */
   cellRenderer?: ColumnCellRenderer;
-  /** S5.8 — this column's cells open the inline editor. Default `false`. Listed here because it
-   *  shares the type (I11); S5.8 honours it. */
-  editable?: boolean;
   /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
