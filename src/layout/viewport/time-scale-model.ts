@@ -117,7 +117,8 @@ function sameRange(a: 'fitDataset' | TimeSpan, b: 'fitDataset' | TimeSpan): bool
 
 /** Per-instance state `bindTimeScale` needs but which is not on the published type (issue #84,
  *  ADR 0007): `bind`/`unbind` are not class methods, so there is nothing for a caller holding a
- *  `TimeScaleModel` reference to call. `view/` is the only importer of `bindTimeScale`. */
+ *  `TimeScaleModel` reference to call. `view/` is the only importer of `bindTimeScale`.
+ *  I2-ok: keyed by TimeScaleModel instance; one instance's entry never reaches another's. */
 const internals = new WeakMap<
   TimeScaleModel,
   { scaleOptions: BoundValue<MutableScaleBinding, ResolvedScale> }
