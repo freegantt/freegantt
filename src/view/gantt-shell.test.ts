@@ -1104,12 +1104,11 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     });
 
     const row = container.querySelector<HTMLElement>('.fg-row')!;
-    expect(ctx!.selectableSegmentsOf({ kind: 'row', rowId: rowId(row.dataset['rowId']!) })).toEqual([
-      owned[0]!.segments[0]!.id,
-      owned[2]!.segments[0]!.id,
-    ]);
+    expect(ctx!.selection.selectableSegmentsOf({ kind: 'row', rowId: rowId(row.dataset['rowId']!) })).toEqual(
+      [owned[0]!.segments[0]!.id, owned[2]!.segments[0]!.id],
+    );
     // A row id no frame carries answers nothing, rather than throwing.
-    expect(ctx!.selectableSegmentsOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
+    expect(ctx!.selection.selectableSegmentsOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
 
     shell.destroy();
   });

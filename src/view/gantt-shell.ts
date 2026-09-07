@@ -729,15 +729,17 @@ export class GanttShell {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry) => this.#capabilities.can(capability, entry),
-      selectableEntriesInRowOrder: () => this.#segmentSelection.selectableEntriesInRowOrder(),
-      selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
-      selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
-      segmentsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
-      segmentsForItem: (item) => this.#layout.segmentIdsForItem(item),
+      // #230 R4: `interaction/` asks one collaborator, not eight. `SegmentSelection` answers all of
+      // it but the two projections that are not its own — the Dataset's and the frame's.
       selection: {
-        get: () => this.#segmentSelection.segmentIds,
+        segmentIds: () => this.#segmentSelection.segmentIds,
         entryIds: () => this.#segmentSelection.entryIds,
         propose: (next) => this.#segmentSelection.propose(next),
+        selectableEntriesInRowOrder: () => this.#segmentSelection.selectableEntriesInRowOrder(),
+        selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
+        selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
+        segmentIdsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
+        segmentIdsForItem: (item) => this.#layout.segmentIdsForItem(item),
       },
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,

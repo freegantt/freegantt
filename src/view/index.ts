@@ -32,6 +32,7 @@ export type {
   EntryGestureContext,
   EntryGestureSession,
   EntryHit,
+  SelectionForGestures,
 } from './entry-gesture-context.js';
 export type {
   ColumnGestureContext,

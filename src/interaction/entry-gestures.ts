@@ -101,8 +101,8 @@ export function attachEntryGestures(
       // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
       // nothing here.
       if (grabbedEdge === undefined && grabbedItemId !== undefined) {
-        const grabbedSegments = ctx.segmentsForItem(grabbedItemId);
-        const selected = ctx.selection.get();
+        const grabbedSegments = ctx.selection.segmentIdsForItem(grabbedItemId);
+        const selected = ctx.selection.segmentIds();
         if (!grabbedSegments.some((id) => selected.includes(id))) {
           anchor = grabbedSegments[0];
           ctx.selection.propose(grabbedSegments);
@@ -148,7 +148,7 @@ export function attachEntryGestures(
    *  crossed. Ranging over rows selected every Segment of every row the range touched, including
    *  the ones before the anchor and after the target inside those two end rows. */
   function selectRange(to: readonly SegmentId[]): readonly SegmentId[] {
-    const order = ctx.selectableSegmentsInRowOrder();
+    const order = ctx.selection.selectableSegmentsInRowOrder();
     const fromIndex = anchor !== undefined ? order.indexOf(anchor) : -1;
     const toIndex = order.indexOf(to[to.length - 1]!);
     if (fromIndex === -1 || toIndex === -1) return to;
@@ -197,7 +197,7 @@ export function attachEntryGestures(
     if (hit === undefined || missesEveryEntry(hit)) {
       if (clearOnMiss && (isPrimaryButton(e) || isRightClick(e))) {
         anchor = undefined;
-        if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+        if (ctx.selection.segmentIds().length > 0) ctx.selection.propose([]);
       }
       return;
     }
@@ -209,7 +209,7 @@ export function attachEntryGestures(
     // Segment; a row names every Segment of every selectable Entry it owns. The rules below then run
     // over the list as a unit. An empty list means the hit landed on something no gesture may
     // select, which writes nothing and clears nothing.
-    const targets = ctx.selectableSegmentsOf(hit);
+    const targets = ctx.selection.selectableSegmentsOf(hit);
     if (targets.length === 0) return;
 
     if (e.shiftKey) {
@@ -238,7 +238,7 @@ export function attachEntryGestures(
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
    *  selected, else it adds the members that are missing (#185). */
   function toggled(targets: readonly SegmentId[]): readonly SegmentId[] {
-    const current = ctx.selection.get();
+    const current = ctx.selection.segmentIds();
     if (targets.every((id) => current.includes(id))) {
       return current.filter((id) => !targets.includes(id));
     }
@@ -263,7 +263,7 @@ export function attachEntryGestures(
     if (e.key !== 'Escape') return;
     if (drag.escape()) return; // was dragging — cancelled, does not also clear the selection
     anchor = undefined;
-    if (ctx.selection.get().length > 0) ctx.selection.propose([]);
+    if (ctx.selection.segmentIds().length > 0) ctx.selection.propose([]);
   }
 
   /** `user-select: none` stops highlight *inside* the Gantt. A double-click still starts a native
