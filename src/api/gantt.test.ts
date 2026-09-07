@@ -20,9 +20,8 @@ import {
 } from './index.js';
 import type {
   DatasetPlugin,
-  EditRequest,
+  EditExtender,
   Entry,
-  StoredEdits,
   GanttDom,
   GanttPlugin,
   GridColumnInput,
@@ -5066,39 +5065,39 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
   });
 });
 
-// #186: `api/gantt.ts` hands the drag preview an *arrow* over `dataset.editExtender`, so every drag
-// re-reads the hook's current occupant (D-S5-23). Storing the getter's result instead would pin the
-// occupant that existed when the Gantt was built, and the ghost would go silent from the moment a
-// plugin composes onto the hook. That is invisible today and wrong the moment S7 lands.
-/** What `Dataset.extraEditsFor` returns: the hook's writes, already read through the dataset's zone
- *  (#209 C3). The double below stands in one step further along than an `EditExtender`, which is the
- *  member `api/gantt.ts` actually calls. */
-type ExtraEditsFor = (request: EditRequest) => StoredEdits;
+// #186 at the public seam: `api/gantt.ts` hands the drag preview an *arrow* over the Dataset's edit
+// hook, so every drag re-reads whatever occupies that hook (D-S5-23). This suite proves the arrow
+// reaches an installed extender through the public `Gantt` surface, and ghosts nothing when the hook
+// stands empty.
+//
+// It does not prove the live half of #186 — an occupant that *changes* after the Gantt exists. No
+// public route allows that: `RegistrationGate` shuts `ctx.edits.setExtender` when the Dataset
+// constructor returns, so a test here can only occupy the hook before the Gantt is built.
+// `interaction/extender-preview.test.ts` reaches `DatasetState.setExtender` directly, composes a
+// second occupant after the shell exists, and guards the live read there.
 
-describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
+describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   const A_START = instant('2026-09-01T00:00:00Z');
   const A_END = instant('2026-09-03T00:00:00Z');
   const X_START = instant('2026-09-05T00:00:00Z');
   const X_END = instant('2026-09-06T00:00:00Z');
 
-  /** Stands in for the S7 case: an occupant that changes after the Gantt exists. A plugin's own
-   *  wrapper installs once, at construction (D-S5-4's registration gate) — but nothing stops the
-   *  wrapper from deferring to a mutable reference, which is what a stateful engine does across its
-   *  own reconfiguration. `current.value` starts as a no-op and the test swaps it post-construction,
-   *  standing in for that later composition (#250 A2: `extraEditsFor` moved off `Dataset`, so a test
-   *  can no longer intercept it by subclassing and overriding a method that no longer exists). */
-  function lateHookPlugin(current: { value: ExtraEditsFor }): DatasetPlugin {
+  /** Occupies the Dataset's edit hook with `cascade`, through the one seam a real plugin uses
+   *  (#250 A2: `extraEditsFor` is no longer a `Dataset` method, so a test can no longer intercept it
+   *  by subclassing). Nothing else installs here, so the wrapper discards the occupant it composes
+   *  onto — `data/edit-extension.test.ts` is where composition order is asserted (D-S5-23). */
+  function extenderPlugin(cascade: EditExtender): DatasetPlugin {
     return {
-      id: 'test.late-hook',
+      id: 'test.extender',
       setup(ctx) {
-        ctx.edits.setExtender(() => (request) => current.value(request));
+        ctx.edits.setExtender(() => cascade);
       },
     };
   }
 
   /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
    *  arithmetic on an `Instant` happens outside `time/` (I10). */
-  const cascadeOntoX: ExtraEditsFor = ({ proposed }) => {
+  const cascadeOntoX: EditExtender = ({ proposed }) => {
     const moved = proposed.get(entryId('a'));
     if (!moved || moved.start === undefined) return new Map();
     return new Map([
@@ -5106,28 +5105,23 @@ describe('Gantt reads the Dataset’s edit hook live (#186)', () => {
     ]);
   };
 
-  function buildGantt(): {
-    gantt: Gantt;
-    occupant: { value: ExtraEditsFor };
-    container: HTMLElement;
-  } {
+  /** No `cascade` means no plugin at all, so the hook keeps its identity occupant — the contrast the
+   *  second test reads. */
+  function buildGantt(cascade?: EditExtender): { gantt: Gantt; container: HTMLElement } {
     const container = document.createElement('div');
-    const occupant = { value: (() => new Map()) as ExtraEditsFor };
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
         { id: 'a', name: 'a', start: A_START, end: A_END },
         { id: 'x', name: 'x', start: X_START, end: X_END },
       ],
-      plugins: [lateHookPlugin(occupant)],
+      ...(cascade ? { plugins: [extenderPlugin(cascade)] } : {}),
     });
-    return { gantt: new Gantt({ container, dataset }), occupant, container };
+    return { gantt: new Gantt({ container, dataset }), container };
   }
 
-  it('ghosts an extender that occupies the hook after construction', async () => {
-    const { gantt, occupant, container } = buildGantt();
-    // Composed after the Gantt is built — the case a stored occupant would miss.
-    occupant.value = cascadeOntoX;
+  it('ghosts an entry an installed extender moves, through the public seam', async () => {
+    const { gantt, container } = buildGantt(cascadeOntoX);
 
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
