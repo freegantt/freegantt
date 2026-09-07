@@ -42,6 +42,7 @@ export default defineConfig({
         'docs-lifecycle': page('docs/lifecycle.html'),
         'docs-classes': page('docs/classes.html'),
         'docs-timeline': page('docs/timeline.html'),
+        'docs-plugins': page('docs/plugins.html'),
         'docs-diagram': page('docs/diagram.html'),
         'docs-maintaining': page('docs/maintaining.html'),
       },
