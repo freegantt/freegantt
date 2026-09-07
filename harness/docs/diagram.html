@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FreeGantt Module Map</title>
 <link rel="stylesheet" href="../harness-nav.css" />
+<link rel="stylesheet" href="./docs-nav.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
@@ -360,20 +361,21 @@
     <nav class="harness-site-nav" aria-label="Harness pages"></nav>
     <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
     <script type="module" src="../harness-nav.ts"></script>
-    <p class="eyebrow">Architecture snapshot — slice S4</p>
-    <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+    <script type="module" src="./docs-nav.ts"></script>
+    <p class="eyebrow">Architecture snapshot — slice S5</p>
+    <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
     <h1>FreeGantt module map</h1>
     <p>
       The dependency graph as it actually stands in <code>src/</code> right now: solid boxes are built and
-      wired together by real imports; hatched boxes are stub modules (<code>index.ts</code> only, 3–5 lines)
-      that the slice plan reserves but hasn't filled in yet. The vertical split is the one boundary the linter
+      wired together by real imports; the one hatched box is the remaining stub
+      (<code>scheduling/index.ts</code>, reserved for S7). The vertical split is the one boundary the linter
       enforces — <code>model/</code>, <code>time/</code>, <code>data/</code>, and <code>layout/</code> stay
       DOM-free; only the right-hand column may touch <code>document</code> or <code>window</code>.
       <code>scheduling/</code> is DOM-free too, but sits outside the core zone on purpose: it is the
       first-party default scheduling plugin's engine, not a mandatory core layer (D4, ADR 0002) — a Gantt with
       no scheduling plugin installed never loads it.
-      At S4, <code>data/</code> and <code>interaction/</code> are now fully built — the only stubs left are
-      <code>scheduling/</code> and <code>extensions/</code>.
+      At S5, <code>extensions/</code> is built: plugin runtime, commands, keymap, popup, and the three
+      shipped built-ins. <code>scheduling/</code> is the only stub left.
     </p>
   </header>
 
@@ -381,7 +383,7 @@
     <svg
       viewBox="0 0 1240 960"
       role="img"
-      aria-label="Layered dependency diagram of the FreeGantt src tree at slice S4: model, time, data and layout form the mandatory DOM-free core on the left; below them, outside the core zone, sits scheduling — the first-party default plugin's DOM-free engine, not part of the core. The right column holds the DOM-touching render, view, interaction and extensions modules, all surfaced through a single api module on top. data/ and interaction/ are now fully built; scheduling/ and extensions/ remain stubs. Data and scheduling meet only through data/'s generic extension hook; a direct link between scheduling and interaction is marked forbidden."
+      aria-label="Layered dependency diagram of the FreeGantt src tree at slice S5: model, time, data and layout form the mandatory DOM-free core on the left; below them, outside the core zone, sits scheduling — still a stub for S7. The right column holds the DOM-touching render, view, interaction and extensions modules, all surfaced through a single api module on top. extensions/ is built in S5. Data and scheduling meet only through data/'s generic extension hook; a direct link between scheduling and interaction is marked forbidden."
     >
       <defs>
         <marker
@@ -421,7 +423,7 @@
       />
       <text x="620" y="44" text-anchor="middle" class="box-name" font-size="17" fill="var(--ink)">api/</text>
       <text x="620" y="63" text-anchor="middle" class="box-sub" font-size="11.5" fill="var(--muted)">
-        Gantt, Dataset · 765 lines · the only public export surface, alongside model/ types
+        Gantt, Dataset, plugins · 1,833 lines · the only public export surface, alongside model/ types
       </text>
 
       <!-- boundary zones -->
@@ -512,7 +514,7 @@
         Entry, Field, ChangeSet, ids
       </text>
       <text x="195" y="227" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        716 lines · 10 files · types + brand helpers, 0 deps
+        1,771 lines · 14 files · types + brand helpers, 0 deps
       </text>
       <text x="195" y="242" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
         errors, geometry, document schema
@@ -533,10 +535,10 @@
         time/
       </text>
       <text x="455" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        instant, zone, scale, format
+        instant, zone, scale, ZonedTime
       </text>
       <text x="455" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        940 lines · 8 files · only new Date() here
+        1,084 lines · 9 files · only new Date() here
       </text>
 
       <!-- layout/ -->
@@ -557,7 +559,7 @@
         frame.ts, items/, lanes/, rows/, viewport/
       </text>
       <text x="320" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        2,342 lines · 20 files · computeFrame(), row/item pipeline
+        3,568 lines · 29 files · computeFrame(), row/item pipeline
       </text>
       <text x="320" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
         TimeScaleModel, ScrollModel, gesture-draft, FrameLayout
@@ -581,7 +583,7 @@
         DatasetState, EntryStore, transaction
       </text>
       <text x="205" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        2,607 lines · 23 files · extension hook → changeset
+        4,207 lines · 28 files · extension hook → changeset
       </text>
       <text x="205" y="556" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
         History, fields, serialization · imports time + model
@@ -621,10 +623,10 @@
         render/
       </text>
       <text x="810" y="215" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        backend, dom/{index,sync-keyed}, null/
+        backend, syncKeyed, decorations, ElementDescription
       </text>
       <text x="810" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        1,028 lines · 7 files · syncKeyed reconciler, date-line
+        2,056 lines · 11 files · syncKeyed reconciler, date-line
       </text>
 
       <!-- view/ -->
@@ -642,10 +644,10 @@
         view/
       </text>
       <text x="930" y="354" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        GanttShell, PaneLayout, GesturePipeline
+        GanttShell, PluginRuntime ports, GesturePipeline
       </text>
       <text x="930" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        2,440 lines · 20 files · capability, affordance, event-bus
+        6,583 lines · 31 files · capability, commands, plugin seams
       </text>
       <text x="930" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
         CollapseState, grid-columns, keyboard/wheel nav, splitter
@@ -666,29 +668,31 @@
         interaction/
       </text>
       <text x="810" y="524" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        entry-gestures, keyboard-editing
+        entry-gestures, column-gestures
       </text>
       <text x="810" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        401 lines · 4 files · drives EntryGestureContext
+        798 lines · 5 files · drives EntryGestureContext
       </text>
 
-      <!-- extensions/ stub -->
+      <!-- extensions/ — BUILT in S5 -->
       <rect
         x="960"
         y="480"
         width="200"
         height="76"
         rx="7"
-        fill="var(--stub-fill)"
-        stroke="var(--border-strong)"
+        fill="var(--bg)"
+        stroke="var(--ink)"
         stroke-width="1.5"
-        stroke-dasharray="5 4"
       />
-      <text x="1060" y="506" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--muted)">
+      <text x="1060" y="506" text-anchor="middle" class="box-name" font-size="14.5" fill="var(--ink)">
         extensions/
       </text>
       <text x="1060" y="525" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-        3 lines · stub — S6
+        PluginRuntime, popup, built-ins
+      </text>
+      <text x="1060" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
+        2,458 lines · 13 files · dogfoods api/
       </text>
 
       <!-- harness note -->
@@ -781,6 +785,16 @@
         Entry type
       </text>
 
+      <!-- view -> extensions (shell constructs PluginRuntime) -->
+      <path
+        d="M1060,410 V480"
+        stroke="var(--ink)"
+        stroke-width="1.5"
+        fill="none"
+        marker-end="url(#arrow)"
+        color="var(--ink)"
+      />
+
       <!-- api arrows: view -> api, model -> api, data -> api, layout -> api, time -> api, interaction -> api -->
       <path
         d="M840,310 C 760,190 700,110 660,70"
@@ -832,7 +846,7 @@
         color="var(--ink)"
       />
       <text x="720" y="180" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">
-        view + data + layout + time + interaction
+        view + data + layout + time + interaction + extensions
       </text>
 
       <!-- data <-> scheduling : the designed seam — generic extension hook, no static import -->
@@ -873,25 +887,23 @@
       </text>
     </svg>
     <figcaption>
-      Boxes trace what <code>src/</code> contains at S4; arrows trace real <code>import</code> statements —
+      Boxes trace what <code>src/</code> contains at S5; arrows trace real <code>import</code> statements —
       except the muted <code>data/ ⇄ scheduling/</code> bridge, which is the designed extension-hook seam (D4):
       no static import in either direction. <code>model/</code> has zero dependencies and feeds nearly
       everything; <code>time/</code> and <code>layout/</code> stay DOM-free so they run the same in Node as in
       a browser; <code>render/</code> and <code>view/</code> are the DOM-touching modules.
-      <code>data/</code> and <code>interaction/</code> are now fully built — <code>data/</code> owns live
-      state, transactions, fields and serialization (importing <code>time/</code> and <code>model/</code>);
-      <code>interaction/</code> drives gestures through the <code>EntryGestureContext</code> seam in
-      <code>view/</code> (importing <code>view/</code>, <code>data/</code> and <code>model/</code>).
-      <code>scheduling/</code> and <code>extensions/</code> remain stubs — reserved names with stub files
-      for S7 and S6 respectively.
-      <code>api/</code> now imports <code>interaction/</code> for constructor injection of gesture attachments.
+      <code>data/</code>, <code>interaction/</code> and <code>extensions/</code> are fully built —
+      <code>extensions/</code> may import only <code>api/</code> and <code>model/</code> (D-S5-5).
+      <code>scheduling/</code> remains a stub for S7.
+      <code>api/</code> imports <code>interaction/</code> for constructor injection of gesture attachments
+      and <code>extensions/</code> for the plugin runtime and shipped built-ins.
     </figcaption>
   </figure>
 
   <div class="legend">
     <div class="legend-item"><span class="swatch solid-core"></span> DOM-free module, built</div>
     <div class="legend-item"><span class="swatch solid-dom"></span> DOM-touching module, built</div>
-    <div class="legend-item"><span class="swatch stub"></span> stub — reserved, not yet implemented</div>
+    <div class="legend-item"><span class="swatch stub"></span> stub — reserved for S7</div>
     <div class="legend-item"><span class="line-sample"></span> live import (solid arrow)</div>
     <div class="legend-item"><span class="line-sample dashed"></span> designed bridge, not yet wired</div>
     <div class="legend-item">
@@ -904,10 +916,10 @@
     <p class="section-eyebrow">Detail — model/</p>
     <h2>Model coupling</h2>
     <p>
-      <code>model/</code> is the one module every other layer is allowed to reach into — 716 lines, zero
-      dependencies, no runtime beyond id/brand helpers (plans/01 §1.1). At S4 it exports
-      <code>Field</code>/<code>ChangeSet</code>/<code>DatasetDocument</code> alongside the original
-      <code>Entry</code>/<code>EntryKind</code> types. Every arrow below is a real
+      <code>model/</code> is the one module every other layer is allowed to reach into — 1,771 lines, zero
+      dependencies, no runtime beyond id/brand helpers (plans/01 §1.1). At S5 it also exports
+      <code>PluginId</code>, <code>ErrorReport</code>, <code>ElementDescription</code> and command
+      primitives alongside <code>Field</code>/<code>ChangeSet</code>/<code>DatasetDocument</code>. Every arrow below is a real
       <code>import</code> in <code>src/</code> today; the label on each box is exactly what that layer pulls
       across the boundary, type-only imports called out separately from the runtime calls
       (<code>entryId()</code>, <code>rowId()</code>, <code>itemId()</code>) that actually execute outside
@@ -1465,11 +1477,11 @@
         />
       </svg>
       <figcaption>
-        The transaction pipeline at S4. The consumer calls <code>dataset.transaction()</code>, which delegates
+        The transaction pipeline at S5. The consumer calls <code>dataset.transaction()</code>, which delegates
         to <code>runTransaction()</code> in <code>data/transaction.ts</code>. The body runs against a staged
         <code>EntryStore</code> overlay so mid-flight reads see consistent state. The
-        <code>EditExtender</code> hook is called once (identity function by default; a scheduling plugin
-        occupies this slot in S7). Hierarchy promotion and rollup run next, then
+        <code>EditExtender</code> hook is called once (identity function by default; a Dataset plugin can wrap
+        it, and a scheduling plugin occupies this slot in S7). Hierarchy promotion and rollup run next, then
         <code>foldChangeSet()</code> diffs the staged edits against committed state to produce one
         <code>ChangeSet</code>. The events fire in order: <code>beforeChange</code> (cancelable — the
         consumer can veto), then <code>change</code> (carries the changeset). The <code>History</code>
@@ -1550,10 +1562,10 @@
           selection · selectionEntries
         </text>
         <text x="185" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          interactions · theme · locale · todayLine
+          interactions · plugins · commands
         </text>
         <text x="185" y="158" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          destroy()
+          theme · locale · todayLine · destroy()
         </text>
         <text x="185" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
           api/gantt.ts
@@ -1637,7 +1649,7 @@
           time/ + layout/ re-exports
         </text>
         <text x="1030" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-          dayPreset, hourPreset, weekPreset, monthPreset, yearPreset
+          presets · instant() · now() · addMs · ZonedTime
         </text>
         <text x="1030" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
           instant(), ViewPreset
@@ -1777,10 +1789,10 @@
       <figcaption>
         Four export groups, one allow-list philosophy: <code>api/index.ts</code> re-exports exactly the types
         a consumer needs to call the classes above it and nothing else — <code>TimeScaleOptions</code> stays
-        internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S4 the
-        <code>Gantt</code> class exposes many live-reconfigurable properties (preset, range, gridColumns,
-        rowSource, collapsed, selection, etc.) and <code>Dataset</code> exposes entries CRUD, transactions,
-        events, fields, serialization, and undo/redo. The call chain underneath never appears in the public
+        internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S5 the
+        <code>Gantt</code> class exposes plugins, commands, and the live-reconfigurable properties (preset,
+        range, gridColumns, rowSource, collapsed, selection, …) and <code>Dataset</code> exposes entries CRUD,
+        transactions, events, fields, Dataset plugins, serialization, and undo/redo. The call chain underneath never appears in the public
         surface; a consumer only ever sees it as bars moving on screen. The first render happens after
         construction completes via <code>FrameScheduler.flush()</code>, not via bind-notify.
       </figcaption>
@@ -1792,8 +1804,8 @@
     <p class="section-eyebrow">Detail — implemented modules</p>
     <h2>How the built modules talk</h2>
     <p>
-      The same graph as above, minus the two remaining stubs — <code>scheduling/</code> and
-      <code>extensions/</code> don't appear. Every arrow label below is a real symbol in
+      The same graph as above, minus the remaining stub — <code>scheduling/</code> does not appear.
+      Every arrow label below is a real symbol in
       <code>src/</code> today. <code>api/</code> builds both <code>Dataset</code> (from <code>data/</code>)
       and <code>Gantt</code> (from <code>view/</code>). <code>view/GanttShell</code> binds to the dataset
       (receiving <code>DatasetState</code>), builds the <code>GesturePipeline</code> with capability
@@ -1808,7 +1820,7 @@
       <svg
         viewBox="0 0 1240 720"
         role="img"
-        aria-label="Call graph of the implemented FreeGantt modules at S4. api/ builds Dataset (data/) and Gantt (view/). GanttShell constructs the Viewport, FrameLayout, RenderBackend, EventBus, GesturePipeline, CollapseState, and every attachment. GanttShell binds to the TimeScaleModel via scale.bind, reads scale and preset, and the model calls onChange which is this.render(). interaction/ drives the EntryGestureContext seam. Per render, computeFrame in layout/frame.ts receives LayoutInput and produces GeometryFrame. The GeometryFrame goes to backend.sync which runs syncKeyed once per layer. model/ is a zero-dependency strip of types plus brand-id helpers."
+        aria-label="Call graph of the implemented FreeGantt modules at S5. api/ builds Dataset (data/) and Gantt (view/). GanttShell constructs the Viewport, FrameLayout, RenderBackend, EventBus, GesturePipeline, PluginRuntime, CollapseState, and every attachment. GanttShell binds to the TimeScaleModel via scale.bind, reads scale and preset, and the model calls onChange which is this.render(). interaction/ drives the EntryGestureContext seam. Per render, computeFrame in layout/frame.ts receives LayoutInput and produces GeometryFrame. The GeometryFrame goes to backend.sync which runs syncKeyed once per layer. model/ is a zero-dependency strip of types plus brand-id helpers."
       >
         <defs>
           <marker
@@ -2274,7 +2286,7 @@
 
   <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
 
-  <footer>src/ · 97 non-test files · 10 layers, 8 with code · plans/03-slices.md — slice S4</footer>
+  <footer>src/ · 150 non-test files · 10 layers, 9 with code · plans/03-slices.md — slice S5</footer>
 </div>
   </body>
 </html>
