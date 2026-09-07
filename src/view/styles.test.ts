@@ -125,6 +125,8 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('--fg-tick-box-floor');
     expect(css).toContain('--fg-indent-width');
     expect(css).toContain('--fg-lane-gap');
+    expect(css).toContain('--fg-bar-opacity');
+    expect(css).toContain('--fg-bar-fill-painted');
     expect(css).not.toContain(':root, .fg-container');
     expect(css).not.toContain('--fg-header-height');
   });
@@ -136,7 +138,9 @@ describe('ensureBaseStyles', () => {
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
-    expect(getComputedStyle(bar as Element).backgroundColor).toBe('rgb(1, 2, 3)');
+    expect(container.style.getPropertyValue('--fg-bar-fill')).toBe('rgb(1, 2, 3)');
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toMatch(/\.fg-bar \{[^}]*background: var\(--fg-bar-fill-painted\)/);
     shell.destroy();
   });
 

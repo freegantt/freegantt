@@ -86,6 +86,8 @@ ${LIGHT_COLOR_TOKENS}
 ${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
   --fg-lane-gap: 2px;
+  --fg-bar-opacity: 0.9;
+  --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent);
 }
 @media (prefers-color-scheme: dark) {
   .fg-container:not([data-fg-theme]) {
@@ -204,14 +206,14 @@ ${DARK_COLOR_TOKENS}
 .fg-bars { position: relative; }
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
-.fg-bar { background: var(--fg-bar-fill); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
-.fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill); }
+.fg-bar { background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
+.fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill-painted); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill-painted); }
 /* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
    barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
    — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
    own size share (CONTEXT.md), read the same way as --fg-tick-box-floor. */
 .fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
-.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill); transform: translate(-50%, -50%) rotate(45deg); }
+.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); transform: translate(-50%, -50%) rotate(45deg); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet
