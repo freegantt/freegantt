@@ -87,7 +87,6 @@ ${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
   --fg-lane-gap: 2px;
   --fg-bar-opacity: 0.9;
-  --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent);
 }
 @media (prefers-color-scheme: dark) {
   .fg-container:not([data-fg-theme]) {
@@ -206,7 +205,11 @@ ${DARK_COLOR_TOKENS}
 .fg-bars { position: relative; }
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
-.fg-bar { background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
+/* T1-1: the colour-mix lives on the bar itself, not .fg-container — a renderer's own
+   --fg-bar-fill override (set on this element, e.g. by barRenderer) only reaches the painted
+   colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
+   .fg-container alone and inherits down unchanged. */
+.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
 .fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill-painted); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill-painted); }
 /* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
    barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
