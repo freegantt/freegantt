@@ -4,6 +4,7 @@ import { createFieldContext, writeField } from './field-access.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
+  IllegalCoreFieldOverrideError,
   segmentId,
   UnknownAggregatorError,
   UnknownFieldTypeError,
@@ -72,8 +73,8 @@ describe('D-S4-35 omitted source', () => {
     expect(ctx(registry).read(entry, 'cost')).toBe(1);
   });
 
-  it('{ key: start } throws DuplicateFieldKeyError', () => {
-    expect(() => new FieldRegistry({ fields: [{ key: 'start' }] })).toThrow(DuplicateFieldKeyError);
+  it('{ key: start } with no other key is a no-op override and does not throw', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'start' }] })).not.toThrow();
   });
 
   it('two Fields that share one meta slot throw DuplicateFieldSourceError', () => {
@@ -103,11 +104,6 @@ describe('D-S4-35 omitted source', () => {
     );
   });
 
-  it('toJSON of an omitted-source Field is the resolved source (read view)', () => {
-    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
-    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
-  });
-
   it('bound FieldContext.read looks up by key after writeField', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     const context = ctx(registry);
@@ -124,5 +120,57 @@ describe('D-S4-35 omitted source', () => {
     expect(written.meta).toEqual({ cost: 500 });
     const next = { ...entry, meta: written.meta };
     expect(context.read(next, 'cost')).toBe(500);
+  });
+
+  it('toJSON of an omitted-source Field is the resolved source (read view)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
+  });
+});
+
+describe("#142 a consumer may override a core Field's editable, and nothing else", () => {
+  it('{ key: start, editable: false } merges onto the core Field', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
+    expect(registry.get('start')?.editable).toBe(false);
+  });
+
+  it('the merged Field keeps its declaration-order position in `all`', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
+    const keys = registry.all.map((field) => field.key);
+    expect(keys.indexOf('start')).toBe(1); // after 'name', ahead of 'end'.
+  });
+
+  it('a core-key declaration carrying a key other than editable throws IllegalCoreFieldOverrideError', () => {
+    expect(
+      () => new FieldRegistry({ fields: [{ key: 'start', source: { from: 'meta', key: 's' } }] }),
+    ).toThrow(IllegalCoreFieldOverrideError);
+  });
+
+  it('the illegal-override error names the offending key', () => {
+    try {
+      new FieldRegistry({ fields: [{ key: 'start', column: { header: 'Start' } }] });
+      expect.unreachable('expected IllegalCoreFieldOverrideError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(IllegalCoreFieldOverrideError);
+      expect((error as IllegalCoreFieldOverrideError).illegalKey).toBe('column');
+      expect((error as IllegalCoreFieldOverrideError).key).toBe('start');
+    }
+  });
+
+  it('overriding the same core key twice throws DuplicateFieldKeyError', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [
+            { key: 'start', editable: false },
+            { key: 'start', editable: true },
+          ],
+        }),
+    ).toThrow(DuplicateFieldKeyError);
+  });
+
+  it('a core-key override does not affect a sibling core Field', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
+    expect(registry.get('end')?.editable).not.toBe(false);
   });
 });
