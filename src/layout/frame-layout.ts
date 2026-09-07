@@ -68,7 +68,7 @@ export class FrameLayout implements FrameLayoutView {
       laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
       entries: input.entries,
       registry: input.itemProducerRegistry,
-      ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
+      datasetRevision: input.datasetRevision,
     });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations);
   }

@@ -16,7 +16,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
+import type { DatasetDocument, DatasetEventMap, Disposer } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -151,10 +151,19 @@ function bindDataset(): void {
 
 // Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
 // plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
-watchAllErrors([dataset, gantt], (report) => {
-  const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
-  logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
-});
+// `watchAllErrors` returns a `Disposer` for exactly this: an import below replaces both `dataset`
+// and `gantt`, so the old subscription is disposed first, alongside `bindDataset`/`bindGantt`'s own
+// rebind — calling `watchAllErrors` twice on the module-scope pair would otherwise leak a stale
+// subscription to entries the import just discarded (T1-4).
+let stopWatchingErrors: Disposer = () => {};
+
+function bindErrors(): void {
+  stopWatchingErrors();
+  stopWatchingErrors = watchAllErrors([dataset, gantt], (report) => {
+    const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+    logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
+  });
+}
 
 // D-S2-25, made visible: checking the box locks the current first entry, and the plugin refuses
 // every later changeset that touches it. The lock itself is a dataset write, so it logs like any
@@ -167,6 +176,7 @@ lockCheckbox.addEventListener('change', () => {
 
 bindDataset();
 bindGantt();
+bindErrors();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
@@ -245,6 +255,7 @@ importBtn.addEventListener('click', () => {
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();
     bindGantt();
+    bindErrors();
     toolbar.innerHTML = '';
     mountTimelineToolbar({ gantt, container: toolbar });
     syncSelectionUi();

@@ -780,8 +780,7 @@ export interface Field<TValue = unknown> {
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     // (undocumented)
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
-    // (undocumented)
-    formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+    formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
     // (undocumented)
     key: FieldKey;
@@ -863,7 +862,7 @@ export interface FormatContext extends FieldContext {
 export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
-export function formatEndInclusive(zone: string, end: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
+export function formatEndInclusive(zone: string, span: TimeSpan, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
 export const formatHour: HeaderFormat;

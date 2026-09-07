@@ -30,7 +30,7 @@ export interface FrameMemoryBind {
   readonly laneGap: number;
   readonly entries: readonly Entry[];
   readonly registry: ItemProducerRegistry;
-  readonly datasetRevision?: number;
+  readonly datasetRevision: number;
   /** Test seam: override packed/fixed height for index-space overscan checks. */
   readonly heightAt?: (index: number) => number;
 }
@@ -75,8 +75,7 @@ export class FrameMemory {
 
     const countChanged = this.#cachedRowCount !== bind.plan.length;
     const metricsChanged = this.#cachedRowHeight !== bind.rowHeight || this.#cachedLaneGap !== bind.laneGap;
-    const revisionChanged =
-      bind.datasetRevision !== undefined && bind.datasetRevision !== this.#datasetRevision;
+    const revisionChanged = bind.datasetRevision !== this.#datasetRevision;
 
     if (this.#heights === undefined || countChanged || metricsChanged) {
       this.#packed.clear();

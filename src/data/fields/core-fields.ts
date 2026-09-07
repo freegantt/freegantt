@@ -31,9 +31,14 @@ function formatStart(value: unknown, ctx: { timeZone: string; locale: Intl.Local
   return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
 }
 
-function formatEnd(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
+function formatEnd(
+  value: unknown,
+  ctx: { timeZone: string; locale: Intl.LocalesArgument },
+  entry: Entry,
+): string {
   if (value === undefined || value === null) return '';
-  return formatEndInclusive(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
+  const span = { start: entry.start, end: value as Instant };
+  return formatEndInclusive(ctx.timeZone, span, ctx.locale, DATE_TIME_FORMAT);
 }
 
 function formatDuration(value: unknown): string {
