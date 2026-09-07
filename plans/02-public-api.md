@@ -86,6 +86,8 @@ const gantt = new Gantt({
 });
 ```
 
+`gantt.dataset` reads back the Dataset instance the constructor took (#226). It carries the same `TMeta`/`TFields`, so `gantt.dataset.on('change', …)` and `gantt.dataset.canUndo` type correctly. A helper that needs both objects takes the Gantt alone and reads `dataset` off it — `mountGanttToolbar({ gantt, container })`. This beats taking the pair and trusting the caller to keep them matched. The getter is read-only: a Gantt binds one Dataset at construction and never rebinds it. A consumer who wants a different Dataset builds a second Gantt.
+
 ### Programmatic mutation — always transactional
 
 ```ts
@@ -259,8 +261,8 @@ S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `Propose
 **A plugin raises this one pair itself, through two verbs that differ.** `ctx.interaction.proposeEntryEdit(payload)` asks: it raises `beforeEntryEdit` and hands back what the handlers answered — `true`/`undefined`, `false`, or an unsettled `Promise`. The caller must read that answer. `ctx.interaction.announceEntryEdit(payload)` tells: it raises `entryEdit` after the commit and returns `void`. One verb per job, so a plugin author sees from the name whether a decision comes back. (`emit*` said neither, and is retired.) Every other `before*` event stays core's own to raise, so no plugin can forge `selectionChange` or any event core owns.
 
 ```ts
-gantt.on('beforeEntryMove', ({ entry, start, end }) => {
-  if (start < mobilization) { toast('Too early'); return false; }   // veto
+gantt.on('beforeEntryMove', ({ entry, start, end, refuse }) => {
+  if (start < mobilization) { toast('Too early'); return refuse('The drop is before mobilization.'); }
 });
 
 gantt.on('beforeEntryEdit', async ({ entry }) => {
@@ -274,8 +276,8 @@ gantt.on('navigationChange', ({ canZoomIn, canZoomOut, presetId }) => {
   presetSelect.value = presetId;
 });
 
-dataset.on('beforeChange', ({ changeSet }) => {
-  if (changeSet.updated.some(u => locked.has(u.id))) return false;   // veto — refuses the whole change
+dataset.on('beforeChange', ({ changeSet, refuse }) => {
+  if (changeSet.updated.some(u => locked.has(u.id))) return refuse('One of these entries is locked.');
 });
 
 dataset.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
@@ -283,7 +285,7 @@ dataset.on('change', ({ changeSet }) => save(changeSet));           // persisten
 
 Rules:
 
-- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`.
+- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`. `beforeChange`, `beforeEntryMove`, and `beforeEntryResize` carry `refuse(reason)` on their payload (#210): call `return refuse('…')` to veto and state why in one line. It still returns `false`, so a bare `return false` still refuses with no reason. `refuse` puts the handler's own words on the `ErrorReport` core raises for the veto. The other `before*` events raise no report, so they take a plain `false` only.
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
 - `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is. **Silent in the UI, not
@@ -330,6 +332,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` |
 | `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text |
 | `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
+| `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
 | `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
 | `--fg-date-line-color` | `#DC2626` | `#F87171` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
@@ -338,6 +341,8 @@ Every level-1 property the library reads as a length goes through one reader (`r
 | `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S5, D-S1.10-9).
+
+**`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted` (T1-1): `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. The bracket and diamond renderers paint from `--fg-bar-fill-painted` too, so one token dims every bar shape the same way. The mix rule lives on `.fg-bar` itself, not on `.fg-container` (#245 S1-4). A `barRenderer` that overrides `--fg-bar-fill` on one bar element sees its own override in the mix, because the read and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container` and inherits down unchanged, so one setting still covers every bar.
 
 **`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
 
