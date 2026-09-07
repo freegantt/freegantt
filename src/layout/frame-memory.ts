@@ -76,7 +76,7 @@ export class FrameMemory {
     const countChanged = this.#cachedRowCount !== bind.plan.length;
     const metricsChanged = this.#cachedRowHeight !== bind.rowHeight || this.#cachedLaneGap !== bind.laneGap;
     const revisionChanged =
-      bind.datasetRevision !== undefined && bind.datasetRevision !== this.#datasetRevision;
+      bind.datasetRevision === undefined || bind.datasetRevision !== this.#datasetRevision;
 
     if (this.#heights === undefined || countChanged || metricsChanged) {
       this.#packed.clear();
