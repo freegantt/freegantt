@@ -20,13 +20,13 @@ export type Aggregator<TValue = unknown> = (children: readonly Entry[], parent: 
 
 // @public
 export class AggregatorFailedError extends FreeGanttError {
-    constructor(fieldKey: string, aggregatorName: string, entryId: EntryId, cause?: unknown);
+    constructor(fieldKey: FieldKey, aggregatorName: string, entryId: EntryId, cause?: unknown);
     // (undocumented)
     readonly aggregatorName: string;
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
-    readonly fieldKey: string;
+    readonly fieldKey: FieldKey;
 }
 
 // @public (undocumented)
@@ -2038,9 +2038,9 @@ export class UnknownCommandError extends FreeGanttError {
 
 // @public
 export class UnknownFieldError extends FreeGanttError {
-    constructor(field: string, operation: string);
+    constructor(field: FieldKey, operation: string);
     // (undocumented)
-    readonly field: string;
+    readonly field: FieldKey;
     // (undocumented)
     readonly operation: string;
 }
@@ -2054,9 +2054,9 @@ export class UnknownFieldTypeError extends FreeGanttError {
 
 // @public
 export class UnknownGridColumnError extends FreeGanttError {
-    constructor(field: string);
+    constructor(field: FieldKey);
     // (undocumented)
-    readonly field: string;
+    readonly field: FieldKey;
 }
 
 // @public
@@ -2070,11 +2070,11 @@ export class UnknownPresetError extends FreeGanttError {
 
 // @public
 export class UnreadableCellValueError extends FreeGanttError {
-    constructor(entryId: EntryId, field: string, text: string | undefined);
+    constructor(entryId: EntryId, field: FieldKey, text: string | undefined);
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
-    readonly field: string;
+    readonly field: FieldKey;
     readonly text: string | undefined;
 }
 

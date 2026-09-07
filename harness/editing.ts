@@ -77,11 +77,11 @@ function hideToast(): void {
 // vetoing handler passed to `refuse` (#210), so the page shows the library's own record instead of
 // keeping a second copy of the same sentence. The mobilization veto below is that case.
 //
-// The lock plugin still announces its own refusal through `onRefusal`, because its `beforeChange`
-// handler returns a bare `false`. One `refuse(...)` there retires that callback and this page's last
-// hand-rolled refusal toast with it.
+// The lock plugin refuses through `refuse(reason)` too, so this page keeps no refusal callback of
+// its own — every refusal, whoever raised it, arrives here.
 watchAllErrors([dataset, gantt], (report) => {
-  prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}`);
+  const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+  prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
   if (report.severity !== 'info' || report.reason !== undefined) showToast(report.message);
 });
 
@@ -117,11 +117,6 @@ lockEntryCheckbox.addEventListener('change', () => {
   attemptMutation(() =>
     lockEntryCheckbox.checked ? locks.lock(LOCKABLE_ENTRY_ID) : locks.unlock(LOCKABLE_ENTRY_ID),
   );
-});
-
-locks.onRefusal((id) => {
-  showToast(`Refused — ${id} is locked`);
-  prependLogLine(log, `entries · ${id} · refused (locked)`);
 });
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {

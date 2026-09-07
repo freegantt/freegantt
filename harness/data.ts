@@ -15,7 +15,7 @@
 // rebind (or the finding against destroy() if it does not).
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/index.js';
+import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
 import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
@@ -147,8 +147,14 @@ function bindGantt(): void {
 
 function bindDataset(): void {
   dataset.on('change', onChange);
-  locks.onRefusal((id) => logLine(`entries · ${id} · refused (locked)`));
 }
+
+// Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
+// plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
+watchAllErrors([dataset, gantt], (report) => {
+  const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+  logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
+});
 
 // D-S2-25, made visible: checking the box locks the current first entry, and the plugin refuses
 // every later changeset that touches it. The lock itself is a dataset write, so it logs like any

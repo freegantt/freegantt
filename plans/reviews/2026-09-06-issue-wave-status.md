@@ -23,7 +23,7 @@ Mark an item done in the same commit that closes it. A line that is not marked d
 | #237 | a bad date names the call the consumer made | `[x]` | `62c5690` · closed, remainder is #242 |
 | #232 | duplicate changeset rows behind the I4 false positive (D-S5-49) | `[~]` | Lane F |
 | #242 | `InvalidInstantError` stays message-shaped — split it, or document the exception | `[?]` | filed from #237 |
-| — | `lock-entries.ts` still returns a bare `false` instead of `refuse(...)` | `[ ]` | one line, from #210 |
+| — | `lock-entries.ts` returns `refuse(reason)`; three pages dropped their refusal callbacks | `[x]` | from #210 |
 | #230 | entry-from-Segment refactor — R3, R4, R5 | `[ ]` | R0–R2 landed |
 | #240 | drag-resize inverted span | `[ ]` | — |
 | #142 | a locked field cannot be dragged or resized (D-S5-48) | `[ ]` | ruled, implementable |
@@ -58,6 +58,22 @@ Each row was re-checked against the code before it was accepted. A row marked
 | candidate 4 — one Segment-diff helper for three hand-rolled copies | real, small | `[ ]` |
 | harness `editing.ts` writes the retired `gantt.preset = { ...gantt.preset, snap }` spelling | real; harness-only, the API already moved to `gantt.snap` | `[x]` |
 | harness `editing.ts` hand-rolls undo/redo instead of `commands.run()` | real; no default chord ships yet, so no double-fire today | `[x]` |
+
+### The issue-wave review (`2026-09-06-s5-start-issue-wave.html`)
+
+Its S2, S3 and the harness snap/undo rows were already fixed by `c96bee1` and `37b5f17`.
+
+| Finding | Verdict | State |
+|---|---|---|
+| S1 — `lock-entries.ts` hand-rolls a refusal channel beside `refuse(reason)` | real; the Stop-rule case the review named worst | `[x]` |
+| Q2 — `errors.ts` types `field` as `string` while `ErrorReport.field` is `FieldKey` | real; a consumer could not switch on a core key | `[x]` |
+| S4 / candidate 2 — the refusal sentence is framed twice and has already drifted | real: `errors.ts` says "this change", `gesture-pipeline.ts` says "this ${kind}" | `[ ]` |
+| candidate 1 — one public "can this Field be written on this Entry?" answer | real; the inline editor re-derives three core rules | `[ ]` |
+| candidate 4 — bind `<TMeta, TFields>` once, `TDataset = TGantt['dataset']` | real; six aliases restate the pair | `[ ]` |
+| S5 — `CellEditorCommitRefusal` carries "Commit", the word ADR 0006 retired here | real naming call | `[ ]` |
+| `CONTEXT.md`'s Refusal entry names none of the three code families | real doc gap | `[ ]` |
+| `#markInvalid` reads `COMMIT_REFUSAL_TEXT[reason]` twice | real, small | `[ ]` |
+| S7 — comment sentences exceed the 25-word ASD-STE100 cap | real, repo-wide habit | `[ ]` |
 
 ### Next slice
 

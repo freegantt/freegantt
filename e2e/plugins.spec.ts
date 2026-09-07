@@ -121,5 +121,5 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
   await expect(page.locator('#toast')).toContainText('entry-15 is locked');
   await expect.poll(leftEdges).toEqual(lockedBefore);
   await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
-  await expect(page.locator('#log')).toContainText('refused (locked)');
+  await expect(page.locator('#log')).toContainText('entry-15 is locked');
 });

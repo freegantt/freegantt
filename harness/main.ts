@@ -9,6 +9,7 @@ import {
   tooltips,
   contextMenu,
   inlineEditing,
+  watchAllErrors,
 } from '../src/api/index.js';
 import type {
   Entry,
@@ -268,7 +269,12 @@ function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
 
-locks.onRefusal((id) => prependLogLine(log, `entries · ${id} · refused (locked)`));
+// Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
+// plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
+watchAllErrors([dataset, gantt], (report) => {
+  const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+  prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
+});
 
 lockCheckbox.addEventListener('change', () => {
   const id = firstEntryId();

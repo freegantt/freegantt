@@ -206,8 +206,8 @@
               <!-- 4 self -->
               <g class="num"><circle cx="8" cy="184" r="8" /><text x="8" y="187" text-anchor="middle">4</text></g>
               <path class="edge" d="M572,178 h44 v14 h-38" marker-end="url(#pa1)" style="color: var(--sub)" />
-              <text x="624" y="182">assertNoDuplicateIds; partition #installed by id → kept / removed</text>
-              <text class="s" x="624" y="196">this plugin's id is new, so it lands in toAdd</text>
+              <text x="624" y="182">assertNoDuplicateIds; partition #installed by id</text>
+              <text class="s" x="624" y="196">→ kept vs removed; this plugin's id is new → toAdd</text>
 
               <!-- 5 -->
               <g class="num"><circle cx="8" cy="228" r="8" /><text x="8" y="231" text-anchor="middle">5</text></g>
@@ -265,8 +265,8 @@
               <g class="num"><circle cx="8" cy="596" r="8" /><text x="8" y="599" text-anchor="middle">13</text></g>
               <rect class="bx warn" x="482" y="580" width="380" height="52" />
               <text class="t" x="494" y="596">this plugin's id is now missing from next → removed</text>
-              <text class="s" x="494" y="610">dispose(): built.disposables.disposeAll() — every register*'s own</text>
-              <text class="s" x="494" y="624">removal fires, in reverse — then ownDispose?.() from step 8</text>
+              <text class="s" x="494" y="610">dispose(): disposables.disposeAll() — every register*'s own</text>
+              <text class="s" x="494" y="624">removal, in reverse — then ownDispose?.() from step 8</text>
             </svg>
           </div>
           <figcaption>
@@ -300,7 +300,7 @@
           <div class="scroller">
             <svg
               class="d"
-              viewBox="0 0 760 170"
+              viewBox="0 0 900 170"
               role="img"
               aria-labelledby="pl-gate-title pl-gate-desc"
               preserveAspectRatio="xMidYMid meet"
@@ -329,12 +329,11 @@
               <rect class="bx" x="420" y="84" width="280" height="30" />
               <text class="s" x="430" y="104">register* — throws RegistrationClosedError</text>
 
-              <rect class="bx hot" x="700" y="34" width="50" height="80" />
-              <text class="t" x="705" y="54">dispose</text>
-              <text class="s" x="705" y="68">disposables</text>
-              <text class="s" x="705" y="80">.disposeAll()</text>
-              <text class="s" x="705" y="96">then own</text>
-              <text class="s" x="705" y="108">Disposer</text>
+              <rect class="bx hot" x="700" y="34" width="180" height="80" />
+              <text class="t hotink" x="712" y="54">dispose</text>
+              <text class="s" x="712" y="70">disposables.disposeAll()</text>
+              <text class="s" x="712" y="84">then ownDispose?.()</text>
+              <text class="xs" x="712" y="102">— see Diagram 1, step 13</text>
             </svg>
           </div>
           <figcaption>
@@ -361,7 +360,7 @@
           <div class="scroller">
             <svg
               class="d"
-              viewBox="0 0 900 460"
+              viewBox="0 0 900 500"
               role="img"
               aria-labelledby="pl-diff-title pl-diff-desc"
               preserveAspectRatio="xMidYMid meet"
@@ -401,7 +400,7 @@
               <text class="s" x="274" y="178">1. #buildContext(id) → ctx, gate</text>
               <text class="s" x="274" y="194">2. plugin.setup(ctx) → ownDispose?</text>
               <text class="s" x="274" y="210">3. gate.close()</text>
-              <text class="s" x="274" y="226">4. justInstalled.push({{plugin, dispose}})</text>
+              <text class="s" x="274" y="226">4. justInstalled.push({plugin, dispose})</text>
               <text class="xs" x="274" y="250">setup order = toAdd's own array order —</text>
               <text class="xs" x="274" y="264">the order the caller's next list names them</text>
 
@@ -414,18 +413,19 @@
               <text class="xs" x="542" y="234">#installed untouched — old set stands</text>
 
               <line class="edge" x1="492" y1="300" x2="524" y2="300" marker-end="url(#pa2)" style="color: var(--sub)" />
-              <rect class="bx pure" x="530" y="270" width="200" height="70" />
+              <rect class="bx pure" x="530" y="270" width="200" height="90" />
               <text class="t" x="542" y="290">no throw</text>
-              <text class="s" x="542" y="306">for removed, reverse:</text>
+              <text class="s" x="542" y="306">removed disposed, reverse:</text>
               <text class="s" x="542" y="320">#disposeOne(each)</text>
-              <text class="xs" x="542" y="334">removed AFTER toAdd's setup, so a</text>
+              <text class="xs" x="542" y="338">after toAdd's own setup — a plugin</text>
+              <text class="xs" x="542" y="350">swapping in sees the old one still live</text>
 
-              <line class="edge" x1="630" y1="340" x2="630" y2="380" marker-end="url(#pa2)" style="color: var(--sub)" />
-              <rect class="bx" x="530" y="386" width="200" height="46" />
+              <line class="edge" x1="630" y1="360" x2="630" y2="386" marker-end="url(#pa2)" style="color: var(--sub)" />
+              <rect class="bx" x="530" y="392" width="200" height="46" />
               <text class="t" x="542" y="404">commit</text>
               <text class="s" x="542" y="418">#installed = [...kept, ...justInstalled]</text>
 
-              <text class="xs" x="20" y="420" style="max-width: 200px">
+              <text class="xs" x="20" y="420">
                 <tspan x="20" dy="0">Rollback only ever touches THIS</tspan>
                 <tspan x="20" dy="14">call's own toAdd. kept and removed</tspan>
                 <tspan x="20" dy="14">are never disposed on a throw — a</tspan>
@@ -549,31 +549,32 @@
               <text class="s" x="496" y="70">array order ≠ input order</text>
 
               <line class="edge" x1="559" y1="76" x2="559" y2="112" marker-end="url(#pa3)" style="color: var(--sub)" />
-              <rect class="bx dom" x="212" y="118" width="230" height="120" />
+              <rect class="bx dom" x="212" y="118" width="230" height="132" />
               <text class="t" x="224" y="138">for plugin of ordered: try</text>
               <text class="s" x="224" y="156">1. buildContext(id) → ctx, gate</text>
               <text class="s" x="224" y="172">2. plugin.setup(ctx) → ownDispose?</text>
               <text class="s" x="224" y="188">3. gate.close()</text>
-              <text class="s" x="224" y="204">4. installed.push({{id, dispose}})</text>
-              <text class="xs" x="224" y="222">a's fields exist before b's setup runs —</text>
-              <text class="xs" x="224" y="234">b may declare an Aggregator over a's Field</text>
+              <text class="s" x="224" y="204">4. installed.push({id, dispose})</text>
+              <text class="xs" x="224" y="222">a's fields exist before b's setup runs</text>
+              <text class="xs" x="224" y="234">— b may declare an Aggregator over a</text>
+              <text class="xs" x="224" y="246">Field a itself declared</text>
 
-              <line class="edge" x1="442" y1="178" x2="478" y2="178" marker-end="url(#pa3)" style="color: var(--sub)" />
-              <rect class="bx hot" x="484" y="118" width="200" height="60" />
+              <line class="edge" x1="442" y1="184" x2="478" y2="184" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx hot" x="484" y="118" width="220" height="90" />
               <text class="t hotink" x="496" y="138">setup throws</text>
               <text class="s" x="496" y="154">unwind installed, reverse</text>
               <text class="s" x="496" y="168">throw PluginSetupError</text>
-              <text class="xs" x="496" y="182">the Dataset constructor throws, too —</text>
-              <text class="xs" x="496" y="194">no half-built Dataset reaches a caller</text>
+              <text class="xs" x="496" y="184">the Dataset constructor throws, too</text>
+              <text class="xs" x="496" y="196">— no half-built Dataset reaches a caller</text>
 
-              <line class="edge" x1="580" y1="178" x2="580" y2="200" marker-end="url(#pa3)" style="color: var(--sub)" />
-              <rect class="bx pure" x="484" y="206" width="200" height="46" />
-              <text class="t" x="496" y="224">no throw</text>
-              <text class="s" x="496" y="238">returns one Disposer for the whole set</text>
+              <line class="edge" x1="594" y1="208" x2="594" y2="224" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <rect class="bx pure" x="484" y="230" width="220" height="46" />
+              <text class="t" x="496" y="248">no throw</text>
+              <text class="s" x="496" y="262">returns one Disposer for the whole set</text>
 
-              <line class="edge" x1="559" y1="238" x2="327" y2="252" marker-end="url(#pa3)" style="color: var(--sub)" />
-              <text class="xs" x="327" y="268">Dataset.destroy() calls it once — every plugin</text>
-              <text class="xs" x="327" y="280">disposes, in reverse setup order</text>
+              <line class="edge" x1="484" y1="253" x2="330" y2="266" marker-end="url(#pa3)" style="color: var(--sub)" />
+              <text class="xs" x="330" y="266">Dataset.destroy() calls it once — every plugin</text>
+              <text class="xs" x="330" y="280">disposes, in reverse setup order</text>
             </svg>
           </div>
           <figcaption>
