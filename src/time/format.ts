@@ -35,7 +35,8 @@ function toJsDate(i: Instant): Date {
  * equivalent, stateless formatter. Keyed by the `options` object's own identity (frozen preset
  * headers and a caller's own literal are both stable references), nested under a zone/locale string
  * so two Gantts sharing one preset but different locales never collide. Module-level `WeakMap` is the
- * sanctioned shape for this (ADR 0007 — see `layout/viewport/time-scale-model.ts`'s `internals`). */
+ * sanctioned shape for this (ADR 0007 — see `layout/viewport/time-scale-model.ts`'s `internals`).
+ * I2-ok: keyed by the caller's own options object; two Gantts share nothing, only a stateless formatter. */
 const formatterCache = new WeakMap<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>();
 
 function intlFormatter(
@@ -117,7 +118,8 @@ export const formatHour: HeaderFormat = (i, zone) => {
 
 /** Per-`headers`-array memo of `dropRepeatedGranularity`'s result (below) — the stripped
  *  `Intl.DateTimeFormatOptions` objects need one stable identity across frames, or `intlFormatter`'s
- *  own `options`-keyed cache would rebuild an `Intl.DateTimeFormat` every frame instead of once. */
+ *  own `options`-keyed cache would rebuild an `Intl.DateTimeFormat` every frame instead of once.
+ *  I2-ok: keyed by the caller's own headers array; two Gantts share nothing, only a derived memo. */
 const repeatedGranularityDropped = new WeakMap<readonly ViewPresetHeader[], readonly DateFormat[]>();
 
 /** A header whose `format` states `year` or `month` shows it to the reader once, at the coarsest

@@ -33,6 +33,14 @@ import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 export type { DatasetHierarchy };
 
+// I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
+// Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
+// was never a method (#250 A2). Populated once, in the constructor, so a Dataset instance always
+// has its state by the time `extraEditsFor` can see it. Keyed on `object`, not `Dataset<TMeta,
+// TFields>`: a `WeakMap` key type does not vary with a generic parameter, and every value this map
+// ever holds a key for is a `Dataset` regardless.
+const datasetState = new WeakMap<object, DatasetState>();
+
 // The Dataset-bound aliases behind `api/dataset-plugin.ts`'s generic shapes (the `*Of` pairing
 // `api/plugin.ts` and `api/command.ts` already use). A plugin author writing against the concrete
 // `Dataset` names these two; code parameterizing over its own Dataset type names the `*Of` forms.
@@ -125,6 +133,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
         : {}),
     });
     this.#time = createZonedTime(this.#state.timeZone);
+    datasetState.set(this, this.#state);
   }
 
   /** Runs inside `DatasetState`'s constructor, at the one moment a plugin may set up: the entry store
@@ -242,17 +251,6 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return this.#state.isRollUpKind(kind);
   }
 
-  /** Calls the extension hook's current occupant — every installed plugin's wrapper, composed
-   *  (D-S5-23), or the identity function when nothing claimed it — and hands back what it wrote.
-   *  Expert surface, not an app author's (`plans/02`, "two callers, two surfaces"): a Gantt calls this
-   *  to ghost an extender's extra edits during a drag (D-S3-18), and never writes through it. A commit
-   *  calls the same occupant again, for real, inside the transaction. A method, not a getter (#209
-   *  Q5): the old `editExtender` getter handed over the occupant itself, so a caller that stored its
-   *  result instead of re-reading it live would ghost a plugin composed on after (#186). */
-  extraEditsFor(request: EditRequest): StoredEdits {
-    return this.#state.extraEditsFor(request);
-  }
-
   /** A counter that rises once per committed change. Call: `if (dataset.datasetRevision !== seen)`
    *  — read it to answer "has anything changed since I last looked?" without diffing entries.
    *
@@ -345,4 +343,22 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     reportCorrectedRollUps(doc, dataset, createErrorRaiser(dataset.#state.bus));
     return dataset;
   }
+}
+
+/** Calls the extension hook's current occupant for this `dataset` — every installed plugin's
+ *  wrapper, composed (D-S5-23), or the identity function when nothing claimed it — and hands back
+ *  what it wrote. Not a `Dataset` method (#250 A2, ADR 0007): a Gantt calls this to ghost an
+ *  extender's extra edits during a drag (D-S3-18) and never writes through it; a commit calls the
+ *  same occupant again, for real, inside the transaction. `api/gantt.ts` is the one caller — an app
+ *  author never proposes an `EditRequest`, so a method here would have no honest caller outside it.
+ *  Exported from `api/` only, never from `api/index.ts`. */
+export function extraEditsFor<TMeta, TFields extends Record<string, unknown>>(
+  dataset: Dataset<TMeta, TFields>,
+  request: EditRequest,
+): StoredEdits {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('extraEditsFor: dataset was not constructed through the Dataset constructor');
+  }
+  return state.extraEditsFor(request);
 }
