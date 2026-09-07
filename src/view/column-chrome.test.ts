@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import type { ResolvedColumn } from '../layout/index.js';
+import type { FieldKey } from '../model/index.js';
 
 function makePorts(overrides: Partial<ColumnChromePorts> = {}): ColumnChromePorts {
   return {
@@ -46,6 +47,37 @@ describe('ColumnChrome.isResizable/isMovable (bug hunt B3)', () => {
 
     expect(chrome.isResizable('cost')).toBe(false);
     expect(chrome.isMovable('cost')).toBe(false);
+  });
+});
+
+describe('ColumnChrome.commitWidth (S5.7, D-S5-18, #249)', () => {
+  it('a resize replaces flex with width — a flex column becomes fixed once the user resizes it', () => {
+    let committedTo: readonly { field: FieldKey; width?: number; flex?: number }[] = [];
+    const proposeColumnsChange = (
+      _from: readonly { field: FieldKey; width?: number; flex?: number }[],
+      to: readonly { field: FieldKey; width?: number; flex?: number }[],
+      apply: () => void,
+    ): boolean => {
+      committedTo = to;
+      apply();
+      return true;
+    };
+    const dataset = () => ({
+      field: (key: FieldKey) => (String(key) === 'cost' ? { key: 'cost', column: {} } : undefined),
+      fields: { all: [] },
+      timeZone: 'UTC',
+    });
+    const chrome = new ColumnChrome(
+      document.createElement('div'),
+      makePorts({ proposeColumnsChange, dataset: dataset as unknown as ColumnChromePorts['dataset'] }),
+      [{ field: 'cost', flex: 2 }],
+    );
+    chrome.setResolvedColumns([makeResolved({ flex: 2 })]);
+
+    chrome.commitWidth('cost', 150);
+
+    expect(committedTo[0]).toMatchObject({ field: 'cost', width: 150 });
+    expect(committedTo[0]).not.toHaveProperty('flex');
   });
 });
 

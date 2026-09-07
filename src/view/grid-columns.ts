@@ -56,8 +56,9 @@ function columnFrom(
   // one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
   // `width` and `flex` answer one question between them, so they merge as a pair rather than key by
   // key: a column that sizes itself at all replaces the Field's sizing whole. Otherwise a Gantt
-  // asking for `flex: 1` would silently lose to a `width` the Field happened to declare. Naming
-  // both on one side keeps the width — `data-fixed` already wins in the stylesheet.
+  // asking for `flex: 1` would silently lose to a `width` the Field happened to declare — `width`
+  // and `flex` are each exclusive on their own object (#249), but two individually-legal objects
+  // still recombine into an illegal pair on a key-by-key merge.
   const sizedHere = input.width !== undefined || input.flex !== undefined;
   const flex = sizedHere ? input.flex : defaults.flex;
   const authoredWidth = sizedHere ? input.width : defaults.width;
@@ -83,15 +84,18 @@ function columnFrom(
  *  never reaches a consumer. Everything else a consumer might have authored rides straight through,
  *  under the name it was authored with (D-S5-37, #194). */
 export function toGridColumn(column: ResolvedColumn): GridColumn {
-  const out: GridColumn = { field: column.field, header: column.header, align: column.align };
-  if (column.width !== undefined) out.width = column.width;
-  if (column.flex !== undefined) out.flex = column.flex;
-  if (column.cellRenderer !== undefined) out.cellRenderer = column.cellRenderer;
-  if (column.editable !== undefined) out.editable = column.editable;
-  if (column.resizable !== undefined) out.resizable = column.resizable;
-  if (column.movable !== undefined) out.movable = column.movable;
-  if (column.tooltip !== undefined) out.tooltip = column.tooltip;
-  return out;
+  const shared = {
+    field: column.field,
+    header: column.header,
+    align: column.align,
+    ...pickDefined(column, ['cellRenderer', 'editable', 'resizable', 'movable', 'tooltip']),
+  };
+  // `GridColumn`'s sizing pair is exclusive (#249), so `shared` cannot carry `width` or `flex` — one
+  // literal per branch is the only construction `tsc` checks against that union; a single `out`
+  // mutated by two `if`s would still compile carrying both keys (a probe confirmed this).
+  if (column.width !== undefined) return { ...shared, width: column.width };
+  if (column.flex !== undefined) return { ...shared, flex: column.flex };
+  return shared;
 }
 
 function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {

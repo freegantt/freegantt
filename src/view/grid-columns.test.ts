@@ -231,6 +231,47 @@ describe('toGridColumn (S5.7, D-S5-18)', () => {
     });
     expect(column).not.toHaveProperty('format');
   });
+
+  it('carries flex through instead of width when the resolved column flexes (#249)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'team', column: { header: 'Team' } }] });
+    const [resolved] = resolveColumns([{ field: 'team', flex: 2 }], registry, { timeZone: zone, locale });
+    const column = toGridColumn(resolved!);
+    expect(column).toEqual({
+      field: 'team',
+      header: 'Team',
+      align: 'start',
+      flex: 2,
+      resizable: true,
+      movable: true,
+    });
+    expect(column).not.toHaveProperty('width');
+  });
+});
+
+// #249: a Grid column states a width or a flex, never both. Compile-time only — never executed.
+describe('GridColumn sizing is exclusive at the type level (#249)', () => {
+  it('rejects width and flex together, from a Gantt column and from a Field default', () => {
+    if (false as boolean) {
+      // @ts-expect-error — a Gantt column names width or flex, never both
+      const gantt: import('../model/index.js').GridColumn = { field: 'cost', width: 120, flex: 1 };
+      // These both compile on their own.
+      const fixed: import('../model/index.js').GridColumn = { field: 'cost', width: 120 };
+      const flexible: import('../model/index.js').GridColumn = { field: 'cost', flex: 1 };
+      const registry = new FieldRegistry({
+        fields: [
+          {
+            key: 'cost',
+            // @ts-expect-error — a Field's own column default names width or flex, never both
+            column: { width: 120, flex: 1 },
+          },
+        ],
+      });
+      void gantt;
+      void fixed;
+      void flexible;
+      void registry;
+    }
+  });
 });
 
 describe('resolveGanttFields (D-S4-13)', () => {

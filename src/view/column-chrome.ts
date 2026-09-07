@@ -296,12 +296,21 @@ export class ColumnChrome {
     return typeof item === 'string' ? { field: item } : { ...item };
   }
 
+  /** A resize replaces `flex` with `width` (#249): a Grid column names one or the other, never both,
+   *  so a flex column the user drags becomes fixed at the size the drag left it. `flex` is dropped on
+   *  purpose here, not merged — a spread that kept it alongside the new `width` stops compiling under
+   *  the exclusive sizing pair (a probe confirmed this), which is what catches a slip back to both. */
+  static #resizedTo(item: GridColumnInput, widthPx: number): GridColumn {
+    const { flex: _flex, ...withoutFlex } = ColumnChrome.#asGridColumn(item);
+    return { ...withoutFlex, width: widthPx };
+  }
+
   /** A resize/reorder gesture reaches every column actually on screen (S5.9: a plugin-registered
    *  column included), not only the consumer's own list. */
   #withWidth(columnKey: FieldKey, widthPx: number): readonly ColumnDeclaration[] {
     return this.#effectiveDeclarations().map((declaration) =>
       ColumnChrome.#fieldOfDeclaration(declaration) === columnKey
-        ? { ...declaration, column: { ...ColumnChrome.#asGridColumn(declaration.column), width: widthPx } }
+        ? { ...declaration, column: ColumnChrome.#resizedTo(declaration.column, widthPx) }
         : declaration,
     );
   }

@@ -67,13 +67,12 @@ export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDesc
 /** Where a cell's text and header sit within the column's width. Default `'start'`. */
 export type ColumnAlign = 'start' | 'center' | 'end';
 
-/** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
- *  sees one (D-S5-17). */
-export interface GridColumn {
+/** Every `GridColumn` key except its sizing. Split out so the sizing pair (`width`/`flex`) can join
+ *  it as an exclusive union — here, in `Field.column` below, and in `SerializedField.column`
+ *  (`model/document.ts`), each of which drops a different subset of these keys (#249). */
+export interface GridColumnFields {
   field: FieldKey;
   header?: string;
-  width?: number;
-  flex?: number;
   align?: ColumnAlign;
   /** S5.7 — per-column, more specific than `GanttOptions.cellRenderer` (D-S5-11). */
   cellRenderer?: ColumnCellRenderer;
@@ -94,6 +93,16 @@ export interface GridColumn {
    *  Default `false`. */
   tooltip?: boolean;
 }
+
+/** A Grid column states a width or a flex, never both (#249): a column that names one answers "how
+ *  wide" on its own, and a column naming neither is fixed-width by default (`view/grid-columns.ts`'s
+ *  `DEFAULT_COLUMN_WIDTH_PX`). `exactOptionalPropertyTypes` is on, so `flex: undefined` alongside a
+ *  named `width` is still rejected — only *omitting* the other key satisfies `?: never`. */
+export type GridColumnSizing = { width?: number; flex?: never } | { width?: never; flex?: number };
+
+/** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
+ *  sees one (D-S5-17). */
+export type GridColumn = GridColumnFields & GridColumnSizing;
 
 /** What a consumer writes: a Field key, or a column object. */
 export type GridColumnInput = FieldKey | GridColumn;
@@ -147,8 +156,11 @@ export interface Field<TValue = unknown> {
   /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
    *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
    *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
-   *  nothing. Which columns a view shows is the Gantt's question, never the Field's. */
-  column?: Omit<GridColumn, 'field' | 'cellRenderer' | 'hidden'>;
+   *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
+   *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
+   *  and `flex` (#249) — so this type is built from `GridColumnFields` directly, joined back to
+   *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
+  column?: Omit<GridColumnFields, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
 }
 
 /** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */

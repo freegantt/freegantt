@@ -3,7 +3,14 @@
 
 import type { DateOnlyEndRule } from './time.js';
 import type { EntryKind } from './entry.js';
-import type { AggregatorName, CoreFieldKey, FieldKey, FieldTypeName, GridColumn } from './field.js';
+import type {
+  AggregatorName,
+  CoreFieldKey,
+  FieldKey,
+  FieldTypeName,
+  GridColumnFields,
+  GridColumnSizing,
+} from './field.js';
 
 /** One Entry as it appears in a Document. Instants are `Z`-suffixed ISO strings; brands are gone.
  *  Optional keys are omitted when absent, never written as `null`. */
@@ -32,7 +39,10 @@ export type SerializedField = {
   type?: FieldTypeName;
   source: { from: 'entry'; field: CoreFieldKey } | { from: 'meta'; key: string };
   rollUp?: AggregatorName;
-  column?: Omit<GridColumn, 'field' | 'hidden'>;
+  // `Omit<GridColumn, …>` would flatten the sizing union and let a written document name both
+  // `width` and `flex` (#249) — built from `GridColumnFields` directly, joined back to
+  // `GridColumnSizing`, the same way `Field.column` (`model/field.ts`) stays exclusive.
+  column?: Omit<GridColumnFields, 'field' | 'hidden'> & GridColumnSizing;
 };
 
 /** Every plugin's own per-entry rows, keyed first by `PluginId` and then by `EntryId` (D-S5-24).
