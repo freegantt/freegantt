@@ -939,6 +939,7 @@ export interface FrameRow {
     // (undocumented)
     laneCount: number;
     matched?: boolean;
+    segmentIds: readonly SegmentId[];
     // (undocumented)
     top: number;
 }

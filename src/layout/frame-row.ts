@@ -2,7 +2,7 @@
 // (layout/decoration.ts, D-S5-15) can name `FrameRow` without importing frame.ts back — frame.ts is
 // itself the file that calls the decoration runner, so the dependency can only run one way.
 
-import type { EntryId, RowId } from '../model/index.js';
+import type { EntryId, RowId, SegmentId } from '../model/index.js';
 import type { PlannedRowKind } from './rows/row-source.js';
 
 export interface FrameRow {
@@ -26,4 +26,8 @@ export interface FrameRow {
    *  `cellRenderer` resolves its `entry` context from (S5.4, D-S5-11). "The Entries this row owns"
    *  and "the Entry this row's cells describe" are two jobs, and only the second one is singular. */
   entryIds: readonly EntryId[];
+  /** Every Segment this row's Entries own, in the same order (#212, ADR 0010, #230 R5) — the set a
+   *  row click selects, and what `render/dom` diffs against the Selection to decide the row's own
+   *  paint. Empty for a header row, same rule as `entryIds`. */
+  segmentIds: readonly SegmentId[];
 }

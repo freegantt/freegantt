@@ -421,6 +421,9 @@ export function placeFrame(
       cells: cellsForRow(planned, input.columns, entryById),
       // A header row stands for no Entry (D-S4-23), so it owns none and never becomes selectable.
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
+      // A reference copy of the set `RowMemory` already resolved for this row (#230 R5) — no
+      // allocation per frame (I5), and the same header rule `entryIds` uses just above.
+      segmentIds: isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : packed.segmentIds,
     });
 
     for (const item of items) {

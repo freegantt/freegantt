@@ -339,10 +339,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
    *  for a row it just created. */
   let paintedSelectedRows: ReadonlySet<RowId> = new Set();
-  /** The Entries each mounted row owns (a header row owns none) — what `applyState`'s row diff
-   *  resolves a `RowId` against. `syncRows` is the only writer, rebuilt from the frame's own rows
-   *  every render — never grows stale across a prune. */
-  const rowEntryIds = new Map<RowId, readonly EntryId[]>();
+  /** The Segments each mounted row owns (a header row owns none) — what `applyState`'s row diff
+   *  reads `FrameRow.segmentIds` into (#230 R5), so the row diff never resolves an Entry to answer
+   *  it. `syncRows` is the only writer, rebuilt from the frame's own rows every render — never grows
+   *  stale across a prune. */
+  const rowSegmentIds = new Map<RowId, readonly SegmentId[]>();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
@@ -656,14 +657,6 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return ids;
   }
 
-  /** Does the Selection hold any Segment of this Entry (#212)? A row paints from this, and so does a
-   *  bar that draws an Entry's whole span. */
-  function entryHasSelectedSegment(id: EntryId, selected: ReadonlySet<SegmentId>): boolean {
-    const entry = entryById(id);
-    if (entry === undefined) return false;
-    return entry.segments.some((segment) => selected.has(segment.id));
-  }
-
   /** Bug hunt (S5 fixes): `.fg-row`'s own selection paint — one token, same shape as `paintDataState`
    *  above but never the bar's five-token set (a row has no hover/pending/drag/ghost paint yet). */
   function paintRowState(rowId: RowId, selected: boolean): void {
@@ -781,8 +774,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   function syncRows(rows: readonly FrameRow[], rowCount: number, columns: readonly FrameColumn[]): void {
     if (!gridLayer) return;
-    rowEntryIds.clear();
-    for (const row of rows) if (row.entryIds.length > 0) rowEntryIds.set(row.id, row.entryIds);
+    rowSegmentIds.clear();
+    for (const row of rows) if (row.segmentIds.length > 0) rowSegmentIds.set(row.id, row.segmentIds);
     rowLayer.sync(gridLayer, rows, {
       key: (row) => row.id,
       create: (row, key) => {
@@ -800,7 +793,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // up (D-S5's own "restamp on remount" fix). `paintedSelectedRows` (applyState's own diff
         // set) gains this row too, or the next `applyState` call would see a spurious diff and
         // repaint a node that is already correct.
-        if (row.entryIds.some((id) => entryHasSelectedSegment(id, paintedSelectedSegmentIds))) {
+        if (row.segmentIds.some((id) => paintedSelectedSegmentIds.has(id))) {
           node.dataset['state'] = 'selected';
           paintedSelectedRows = new Set(paintedSelectedRows).add(key);
         }
@@ -1170,12 +1163,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedPending = nextPending;
 
       // Bug hunt (S5 fixes): `.fg-row`'s own selection paint, off the same Selection the bars paint
-      // from. A row paints selected when the Selection holds any Segment of any Entry it owns (#212).
+      // from. A row paints selected when the Selection holds any Segment it owns (#212, #230 R5).
       // Still diff-and-touch-only (I5): only rows whose token actually flips get written, exactly
       // like the bar loop above.
       const nextSelectedRows = new Set<RowId>();
-      rowEntryIds.forEach((entryIds, rowId) => {
-        if (entryIds.some((id) => entryHasSelectedSegment(id, nextSelectedSegmentIds))) {
+      rowSegmentIds.forEach((segmentIds, rowId) => {
+        if (segmentIds.some((id) => nextSelectedSegmentIds.has(id))) {
           nextSelectedRows.add(rowId);
         }
       });
@@ -1279,7 +1272,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedGhost = new Set();
       paintedSelectedSegmentIds = new Set();
       paintedSelectedRows = new Set();
-      rowEntryIds.clear();
+      rowSegmentIds.clear();
       lastHeaderColumnKeys = [];
       paintedColumnResize = undefined;
       paintedColumnDropKey = undefined;
