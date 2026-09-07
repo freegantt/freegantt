@@ -1666,9 +1666,6 @@ export interface ProposedSpan {
 }
 
 // @public
-export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
-
-// @public
 export interface RangeBand {
     // (undocumented)
     class?: string;
