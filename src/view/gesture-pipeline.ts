@@ -247,27 +247,27 @@ export class GesturePipeline {
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
     const itemIds = spans.map((span) => itemId(span.entry));
-    // #210: the same note goes out on the payload and comes back in the refusal, so a handler's
-    // `refuse('…')` reaches the report core raises for its veto.
+    // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
+    // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
+    // the `before*` payload alone (event-bus.ts's map already types `entryMove`/`entryResize`
+    // without it) — the after-emit below gets its own payload, built from the same base but never
+    // carrying `refuse`.
     const note = new RefusalNote();
     const event =
       gesture.kind === 'resize'
         ? {
             before: 'beforeEntryResize' as const,
             after: 'entryResize' as const,
-            payload: {
-              ...grabbed,
-              entries: spans,
-              edge: gesture.edge,
-              refuse: note.refuse,
-            } satisfies EntryResize & Refusable,
+            afterPayload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
           }
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
-            payload: { ...grabbed, entries: spans, refuse: note.refuse } satisfies EntryMove & Refusable,
+            afterPayload: { ...grabbed, entries: spans } satisfies EntryMove,
           };
-    const before = this.#deps.emit(event.before, event.payload);
+    // One payload shape, spelled once. The `before*` copy adds the note; nothing removes it again.
+    const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
+    const before = this.#deps.emit(event.before, beforePayload);
     const refusal: GestureRefusal = {
       code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
       event: event.before,
@@ -277,7 +277,7 @@ export class GesturePipeline {
     return this.#settle(before, draft, itemIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(draft);
       if (committed) {
-        this.#deps.emit(event.after, event.payload);
+        this.#deps.emit(event.after, event.afterPayload);
       }
       return committed;
     });

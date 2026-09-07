@@ -122,7 +122,11 @@ export interface Field<TValue = unknown> {
   rollUp?: AggregatorName;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
-  formatValue?(value: TValue | undefined, ctx: FormatContext): string;
+  /** `entry` is the row this value came from. `FormatContext` is built once per `resolveColumns`
+   *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
+   *  cell — a formatter that needs the Entry declares this third parameter instead; every other
+   *  formatter still assigns with two, or one (#240). */
+  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
   /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
    *  back into a stored value. `undefined` means the text names no value — the editor stays open in
    *  the invalid state and commits nothing. `formatValue` is not invertible in general (a

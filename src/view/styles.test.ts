@@ -19,6 +19,7 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
   return {
     entries: new EntryStore(list, context),
     timeZone,
+    datasetRevision: 0,
     isRollUpKind: () => false,
     fields: { all: CORE_FIELDS },
     field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),

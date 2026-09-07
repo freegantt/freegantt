@@ -28,7 +28,7 @@ function defaultContent(
   columns: readonly TooltipColumn[],
 ): ElementDescription {
   const start = formatDate(timeZone, entry.start, locale);
-  const end = formatEndInclusive(timeZone, entry.end, locale);
+  const end = formatEndInclusive(timeZone, entry, locale);
   const dates = start === end ? start : `${start} – ${end}`;
   return {
     class: { 'fg-tooltip': true },
