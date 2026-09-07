@@ -149,14 +149,6 @@ export type AttachColumnGestures = (
  * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
 export type Theme = 'auto' | 'light' | 'dark';
 
-/** #157: how wide the grid pane sits. A number is px. `'fitColumns'` is a standing instruction.
- *  The pane sits exactly on its columns' own right edge (`totalColumnWidth`, `layout/column.ts`),
- *  and re-measures every time the columns change. A consumer never restates a width the library
- *  already computes. It is not a value a consumer reads back: `gridWidth`'s getter answers in px,
- *  because "how wide is the pane" is a question about pixels. Defined in `grid-pane-width.ts`,
- *  which owns the rules this type describes; re-exported here so `GanttShellOptions.gridWidth`
- *  names the same type `view/index.ts` already re-exports from this file. */
-export type { GridWidth };
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
 
