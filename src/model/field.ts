@@ -125,6 +125,15 @@ export interface TooltipColumn {
 export interface Field<TValue = unknown> {
   key: FieldKey;
   type?: FieldTypeName;
+  /** Whether this Field's value may change: the inline cell editor honours it (S5.8), and bar
+   *  drag-resize honours the same answer for `start`/`end` (#142) — one home for "may this value
+   *  change," asked by every gesture that writes it (I14). Default `false`.
+   *
+   *  A core Field (`start`, `name`, ...) is declared by the library and cannot be redeclared, so a
+   *  consumer overrides only this key on one through `DatasetOptions.fields`/`ctx.fields.register`
+   *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
+   *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`). */
+  editable?: boolean;
   /** Default: `{ from: 'meta', key: this Field's key }` (D-S4-35). */
   source?: FieldSource;
   /** Name only — a function does not serialize (ADR 0005). */

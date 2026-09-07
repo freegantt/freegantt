@@ -208,6 +208,7 @@ export {
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
+  IllegalCoreFieldOverrideError,
   DuplicateFieldSourceError,
   InvalidFieldSourceError,
   UnknownAggregatorError,

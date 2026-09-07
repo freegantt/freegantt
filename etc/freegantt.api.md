@@ -790,6 +790,7 @@ export interface Field<TValue = unknown> {
     column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
+    editable?: boolean;
     // (undocumented)
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -1249,6 +1250,17 @@ export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription 
 export interface HeaderRendererContext {
     // (undocumented)
     column: ResolvedColumn;
+}
+
+// @public
+export class IllegalCoreFieldOverrideError extends FreeGanttError {
+    constructor(key: string, illegalKey: string, overridableKeys: readonly string[]);
+    // (undocumented)
+    readonly illegalKey: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly overridableKeys: readonly string[];
 }
 
 // @public

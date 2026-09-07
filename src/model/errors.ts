@@ -336,8 +336,10 @@ export class UnknownFieldError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-field-key'` — two Field declarations share a `key`, or a declaration names a
- *  core Field (D-S4-5). */
+/** `code: 'duplicate-field-key'` — two Field declarations share a `key`, including two declarations
+ *  that both override the same core Field (D-S4-5, #142). A declaration naming a core Field's key
+ *  alone, or naming one alongside an illegal key, is `IllegalCoreFieldOverrideError` instead — this
+ *  error is for an outright clash, the same key claimed twice. */
 export class DuplicateFieldKeyError extends FreeGanttError {
   readonly key: string;
 
@@ -348,6 +350,29 @@ export class DuplicateFieldKeyError extends FreeGanttError {
     );
     this.name = 'DuplicateFieldKeyError';
     this.key = key;
+  }
+}
+
+/** `code: 'illegal-core-field-override'` — a consumer declaration names a core Field's key (`start`,
+ *  `name`, ...) and carries a key the library does not let a consumer override there. A core Field
+ *  cannot be redeclared (`DuplicateFieldKeyError` is for two ordinary declarations sharing a key),
+ *  but `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` lets one declaration merge a narrow,
+ *  named set of keys onto a core Field instead — `editable` today (#142). Naming any other key
+ *  (`source`, `column`, ...) throws this. */
+export class IllegalCoreFieldOverrideError extends FreeGanttError {
+  readonly key: string;
+  readonly illegalKey: string;
+  readonly overridableKeys: readonly string[];
+
+  constructor(key: string, illegalKey: string, overridableKeys: readonly string[]) {
+    super(
+      'illegal-core-field-override',
+      `fields: "${key}" already names a core field, so only ${overridableKeys.map((k) => `"${k}"`).join(', ')} may be overridden on it. Remove "${illegalKey}" from this declaration, or give it a different key.`,
+    );
+    this.name = 'IllegalCoreFieldOverrideError';
+    this.key = key;
+    this.illegalKey = illegalKey;
+    this.overridableKeys = overridableKeys;
   }
 }
 
