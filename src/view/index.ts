@@ -20,7 +20,15 @@ export type {
   EntryResize,
   EntryFieldEdit,
 } from './event-bus.js';
-export type { CapabilityRule, Interactions, KindDefaults } from './capability.js';
+export type {
+  CapabilityRule,
+  GestureCapability,
+  Interactions,
+  KindDefaults,
+  WriteRefusalReason,
+  WriteRule,
+  WriteVerdict,
+} from './capability.js';
 export type { MountLayer } from './mount-layer.js';
 export type { GanttDom, DomTarget } from './gantt-dom.js';
 // #177: `GanttDom.paneOf` answers with it, and `pane-layout.ts` is where the panes themselves live.

@@ -176,7 +176,6 @@ describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5
       locale,
     });
     expect(columns[0]?.cellRenderer).toBe(renderer);
-    expect(columns[0]?.editable).toBe(true);
     // this Gantt's own gridColumns entry never set resizable — the Field's own column default (false) wins.
     expect(columns[0]?.resizable).toBe(false);
     // this Gantt's own gridColumns entry sets movable directly, over no Field default.

@@ -20,7 +20,7 @@ import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/inde
 import type { PlannedRowKind } from '../layout/index.js';
 import { isPlannedHeaderRow } from '../layout/index.js';
 import type { EntryStoreView } from '../model/index.js';
-import type { Interactions } from './capability.js';
+import type { GestureCapability } from './capability.js';
 import type { SelectionChange } from './event-bus.js';
 import type { EntryHit } from './entry-gesture-context.js';
 
@@ -46,7 +46,7 @@ export interface SegmentSelectionPorts {
   /** Every Segment this bar stands for — `FrameLayout.segmentIdsForItem` (#212). */
   segmentIdsForItem(id: ItemId): readonly SegmentId[];
   /** D-S3-9's one capability resolution (I14) — never resolved twice for the same question. */
-  canGesture(capability: keyof Interactions, id: EntryId): boolean;
+  canGesture(capability: GestureCapability, id: EntryId): boolean;
   /** The cancelable `beforeSelectionChange` → apply → `selectionChange` sequence (D-S3-10). Returns
    *  whether `apply` ran, the same boolean `GanttShell#proposeChange` already returns. */
   confirm(change: SelectionChange, apply: () => void): boolean;

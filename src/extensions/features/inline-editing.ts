@@ -790,15 +790,17 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
         const edited: EditedCell = { entryId: entry.id, field: field.key };
         editing.dismissNotice();
-        // The next two refusals stay silent by decision (`s5.8-inline-editing.md` §1, "Which
-        // refusals speak"). Neither cell offers an editor at all. I14 already hides the
-        // affordance from the same resolution that refuses the gesture, so there is nothing to
-        // explain. Every refusal below them is about a cell that *does* offer an editor, so each
-        // one names itself.
-        if (!ctx.interaction.canEdit(entry)) return;
-        if (ctx.view.isColumnEditable(field.key) !== true) return;
-        if (ctx.dataset.isRollUpKind(entry.kind) && field.rollUp !== undefined) {
-          editing.refuse(edited, cell, 'derived-value');
+        // Which refusals speak (`s5.8-inline-editing.md` §1). A cell that offers no editor at all
+        // refuses silently. A cell that offers an editor it cannot open names its reason. #256 moved
+        // that decision onto the verdict itself, so this file holds no list of which refusal is
+        // which. Every refusal below the write check is about a cell that *does* offer an editor, so
+        // each one names itself.
+        // #256: one question, asked of the cell — the same answer that paints or hides the bar's
+        // resize handles. A refusal that names a reason is one this cell must explain. A refusal
+        // with none is already visible, so it stays silent (see the comment above).
+        const write = ctx.interaction.canWrite(entry, field.key);
+        if (!write.ok) {
+          if (write.reason !== undefined) editing.refuse(edited, cell, write.reason);
           return;
         }
         if (writesSegmentEnvelope(entry, field)) {
@@ -862,7 +864,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         // opens the first editable column on screen, whoever declared it.
         for (const column of ctx.view.resolvedColumns()) {
           const fieldKey = column.field;
-          if (ctx.view.isColumnEditable(fieldKey) !== true) continue;
+          if (!ctx.interaction.canWrite(entry, fieldKey).ok) continue;
           const cell = ctx.view.dom.cellFor(entryId, fieldKey);
           if (cell === undefined) continue;
           const field = ctx.dataset.field(fieldKey);

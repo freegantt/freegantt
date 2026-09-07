@@ -69,21 +69,17 @@ function columnFrom(
     // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
     cellRenderer: input.cellRenderer,
     tooltip: input.tooltip ?? defaults.tooltip,
-    // #142: `editable` has one home, `Field.editable` — a Grid column carries no override of its
-    // own (`GridColumnBase` dropped the key). S5.8 reads this answer off the resolved column.
-    editable: field.editable,
   };
   return {
     ...column,
-    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer', 'tooltip', 'editable']),
+    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer', 'tooltip']),
   };
 }
 
 /** S5.7, D-S5-18: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only
  *  `ResolvedColumn`. It drops `format`, a render-time closure with no public type of its own that
- *  never reaches a consumer, and `editable` — that answer lives on the Field now (#142), not the
- *  column. Everything else a consumer might have authored rides straight through, under the name it
- *  was authored with (D-S5-37, #194). */
+ *  never reaches a consumer. Everything else a consumer might have authored rides straight through,
+ *  under the name it was authored with (D-S5-37, #194). */
 export function toGridColumn(column: ResolvedColumn): GridColumn {
   const shared = {
     field: column.field,

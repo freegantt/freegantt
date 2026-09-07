@@ -6,7 +6,7 @@
 // type lives here once instead of being mirrored on both sides of that edge.
 
 import type { Entry, EntryId, ItemId, RowId, SegmentId, ClientPoint } from '../model/index.js';
-import type { Interactions } from './capability.js';
+import type { GestureCapability } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
 export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
@@ -97,7 +97,7 @@ export interface EntryGestureContext {
   entryFor(itemId: ItemId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`.
    *  `edge` narrows a `'resize'` question to one handle (#142); every other capability ignores it. */
-  can(capability: keyof Interactions, entry: Entry, edge?: 'start' | 'end'): boolean;
+  can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */

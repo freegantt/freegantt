@@ -3,7 +3,6 @@
 
 import { GanttShell } from '../view/index.js';
 import type {
-  CapabilityRule,
   GanttEventHandler,
   GanttEventMap,
   GridWidth,
@@ -648,7 +647,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  drops them instead. The rule is a boolean, or a predicate the resolver runs per entry —
    *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. It re-resolves at
    *  once, so a stricter rule hides a handle without waiting for the next pointer move. */
-  setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void {
+  setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void {
     this.#shell.setCapabilityRule(capability, rule);
   }
 

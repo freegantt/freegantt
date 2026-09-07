@@ -47,7 +47,7 @@ import type {
   RegisterKeyHandler,
 } from '../extensions/keymap.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
-import type { KindDefaults } from './capability.js';
+import type { KindDefaults, WriteVerdict } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import { buildElement } from '../render/dom/element-description.js';
 import type { MountLayer } from './mount-layer.js';
@@ -108,8 +108,8 @@ export interface GanttShellPorts {
   /** One of those columns, by Field key. `ColumnChrome` answers from its own index, so this never
    *  scans the list (review A6). */
   resolvedColumn(field: FieldKey): ResolvedColumn | undefined;
-  /** I14's one capability resolution, asked for the `edit` gesture. */
-  canEdit(entry: Entry): boolean;
+  /** I14's one capability resolution, asked for one cell (#256). */
+  canWrite(entry: Entry, field: FieldKey): WriteVerdict;
   /** Raises `beforeEntryEdit` on this Gantt's own bus and hands back what the handlers answered. */
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
@@ -180,8 +180,14 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  `move`/`resize` already read through `interaction/entry-gestures.ts`'s `ctx.can`. This
      *  surface exposes it because `inlineEditing()` is the first *plugin* that needs to ask it.
      *  Every other capability check lives inside core's own gesture wiring, which a plugin cannot
-     *  reach (D-S5-5). */
-    canEdit(entry: Entry): boolean;
+     *  reach (D-S5-5).
+     *
+     *  #256: the question names a cell — one Entry, one Field — because that is what a write names.
+     *  The same answer gates the bar's resize handles and its move. So a plugin that asks it here
+     *  cannot disagree with the gesture that writes the same value. A refusal that carries a
+     *  `reason` is one the user must be told about. A refusal with none is already visible, because
+     *  nothing offered the write at all. */
+    canWrite(entry: Entry, field: FieldKey): WriteVerdict;
     /** S5.8, D-S5-19: proposes the edit, and the answer is a Veto. This raises `beforeEntryEdit` on
      *  this Gantt's own event bus. It returns exactly what the registered handlers returned:
      *  `true`/`undefined` (no veto), `false`, or an unsettled `Promise` (D-S3-17's async-veto shape,
@@ -300,11 +306,6 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  different question: what the *consumer* authored (D-S5-33). A plugin that walks the grid wants
      *  this one. Call: `for (const column of ctx.view.resolvedColumns())`. */
     resolvedColumns(): readonly GridColumn[];
-    /** S5.8, D-S5-19: whether the currently resolved Grid column for `field` allows inline editing.
-     *  That is the Field's own `editable` (#142) — one home, no column-level override. It is the
-     *  same resolution the grid pane itself paints from (`ColumnChrome`). `undefined` when `field`
-     *  names no column in the Gantt's current `gridColumns` (not shown right now). */
-    isColumnEditable(field: FieldKey): boolean | undefined;
     /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
      *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4). Disposing this plugin
      *  removes the provider automatically. A provider has no `close()`/`unregister()` of its own, so
@@ -448,7 +449,7 @@ export function buildPluginPorts(
     interaction: {
       registerKeybinding: (binding) => registerWhileOpen(() => shell.keymap.register(binding)),
       registerKeyHandler: (chord, handler, options) => shell.keymap.registerHandler(chord, handler, options),
-      canEdit: (entry) => shell.canEdit(entry),
+      canWrite: (entry, field) => shell.canWrite(entry, field),
       proposeEntryEdit: (payload) => shell.proposeEntryEdit(payload),
       announceEntryEdit: (payload) => shell.announceEntryEdit(payload),
       registerKindDefaults: (kind, defaults) =>
@@ -474,9 +475,6 @@ export function buildPluginPorts(
       registerDecoration: (layer, provider) =>
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
-      // S5.8, D-S5-19: `field` names the currently *resolved* column, not the raw `GridColumnInput[]`
-      // a consumer's own `gridColumns` getter returns.
-      isColumnEditable: (field) => shell.resolvedColumn(field)?.editable,
       registerGridColumn: (column) =>
         registerWhileOpen(() => shell.registrations.registerGridColumn(column, pluginId)),
     },

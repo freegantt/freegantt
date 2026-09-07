@@ -91,7 +91,7 @@ import type {
 } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
-import type { CapabilityRule, Capabilities, Interactions } from './capability.js';
+import type { Capabilities, GestureCapability, Interactions } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -1022,7 +1022,7 @@ export class GanttShell {
 
   /** D-S5-35: writes one gesture's rule and leaves every other rule standing. It replaces the value
    *  it holds with a copy, so the object a consumer assigned is never mutated (`plans/02` §2). */
-  setCapabilityRule(capability: keyof Interactions, rule: CapabilityRule): void {
+  setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void {
     this.#interactions = { ...this.#interactions, [capability]: rule };
     this.#refreshCapabilities();
   }
@@ -1063,12 +1063,12 @@ export class GanttShell {
    *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here, rather than
    *  repeating the three-argument call. */
   #resolveCapabilities(): Capabilities {
-    return resolveCapabilities(
-      this.#interactions,
-      (kind) => this.#options.dataset.isRollUpKind(kind),
-      (kind) => this.#registrations.kindDefaultsFor(kind),
-      (edge) => this.#options.dataset.field(edge)?.editable === true,
-    );
+    return resolveCapabilities({
+      interactions: this.#interactions,
+      isRollUpKind: (kind) => this.#options.dataset.isRollUpKind(kind),
+      fieldFor: (key) => this.#options.dataset.field(key),
+      registeredDefaultsFor: (kind) => this.#registrations.kindDefaultsFor(kind),
+    });
   }
 
   /** `set interactions` and `registerKindDefaults`'s register/dispose pair both change an input
@@ -1262,7 +1262,7 @@ export class GanttShell {
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
-      canEdit: (entry) => this.#capabilities.can('edit', entry),
+      canWrite: (entry, field) => this.#capabilities.canWrite(entry, field),
       proposeEntryEdit: (payload) => this.#events.emit('beforeEntryEdit', payload),
       announceEntryEdit: (payload) => {
         this.#events.emit('entryEdit', payload);
@@ -1342,7 +1342,7 @@ export class GanttShell {
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
    *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
    *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
-  #canGesture(capability: keyof Interactions, id: EntryId, edge?: 'start' | 'end'): boolean {
+  #canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean {
     const entry = this.#options.dataset.entries.get(id);
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
