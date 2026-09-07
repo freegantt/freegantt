@@ -73,6 +73,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -102,6 +103,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
@@ -126,6 +128,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       }),
     );
@@ -154,6 +157,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 40, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       }),
     );
@@ -175,6 +179,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       }),
     );
@@ -197,6 +202,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     // computeFrame never sets a flag true today (no scheduling plugin wired yet) — mutate the frame's
@@ -221,6 +227,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
@@ -244,6 +251,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
         columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
@@ -268,6 +276,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
@@ -295,6 +304,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
@@ -343,6 +353,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
@@ -391,6 +402,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
@@ -442,6 +454,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 32 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       }),
     );
@@ -466,6 +479,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 64, width: 100, height: 32 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(scrolled);
@@ -495,6 +509,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 100, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -520,6 +535,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -542,6 +558,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -584,6 +601,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -611,6 +629,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -651,6 +670,7 @@ describe('render/dom backend', () => {
           visible: { x: 0, y: 0, width: 0, height: 0 },
           rowHeight: 32,
           revision: 0,
+          datasetRevision: 0,
           itemProducerRegistry,
         }),
       );
@@ -695,6 +715,7 @@ describe('render/dom backend', () => {
           visible: { x: 0, y: 0, width: 0, height: 0 },
           rowHeight: 32,
           revision: 0,
+          datasetRevision: 0,
           itemProducerRegistry,
         }),
       );
@@ -723,6 +744,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -759,6 +781,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -800,6 +823,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -831,6 +855,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -865,6 +890,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -899,6 +925,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -941,6 +968,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: oneRowForBoth,
     });
@@ -971,6 +999,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1021,6 +1050,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(1);
@@ -1063,6 +1093,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1094,6 +1125,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1128,6 +1160,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1164,6 +1197,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1197,6 +1231,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1232,6 +1267,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1261,6 +1297,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1288,6 +1325,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1317,6 +1355,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1354,6 +1393,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1391,6 +1431,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1441,6 +1482,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1493,6 +1535,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1546,6 +1589,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1586,6 +1630,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1615,6 +1660,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1647,6 +1693,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1685,6 +1732,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', tree: true },
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
@@ -1731,6 +1779,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1757,6 +1806,7 @@ describe('render/dom backend', () => {
         visible: { x: 0, y: 0, width: 0, height: 0 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       }),
     );
@@ -1791,6 +1841,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1832,6 +1883,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -1870,6 +1922,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -1904,6 +1957,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     backend.sync(frame);
@@ -1932,6 +1986,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
@@ -1968,6 +2023,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 1000, height: 1000 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
@@ -2006,6 +2062,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
@@ -2034,6 +2091,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -2079,6 +2137,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 200 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const row = frame.rows[0]!;
@@ -2116,6 +2175,7 @@ describe('render/dom backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },

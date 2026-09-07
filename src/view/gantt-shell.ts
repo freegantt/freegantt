@@ -1339,13 +1339,10 @@ export class GanttShell {
    *  That reader runs once per rAF frame for the whole length of a drag. Rebuilding the map there
    *  copied every Entry in the Dataset sixty times a second (I5). A drag commits once, at the end,
    *  so a drag now rebuilds this at most once. One revision is the whole cache key, because
-   *  `EditRequest.entries` is committed-only by contract (D-S5-45).
-   *
-   *  A Dataset that states no `datasetRevision` rebuilds on every call. Absent means *invalidate*,
-   *  never *never* — the trap #243 records, where the opposite reading served a stale cache. */
+   *  `EditRequest.entries` is committed-only by contract (D-S5-45). */
   #committedEntriesById(): ReadonlyMap<EntryId, Entry> {
     const revision = this.#options.dataset.datasetRevision;
-    if (revision === undefined || revision !== this.#entriesByIdRevision) {
+    if (revision !== this.#entriesByIdRevision) {
       this.#entriesById = new Map(this.#options.dataset.entries.all.map((entry) => [entry.id, entry]));
       this.#entriesByIdRevision = revision;
     }
@@ -1756,7 +1753,6 @@ export class GanttShell {
   }
 
   render(): void {
-    const datasetRevision = this.#options.dataset.datasetRevision;
     const frame = this.#layout.computeFrame(
       // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
       // What this shell contributes is what changed since the last frame — the viewport's geometry,
@@ -1772,7 +1768,7 @@ export class GanttShell {
         collapsed: this.#treeCollapse.ids,
         itemProducerRegistry: this.#registrations.itemProducers,
         decorationProviders: this.#registrations.decorationProviders(),
-        ...(typeof datasetRevision === 'number' ? { datasetRevision } : {}),
+        datasetRevision: this.#options.dataset.datasetRevision,
       }),
     );
     this.#backend.sync(frame);

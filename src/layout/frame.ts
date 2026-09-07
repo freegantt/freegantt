@@ -257,7 +257,7 @@ export interface LayoutInput {
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
   laneGapPx?: number;
   /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
-  datasetRevision?: number;
+  datasetRevision: number;
   /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
   fieldContext?: FieldContext;
   /** Registered decoration providers (S5.6, D-S5-15), `ctx.view.registerDecoration`'s own record.
@@ -331,7 +331,7 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
     laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
     entries: input.entries,
     registry: input.itemProducerRegistry,
-    ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
+    datasetRevision: input.datasetRevision,
   });
   return mem;
 }
