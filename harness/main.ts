@@ -32,10 +32,13 @@ import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 
-// S5.8, D-S5-19: Name, Start, End and Budget are editable (double-click, or Enter on the selected
-// row's first editable column) — `editable` is the Field's own answer now (#142), so no column
-// here restates it. Duration stays read-only: it is `compute`-sourced and has no stored home to
-// write back to (ADR 0005: the Rollup would overwrite an edit on the next commit).
+// S5.8, D-S5-19: Name, Start and Budget are editable (double-click, or Enter on the selected row's
+// first editable column) — `editable` is the Field's own answer now (#142), so no column here
+// restates it. End keeps its own demo intent (`index.html`'s own copy names only Name, Start and
+// Budget): `CORE_FIELDS.end` now defaults to editable, so `demoFieldOptions.fields` states an
+// explicit `editable: false` override for it. Duration stays read-only regardless: it is
+// `compute`-sourced and has no stored home to write back to (ADR 0005: the Rollup would overwrite
+// an edit on the next commit).
 const GRID_COLUMNS: readonly GridColumnInput[] = [
   'name',
   'start',
