@@ -64,6 +64,9 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+
+// @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 // @public (undocumented)
@@ -210,7 +213,7 @@ export interface CoreFieldValues extends Omit<Entry, 'id'> {
 }
 
 // @public
-export function createPopup(view: PopupSurface, keymap: KeyHandlerRegistrar): Popup;
+export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
 
 // @public
 export interface CustomRow {
@@ -735,7 +738,7 @@ export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, 
 }
 
 // @public
-export type ErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | (string & {});
+export type ErrorCode = BuiltInErrorCode | (string & {});
 
 // @public
 export interface ErrorFeed {
@@ -1399,14 +1402,6 @@ export interface KeyEventLike {
 }
 
 // @public
-export interface KeyHandlerRegistrar {
-    // (undocumented)
-    registerHandler(chord: string, handler: (event: KeyEventLike) => void, options?: {
-        captureInEditable?: boolean;
-    }): () => void;
-}
-
-// @public
 export type KindDefaults = {
     [K in keyof Interactions]?: boolean;
 };
@@ -1537,9 +1532,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     // (undocumented)
     interaction: {
         registerKeybinding(binding: KeyBindingOf<TGantt, TDataset>): Disposer;
-        registerKeyHandler(chord: KeyChord, handler: (event: KeyEventLike) => void, options?: {
-            captureInEditable?: boolean;
-        }): () => void;
+        registerKeyHandler: RegisterKeyHandler;
         canEdit(entry: Entry): boolean;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
@@ -1599,9 +1592,9 @@ export class PluginSetupError extends FreeGanttError {
 // @public
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
     // (undocumented)
-    remove(id: EntryId): void;
+    remove(id: EntryId | string): void;
     // (undocumented)
-    set(id: EntryId, value: T): void;
+    set(id: EntryId | string, value: T): void;
 }
 
 // @public
@@ -1612,7 +1605,7 @@ export interface PluginStoreView<T extends object> {
     // (undocumented)
     readonly all: ReadonlyMap<EntryId, T>;
     // (undocumented)
-    get(id: EntryId): T | undefined;
+    get(id: EntryId | string): T | undefined;
 }
 
 // @public
@@ -1674,9 +1667,6 @@ export interface ProposedSpan {
 }
 
 // @public
-export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
-
-// @public
 export interface RangeBand {
     // (undocumented)
     class?: string;
@@ -1692,6 +1682,11 @@ export interface RangeBand {
 export interface Refusable {
     readonly refuse: (reason: string) => false;
 }
+
+// @public
+export type RegisterKeyHandler = (chord: string, handler: (event: KeyEventLike) => void, options?: {
+    captureInEditable?: boolean;
+}) => () => void;
 
 // @public
 export class RegistrationClosedError extends FreeGanttError {

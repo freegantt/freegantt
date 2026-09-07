@@ -34,7 +34,7 @@ export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 /** Another plugin's store, read-only (D-S5-30). Dropping `set`/`remove` is what makes ownership
  *  legible at the call site: a reviewer never has to check by hand which plugin a store call owns. */
 export interface PluginStoreView<T extends object> {
-  get(id: EntryId): T | undefined;
+  get(id: EntryId | string): T | undefined;
   readonly all: ReadonlyMap<EntryId, T>;
 }
 
@@ -45,6 +45,6 @@ export interface PluginStoreView<T extends object> {
  * `entries.add` already follows.
  */
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
-  set(id: EntryId, value: T): void;
-  remove(id: EntryId): void;
+  set(id: EntryId | string, value: T): void;
+  remove(id: EntryId | string): void;
 }

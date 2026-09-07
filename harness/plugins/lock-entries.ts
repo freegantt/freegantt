@@ -51,7 +51,7 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
 
     setup(ctx) {
       store = ctx.store.reserve<LockRow>();
-      for (const id of initiallyLocked) store.set(entryId(id), { locked: true });
+      for (const id of initiallyLocked) store.set(id, { locked: true });
 
       // What does a locked entry do while a neighbour moves? It moves too, so the drag preview shows
       // the cost of the lock before the drop.
@@ -94,11 +94,11 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
 
     /** A store write on its own: it commits, raises `change`, and one undo reverses it (#156). */
     lock(id) {
-      store?.set(entryId(id), { locked: true });
+      store?.set(id, { locked: true });
     },
 
     unlock(id) {
-      store?.remove(entryId(id));
+      store?.remove(id);
     },
   };
 }

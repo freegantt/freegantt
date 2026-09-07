@@ -70,10 +70,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
   return {
     id: 'freegantt.contextMenu',
     setup(ctx: PluginContext) {
-      const popup: Popup = createPopup(ctx.view, {
-        registerHandler: (chord, handler, handlerOptions) =>
-          ctx.interaction.registerKeyHandler(chord, handler, handlerOptions),
-      });
+      const popup: Popup = createPopup(ctx.view, ctx.interaction.registerKeyHandler);
       /** The listeners one open menu needs. They live exactly as long as that menu. `forgetOpenMenu`
        *  reassigns the store on every close, because `DisposableStore.disposeAll()` latches. A spent
        *  store fires every later `add` at once. `createPopup`'s own store avoids that trap the same

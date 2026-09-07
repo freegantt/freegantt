@@ -29,13 +29,15 @@ import type { PluginId } from './plugin.js';
  *  with one word. Telemetry routes on `severity !== 'info'`; a toast styles on all three. */
 export type ErrorSeverity = 'error' | 'warning' | 'info';
 
-/** The machine-readable half of an Error report — kebab-case, and open at the tail so a plugin can
- *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
- *  the `(string & {})` tail is the same shape `EntryKind` already uses.
- *
- *  A code that names a thrown `FreeGanttError` matches that class's own `code`, so a consumer that
- *  already switches on `error.code` reads the report the same way. */
-export type ErrorCode =
+/** Every built-in code an Error report's `code` can carry, one closed union (T1-3, #247 S3-4). The
+ *  built-in cell editor owns the last eight — its own `REFUSAL_TEXT`/`COMMIT_REFUSAL_TEXT` tables
+ *  (`extensions/features/inline-editing.ts`) hold the words the user reads for each one.
+ *  `error-code-drift.test.ts`, on the `extensions/` side of the boundary `model/` may not cross,
+ *  checks every one of those table keys against this union through a `Record<BuiltInErrorCode,
+ *  true>` literal — a code missing there fails to compile, and a code missing here fails that
+ *  literal too, so the two tables cannot drift apart in either direction (I11). A `type`, not a
+ *  runtime tuple: `model/` carries zero runtime beyond its id/brand helpers (`plans/01` §1). */
+export type BuiltInErrorCode =
   // A refusal core observed.
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
@@ -53,7 +55,17 @@ export type ErrorCode =
   | 'no-date-value'
   | 'time-of-day'
   | 'unsaved-value'
-  | (string & {});
+  | 'segmented-entry'
+  | 'unreadable-value'
+  | 'refused-write';
+
+/** The machine-readable half of an Error report — kebab-case, and open at the tail so a plugin can
+ *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
+ *  the `(string & {})` tail is the same shape `EntryKind` already uses.
+ *
+ *  A code that names a thrown `FreeGanttError` matches that class's own `code`, so a consumer that
+ *  already switches on `error.code` reads the report the same way. */
+export type ErrorCode = BuiltInErrorCode | (string & {});
 
 /** The one call a `before*` handler makes to say **why** it refuses (#210).
  *
