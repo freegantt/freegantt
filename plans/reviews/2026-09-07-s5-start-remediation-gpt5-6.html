@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeGantt s5-start remediation plan — GPT-5.6</title>
+  <style>
+    :root { color-scheme:light; --ink:#172033; --muted:#5d6678; --line:#d9dee8; --paper:#fff; --ground:#f5f3ee; --high:#9f1239; --medium:#a15c00; --good:#087a55; --code:#eef1f5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
+    main { max-width:1160px; margin:auto; padding:40px 24px 80px; }
+    h1,h2,h3 { line-height:1.2; }
+    h1 { font-size:2rem; margin-bottom:8px; }
+    h2 { margin-top:42px; border-bottom:2px solid var(--ink); padding-bottom:8px; }
+    p { max-width:92ch; }
+    code,.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--code); padding:1px 4px; border-radius:3px; }
+    .meta,.note { color:var(--muted); }
+    .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:24px 0; }
+    .metric,.card,.slice { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px; }
+    .metric strong { display:block; font-size:1.8rem; }
+    .slice { margin:12px 0; }
+    .slice h3 { margin:0 0 8px; }
+    table { width:100%; border-collapse:collapse; background:var(--paper); font-size:.86rem; }
+    th,td { text-align:left; vertical-align:top; padding:9px 10px; border:1px solid var(--line); }
+    th { background:#e9edf3; }
+    .high { color:var(--high); font-weight:700; }
+    .medium { color:var(--medium); font-weight:700; }
+    .good { color:var(--good); font-weight:700; }
+    ul,ol { padding-left:22px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Recommended fixes for the <span class="mono">s5-start</span> findings</h1>
+    <p class="meta">GPT-5.6 · 2026-09-07 · companion to <code>2026-09-07-s5-start-api-architecture-gpt5-6.html</code></p>
+    <p>This report gives implementation guidance. It does not perform a second review pass.</p>
+  </header>
+
+  <section class="summary">
+    <div class="metric"><strong>8</strong>reviewable slices</div>
+    <div class="metric"><strong>4</strong>runtime fixes first</div>
+    <div class="metric"><strong>6</strong>public surface changes</div>
+    <div class="metric"><strong>1</strong>hard slice dependency</div>
+  </section>
+
+  <section>
+    <h2>Recommendation summary</h2>
+    <div class="card">
+      <p>Fix runtime defects before architecture debt.</p>
+      <p>Keep app-author and plugin-author interfaces separate.</p>
+      <p>Use existing internal seams. Do not add a new public hook for preview resolution.</p>
+      <p>Make invalid authored states fail in TypeScript. Keep resolved internal shapes simple.</p>
+      <p>Test each extracted module through its interface. Do not test through GanttShell when a smaller seam exists.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Remediation matrix</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Recommended change</th><th>Required test</th><th>Risk or note</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="high">T1-1</td>
+          <td><code>src/view/styles.ts</code>: move <code>--fg-bar-fill-painted</code> from <code>.fg-container</code> to <code>.fg-bar</code>. Keep <code>--fg-bar-opacity</code> inherited.</td>
+          <td>Add a browser assertion for the computed color of a renderer-colored bar.</td>
+          <td>Compare against a probe element. Browser serialization of <code>color-mix()</code> can change.</td>
+        </tr>
+        <tr>
+          <td class="medium">T1-2</td>
+          <td><code>src/view/gesture-pipeline.ts</code>: build one base payload. Add <code>refuse</code> only to the before-event copy.</td>
+          <td>Assert that both after-event payloads have no <code>refuse</code> key.</td>
+          <td>Keep resize <code>edge</code> on both payloads.</td>
+        </tr>
+        <tr>
+          <td class="medium">T1-3</td>
+          <td><code>src/model/error-report.ts</code>: add the three editor codes. Prefer one <code>BUILT_IN_ERROR_CODES</code> tuple and derive the closed literals.</td>
+          <td>Assert that all editor refusal keys occur in the built-in tuple.</td>
+          <td>The open string tail remains for plugin codes.</td>
+        </tr>
+        <tr>
+          <td class="medium">T1-4</td>
+          <td><code>harness/data.ts</code>: add <code>bindErrors()</code>. Dispose the old watcher before each rebind.</td>
+          <td>Import a Document, trigger a refusal, and assert a new error-log row.</td>
+          <td>This uses the shipped helper. It adds no harness workaround.</td>
+        </tr>
+        <tr>
+          <td>T1-5</td>
+          <td>Add a focused shared-envelope conflict test in data/.</td>
+          <td>Assert <code>SegmentsOutOfSyncError</code>, no change event, and no revision increase.</td>
+          <td>No production edit.</td>
+        </tr>
+        <tr>
+          <td>T1-6</td>
+          <td>Add a focused cache test for <code>committedEntriesById</code>.</td>
+          <td>Assert stable identity per revision and a fresh map after invalidation.</td>
+          <td>Also cover a Dataset without <code>datasetRevision</code>.</td>
+        </tr>
+        <tr>
+          <td>T1-7</td>
+          <td>Add <code>src/view/segment-selection.test.ts</code> against literal <code>SegmentSelectionPorts</code>.</td>
+          <td>Cover order, hit kinds, mixed ownership, stepping, and dropped Segments.</td>
+          <td>The existing ports interface is the correct test surface.</td>
+        </tr>
+        <tr>
+          <td>T1-8</td>
+          <td>Repair the issue-wave table and mark the SegmentSelection extraction complete.</td>
+          <td>Read the rendered Markdown.</td>
+          <td>Documentation only.</td>
+        </tr>
+        <tr>
+          <td class="high">A1</td>
+          <td>Change the call to <code>createPopup(ctx.view, ctx.interaction.registerKeyHandler)</code>. Remove <code>KeyHandlerRegistrar</code> from the public barrel.</td>
+          <td>Update popup tests to pass a bound registration function.</td>
+          <td>The plugin port is already an arrow property, so bare passing is safe.</td>
+        </tr>
+        <tr>
+          <td class="high">A2</td>
+          <td>Remove <code>Dataset.extraEditsFor</code>. Add a private Dataset-to-state friend lookup in <code>api/dataset.ts</code>. Export its function only inside api/.</td>
+          <td>Assert that the generated public report no longer contains <code>extraEditsFor</code>.</td>
+          <td>Do not add a new plugin surface. <code>api/gantt.ts</code> is the only cross-object caller.</td>
+        </tr>
+        <tr>
+          <td class="medium">A3</td>
+          <td>Accept <code>EntryId | string</code> in PluginStore <code>get</code>, <code>set</code>, and <code>remove</code>. Brand at data/ entry points.</td>
+          <td>Mix string and branded ids across write and read calls.</td>
+          <td>Keep <code>all</code> keyed by branded <code>EntryId</code>.</td>
+        </tr>
+        <tr>
+          <td class="medium">A4</td>
+          <td>Split authored <code>GridColumn</code> into a base plus exclusive width and flex branches.</td>
+          <td>Add a compile-time rejection for a column with both keys.</td>
+          <td><code>exactOptionalPropertyTypes</code> also rejects explicit <code>undefined</code>.</td>
+        </tr>
+        <tr>
+          <td class="medium">A5</td>
+          <td>Publish resolved <code>DateLine</code>. Rename layout geometry to <code>DateLineDecoration</code>. Return <code>Instant</code> from both resolved getters.</td>
+          <td>Set a string date, then assert that the getter returns an Instant.</td>
+          <td>Keep loose setter types. Make the internal rename atomic.</td>
+        </tr>
+        <tr>
+          <td class="medium">A6</td>
+          <td>Remove <code>RaiseError</code> from <code>src/api/index.ts</code>. Keep the internal model export.</td>
+          <td>Regenerate and inspect <code>etc/freegantt.api.md</code>.</td>
+          <td>This is a public-surface deletion only.</td>
+        </tr>
+        <tr>
+          <td>A7</td>
+          <td>Add Error feed to CONTEXT.md. Add <code>fieldRowsOf(changeSet)</code> to the History example.</td>
+          <td>Run sentence-length checks.</td>
+          <td>No runtime change.</td>
+        </tr>
+        <tr>
+          <td class="medium">R1</td>
+          <td>Rename the WeakMap predicate so it does not claim an unchecked key. Require an <code>I2-ok</code> reason comment for each exemption.</td>
+          <td>Add a red case for an unexplained module WeakMap. Keep explained caches green.</td>
+          <td>Do not require local key classes. Existing valid caches use external key types.</td>
+        </tr>
+        <tr>
+          <td>R2</td>
+          <td>Extract <code>GridPaneWidth</code> into <code>src/view/grid-pane-width.ts</code>. Move the width rules and state behind narrow ports.</td>
+          <td>Test floors, ceilings, fitColumns, flex columns, and veto rollback through the new interface.</td>
+          <td>Keep GanttShell as the composition root. Add no public interface.</td>
+        </tr>
+        <tr>
+          <td>R3</td>
+          <td>Remove <code>grouped</code> and <code>pack</code> from the harness only after <code>rowSource</code> returns resolved defaults.</td>
+          <td>Toggle grouping and packing twice. Assert both labels after each toggle.</td>
+          <td>Do not replace explicit state with an implicit-default check.</td>
+        </tr>
+        <tr>
+          <td>R4</td>
+          <td>Replace NUL-delimited staged keys with a nested Map keyed by store name, then Entry id.</td>
+          <td>Use the same Entry id in two plugin stores and verify independent rows.</td>
+          <td>This removes string-key encoding and restores text search.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Three corrected recommendations</h2>
+    <div class="slice">
+      <h3>A2 · Use an internal friend seam</h3>
+      <p>The first report suggested a plugin wiring surface. That surface has no honest external caller.</p>
+      <p>Use ADR 0007's private WeakMap pattern instead. The public Dataset then loses the core-only method.</p>
+    </div>
+    <div class="slice">
+      <h3>R1 · Require reasons, not local key types</h3>
+      <p>Valid caches use <code>Intl.DateTimeFormatOptions</code>, ViewPreset headers, and DOM Elements as keys.</p>
+      <p>A local-type rule rejects good caches. A required reason makes each exception reviewable.</p>
+    </div>
+    <div class="slice">
+      <h3>R3 · Resolve defaults before deleting state</h3>
+      <p>The current getter can return an omitted <code>heightMode</code>. The harness must not re-derive its default.</p>
+      <p>Return the resolved setting first. Then the harness can read one reliable source.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Recommended implementation order</h2>
+    <div class="slice">
+      <h3>Slice 1 · Runtime defects</h3>
+      <p><strong>Findings:</strong> T1-1, T1-2, T1-4, R4.</p>
+      <p>These fixes change runtime behavior without changing the public type report.</p>
+      <p><strong>Gate:</strong> <code>pnpm verify</code> and focused browser tests.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 2 · Missing guards</h3>
+      <p><strong>Findings:</strong> T1-5, T1-6, T1-7.</p>
+      <p>This slice adds tests only. It can run in parallel with Slice 1.</p>
+      <p><strong>Gate:</strong> Node and DOM test projects.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 3 · Small surface fixes</h3>
+      <p><strong>Findings:</strong> A6, A1, A3, T1-3.</p>
+      <p>Regenerate the public report once. Review its deletion and signature changes together.</p>
+      <p><strong>Gate:</strong> <code>pnpm verify</code> and <code>pnpm api-report</code>.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 4 · Resolved Date line surface</h3>
+      <p><strong>Finding:</strong> A5.</p>
+      <p>Keep this rename separate because it crosses layout/, render/, view/, and api/.</p>
+      <p><strong>Gate:</strong> typecheck, boundaries, tests, and public report.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 5 · Exclusive Grid column sizing</h3>
+      <p><strong>Finding:</strong> A4.</p>
+      <p>Keep this separate so TypeScript errors expose each invalid construction clearly.</p>
+      <p><strong>Gate:</strong> typecheck first, then the full verification command.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 6 · Remove the hook leak, then tighten I2</h3>
+      <p><strong>Findings:</strong> A2, then R1.</p>
+      <p>A2 adds the private WeakMap. R1 must then accept it with a stated reason.</p>
+      <p><strong>Gate:</strong> public report, lint guards, and full verification.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 7 · Records and glossary</h3>
+      <p><strong>Findings:</strong> T1-8, A7, and all governing-record gaps.</p>
+      <p>Scope the <code>*Request</code> ban to app-author options. Keep <code>EditRequest</code> as plugin vocabulary.</p>
+      <p>Document <code>refuse(reason)</code>, <code>gantt.dataset</code>, D-S5-49, and <code>--fg-bar-opacity</code>.</p>
+      <p><strong>Gate:</strong> sentence-length, vendor-name, and format checks.</p>
+    </div>
+    <div class="slice">
+      <h3>Slice 8 · GanttShell depth and harness cleanup</h3>
+      <p><strong>Findings:</strong> R2, then R3.</p>
+      <p>Extract grid width after correctness and public surface work lands.</p>
+      <p><strong>Gate:</strong> full verification and focused harness browser tests.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Target public call sites</h2>
+    <table>
+      <thead><tr><th>Job</th><th>Recommended call</th></tr></thead>
+      <tbody>
+        <tr><td>Create a popup</td><td><code>createPopup(ctx.view, ctx.interaction.registerKeyHandler)</code></td></tr>
+        <tr><td>Write plugin-owned data</td><td><code>ctx.store.reserve&lt;Lock&gt;().set('t2', { locked: true })</code></td></tr>
+        <tr><td>State a fixed column</td><td><code>{ field: 'cost', width: 120 }</code></td></tr>
+        <tr><td>State a flexible column</td><td><code>{ field: 'cost', flex: 1 }</code></td></tr>
+        <tr><td>Read a resolved Date line</td><td><code>diffMs(gantt.dateLines[0].placeAt, now())</code></td></tr>
+        <tr><td>Watch both error feeds</td><td><code>watchAllErrors([dataset, gantt], showError)</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Completion standard</h2>
+    <ol>
+      <li>Run <code>pnpm verify</code> after each slice.</li>
+      <li>Run focused browser tests after Slices 1 and 8.</li>
+      <li>Review <code>etc/freegantt.api.md</code> after every public change.</li>
+      <li>Review <code>harness/main.ts</code> before each commit.</li>
+      <li>Do not close a harness gap with a harness adapter.</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>
