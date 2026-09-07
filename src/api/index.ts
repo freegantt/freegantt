@@ -91,6 +91,7 @@ export type {
   GanttOptionsBase,
   GanttScaleOptions,
   DateLineInput,
+  DateLine,
   GanttPlugin,
   PluginContext,
   Command,
