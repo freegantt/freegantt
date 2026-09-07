@@ -83,3 +83,4 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 - TS strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), pnpm, Vite, Vitest (pure tests run in Node with no DOM env), fast-check for property tests. Dont do lie generics
 - The invariants table (`plans/01` §11, I1–I14) is the review checklist; every invariant maps to a CI job.
 - Slice gates (`plans/00` §4) must pass before the next slice starts.
+- **A plan or review's account of the code is a claim. Open the file before you act on it.** A verified finding does not verify its proposed fix. On #244 all 18 findings were real, but one report described the code wrongly, and the true fix was smaller. Probe behaviour with a throwaway test before any "changes no reader" refactor. Delete the probe. Then pin the behaviour with a real test. Two earlier misses (#230 R1's collapsed-row disagreement, a default nobody opened) cost a silent regression each.
