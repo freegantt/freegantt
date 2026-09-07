@@ -21,7 +21,7 @@ import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
 import type { RowMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
-import { isPlannedHeaderRow } from './rows/row-source.js';
+import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { Item } from './items/produce-items.js';
 import type { ItemProducerRegistry } from './items/produce-items.js';
@@ -196,6 +196,11 @@ export interface GeometryFrame {
    * virtualization doesn't announce "row 3" with no "of 30" (S1.10, D-S1.10-5/7). Same "always the
    * full extent" shape as `contentHeight`/`contentWidth` below. */
   rowCount: number;
+  /** Whether the row source can put one row under another (`nestsRows`). A backend needs it to pick
+   *  the grid's authoring pattern: only a `treegrid` row may carry `aria-level` and `aria-expanded`,
+   *  so a flat source must emit neither (S5.11, D-S5-25). A fact about the row set, so it is stated
+   *  once here rather than guessed per row from `depth`. */
+  tree: boolean;
   /** Always the full extent, never the window's. */
   contentHeight: number;
   /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
@@ -515,6 +520,7 @@ export function placeFrame(
     header: { bands },
     rows,
     rowCount: plan.length,
+    tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),
     contentHeight: index.totalHeight,
     contentWidth: scale.contentWidth,
     bars,

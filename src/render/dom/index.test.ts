@@ -439,13 +439,39 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it("stamps .fg-row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
+  it("stamps a tree row's aria-posinset/aria-setsize from the frame's absolute row index and total row count, not the windowed count (D-S1.10-5)", () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
     // A dataset larger than the window: rowHeight * entries.length exceeds the visible slice, so
     // rows[].index runs ahead of the windowed row count while frame.rowCount stays the full total.
+    backend.sync(
+      computeFrame({
+        entries: sampleEntries,
+        rows: { source: 'entries', tree: true },
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 32 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        itemProducerRegistry,
+      }),
+    );
+
+    const row = grid.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.getAttribute('aria-posinset')).toBe('1');
+    expect(row.getAttribute('aria-setsize')).toBe(String(sampleEntries.length));
+    expect(row.getAttribute('aria-level')).toBe('1');
+    backend.destroy();
+  });
+
+  it('gives a flat grid row aria-rowindex alone, and none of the three tree attributes (S5.11, D-S5-25)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
     backend.sync(
       computeFrame({
         entries: sampleEntries,
@@ -460,8 +486,11 @@ describe('render/dom backend', () => {
     );
 
     const row = grid.querySelector<HTMLElement>('.fg-row')!;
-    expect(row.getAttribute('aria-posinset')).toBe('1');
-    expect(row.getAttribute('aria-setsize')).toBe(String(sampleEntries.length));
+    // The header row above the body takes index 1, so the first body row is 2.
+    expect(row.getAttribute('aria-rowindex')).toBe('2');
+    expect(row.hasAttribute('aria-posinset')).toBe(false);
+    expect(row.hasAttribute('aria-setsize')).toBe(false);
+    expect(row.hasAttribute('aria-level')).toBe(false);
     backend.destroy();
   });
 
@@ -546,7 +575,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('gives .fg-row role="listitem" and data-testid/data-row-id, .fg-bar data-testid alongside data-item-id (U6)', () => {
+  it('gives .fg-row role="row" and data-testid/data-row-id, .fg-bar data-testid alongside data-item-id (U6)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -564,7 +593,7 @@ describe('render/dom backend', () => {
     backend.sync(frame);
 
     const row = grid.querySelector<HTMLElement>('.fg-row')!;
-    expect(row.getAttribute('role')).toBe('listitem');
+    expect(row.getAttribute('role')).toBe('row');
     expect(row.dataset['testid']).toBe('fg-row');
     expect(row.dataset['rowId']).toBe(frame.rows[0]!.id);
 

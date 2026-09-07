@@ -39,6 +39,11 @@ export interface PaneLayoutOptions {
  *  is this in?" and "where is that pane?" speak one vocabulary. Public through `GanttDom`. */
 export type PaneName = 'grid' | 'timeline';
 
+/** Which published authoring pattern the grid pane follows (S5.11, D-S5-25). A row source that nests
+ *  rows is a `treegrid`; a flat one is a `grid`. The two patterns differ in one thing this layout
+ *  cares about — only a `treegrid` row may carry `aria-level` and `aria-expanded`. */
+export type GridPattern = 'grid' | 'treegrid';
+
 export interface Panes {
   /** The Row layer (`.fg-rows`): row labels and Grid cells. No *vertical* scrollbar — it follows
    *  the scroll owner by transform (D-S1.8-1). The grid pane around it is a real horizontal
@@ -60,9 +65,11 @@ export class PaneLayout {
   #container: HTMLElement;
   #gridPane: HTMLElement;
   #spacer: HTMLElement;
+  #timelinePane: HTMLElement;
   #gridWidth: number;
   #minGridWidth: number;
   #headerBandCount = 0;
+  #gridPattern: GridPattern = 'grid';
 
   constructor(options: PaneLayoutOptions) {
     this.#container = options.container;
@@ -71,11 +78,10 @@ export class PaneLayout {
     // is a 13th class beyond D-S1.10-1's shipped twelve — needed because the container's own display/
     // overflow are structural too, and nothing else identifies it for a stylesheet rule to target.
     this.#container.classList.add('fg-container');
-    // S1.10, D-S1.10-5: the container is the one honest tab stop this step defines (no roving tabindex
-    // yet — that's S3's, once a keyboard controller exists to move it). `aria-label` is live
-    // (GanttShell.a11yLabel) and set separately, not here.
+    // S1.10, D-S1.10-4: the container names the whole Gantt (`accessibleName`, live). It is no
+    // longer a tab stop — S5.11's roving focus gives each pane its own (D-S5-26), and one container
+    // tab stop beside two pane tab stops would be a third stop that reaches nothing.
     this.#container.setAttribute('role', 'group');
-    this.#container.setAttribute('tabindex', '0');
     this.#minGridWidth = options.minGridWidth ?? DEFAULT_MIN_GRID_WIDTH;
 
     const splitterWidth = readPixelProperty(this.#container, SPLITTER_WIDTH_PROPERTY, SPLITTER_WIDTH_POLICY);
@@ -92,18 +98,26 @@ export class PaneLayout {
     this.#gridPane = document.createElement('div');
     this.#gridPane.className = 'fg-grid-pane';
     this.#gridPane.style.width = `${this.#gridWidth}px`;
+    // S5.11, D-S5-25: the grid pane is the pane that carries the published pattern. `gridPattern`
+    // (live, from the row source) picks which of the two it is.
+    this.#gridPane.setAttribute('role', this.#gridPattern);
 
     // D-S1.12-9: renders one empty `.fg-band` per header band (`setHeaderBandCount`) instead of
     // being sized imperatively — both panes then resolve their header height from the same
     // `--fg-band-height` CSS expression and cannot drift.
     this.#spacer = document.createElement('div');
     this.#spacer.className = 'fg-grid-spacer';
+    // S5.11, D-S5-25: the spacer holds the one header row, so it is the grid's header `rowgroup`.
+    // Its `.fg-band` children are empty height mirrors of the timeline's bands and say nothing to a
+    // screen reader — `setHeaderBandCount` hides each one from the tree.
+    this.#spacer.setAttribute('role', 'rowgroup');
 
     const rowClip = document.createElement('div');
     rowClip.className = 'fg-rows-clip';
 
     const headerRow = document.createElement('div');
     headerRow.className = 'fg-grid-header';
+    headerRow.setAttribute('role', 'row');
     this.#spacer.append(headerRow);
 
     // render/dom's sync() moves this element by `translateY(-visible.y)` every frame (D-S1.8-1).
@@ -113,6 +127,9 @@ export class PaneLayout {
     // never transformed) owns the clip; `rowLayer` (below) owns the transform.
     const rowLayer = document.createElement('div');
     rowLayer.className = 'fg-rows';
+    // S5.11, D-S5-25: the body `rowgroup`. Only the windowed rows exist inside it, which is what
+    // `aria-rowcount`/`aria-rowindex` (`setGridSize`, and `render/dom`'s per-row index) exist to say.
+    rowLayer.setAttribute('role', 'rowgroup');
 
     rowClip.append(rowLayer);
     this.#gridPane.append(this.#spacer, rowClip);
@@ -120,9 +137,17 @@ export class PaneLayout {
     const splitter = document.createElement('div');
     splitter.className = SPLITTER_CLASS;
     splitter.style.width = `${splitterWidth}px`;
+    // S5.11, D-S5-26: the splitter gains a keyboard path this step, so it becomes a real widget
+    // rather than a pointer-only strip. `attachSplitter` (`view/splitter.ts`) owns the live values.
+    splitter.setAttribute('role', 'separator');
 
     const timelinePane = document.createElement('div');
     timelinePane.className = 'fg-timeline-pane';
+    // S5.11, D-S5-25: a labelled region of focusable bars, explicitly not a second grid. `aria-owns`
+    // across the two scrollers was considered and rejected — a virtualized row's node often does not
+    // exist to be owned. `accessibleName` (live) names it.
+    timelinePane.setAttribute('role', 'region');
+    this.#timelinePane = timelinePane;
 
     // S5.3, D-S5-8: sits above both panes in DOM order (and stacking, `view/styles.ts`'s
     // `.fg-overlay`) — the container's one absolutely positioned overlay layer, spanning it edge to
@@ -134,6 +159,35 @@ export class PaneLayout {
     this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
 
     this.panes = { rows: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane, overlay };
+  }
+
+  /** Live (S1.10, D-S1.10-4): the one name a screen reader reads for this Gantt. The container
+   *  carries it for the widget as a whole, and the timeline pane repeats it because a `region` with
+   *  no name is not a region at all (D-S5-25). The grid pane needs none: its own rows and column
+   *  headers say what it holds. */
+  set accessibleName(label: string) {
+    this.#container.setAttribute('aria-label', label);
+    this.#timelinePane.setAttribute('aria-label', label);
+  }
+
+  /** Live (S5.11, D-S5-25): which published pattern the grid pane follows. A tree row source makes
+   *  it a `treegrid`, and only then may a row carry `aria-level` and `aria-expanded`. */
+  get gridPattern(): GridPattern {
+    return this.#gridPattern;
+  }
+
+  set gridPattern(pattern: GridPattern) {
+    if (pattern === this.#gridPattern) return;
+    this.#gridPattern = pattern;
+    this.#gridPane.setAttribute('role', pattern);
+  }
+
+  /** S5.11, D-S5-25: how many rows and columns the grid *has*, which is not how many it draws — only
+   *  the windowed rows exist in the DOM (I3). Without this pair a screen reader reads "row 4 of 12"
+   *  over a 5,000-row dataset. */
+  setGridSize(rowCount: number, columnCount: number): void {
+    this.#gridPane.setAttribute('aria-rowcount', String(rowCount));
+    this.#gridPane.setAttribute('aria-colcount', String(columnCount));
   }
 
   get gridWidth(): number {
@@ -231,6 +285,9 @@ export class PaneLayout {
     for (let i = 0; i < count; i++) {
       const band = document.createElement('div');
       band.className = 'fg-band';
+      // Height only — the timeline's own bands carry the tick labels. Hidden, so the header
+      // `rowgroup` around it holds exactly one row (D-S5-25).
+      band.setAttribute('aria-hidden', 'true');
       this.#spacer.append(band);
     }
     this.#spacer.append(this.panes.gridHeader);
