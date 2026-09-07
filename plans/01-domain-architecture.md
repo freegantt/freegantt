@@ -400,6 +400,11 @@ interface GeometryFrame {
     depth: number; expandable: boolean; expanded: boolean;
     matched?: boolean;   // false when kept only because a descendant matched the filter
     cells: readonly string[];
+    /** Every Entry the row owns, and every Segment those Entries own, in the same order (#212,
+     *  ADR 0010, #230 R5). A row click selects the Segment set, and `render/dom` diffs it against
+     *  the Selection to decide the row's own paint. The frame states both, so the row paint never
+     *  reads a second Entry source. Both are empty for a header row, which stands for no Entry. */
+    entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[];
   }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
@@ -703,6 +708,8 @@ flowchart TB
 ### 8.3 Split pane (D8)
 
 `GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native *vertical* scroller (D-D, D-S1.8-1) — the grid pane never becomes a second one. Horizontally the grid pane is its own independent native scroller when fixed-width columns overflow it, unsynced with the timeline's own time-axis horizontal scroll (D-S1.8-13, #126). Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S4–S5 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
+
+**`GanttShell` composes; it does not own the Selection (#230 R4).** `view/segment-selection.ts`'s `SegmentSelection` holds the selected Segment ids, the row-rank cache, and the pane rule that decides what a pointer hit would add to them (ADR 0010). The shell keeps the composition — it builds the class and passes it the ports it needs — but the six members that answer "what is selected" moved out, because a shell that changes for selection reasons changes for every reason. `interaction/entry-gestures.ts` asks `selectableSegmentsOf` rather than re-deriving the pane rule with a second switch on hit kind. `SegmentSelection` publishes `segmentIds` and `entryIds` on one object, and that object is structurally the `ActedOn` a Command already takes, so the gesture path and the Command path read one shape instead of two (#216 Q3).
 
 ---
 

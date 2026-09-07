@@ -96,13 +96,23 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
 - **The hot path keeps its budget (I5).** The selection diff runs over Segments instead of Entries. It
   stays O(what changed) and never scans every mounted bar.
 - **One layer answers "which Segments does this stand for".** The pane rule stays on `targetUnder`, as
-  above. The Segment set behind it is the layout's answer (`FrameLayout.segmentIdsForItem` and
-  `segmentIdsForRow`), asked for by the pointer path and the gesture path alike. A rendered node's
+  above. The Segment set behind it is the layout's answer, asked for by the pointer path and the
+  gesture path alike. #230 gave that answer two shapes for one cached record: the frame *states* it
+  on the bar and the row (`FrameBar.segmentIds`, `FrameRow.segmentIds`), which is what the paint
+  reads; `FrameLayout.segmentIdsForItem` and `segmentIdsForRow` answer the same fact as a lookup by
+  id, which is what a caller holding only an id reads. Two shapes, one source. A rendered node's
   `data-segment-id` says which Segment a bar draws right now; it is not a second source for the set.
   Two sources disagreed once a removed Segment renumbered the bars, which is the same
   paint-versus-action split this ADR exists to close. `targetUnder`'s pointer memo carries the
   layout's frame count for the same reason: a bar keeps its `data-item-id` while the Segment under it
   changes, so no node stamp can tell the memo it went stale.
+- **One module owns the Selection, and it is not the shell.** `view/segment-selection.ts` holds the
+  Segment ids and the pane rule that decides what a pointer hit would add to them (#230 R4). Before
+  it, `interaction/entry-gestures.ts` re-derived that rule with its own switch on hit kind — the
+  second reading this ADR exists to stop. `interaction/` now asks `selectableSegmentsOf` and never
+  answers it. `SegmentSelection` publishes `segmentIds` and `entryIds` on one object, which is the
+  pair a Command's `ActedOn` already takes, so the gesture path and the Command path read one shape
+  (#216 Q3).
 
 Supersedes the premise of D-S3-10 (`plans/s3-direct-manipulation/s3.1-selection.md`) and the pick
 clause of D-S4-30 (`plans/s4-hierarchy-and-rows/README.md`). Issue #212.
