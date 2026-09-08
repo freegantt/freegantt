@@ -95,6 +95,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     // #198: the shell filters this list by the `select` capability before `interaction/` ever sees it
     // (`gantt-shell.ts#selectableEntriesInRowOrder`), and the capability resolves there once (I14).
     setHovered: () => {},
+    setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');

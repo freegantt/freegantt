@@ -398,6 +398,10 @@ export class GanttShell {
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
+  /** The grid row under the pointer, reported by `EntryGestureContext.setHoveredRow` — undefined
+   *  once the pointer leaves the grid pane. `#hoveredRow()` falls back to the hovered bar's own row,
+   *  so this holds only the half the timeline pane cannot answer. */
+  #hoveredRowId: RowId | undefined;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
    *  by item id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
    *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
@@ -758,6 +762,7 @@ export class GanttShell {
         segmentIdsForItem: (item) => this.#layout.segmentIdsForItem(item),
       },
       setHovered: (item) => this.#setHovered(item),
+      setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
     };
@@ -1483,6 +1488,21 @@ export class GanttShell {
     this.#refreshAffordances();
   }
 
+  #setHoveredRow(next: RowId | undefined): void {
+    if (this.#hoveredRowId === next) return;
+    this.#hoveredRowId = next;
+    this.#refreshAffordances();
+  }
+
+  /** Which row reads as hovered. The grid pane names one directly. Over the timeline pane only a bar
+   *  is under the pointer, so the row comes off the frame that drew it. Asked once per affordance
+   *  refresh, never per pointer move beyond that (I5). */
+  #hoveredRow(): RowId | undefined {
+    if (this.#hoveredRowId !== undefined) return this.#hoveredRowId;
+    if (this.#hoveredItemId === undefined) return undefined;
+    return this.#layout.rowIdForEntry(entryIdOfItem(this.#hoveredItemId));
+  }
+
   /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
@@ -1497,6 +1517,7 @@ export class GanttShell {
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
+    setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
     setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);

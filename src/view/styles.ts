@@ -47,6 +47,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-header-divider-color: #E6E2D9;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #FAF8F2;
+  --fg-row-hover-bg: #F6F3EB;
   --fg-row-label-color: #1A1815;
   /* Deliberately only a little past the floor (4.9:1 on the pane): dim enough to read as filtered
      out, still legible. */
@@ -59,6 +60,16 @@ const LIGHT_COLOR_TOKENS = `
      there, under the 4.5:1 floor (axe color-contrast, S5.11). #C93820 is the same vermilion two
      steps darker: 4.61:1 on the band, 5.16:1 on the pane the stroke itself crosses. */
   --fg-date-line-color: #C93820;
+  /* Ink on a Date/Cursor line label, which is a filled chip in the time colour — the same
+     fill/label pairing --fg-bar-fill and --fg-bar-label-color already make. */
+  --fg-date-line-label-color: #FFFFFF;
+  /* The hovered bar's inset hairline — D-S3-7's hovered token, unpainted until now. It borrows no
+     meaning hue, so a hovered bar and a selected one are never confusable — and it stays inside the
+     bar's own box, so a hover never shifts a neighbour. */
+  --fg-hover-ring: rgb(26 24 21 / 0.22);
+  /* The dragged bar's lift — D-S3-7's dragging token. One static, hard-offset shadow: no blur to
+     rasterize and no animation, so it never lands on the drag hot path. */
+  --fg-drag-shadow: 0 2px 0 rgb(26 24 21 / 0.18);
   /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
      selection outline invisible against it. It must also stay clear of --fg-date-line-color and
      --fg-warn, which is what the old hue-25 red failed — it landed within a few degrees of the date
@@ -87,6 +98,7 @@ const DARK_COLOR_TOKENS = `
   --fg-header-divider-color: #2B2F36;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #20232A;
+  --fg-row-hover-bg: #262A32;
   --fg-row-label-color: #ECEAE3;
   /* 4.8:1 on the pane — the same "filtered out, still legible" reading the light theme takes. */
   --fg-row-unmatched-label-color: #8B8880;
@@ -94,6 +106,11 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-label-color: #16181D;
   --fg-warn: #E0A340;
   --fg-date-line-color: #FF6F57;
+  --fg-date-line-label-color: #1B1D22;
+  /* The ring inverts to the theme's own ink, the same move --fg-bar-fill and --fg-bar-label-color
+     make: a light hairline reads on a dark bar where the light theme's dark one would vanish. */
+  --fg-hover-ring: rgb(236 234 227 / 0.26);
+  --fg-drag-shadow: 0 2px 0 rgb(0 0 0 / 0.45);
   --fg-selection-color: oklch(0.76 0.17 305);
   --fg-focus-ring: oklch(0.78 0.14 220);
   --fg-popup-bg: #22252B;
@@ -225,7 +242,11 @@ ${DARK_COLOR_TOKENS}
    an outline (an outline would fight the row's cell layout the way .fg-bar's never has to). Same
    --fg-selection-color Token .fg-bar[data-state~="selected"] already uses, so a bar click and its
    matching row read as one selection, not two colours. */
-.fg-row[data-state~='selected'] { background: color-mix(in oklab, var(--fg-selection-color) 16%, transparent); }
+/* Hover, then selection — a selected row that is also hovered reads as selected, because the later
+   rule wins on equal specificity. Both paint the grid row and its timeline band from one
+   paintRowState answer, so a row reads the same on both sides of the splitter. */
+.fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
+.fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: color-mix(in oklab, var(--fg-selection-color) 16%, transparent); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -257,17 +278,20 @@ ${DARK_COLOR_TOKENS}
 .fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); transform: translate(-50%, -50%) rotate(45deg); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
-   per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet
-   (S3.2 adds the grab cursor it pairs with); the token still paints so a consumer's own selector can
-   already key off it. */
+   per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
+   Hover is a box-shadow and selection an outline, so a bar that is both wears both without either
+   rule overwriting the other. */
+.fg-bar[data-state~="hovered"] { box-shadow: inset 0 0 0 1px var(--fg-hover-ring); }
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); }
 /* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
-   bar the caller never grabbed, moved by the hook's own cascade. 'dragging' (the caller's own grabbed
-   bar, ItemPreview.extra: false) paints no rule of its own yet, same as 'hovered' above. */
+   bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4); pointer-events: none; }
+/* The caller's own grabbed bar (ItemPreview.extra: false). It comes after 'pending' and 'ghost' so
+   its opacity wins: a bar the pointer is carrying reads solid, whatever else it also is. */
+.fg-bar[data-state~="dragging"] { box-shadow: var(--fg-drag-shadow); opacity: 1; }
 /* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
@@ -284,10 +308,18 @@ ${DARK_COLOR_TOKENS}
    would resolve against the pane's visible clientHeight and cut the line off at the first
    screenful instead of running the full scrollable row content. */
 .fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-.fg-date-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg-date-line-color); }
+/* A label is a filled chip, not bare coloured text. Bare text put a thin time-coloured word on the
+   header band and asked it to clear 4.5:1 there; a chip carries its own ground, so the label reads
+   at any band colour a theme picks.
+   D-S1.13-8 retired the Today-only colour token with no alias: Today is a Date line that carries
+   data-flag="today", not a line with a palette of its own. Paint now stamps that flag on the label
+   as well as the stroke, so a consumer that wants Today apart from the rest can reach both halves —
+   .fg-date-line[data-flag='today'] and .fg-date-line-label[data-flag='today']. The sheet itself
+   states no such rule, which is the decision holding. */
+.fg-date-line-label, .fg-cursor-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--fg-date-line-color); color: var(--fg-date-line-label-color); }
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: 2; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-.fg-cursor-line-label { position: absolute; left: 0; top: 0; z-index: 2; white-space: nowrap; color: var(--fg-date-line-color); pointer-events: none; }
+.fg-cursor-line-label { z-index: 2; pointer-events: none; }
 /* S5.3, D-S5-8: the one overlay layer, above both panes (DOM order alone gives it the top of the
    stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
    panes underneath; a mounted .fg-popup opts back in. */
