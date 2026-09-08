@@ -186,7 +186,7 @@ export { lateRegistration };
 ```
 
 Some parts of the context stay open after `setup()` returns, because they
-are not registrations — `interaction.canEdit`, for example, is a plain
+are not registrations — `interaction.canWrite`, for example, is a plain
 read and keeps working (`src/view/plugin-ports.test.ts`, "leaves ungated
 parts open after setup returns").
 
