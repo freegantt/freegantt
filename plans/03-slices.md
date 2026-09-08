@@ -215,7 +215,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - The `features: { tooltips: true, ... }` name table this section first sketched never shipped. A plugin is a value, not a name in a table: `Gantt.plugins` and `Dataset.plugins` each take an array of factories (`plugins: [tooltips(), contextMenu({...})]`), so an unused feature costs zero bundle bytes because nothing names it (D-S5-2, gate `[S5-A6]`).
 - The entry editor is a plugin, not a core feature. `inlineEditing()` ships from `extensions/features/` and installs through `Gantt.plugins`, the same route `tooltips()` and `contextMenu()` take — proof that the dogfood rule (`[S5-A1]`) covers editing too.
-- `registerField` moved host. A Gantt plugin's `PluginContext` no longer carries it: a Gantt plugin shows a Field through `view.registerGridColumn` alone, and only a Dataset plugin declares a Field, through `ctx.fields.register` on the Dataset plugin contract S5.10 shipped (`01` §10.2).
+- `registerField` moved contract. A Gantt plugin's `PluginContext` no longer carries it: a Gantt plugin shows a Field through `view.registerGridColumn` alone, and only a Dataset plugin declares a Field, through `ctx.fields.register` on the Dataset plugin contract S5.10 shipped (`01` §10.2).
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
