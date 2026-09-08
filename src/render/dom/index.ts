@@ -3,8 +3,10 @@
 
 import type {
   BarFlags,
+  BarLabelPlacement,
   BarLabels,
   BarRenderer,
+  BarRendererContext,
   ElementDescription,
   Entry,
   EntryId,
@@ -218,8 +220,6 @@ function rowParity(index: number): RowParity {
  *  `padding-inline`) — one design value, read in two places for two different jobs: this file's fit
  *  test, and the label's own inline padding. */
 const DEFAULT_BAR_LABEL_GAP_PX = 8;
-
-type BarLabelPlacement = 'inside' | 'outside';
 
 /** J1's whole rule, pure arithmetic (no DOM read): `'fitBar'` reads inside when the label fits,
  *  outside to the right when it does not, and falls back to inside — ellipsised, by the CSS `.fg-
@@ -1093,6 +1093,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
+    // One read per frame answers every bar (the same "resolve once per frame" posture `syncRowCells`
+    // keeps for its column renderers) — the setting cannot change part-way through one sync.
+    const barLabels = readBarLabels();
     barGeomByItemId.clear();
     itemIdsByEntryId.clear();
     itemIdsBySegmentId.clear();
@@ -1129,28 +1132,37 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         return node;
       },
       toGeom: (bar) => {
+        // J1: the library measures and places every bar's label first, before any renderer runs, so
+        // a `barRenderer` can paint the label the library already decided on. One text ruler, in one
+        // place — a renderer never needs one of its own to know inside from outside.
+        const textWidth = barLabels === 'none' ? undefined : textRuler?.widthOf(bar.label);
+        const resolvedPlacement = resolveBarLabelPlacement(
+          barLabels,
+          textWidth,
+          bar.x,
+          bar.width,
+          barLabelGapPx,
+          contentWidthPx,
+        );
         const resolved = resolveBarRenderer(bar.kind);
         let content: ElementDescription | undefined;
         if (resolved !== undefined) {
           const entry = entryById(bar.entryId);
-          if (entry !== undefined) content = callRenderer('bar', resolved, { entry, item: bar }, raiseError);
+          if (entry !== undefined) {
+            const context: BarRendererContext = { entry, item: bar };
+            if (resolvedPlacement !== undefined) {
+              context.label = { text: bar.label, placement: resolvedPlacement };
+            }
+            content = callRenderer('bar', resolved, context, raiseError);
+          }
         }
-        // J1: a `barRenderer` result already owns this bar's content, so no label is measured, cached
-        // or placed for it — the "no injected child, no data-label" rule pins the S5.4 seam (D-S5-11).
-        const textWidth = content === undefined ? textRuler?.widthOf(bar.label) : undefined;
-        const labelPlacement =
-          content === undefined
-            ? resolveBarLabelPlacement(
-                readBarLabels(),
-                textWidth,
-                bar.x,
-                bar.width,
-                barLabelGapPx,
-                contentWidthPx,
-              )
-            : undefined;
+        // A `barRenderer` result owns this bar's content, so the library injects no label child and
+        // stamps no `data-label` for it — the S5.4 seam (D-S5-11). The renderer's own label rides in
+        // its markup instead, which is also why the mid-drag restamp below skips such a bar: its
+        // label placement is a frame fact for it, not a hot-path one.
+        const paintedPlacement = content === undefined ? resolvedPlacement : undefined;
         labelWidthByItemId.set(bar.id, content === undefined ? textWidth : undefined);
-        labelPlacementByItemId.set(bar.id, labelPlacement);
+        labelPlacementByItemId.set(bar.id, paintedPlacement);
         return {
           kind: bar.kind,
           label: bar.label,
@@ -1164,7 +1176,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           // #212: the geom carries the Segment, so `shallowEqual` sees a Segment change and patches.
           // The key stays present and may hold `undefined`, which keeps the key count stable.
           segmentId: bar.segmentId,
-          labelPlacement,
+          labelPlacement: paintedPlacement,
           ...(content !== undefined ? { content } : {}),
         };
       },

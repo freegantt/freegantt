@@ -314,6 +314,8 @@ export type {
   BarRenderer,
   BarRendererContext,
   BarLabels,
+  BarLabelPlacement,
+  ResolvedBarLabel,
   RendererByKind,
   CellRenderer,
   CellRendererContext,
