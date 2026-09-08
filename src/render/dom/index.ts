@@ -780,6 +780,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       const node = document.createElement('div');
       node.className = COLUMN_HEADER_CLASS;
       node.dataset[FIELD_KEY] = key;
+      node.setAttribute('role', 'columnheader');
       // S5.11, D-S5-25: one Grid column's header cell is a `columnheader`, inside the header row
       // `view/pane-layout.ts` mounts it in. `tabIndex` stays off the node here — `view/roving-focus.ts`
       // owns which one header cell is the pane's tab stop.

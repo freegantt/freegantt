@@ -319,6 +319,21 @@ describe('render/dom backend', () => {
     expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(4);
     expect(gridHeader.querySelectorAll('.fg-col-header')).toHaveLength(4);
     expect(gridHeader.querySelector('[data-field="cost"]')?.textContent).toBe('Budget');
+    // Every cell states its role and its 1-based column position, so a reorder moves the position
+    // with the column. A header cell with no role leaves `aria-colindex` on a bare div and leaves
+    // the header `row` owning no `columnheader` — two critical axe failures the first run of
+    // `e2e/a11y.spec.ts` caught against D-S5-25's own comment (S5.11, D-S5-27).
+    const headerCells = Array.from(gridHeader.querySelectorAll<HTMLElement>('.fg-col-header'));
+    expect(headerCells.map((cell) => cell.getAttribute('role'))).toEqual(
+      Array.from({ length: 4 }, () => 'columnheader'),
+    );
+    expect(headerCells.map((cell) => cell.getAttribute('aria-colindex'))).toEqual(['1', '2', '3', '4']);
+    const bodyCells = Array.from(row.querySelectorAll<HTMLElement>('.fg-row-label, .fg-row-cell'));
+    expect(bodyCells.map((cell) => cell.getAttribute('role'))).toEqual(
+      Array.from({ length: 4 }, () => 'gridcell'),
+    );
+    expect(bodyCells.map((cell) => cell.getAttribute('aria-colindex'))).toEqual(['1', '2', '3', '4']);
+
     const costCell = row.querySelector<HTMLElement>('[data-field="cost"]')!;
     expect(costCell.style.width).toBe('90px');
     expect(costCell.dataset['align']).toBe('end');
