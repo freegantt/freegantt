@@ -38,19 +38,27 @@ test('weekend bands appear, follow a pan, and a checkbox removes the plugin live
   if (!firstBandBefore) throw new Error('missing bounding box');
 
   // Pans the visible window right, through the same core command (freegantt.panRight) a pointer
-  // gesture binds to — real keyboard interaction, not an imperative call into the Gantt. Focus
-  // must land on the container itself (the one honest tab stop, view/pane-layout.ts) for the
-  // shell's keydown listener to see it — same pattern e2e/hierarchy.spec.ts's own ArrowRight test uses.
-  const ganttRoot = page.locator('#gantt');
-  await ganttRoot.focus();
-  await expect(ganttRoot).toBeFocused();
+  // gesture binds to — real keyboard interaction, not an imperative call into the Gantt. S5.11,
+  // D-S5-26: the container itself carries no tabindex any more — `view/roving-focus.ts` owns one
+  // tab stop per pane instead, so focus lands on the timeline pane's own bar, the honest tab stop
+  // whose bubbled keydown the shell's listener sees (same pattern e2e/hierarchy.spec.ts uses). Plain
+  // `ArrowRight` moved off panning too (D-S5-26): `Alt+ArrowRight` is the pan chord now.
+  // Keyed on `data-item-id`, not a bare `.first()`: virtualization can still mount more bars ahead
+  // of this one in DOM order right after the page settles (#256's own settle race, widened). A
+  // `.first()` locator re-resolves on every retry, so it would then quietly point at a new,
+  // unfocused bar instead of reporting that this one lost focus.
+  const firstBarId = await page.locator('#gantt .fg-bar').first().getAttribute('data-item-id');
+  expect(firstBarId).toBeTruthy();
+  const firstBar = page.locator(`#gantt .fg-bar[data-item-id="${firstBarId}"]`);
+  await firstBar.focus();
+  await expect(firstBar).toBeFocused();
 
   // Presses inside the poll itself (not once, up front): a worker under load can still be settling
   // the page's own initial today-line pan when `firstBandBefore` above was captured, so a single
   // burst of key presses can race that settle. Pressing again on every retry is self-healing either way.
   await expect
     .poll(async () => {
-      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Alt+ArrowRight');
       const box = await bands.first().boundingBox();
       return box?.x ?? null;
     })

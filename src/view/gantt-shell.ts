@@ -37,6 +37,7 @@ import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
 import { ContainerResize, DomMountLayer } from './mount-layer.js';
 import { ContainerDom } from './gantt-dom.js';
+import type { DomTarget } from './gantt-dom.js';
 import { attachSplitter } from './splitter.js';
 import type { SplitterAttachment } from './splitter.js';
 import { GridPaneWidth } from './grid-pane-width.js';
@@ -114,6 +115,8 @@ import { TreeCollapse } from './tree-collapse.js';
 import { SegmentSelection } from './segment-selection.js';
 import type { SegmentSelectionPorts } from './segment-selection.js';
 import { createFieldContext } from '../data/fields/field-access.js';
+import { RovingFocus } from './roving-focus.js';
+import type { RovingFocusPorts } from './roving-focus.js';
 
 /** One `{ detach() }` for every inject slot. `view/` may not import `interaction/` (plans/01 §1:
  *  `INT --> VIEW`, not the reverse). So the shell takes pointer and keyboard attachments by
@@ -222,7 +225,14 @@ export interface GanttShellWiring {
           entryIds: readonly EntryId[];
           segmentIds: readonly SegmentId[];
         }
-      | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
+      | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      // S5.11, D-S5-26/D-S5-39: the roving-focus grid pane fills two `CommandTarget` kinds a
+      // right-click never reaches on its own. `'row'` names a focused Row. `'cell'` names a
+      // focused Grid cell, and `field` names its column. The splitter also gains its own kind,
+      // for parity with the panes either side of it.
+      | { kind: 'row'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      | { kind: 'cell'; field?: FieldKey; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      | { kind: 'splitter'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
@@ -443,6 +453,9 @@ export class GanttShell {
   #theme: Theme = DEFAULT_THEME;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
+  /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
+   *  once `#treeCollapse`/`#segmentSelection`/`#columnChrome` exist, since its ports read all three. */
+  #rovingFocus!: RovingFocus;
   /** Issue #137 F9: the one `ResizeObserver` per Gantt, which both mount layers below share. */
   #containerResize: ContainerResize;
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
@@ -690,6 +703,7 @@ export class GanttShell {
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
     });
+    this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
@@ -734,8 +748,6 @@ export class GanttShell {
       setHovered: (item) => this.#setHovered(item),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
-      tryTreeArrow: (direction) => this.#treeCollapse.handleArrow(direction),
-      expandAllRows: () => this.expandAll(),
     };
     // S5.2, D-S5-6/D-S5-7: core commands first, then the keymap listener. Both attach ahead of
     // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
@@ -796,7 +808,9 @@ export class GanttShell {
       this.#container,
       gestureContext,
     );
-    this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#container, gestureContext);
+    // S5.11, D-S5-39: scoped to the timeline pane, not the whole container. A bar's nudge/resize
+    // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
+    this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
@@ -1115,29 +1129,38 @@ export class GanttShell {
     this.#resolvedViewportGestures = resolveViewportGestures(next);
   }
 
-  /** S5.2, D-S5-6: the live `CommandContext` builder. `entry` is the first selected entry, or
-   *  `undefined` when nothing is selected (the doc's "the focused row, or none"). `target` fills in
-   *  for a focused header cell (S5.7, D-S5-26, issue #137 F6), or, failing that, for the Selection
-   *  itself (#212). A keyboard chord has no right-clicked node to reconcile against the Selection.
-   *  So it names the Selection directly, and `when`/`run` read `ctx.target.entryIds` exactly as a
-   *  mouse invocation does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt`
-   *  — `view/` may not name either type (D-S5-5's mirror). A `wiring` with no `buildCommandContext`
-   *  makes every command's context an empty object — a test that drives the shell alone. That is
-   *  fine. No core command reads `ctx.dataset`/`ctx.gantt` without first checking
-   *  `ctx.entry`/`ctx.target`, and no such test runs a command that needs them. */
+  /** S5.2, D-S5-6: the live `CommandContext` builder.
+   *
+   *  `entry` is the first selected entry, or `undefined` when nothing is selected. `target` names
+   *  what real keyboard focus sits on right now (S5.11, D-S5-39), one of the five `TargetKind`s.
+   *
+   *  A keyboard chord has no right-clicked node to reconcile against the Selection. So `target`'s
+   *  `entryIds`/`segmentIds` name the Selection directly, for every kind but `'header'` and
+   *  `'splitter'` (#212). `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation
+   *  does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
+   *  name either type (D-S5-5's mirror).
+   *
+   *  A `wiring` with no `buildCommandContext` makes every command's context an empty object, for a
+   *  test that drives the shell alone. That is fine. No core command reads `ctx.dataset`/`ctx.gantt`
+   *  without first checking `ctx.entry`/`ctx.target`, and no such test runs a command that needs
+   *  them. */
   #buildCommandContext(): CommandContext<unknown> {
     const segmentIds = this.#segmentSelection.segmentIds;
     const entryIds = this.#segmentSelection.entryIds;
     const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
-    const field = this.#columnChrome.focusedHeaderField;
-    // #199/#212: a header cell stands for no Entry and no Segment, and neither set is ever absent.
+    // S5.11, D-S5-39: real DOM focus is the single source of truth for "what is the target of
+    // this chord". `view/roving-focus.ts` moves focus onto the exact node a chord acts on —
+    // a row, a cell, a bar, a header cell, or the splitter.
+    const focused = this.#rovingFocus.focusedElement();
+    const domTarget = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
+    // #199/#212: no node holds focus (an empty pane) — fall back to the Selection alone.
     const target =
-      field !== undefined
-        ? { kind: 'header' as const, field, entryIds: [], segmentIds: [] }
-        : segmentIds.length > 0
+      domTarget === undefined
+        ? segmentIds.length > 0
           ? { kind: 'bar' as const, entryIds, segmentIds }
-          : undefined;
+          : undefined
+        : this.#targetFromDom(domTarget, entryIds, segmentIds);
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
@@ -1145,6 +1168,34 @@ export class GanttShell {
       ...(entry !== undefined ? { entry } : {}),
       ...(target !== undefined ? { target } : {}),
     }) as CommandContext<unknown>;
+  }
+
+  /** The `CommandTarget` a resolved `DomTarget` names (S5.11, D-S5-39). `'header'` and `'splitter'`
+   *  stand for no Entry and no Segment, so both name empty sets, matching `DomTarget`'s own contract.
+   *  Every other kind names the current Selection. A keyboard chord has no separate "clicked" thing
+   *  to reconcile the Selection against (this file's own doc comment above). */
+  #targetFromDom(domTarget: DomTarget, entryIds: readonly EntryId[], segmentIds: readonly SegmentId[]) {
+    // Each arm returns an object literal with its own `kind` literal, never `domTarget.kind` read
+    // straight through. That keeps the inferred return type the exact union `CommandTarget` names.
+    // Widening `kind` to plain `TargetKind` would lose that precision.
+    switch (domTarget.kind) {
+      case 'header': {
+        const field = domTarget.field;
+        return field !== undefined
+          ? { kind: 'header' as const, field, entryIds: [], segmentIds: [] }
+          : { kind: 'bar' as const, entryIds, segmentIds };
+      }
+      case 'splitter':
+        return { kind: 'splitter' as const, entryIds: [], segmentIds: [] };
+      case 'row':
+        return { kind: 'row' as const, entryIds, segmentIds };
+      case 'cell':
+        return domTarget.field !== undefined
+          ? { kind: 'cell' as const, field: domTarget.field, entryIds, segmentIds }
+          : { kind: 'cell' as const, entryIds, segmentIds };
+      case 'bar':
+        return { kind: 'bar' as const, entryIds, segmentIds };
+    }
   }
 
   /** D-S5-6: the shell verbs `core-commands.ts`'s catalog calls, closing over this shell's own
@@ -1183,6 +1234,40 @@ export class GanttShell {
       isColumnMovable: (key) => this.#columnChrome.isMovable(key),
       resizeColumnStep: (key, direction) => this.#columnChrome.resizeStep(key, direction),
       moveColumnStep: (key, direction) => this.#columnChrome.moveStep(key, direction),
+    };
+  }
+
+  /** `view/roving-focus.ts`'s one seam back into this shell (S5.11). `revealRow`/`revealEntry` force
+   *  a synchronous `#frames.flush()` after adjusting the viewport. `RovingFocus` needs the new row
+   *  or bar node in the DOM the instant the call returns, so it can call `.focus()` on it. That
+   *  differs from the public `reveal()` method above, whose own flush only runs on the
+   *  collapsed-ancestor branch. */
+  #rovingFocusPorts(): RovingFocusPorts {
+    return {
+      plannedRows: () => this.#layout.plannedRows(),
+      columnKeys: () => this.#columnChrome.resolvedColumns.map((column) => column.field),
+      rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
+      rowsPerPage: () =>
+        Math.max(1, Math.floor(this.#viewport.visible.height / this.#frameSettings.rowHeight)),
+      collapseRow: (id) => this.#treeCollapse.collapse(id),
+      expandRow: (id) => this.#treeCollapse.expand(id),
+      selectOnFocus: (hit) =>
+        this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsOf(hit)),
+      setFocusedColumn: (field) => this.#columnChrome.setFocusedColumn(field),
+      revealRow: (index) => {
+        const y = this.#layout.rowTop(index);
+        this.#viewport.reveal({
+          x: this.#viewport.scroll.state.position.x,
+          y,
+          width: 0,
+          height: this.#frameSettings.rowHeight,
+        });
+        this.#frames.flush();
+      },
+      revealEntry: (id) => {
+        this.reveal(id);
+        this.#frames.flush();
+      },
     };
   }
 
@@ -1294,16 +1379,34 @@ export class GanttShell {
     const bind = (chord: string, command: string): void => {
       this.#keymap.register({ chord, command });
     };
-    bind('PageDown', 'freegantt.pageDown');
-    bind('PageUp', 'freegantt.pageUp');
-    bind('Home', 'freegantt.panToStart');
-    bind('End', 'freegantt.panToEnd');
-    bind('ArrowRight', 'freegantt.panRight');
-    bind('ArrowLeft', 'freegantt.panLeft');
-    bind('ArrowDown', 'freegantt.panDown');
-    bind('ArrowUp', 'freegantt.panUp');
-    // S5.7, D-S5-18/D-S5-26: scoped to a focused header cell by the command's own `when` above. A
-    // plain `ArrowLeft`/`ArrowRight` (pan, bound above) never conflicts with the modified chords here.
+    // S5.11, D-S5-26: roving focus (`view/roving-focus.ts`) now owns the plain arrows, Home/End
+    // and Page Up/Down in both panes. A grid-pane arrow moves focus between rows and cells. A
+    // timeline-pane arrow nudges the focused bar instead (`interaction/keyboard-editing.ts`).
+    // Panning gets no plain chord at all, because moving focus already scrolls the target into
+    // view. Horizontal panning survives as an explicit, Gantt-wide fallback on
+    // `Alt+ArrowLeft`/`Alt+ArrowRight`. Vertical panning gets none, since a focused row is always
+    // already visible. `Mod+Home`/`Mod+End` are the same fallback for the whole time axis. That
+    // differs from the grid pane's own `Home`/`End`, which jump to the first and last row.
+    bind('Alt+ArrowRight', 'freegantt.panRight');
+    bind('Alt+ArrowLeft', 'freegantt.panLeft');
+    bind('Mod+Home', 'freegantt.panToStart');
+    bind('Mod+End', 'freegantt.panToEnd');
+    // S5.11, D-S5-26: keyboard zoom did not exist before this slice (S3.7 shipped only the
+    // ctrl/⌘+wheel pointer gesture). `Mod+=`/`Mod+-` mirror the browser's own page-zoom chords;
+    // `Mod+0` mirrors the browser's own reset-zoom chord, repurposed here for "pan to today".
+    bind('Mod+=', 'freegantt.zoomIn');
+    bind('Mod+-', 'freegantt.zoomOut');
+    bind('Mod+0', 'freegantt.panToToday');
+    bind('Mod+A', 'freegantt.selectAll');
+    bind('Escape', 'freegantt.clearSelection');
+    // #119: the whole-Gantt undo/redo chord. `captureInEditable` stays at its default `false`
+    // (same gate `Delete` below relies on), so an `<input>`'s own native undo keeps this chord.
+    bind('Mod+Z', 'freegantt.undo');
+    bind('Mod+Shift+Z', 'freegantt.redo');
+    // S5.7, D-S5-18/D-S5-26: `resizeColumnWider`/`moveColumnRight` and their pair share a chord
+    // with `panRight`/`panLeft` above. `Keymap.resolve()`'s newest-first order (D-S5-7) checks
+    // these two first. Their own `when` refuses unless a header cell is focused, so an unfocused
+    // header falls through to the plain pan bound above it.
     bind('Shift+ArrowRight', 'freegantt.resizeColumnWider');
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
@@ -1716,7 +1819,7 @@ export class GanttShell {
       }),
     );
     // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are
-    // facts about the whole row set, so they are read here rather than per row — only the windowed
+    // facts about the whole row set, so they are read here rather than per row. Only the windowed
     // rows reach `render/dom` at all (I3).
     this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
     this.#paneLayout.setGridSize(frame.rowCount, frame.columns.length);
@@ -1737,6 +1840,9 @@ export class GanttShell {
       this.#columnChrome.resolvedColumns,
       this.#paneLayout.gridWidth,
     );
+    // S5.11, D-S5-25: this runs after the backend syncs the DOM to this frame, not before. A row
+    // or bar the sweep wants to focus must already exist as a node.
+    this.#rovingFocus.syncAfterRender();
   }
 
   destroy(): void {
@@ -1744,6 +1850,7 @@ export class GanttShell {
     // S5.1, D-S5-3: plugins first. A disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
+    this.#rovingFocus.detach();
     this.#containerResize.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);

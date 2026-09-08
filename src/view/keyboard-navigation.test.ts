@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardNavigation } from './keyboard-navigation.js';
 import type { KeyboardNavigationContext } from './keyboard-navigation.js';
+import { GanttShell } from './gantt-shell.js';
+import type { GanttShellOptions } from './gantt-shell.js';
+import { entryId, mintedSegmentId, segmentId } from '../model/index.js';
+import type { Entry, Instant } from '../model/index.js';
+import { EntryStore } from '../data/index.js';
+import { CORE_FIELDS } from '../data/fields/core-fields.js';
 
 function el(): HTMLElement {
   const node = document.createElement('div');
@@ -137,6 +143,248 @@ describe('attachKeyboardNavigation (S3.7, D-S3-13 / D-S3-14)', () => {
 
     container.dispatchEvent(key({ key: 'PageDown' }));
     expect(pans).toEqual([]);
+    container.remove();
+  });
+});
+
+// S5.11, D-S5-39: `[S5-A4]` — a real `GanttShell`, wired production-default (`wiring: {}`), drives
+// the chord-map table straight through `roving-focus.ts` + `keymap.ts` + `core-commands.ts`. One
+// assertion per row proves the *scoped* meaning ("focus scope decides what a chord means"), not
+// just that a listener exists. `keyboard-navigation.ts` above is the retired file this table
+// replaced; the gate (`s5.13-gallery-and-gate.md` line 4) still names this file, so the new rows
+// land here rather than in a new `roving-focus.test.ts`.
+describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
+  const zone = 'UTC';
+  const day = (n: number): Instant => Date.parse(`2026-09-0${n + 1}T00:00:00Z`) as Instant;
+
+  function parityDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
+    let mintedSegmentCounter = 0;
+    return {
+      entries: new EntryStore(entries, {
+        timeZone: zone,
+        dateOnlyEnd: 'inclusive' as const,
+        referenceDate: 0 as Instant,
+        rollUpKinds: new Set(['group']),
+        mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
+      }),
+      timeZone: zone,
+      datasetRevision: 0,
+      isRollUpKind: () => false,
+      fields: { all: CORE_FIELDS },
+      field: (fieldKey) => CORE_FIELDS.find((field) => String(field.key) === String(fieldKey)),
+      on: () => {},
+      off: () => {},
+    };
+  }
+
+  function spanEntry(id: string, opts: { parentId?: string } = {}): Entry {
+    return {
+      id: entryId(id),
+      name: id,
+      kind: 'span',
+      start: day(0),
+      end: day(2),
+      ...(opts.parentId !== undefined ? { parentId: entryId(opts.parentId) } : {}),
+      segments: [{ id: segmentId(`${id}-1`), start: day(0), end: day(2) }],
+    };
+  }
+
+  function rows(container: HTMLElement): HTMLElement[] {
+    return Array.from(container.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
+  }
+
+  function bars(container: HTMLElement): HTMLElement[] {
+    return Array.from(container.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'));
+  }
+
+  function rowIdOf(el: Element | null): string | undefined {
+    return el?.getAttribute('data-row-id') ?? undefined;
+  }
+
+  function itemIdOf(el: Element | null): string | undefined {
+    return el?.getAttribute('data-item-id') ?? undefined;
+  }
+
+  function arrow(key: string, extra: KeyboardEventInit = {}): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
+  }
+
+  it('grid pane row: ArrowDown/ArrowUp move focus one row at a time, and only there', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
+    });
+    shell.render();
+
+    const [row0, row1, row2] = rows(container);
+    row0!.focus();
+
+    row0!.dispatchEvent(arrow('ArrowDown'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row1!));
+
+    document.activeElement!.dispatchEvent(arrow('ArrowDown'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row2!));
+
+    // Clamped at the last row: one more ArrowDown does not fall off the end.
+    document.activeElement!.dispatchEvent(arrow('ArrowDown'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row2!));
+
+    document.activeElement!.dispatchEvent(arrow('ArrowUp'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row1!));
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('grid pane row: ArrowRight expands a collapsed parent; ArrowLeft collapses it back', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: parityDataset([spanEntry('p'), spanEntry('c', { parentId: 'p' })]),
+      rowSource: { source: 'entries', tree: true },
+      collapsed: ['p'],
+    });
+    shell.render();
+
+    const parentRow = rows(container)[0]!;
+    parentRow.focus();
+    expect(shell.collapsed.map(String)).toContain('p');
+    expect(rows(container)).toHaveLength(1); // the child stays hidden while `p` is collapsed
+
+    parentRow.dispatchEvent(arrow('ArrowRight'));
+    // `TreeCollapse.confirm` only requests a frame (`#frames.request()`, rAF-scheduled) — a real
+    // page paints it on the next tick; this test forces that same frame now.
+    shell.render();
+    expect(shell.collapsed.map(String)).not.toContain('p');
+    expect(rows(container)).toHaveLength(2); // expanding reveals the child row
+
+    // Focus stays on `p` after the expand — ArrowLeft now collapses it straight back.
+    document.activeElement!.dispatchEvent(arrow('ArrowLeft'));
+    shell.render();
+    expect(shell.collapsed.map(String)).toContain('p');
+    expect(rows(container)).toHaveLength(1);
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('grid pane row: Home/End jump to the first/last row', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
+    });
+    shell.render();
+
+    const [row0, , row2] = rows(container);
+    row0!.focus();
+
+    document.activeElement!.dispatchEvent(arrow('End'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row2!));
+
+    document.activeElement!.dispatchEvent(arrow('Home'));
+    expect(rowIdOf(document.activeElement)).toBe(rowIdOf(row0!));
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('grid pane row: Mod+A selects all, and Escape clears the Selection — whole-Gantt chords, not row-scoped', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: parityDataset([spanEntry('a'), spanEntry('b')]),
+    });
+    shell.render();
+
+    rows(container)[0]!.focus();
+    document.activeElement!.dispatchEvent(arrow('a', { ctrlKey: true }));
+    expect(shell.selection).toHaveLength(2);
+
+    document.activeElement!.dispatchEvent(arrow('Escape'));
+    expect(shell.selection).toHaveLength(0);
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it("timeline pane bar: ArrowDown/ArrowUp move focus to the nearest bar one row down/up — the grid pane's own meaning does not carry over", () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
+    });
+    shell.render();
+
+    const [bar0, bar1] = bars(container);
+    bar0!.focus();
+
+    bar0!.dispatchEvent(arrow('ArrowDown'));
+    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar1!));
+
+    // A plain ArrowRight nudges the bar (D-GH-1) — it never moves focus, unlike a grid-pane row.
+    document.activeElement!.dispatchEvent(arrow('ArrowRight'));
+    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar1!));
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('timeline pane bar: Home/End focus the first/last bar of the focused row', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const shell = new GanttShell({ wiring: {}, container, dataset: parityDataset([spanEntry('a')]) });
+    shell.render();
+
+    const bar0 = bars(container)[0]!;
+    bar0.focus();
+
+    document.activeElement!.dispatchEvent(arrow('End'));
+    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar0));
+
+    document.activeElement!.dispatchEvent(arrow('Home'));
+    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar0));
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('#119: Mod+Z runs freegantt.undo and Mod+Shift+Z runs freegantt.redo, from either pane', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const undo = vi.fn();
+    const redo = vi.fn();
+    const shell = new GanttShell({
+      wiring: {
+        buildCommandContext: (parts) => ({
+          ...parts,
+          dataset: { canUndo: true, undo, canRedo: true, redo },
+        }),
+      },
+      container,
+      dataset: parityDataset([spanEntry('a')]),
+    });
+    shell.render();
+
+    bars(container)[0]!.focus();
+    document.activeElement!.dispatchEvent(arrow('z', { ctrlKey: true }));
+    expect(undo).toHaveBeenCalledTimes(1);
+
+    document.activeElement!.dispatchEvent(arrow('z', { ctrlKey: true, shiftKey: true }));
+    expect(redo).toHaveBeenCalledTimes(1);
+
+    shell.destroy();
     container.remove();
   });
 });

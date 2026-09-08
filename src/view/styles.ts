@@ -34,7 +34,9 @@ const LIGHT_COLOR_TOKENS = `
   --fg-header-bg: #EEF1F5;
   --fg-header-band-bg: #FFFFFF;
   --fg-header-text: #16191F;
-  --fg-header-subtext: #79828F;
+  /* #79828F on white read 3.88:1 (axe color-contrast, S5.11) — under the 4.5:1 floor for normal
+     text. #646D7B on white measures 5.23:1. */
+  --fg-header-subtext: #646D7B;
   --fg-header-divider-color: #DDE2E9;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: rgba(22, 25, 31, 0.03);
@@ -51,6 +53,10 @@ const LIGHT_COLOR_TOKENS = `
      any other meaning in the sheet: nothing else on the chart is this hue, so it says "picked" and
      nothing else. */
   --fg-selection-color: oklch(0.55 0.20 305);
+  /* S5.11, D-S5-25/D-S5-26: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
+     bar/header-cell/splitter reads as "focused" and never as "selected" (--fg-selection-color) or
+     "conflict"/"pending" (--fg-warn). Cyan sits clear of every other hue this sheet already claims. */
+  --fg-focus-ring: oklch(0.62 0.16 220);
   --fg-popup-bg: #FFFFFF;
   --fg-popup-border: #DDE2E9;
   --fg-popup-shadow: 0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22);
@@ -62,7 +68,8 @@ const DARK_COLOR_TOKENS = `
   --fg-header-bg: #12161C;
   --fg-header-band-bg: #171B22;
   --fg-header-text: #E8ECF3;
-  --fg-header-subtext: #6D7889;
+  /* #6D7889 on the pane bg (#171B22) read 3.86:1. #818C9E on the same bg measures 5.08:1. */
+  --fg-header-subtext: #818C9E;
   --fg-header-divider-color: #262C36;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: rgba(232, 236, 243, 0.04);
@@ -73,6 +80,7 @@ const DARK_COLOR_TOKENS = `
   --fg-warn: #E0A340;
   --fg-date-line-color: #FF6F57;
   --fg-selection-color: oklch(0.76 0.17 305);
+  --fg-focus-ring: oklch(0.78 0.14 220);
   --fg-popup-bg: #1B2029;
   --fg-popup-border: #313846;
   --fg-popup-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6);
@@ -158,6 +166,21 @@ ${DARK_COLOR_TOKENS}
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
+/* S5.11, D-S5-25/D-S5-26: one focus ring style for every roving-focus target — the two panes
+   themselves (axe scrollable-region-focusable: a scrollable pane needs its own tab stop), a grid
+   row/cell, a column header cell, a bar, and the splitter. An inset ring keeps the outline inside
+   the element's own box instead of colliding with a neighbour row/cell/bar. */
+.fg-grid-pane:focus-visible,
+.fg-timeline-pane:focus-visible,
+.fg-row:focus-visible,
+.fg-row-label:focus-visible,
+.fg-row-cell:focus-visible,
+.fg-col-header:focus-visible,
+.fg-bar:focus-visible,
+.fg-splitter:focus-visible {
+  outline: 2px solid var(--fg-focus-ring);
+  outline-offset: -2px;
+}
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it

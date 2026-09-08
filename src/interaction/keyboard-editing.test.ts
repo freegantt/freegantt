@@ -156,36 +156,6 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     expect(nudges).toEqual([]);
   });
 
-  it('ArrowDown moves the selection to the next select-capable row, skipping an incapable one', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([A], { incapableRows: [B] });
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowDown' }));
-
-    expect(proposals).toEqual([[segmentOf(C)]]);
-  });
-
-  it('ArrowUp moves the selection to the previous select-capable row', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([C]);
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
-
-    expect(proposals).toEqual([[segmentOf(B)]]);
-  });
-
-  it('ArrowUp at the top row leaves the selection untouched — no capable neighbour that way', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([A]);
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
-
-    expect(proposals).toEqual([]);
-  });
-
   it('preventDefault fires for a handled key, not for an unrelated one', () => {
     const container = document.createElement('div');
     const { ctx } = makeContext([A]);
@@ -211,51 +181,5 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
 
     expect(nudges).toEqual([]);
-  });
-});
-
-describe('attachKeyboardEditing — tree keyboard (S4.10, D-S4-33)', () => {
-  it('ArrowRight calls tryTreeArrow before nudge when the tree handler claims the key', () => {
-    const container = document.createElement('div');
-    let treeDirection: 'left' | 'right' | undefined;
-    const { ctx, nudges } = makeContext([A]);
-    attachKeyboardEditing(container, {
-      ...ctx,
-      tryTreeArrow: (direction) => {
-        treeDirection = direction;
-        return true;
-      },
-    });
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
-
-    expect(treeDirection).toBe('right');
-    expect(nudges).toEqual([]);
-  });
-
-  it('ArrowLeft nudges when tryTreeArrow does not handle the key', () => {
-    const container = document.createElement('div');
-    const { ctx, nudges } = makeContext([A]);
-    attachKeyboardEditing(container, { ...ctx, tryTreeArrow: () => false });
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowLeft' }));
-
-    expect(nudges).toEqual([[-1, undefined]]);
-  });
-
-  it('Shift+8 expands every row through expandAllRows', () => {
-    const container = document.createElement('div');
-    let expanded = false;
-    const { ctx } = makeContext([A]);
-    attachKeyboardEditing(container, {
-      ...ctx,
-      expandAllRows: () => {
-        expanded = true;
-      },
-    });
-
-    container.dispatchEvent(key('keydown', { key: '8', shiftKey: true }));
-
-    expect(expanded).toBe(true);
   });
 });

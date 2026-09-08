@@ -45,6 +45,11 @@ export type PaneName = 'grid' | 'timeline';
 export type GridPattern = 'grid' | 'treegrid';
 
 export interface Panes {
+  /** S5.11, D-S5-26: the grid pane itself (`.fg-grid-pane`) — `view/roving-focus.ts`'s fallback tab
+   *  stop for the treegrid/grid as a whole, when the pane has no row or header cell to carry a
+   *  roving tabindex of its own (an empty dataset, or every column hidden). Named to match
+   *  `timeline` below, the pane `roving-focus.ts` treats the same way. */
+  readonly grid: HTMLElement;
   /** The Row layer (`.fg-rows`): row labels and Grid cells. No *vertical* scrollbar — it follows
    *  the scroll owner by transform (D-S1.8-1). The grid pane around it is a real horizontal
    *  scroller when its content overflows (D-S1.8-13, #126). */
@@ -101,6 +106,10 @@ export class PaneLayout {
     // S5.11, D-S5-25: the grid pane is the pane that carries the published pattern. `gridPattern`
     // (live, from the row source) picks which of the two it is.
     this.#gridPane.setAttribute('role', this.#gridPattern);
+    // S5.11, D-S5-26: a fallback tab stop (axe scrollable-region-focusable) — `-1` here so a normal
+    // Tab still lands on the roving row/cell `view/roving-focus.ts` manages; it lifts this to `0`
+    // only when the pane has nothing else to focus.
+    this.#gridPane.tabIndex = -1;
 
     // D-S1.12-9: renders one empty `.fg-band` per header band (`setHeaderBandCount`) instead of
     // being sized imperatively — both panes then resolve their header height from the same
@@ -147,6 +156,7 @@ export class PaneLayout {
     // across the two scrollers was considered and rejected — a virtualized row's node often does not
     // exist to be owned. `accessibleName` (live) names it.
     timelinePane.setAttribute('role', 'region');
+    timelinePane.tabIndex = -1;
     this.#timelinePane = timelinePane;
 
     // S5.3, D-S5-8: sits above both panes in DOM order (and stacking, `view/styles.ts`'s
@@ -158,7 +168,14 @@ export class PaneLayout {
 
     this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
 
-    this.panes = { rows: rowLayer, gridHeader: headerRow, splitter, timeline: timelinePane, overlay };
+    this.panes = {
+      grid: this.#gridPane,
+      rows: rowLayer,
+      gridHeader: headerRow,
+      splitter,
+      timeline: timelinePane,
+      overlay,
+    };
   }
 
   /** Live (S1.10, D-S1.10-4): the one name a screen reader reads for this Gantt. The container
