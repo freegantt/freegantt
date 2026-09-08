@@ -40,14 +40,16 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S1.11 large dataset</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      e2e fixture for S1's <code>[S1-A1]</code> acceptance check (plans/s1.11-close-the-gate/README.md
-      D-S1.11-5): 5,000 seeded entries at <code>zoom: 'preset'</code>, content wider than the pane, so the DOM
-      holds only the windowed rows the whole time.
-    </p>
-    <div id="gantt"></div>
+    <main>
+      <h1>FreeGantt — S1.11 large dataset</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        e2e fixture for S1's <code>[S1-A1]</code> acceptance check (plans/s1.11-close-the-gate/README.md
+        D-S1.11-5): 5,000 seeded entries at <code>zoom: 'preset'</code>, content wider than the pane, so the
+        DOM holds only the windowed rows the whole time.
+      </p>
+      <div id="gantt"></div>
+    </main>
     <script type="module" src="./large-dataset.ts"></script>
   </body>
 </html>

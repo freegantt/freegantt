@@ -14,121 +14,125 @@
         <span class="appbar-spacer"></span>
       </header>
 
-      <div class="page-head">
-        <h1>Generic demo</h1>
-        <p>
-          A four-level fixture tree with grid columns. The strip on the chart is the surface a consumer ships;
-          everything under the torn rule drives the demo. The S4.11 acceptance playground with its changeset
-          log stays on <a href="./hierarchy.html">hierarchy.html</a>.
-        </p>
-      </div>
+      <main>
+        <div class="page-head">
+          <h1>Generic demo</h1>
+          <p>
+            A four-level fixture tree with grid columns. The strip on the chart is the surface a consumer
+            ships; everything under the torn rule drives the demo. The S4.11 acceptance playground with its
+            changeset log stays on <a href="./hierarchy.html">hierarchy.html</a>.
+          </p>
+        </div>
 
-      <!-- The library's own surface: toolbar, chart and readout share one border and one rule
+        <!-- The library's own surface: toolbar, chart and readout share one border and one rule
            rhythm, so they read as a single instrument. -->
-      <section class="workbench" aria-label="Gantt">
-        <div id="toolbar"></div>
-        <div id="gantt"></div>
-        <div class="statusbar">
-          <span class="readout" id="selection-readout">No selection</span>
-        </div>
-      </section>
+        <section class="workbench" aria-label="Generic demo workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="selection-readout">No selection</span>
+          </div>
+        </section>
 
-      <!-- Everything below the torn rule is apparatus. It exercises the library; it ships to
+        <!-- Everything below the torn rule is apparatus. It exercises the library; it ships to
            nobody. The dashed rule and the plainer controls say so without a label having to. -->
-      <section class="bench" aria-label="Harness controls">
-        <div class="bench-head">
-          <h2>Harness bench</h2>
-          <p>Demo-only controls. None of this is library UI.</p>
-        </div>
+        <section class="bench" aria-label="Harness controls">
+          <div class="bench-head">
+            <h2>Harness bench</h2>
+            <p>Demo-only controls. None of this is library UI.</p>
+          </div>
 
-        <div class="bench-grid">
-          <div class="panel">
-            <h3>Rows and columns</h3>
-            <p>Row source, lane packing, filtering and column visibility.</p>
-            <div class="control-row">
-              <button id="rows-source-btn" type="button">Group by team</button>
-              <button id="pack-rows-btn" type="button">Pack overlapping bars</button>
-              <button id="filter-team-btn" type="button">Filter team: off</button>
-              <button id="sort-name-btn" type="button">Sort by name: off</button>
+          <div class="bench-grid">
+            <div class="panel">
+              <h3>Rows and columns</h3>
+              <p>Row source, lane packing, filtering and column visibility.</p>
+              <div class="control-row">
+                <button id="rows-source-btn" type="button">Group by team</button>
+                <button id="pack-rows-btn" type="button">Pack overlapping bars</button>
+                <button id="filter-team-btn" type="button">Filter team: off</button>
+                <button id="sort-name-btn" type="button">Sort by name: off</button>
+              </div>
+              <div class="control-row">
+                <button id="toggle-budget-btn" type="button">Hide Budget</button>
+                <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
+              </div>
             </div>
-            <div class="control-row">
-              <button id="toggle-budget-btn" type="button">Hide Budget</button>
-              <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
+
+            <div class="panel">
+              <h3>Mutation</h3>
+              <p>
+                Every write goes through one transaction and one changeset. Double-click Name, Start or Budget
+                in the grid to edit in place.
+              </p>
+              <div class="control-row">
+                <input id="rename-input" type="text" size="16" aria-label="New name" />
+                <button id="rename-btn" type="button">Rename</button>
+                <button id="remove-btn" type="button">Remove</button>
+              </div>
+              <div class="control-row">
+                <button id="add-entry" type="button">Add entry</button>
+                <button id="cost-btn" type="button">Set cost 500</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Vetoes and capabilities</h3>
+              <p>
+                A Mobilization date line marks a hard boundary — <code>beforeEntryMove</code> refuses a drop
+                before it. Hold drop proves the async veto path.
+              </p>
+              <div class="control-row">
+                <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry</label>
+              </div>
+              <div class="control-row">
+                <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
+                <label><input id="lock-resize" type="checkbox" /> Lock resize</label>
+              </div>
+              <div class="notice" id="toast" hidden></div>
+            </div>
+
+            <div class="panel">
+              <h3>Plugins and renderers</h3>
+              <p>
+                Each control is a plugin over the public contract alone. <code>Mod+K</code> clears the
+                selection through a plugin-registered command.
+              </p>
+              <div class="control-row">
+                <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
+                <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+              </div>
+              <div class="control-row">
+                <label>
+                  <input id="renderers-toggle" type="checkbox" checked /> Custom milestone and cost renderers
+                </label>
+                <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Document</h3>
+              <p>
+                Round-trips the dataset through the public <code>toJSON</code>/<code>fromJSON</code> pair.
+              </p>
+              <div class="control-row">
+                <button id="export-btn" type="button">Export</button>
+                <button id="import-btn" type="button">Import</button>
+              </div>
+              <textarea
+                id="document-json"
+                rows="5"
+                aria-label="Dataset document JSON"
+                placeholder="Export writes the document here."
+              ></textarea>
             </div>
           </div>
 
-          <div class="panel">
-            <h3>Mutation</h3>
-            <p>
-              Every write goes through one transaction and one changeset. Double-click Name, Start or Budget
-              in the grid to edit in place.
-            </p>
-            <div class="control-row">
-              <input id="rename-input" type="text" size="16" aria-label="New name" />
-              <button id="rename-btn" type="button">Rename</button>
-              <button id="remove-btn" type="button">Remove</button>
-            </div>
-            <div class="control-row">
-              <button id="add-entry" type="button">Add entry</button>
-              <button id="cost-btn" type="button">Set cost 500</button>
-            </div>
-          </div>
-
-          <div class="panel">
-            <h3>Vetoes and capabilities</h3>
-            <p>
-              A Mobilization date line marks a hard boundary — <code>beforeEntryMove</code> refuses a drop
-              before it. Hold drop proves the async veto path.
-            </p>
-            <div class="control-row">
-              <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry</label>
-            </div>
-            <div class="control-row">
-              <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
-              <label><input id="lock-resize" type="checkbox" /> Lock resize</label>
-            </div>
-            <div class="notice" id="toast" hidden></div>
-          </div>
-
-          <div class="panel">
-            <h3>Plugins and renderers</h3>
-            <p>
-              Each control is a plugin over the public contract alone. <code>Mod+K</code> clears the selection
-              through a plugin-registered command.
-            </p>
-            <div class="control-row">
-              <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
-              <button id="open-popup-btn" type="button">Open popup on selected bar</button>
-            </div>
-            <div class="control-row">
-              <label>
-                <input id="renderers-toggle" type="checkbox" checked /> Custom milestone and cost renderers
-              </label>
-              <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
-            </div>
-          </div>
-
-          <div class="panel">
-            <h3>Document</h3>
-            <p>Round-trips the dataset through the public <code>toJSON</code>/<code>fromJSON</code> pair.</p>
-            <div class="control-row">
-              <button id="export-btn" type="button">Export</button>
-              <button id="import-btn" type="button">Import</button>
-            </div>
-            <textarea
-              id="document-json"
-              rows="5"
-              aria-label="Dataset document JSON"
-              placeholder="Export writes the document here."
-            ></textarea>
-          </div>
-        </div>
-
-        <details class="log-panel" open>
-          <summary>Event log</summary>
-          <div id="log" aria-label="Event log"></div>
-        </details>
-      </section>
+          <details class="log-panel" open>
+            <summary>Event log</summary>
+            <div id="log" role="log" aria-label="Event log"></div>
+          </details>
+        </section>
+      </main>
     </div>
 
     <script type="module" src="./main.ts"></script>

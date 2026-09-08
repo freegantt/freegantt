@@ -77,66 +77,68 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S4 hierarchy, row sources, pack lanes &amp; rollup</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      One Gantt, one fixture (<code>fixtures/hierarchy-dataset.ts</code>). The controls below exercise live
-      row re-resolution, pack-mode heights, tree collapse, declared-field rollup, and JSON round-trip — with
-      every committed changeset logged the same way <code>data.html</code> does (D-S2-17). Drag a column edge
-      to resize it or a header cell to reorder it (S5.7, D-S5-18) — a focused header cell also takes
-      <kbd>Shift+Arrow</kbd> to resize and <kbd>Alt+Arrow</kbd> to move. Double-click Name, Start or Cost to
-      edit in place (S5.8, D-S5-19) — Enter or blur commits one transaction, Escape reverts. End stays
-      read-only on purpose: a column is editable only when you say so.
-    </p>
-    <div id="controls">
-      <label>
-        Rows
-        <select id="rows-mode" aria-label="Row source">
-          <option value="tree" selected>Tree</option>
-          <option value="grouped">Grouped by team</option>
-          <option value="flat">Flat</option>
-        </select>
-      </label>
-      <label>
-        Height
-        <select id="height-mode" aria-label="Row height mode">
-          <option value="fixed" selected>Fixed</option>
-          <option value="pack">Pack</option>
-        </select>
-      </label>
-      <button id="toggle-cost-col" type="button">Hide cost column</button>
-      <button id="filter-team-btn" type="button">Filter team: off</button>
-      <label>
-        Sort
-        <select id="sort-field" aria-label="Sort field">
-          <option value="none" selected>Off</option>
-          <option value="start">Start</option>
-          <option value="cost">Cost</option>
-          <option value="name">Name</option>
-        </select>
-      </label>
-      <button id="expand-all-btn" type="button">Expand all</button>
-      <button id="collapse-all-btn" type="button">Collapse all</button>
-      <label><input id="autogroup-checkbox" type="checkbox" checked /> autoGroup (rebuild on change)</label>
-      <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
-      <label>
-        <input id="custom-editor-checkbox" type="checkbox" /> Bring your own editor (beforeEntryEdit, Name
-        only)
-      </label>
-      <p id="selection-readout">Selection: (none)</p>
-      <p id="grid-columns-readout">Columns: (drag a column edge to resize, drag a header to reorder)</p>
-      <button id="cost-btn" type="button">Set cost 500</button>
-      <button id="undo-btn" type="button">Undo</button>
-      <button id="redo-btn" type="button">Redo</button>
-    </div>
-    <div id="toolbar"></div>
-    <div id="gantt"></div>
-    <div id="document-controls">
-      <button id="export-btn" type="button">Export</button>
-      <button id="import-btn" type="button">Import</button>
-      <textarea id="document-json" rows="8" cols="80" aria-label="Dataset document JSON"></textarea>
-    </div>
-    <div id="log" aria-label="Changeset log"></div>
+    <main>
+      <h1>FreeGantt — S4 hierarchy, row sources, pack lanes &amp; rollup</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        One Gantt, one fixture (<code>fixtures/hierarchy-dataset.ts</code>). The controls below exercise live
+        row re-resolution, pack-mode heights, tree collapse, declared-field rollup, and JSON round-trip — with
+        every committed changeset logged the same way <code>data.html</code> does (D-S2-17). Drag a column
+        edge to resize it or a header cell to reorder it (S5.7, D-S5-18) — a focused header cell also takes
+        <kbd>Shift+Arrow</kbd> to resize and <kbd>Alt+Arrow</kbd> to move. Double-click Name, Start or Cost to
+        edit in place (S5.8, D-S5-19) — Enter or blur commits one transaction, Escape reverts. End stays
+        read-only on purpose: a column is editable only when you say so.
+      </p>
+      <div id="controls">
+        <label>
+          Rows
+          <select id="rows-mode" aria-label="Row source">
+            <option value="tree" selected>Tree</option>
+            <option value="grouped">Grouped by team</option>
+            <option value="flat">Flat</option>
+          </select>
+        </label>
+        <label>
+          Height
+          <select id="height-mode" aria-label="Row height mode">
+            <option value="fixed" selected>Fixed</option>
+            <option value="pack">Pack</option>
+          </select>
+        </label>
+        <button id="toggle-cost-col" type="button">Hide cost column</button>
+        <button id="filter-team-btn" type="button">Filter team: off</button>
+        <label>
+          Sort
+          <select id="sort-field" aria-label="Sort field">
+            <option value="none" selected>Off</option>
+            <option value="start">Start</option>
+            <option value="cost">Cost</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+        <button id="expand-all-btn" type="button">Expand all</button>
+        <button id="collapse-all-btn" type="button">Collapse all</button>
+        <label><input id="autogroup-checkbox" type="checkbox" checked /> autoGroup (rebuild on change)</label>
+        <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
+        <label>
+          <input id="custom-editor-checkbox" type="checkbox" /> Bring your own editor (beforeEntryEdit, Name
+          only)
+        </label>
+        <p id="selection-readout">Selection: (none)</p>
+        <p id="grid-columns-readout">Columns: (drag a column edge to resize, drag a header to reorder)</p>
+        <button id="cost-btn" type="button">Set cost 500</button>
+        <button id="undo-btn" type="button">Undo</button>
+        <button id="redo-btn" type="button">Redo</button>
+      </div>
+      <div id="toolbar"></div>
+      <div id="gantt"></div>
+      <div id="document-controls">
+        <button id="export-btn" type="button">Export</button>
+        <button id="import-btn" type="button">Import</button>
+        <textarea id="document-json" rows="8" cols="80" aria-label="Dataset document JSON"></textarea>
+      </div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+    </main>
     <script type="module" src="./hierarchy.ts"></script>
   </body>
 </html>

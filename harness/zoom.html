@@ -57,21 +57,24 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S1.12 timeline &amp; navigation</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      e2e fixture for S1.9's acceptance checks (plans/s1.9-presets-and-zoom/README.md §6, §9) — exposes the
-      constructed <code>Gantt</code> on <code>window.__gantt</code> — and the S1.12 timeline &amp; navigation
-      demo (plans/s1.12-timeline-navigation/README.md §3.7): every control below is a plain assignment or a
-      one-line call over the public <code>Gantt</code> surface. Switch to <strong>multi-year</strong> and pick
-      the <code>day</code> preset to see the density floor (D-S1.12-2) scroll instead of squish.
-    </p>
-    <div id="toolbar"></div>
-    <div id="dataset-switch">
-      <label><input type="radio" name="dataset" value="sample" checked /> sample</label>
-      <label><input type="radio" name="dataset" value="multi-year" /> multi-year</label>
-    </div>
-    <div id="gantt"></div>
+    <main>
+      <h1>FreeGantt — S1.12 timeline &amp; navigation</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        e2e fixture for S1.9's acceptance checks (plans/s1.9-presets-and-zoom/README.md §6, §9) — exposes the
+        constructed <code>Gantt</code> on <code>window.__gantt</code> — and the S1.12 timeline &amp;
+        navigation demo (plans/s1.12-timeline-navigation/README.md §3.7): every control below is a plain
+        assignment or a one-line call over the public <code>Gantt</code> surface. Switch to
+        <strong>multi-year</strong> and pick the <code>day</code> preset to see the density floor (D-S1.12-2)
+        scroll instead of squish.
+      </p>
+      <div id="toolbar"></div>
+      <div id="dataset-switch">
+        <label><input type="radio" name="dataset" value="sample" checked /> sample</label>
+        <label><input type="radio" name="dataset" value="multi-year" /> multi-year</label>
+      </div>
+      <div id="gantt"></div>
+    </main>
     <script type="module" src="./zoom.ts"></script>
   </body>
 </html>

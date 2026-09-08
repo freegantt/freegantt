@@ -34,8 +34,9 @@
         </nav>
       </header>
 
-      <!-- ══════════════════════════════════════════════════════════ 1 -->
-      <section id="s1">
+      <main>
+        <!-- ══════════════════════════════════════════════════════════ 1 -->
+        <section id="s1">
         <h2><span class="num">1</span>Run the harness</h2>
         <p class="lede">
           The harness is the library's first consumer: plain TypeScript against
@@ -235,7 +236,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
 
         <div class="cards">
           <article class="card">
-            <h5><a href="./layers.html">Layers &amp; import rules</a></h5>
+            <h3><a href="./layers.html">Layers &amp; import rules</a></h3>
             <p class="path">layers.html</p>
             <p>
               The ten directories under <code>src/</code>, which of them may import which, and the custom
@@ -243,12 +244,12 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./files.html">File inventory</a></h5>
+            <h3><a href="./files.html">File inventory</a></h3>
             <p class="path">files.html</p>
             <p>Every non-test file in <code>src/</code>, with the one thing it is for.</p>
           </article>
           <article class="card">
-            <h5><a href="./lifecycle.html">Construction, render, notification</a></h5>
+            <h3><a href="./lifecycle.html">Construction, render, notification</a></h3>
             <p class="path">lifecycle.html</p>
             <p>
               What <code>new Gantt(…)</code> builds, what one <code>render()</code> does, and how an edit
@@ -256,7 +257,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./classes.html">Class map</a></h5>
+            <h3><a href="./classes.html">Class map</a></h3>
             <p class="path">classes.html</p>
             <p>
               Every class in the built layers — <code>layout/</code>, <code>view/</code>,
@@ -265,7 +266,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./timeline.html">Timeline render</a></h5>
+            <h3><a href="./timeline.html">Timeline render</a></h3>
             <p class="path">timeline.html</p>
             <p>
               How the header, density floor, sticky tick labels, and today line paint. Includes a pipeline
@@ -273,7 +274,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./plugins.html">Plugin lifecycle</a></h5>
+            <h3><a href="./plugins.html">Plugin lifecycle</a></h3>
             <p class="path">plugins.html</p>
             <p>
               What <code>installPlugin</code> and <code>uninstallPlugin</code> do, when the registration
@@ -282,7 +283,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./diagram.html">Module map diagrams</a></h5>
+            <h3><a href="./diagram.html">Module map diagrams</a></h3>
             <p class="path">diagram.html</p>
             <p>
               The layer graph as a picture: the DOM-free core on the left, the DOM column on the right, the
@@ -290,7 +291,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./maintaining.html">Maintaining these pages</a></h5>
+            <h3><a href="./maintaining.html">Maintaining these pages</a></h3>
             <p class="path">maintaining.html</p>
             <p>
               What to update when a file changes, the rules for the content, and the recipe that re-measures
@@ -298,7 +299,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="../../docs/05-consumer-api.md">Consumer API index</a></h5>
+            <h3><a href="../../docs/05-consumer-api.md">Consumer API index</a></h3>
             <p class="path">docs/05-consumer-api.md</p>
             <p>
               Outside this folder: links to the README, <code>plans/02</code>, <code>CONTEXT.md</code>, and
@@ -308,7 +309,8 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
         </div>
       </section>
 
-      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+        <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">
