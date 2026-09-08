@@ -133,11 +133,15 @@ export class RovingFocus {
   }
 
   /** The node real DOM focus currently sits on, if it is one this module manages. This is what
-   *  `GanttShell#buildCommandContext` reads to fill `CommandTarget` for a chord (D-S5-39). */
+   *  `GanttShell#buildCommandContext` reads to fill `CommandTarget` for a chord (D-S5-39). The
+   *  splitter is a sibling of the two panes, not a descendant of either (`pane-layout.ts`), so it
+   *  gets its own equality check rather than falling out of a `contains()` call like a row or a
+   *  bar does. */
   focusedElement(): HTMLElement | undefined {
     const doc = this.#panes.rows.ownerDocument;
     const active = doc.activeElement;
     if (!(active instanceof HTMLElement)) return undefined;
+    if (active === this.#panes.splitter) return active;
     if (this.#panes.rows.contains(active) || this.#panes.gridHeader.contains(active)) return active;
     if (this.#panes.timeline.contains(active)) return active;
     return undefined;

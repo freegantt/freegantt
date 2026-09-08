@@ -387,4 +387,46 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     shell.destroy();
     container.remove();
   });
+
+  it('#buildCommandContext fills all five TargetKinds from focus (D-S5-39)', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const captured: { target: { kind: string } | undefined } = { target: undefined };
+    const shell = new GanttShell({
+      wiring: {
+        // Mod+Z is registered unconditionally (`core-commands.ts`), so this runs on every chord
+        // below regardless of `dataset.canUndo` — it exists only to capture `parts.target`, the
+        // same trick the Mod+Z test above uses for `dataset`.
+        buildCommandContext: (parts) => {
+          captured.target = parts.target;
+          return { ...parts, dataset: { canUndo: false, undo: () => {}, canRedo: false, redo: () => {} } };
+        },
+      },
+      container,
+      dataset: parityDataset([spanEntry('a')]),
+      gridColumns: ['name'],
+    });
+    shell.render();
+
+    // Mod+Z fires and overwrites `captured.target` on every chord below, so nothing needs to
+    // reset it first — the chord itself always runs (D-S5-7's newest-first resolution never
+    // skips a registered command for missing `when` state; `dataset.canUndo: false` above only
+    // decides whether undo itself then runs).
+    function readTargetKindFrom(el: HTMLElement): string | undefined {
+      el.focus();
+      document.activeElement!.dispatchEvent(arrow('z', { ctrlKey: true }));
+      return captured.target?.kind;
+    }
+
+    expect(readTargetKindFrom(rows(container)[0]!)).toBe('row');
+    expect(readTargetKindFrom(container.querySelector<HTMLElement>('.fg-row-label')!)).toBe('cell');
+    expect(readTargetKindFrom(bars(container)[0]!)).toBe('bar');
+    expect(
+      readTargetKindFrom(container.querySelector<HTMLElement>('.fg-col-header[data-field="name"]')!),
+    ).toBe('header');
+    expect(readTargetKindFrom(container.querySelector<HTMLElement>('.fg-splitter')!)).toBe('splitter');
+
+    shell.destroy();
+    container.remove();
+  });
 });

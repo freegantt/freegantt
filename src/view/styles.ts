@@ -325,6 +325,11 @@ ${DARK_COLOR_TOKENS}
    and never one of its values, so a rename reaches no selector here. A consumer styling one reason
    writes [data-reason='derived-value'], which is also the code they read off the report. */
 .fg-cell-notice { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
+/* S5.11, D-S5-26: the polite live region (view/live-region.ts). Visually hidden, never hidden from
+   assistive tech — display: none/visibility: hidden would remove the node from the accessibility
+   tree along with the page, and a screen reader would never read a text change it cannot see happen.
+   The 1px clip-rect technique keeps the node painted, at zero size, off-screen. */
+.fg-live-region { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

@@ -64,6 +64,7 @@ import { panToTodayLine } from './today-landing.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
+import { LiveRegion } from './live-region.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import {
   RevealTargetNotFoundError,
@@ -456,6 +457,9 @@ export class GanttShell {
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
    *  once `#treeCollapse`/`#segmentSelection`/`#columnChrome` exist, since its ports read all three. */
   #rovingFocus!: RovingFocus;
+  /** S5.11, D-S5-26: the one polite live region for this Gantt (`view/live-region.ts`'s own file
+   *  header). Constructed and attached alongside `#rovingFocus`, once `#container` exists. */
+  #liveRegion!: LiveRegion;
   /** Issue #137 F9: the one `ResizeObserver` per Gantt, which both mount layers below share. */
   #containerResize: ContainerResize;
   /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
@@ -710,6 +714,8 @@ export class GanttShell {
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
     });
     this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
+    this.#liveRegion = new LiveRegion(this.#container, this);
+    this.#liveRegion.attach();
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
@@ -1359,7 +1365,21 @@ export class GanttShell {
       announceEntryEdit: (payload) => {
         this.#events.emit('entryEdit', payload);
       },
+      focusedCell: () => this.#focusedCell(),
     };
+  }
+
+  /** S5.11, D-S5-39: which cell real keyboard focus sits on, if any. This runs the same `DomTarget`
+   *  resolution `#buildCommandContext` runs for a chord, read here for `ctx.view.focusedCell()`
+   *  instead. `Enter` is `inline-editing.ts`'s first caller: it retired the "open the first editable
+   *  column" stand-in the day roving focus shipped a real per-cell answer. */
+  #focusedCell(): { entryId: EntryId; field: FieldKey } | undefined {
+    const focused = this.#rovingFocus.focusedElement();
+    const target = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
+    if (target?.kind !== 'cell' || target.entry === undefined || target.field === undefined) {
+      return undefined;
+    }
+    return { entryId: target.entry.id, field: target.field };
   }
 
   /** `plugin-registrations.ts`'s one seam back into this shell (#170). Every member is a pass that
@@ -1870,6 +1890,7 @@ export class GanttShell {
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
     this.#rovingFocus.detach();
+    this.#liveRegion.detach();
     this.#containerResize.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
