@@ -94,7 +94,7 @@ export type EntryEdit<
  *    `moveEntryTo` builds one of those for them (D-S5-50).
  *
  *  Core builds these on the way in — the extension hook's writes included, at one door
- *  (`DatasetState.extraEditsFor` → `readEdits`) — and `diffEdit` compares one against `entries`.
+ *  (`DatasetState.extraEditsFor` → `toStoredEdits`) — and `diffEdit` compares one against `entries`.
  *
  *  Every `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is
  *  not. That asymmetry is the enforcement: a missing normalization is a compile error rather than a
@@ -116,7 +116,7 @@ export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
 /** What a plugin author writes: one `EntryEdit` per Entry, keyed by `EntryId` — exactly the object
  *  `dataset.entries.update(id, edit)` takes, loose dates included (#209). An `EditExtender` returns
  *  one, and `mergeEntryEdits` composes two. Core reads it into `StoredEdits` at the hook boundary,
- *  through the same `readEdit` every other write goes through, so an extender never normalizes a date
+ *  through the same `toStoredEdit` every other write goes through, so an extender never normalizes a date
  *  and never states its own proposed keys. */
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 

@@ -599,11 +599,11 @@ describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
 
   /** A multi-select Delete: one Segment removed from every Entry of `entryCount`, all in one
    *  transaction — the shape a `removeSegments` call takes from a keyboard delete on a large
-   *  selection. Returns how many times `overlayStoredEdit` ran rebuilding an overlay Entry, the
+   *  selection. Returns how many times `entryAfterEdit` ran rebuilding an overlay Entry, the
    *  cost the old `#liveSegmentOwner` paid once per already-edited id for every Segment id it
    *  checked (quadratic in `entryCount`). */
   function overlayCallsForMultiSegmentDelete(entryCount: number): number {
-    const overlaySpy = vi.spyOn(fieldAccess, 'overlayStoredEdit');
+    const overlaySpy = vi.spyOn(fieldAccess, 'entryAfterEdit');
     const state = dataset(
       Array.from({ length: entryCount }, (_, index) => ({
         id: `e${index}`,
@@ -630,7 +630,7 @@ describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
 
     // The fix reads Segment ownership straight off `WriteSet.segmentOwner` — one map lookup per
     // id — so a 4x larger transaction costs at most a small multiple more overlay rebuilds, the
-    // ones `get()`/`readEdit` already pay once per Entry regardless of this fix. Before the fix,
+    // ones `get()`/`toStoredEdit` already pay once per Entry regardless of this fix. Before the fix,
     // the same 4x grew the call count roughly 16x (quadratic): each Entry's uniqueness check
     // rebuilt an overlay for every id already staged ahead of it.
     expect(large).toBeLessThan(small * 4 + 50);
@@ -731,7 +731,7 @@ describe('rollup (§1.5)', () => {
     expect(seen).toHaveLength(1);
     const parentRows = fieldRowsOf(seen[0]!).filter((row) => row.id === entryId('p1'));
     // `segments` rides along (#212 B1 fix): p1 draws one Segment, and the Rollup keeps it paired
-    // with the envelope it just rolled up, the same way `readEdit` pairs a direct `update(id, {
+    // with the envelope it just rolled up, the same way `toStoredEdit` pairs a direct `update(id, {
     // start })`.
     expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'segments', 'start']);
     const after = state.entries.get('p1')!;

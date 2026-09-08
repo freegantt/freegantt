@@ -3,8 +3,8 @@ import {
   fitSegmentsToEnvelope,
   moveEntryTo,
   reconcileExtenderEdits,
-  readEntries,
-  readEdit,
+  toEntries,
+  toStoredEdit,
 } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
@@ -37,10 +37,10 @@ function createContext(): EntryReadContext {
   };
 }
 
-describe('readEntries', () => {
+describe('toEntries', () => {
   it('brands a plain string id and reads a date-only end inclusively', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(entry?.id).toBe(entryId('t1'));
     expect(entry?.start).toBe(utc('2026-09-01T00:00:00Z'));
     // 'through the 8th' — the half-open boundary is the start of the 9th.
@@ -49,7 +49,7 @@ describe('readEntries', () => {
 
   it('leaves an optional field absent when the input never had it, but defaults kind to span', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(Object.keys(entry ?? {}).sort()).toEqual(
       ['end', 'id', 'kind', 'name', 'segments', 'start'].sort(),
     );
@@ -58,7 +58,7 @@ describe('readEntries', () => {
 
   it('fills one segment over the full span when the input names none', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(entry?.segments).toHaveLength(1);
     expect(entry?.segments[0]?.id).toBe(segmentId('minted-1'));
   });
@@ -74,7 +74,7 @@ describe('readEntries', () => {
       segments: [{ start: '2026-09-01', end: '2026-09-02' }],
       meta: { team: 'A' },
     };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(entry?.parentId).toBe(entryId('root'));
     expect(entry?.kind).toBe('milestone');
     expect(entry?.segments).toEqual([
@@ -95,14 +95,14 @@ describe('readEntries', () => {
       end: '2026-09-05',
       segments: [{ id: 'authored-seg', start: '2026-09-01', end: '2026-09-05' }],
     };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(entry?.segments[0]?.id).toBe(segmentId('authored-seg'));
   });
 
   // 2026-09-06 ruling, #143: an inverted span is refused at ingest, not stored and rendered honestly.
   it('refuses a construction-time entry whose end sits before its start', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-08', end: '2026-09-01' };
-    expect(() => readEntries([input], createContext())).toThrow(InvertedSpanError);
+    expect(() => toEntries([input], createContext())).toThrow(InvertedSpanError);
   });
 
   it('refuses a construction-time entry whose named segment is inverted', () => {
@@ -113,7 +113,7 @@ describe('readEntries', () => {
       end: '2026-09-05',
       segments: [{ start: '2026-09-05', end: '2026-09-01' }],
     };
-    expect(() => readEntries([input], createContext())).toThrow(InvertedSpanError);
+    expect(() => toEntries([input], createContext())).toThrow(InvertedSpanError);
   });
 
   // The zero-length span stays legal (D-S3-4, #212's rollUpKinds default) — this is the regression
@@ -126,15 +126,15 @@ describe('readEntries', () => {
       start: '2026-09-01T09:00:00Z',
       end: '2026-09-01T09:00:00Z',
     };
-    const [entry] = readEntries([input], createContext());
+    const [entry] = toEntries([input], createContext());
     expect(entry?.start).toBe(entry?.end);
   });
 });
 
-describe('readEdit (S4.10, D-S4-30)', () => {
+describe('toStoredEdit (S4.10, D-S4-30)', () => {
   it('throws SegmentsOutOfSyncError when start/end are written without segments on a two-segment entry', () => {
     const context = createContext();
-    const [segmented] = readEntries(
+    const [segmented] = toEntries(
       [
         {
           id: 'seg',
@@ -149,18 +149,15 @@ describe('readEdit (S4.10, D-S4-30)', () => {
       ],
       context,
     );
-    expect(() => readEdit({ start: '2026-09-02' }, context, segmented!, registry, 'entries.update')).toThrow(
-      SegmentsOutOfSyncError,
-    );
+    expect(() =>
+      toStoredEdit({ start: '2026-09-02' }, context, segmented!, registry, 'entries.update'),
+    ).toThrow(SegmentsOutOfSyncError);
   });
 
   it('moves the lone segment with the envelope on a one-segment entry', () => {
     const context = createContext();
-    const [single] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
-    const edit = readEdit({ start: '2026-09-02' }, context, single!, registry, 'entries.update');
+    const [single] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
+    const edit = toStoredEdit({ start: '2026-09-02' }, context, single!, registry, 'entries.update');
     expect(edit.start).toBe(utc('2026-09-02T00:00:00Z'));
     expect(edit.segments).toHaveLength(1);
   });
@@ -169,34 +166,25 @@ describe('readEdit (S4.10, D-S4-30)', () => {
   // inverted span silently, through the sole-Segment pairing in `reconcileEnvelope`.
   it('refuses update(id, { start }) when the new start would end before the entry ends', () => {
     const context = createContext();
-    const [single] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
-    expect(() => readEdit({ start: '2026-09-10' }, context, single!, registry, 'entries.update')).toThrow(
+    const [single] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
+    expect(() => toStoredEdit({ start: '2026-09-10' }, context, single!, registry, 'entries.update')).toThrow(
       InvertedSpanError,
     );
   });
 
   it('refuses update(id, { end }) when the new end would sit before the entry starts', () => {
     const context = createContext();
-    const [single] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-05', end: '2026-09-10' }],
-      context,
-    );
-    expect(() => readEdit({ end: '2026-09-01' }, context, single!, registry, 'entries.update')).toThrow(
+    const [single] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-05', end: '2026-09-10' }], context);
+    expect(() => toStoredEdit({ end: '2026-09-01' }, context, single!, registry, 'entries.update')).toThrow(
       InvertedSpanError,
     );
   });
 
   it('refuses update(id, { segments }) naming a Segment whose end sits before its start', () => {
     const context = createContext();
-    const [single] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
+    const [single] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
     expect(() =>
-      readEdit(
+      toStoredEdit(
         { segments: [{ start: '2026-09-05', end: '2026-09-01' }] },
         context,
         single!,
@@ -210,11 +198,11 @@ describe('readEdit (S4.10, D-S4-30)', () => {
   // alongside the refusal itself, so a resize gesture's own clamp keeps working (#143).
   it('still accepts update(id, { end }) writing a zero-length span', () => {
     const context = createContext();
-    const [single] = readEntries(
+    const [single] = toEntries(
       [{ id: 'seg', name: 'Seg', start: '2026-09-01T09:00:00Z', end: '2026-09-05T09:00:00Z' }],
       context,
     );
-    const edit = readEdit({ end: '2026-09-01T09:00:00Z' }, context, single!, registry, 'entries.update');
+    const edit = toStoredEdit({ end: '2026-09-01T09:00:00Z' }, context, single!, registry, 'entries.update');
     expect(edit.start).toBe(edit.end);
   });
 
@@ -222,13 +210,10 @@ describe('readEdit (S4.10, D-S4-30)', () => {
   // internal "no Segments" assertion as a bare `Error`, with no `code` and no `FreeGanttError`.
   it('throws a typed EmptySegmentsError, not a bare Error, when segments is written empty', () => {
     const context = createContext();
-    const [single] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
+    const [single] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
     let caught: unknown;
     try {
-      readEdit({ segments: [] }, context, single!, registry, 'entries.update');
+      toStoredEdit({ segments: [] }, context, single!, registry, 'entries.update');
     } catch (error) {
       caught = error;
     }
@@ -241,12 +226,9 @@ describe('readEdit (S4.10, D-S4-30)', () => {
   // claiming the caller wrote what `envelopeOfSegments` derived instead.
   it('throws SegmentsOutOfSyncError when a written start/end disagrees with the written segments', () => {
     const context = createContext();
-    const [entry] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
+    const [entry] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
     expect(() =>
-      readEdit(
+      toStoredEdit(
         {
           start: 100,
           end: 200,
@@ -265,11 +247,8 @@ describe('readEdit (S4.10, D-S4-30)', () => {
 
   it('derives start/end from segments silently when the caller names neither', () => {
     const context = createContext();
-    const [entry] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }],
-      context,
-    );
-    const edit = readEdit(
+    const [entry] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-09-01', end: '2026-09-05' }], context);
+    const edit = toStoredEdit(
       {
         segments: [
           { start: 0, end: 10 },
@@ -294,7 +273,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
   const context = createContext();
 
   function committedSegmentedEntry(): ReadonlyMap<ReturnType<typeof entryId>, Entry> {
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 'seg',
@@ -318,9 +297,9 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     const entry = committed.get(id!)!;
     // The body's own edit collapses the two Segments to one spanning the whole entry — reconciling
     // against `committed` alone would still see two Segments and throw `SegmentsOutOfSyncError`.
-    // `readEdit` is the real path a body edit takes, so it also carries the envelope
+    // `toStoredEdit` is the real path a body edit takes, so it also carries the envelope
     // `reconcileEnvelope` derives from the new Segment, the same as the commit pipeline sees it.
-    const bodyEdit = readEdit(
+    const bodyEdit = toStoredEdit(
       { segments: [{ start: '2026-01-01', end: '2026-01-10' }] },
       context,
       entry,
@@ -346,7 +325,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
 
   it('refuses an envelope-only cascade against a body-split Segment (1→2), not the stale one-Segment committed state', () => {
     const context2 = createContext();
-    const [single] = readEntries(
+    const [single] = toEntries(
       [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
       context2,
     );
@@ -354,7 +333,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     // The body's own edit splits the one Segment into two — reconciling against `committed` alone
     // would still see one Segment and pair the envelope onto it directly, silently succeeding on the
     // wrong Segment count instead of catching that this write is now ambiguous.
-    const bodyEdit = readEdit(
+    const bodyEdit = toStoredEdit(
       {
         segments: [
           { start: '2026-01-01', end: '2026-01-02' },
@@ -402,7 +381,7 @@ describe('fitSegmentsToEnvelope (#212 R2 fix-plan review, finding B1)', () => {
 describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44)', () => {
   it('refuses a several-Segment envelope-only write naming only start, same as entries.update()', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 'seg',
@@ -427,7 +406,7 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
 
   it('refuses a several-Segment envelope-only write naming both start and end', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 'seg',
@@ -453,7 +432,7 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
 
   it('refuses an inverted envelope too — nothing about it makes a several-Segment write computable', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 'seg',
@@ -479,10 +458,7 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
 
   it('still pairs the envelope onto the one Segment of a sole-Segment Entry, same as reconcileEnvelope', () => {
     const context = createContext();
-    const [entry] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
-      context,
-    );
+    const [entry] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }], context);
     const entries = new Map([[entry!.id, entry!]]);
     const newStart = instant(utc('2026-01-02T00:00:00Z'));
 
@@ -499,10 +475,7 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
   // case above.
   it('refuses an inverted cascade against a sole-Segment Entry, same as an inverted entries.update()', () => {
     const context = createContext();
-    const [entry] = readEntries(
-      [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
-      context,
-    );
+    const [entry] = toEntries([{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }], context);
     const entries = new Map([[entry!.id, entry!]]);
     const invertingStart = instant(utc('2026-01-10T00:00:00Z'));
 
@@ -516,7 +489,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
   /** Two Segments. A date-only `end` is inclusive here, so they store as `[01-01, 01-06)` and
    *  `[01-06, 01-11)`, and the Entry's envelope is `[01-01, 01-11)`. */
   function twoSegmentEntry(context: EntryReadContext): Entry {
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 't1',
@@ -562,10 +535,10 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     expect(edit.segments?.[0]?.start).toBe(utc('2026-01-03T05:00:00Z'));
   });
 
-  it('lets readEdit derive the envelope, so the stored edit still states start and end', () => {
+  it('lets toStoredEdit derive the envelope, so the stored edit still states start and end', () => {
     const context = createContext();
     const entry = twoSegmentEntry(context);
-    const stored = readEdit(
+    const stored = toStoredEdit(
       moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z'))),
       context,
       entry,
@@ -589,9 +562,9 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')))]]),
       new Map([[entry.id, { end: laterEnd }]]),
     );
-    expect(() => readEdit(afterTheChange.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
-      SegmentsOutOfSyncError,
-    );
+    expect(() =>
+      toStoredEdit(afterTheChange.get(entry.id)!, context, entry, registry, 'entries.update'),
+    ).toThrow(SegmentsOutOfSyncError);
 
     // The shape `moveEntryTo` used to return, merged the same way: the same refusal.
     const beforeTheChange = mergeEntryEdits(
@@ -608,7 +581,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       new Map([[entry.id, { end: laterEnd }]]),
     );
     expect(() =>
-      readEdit(beforeTheChange.get(entry.id)!, context, entry, registry, 'entries.update'),
+      toStoredEdit(beforeTheChange.get(entry.id)!, context, entry, registry, 'entries.update'),
     ).toThrow(SegmentsOutOfSyncError);
   });
 
@@ -635,7 +608,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
         ],
       ]),
     );
-    const lost = readEdit(withStatedEnvelope.get(entry.id)!, context, entry, registry, 'entries.update');
+    const lost = toStoredEdit(withStatedEnvelope.get(entry.id)!, context, entry, registry, 'entries.update');
     expect(lost.end).toBe(utc('2026-01-07T00:00:00Z'));
     expect(lost.end).not.toBe(utc('2026-02-01T00:00:00Z'));
 
@@ -646,7 +619,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
       new Map([[entry.id, moveEntryTo(entry, instant(utc('2026-01-03T00:00:00Z')))]]),
     );
     expect(refused.get(entry.id)!.end).toBe(utc('2026-02-01T00:00:00Z'));
-    expect(() => readEdit(refused.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
+    expect(() => toStoredEdit(refused.get(entry.id)!, context, entry, registry, 'entries.update')).toThrow(
       SegmentsOutOfSyncError,
     );
   });
@@ -668,7 +641,7 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
 
   it('names the entry the consumer wrote, not only the segment id ingest minted', () => {
     const error = invertedSpanErrorFrom(() =>
-      readEntries(
+      toEntries(
         [
           {
             id: 't1',
@@ -699,7 +672,7 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
 
   it('names no segment when the entry, not a segment, carries the inverted span', () => {
     const error = invertedSpanErrorFrom(() =>
-      readEntries([{ id: 't1', name: 'Design', start: '2026-01-10', end: '2026-01-01' }], createContext()),
+      toEntries([{ id: 't1', name: 'Design', start: '2026-01-10', end: '2026-01-01' }], createContext()),
     );
 
     expect(error.segmentId).toBeUndefined();
@@ -708,29 +681,29 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
 
   it('an unreadable date names the caller too, not toInstant (#237)', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
     );
 
     expect(() =>
-      readEntries([{ id: 't2', name: 'Build', start: 'next tuesday', end: '2026-01-05' }], context),
+      toEntries([{ id: 't2', name: 'Build', start: 'next tuesday', end: '2026-01-05' }], context),
     ).toThrow('construction: "next tuesday" is not a date this library reads.');
-    expect(() => readEdit({ start: 'next tuesday' }, context, entry!, registry, 'entries.update')).toThrow(
-      'entries.update: "next tuesday" is not a date this library reads.',
-    );
+    expect(() =>
+      toStoredEdit({ start: 'next tuesday' }, context, entry!, registry, 'entries.update'),
+    ).toThrow('entries.update: "next tuesday" is not a date this library reads.');
   });
 
   it('names entries.update for an update, and the edit extender for a cascade', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
     );
     const inverting = { start: instant(utc('2026-06-01T00:00:00Z')) };
 
     const fromUpdate = invertedSpanErrorFrom(() =>
-      readEdit(inverting, context, entry!, registry, 'entries.update'),
+      toStoredEdit(inverting, context, entry!, registry, 'entries.update'),
     );
     expect(fromUpdate.operation).toBe('entries.update');
 
@@ -747,20 +720,20 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
   // inversion. Tidying `<` into `<=` in `reconcileEnvelope` breaks both at once.
   it('leaves a zero-length span legal', () => {
     const context = createContext();
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
     );
     const zeroLength = instant(entry!.start);
 
-    const stored = readEdit({ end: zeroLength }, context, entry!, registry, 'entries.update');
+    const stored = toStoredEdit({ end: zeroLength }, context, entry!, registry, 'entries.update');
     expect(stored.start).toBe(stored.end);
   });
 });
 
 describe('a refusal names the caller that reached it, not one door of two (#239, #237)', () => {
   function twoSegments(context: EntryReadContext): Entry {
-    const [entry] = readEntries(
+    const [entry] = toEntries(
       [
         {
           id: 't1',
@@ -800,7 +773,7 @@ describe('a refusal names the caller that reached it, not one door of two (#239,
     const context = createContext();
     const entry = twoSegments(context);
 
-    expect(() => readEdit({ segments: [] }, context, entry, registry, 'entries.update')).toThrow(
+    expect(() => toStoredEdit({ segments: [] }, context, entry, registry, 'entries.update')).toThrow(
       /^entries\.update: /,
     );
   });

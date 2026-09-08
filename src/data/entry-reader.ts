@@ -57,7 +57,7 @@ interface EditOrigin {
   readonly operation: string;
 }
 
-/** The name a plugin author knows their own write by. `reconcileEnvelope` and `readEdit` serve both
+/** The name a plugin author knows their own write by. `reconcileEnvelope` and `toStoredEdit` serve both
  *  `entries.update()` and an `EditExtender` cascade (D-S5-44), and a message that named the wrong one
  *  sent the reader to a call they never made (#239). Exported so `build-commit-change-set.ts` can
  *  name the same call when it reconciles a body author's and an extender author's envelope keys
@@ -70,7 +70,7 @@ const ENVELOPE_KEYS = ['start', 'end', 'segments'] as const;
 
 /** Which of `start`/`end`/`segments` a caller's own loose edit named, before `reconcileEnvelope` pairs
  *  or back-derives the rest (#232). This is the fact the I4 guard and the commit's own envelope
- *  reconciliation both need and `readEdit` alone can answer, because after reconciliation the same
+ *  reconciliation both need and `toStoredEdit` alone can answer, because after reconciliation the same
  *  three keys sit on the `StoredEdit` whether the caller wrote one of them or none — `reconcileEnvelope`
  *  fills in whichever the caller left out. */
 export function authoredEnvelopeKeysOf(edit: Readonly<Record<string, unknown>>): ReadonlySet<string> {
@@ -88,7 +88,7 @@ function spanOf(segment: { start: Instant; end: Instant }): TimeSpan {
 /** `existing` is the Segment presently at this position, when `entries.update` is moving one it
  *  already drew (S2.3 §1.1, #212). An input that names no `id` keeps `existing`'s id — a move, not a
  *  replacement — and mints only when there is no Segment at that position to keep the id of. */
-function readSegment(
+function toSegment(
   input: SegmentInput,
   context: EntryReadContext,
   owner: EditOrigin,
@@ -109,7 +109,7 @@ function readSegment(
 
 /** Every stored Entry has at least one Segment (#212), so nothing downstream carries a "this one
  * draws no Segment" branch. An Entry that named none stores its own envelope as its one Segment. */
-function readSegments(
+function toSegments(
   input: EntryInput,
   span: TimeSpan,
   context: EntryReadContext,
@@ -118,7 +118,7 @@ function readSegments(
   if (input.segments === undefined || input.segments.length === 0) {
     return [{ id: context.mintSegmentId(), start: span.start, end: span.end }];
   }
-  return input.segments.map((segment) => readSegment(segment, context, owner));
+  return input.segments.map((segment) => toSegment(segment, context, owner));
 }
 
 /** The one Segment an Entry draws, or `undefined` when it draws several — the question
@@ -136,11 +136,11 @@ function soleSegmentOf(entry: Entry): Segment | undefined {
  * finding 4): an Entry that names Segments overrunning its own authored span used to keep that
  * stale span forever, because ingest was not one of the places that computed the envelope.
  * `envelopeOfSegments` is the one function every write path — this one included — calls instead. */
-export function readEntry(input: EntryInput, context: EntryReadContext, operation: string): Entry {
+export function toEntry(input: EntryInput, context: EntryReadContext, operation: string): Entry {
   const kind = input.kind ?? 'span';
   const owner: EditOrigin = { entryId: entryId(input.id), operation };
-  const span = readEntrySpan(input, kind, context, owner);
-  const segments = readSegments(input, span, context, owner);
+  const span = toEntrySpan(input, kind, context, owner);
+  const segments = toSegments(input, span, context, owner);
   const envelope = envelopeOfSegments(segments);
   const entry: Entry = {
     id: entryId(input.id),
@@ -159,7 +159,7 @@ export function readEntry(input: EntryInput, context: EntryReadContext, operatio
  * that omits both gets a zero-length span at the reference date, which the rollup overwrites on the
  * first commit that gives it children. Omitting only one, on any kind, is `InvalidInstantError` — a
  * half-specified span is not a span the rollup or a non-deriving kind can make sense of. */
-function readEntrySpan(
+function toEntrySpan(
   input: EntryInput,
   kind: EntryKind,
   context: EntryReadContext,
@@ -216,19 +216,19 @@ function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
   }
 }
 
-export function readEntries(
+export function toEntries(
   inputs: readonly EntryInput[],
   context: EntryReadContext,
   operation = 'construction',
 ): readonly Entry[] {
-  const entries = inputs.map((input) => readEntry(input, context, operation));
+  const entries = inputs.map((input) => toEntry(input, context, operation));
   assertNoDuplicateSegmentIds(entries);
   return entries;
 }
 
 /** What `reconcileEnvelope` hands back: the reconciled edit, and which keys it wrote onto the edit
  *  itself — `segments` paired on, or `start`/`end` read back off Segments the edit already named.
- *  `readEdit` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
+ *  `toStoredEdit` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
  *  caller of `reconcileEnvelope` is told what changed, instead of diffing `Object.keys` before and
  *  after to find out. */
 export interface EnvelopeReconciliation {
@@ -246,7 +246,7 @@ export interface EnvelopeReconciliation {
  * An edit that names both `segments` and an envelope the Segments do not produce is refused too
  * (`'conflicting'`) rather than picking a winner (finding S3).
  *
- * `readEdit` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
+ * `toStoredEdit` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
  * an `EditExtender`'s cascade — the same function, the same refusal, for both callers (D-S5-44). A
  * plugin's cascade cannot be asked to send a clearer edit the way `entries.update()`'s caller can,
  * but it has an author, and this refusal is how that author is told at dev time to write `segments`
@@ -369,7 +369,7 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * plugin-author tool and not an app-author one.
  *
  * `start` is an `Instant`, not the loose `InstantInput` every way *in* takes. This is a builder, not a
- * way in: the way in is the extender's return, which `readEdits` normalizes. Taking a loose date here
+ * way in: the way in is the extender's return, which `toStoredEdits` normalizes. Taking a loose date here
  * would need a zone to read it, and asking a plugin author to hand back `ctx.dataset.timeZone` — a
  * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
@@ -445,7 +445,7 @@ export function reconcileExtenderEditsForPreview(
   return changed ? reconciled : edits;
 }
 
-/** `readEditDetailed`'s result: the `StoredEdit` `readEdit` has always returned, plus which of
+/** `toEditReading`'s result: the `StoredEdit` `toStoredEdit` has always returned, plus which of
  *  `start`/`end`/`segments` the *caller* named before `reconcileEnvelope` paired or back-derived the
  *  rest. The commit path needs that second fact to tell a body author's envelope write from an
  *  `EditExtender`'s own, which `proposedKeys` alone cannot: `reconcileEnvelope` folds its own added
@@ -456,8 +456,8 @@ export interface EditReading {
   readonly authoredEnvelopeKeys: ReadonlySet<string>;
 }
 
-/** `readEditsDetailed`'s result: `EditReading` widened from one Entry to the whole map an
- *  `EditExtender` cascade touches — what `DatasetState.readExtenderEdits` hands the commit path
+/** `toEditsReading`'s result: `EditReading` widened from one Entry to the whole map an
+ *  `EditExtender` cascade touches — what `DatasetState.extraEditsReadingFor` hands the commit path
  *  (#232). Internal only. */
 export interface EditsReading {
   readonly stored: StoredEdits;
@@ -465,12 +465,12 @@ export interface EditsReading {
 }
 
 /** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
- * goes through `time/` the way `readEntry` reads a whole `Entry`. Declared Field keys fold through
+ * goes through `time/` the way `toEntry` reads a whole `Entry`. Declared Field keys fold through
  * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`.
  *
  * Returns the envelope keys the caller itself named alongside the `StoredEdit`, for the commit path
  * to tell a body author's envelope write from an extender's own (#232) — see `EditReading`. */
-export function readEditDetailed(
+export function toEditReading(
   edit: EntryEdit,
   context: EntryReadContext,
   entry: Entry,
@@ -498,7 +498,7 @@ export function readEditDetailed(
     // segments })` moves a Segment, per `CONTEXT.md`. An index beyond the Entry's current count has
     // no counterpart to keep, so it mints a fresh id, the same as an added Segment on `entries.add`.
     stored.segments = edit.segments.map((segment, index) =>
-      readSegment(segment, context, { entryId: entry.id, operation }, entry.segments[index]),
+      toSegment(segment, context, { entryId: entry.id, operation }, entry.segments[index]),
     );
   }
 
@@ -518,20 +518,20 @@ export function readEditDetailed(
 }
 
 /** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — the shape every existing caller
- *  wants. `readEditDetailed` above is the same read; this discards the extra fact only the commit
+ *  wants. `toEditReading` above is the same read; this discards the extra fact only the commit
  *  path's I4 guard needs (#232). */
-export function readEdit(
+export function toStoredEdit(
   edit: EntryEdit,
   context: EntryReadContext,
   entry: Entry,
   registry: FieldRegistry,
   operation: string,
 ): StoredEdit {
-  return readEditDetailed(edit, context, entry, registry, operation).stored;
+  return toEditReading(edit, context, entry, registry, operation).stored;
 }
 
 /**
- * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `readEdit`
+ * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toStoredEdit`
  * per Entry, so a plugin's cascade takes the exact road `dataset.entries.update(id, edit)` takes: the
  * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
@@ -544,10 +544,10 @@ export function readEdit(
  * no row for such an id either (#209 Q3, tracked as #235).
  *
  * Returns each Entry's authored envelope keys alongside its `StoredEdit`, the same fact
- * `readEditDetailed` reports — the commit path's I4 guard needs to know which of `start`/`end`/
+ * `toEditReading` reports — the commit path's I4 guard needs to know which of `start`/`end`/
  * `segments` the hook itself named, not which `reconcileEnvelope` added on the hook's behalf (#232).
  */
-export function readEditsDetailed(
+export function toEditsReading(
   edits: EntryEdits,
   context: EntryReadContext,
   entryFor: (id: EntryId) => Entry | undefined,
@@ -565,7 +565,7 @@ export function readEditsDetailed(
     for (const key of Object.keys(edit)) {
       if (!registry.has(key)) throw new UnknownFieldError(key, EXTENDER_OPERATION);
     }
-    const reading = readEditDetailed(edit, context, entry, registry, EXTENDER_OPERATION);
+    const reading = toEditReading(edit, context, entry, registry, EXTENDER_OPERATION);
     stored.set(id, reading.stored);
     authoredEnvelopeKeys.set(id, reading.authoredEnvelopeKeys);
   }
@@ -573,12 +573,12 @@ export function readEditsDetailed(
 }
 
 /** Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). See
- *  `readEditsDetailed` above for the same read plus each Entry's authored envelope keys. */
-export function readEdits(
+ *  `toEditsReading` above for the same read plus each Entry's authored envelope keys. */
+export function toStoredEdits(
   edits: EntryEdits,
   context: EntryReadContext,
   entryFor: (id: EntryId) => Entry | undefined,
   registry: FieldRegistry,
 ): StoredEdits {
-  return readEditsDetailed(edits, context, entryFor, registry).stored;
+  return toEditsReading(edits, context, entryFor, registry).stored;
 }

@@ -40,7 +40,7 @@ Then the step itself:
   (D-S2-5). `view/event-bus.ts` **still exists** (it is not deleted — only `entry-input.ts` is): it now
   holds `GanttEventMap`/`GridWidthChange` and re-exports `EventBus` from `data/`, matching D-S2-5's
   "the event maps themselves stay with their owners."
-- **`data/entry-reader.ts`** — `readEntries`, moved verbatim from the deleted `src/api/entry-input.ts`.
+- **`data/entry-reader.ts`** — `toEntries`, moved verbatim from the deleted `src/api/entry-input.ts`.
 - **`data/entry-store.ts`** — `EntryStore`, implementing `EntryStoreView`. `byId` is a plain `Map`;
   `all` and the `byParent` index used by `childrenOf` are `computed` over one revision `signal`
   (D-S2-3's cached-identity rule — same array until the next commit). No write set yet: S2.2 adds the

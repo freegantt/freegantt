@@ -134,7 +134,7 @@ export function writeField(edit: StoredEdit, entry: Entry, field: ResolvedField,
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
 export function writeOntoEntry(entry: Entry, field: ResolvedField, value: unknown): Entry {
-  return overlayStoredEdit(entry, writeField({}, entry, field, value));
+  return entryAfterEdit(entry, writeField({}, entry, field, value));
 }
 
 /** Folds declared meta-sourced keys from a public `EntryEdit` into a storage-shaped edit. */
@@ -145,7 +145,7 @@ export function writeDeclaredMetaFields(
   registry: FieldRegistry,
 ): StoredEdit {
   let next = stored;
-  const overlay = overlayStoredEdit(entry, stored);
+  const overlay = entryAfterEdit(entry, stored);
   for (const key of Object.keys(edit)) {
     const field = registry.get(key);
     if (!field || !storesInMeta(field)) continue;
@@ -160,7 +160,7 @@ export function editProposesField(edit: StoredEdit | undefined, field: ResolvedF
 }
 
 /** Applies a stored overlay the way `EntryStore.get` must: core keys only, never proposedKeys. */
-export function overlayStoredEdit(entry: Entry, edit: StoredEdit): Entry {
+export function entryAfterEdit(entry: Entry, edit: StoredEdit): Entry {
   const next: Entry = { ...entry };
   const bag = edit as Record<string, unknown>;
   for (const field of CORE_FIELDS) {

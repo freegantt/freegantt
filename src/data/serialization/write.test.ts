@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON, readDocument } from './index.js';
+import { toDocument, fromDocument } from './index.js';
 import type { EntryInput } from '../../model/index.js';
 
 function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
@@ -13,9 +13,9 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
   };
 }
 
-describe('toJSON fields (S4.4, D-S4-15)', () => {
+describe('toDocument fields (S4.4, D-S4-15)', () => {
   it('writes schema: 3 and omits fields and plugins when neither is present', () => {
-    const doc = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
+    const doc = toDocument(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
     expect(doc.schema).toBe(4);
     expect('fields' in doc).toBe(false);
     expect('plugins' in doc).toBe(false);
@@ -32,7 +32,7 @@ describe('toJSON fields (S4.4, D-S4-15)', () => {
       ],
       entries: [span('t1', { meta: { cost: 1, riskScore: 2 } })],
     });
-    const doc = toJSON(dataset);
+    const doc = toDocument(dataset);
     expect(doc.fields).toEqual([
       {
         key: 'cost',
@@ -69,7 +69,7 @@ describe('toJSON fields (S4.4, D-S4-15)', () => {
       ],
       entries: [span('t1', { meta: { cost: 1 } })],
     });
-    const doc = toJSON(dataset);
+    const doc = toDocument(dataset);
     expect(doc.fields).toEqual([{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'sum' }]);
     const cost = doc.fields![0] as Record<string, unknown>;
     expect('equals' in cost).toBe(false);
@@ -84,13 +84,13 @@ describe('toJSON fields (S4.4, D-S4-15)', () => {
       fields: [{ key: 'cost', type: 'money' }],
       entries: [span('t1', { meta: { cost: 400 } })],
     });
-    const doc = toJSON(dataset);
-    const round = toJSON(new DatasetState(readDocument(doc)));
+    const doc = toDocument(dataset);
+    const round = toDocument(new DatasetState(fromDocument(doc)));
     expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
   });
 
   it('does not write core Fields', () => {
-    const doc = toJSON(
+    const doc = toDocument(
       new DatasetState({
         timeZone: 'UTC',
         fields: [{ key: 'cost' }],

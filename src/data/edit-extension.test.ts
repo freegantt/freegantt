@@ -124,7 +124,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
   it('core derives every proposed key from the composed edit, so the meta-sourced Field is recognized', () => {
     for (const { stored } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
       const keys = [...proposedKeysOf(stored.get(target))].sort();
-      // `segments` rides along because `readEdit` pairs the lone Segment onto an envelope-only write
+      // `segments` rides along because `toStoredEdit` pairs the lone Segment onto an envelope-only write
       // and states what it added. That fold is #232's subject, not this law's.
       expect(keys).toEqual(['cost', 'end', 'segments', 'start']);
       expect(stored.get(target)?.meta).toEqual({ cost: 500 });
@@ -146,7 +146,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
 // base's stated keys, `diffEdit` took its authored branch, and only the last plugin got a row.
 //
 // The fixture writes `name`, `kind` and `parentId` — non-date Fields on purpose. Date Fields
-// (`start`/`end`) on one Entry hit the envelope-companion collision in `readEdit` (#232), which is a
+// (`start`/`end`) on one Entry hit the envelope-companion collision in `toStoredEdit` (#232), which is a
 // different defect. A `meta` write as the last plugin would mask this one through `diffEdit`'s
 // `authored.has('meta')` escape, so none of the three uses `meta` either.
 describe('composing three extenders that write one Entry (#238)', () => {

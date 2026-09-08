@@ -1,4 +1,4 @@
-// data/ — Field data half of the Document (D-S4-15). readDocument and toJSON call this codec.
+// data/ — Field data half of the Document (D-S4-15). fromDocument and toDocument call this codec.
 
 import type { Field, FieldSource, FieldType } from '../../model/index.js';
 import type { SerializedField } from '../../model/index.js';

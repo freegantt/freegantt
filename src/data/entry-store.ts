@@ -33,14 +33,14 @@ import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { StoredEdit, StoredEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { authoredEnvelopeKeysOf, readEditDetailed, readEntry } from './entry-reader.js';
+import { authoredEnvelopeKeysOf, toEditReading, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
   createFieldContext,
   mergeStoredEdits,
-  overlayStoredEdit,
+  entryAfterEdit,
   writeOntoEntry,
 } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -165,7 +165,7 @@ export class EntryStore implements EntryStoreContract {
     const committed = this.#byId.get(key);
     if (!committed) return undefined;
     const edit = this.#writeSet.edits.get(key);
-    return edit ? overlayStoredEdit(committed, edit) : committed;
+    return edit ? entryAfterEdit(committed, edit) : committed;
   }
 
   has(id: EntryId | string): boolean {
@@ -343,7 +343,7 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = readEntry(input, this.#context, 'entries.add');
+      const entry = toEntry(input, this.#context, 'entries.add');
       this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
@@ -361,7 +361,7 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
       const current = this.get(key)!;
-      const reading = readEditDetailed(edit, this.#context, current, this.#registry, 'entries.update');
+      const reading = toEditReading(edit, this.#context, current, this.#registry, 'entries.update');
       const stored = reading.stored;
       if (stored.segments !== undefined) {
         this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
@@ -415,7 +415,7 @@ export class EntryStore implements EntryStoreContract {
    *  plan R3, ADR 0010). `entries.remove` is a deliberate "delete this branch" call; losing a last
    *  bar to a `Delete` keypress is not the same request, so a child promotes to `id`'s own parent
    *  instead of disappearing with it. Otherwise the remaining Segments go through `update`, the
-   *  normal edit path, which recomputes the envelope around them itself (#212, finding 4: `readEdit`
+   *  normal edit path, which recomputes the envelope around them itself (#212, finding 4: `toStoredEdit`
    *  is the one owner) — this call names no `start` or `end` of its own, so there is nothing here
    *  that could disagree with them. */
   #removeSegmentsFrom(token: TxToken, id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
@@ -438,7 +438,7 @@ export class EntryStore implements EntryStoreContract {
       const edit: StoredEdit = {};
       // Deliberate exactOptionalPropertyTypes escape, same posture as `source-strategy.ts`'s meta
       // clear: an explicit `undefined` un-parents the child to the root, distinct from the key being
-      // absent, which `overlayStoredEdit` would then leave the child's parentId untouched by.
+      // absent, which `entryAfterEdit` would then leave the child's parentId untouched by.
       (edit as Record<string, unknown>)['parentId'] = parentId;
       this.stageUpdate(token, child.id, edit);
     }
@@ -523,7 +523,7 @@ export class EntryStore implements EntryStoreContract {
 
   /** `authoredEnvelopeKeys` names which of `start`/`end`/`segments` the caller itself wrote into
    *  `edit`, before any envelope reconciliation ran (#232) — `update()` below passes the fact
-   *  `readEditDetailed` already computed. A caller that stages a raw `StoredEdit` directly (a
+   *  `toEditReading` already computed. A caller that stages a raw `StoredEdit` directly (a
    *  same-transaction reparent, a test fixture) has done no such reconciliation, so the default —
    *  the triad-intersection of `edit`'s own keys — is exactly that edit's authored keys too. */
   stageUpdate(
@@ -536,7 +536,7 @@ export class EntryStore implements EntryStoreContract {
     const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
     const staged = writeSet.added.get(id);
     if (staged) {
-      const merged = overlayStoredEdit(staged, edit);
+      const merged = entryAfterEdit(staged, edit);
       writeSet.added.set(id, merged);
       if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, merged.segments);
       return;
