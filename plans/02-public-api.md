@@ -72,6 +72,8 @@ const gantt = new Gantt({
   interactions: {
     move: true,
     resize: t => t.kind !== 'group',      // boolean or per-entry predicate — see §4.1
+    edit: (t, field) =>                   // #256: the write rule names a cell, not an entry
+      t.id === 'fixed' && field === 'end' ? false : undefined,   // `undefined` = no opinion
     linkCreate: true,
   },
   viewportGestures: { wheelZoom: true },  // or `false` to turn wheel/keyboard pan+zoom off
@@ -396,7 +398,11 @@ barRenderer: {
 }
 ```
 
-**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+
+**`interactions.edit` names a cell, not an entry** (#256). Its predicate takes `(entry, field)`, because a write names one Entry and one Field — the changeset's own shape. It is the one override above `Field.editable` (§2.6), and the only per-entry axis that key has: a Field states which values are writable at all, and this states which of them are writable *here*. It answers for every writer at once — the cell editor, both resize handles, and the bar move — because all three write a cell. A predicate returns `undefined` for a cell it has no opinion about, and the rules below it decide that cell, so locking one End does not open every derived value on the page. A bare boolean pins every cell with no fall-through.
+
+**A gesture asks two questions, and needs both.** `move`/`resize`/`select` say whether the gesture is *offered*; `edit` says whether the values it writes *may change*. `move` writes `start` and `end`, so it needs both cells. `resize` writes the dragged edge's own Field. `select` writes nothing, so it never asks. This is why `resize: true` opens a handle the library would have closed and still cannot write a Field the consumer locked — to open that, open the Field, or answer `edit` for the cell.
 
 **Keyboard bindings on the Selection.** The full pane-scoped chord map is
 `plans/s5-extensibility-and-editing/s5.11-a11y-completion.md`'s D-S5-26; these two act on the
@@ -486,7 +492,7 @@ dataset.fields.all;                            // every declared Field, core inc
 
 An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
 
-**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142): `{ key: 'cost', editable: true }` opens both `inlineEditing()`'s cell editor for that field and a bar's drag-resize handle on it — one answer gates both (I14), so a consumer states it once. Default is `false`. Core's own `name`, `start` and `end` default to `true`, matching the resize a bar already allowed before this Field existed; overriding a core field's `editable` alone is legal (`{ key: 'end', editable: false }` closes it without redeclaring `end`'s source or rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name).
+**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256): `{ key: 'cost', editable: true }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too — one answer gates every writer (I14), so a consumer states it once. A Field states which values are writable at all; `interactions.edit` states which of them are writable on *which entry* (§4.1). Default is `false`. Core's own `name`, `start` and `end` default to `true`, matching the resize a bar already allowed before this Field existed; overriding a core field's `editable` alone is legal (`{ key: 'end', editable: false }` closes it without redeclaring `end`'s source or rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name).
 
 **Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
 
@@ -618,7 +624,7 @@ one file. A member declared in the wrong group does not compile.
 
 **A read seam is not a registration.** `ctx.view.resolveTooltipContent(entryId)` returns an
 `ElementDescription` — the tooltip's *body*, which `tooltips()` then mounts. It pairs with
-`ctx.view.resolveTooltipColumns(entry)` and `ctx.view.isColumnEditable(field)`. None of the three is
+`ctx.view.resolveTooltipColumns(entry)` and `ctx.interaction.canWrite(entry, field)` (#256). None of the three is
 gated: a plugin reads them for as long as it runs, not only while `setup` runs.
 
 ### 4.5 The plugin-to-DOM seam: `ctx.view.dom` and `ctx.view.onDomEvent`
