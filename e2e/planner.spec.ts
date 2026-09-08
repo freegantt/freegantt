@@ -27,7 +27,7 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const light = await paint(page);
-  await page.getByRole('button', { name: 'Graphite' }).click();
+  await page.getByRole('button', { name: 'Dark' }).click();
   await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'dark');
   const dark = await paint(page);
 
