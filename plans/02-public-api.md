@@ -309,42 +309,9 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | full `GanttPlugin` (see `01` §10): fields, decorations, columns, controllers, commands |
 
-Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a consumer turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`, **retired at S1.12** — migration: `--fg-header-height: 40px` on a two-band preset becomes `--fg-band-height: 20px`). The grid pane's spacer now mirrors one empty `.fg-band` per header band, so both panes size from `--fg-band-height`.
+Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — a property whose zero value would be nonsense (a zero-height row is not a row) rejects it; a property whose zero value is a real, intentional choice (a consumer turning the grid pane off) keeps it. Re-read cadence stays the caller's own choice, and is stated at each call site — some properties read once at construction, others read again on every pane measurement, none per render.
 
-**The complete level-1 `--fg-*` table (S1.10, D-S1.10-1/D-S1.10-9).** A consumer with no CSS of its own gets these defaults; every one is overridable by setting the same property on the container element, which `view/styles.ts`'s `var(--fg-x, default)` always prefers over its own fallback (U4). Metrics are read through `pixel-property.ts` (above); colour tokens are plain CSS custom properties consumed directly by the base stylesheet's class rules — no JS reads them.
-
-| Token | Default (light) | Default (dark) | Read by |
-|---|---|---|---|
-| `--fg-row-height` | `32px` | — (not theme-dependent) | `pixel-property.ts`, re-read on pane measurement |
-| `--fg-grid-pane-width` | `220px` | — | `pixel-property.ts`, read once at construction |
-| `--fg-splitter-width` | `4px` | — | `pixel-property.ts` |
-| `--fg-band-height` | `20px` | — | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12) |
-| `--fg-tick-box-floor` | `9px` | — | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
-| `--fg-diamond-size` | `10px` | — | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph (bug hunt, S5 fixes) |
-| `--fg-bar-min-width` | `12px` | — | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every kind's own painted-span floor, `max`'d against a milestone's diamond floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched (#212 follow-up) |
-| `--fg-bar-radius` | `3px` | — | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
-| `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background |
-| `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
-| `--fg-header-bg` | `#F4F2EC` | `#22252B` | `.fg-header` background |
-| `--fg-header-band-bg` | `#FFFFFF` | `#1B1D22` | `.fg-band` background |
-| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text |
-| `--fg-header-subtext` | `#9A958B` | `#6E6A62` | `.fg-tick` text |
-| `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands |
-| `--fg-row-even-bg` | `transparent` | `transparent` | `.fg-row:nth-child(even)` |
-| `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` |
-| `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text |
-| `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
-| `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
-| `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
-| `--fg-date-line-color` | `#DC2626` | `#F87171` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
-| `--fg-selection-color` | `oklch(.55 .19 25)` | `oklch(.75 .19 25)` | `.fg-bar[data-state~="selected"]` outline; pending uses the same token, dotted |
-| `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
-| `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
-
-Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S5, D-S1.10-9).
-
-**`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted` (T1-1): `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. The bracket and diamond renderers paint from `--fg-bar-fill-painted` too, so one token dims every bar shape the same way. The mix rule lives on `.fg-bar` itself, not on `.fg-container` (#245 S1-4). A `barRenderer` that overrides `--fg-bar-fill` on one bar element sees its own override in the mix, because the read and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container` and inherits down unchanged, so one setting still covers every bar.
+**The complete level-1 `--fg-*` reference — every token, its light/dark defaults, what reads it, and the retired/renamed tokens' migration notes — moved to [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (issue #221).** Level 1 stays documented here as a level of the ladder; the token-by-token values are a reference that drifts out of date faster than this design statement does, so they live beside the rest of the consumer-facing surface instead.
 
 **`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
 
