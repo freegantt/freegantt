@@ -246,6 +246,9 @@
          an `--fg-x-*` token: a gap the design flags, not one the library fills). */
       .demo-weekend-band {
         background: var(--demo-weekend-bg);
+        /* The design paints this overlay at 0.55 (DESIGN-FACTS §1.2). At full strength it swallows
+           the grid line on its trailing edge, which is exactly where every week boundary falls. */
+        opacity: 0.55;
       }
 
       /* ---- The toolbar (DESIGN-FACTS §5) ----------------------------------------------------- */
