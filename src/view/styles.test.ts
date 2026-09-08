@@ -183,7 +183,7 @@ describe('ensureBaseStyles', () => {
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
-    expect(getComputedStyle(bar as Element).color).toBe('#10131A');
+    expect(getComputedStyle(bar as Element).color).toBe('#16181D');
     shell.destroy();
   });
 });
