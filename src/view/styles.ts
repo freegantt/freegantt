@@ -308,7 +308,17 @@ ${DARK_COLOR_TOKENS}
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
 .fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
-.fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill-painted); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill-painted); }
+/* DESIGN-FACTS §2.4: a group bar is a solid rail 10px high in the row's own label ink, with a 4px
+   downward cap at each end — not an outline box at full bar height, which shouted over every span
+   bar under it. The box keeps the full bar height because that is the hit target; only the glyph
+   inside it is ink, so both pieces read --fg-group-bar-ink and a state can swap that one value.
+   --fg-group-bar-height is an undeclared knob with a default, the shape --fg-bar-radius takes. */
+.fg-bar-bracket { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
+.fg-bar-bracket::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
+/* One 8x4 cap per end, hung off the rail's bottom edge. The wedge of a conic gradient whose apex
+   sits at the tile's bottom centre is the same downward triangle the design draws with a border
+   trick — and a border trick needs an element of its own, which a rail with two ends does not have. */
+.fg-bar-bracket::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
 /* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
    barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
    — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
@@ -338,6 +348,14 @@ ${DARK_COLOR_TOKENS}
    an outline flush against the fill would nearly vanish into it. The offset moves the ring onto the
    pane beside the bar, where it reads against a different colour. */
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
+/* A group bar's box is its hit target, not its ink: the shared outline and the shared inset ring
+   would both frame a full-height rectangle of empty pane around a 10px rail. So the state paints on
+   the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no outer
+   border at all — and hovered rings the rail alone. Both need the box's own state paint cancelled
+   first, and they sit after the shared rules so equal specificity resolves this way. */
+.fg-bar-bracket[data-state~="hovered"], .fg-bar-bracket[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-bracket[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
+.fg-bar-bracket[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }
