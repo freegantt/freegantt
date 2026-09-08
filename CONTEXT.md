@@ -548,6 +548,15 @@ every kind, so it refuses, and is refused by, any per-kind claim.
 _Avoid_: Renderer point as a synonym (a point is `bar`/`cell`/`header`/`tooltip`; a slot is what one
 registration holds, and the `bar` point holds many)
 
+**Decoration**:
+A pure paint a plugin adds without owning an Item or a Renderer slot — a weekend band, a row
+stripe (`layout/decoration.ts`'s `DecorationInput`, D-S5-15). `ctx.view.registerDecoration(layer,
+provider)` registers a `DecorationProvider`, a function of the visible span and rows that states
+time or a `RowId`, never pixels; `layout/decorations.ts` converts through the bound `TimeScale`
+(I12), so a shared axis keeps every Decoration in step. `layer` picks `underBars` or `overBars`,
+and several providers on one layer all paint, in registration order.
+_Avoid_: Overlay, band (both name one _kind_ of Decoration's shape, not the registration mechanism)
+
 **GanttPlugin**:
 The public extension contract: an `id` plus a `setup(ctx)` that returns a `Disposer`, or nothing.
 A plugin returns one only for a resource it owns itself — a timer, a socket, a subscription of its
@@ -557,8 +566,6 @@ _Avoid_: Extension (Extensions is the name of the source layer that runs plugins
 
 **PluginContext**:
 The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint). Every `register*` on it returns a `Disposer` and lives exactly as long as the plugin does; collisions resolve by one policy per seam shape (`plans/02` §4.4, and the Registration table entry above). `view/plugin-ports.ts` declares the whole shape, grouped the way a plugin reads it (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`); `api/gantt.ts` adds `dataset` and `gantt` and nothing else, so a new seam is one edit in one file.
-_Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
-
 **Plugin ports**:
 What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns — the **`PluginContextParts`** — plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
 _Avoid_: `PluginContextPorts` (renamed 2026-09-05, issue #183 — `api/index.ts` exports that member
@@ -587,11 +594,18 @@ _Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing 
 
 **DatasetPlugin**, **EditExtender**, **PluginStore**:
 Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Landed in S5.10 (#15, #156). `DatasetPlugin` and its context live in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
-_Avoid_: Treating these as settled — the exact shapes are still open design work
 
 **PluginRuntime**:
 The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `GanttPlugin` list (S5.1, D-S5-1/D-S5-3). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `setup()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `setup()` throw unwinds only the batch just added, leaving the previously installed set untouched.
 _Avoid_: PluginHost (retired — "Host" is repo-wide retired vocabulary, see Consumer)
+
+**Command**:
+One named, invokable action a `CommandRegistry` holds — `id`, an optional `label`, an optional
+`when(ctx)` that gates whether it runs right now, and `run(ctx)` (`api/command.ts`'s `CommandOf`,
+S5.2, D-S5-6). The library's own core catalog and a plugin's own commands are both just Commands;
+a context menu item and a keybinding both resolve to one, so either can invoke the same action.
+_Avoid_: Action (too generic — this repo's own word for one is Command), Menu item (a context menu
+item is one _use_ of a Command, not the Command itself)
 
 **Command registry**:
 The `extensions/commands.ts` class (`CommandRegistry`) a `GanttShell` builds once and holds privately: `register`/`run`/`available`, keyed by a command's own `id` under the `freegantt.*`-namespaced core catalog (`view/core-commands.ts`) or a plugin's own id (D-S5-6). Public as `Gantt.commands`, typed against the api-level `CommandRegistryOf`. `run()` on a command whose `when` declines is a silent no-op, the same posture a disabled menu item takes; `run()` on an unknown id throws.
@@ -608,6 +622,10 @@ _Avoid_: Overlay handle (retired — a one-field wrapper is the inner type, so `
 **Overlay**:
 One absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime (S5.3, D-S5-8). It is the Mount layer that **escapes the pane box**, which is the whole difference from the Row layer. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over. Geometry and identity are the Gantt DOM's, not the Overlay's: `bounds`, `paneBounds`, `contains` and `elementForEntry` moved to `ctx.view.dom` in 2026-09-04's review (N1), because `overlay.elementForEntry(id)` returned a timeline bar that was never in the overlay — one word covering two concepts, the #7 failure. The layer's _own_ rect is the exception, and stayed with it (`overlay.bounds`, #168).
 _Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack); reading `Overlay` as "everything positioned about the Gantt" (that is the Gantt DOM)
+
+**OverlayHost** (retired name):
+The plan-stage name for this layer, before S5.3 shipped it (`plans/s5-extensibility-and-editing/s5.3-overlay-and-popup.md`). It shipped as the **Overlay** instance of the shared **Mount layer** shape instead, so a plugin author names `MountLayer`/`ctx.view.overlay`, never `OverlayHost`.
+_Avoid_: Treating this as the shipped name — see Overlay, Mount layer
 
 **Gantt DOM**:
 This Gantt's own rendered DOM, read as questions (`view/gantt-dom.ts`'s `GanttDom`, `ContainerDom`; public as `ctx.view.dom`). Three of them: `owns(node)` — is this event mine (I2); `targetUnder(node)` — what is this node; `barFor(id)` / `cellFor(id, field)` — where is this entry's element. It also carries `bounds`, `paneBounds` and `cellText(cell)`. It exists because `extensions/` may not import `render/` (D-S5-5), so every class name crossing that boundary is a contract: `render/dom/dom-contract.ts` declares them, `view/gantt-dom.ts` is the only reader, and `view/gantt-dom.test.ts` paints a real frame and asserts the two still agree. Before it, a plugin retyped eight `.fg-*` selectors and three `data-*` keys, and a rename broke every plugin with a green build.

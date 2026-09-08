@@ -209,7 +209,13 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S5 — Extensibility, editing surfaces, a11y completion
 
-**Position:** after S4, before S6. **Spec drafted, not started.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.13-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.13-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+**Position:** after S4, before S6. **Done, gate passing.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.13-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.13-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+
+**Scope calls that changed this slice's own scope, settled in [`s5.13-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.13-gallery-and-gate.md):**
+
+- The `features: { tooltips: true, ... }` name table this section first sketched never shipped. A plugin is a value, not a name in a table: `Gantt.plugins` and `Dataset.plugins` each take an array of factories (`plugins: [tooltips(), contextMenu({...})]`), so an unused feature costs zero bundle bytes because nothing names it (D-S5-2, gate `[S5-A6]`).
+- The entry editor is a plugin, not a core feature. `inlineEditing()` ships from `extensions/features/` and installs through `Gantt.plugins`, the same route `tooltips()` and `contextMenu()` take — proof that the dogfood rule (`[S5-A1]`) covers editing too.
+- `registerField` moved host. A Gantt plugin's `PluginContext` no longer carries it: a Gantt plugin shows a Field through `view.registerGridColumn` alone, and only a Dataset plugin declares a Field, through `ctx.fields.register` on the Dataset plugin contract S5.10 shipped (`01` §10.2).
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
@@ -228,12 +234,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
-- [ ] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
-- [ ] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
-- [ ] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
-- [ ] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
+- [x] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
+- [x] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
+- [x] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [x] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [x] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
+- [x] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
 
