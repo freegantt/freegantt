@@ -313,12 +313,12 @@ ${DARK_COLOR_TOKENS}
    bar under it. The box keeps the full bar height because that is the hit target; only the glyph
    inside it is ink, so both pieces read --fg-group-bar-ink and a state can swap that one value.
    --fg-group-bar-height is an undeclared knob with a default, the shape --fg-bar-radius takes. */
-.fg-bar-bracket { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
-.fg-bar-bracket::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
+.fg-bar-summary { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
+.fg-bar-summary::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
 /* One 8x4 cap per end, hung off the rail's bottom edge. The wedge of a conic gradient whose apex
    sits at the tile's bottom centre is the same downward triangle the design draws with a border
    trick — and a border trick needs an element of its own, which a rail with two ends does not have. */
-.fg-bar-bracket::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
+.fg-bar-summary::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
 /* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
    barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
    — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
@@ -353,9 +353,9 @@ ${DARK_COLOR_TOKENS}
    the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no outer
    border at all — and hovered rings the rail alone. Both need the box's own state paint cancelled
    first, and they sit after the shared rules so equal specificity resolves this way. */
-.fg-bar-bracket[data-state~="hovered"], .fg-bar-bracket[data-state~="selected"] { outline: none; box-shadow: none; }
-.fg-bar-bracket[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
-.fg-bar-bracket[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
+.fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
+.fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
 /* A diamond's box is its hit target, not its ink, exactly as a group bar's is: the shared outline
    frames a full-height rectangle of empty pane around a glyph the size of a checkbox. Both states
    paint on the glyph, where they ring the rotated shape itself. Same running order as the rail's —

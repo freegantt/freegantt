@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 async function paint(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
     const spanBar = document.querySelector<HTMLElement>(
-      '#gantt .fg-bar:not(.fg-bar-bracket):not(.fg-bar-diamond)',
+      '#gantt .fg-bar:not(.fg-bar-summary):not(.fg-bar-diamond)',
     )!;
     return {
       bar: getComputedStyle(spanBar).backgroundColor,
@@ -54,7 +54,7 @@ test('the cells the design draws as pictures are real rendered nodes', async ({ 
 
   // A phase is a group bracket, a checkpoint is a diamond — both the library's own shapes, from
   // `entry.kind`, recoloured by the renderer and not redrawn by it.
-  await expect(page.locator('#gantt .fg-bar-bracket').first()).toBeVisible();
+  await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
   await expect(page.locator('#gantt .fg-bar-diamond').first()).toBeVisible();
 
   // The progress meter is described, not two anonymous divs.

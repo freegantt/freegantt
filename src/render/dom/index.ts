@@ -202,7 +202,7 @@ type BarGeom = Pick<
 };
 /** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
 const BAR_SHAPE_CLASS = Object.freeze({
-  group: 'fg-bar-bracket',
+  group: 'fg-bar-summary',
   milestone: 'fg-bar-diamond',
 }) as Readonly<Record<string, string>>;
 

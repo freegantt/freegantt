@@ -14,7 +14,7 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
     const headerBottom = header?.getBoundingClientRect().bottom ?? pane.getBoundingClientRect().top;
     const paneRect = pane.getBoundingClientRect();
     for (const bar of Array.from(pane.querySelectorAll<HTMLElement>('.fg-bar'))) {
-      if (bar.classList.contains('fg-bar-bracket')) continue;
+      if (bar.classList.contains('fg-bar-summary')) continue;
       const rect = bar.getBoundingClientRect();
       if (rect.top < headerBottom + 1) continue;
       if (rect.bottom > paneRect.bottom) continue;
@@ -98,7 +98,7 @@ async function unobstructedBars(page: import('@playwright/test').Page, count: nu
     const found: string[] = [];
     for (const bar of Array.from(pane.querySelectorAll<HTMLElement>('.fg-bar'))) {
       if (found.length >= wanted) break;
-      if (bar.classList.contains('fg-bar-bracket')) continue;
+      if (bar.classList.contains('fg-bar-summary')) continue;
       const rect = bar.getBoundingClientRect();
       if (rect.top < headerBottom + 1) continue;
       if (rect.bottom > paneRect.bottom) continue;

@@ -6,7 +6,7 @@ test.describe('theme (system dark)', () => {
   test('Light pins the Gantt pane to the light tokens, Dark pins the dark tokens', async ({ page }) => {
     await page.addInitScript(() => localStorage.removeItem('freegantt-harness-theme'));
     await page.goto('/');
-    const bar = page.locator('#gantt .fg-bar:not(.fg-bar-bracket):not(.fg-bar-diamond)').first();
+    const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary):not(.fg-bar-diamond)').first();
     await expect(bar).toBeVisible();
 
     const pane = page.locator('#gantt .fg-timeline-pane');
