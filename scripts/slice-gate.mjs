@@ -57,6 +57,14 @@ export function tagged(id, runners, label, { runnerImpls = RUNNERS, existsOption
   };
 }
 
+/** `[S5-A1]` is the dogfood gate (D-S5-5), and its claim has two halves that only mean something
+ * together: the lint proves `extensions/` reaches nothing but `api/` and `model/`, and the feature
+ * tests prove a built-in still does its whole job from that surface. A green lint over a plugin
+ * that does nothing proves nothing, so the one line runs both. */
+export function provenByLintAndTests(check, lint = () => run('pnpm boundaries')) {
+  return { label: check.label, run: () => lint() && check.run() };
+}
+
 const GATES = {
   S0: {
     name: 'S0 → S1',
@@ -201,6 +209,34 @@ const GATES = {
       tagged('S4-A11', ['vitest'], "{ source: 'custom', resolve } produces the resolver's rows"),
     ],
     human: ['HUMAN: harness/hierarchy.html is pokeable — row sources, pack, filter, collapse, cost + undo'],
+  },
+  S5: {
+    name: 'S5 → S6',
+    checks: [
+      provenByLintAndTests(
+        tagged('S5-A1', ['vitest'], 'every built-in feature is a plugin over the public surface alone'),
+      ),
+      tagged('S5-A2', ['e2e'], 'weekend shading draws, follows a pan, and clears when removed live'),
+      tagged('S5-A3', ['vitest'], "a consumer's own kind renders and refuses resize; no src/ file names it"),
+      tagged(
+        'S5-A4',
+        ['vitest', 'e2e'],
+        'chord-map parity with the pointer; axe finds nothing on any gallery page',
+      ),
+      tagged(
+        'S5-A5',
+        ['vitest', 'e2e'],
+        'a cell edit commits one transaction; beforeEntryEdit replaces the editor',
+      ),
+      {
+        // The two halves of D-S5-28, and the reason there are two: the probe catches a built-in an
+        // accidental import drags in, and the budget catches growth no single import causes. The
+        // build runs first because both read `dist/`, the path a third party's bundler resolves.
+        label: '[S5-A6] no unused built-in reaches a consumer bundle, and core does not grow past its budget',
+        run: () => run('pnpm build') && run('pnpm bundle-probe') && run('pnpm size-limit'),
+      },
+    ],
+    human: ['HUMAN: the gallery, opened cold, explains the library to someone who has never seen it'],
   },
 };
 

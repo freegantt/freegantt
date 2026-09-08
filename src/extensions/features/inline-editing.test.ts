@@ -194,7 +194,7 @@ function escape(el: HTMLElement): void {
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 }
 
-describe('inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
+describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
   it('double-click on an editable text cell opens a seeded input', () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e1', 'name'));

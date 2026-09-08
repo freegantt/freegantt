@@ -59,7 +59,7 @@ function menuItems(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>('.fg-menu-item'));
 }
 
-describe('contextMenu() (S5.5, D-S5-13/14)', () => {
+describe('[S5-A1] contextMenu() (S5.5, D-S5-13/14)', () => {
   it('right-click opens the menu at the pointer', () => {
     const { container, gantt } = makeGantt();
 

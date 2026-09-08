@@ -25,7 +25,9 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
 // [S5-A2]: harness/plugins.html installs weekendShading() — harness/plugins/weekend-shading.ts,
 // written against the public 'freegantt' entry alone (D-S5-15/D-S5-16). Bands appear, follow a
 // pan, and the page's own checkbox removes the plugin live (no core edit either way).
-test('weekend bands appear, follow a pan, and a checkbox removes the plugin live', async ({ page }) => {
+test('[S5-A2] weekend bands appear, follow a pan, and a checkbox removes the plugin live', async ({
+  page,
+}) => {
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
