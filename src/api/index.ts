@@ -138,7 +138,6 @@ export type {
 // entry, and `WriteVerdict` is what `ctx.interaction.canWrite` hands a plugin back.
 export type {
   CapabilityRule,
-  GestureCapability,
   Interactions,
   KindDefaults,
   WriteRefusalReason,

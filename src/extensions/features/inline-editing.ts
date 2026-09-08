@@ -80,8 +80,14 @@ function isDateField(field: Field): boolean {
  *  The cell keeps refusing, because an editor over it can only fail on commit.
  *
  *  This names `start` and `end` by key, as `isDateField` above already does for the same two core
- *  Fields. That repeats a rule `data/` also holds. One owner would be better, and the library still
- *  has no public "can this Field be written on this Entry?" question to be that owner. */
+ *  Fields. That repeats a rule `data/` also holds.
+ *
+ *  #256 added the library's own write question, `ctx.interaction.canWrite`. This rule stays out of
+ *  it, on purpose. A drag on a segmented bar writes `segments` and a recomputed envelope, so it
+ *  writes these two keys legally. Only a *direct* envelope write is refused.
+ *
+ *  So this is a rule about which door, not about whether the value may change. Folding it into
+ *  `canWrite` would take the handles off every segmented bar. */
 function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
   if (entry.segments.length <= 1) return false;
   return field.key === 'start' || field.key === 'end';

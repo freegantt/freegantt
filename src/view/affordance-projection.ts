@@ -31,7 +31,7 @@ export interface AffordanceIds {
    *  the frame it synced, the same way the Selection paints (#185). */
   resizableEntryId?: EntryId;
   /** #142: which of `resizableEntryId`'s two handles may resize, independently — a Field's own
-   *  `editable` can close `end` while leaving `start` open (or the reverse). Present exactly when
+   *  one write answer can close `end` while leaving `start` open, or the reverse. Present exactly when
    *  `resizableEntryId` is; a backend hides a handle whose own edge answers `false` here even while
    *  the other one still paints. */
   resizableEdges?: { start: boolean; end: boolean };

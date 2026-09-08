@@ -1183,9 +1183,6 @@ export type GanttScaleOptions = {
 };
 
 // @public
-export type GestureCapability = 'move' | 'resize' | 'select';
-
-// @public
 export type GridColumn = GridColumnBase & GridColumnSizing;
 
 // @public
@@ -2188,7 +2185,7 @@ export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: Er
 export function wholeEntryItem(entry: Entry): Item;
 
 // @public
-export type WriteRefusalReason = 'derived-value';
+export type WriteRefusalReason = Extract<BuiltInErrorCode, 'derived-value'>;
 
 // @public
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);

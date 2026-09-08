@@ -52,6 +52,16 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
  *  Field is the library's own — it cannot be redeclared — but this one key is a fact about the
  *  Dataset, not about the Field's identity, so a consumer may still state it. The next key added
  *  here is the whole change; nothing else in `#mergeCoreFieldOverride` needs to know its name. */
+/** Does this Field take part in the Rollup? `'none'` is a declared opt-out, not an absent key
+ *  (`register({ key: 'locked', rollUp: 'none' })`), so an absent key and an opted-out one both
+ *  answer `false`. One predicate, because two readers ask: the Rollup pass itself, and #256's
+ *  `canWrite`, which refuses a roll-up parent's rolling-up cell and must refuse exactly the set the
+ *  pass would overwrite. Two spellings of this test disagreed on `'none'`, and the cell then said
+ *  "this value comes from the rows below it" about a value nothing rolls up. */
+export function rollsUp(field: Field): boolean {
+  return field.rollUp !== undefined && field.rollUp !== 'none';
+}
+
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable'] as const;
 
 /** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
@@ -190,9 +200,7 @@ export class FieldRegistry {
 
   /** Fields that participate in the Rollup after type merge (D-S4-3). */
   rollingUpFields(): readonly RollingUpField[] {
-    return this.all.filter(
-      (field): field is RollingUpField => field.rollUp !== undefined && field.rollUp !== 'none',
-    );
+    return this.all.filter((field): field is RollingUpField => rollsUp(field));
   }
 
   valuesEqual(key: string, from: unknown, to: unknown): boolean {

@@ -1,14 +1,15 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 
-// #256: one answer decides whether a cell's value may change, and every writer asks it — the inline
-// cell editor, the bar's two resize handles, and the bar move. A unit test can prove the resolution
-// agrees with itself. Only a browser can prove the wiring does: that the handle a real engine paints
-// is the same edge a real drag is allowed to write. That gap is what #256 filed, and #255 is the
-// reason it matters — the one regression #142's own merge produced was invisible to `pnpm verify`
-// and caught only here.
+// #256: one answer decides whether a cell's value may change. Every writer asks it: the inline cell
+// editor, the bar's two resize handles, and the bar move.
 //
-// `/`'s own page pins one row's finish date (`harness/main.ts`). It refuses that row's `end`, and
-// nothing else on the page, so the resize demo the same page exists for keeps working.
+// A unit test proves the resolution agrees with itself. Only a browser proves the wiring does. The
+// handle a real engine paints must be the same edge a real drag may write. That gap is what #256
+// filed. #255 is why it matters: the one regression #142's own merge produced never reached
+// `pnpm verify`, and only the browser suite caught it.
+//
+// `/` pins one row's finish date (`harness/main.ts`). It refuses that row's `end` and nothing else,
+// so the resize demo the same page exists for keeps working.
 
 declare global {
   interface Window {
@@ -19,9 +20,10 @@ declare global {
 }
 
 /** Opens `/` and brings the pinned row into view. The page names which row it pinned, so this file
- *  hardcodes no fixture row — a fixture edit moves the pin and every test below follows it. Only the
- *  windowed rows reach the DOM (I3), so the row is revealed through the public `gantt.reveal` rather
- *  than searched for among whatever happens to be painted. */
+ *  hardcodes no fixture row. A fixture edit moves the pin, and every test below follows it.
+ *
+ *  Only the windowed rows reach the DOM (I3). So this reveals the row through the public
+ *  `gantt.reveal`, rather than search whatever happens to be painted. */
 async function openPinnedRow(page: Page): Promise<{ bar: Locator; entryId: string }> {
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -34,8 +36,8 @@ async function openPinnedRow(page: Page): Promise<{ bar: Locator; entryId: strin
   return { bar, entryId };
 }
 
-/** The committed span, read back through the public Dataset — the ground truth for what a drag
- *  wrote, as opposed to what a bar's own (possibly stale) box reports. */
+/** The committed span, read back through the public Dataset. It is the ground truth for what a drag
+ *  wrote. A bar's own box can be stale, and reports geometry rather than a write. */
 async function committedSpan(page: Page, entryId: string): Promise<{ start: number; end: number }> {
   return page.evaluate((id) => {
     const entry = window.__dataset.entries.get(id)!;
@@ -53,8 +55,8 @@ test('a pinned end paints no end handle, and still paints the start handle', asy
 
   await hover(page, bar);
 
-  // The start edge writes `start` alone, which this row never pinned, so its handle still paints.
-  // That is the half that makes this a real refusal rather than a dead row.
+  // The start edge writes `start` alone, and this row never pinned that. So its handle still
+  // paints. That half is what makes this a real refusal rather than a dead row.
   await expect(page.locator('.fg-bar-handle[data-edge="start"]')).toBeVisible();
   await expect(page.locator('.fg-bar-handle[data-edge="end"]')).toBeHidden();
 });
@@ -64,9 +66,9 @@ test('a drag at a pinned end edge commits nothing', async ({ page }) => {
   const before = await committedSpan(page, entryId);
   const box = (await bar.boundingBox())!;
 
-  // Drags from the bar's own visible right edge, not from a handle's box — a user grabs the edge
-  // they can see. Here there is no handle to grab at all, which is the point: the drag must find
-  // nothing to arm, rather than arm a move that writes the pinned date anyway.
+  // Drags from the bar's own visible right edge, not from a handle's box. A user grabs the edge
+  // they can see. Here no handle exists to grab, which is the point. The drag must find nothing to
+  // arm, rather than arm a move that writes the pinned date anyway.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.move(box.x + box.width, box.y + box.height / 2);
   await page.mouse.down();
@@ -98,9 +100,10 @@ test('the start edge of a pinned row still resizes and commits', async ({ page }
   await page.mouse.move(box.x, box.y + box.height / 2);
   await page.mouse.down();
   // Inward, the same direction `resize.spec.ts` drags a start edge. The delta is a third of the
-  // bar's own width, which clears the preset's snap unit at any zoom this page opens at — a drag
-  // that snaps back to the day it started on commits nothing, and would look exactly like the three
-  // refusals above, so this control would then prove nothing.
+  // bar's own width. That clears the preset's snap unit at any zoom this page opens at.
+  //
+  // A smaller drag can snap back to the day it started on and commit nothing. That looks exactly
+  // like the three refusals above, and this control would then prove nothing.
   await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2, { steps: 5 });
   await page.mouse.up();
 
@@ -120,4 +123,22 @@ test('a pinned cell refuses the inline editor, and its neighbour still opens one
   // The same row's Start is untouched, so the page proves the refusal is one cell wide.
   await row.locator('[data-field="start"]').first().dblclick();
   await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(1);
+});
+
+// The other half of the same answer, and the blunt one: `/data.html` declares End read-only for the
+// whole Dataset through the core-Field override #142 shipped (`fields: [{ key: 'end', editable:
+// false }]`). That path had no harness call site at all until now, and no browser ever drove it.
+// Nothing on that page resizes a bar, so the lock costs the page nothing.
+test('a Field declared read-only closes the end handle on every row', async ({ page }) => {
+  await page.goto('/data.html');
+  const bars = page.locator('#gantt .fg-bar');
+  await expect(bars.first()).toBeVisible();
+
+  // Hover each painted bar in turn: one row that still offered an end handle would fail this.
+  for (let i = 0; i < (await bars.count()); i++) {
+    const box = await bars.nth(i).boundingBox();
+    if (box === null) continue;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator('.fg-bar-handle[data-edge="end"]')).toBeHidden();
+  }
 });

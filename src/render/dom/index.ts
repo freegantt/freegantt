@@ -434,7 +434,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
    *  `.style` — the base stylesheet owns `[hidden] { display: none }`.
    *
-   *  #142: `edges` hides one handle independently of the other — a Field's own `editable` can close
+   *  #142/#256: `edges` hides one handle independently of the other — one write answer can close
    *  `end` while `start` still drags. Default both open, so a caller with nothing to say about edges
    *  (there is none left in this file, but a future one might arrive with `bars` alone) still shows
    *  a whole pair, matching the pre-#142 pair-only behaviour. */
