@@ -67,11 +67,9 @@ test('the timeline zebra paints in dark mode, in the same colour as the grid', a
     };
   });
   expect(striped.band).toBe(striped.row);
-  // The dark theme's --fg-row-odd-bg, as the browser rounds it — a light tint, not the light
-  // theme's dark one, which is what left the timeline looking unstriped in dark mode. The tint is
-  // the theme's own ink rather than pure white, so the zebra sits in the same blue-shifted family
-  // as the ground it stripes.
-  expect(striped.band).toBe('rgba(232, 236, 243, 0.04)');
+  // The dark theme's --fg-row-odd-bg — a stripe lighter than the pane it sits on (#1B1D22), not
+  // the light theme's darker one, which is what left the timeline looking unstriped in dark mode.
+  expect(striped.band).toBe('rgb(32, 35, 42)');
 });
 
 test('the last row scrolls fully into view — the pane scrolls its header as well as its rows', async ({

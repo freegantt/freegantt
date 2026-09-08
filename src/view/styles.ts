@@ -11,14 +11,21 @@
 // new `freegantt/no-inline-style-outside-geometry` lint rule leaves `transform`/`width`/`height` as the
 // only properties still legitimately written inline.
 //
-// The colour defaults are a cool, blue-shifted drawing-sheet palette: a white chart sheet on a light
-// grey ground, and a deep indigo-slate in the dark theme. They replace the warm cream set D-S1.10-9
-// first shipped. Two reasons. The warm ground clashed with any app shell that is not also warm, and a
-// library's defaults have to sit inside somebody else's page. And the old --fg-selection-color was a
-// red within a few degrees of --fg-date-line-color, so a selected row and a date line were the same
-// paint — the selection is violet now, a hue nothing else in the sheet claims. Colour carries meaning
-// here and each meaning gets its own hue: blue is data, vermilion marks time, amber warns, violet is
-// what the user picked.
+// Colour carries meaning here and each meaning gets its own hue: blue is data, vermilion marks time,
+// amber warns, violet is what the user picked, cyan is what the keyboard focused. Nothing else on the
+// sheet claims any of the five, so a reader never has to ask which of two meanings a colour states.
+//
+// The values are the `Gantt demo sandbox rebuild` design's Light and Graphite token sets (its
+// Graphite is this sheet's `dark` — one name per concept, and `dark` is the one the public `Theme`
+// type already publishes). The greys carry a trace of yellow, under 0.02 saturation: warm enough that
+// the sheet sits inside a document page without reading as a screenshot, neutral enough that it does
+// not fight a cold page around it. Dark inverts the bar to the light end of the same blue and gives it
+// dark labels, which is what buys its 9:1 label contrast, and lifts all five meaning hues together so
+// their separation survives the move.
+//
+// --fg-bar-opacity is 1, not the 0.9 this sheet shipped before. At 0.9 the light theme's bar label
+// measured about 4.1:1 against its own fill, under the 4.5:1 floor; the softening moved into the fill
+// itself, which is a colour the theme controls, instead of an opacity that erodes the label with it.
 //
 // Theme tokens live on `.fg-container`. `theme: 'light'|'dark'` writes `data-fg-theme` on that
 // container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
@@ -30,22 +37,28 @@ const MARKER_ATTR = 'data-freegantt-styles';
 
 const LIGHT_COLOR_TOKENS = `
   --fg-pane-bg: #FFFFFF;
-  --fg-splitter-color: #DDE2E9;
-  --fg-header-bg: #EEF1F5;
-  --fg-header-band-bg: #FFFFFF;
-  --fg-header-text: #16191F;
-  /* #79828F on white read 3.88:1 (axe color-contrast, S5.11) — under the 4.5:1 floor for normal
-     text. #646D7B on white measures 5.23:1. */
-  --fg-header-subtext: #646D7B;
-  --fg-header-divider-color: #DDE2E9;
+  --fg-splitter-color: #E6E2D9;
+  --fg-header-bg: #FFFFFF;
+  --fg-header-band-bg: #F4F2EC;
+  --fg-header-text: #1A1815;
+  /* 6.1:1 on --fg-header-band-bg, the surface a tick label actually sits on (axe color-contrast,
+     S5.11) — the 4.5:1 floor for normal text. */
+  --fg-header-subtext: #5E5A53;
+  --fg-header-divider-color: #E6E2D9;
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(22, 25, 31, 0.03);
-  --fg-row-label-color: #16191F;
-  --fg-row-unmatched-label-color: #79828F;
-  --fg-bar-fill: oklch(0.52 0.14 248);
+  --fg-row-odd-bg: #FAF8F2;
+  --fg-row-label-color: #1A1815;
+  /* Deliberately only a little past the floor (4.9:1 on the pane): dim enough to read as filtered
+     out, still legible. */
+  --fg-row-unmatched-label-color: #757068;
+  --fg-bar-fill: oklch(0.49 0.13 248);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #B4690E;
-  --fg-date-line-color: #CF3B26;
+  /* The design states #CF3B26. A Date line label sits in a header band, and this theme paints that
+     band cream (--fg-header-band-bg) where the old one painted it white — #CF3B26 reads 4.36:1
+     there, under the 4.5:1 floor (axe color-contrast, S5.11). #C93820 is the same vermilion two
+     steps darker: 4.61:1 on the band, 5.16:1 on the pane the stroke itself crosses. */
+  --fg-date-line-color: #C93820;
   /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
      selection outline invisible against it. It must also stay clear of --fg-date-line-color and
      --fg-warn, which is what the old hue-25 red failed — it landed within a few degrees of the date
@@ -55,35 +68,37 @@ const LIGHT_COLOR_TOKENS = `
   --fg-selection-color: oklch(0.55 0.20 305);
   /* S5.11, D-S5-25/D-S5-26: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
      bar/header-cell/splitter reads as "focused" and never as "selected" (--fg-selection-color) or
-     "conflict"/"pending" (--fg-warn). Cyan sits clear of every other hue this sheet already claims. */
+     "conflict"/"pending" (--fg-warn). Cyan sits clear of every other hue this sheet already claims.
+     The design carries no focus hue of its own, so this pair stays as S5.11 set it. */
   --fg-focus-ring: oklch(0.62 0.16 220);
   --fg-popup-bg: #FFFFFF;
-  --fg-popup-border: #DDE2E9;
-  --fg-popup-shadow: 0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22);
+  --fg-popup-border: #E6E2D9;
+  --fg-popup-shadow: 0 8px 24px rgb(26 24 21 / 0.12);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
-  --fg-pane-bg: #171B22;
-  --fg-splitter-color: #262C36;
-  --fg-header-bg: #12161C;
-  --fg-header-band-bg: #171B22;
-  --fg-header-text: #E8ECF3;
-  /* #6D7889 on the pane bg (#171B22) read 3.86:1. #818C9E on the same bg measures 5.08:1. */
-  --fg-header-subtext: #818C9E;
-  --fg-header-divider-color: #262C36;
+  --fg-pane-bg: #1B1D22;
+  --fg-splitter-color: #2B2F36;
+  --fg-header-bg: #1B1D22;
+  --fg-header-band-bg: #22252B;
+  --fg-header-text: #ECEAE3;
+  /* 6.3:1 on --fg-header-band-bg (axe color-contrast, S5.11). */
+  --fg-header-subtext: #A8A49B;
+  --fg-header-divider-color: #2B2F36;
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(232, 236, 243, 0.04);
-  --fg-row-label-color: #E8ECF3;
-  --fg-row-unmatched-label-color: #6D7889;
+  --fg-row-odd-bg: #20232A;
+  --fg-row-label-color: #ECEAE3;
+  /* 4.8:1 on the pane — the same "filtered out, still legible" reading the light theme takes. */
+  --fg-row-unmatched-label-color: #8B8880;
   --fg-bar-fill: oklch(0.74 0.13 248);
-  --fg-bar-label-color: #10131A;
+  --fg-bar-label-color: #16181D;
   --fg-warn: #E0A340;
   --fg-date-line-color: #FF6F57;
   --fg-selection-color: oklch(0.76 0.17 305);
   --fg-focus-ring: oklch(0.78 0.14 220);
-  --fg-popup-bg: #1B2029;
-  --fg-popup-border: #313846;
-  --fg-popup-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+  --fg-popup-bg: #22252B;
+  --fg-popup-border: #3A3F48;
+  --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -94,7 +109,7 @@ ${LIGHT_COLOR_TOKENS}
 ${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
   --fg-lane-gap: 2px;
-  --fg-bar-opacity: 0.9;
+  --fg-bar-opacity: 1;
 }
 @media (prefers-color-scheme: dark) {
   .fg-container:not([data-fg-theme]) {
