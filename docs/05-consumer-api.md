@@ -81,19 +81,19 @@ no JS reads it.
 
 | Token | Default | Read by |
 |---|---|---|
-| `--fg-row-height` | `32px` | `pixel-property.ts`, re-read on every pane measurement |
+| `--fg-row-height` | `36px` | `pixel-property.ts`, re-read on every pane measurement |
 | `--fg-grid-pane-width` | `160px` | `pixel-property.ts`, read once at construction |
 | `--fg-splitter-width` | `4px` | `pixel-property.ts` |
-| `--fg-band-height` | `20px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12 — see below) |
+| `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12 — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
-| `--fg-diamond-size` | `10px` | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph |
+| `--fg-diamond-size` | `15px` | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every kind's own painted-span floor, `max`'d against a milestone's diamond floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row/lane band |
-| `--fg-bar-radius` | `3px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
+| `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
 | `--fg-column-min-width` | `40px` | `column-chrome.ts` — floors how far a resize drag or a keyboard step can shrink a column |
 | `--fg-column-resizer-hit` | `12px` | `.fg-column-resizer::before` — widens the resize grip's pointer hit target only; the visible grip stays 6px, and no JS reads this token |
-| `--fg-cell-padding-inline` | `8px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` — the one pair a header cell and a row cell both read, so grid text never sits flush against a column's edge |
+| `--fg-cell-padding-inline` | `10px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` — the one pair a header cell and a row cell both read, so grid text never sits flush against a column's edge |
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-lane-gap` | `2px` | `.fg-container` declaration + `pixel-property.ts` into `LayoutInput.laneGapPx`, re-read on every pane measurement — gap between a row's packed lanes (`rowSource.heightMode: 'pack'`) |

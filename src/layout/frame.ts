@@ -41,7 +41,7 @@ export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
  *  px. `barSpan`'s milestone floor is this rotated 45° (`diamondSizePx * √2`), so the painted diamond
  *  and its outline always fit inside the bar box (bug hunt: a 0-width milestone bar left the diamond
  *  and its selection outline hanging off the left edge). */
-export const DEFAULT_DIAMOND_SIZE_PX = 10;
+export const DEFAULT_DIAMOND_SIZE_PX = 15;
 
 /** Shipped bar min width (CONTEXT.md) — `--fg-bar-min-width` fallback, in px. Every kind's painted
  *  span floors here at minimum, even a `span` a caller (or a drag) has driven to zero width: a bar
