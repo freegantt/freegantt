@@ -8,6 +8,7 @@ export {};
 
 type DocsPageId =
   | 'overview'
+  | 'api-reference'
   | 'layers'
   | 'files'
   | 'lifecycle'
@@ -26,6 +27,12 @@ type DocsPage = {
 
 const DOCS_PAGES: readonly DocsPage[] = [
   { id: 'overview', label: 'Overview', file: 'index.html', title: 'Harness docs — overview and usage' },
+  {
+    id: 'api-reference',
+    label: 'API reference',
+    file: 'api-reference.html',
+    title: 'API reference — the generated export list',
+  },
   { id: 'layers', label: 'Layers', file: 'layers.html', title: 'Layer map & import rules' },
   { id: 'files', label: 'Files', file: 'files.html', title: 'File inventory' },
   { id: 'lifecycle', label: 'Lifecycle', file: 'lifecycle.html', title: 'Construction, render, notification' },
