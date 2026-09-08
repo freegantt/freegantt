@@ -99,16 +99,12 @@
            lighter `#1B1D22`, and at 0.55 that leaves a band nobody can see. */
         --demo-weekend-bg: #e8e6e0;
       }
-      @media (prefers-color-scheme: dark) {
-        body:not(.theme-paper) {
-          --demo-phase-60: oklch(0.78 0.12 60);
-          --demo-phase-30: oklch(0.78 0.12 30);
-          --demo-phase-285: oklch(0.78 0.12 285);
-          --demo-phase-15: oklch(0.78 0.12 15);
-          --demo-phase-215: oklch(0.78 0.12 215);
-          --demo-weekend-bg: #2d3037;
-        }
-      }
+      /* The dark set answers the theme the Gantt is actually on, never the reader's OS. A
+         `@media (prefers-color-scheme: dark)` rule used to state these too, and it was a bug: it
+         fired on a dark desktop even after the reader chose Light, painting a dark weekend band and
+         dark-theme phase hues onto a white pane — grey stripes and washed-out bars. Which theme the
+         page *opens* on is a script decision (`preferredTheme()` in `planner.ts`, which does read
+         the OS); which one it *paints* is this attribute, and only this attribute. */
       body:has(#gantt[data-fg-theme='dark']) {
         --demo-phase-60: oklch(0.78 0.12 60);
         --demo-phase-30: oklch(0.78 0.12 30);
