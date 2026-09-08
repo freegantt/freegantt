@@ -9,7 +9,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`README.md`](../README.md) | Quick start, dates/ids, and the API as it ships on the current branch |
 | [`plans/02-public-api.md`](../plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
 | [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
-| [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor) |
+| [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); rendered at [`harness/docs/api-reference.html`](../harness/docs/api-reference.html) |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
 
 ## S4 surface (hierarchy and rows)
@@ -173,4 +173,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-Internal module maps under `harness/docs/` are for maintainers and may lag the current slice.
+Internal module maps under `harness/docs/` are for maintainers and may lag the current slice, with
+one exception: [`harness/docs/api-reference.html`](../harness/docs/api-reference.html) renders the
+committed `etc/freegantt.api.md` and never drifts from it (D-S5-29).

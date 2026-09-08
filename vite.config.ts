@@ -37,6 +37,7 @@ export default defineConfig({
         // Static architecture pages under harness/docs/ — without an input entry, `pnpm build`
         // would drop them the same way D-S1.11-5 caught the missing demo HTML files.
         'docs-index': page('docs/index.html'),
+        'docs-api-reference': page('docs/api-reference.html'),
         'docs-layers': page('docs/layers.html'),
         'docs-files': page('docs/files.html'),
         'docs-lifecycle': page('docs/lifecycle.html'),
