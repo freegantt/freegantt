@@ -963,9 +963,9 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // J2: one `.fg-tick-line` per finest-band tick, mounted before `.fg-row-bands` so the zebra and
-  // the selected-row band paint over the lines (the design's own order).
-  it('paints one tick line per finest-band tick, before the row bands, with major stamped', () => {
+  // J2: one `.fg-tick-line` per finest-band tick, mounted after `.fg-row-bands` and the decorations
+  // layer, and before `.fg-bars` — the design's own paint order (bands -> shades -> gridLines -> bars).
+  it('paints one tick line per finest-band tick, over the row bands and under the bars, with major stamped', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });

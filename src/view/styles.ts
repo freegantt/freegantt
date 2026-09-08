@@ -251,11 +251,11 @@ ${DARK_COLOR_TOKENS}
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
 .fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
 .fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
-/* J2: one line per finest-band tick boundary, mounted between the header and .fg-row-bands (D-S1.7-4)
-   so the zebra and the selected-row band paint over the lines, the design's own paint order. height
-   is set inline per frame (render/dom/tick-lines.ts), not bottom: 0 — same reason .fg-date-line
-   states: .fg-timeline-pane is both this element's positioned ancestor and its own overflow: auto
-   scroll container. */
+/* J2: one line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
+   the zebra, the selected-row band, and weekend shading paint over the lines, and every bar paints
+   over them in turn — the design's own paint order. height is set inline per frame
+   (render/dom/tick-lines.ts), not bottom: 0 — same reason .fg-date-line states: .fg-timeline-pane is
+   both this element's positioned ancestor and its own overflow: auto scroll container. */
 .fg-tick-lines { position: relative; }
 .fg-tick-line { position: absolute; top: 0; left: 0; width: 1px; background: var(--fg-tick-line-color); pointer-events: none; }
 .fg-tick-line[data-major] { background: var(--fg-tick-line-strong-color); }

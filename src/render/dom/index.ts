@@ -1169,12 +1169,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       cursorLineLabel.setAttribute('aria-hidden', 'true');
       cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, rowBandLayer, barLayer, contentSizer);
-      // Inserted between the header and the row bands (D-S1.7-4): the zebra and the selected-row
-      // band paint over the lines, matching the design's own paint order.
-      tickLines = attachTickLines(timelineHost, rowBandLayer);
       // S5.6, D-S5-15: mounted before Date lines, so a registered decoration paints below the
       // today wrapper and any authored Date line — those stay the topmost stroke either way.
       decorations = attachDecorations(timelineHost, barLayer);
+      // Inserted between the decorations and the bars, so the lines paint over the zebra, the
+      // selected-row band, and weekend shading, and under every bar — the design's own paint
+      // order (`bands` -> `shades` -> `gridLines` -> bars, J2 mount-order fix).
+      tickLines = attachTickLines(timelineHost, barLayer);
       dateLines = attachDateLines(timelineHost, headerLayer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
