@@ -13,7 +13,7 @@ import type {
   SegmentId,
 } from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
-import type { TimeScale, ViewPreset } from '../time/index.js';
+import type { Tick, TimeScale, ViewPreset } from '../time/index.js';
 import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineDecoration } from './date-line.js';
@@ -178,10 +178,10 @@ export interface FrameHeaderBand {
 }
 
 /** One vertical line in the timeline pane, at every finest-band tick boundary. `major` marks a line
- *  a coarser band also starts at — a week's Monday under `dayAndWeek`, a month under `weekAndMonth` —
- *  so the pane's own grid states the same boundaries the header already draws, with no calendar
- *  knowledge of its own. `x` is unclamped, unlike a header tick's: the line paints wherever its
- *  instant falls, even off-screen inside the overscan buffer. */
+ *  that opens a coarser band's cell — the Monday that opens a week under `dayAndWeek`, the week that
+ *  opens a month under `weekAndMonth` — so the pane's own grid states the same boundaries the header
+ *  already draws, with no calendar knowledge of its own. `x` is unclamped, unlike a header tick's:
+ *  the line paints wherever its instant falls, even off-screen inside the overscan buffer. */
 export interface FrameTickLine {
   x: number;
   major: boolean;
@@ -365,6 +365,33 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
   return mem;
 }
 
+/** Where every band coarser than the finest one opens a cell, in ascending x. Bands run coarsest
+ *  first (D-S1.7-6), so the finest band is the last array and every other one is a coarser band. */
+function coarserBandStartsOf(rawBandTicks: readonly (readonly Tick[])[]): readonly number[] {
+  const starts = new Set<number>();
+  for (const bandTicks of rawBandTicks.slice(0, -1)) {
+    for (const tick of bandTicks) starts.add(tick.x);
+  }
+  return [...starts].sort((a, b) => a - b);
+}
+
+/** Call: `markMajorTickLines(finestBandTicks, coarserBandStartXs)`. One line per finest tick. The
+ *  line is major when a coarser cell starts inside that tick's own cell `[x, x + width)` — the week
+ *  holding the 1st carries the month's line, because a month rarely starts on a Monday. Both arrays
+ *  ascend by x and come from the same `TimeScale`, so one walk pairs them and an exact boundary
+ *  (a week that does start on the 1st) compares equal. */
+function markMajorTickLines(
+  finestBandTicks: readonly Tick[],
+  coarserBandStartXs: readonly number[],
+): FrameTickLine[] {
+  let next = 0;
+  return finestBandTicks.map((tick) => {
+    while (next < coarserBandStartXs.length && coarserBandStartXs[next]! < tick.x) next += 1;
+    const start = coarserBandStartXs[next];
+    return { x: tick.x, major: start !== undefined && start < tick.x + tick.width };
+  });
+}
+
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
  * renders; a one-shot caller omits it and gets memory built and discarded here. `decorations` is the
@@ -530,17 +557,17 @@ export function placeFrame(
   });
 
   // One line per finest-band tick — the last raw ticks array, bands run coarsest first (D-S1.7-6).
-  // `major` when a coarser band starts at the same Instant, so the pane's own boundaries always
-  // match the header's without either side deriving a calendar rule the other does not already have.
+  // A line is `major` when the coarser band changes over its own cell: the finest cell that a
+  // coarser cell starts inside opens that coarser cell's run. Under `dayAndWeek` the coarser (week)
+  // start lands exactly on a day tick, so the Monday is major. Under `weekAndMonth` a month almost
+  // never starts on a Monday, so the week that *contains* the 1st carries the month's line — an
+  // equality test would find nothing there and leave the grid flat (#265). Under `monthAndYear` the
+  // coarser band is the year and January always starts a month cell, so a range inside one calendar
+  // year has no major line at all: at the coarsest shipped preset that is the honest answer, and
+  // `frame.test.ts` pins it.
   const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
-  const coarserBandStarts = new Set<Instant>();
-  for (const bandTicks of rawBandTicks.slice(0, -1)) {
-    for (const tick of bandTicks) coarserBandStarts.add(tick.instant);
-  }
-  const tickLines: FrameTickLine[] = finestBandTicks.map((tick) => ({
-    x: tick.x,
-    major: coarserBandStarts.has(tick.instant),
-  }));
+  const coarserBandStartXs = coarserBandStartsOf(rawBandTicks);
+  const tickLines: FrameTickLine[] = markMajorTickLines(finestBandTicks, coarserBandStartXs);
 
   const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,

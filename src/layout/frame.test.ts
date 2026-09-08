@@ -670,6 +670,56 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     expect(frame.tickLines.some((line) => !line.major)).toBe(true);
   });
 
+  it('marks the week that holds the 1st major, when the month starts mid-week', () => {
+    // 2026-09-01 is a Tuesday, so no week starts on it: an equality test between a week tick and a
+    // month tick finds nothing here, and the grid stays flat (#265). The week of 2026-08-31 holds
+    // the 1st, so that week's line carries September.
+    const weekAndMonthHeaders = {
+      ...preset,
+      headers: [
+        { unit: 'month' as const, increment: 1, format: () => 'M' },
+        { unit: 'week' as const, increment: 1, format: () => 'w' },
+      ],
+    };
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: weekAndMonthHeaders,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    const majors = frame.tickLines.filter((line) => line.major);
+    expect(majors.length).toBe(1);
+    expect(majors[0]!.x).toBe(gridScale.xForInstant(instant('2026-08-31T00:00:00Z')));
+  });
+
+  it('marks no line major when the range stays inside one coarser cell', () => {
+    // monthAndYear over months of one calendar year: the coarser band is the year, and no year
+    // starts inside this range. Zero strong lines is the honest answer at the coarsest preset.
+    const monthAndYearHeaders = {
+      ...preset,
+      headers: [
+        { unit: 'year' as const, increment: 1, format: () => 'y' },
+        { unit: 'month' as const, increment: 1, format: () => 'M' },
+      ],
+    };
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: monthAndYearHeaders,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.tickLines.length).toBeGreaterThan(0);
+    expect(frame.tickLines.every((line) => !line.major)).toBe(true);
+  });
+
   it('marks no line major on a single-band preset — no coarser band to align to', () => {
     const frame = computeFrame({
       entries: gridEntries,
