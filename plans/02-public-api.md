@@ -362,7 +362,7 @@ Both questions — *how does this entry look?* and *what can you do to it?* — 
 ```ts
 barRenderer: {
   milestone: ({ entry }) => diamond(entry),
-  group:     ({ entry }) => bracket(entry),
+  group:     ({ entry }) => summaryRail(entry),
   buffer:    ({ entry }) => hatched(entry),   // consumer-defined kind
   '*':       ({ entry }) => defaultBar(entry),
 }

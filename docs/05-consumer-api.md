@@ -141,8 +141,9 @@ I2-safe place a `registerThemePreset`-shaped seam can live.
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
 `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. The
-bracket and diamond renderers paint from `--fg-bar-fill-painted` too, so one token dims every bar
-shape the same way. The mix rule lives on `.fg-bar` itself, not on `.fg-container` — a `barRenderer`
+diamond glyph paints from `--fg-bar-fill-painted` too, so one token dims a span bar and a checkpoint
+the same way. A summary rail is the exception: it paints from `--fg-group-bar-ink`, the row ink, and
+this token does not reach it. The mix rule lives on `.fg-bar` itself, not on `.fg-container` — a `barRenderer`
 that overrides `--fg-bar-fill` on one bar element sees its own override in the mix, because the read
 and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container`
 and inherits down unchanged, so one setting still covers every bar.

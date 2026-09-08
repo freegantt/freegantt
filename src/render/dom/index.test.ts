@@ -1971,7 +1971,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('applies bracket and diamond classes off data-kind', () => {
+  it('applies summary and diamond classes off data-kind', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1992,9 +1992,9 @@ describe('render/dom backend', () => {
     const groupBar = timeline.querySelector<HTMLElement>('[data-kind="group"]')!;
     const mileBar = timeline.querySelector<HTMLElement>('[data-kind="milestone"]')!;
     const spanBar = timeline.querySelector<HTMLElement>('[data-kind="span"]')!;
-    expect(groupBar.className.split(' ')).toContain('fg-bar-bracket');
+    expect(groupBar.className.split(' ')).toContain('fg-bar-summary');
     expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
-    expect(spanBar.className.split(' ')).not.toContain('fg-bar-bracket');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-summary');
     expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
 
     backend.destroy();

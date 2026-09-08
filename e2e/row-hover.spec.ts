@@ -46,7 +46,7 @@ test('hovering a bar paints the grid row that owns it, across the splitter the o
   page,
 }) => {
   await page.goto('/');
-  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-bracket):not(.fg-bar-diamond)').first();
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary):not(.fg-bar-diamond)').first();
   await expect(bar).toBeVisible();
 
   await bar.hover();
