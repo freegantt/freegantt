@@ -13,9 +13,10 @@ export interface TickLineAttachment {
 }
 
 /** Attaches one 1px stroke per finest-band tick to the timeline pane, keyed by array position —
- *  same precedent as Header bands and Date lines (no `id` of its own). Mounted before the row band
- *  layer (D-S1.7-4's overscan) so the zebra and the selected-row band paint over the lines, matching
- *  the design's own order. Call `sync` each frame. */
+ *  same precedent as Header bands and Date lines (no `id` of its own). Mounted before the bar
+ *  layer, after the row band and decoration layers, so the zebra, the selected-row band, and
+ *  weekend shading all paint over the lines, and every bar paints over them in turn — the
+ *  design's own paint order (`bands` -> `shades` -> `gridLines` -> bars). Call `sync` each frame. */
 export function attachTickLines(timelineHost: HTMLElement, before: HTMLElement): TickLineAttachment {
   const layer = document.createElement('div');
   layer.className = 'fg-tick-lines';
