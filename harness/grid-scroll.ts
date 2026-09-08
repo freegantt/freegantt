@@ -16,7 +16,9 @@ const gridColumns: readonly GridColumnInput[] = [
   { field: 'duration', width: 120 },
 ];
 
-new Gantt({ container: '#gantt', dataset, gridColumns });
+// Distinct a11yLabel per instance: the default ('Gantt') is fine for one Gantt on a page, but three
+// sharing it name the same accessible region three times over (axe landmark-unique, D-S5-27).
+new Gantt({ container: '#gantt', dataset, gridColumns, a11yLabel: 'Fixed-width columns' });
 
 // #139: the same four columns with nothing authored. A Grid column is fixed-width by default — it
 // takes its Field's declared width, or `--fg-column-width` — so this pane overflows and scrolls
@@ -25,6 +27,7 @@ new Gantt({
   container: '#gantt-default',
   dataset,
   gridColumns: ['name', 'start', 'end', 'duration'],
+  a11yLabel: 'Bare field names',
 });
 
 // #139: `flex` is the one opt-out. The Name column shares whatever the fixed columns leave, so this
@@ -33,4 +36,5 @@ new Gantt({
   container: '#gantt-flex',
   dataset,
   gridColumns: [{ field: 'name', flex: 1 }, 'start'],
+  a11yLabel: 'Flexed name column',
 });

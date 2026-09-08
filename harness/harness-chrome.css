@@ -32,7 +32,10 @@
 
   --ink: #16191f;
   --ink-2: #4a5260;
-  --ink-3: #79828f;
+  /* #79828f (the library's own --fg-header-subtext default) reads at 3.88:1 on --surface — axe's
+     color-contrast rule (D-S5-27) wants 4.5:1 for normal-size text. Darkened to clear that ratio;
+     the library token itself is a separate, reported finding, not fixed here. */
+  --ink-3: #5a6270;
 
   --rule: #dde2e9;
   --rule-strong: #c2cad5;

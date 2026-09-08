@@ -94,56 +94,61 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S5.1 plugin runtime</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      <code>gantt.plugins</code> live, over the public plugin contract alone (`plans/s5-extensibility-and-
-      editing/s5.1-plugin-runtime.md`). The button below installs and removes a two-line logging plugin — the
-      bars keep their identity across both (I8); nothing remounts.
-    </p>
-    <p>
-      <code>barRenderer</code>/<code>cellRenderer</code> (S5.4, D-S5-10/11/12): a milestone entry paints as a
-      diamond and an over-budget cost cell paints red, both through <code>ElementDescription</code> alone —
-      the toggle below switches both off live, no remount (I8).
-    </p>
-    <p>
-      <code>weekendShading()</code> (S5.6, D-S5-15/D-S5-16, [S5-A2]): a harness-only, third-party-style plugin
-      — <code>harness/plugins/weekend-shading.ts</code> imports from <code>'freegantt'</code> alone, never a
-      path inside the library. It shades Saturday/Sunday under the bars through
-      <code>ctx.view.registerDecoration</code> and <code>dataset.time</code>. The checkbox below removes it
-      live.
-    </p>
-    <p>
-      <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3]): a consumer-defined
-      <code>'buffer'</code> kind — <code>harness/plugins/buffer-kind.ts</code>, zero core edits, zero private
-      imports. One plugin claims all four seams: <code>ctx.layout.registerItemProducer</code> (what shape it
-      draws), <code>ctx.view.registerRenderer('bar', …)</code> (the hatched fill),
-      <code>ctx.interaction.registerKindDefaults</code> (no resize handle), and
-      <code>ctx.commands.register</code> (its own right-click item, scoped to the kind by <code>when</code>).
-      Uncheck "Custom milestone + cost renderers" to see the hatch come from the plugin's own registration
-      rather than this page's <code>barRenderer</code> config — same pixels, D-S5-11's config-beats-a-plugin
-      rule is what changes hands.
-    </p>
-    <p>
-      <code>riskKind()</code> (review P2): a <em>second</em> kind-defining plugin —
-      <code>harness/plugins/risk-kind.ts</code>. It registers
-      <code>ctx.view.registerRenderer('bar', …)</code> for its own kind while <code>bufferKind()</code> holds
-      that point for its own. The <code>bar</code> point keys on the kind, so both plugins install and both
-      paint. "Drop riskKind" removes one of the two: the buffer hatch stays exactly as it was.
-    </p>
-    <div id="controls">
-      <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
-      <button id="open-popup-btn" type="button">Open popup on selected bar</button>
-      <label><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label>
-      <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
-      <label
-        ><input id="kind-plugins-toggle" type="checkbox" checked /> Buffer + risk kinds (right-click for
-        menu)</label
-      >
-      <button id="drop-risk-kind-btn" type="button">Drop riskKind</button>
-    </div>
-    <div id="gantt"></div>
-    <div id="log" aria-label="Plugin event log"></div>
+    <main>
+      <h1>FreeGantt — S5.1 plugin runtime</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        <code>gantt.plugins</code> live, over the public plugin contract alone (`plans/s5-extensibility-and-
+        editing/s5.1-plugin-runtime.md`). The button below installs and removes a two-line logging plugin —
+        the bars keep their identity across both (I8); nothing remounts.
+      </p>
+      <p>
+        <code>barRenderer</code>/<code>cellRenderer</code> (S5.4, D-S5-10/11/12): a milestone entry paints as
+        a diamond and an over-budget cost cell paints red, both through <code>ElementDescription</code> alone
+        — the toggle below switches both off live, no remount (I8).
+      </p>
+      <p>
+        <code>weekendShading()</code> (S5.6, D-S5-15/D-S5-16, [S5-A2]): a harness-only, third-party-style
+        plugin — <code>harness/plugins/weekend-shading.ts</code> imports from <code>'freegantt'</code> alone,
+        never a path inside the library. It shades Saturday/Sunday under the bars through
+        <code>ctx.view.registerDecoration</code> and <code>dataset.time</code>. The checkbox below removes it
+        live.
+      </p>
+      <p>
+        <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3]): a consumer-defined
+        <code>'buffer'</code> kind — <code>harness/plugins/buffer-kind.ts</code>, zero core edits, zero
+        private imports. One plugin claims all four seams: <code>ctx.layout.registerItemProducer</code> (what
+        shape it draws), <code>ctx.view.registerRenderer('bar', …)</code> (the hatched fill),
+        <code>ctx.interaction.registerKindDefaults</code> (no resize handle), and
+        <code>ctx.commands.register</code> (its own right-click item, scoped to the kind by
+        <code>when</code>). Uncheck "Custom milestone + cost renderers" to see the hatch come from the
+        plugin's own registration rather than this page's <code>barRenderer</code> config — same pixels,
+        D-S5-11's config-beats-a-plugin rule is what changes hands.
+      </p>
+      <p>
+        <code>riskKind()</code> (review P2): a <em>second</em> kind-defining plugin —
+        <code>harness/plugins/risk-kind.ts</code>. It registers
+        <code>ctx.view.registerRenderer('bar', …)</code> for its own kind while
+        <code>bufferKind()</code> holds that point for its own. The <code>bar</code> point keys on the kind,
+        so both plugins install and both paint. "Drop riskKind" removes one of the two: the buffer hatch stays
+        exactly as it was.
+      </p>
+      <div id="controls">
+        <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
+        <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+        <label
+          ><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label
+        >
+        <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
+        <label
+          ><input id="kind-plugins-toggle" type="checkbox" checked /> Buffer + risk kinds (right-click for
+          menu)</label
+        >
+        <button id="drop-risk-kind-btn" type="button">Drop riskKind</button>
+      </div>
+      <div id="gantt"></div>
+      <div id="log" role="log" aria-label="Plugin event log"></div>
+    </main>
     <script type="module" src="./plugins.ts"></script>
   </body>
 </html>
