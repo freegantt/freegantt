@@ -50,9 +50,13 @@ const LIGHT_COLOR_TOKENS = `
      Two opaque tokens, not one colour at two alphas — a compositing cost on a 1px line buys nothing,
      and the pair gives a consumer the stated opt-out twice over: set either to transparent and that
      line stops painting, with no config key involved. */
-  --fg-tick-line-color: #ECE8DF;
-  /* A line a coarser header band also starts at — a week's Monday, a month's first day. */
-  --fg-tick-line-strong-color: #DCD7CB;
+  /* A line has to stay a line over everything that paints above it — the pane, the zebra's odd row,
+     and a consumer's own band. The first pair (#ECE8DF/#DCD7CB) held 1.07:1 over a warm overlay in
+     the #F3F0E7 family, so the line and the band merged into one soft stripe and no week division
+     read at all. These carry 1.34:1 and 1.62:1 on the pane, and stay over 1.25:1 under such a band. */
+  --fg-tick-line-color: #E3DED2;
+  /* A line the coarser header band changes over — the week holding the 1st, a week's Monday. */
+  --fg-tick-line-strong-color: #D2CBB9;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #FAF8F2;
   --fg-row-hover-bg: #F6F3EB;
