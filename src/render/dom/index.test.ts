@@ -541,6 +541,49 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('paints hover and selection on a row and on its timeline band, so one row reads as one row', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const firstRow = frame.rows[0]!;
+    const secondRow = frame.rows[1]!;
+    const nodesOf = (rowId: string): HTMLElement[] => [
+      grid.querySelector<HTMLElement>(`.fg-row[data-row-id="${rowId}"]`)!,
+      timeline.querySelector<HTMLElement>(`.fg-row-band[data-row-id="${rowId}"]`)!,
+    ];
+
+    backend.applyState({ hoveredRowId: firstRow.id });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered');
+
+    // Selection wins the paint on a row that is both, and the token set says so in one attribute.
+    backend.applyState({ hoveredRowId: firstRow.id, selectedSegmentIds: firstRow.segmentIds });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered selected');
+
+    // Hover moves on: the row it left keeps only what it still is, and the row it reached gains it.
+    backend.applyState({ hoveredRowId: secondRow.id, selectedSegmentIds: firstRow.segmentIds });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('selected');
+    for (const node of nodesOf(secondRow.id)) expect(node.dataset['state']).toBe('hovered');
+
+    backend.applyState({});
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('');
+    for (const node of nodesOf(secondRow.id)) expect(node.dataset['state']).toBe('');
+
+    backend.destroy();
+  });
+
   it("gives each timeline row band its row's own top and height (I9: both panes, one geometry)", () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();

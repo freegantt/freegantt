@@ -353,6 +353,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
    *  for a row it just created. */
   let paintedSelectedRows: ReadonlySet<RowId> = new Set();
+  /** The row `applyState` last stamped `data-state~="hovered"` on, the same diff base its selected
+   *  twin above keeps. */
+  let paintedHoveredRow: RowId | undefined;
   /** The Segments each mounted row owns (a header row owns none) — what `applyState`'s row diff
    *  reads `FrameRow.segmentIds` into (#230 R5), so the row diff never resolves an Entry to answer
    *  it. `syncRows` is the only writer, rebuilt from the frame's own rows every render — never grows
@@ -695,12 +698,19 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return ids;
   }
 
-  /** Bug hunt (S5 fixes): `.fg-row`'s own selection paint — one token, same shape as `paintDataState`
-   *  above but never the bar's five-token set (a row has no hover/pending/drag/ghost paint yet). */
-  function paintRowState(rowId: RowId, selected: boolean): void {
-    const node = rowLayer.node(rowId);
-    if (!node) return;
-    node.dataset['state'] = selected ? 'selected' : '';
+  /** A row's own paint — two of the bar's five tokens, never the other three (a row has no
+   *  pending/drag/ghost state). Written to the grid row *and* to that row's timeline band, off one
+   *  answer, so a hovered or selected row reads the same on both sides of the splitter. A row whose
+   *  band the viewport culled just misses that half; the next `syncRowBands` restamps it. */
+  function paintRowState(rowId: RowId, selected: boolean, hovered: boolean): void {
+    const tokens: string[] = [];
+    if (hovered) tokens.push('hovered');
+    if (selected) tokens.push('selected');
+    const state = tokens.join(' ');
+    const row = rowLayer.node(rowId);
+    if (row) row.dataset['state'] = state;
+    const band = rowBandLayerCache.node(rowId);
+    if (band) band.dataset['state'] = state;
   }
 
   const tickSpec = {
@@ -1089,6 +1099,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // The row this band paints — the same `data-row-id` the grid pane's own `.fg-row` carries,
         // so a viewer (or a test) can line the two panes up row by row.
         node.dataset[ROW_ID_KEY] = key;
+        // Same restamp-on-remount rule `syncRows` and `syncBars` already follow: virtualization can
+        // build this band long after the selection or hover that ought to paint it, and a band
+        // scrolled back into view must not wait for the next state change to catch up.
+        const tokens: string[] = [];
+        if (paintedHoveredRow === key) tokens.push('hovered');
+        if (paintedSelectedRows.has(key)) tokens.push('selected');
+        node.dataset['state'] = tokens.join(' ');
         return node;
       },
       toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
@@ -1255,9 +1272,19 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       nextSelectedRows.forEach((rowId) => {
         if (!paintedSelectedRows.has(rowId)) changedRows.add(rowId);
       });
-      changedRows.forEach((rowId) => paintRowState(rowId, nextSelectedRows.has(rowId)));
+      // The hovered row joins the same diff — two rows at most flip per pointer move, and the
+      // repaint stays the write of one attribute on each (I5).
+      const nextHoveredRow = state.hoveredRowId;
+      if (paintedHoveredRow !== nextHoveredRow) {
+        if (paintedHoveredRow !== undefined) changedRows.add(paintedHoveredRow);
+        if (nextHoveredRow !== undefined) changedRows.add(nextHoveredRow);
+      }
+      changedRows.forEach((rowId) =>
+        paintRowState(rowId, nextSelectedRows.has(rowId), nextHoveredRow === rowId),
+      );
       paintedSelectedSegmentIds = nextSelectedSegmentIds;
       paintedSelectedRows = nextSelectedRows;
+      paintedHoveredRow = nextHoveredRow;
 
       // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-item computation of its own. #211: the

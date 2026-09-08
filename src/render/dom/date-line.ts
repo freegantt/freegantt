@@ -4,7 +4,7 @@ import type { DateLineDecoration, FrameDecoration } from '../../layout/index.js'
 import { KeyedLayer } from './sync-keyed.js';
 
 type DateLineGeom = { x: number; height: number; className: string; today: boolean };
-type DateLineLabelGeom = { x: number; label: string; className: string };
+type DateLineLabelGeom = { x: number; label: string; className: string; today: boolean };
 type LabelledDateLine = { line: DateLineDecoration; index: number };
 
 export interface DateLineAttachment {
@@ -78,11 +78,20 @@ export function attachDateLines(timelineHost: HTMLElement, headerLayer: HTMLElem
       labels.sync(labelLayer, labelledDateLines(lines), {
         key: (item) => item.index,
         create: () => createHiddenDiv(),
-        toGeom: ({ line }) => ({ x: line.x, label: line.label ?? '', className: line.className ?? '' }),
+        toGeom: ({ line }) => ({
+          x: line.x,
+          label: line.label ?? '',
+          className: line.className ?? '',
+          today: line.today === true,
+        }),
         patch: (node, geom) => {
           node.className = classListFor(geom.className, 'fg-date-line-label');
           node.style.transform = `translateX(${geom.x}px)`;
           node.textContent = geom.label;
+          // The label carries the flag its own stroke carries, so the chip can take the Today colour.
+          // It sits in the header layer, not beside the stroke, so no selector reaches it from there.
+          if (geom.today) node.dataset['flag'] = 'today';
+          else delete node.dataset['flag'];
         },
       });
     },

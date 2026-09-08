@@ -892,10 +892,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       expect(computeFrameSpy).not.toHaveBeenCalled();
       expect(mutations).toBe(0);
       const dataStateWrites = setAttributeSpy.mock.calls.filter(([name]) => name === 'data-state').length;
-      // Each of the `bars.length` steps changes at most two bars' `data-state` (the newly hovered one
-      // and the previously hovered one) plus the final clear — a per-mounted-bar write pattern would
-      // instead scale with `bars.length * bars.length`.
-      expect(dataStateWrites).toBeLessThanOrEqual(bars.length * 2 + 2);
+      // Each of the `bars.length` steps writes `data-state` six times at most: two bars (the newly
+      // hovered one and the previously hovered one) and two rows (same pair), each row painting its
+      // grid node and its timeline band. The final clear costs the same six. A per-mounted-bar write
+      // pattern would instead scale with `bars.length * bars.length`, which is the shape this ceiling
+      // exists to catch — the constant is not the point.
+      expect(dataStateWrites).toBeLessThanOrEqual(bars.length * 6 + 6);
 
       setAttributeSpy.mockRestore();
       computeFrameSpy.mockRestore();

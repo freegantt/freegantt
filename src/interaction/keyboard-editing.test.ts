@@ -59,6 +59,7 @@ function makeContext(
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
     setHovered: () => {},
+    setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {
       selectableEntriesInRowOrder: () => ORDER,
