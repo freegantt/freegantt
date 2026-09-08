@@ -64,6 +64,7 @@ const COLOR_TOKENS = [
   '--fg-header-divider-color',
   '--fg-row-even-bg',
   '--fg-row-odd-bg',
+  '--fg-row-selected-bg',
   '--fg-row-label-color',
   '--fg-bar-fill',
   '--fg-bar-label-color',
@@ -158,6 +159,30 @@ describe('ensureBaseStyles', () => {
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     expect(css).toContain('--fg-pending-opacity');
     expect(css).toContain('outline: 2px dotted var(--fg-selection-color)');
+  });
+
+  // J3: --fg-selection-color now shares --fg-bar-fill's own hue, so a flush outline would nearly
+  // vanish into the fill. The offset is what keeps the ring visible against the pane instead.
+  it('offsets the selected and pending bar outline off the fill, not flush against it (J3)', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const selectedRule = css.split('\n').find((line) => line.startsWith('.fg-bar[data-state~="selected"]'));
+    const pendingRule = css.split('\n').find((line) => line.startsWith('.fg-bar[data-state~="pending"]'));
+    expect(selectedRule).toContain('outline-offset: 2px');
+    expect(pendingRule).toContain('outline-offset: 2px');
+  });
+
+  // J3: a selected row (or filtered row band) reads as one opaque colour, not a mix over whatever
+  // sits behind the container — so axe can check it without knowing the pane's own background.
+  it('paints a selected row with the flat --fg-row-selected-bg token, not a colour-mix', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const rule = css.split('\n').find((line) => line.includes(".fg-row[data-state~='selected']"));
+    expect(rule).toBeDefined();
+    expect(rule).toContain('var(--fg-row-selected-bg)');
+    expect(rule).not.toContain('color-mix');
   });
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
