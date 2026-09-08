@@ -37,6 +37,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 /** Every file a sentence pass has been run over. See the header for how this list grows. */
 const SCOPED_FILES = [
+  'src/view/capability.ts',
   'src/api/plugin.ts',
   'src/extensions/features/context-menu.ts',
   'src/extensions/features/date-input.ts',

@@ -26,7 +26,7 @@ export interface InteractionState {
    *  narrows to one bar when the Selection holds exactly one Segment of the Entry (#212). */
   resizableEntryId?: EntryId;
   /** #142: which of `resizableEntryId`'s two handles may resize, independently — a Field's own
-   *  `editable` can close one edge while leaving the other open. A backend hides the closed edge's
+   *  one edge can close while the other stays open — a Field's `editable`, or `interactions.edit` (#256). A backend hides the closed edge's
    *  handle and leaves the other one painting. Present exactly when `resizableEntryId` is. */
   resizableEdges?: { start: boolean; end: boolean };
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`

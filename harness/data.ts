@@ -27,9 +27,19 @@ declare global {
   }
 }
 
+// #142 shipped the core-Field override, and #256 gave it its first call site. This page declares
+// End read-only for the whole Dataset, which is the blunt, document-level lock. It can, because it
+// demonstrates mutation and serialization rather than drag-resize. `main.ts` shows the other half:
+// the same answer narrowed to one row through `interactions.edit`.
+//
+// The lock rides in the Document too. `editable` serializes on the Field, so an exported Document
+// carries it and an import puts it back (`data/serialization/field-document.ts`).
 const COST_FIELDS = {
   fieldTypes: { money: { rollUp: 'sum' as const } },
-  fields: [{ key: 'cost' as const, type: 'money' }],
+  fields: [
+    { key: 'cost' as const, type: 'money' },
+    { key: 'end' as const, editable: false },
+  ],
 };
 
 // S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.

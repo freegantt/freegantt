@@ -112,9 +112,10 @@ export interface GanttOptionsBase<
   /** Live (S3, D-S3-10; ADR 0010, #212). Segment ids, loose on the way in; assignment runs the same
    *  cancelable sequence a click runs. Default `[]`. */
   selectedSegmentIds?: readonly (SegmentId | string)[];
-  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default
+  /** Live (S3, D-S3-9). A gesture rule is a boolean or a per-entry predicate; `edit` takes the cell
+   *  and may answer "no opinion" (#256). Both sit over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
-   *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one gesture (D-S5-35). */
+   *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
   interactions?: Interactions;
   /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
@@ -644,8 +645,10 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
 
   /** D-S5-35. Call: `gantt.setCapabilityRule('resize', false)`. It writes the rule for one gesture
    *  and leaves the rules for the others exactly as they are. `gantt.interactions = { resize: false }`
-   *  drops them instead. The rule is a boolean, or a predicate the resolver runs per entry —
-   *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. It re-resolves at
+   *  drops them instead. A gesture rule is a boolean, or a predicate the resolver runs per entry —
+   *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. The `edit` rule is
+   *  the one that takes a cell (#256): `gantt.setCapabilityRule('edit', (entry, field) => (field ===
+   *  'end' ? false : undefined))`, where `undefined` leaves that cell to the rules below. It re-resolves at
    *  once, so a stricter rule hides a handle without waiting for the next pointer move. */
   setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void {
     this.#shell.setCapabilityRule(capability, rule);

@@ -367,15 +367,16 @@ holdDropCheckbox.addEventListener('change', () => {
   hideToast();
 });
 
-// #256: which cells may change? One row's finish date is fixed by contract. Its End cell refuses the
-// editor, it paints no end handle, and the bar refuses a move — a move writes both dates, so it
-// writes the pinned one too. Its start edge still resizes, because that writes `start` alone. Every
-// other row is untouched.
+// #256: which cells may change? One row's finish date is fixed by contract. Its End cell refuses
+// the editor, and it paints no end handle. The bar refuses a move too, because a move writes both
+// dates. Its start edge still resizes, because that writes `start` alone. Every other row is
+// untouched.
 //
-// `Field.editable` says which Fields are writable at all; this says which of them are writable
-// *here*. That per-entry axis is what a Field declaration has no room for, and before #256 this page
-// could show no refusal at all: the only lock available was a whole-Field one, on the very Field
-// this page demonstrates resize with.
+// `Field.editable` says which Fields are writable at all. This says which of them are writable
+// *here*. A Field declaration has no room for that per-entry axis.
+//
+// Before #256 this page could show no refusal at all. The only lock was a whole-Field one, on the
+// very Field this page demonstrates resize with.
 const FIXED_FINISH_ENTRY = 'entry-13';
 gantt.setCapabilityRule('edit', (entry, field) =>
   entry.id === FIXED_FINISH_ENTRY && field === 'end' ? false : undefined,
@@ -385,7 +386,7 @@ gantt.setCapabilityRule('edit', (entry, field) =>
 // rather than naming a fixture row of its own.
 window.__fixedFinishEntryId = FIXED_FINISH_ENTRY;
 
-// #195, D-S5-35: the page writes the one gesture it owns. Assigning `gantt.interactions` would
+// #195, D-S5-35: the page writes the one rule it owns. Assigning `gantt.interactions` would
 // restate the whole capability config, and drop any other rule this page had set. Unchecking the box
 // clears the rule rather than setting `resize: true`, so a group row stays unresizable.
 lockResizeCheckbox.addEventListener('change', () => {

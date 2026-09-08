@@ -129,9 +129,35 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(e, 'nothing-declares-this').ok).toBe(false);
   });
 
-  it('refuses a compute-sourced Field with no editable key of its own — it has no stored home', () => {
+  it('refuses a compute-sourced Field and an undeclared key — neither has a stored home', () => {
     const caps = capabilities();
     expect(caps.canWrite(entry(), 'duration').ok).toBe(false);
+    expect(caps.canWrite(entry(), 'nothing-declares-this').ok).toBe(false);
+  });
+
+  // Structure, not policy: `interactions: { edit: true }` reads like "turn editing on", and it used
+  // to open the Duration cell — the editor took a typed value and the write went nowhere.
+  it('lets no rule at all open a cell with nowhere to write', () => {
+    for (const inputs of [
+      { interactions: { edit: true } },
+      { registeredDefaultsFor: () => ({ edit: true }) },
+      { interactions: { edit: () => true } },
+    ]) {
+      const caps = capabilities(inputs);
+      expect(caps.canWrite(entry(), 'duration').ok).toBe(false);
+      expect(caps.canWrite(entry(), 'nothing-declares-this').ok).toBe(false);
+    }
+  });
+
+  // #256 review A1: `rollUp: 'none'` is a declared opt-out, so the Rollup pass skips the Field and
+  // `canWrite` must skip it too. Two spellings of that test disagreed, and this cell claimed its
+  // value came from the rows below it while nothing rolled it up.
+  it("treats rollUp: 'none' as not rolling up, the same way the Rollup pass does", () => {
+    const caps = capabilities(
+      { isRollUpKind: isGroup },
+      { key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'none', editable: true },
+    );
+    expect(caps.canWrite(entry({ kind: 'group' }), 'cost')).toEqual({ ok: true });
   });
 
   it("refuses a roll-up parent's rolling-up Field, and says why", () => {
