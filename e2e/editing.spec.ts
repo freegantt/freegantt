@@ -14,7 +14,7 @@ import { test, expect } from '@playwright/test';
 // fix (give `#selection-readout` a stable box), not something `inlineEditing()` can compensate for.
 // Selecting the row once first (settling the reflow) before the real double-click works around it here.
 
-test('double-click a Name cell edits in place and commits on Enter', async ({ page }) => {
+test('[S5-A5] double-click a Name cell edits in place and commits on Enter', async ({ page }) => {
   await page.goto('/');
   const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
   await expect(cell).toBeVisible();
@@ -51,7 +51,7 @@ test('Escape reverts a Budget edit with no commit', async ({ page }) => {
 
 // U8, [S5-A5]: hierarchy.html's own "Bring your own editor" checkbox opens `window.prompt` through
 // `beforeEntryEdit` instead of the built-in editor (harness/hierarchy.ts).
-test('a consumer replaces the editor through beforeEntryEdit (U8)', async ({ page }) => {
+test('[S5-A5] a consumer replaces the editor through beforeEntryEdit (U8)', async ({ page }) => {
   await page.goto('/hierarchy.html');
   await page.locator('#custom-editor-checkbox').check();
 

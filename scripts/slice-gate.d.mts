@@ -21,3 +21,5 @@ export function tagged(
   label: string,
   options?: { runnerImpls?: Record<string, RunnerImpl>; existsOptions?: { dirs?: string[]; cwd?: string } },
 ): GateCheck;
+
+export function provenByLintAndTests(check: GateCheck, lint?: () => boolean): GateCheck;

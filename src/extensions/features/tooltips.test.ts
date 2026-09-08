@@ -26,7 +26,7 @@ function unhover(bar: HTMLElement, relatedTarget: EventTarget | null = null): vo
   bar.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget }));
 }
 
-describe('tooltips() (S5.5, D-S5-13)', () => {
+describe('[S5-A1] tooltips() (S5.5, D-S5-13)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

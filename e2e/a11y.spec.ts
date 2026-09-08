@@ -42,7 +42,7 @@ async function waitForPageToSettle(page: import('@playwright/test').Page, file: 
 }
 
 for (const file of HARNESS_PAGE_FILES) {
-  test(`${file} has no axe violations`, async ({ page }) => {
+  test(`[S5-A4] ${file} has no axe violations`, async ({ page }) => {
     await page.goto(`/${file}`);
     await waitForPageToSettle(page, file);
 
