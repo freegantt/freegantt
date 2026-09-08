@@ -149,6 +149,9 @@ test('dragging the splitter re-fits the axis with no other call (U4)', async ({ 
 // U1: both panes stay pixel-aligned during and after a drag, not just before it (I9) — the grid
 // pane's row layer and the timeline pane's bars both read `top`/`y` from the same `frame.rows`, so a
 // drag that changes only horizontal geometry must never disturb that vertical agreement.
+//
+// `--fg-bar-height` (bar height): a bar centres in its row rather than filling it, so "aligned"
+// means the bar's top sits the row's top plus half the row/bar height difference, not equality.
 test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
@@ -164,26 +167,44 @@ test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }
   // `getBoundingClientRect()`, not a parsed `transform` string, so this survives the library
   // changing how it expresses the same offset.
   const pairs = await page.evaluate(() => {
-    const rowTopByEntryId = new Map<string, number>();
+    const rowTopByEntryId = new Map<string, { top: number; height: number }>();
     for (const row of Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'))) {
       const rowId = row.dataset['rowId'];
       const entryId = rowId;
-      if (entryId) rowTopByEntryId.set(entryId, row.getBoundingClientRect().top);
+      const box = row.getBoundingClientRect();
+      if (entryId) rowTopByEntryId.set(entryId, { top: box.top, height: box.height });
     }
-    const matched: Array<{ entryId: string; rowTop: number; barTop: number }> = [];
+    const matched: Array<{
+      entryId: string;
+      rowTop: number;
+      rowHeight: number;
+      barTop: number;
+      barHeight: number;
+    }> = [];
     for (const bar of Array.from(document.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'))) {
       const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
       const entryId = itemId?.split(':')[0];
-      const rowTop = entryId ? rowTopByEntryId.get(entryId) : undefined;
-      if (entryId && rowTop !== undefined) {
-        matched.push({ entryId, rowTop, barTop: bar.getBoundingClientRect().top });
+      const row = entryId ? rowTopByEntryId.get(entryId) : undefined;
+      if (entryId && row !== undefined) {
+        const barBox = bar.getBoundingClientRect();
+        matched.push({
+          entryId,
+          rowTop: row.top,
+          rowHeight: row.height,
+          barTop: barBox.top,
+          barHeight: barBox.height,
+        });
       }
     }
     return matched;
   });
 
   expect(pairs.length).toBeGreaterThan(1);
-  for (const { entryId, rowTop, barTop } of pairs) {
-    expect(barTop, `entry ${entryId}: bar top must match its row top`).toBeCloseTo(rowTop, 0);
+  for (const { entryId, rowTop, rowHeight, barTop, barHeight } of pairs) {
+    const expectedBarTop = rowTop + (rowHeight - barHeight) / 2;
+    expect(barTop, `entry ${entryId}: bar top must centre inside its row's band`).toBeCloseTo(
+      expectedBarTop,
+      0,
+    );
   }
 });
