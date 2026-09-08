@@ -31,7 +31,7 @@ const row: FrameRow = {
 };
 
 function baseInput(providers: readonly RegisteredDecorationProvider[]): RunDecorationsInput {
-  return { providers, span, rows: [row], timeZone: ZONE, xForInstant };
+  return { providers, span, rows: [row], timeZone: ZONE, tickUnit: 'day', tickIncrement: 1, xForInstant };
 }
 
 describe('DecorationRunner', () => {
@@ -78,6 +78,29 @@ describe('DecorationRunner', () => {
     expect(seen?.rows).toEqual([row]);
     expect(seen?.time.zone).toBe(ZONE);
     expect(seen?.time.dayOfWeek(start)).toBe(1);
+    expect(seen?.tickUnit).toBe('day');
+    expect(seen?.tickIncrement).toBe(1);
+  });
+
+  it('recomputes when the tick step changes, with the same span, rows and scale', () => {
+    const runner = new DecorationRunner();
+    const provider = vi.fn<DecorationProvider>((ctx) =>
+      ctx.tickUnit === 'day' ? [{ kind: 'rangeBand', start, end: dayEnd }] : [],
+    );
+    const providers: readonly RegisteredDecorationProvider[] = [{ layer: 'underBars', provider }];
+    runner.run(baseInput(providers));
+    const atWeek = runner.run({ ...baseInput(providers), tickUnit: 'week' });
+    expect(provider).toHaveBeenCalledTimes(2);
+    expect(atWeek.underBars).toEqual([]);
+  });
+
+  it('recomputes when only the tick increment changes', () => {
+    const runner = new DecorationRunner();
+    const provider = vi.fn<DecorationProvider>(() => []);
+    const providers: readonly RegisteredDecorationProvider[] = [{ layer: 'underBars', provider }];
+    runner.run(baseInput(providers));
+    runner.run({ ...baseInput(providers), tickIncrement: 2 });
+    expect(provider).toHaveBeenCalledTimes(2);
   });
 
   it('runs each provider once per window, memoizing an unchanged window', () => {

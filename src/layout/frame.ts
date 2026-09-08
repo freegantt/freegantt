@@ -583,6 +583,11 @@ export function placeFrame(
     ...(input.dateLines ? { dateLines: input.dateLines } : {}),
   });
 
+  // What one tick column on screen stands for: the finest band's own step, because that is the band
+  // `tickLines` draws the pane's grid from and the one a reader counts columns on. A preset with no
+  // header bands draws no columns at all, so it states its own `tickUnit` instead — never coarser
+  // than a band's (`presets.test.ts`).
+  const finestBand = bands[bands.length - 1];
   const decorationRunner = decorations ?? new DecorationRunner();
   const { underBars, overBars } = decorationRunner.run({
     providers: input.decorationProviders ?? [],
@@ -592,6 +597,8 @@ export function placeFrame(
     },
     rows,
     timeZone: scale.timeZone,
+    tickUnit: finestBand?.unit ?? preset.tickUnit,
+    tickIncrement: finestBand?.increment ?? preset.tickIncrement,
     xForInstant: (at) => scale.xForInstant(at),
   });
 
