@@ -34,6 +34,7 @@
           <a href="#s4"><b>4</b>A Dataset plugin installs once</a>
         </nav>
       </header>
+      <main>
 
       <!-- ══════════════════════════════════════════════════════════ 1 -->
       <section id="s1">
@@ -277,7 +278,7 @@
           </figcaption>
         </figure>
 
-        <h4>Why the gate closes the instant <code>setup()</code> returns</h4>
+        <h3>Why the gate closes the instant <code>setup()</code> returns</h3>
         <p>
           A plugin's registrations have exactly one lifetime: the plugin's own. If <code>setup()</code>
           could keep registering after it returns — from a timer, a promise, a DOM callback it captured —
@@ -442,7 +443,7 @@
           </figcaption>
         </figure>
 
-        <h4>The five seams a Gantt plugin registers into</h4>
+        <h3>The five seams a Gantt plugin registers into</h3>
         <p>
           <code>ctx.view</code>/<code>ctx.layout</code> carry five distinct registration points, one module
           (<code>view/plugin-registrations.ts</code>), each with the one thing that has to run again after a
@@ -597,6 +598,7 @@
       </section>
 
       <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">
