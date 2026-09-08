@@ -212,7 +212,7 @@ const gantt = new Gantt({
   gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true },
   // The design frames the whole build rather than a window into it. Row height is a token, not an
-  // option — this page sets `--fg-row-height` in its own stylesheet.
+  // option — and the design's own 36px is the library's default now, so this page states nothing.
   range: plannerSpan,
   preset: 'weekAndMonth',
   barRenderer: PHASE_BARS,
