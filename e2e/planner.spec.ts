@@ -18,6 +18,8 @@ async function paint(page: import('@playwright/test').Page) {
       bar: getComputedStyle(spanBar).backgroundColor,
       pane: getComputedStyle(document.querySelector('#gantt .fg-timeline-pane')!).backgroundColor,
       avatar: getComputedStyle(document.querySelector('.demo-avatar')!).backgroundColor,
+      // The toolbar sits above the Gantt, outside `.fg-container`, and paints from the same tokens.
+      toolbar: getComputedStyle(document.querySelector('#toolbar .demo-toolbar-row')!).backgroundColor,
     };
   });
 }
@@ -37,6 +39,10 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   expect(dark.avatar).toBe(dark.bar);
   expect(dark.bar).not.toBe(light.bar);
   expect(dark.pane).not.toBe(light.pane);
+  // The page's own chrome follows the theme too. The toolbar reads `--fg-*` and lives outside
+  // `.fg-container`, so it only follows while the token blocks select on the pin alone.
+  expect(light.toolbar).toBe(light.pane);
+  expect(dark.toolbar).toBe(dark.pane);
 
   // Paper is not a library theme. It rides on top of Light as a class the page defines, and it
   // repaints the Gantt without `data-fg-theme` moving off 'light'.
@@ -46,6 +52,7 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'light');
   expect(paper.pane).not.toBe(light.pane);
   expect(paper.bar).not.toBe(light.bar);
+  expect(paper.toolbar).toBe(paper.pane);
 });
 
 test('the cells the design draws as pictures are real rendered nodes', async ({ page }) => {

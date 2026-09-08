@@ -134,7 +134,11 @@ Colour defaults are sourced from an existing, unnamed palette this team maintain
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
 specs, docs, or code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block
 applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`;
-`'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named
+`'light'`/`'dark'` write the attribute and always win over the media query on specificity. The two
+attribute blocks select on `[data-fg-theme='light'|'dark']` alone, not on `.fg-container`, so a
+consumer can put the same attribute on a wrapper around its own chrome — a toolbar above the Gantt —
+and every `--fg-*` there means what it means inside. The library writes the attribute on its own
+container only; mirroring it onto anything else is the consumer's own call. No named
 multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
 I2-safe place a `registerThemePreset`-shaped seam can live.
 
