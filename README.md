@@ -416,6 +416,19 @@ Holding **Alt** during a drag suspends snapping for that one gesture, regardless
 has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
 `gantt.preset` assignment — try it against a live drag at `pnpm dev`.
 
+## Plugins
+
+`docs/06-plugin-authoring.md` covers both plugin contracts (`GanttPlugin`, `DatasetPlugin`), every
+registration seam, and the errors an author meets. `tooltips()`, `contextMenu()`, and
+`inlineEditing()` ship as built-in plugins; installing none of them keeps them out of a consumer's
+bundle.
+
+```ts
+import { Gantt, tooltips, contextMenu } from 'freegantt';
+
+const gantt = new Gantt({ container, dataset, plugins: [tooltips(), contextMenu()] });
+```
+
 ## Events
 
 Gantt events (`entryMove`, `selectionChange`, `collapseChange`, `navigationChange`, …) fire on the
@@ -471,14 +484,15 @@ To customize dark mode instead of just light mode, scope the override to the dar
 
 ## Further reading
 
-| Doc                       | Audience                                                                |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `plans/02-public-api.md`  | Full consumer API — events, errors, serialization, customization ladder |
-| `docs/05-consumer-api.md` | Consumer API index and S4 surface summary                               |
-| `CONTEXT.md`              | Glossary (Entry, Field, Row, Row source, Rollup, …)                     |
-| `plans/03-slices.md`      | Delivery roadmap and acceptance criteria                                |
-| `etc/freegantt.api.md`    | Generated TypeScript export report (api-extractor)                      |
-| `harness/docs/`           | Internal module maps for maintainers (may lag the current slice)        |
+| Doc                           | Audience                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `plans/02-public-api.md`      | Full consumer API — events, errors, serialization, customization ladder          |
+| `docs/05-consumer-api.md`     | Consumer API index and S4 surface summary                                        |
+| `CONTEXT.md`                  | Glossary (Entry, Field, Row, Row source, Rollup, …)                              |
+| `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                         |
+| `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                               |
+| `docs/06-plugin-authoring.md` | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
+| `harness/docs/`               | Internal module maps for maintainers (may lag the current slice)                 |
 
 ## Development
 
