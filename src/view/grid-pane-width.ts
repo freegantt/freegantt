@@ -56,6 +56,13 @@ export class GridPaneWidth {
     return this.#ports.readMinWidth();
   }
 
+  /** The #139 ceiling a splitter drag clamps `width` to — `undefined` when the resolved columns
+   *  name no edge (a `flex` column, #139). S5.11's splitter reads this for `aria-valuemax`, and
+   *  falls back to the container's own outer bound when it is `undefined` (`splitter.ts`). */
+  get ceiling(): number | undefined {
+    return this.#columnsEdge();
+  }
+
   /** `gantt.gridWidth = width`'s own rule. One write path, one place the veto lives (through
    *  `commitWidth`). #139 caps a px width at the columns' own edge — a width past the last column
    *  would only be dead space. `'fitColumns'` (#157) puts the pane exactly on that edge and keeps

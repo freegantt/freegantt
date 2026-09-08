@@ -1510,6 +1510,159 @@ describe('Gantt minGridWidth (#127)', () => {
   });
 });
 
+describe('Gantt splitter keyboard resize and ARIA (S5.11, D-S5-25/D-S5-26)', () => {
+  function splitterOf(container: HTMLElement): HTMLElement {
+    const splitter = container.querySelector<HTMLElement>('.fg-splitter');
+    if (splitter === null) throw new Error('no splitter');
+    return splitter;
+  }
+
+  function arrow(key: string): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true });
+  }
+
+  it('the separator is a tab stop and carries an accessible name and the aria-value* trio', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      minGridWidth: 120,
+      gridColumns: ['name', 'start'],
+    });
+
+    const splitter = splitterOf(container);
+    expect(splitter.getAttribute('role')).toBe('separator');
+    expect(splitter.tabIndex).toBe(0);
+    expect(splitter.getAttribute('aria-label')).toBeTruthy();
+    expect(splitter.getAttribute('aria-valuemin')).toBe('120');
+    // 240 + 120: the columns end at 360, the #139 ceiling `aria-valuemax` reports.
+    expect(splitter.getAttribute('aria-valuemax')).toBe('360');
+    expect(splitter.getAttribute('aria-valuenow')).toBe('200');
+
+    gantt.destroy();
+  });
+
+  it('ArrowRight/ArrowLeft resize gridWidth and keep aria-valuenow live', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+    const splitter = splitterOf(container);
+
+    splitter.dispatchEvent(arrow('ArrowRight'));
+    expect(gantt.gridWidth).toBe(216);
+    expect(splitter.getAttribute('aria-valuenow')).toBe('216');
+
+    splitter.dispatchEvent(arrow('ArrowLeft'));
+    splitter.dispatchEvent(arrow('ArrowLeft'));
+    expect(gantt.gridWidth).toBe(184);
+    expect(splitter.getAttribute('aria-valuenow')).toBe('184');
+
+    gantt.destroy();
+  });
+
+  it('a keyboard resize raises the same beforeGridWidthChange/gridWidthChange pair a drag raises', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+    const splitter = splitterOf(container);
+
+    const before: Array<{ from: number; to: number }> = [];
+    const after: Array<{ from: number; to: number }> = [];
+    gantt.on('beforeGridWidthChange', (payload) => {
+      before.push(payload);
+    });
+    gantt.on('gridWidthChange', (payload) => {
+      after.push(payload);
+    });
+
+    splitter.dispatchEvent(arrow('ArrowRight'));
+
+    expect(before).toEqual([{ from: 200, to: 216 }]);
+    expect(after).toEqual([{ from: 200, to: 216 }]);
+
+    gantt.destroy();
+  });
+
+  it('a beforeGridWidthChange veto refuses a keyboard resize exactly as it refuses a drag', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+    const splitter = splitterOf(container);
+
+    gantt.on('beforeGridWidthChange', () => false);
+    splitter.dispatchEvent(arrow('ArrowRight'));
+
+    expect(gantt.gridWidth).toBe(200);
+    expect(splitter.getAttribute('aria-valuenow')).toBe('200');
+
+    gantt.destroy();
+  });
+
+  it('Home jumps gridWidth to minGridWidth and End jumps it to the columns’ own edge', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      minGridWidth: 120,
+      gridColumns: ['name', 'start'],
+    });
+    const splitter = splitterOf(container);
+
+    splitter.dispatchEvent(arrow('Home'));
+    expect(gantt.gridWidth).toBe(120);
+
+    splitter.dispatchEvent(arrow('End'));
+    expect(gantt.gridWidth).toBe(360);
+
+    gantt.destroy();
+  });
+
+  it('minGridWidth stays the floor after it changes, live', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+    const splitter = splitterOf(container);
+    expect(splitter.getAttribute('aria-valuemin')).toBe('40');
+
+    gantt.minGridWidth = 100;
+
+    expect(splitter.getAttribute('aria-valuemin')).toBe('100');
+    gantt.destroy();
+  });
+
+  it('a flex column names no #139 edge, so aria-valuemax falls back to the container’s own bound', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridColumns: [{ field: 'name', flex: 1 }, 'start'],
+    });
+    const splitter = splitterOf(container);
+
+    // happy-dom lays out nothing, so the container's own client rect is 0 here — the point is that
+    // the fallback is a real, finite number rather than the #139 ceiling (`undefined`).
+    expect(splitter.getAttribute('aria-valuemax')).not.toBeNull();
+    expect(Number.isFinite(Number(splitter.getAttribute('aria-valuemax')))).toBe(true);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
   it('a declared cost shows beside start; assigning gridColumns re-renders with no remount', async () => {
     const container = document.createElement('div');

@@ -147,8 +147,11 @@ export class PaneLayout {
     splitter.className = SPLITTER_CLASS;
     splitter.style.width = `${splitterWidth}px`;
     // S5.11, D-S5-26: the splitter gains a keyboard path this step, so it becomes a real widget
-    // rather than a pointer-only strip. `attachSplitter` (`view/splitter.ts`) owns the live values.
+    // rather than a pointer-only strip. `attachSplitter` (`view/splitter.ts`) owns the live
+    // `aria-value*` trio and the keyboard handling; this layout only makes the node a tab stop —
+    // one splitter, one stop, so no roving tabindex is needed here (unlike the two panes).
     splitter.setAttribute('role', 'separator');
+    splitter.tabIndex = 0;
 
     const timelinePane = document.createElement('div');
     timelinePane.className = 'fg-timeline-pane';
