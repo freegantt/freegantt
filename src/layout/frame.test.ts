@@ -16,12 +16,16 @@ import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
   createTimeScale,
+  dayAndWeekPreset,
   dayPreset,
   hourPreset,
   instant,
   formatDate,
   formatEndInclusive,
+  weekAndMonthPreset,
 } from '../time/index.js';
+import type { ViewPresetHeader } from '../time/index.js';
+import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
@@ -623,6 +627,171 @@ describe('computeFrame — Date lines (S1.13)', () => {
       todayLine: outside,
     });
     expect(frame.decorations).toEqual([]);
+  });
+});
+
+describe('computeFrame — timeline grid lines (J2)', () => {
+  // 2026-08-24 is a Monday; the window runs three ISO weeks to 2026-09-14 (also a Monday), so it
+  // carries three week starts to check `major` against.
+  const gridScale = createTimeScale({
+    timeZone: 'UTC',
+    range: { start: instant('2026-08-24T00:00:00Z'), end: instant('2026-09-14T00:00:00Z') },
+    pxPerMs: 1 / (60 * 60 * 1000),
+  });
+  const gridEntries: readonly Entry[] = [
+    {
+      ...sampleEntries[0]!,
+      id: entryId('grid-1'),
+      start: instant('2026-08-24T00:00:00Z'),
+      end: instant('2026-08-25T00:00:00Z'),
+    },
+  ];
+  const dayAndWeekHeaders = {
+    ...preset,
+    headers: [
+      { unit: 'week' as const, increment: 1, format: () => 'w' },
+      { unit: 'day' as const, increment: 1, format: () => 'd' },
+    ],
+  };
+
+  it('marks the day tick a week also starts at, and nothing else, major', () => {
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: dayAndWeekHeaders,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    const weekStartXs = new Set(frame.header.bands[0]!.ticks.map((tick) => tick.x));
+    expect(frame.tickLines.length).toBe(frame.header.bands[1]!.ticks.length);
+    for (const line of frame.tickLines) {
+      expect(line.major).toBe(weekStartXs.has(line.x));
+    }
+    expect(frame.tickLines.some((line) => line.major)).toBe(true);
+    expect(frame.tickLines.some((line) => !line.major)).toBe(true);
+  });
+
+  it('marks the week that holds the 1st major, when the month starts mid-week', () => {
+    // 2026-09-01 is a Tuesday, so no week starts on it: an equality test between a week tick and a
+    // month tick finds nothing here, and the grid stays flat (#265). The week of 2026-08-31 holds
+    // the 1st, so that week's line carries September.
+    const weekAndMonthHeaders = {
+      ...preset,
+      headers: [
+        { unit: 'month' as const, increment: 1, format: () => 'M' },
+        { unit: 'week' as const, increment: 1, format: () => 'w' },
+      ],
+    };
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: weekAndMonthHeaders,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    const majors = frame.tickLines.filter((line) => line.major);
+    expect(majors.length).toBe(1);
+    expect(majors[0]!.x).toBe(gridScale.xForInstant(instant('2026-08-31T00:00:00Z')));
+  });
+
+  it('marks no line major when the range stays inside one coarser cell', () => {
+    // monthAndYear over months of one calendar year: the coarser band is the year, and no year
+    // starts inside this range. Zero strong lines is the honest answer at the coarsest preset.
+    const monthAndYearHeaders = {
+      ...preset,
+      headers: [
+        { unit: 'year' as const, increment: 1, format: () => 'y' },
+        { unit: 'month' as const, increment: 1, format: () => 'M' },
+      ],
+    };
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: monthAndYearHeaders,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.tickLines.length).toBeGreaterThan(0);
+    expect(frame.tickLines.every((line) => !line.major)).toBe(true);
+  });
+
+  it('emits no line outside the content, so the overscan buffer cannot widen the pane', () => {
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: dayAndWeekHeaders,
+      // Parked at the right edge, where the overscan buffer reaches past the content extent.
+      visible: { x: gridScale.contentWidth - 200, y: 0, width: 200, height: 400 },
+      overscan: { verticalRows: 0, horizontalPx: 300 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.tickLines.length).toBeGreaterThan(0);
+    for (const line of frame.tickLines) {
+      expect(line.x).toBeGreaterThanOrEqual(0);
+      expect(line.x).toBeLessThan(gridScale.contentWidth);
+    }
+  });
+
+  it('marks no line major on a single-band preset — no coarser band to align to', () => {
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: { ...preset, headers: [{ unit: 'day', increment: 1, format: () => 'd' }] },
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.tickLines.length).toBeGreaterThan(0);
+    expect(frame.tickLines.every((line) => !line.major)).toBe(true);
+  });
+});
+
+describe('computeFrame — the tick step a decoration provider reads', () => {
+  function tickStepSeenBy(headers: ViewPresetHeader[]): { unit: string; increment: number } {
+    let seen: DecorationContext | undefined;
+    computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset: { ...preset, headers },
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+      decorationProviders: [
+        {
+          layer: 'underBars',
+          provider: (ctx) => {
+            seen = ctx;
+            return [];
+          },
+        },
+      ],
+    });
+    return { unit: seen!.tickUnit, increment: seen!.tickIncrement };
+  }
+
+  it('states the finest (last) header band, not the coarsest', () => {
+    expect(tickStepSeenBy([...weekAndMonthPreset.headers])).toEqual({ unit: 'week', increment: 1 });
+    expect(tickStepSeenBy([...dayAndWeekPreset.headers])).toEqual({ unit: 'day', increment: 1 });
+  });
+
+  it("falls back to the preset's own tick step when it carries no header band", () => {
+    expect(tickStepSeenBy([])).toEqual({ unit: preset.tickUnit, increment: preset.tickIncrement });
   });
 });
 

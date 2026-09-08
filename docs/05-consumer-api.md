@@ -88,6 +88,7 @@ no JS reads it.
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-diamond-size` | `10px` | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every kind's own painted-span floor, `max`'d against a milestone's diamond floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched |
+| `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row/lane band |
 | `--fg-bar-radius` | `3px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
 | `--fg-column-min-width` | `40px` | `column-chrome.ts` — floors how far a resize drag or a keyboard step can shrink a column |
@@ -96,6 +97,7 @@ no JS reads it.
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-lane-gap` | `2px` | `.fg-container` declaration + `pixel-property.ts` into `LayoutInput.laneGapPx`, re-read on every pane measurement — gap between a row's packed lanes (`rowSource.heightMode: 'pack'`) |
+| `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label (J1) |
 
 ### Colour and shadow tokens
 
@@ -114,13 +116,16 @@ no JS reads it.
 | `--fg-row-unmatched-label-color` | `#79828F` | `#6D7889` | `.fg-row-label`/`.fg-row-cell` text on a row `data-matched='false'` marks — a grouping row whose value no `groupBy` bucket claimed |
 | `--fg-bar-fill` | `oklch(0.52 0.14 248)` | `oklch(0.74 0.13 248)` | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text |
+| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text, and `.fg-bar-diamond .fg-bar-label` (undoes the diamond glyph's own `color: transparent`) |
+| `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` (J1) |
+| `--fg-diamond-stroke` | `none` | — (not theme-dependent) | `.fg-bar-diamond::before`'s own `border` shorthand — a hollow diamond is `--fg-bar-fill` at the pane's background plus a stroke here, which is how a consumer paints "not done yet" on a checkpoint. `box-sizing: border-box`, so a stroke never grows the glyph past `--fg-diamond-size` |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
-| `--fg-selection-color` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | `.fg-bar[data-state~="selected"]` outline (pending uses the same token, dotted); `.fg-row[data-state~="selected"]` background; the column reorder drop indicator; the open cell editor's ring |
+| `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
+| `--fg-row-selected-bg` | `#EEF3FB` | `#1F2A3F` | `.fg-row[data-state~="selected"]`/`.fg-row-band[data-state~="selected"]` background — a flat token, not a mix of `--fg-selection-color` |
 | `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
 | `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
-| `--fg-focus-ring` | `oklch(0.62 0.16 220)` | `oklch(0.78 0.14 220)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
+| `--fg-focus-ring` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
 | `--fg-popup-bg` | `#FFFFFF` | `#1B2029` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
 | `--fg-popup-border` | `#DDE2E9` | `#313846` | `.fg-popup` border |
 | `--fg-popup-shadow` | `0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22)` | `0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6)` | `.fg-popup` box-shadow; also the grabbed header cell's lifted shadow during a column reorder drag |
@@ -129,15 +134,20 @@ Colour defaults are sourced from an existing, unnamed palette this team maintain
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
 specs, docs, or code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block
 applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`;
-`'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named
+`'light'`/`'dark'` write the attribute and always win over the media query on specificity. The two
+attribute blocks select on `[data-fg-theme='light'|'dark']` alone, not on `.fg-container`, so a
+consumer can put the same attribute on a wrapper around its own chrome — a toolbar above the Gantt —
+and every `--fg-*` there means what it means inside. The library writes the attribute on its own
+container only; mirroring it onto anything else is the consumer's own call. No named
 multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
 I2-safe place a `registerThemePreset`-shaped seam can live.
 
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
 `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. The
-bracket and diamond renderers paint from `--fg-bar-fill-painted` too, so one token dims every bar
-shape the same way. The mix rule lives on `.fg-bar` itself, not on `.fg-container` — a `barRenderer`
+diamond glyph paints from `--fg-bar-fill-painted` too, so one token dims a span bar and a checkpoint
+the same way. A summary rail is the exception: it paints from `--fg-group-bar-ink`, the row ink, and
+this token does not reach it. The mix rule lives on `.fg-bar` itself, not on `.fg-container` — a `barRenderer`
 that overrides `--fg-bar-fill` on one bar element sees its own override in the mix, because the read
 and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container`
 and inherits down unchanged, so one setting still covers every bar.

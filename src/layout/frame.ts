@@ -13,7 +13,7 @@ import type {
   SegmentId,
 } from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
-import type { TimeScale, ViewPreset } from '../time/index.js';
+import type { Tick, TimeScale, ViewPreset } from '../time/index.js';
 import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineDecoration } from './date-line.js';
@@ -51,6 +51,13 @@ export const DEFAULT_DIAMOND_SIZE_PX = 10;
  *  floors answer different questions (room for a diamond glyph vs. room for a resize handle) and
  *  must be free to move apart. */
 export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
+
+/** Shipped bar height (CONTEXT.md) — `--fg-bar-height` fallback, in px. A bar paints shorter than its
+ *  own row on purpose (the row also carries the grid pane's label and cells, at their own line
+ *  height) and sits centred in the row's vertical middle — `barHeightPx` is its own number, not a
+ *  fraction of `rowHeight`, so a denser preset (`{ rowHeight: 30, barHeightPx: 14 }`) can shrink both
+ *  independently. */
+export const DEFAULT_BAR_HEIGHT_PX = 18;
 
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
@@ -170,6 +177,16 @@ export interface FrameHeaderBand {
   ticks: readonly FrameHeaderTick[];
 }
 
+/** One vertical line in the timeline pane, at every finest-band tick boundary. `major` marks a line
+ *  that opens a coarser band's cell — the Monday that opens a week under `dayAndWeek`, the week that
+ *  opens a month under `weekAndMonth` — so the pane's own grid states the same boundaries the header
+ *  already draws, with no calendar knowledge of its own. `x` is unclamped, unlike a header tick's:
+ *  the line paints wherever its instant falls, even off-screen inside the overscan buffer. */
+export interface FrameTickLine {
+  x: number;
+  major: boolean;
+}
+
 export interface FrameHeader {
   bands: readonly FrameHeaderBand[];
 }
@@ -190,6 +207,9 @@ export interface GeometryFrame {
   /** The culled region, in timeline-content coordinates (conventions §1, D-S1.7-3). Was `viewport`. */
   visible: Rect;
   header: FrameHeader;
+  /** One line per finest-band tick boundary, in the culled window (D-S1.7-4's overscan, unchanged).
+   *  Empty when the preset carries no headers. */
+  tickLines: readonly FrameTickLine[];
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: FrameRow[];
   /** Total row count across the whole dataset, never the window's — what `aria-setsize` needs so
@@ -249,6 +269,10 @@ export interface LayoutInput {
    *  larger of the two always wins. View reads `--fg-bar-min-width` and passes it; layout never
    *  restates the stylesheet. */
   minBarWidthPx?: number;
+  /** Painted bar height in px (CONTEXT.md). Default `DEFAULT_BAR_HEIGHT_PX`. A bar centres in its own
+   *  row/lane band at this height; `barSpan`'s width floors are unaffected (a horizontal question).
+   *  View reads `--fg-bar-height` and passes it; layout never restates the stylesheet. */
+  barHeightPx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
   /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
@@ -341,6 +365,33 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
   return mem;
 }
 
+/** Where every band coarser than the finest one opens a cell, in ascending x. Bands run coarsest
+ *  first (D-S1.7-6), so the finest band is the last array and every other one is a coarser band. */
+function coarserBandStartsOf(rawBandTicks: readonly (readonly Tick[])[]): readonly number[] {
+  const starts = new Set<number>();
+  for (const bandTicks of rawBandTicks.slice(0, -1)) {
+    for (const tick of bandTicks) starts.add(tick.x);
+  }
+  return [...starts].sort((a, b) => a - b);
+}
+
+/** Call: `markMajorTickLines(finestBandTicks, coarserBandStartXs)`. One line per finest tick. The
+ *  line is major when a coarser cell starts inside that tick's own cell `[x, x + width)` — the week
+ *  holding the 1st carries the month's line, because a month rarely starts on a Monday. Both arrays
+ *  ascend by x and come from the same `TimeScale`, so one walk pairs them and an exact boundary
+ *  (a week that does start on the 1st) compares equal. */
+function markMajorTickLines(
+  finestBandTicks: readonly Tick[],
+  coarserBandStartXs: readonly number[],
+): FrameTickLine[] {
+  let next = 0;
+  return finestBandTicks.map((tick) => {
+    while (next < coarserBandStartXs.length && coarserBandStartXs[next]! < tick.x) next += 1;
+    const start = coarserBandStartXs[next];
+    return { x: tick.x, major: start !== undefined && start < tick.x + tick.width };
+  });
+}
+
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
  * renders; a one-shot caller omits it and gets memory built and discarded here. `decorations` is the
@@ -370,6 +421,7 @@ export function placeFrame(
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const diamondSizePx = input.diamondSizePx ?? DEFAULT_DIAMOND_SIZE_PX;
   const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;
+  const barHeightPx = input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -442,9 +494,11 @@ export function placeFrame(
         kind: item.kind,
         label: item.label,
         x,
-        y: yForLane(top, lane, rowHeight, laneGap),
+        // Centred in its own lane band: yForLane answers the band's own top, at rowHeight tall, and
+        // half the leftover (rowHeight - barHeightPx) sits above the bar, half below.
+        y: yForLane(top, lane, rowHeight, laneGap) + (rowHeight - barHeightPx) / 2,
         width,
-        height: rowHeight,
+        height: barHeightPx,
         lane,
         flags: {},
         minimumSpan,
@@ -478,12 +532,18 @@ export function placeFrame(
   // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
 
   const headerFormats = dropRepeatedGranularity(preset.headers);
+  // Raw ticks per band, coarsest first (D-S1.7-6) — computed once and shared by `bands`' clamped
+  // labels below and `tickLines`' unclamped lines: both read the same `scale.ticks` call per band,
+  // so a preset's own boundaries never drift between the header and the pane under it.
+  const rawBandTicks = preset.headers.map((header) =>
+    scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
+  );
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
     const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
     return {
       unit: header.unit,
       increment: header.increment,
-      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => {
+      ticks: rawBandTicks[i]!.map((tick) => {
         // Only the one tick whose cell actually straddles the clamp line is "stuck" — a tick
         // that ends before it (fully behind the visible edge, kept around only by the overscan
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
@@ -496,12 +556,38 @@ export function placeFrame(
     };
   });
 
+  // One line per finest-band tick — the last raw ticks array, bands run coarsest first (D-S1.7-6).
+  // A line is `major` when the coarser band changes over its own cell: the finest cell that a
+  // coarser cell starts inside opens that coarser cell's run. Under `dayAndWeek` the coarser (week)
+  // start lands exactly on a day tick, so the Monday is major. Under `weekAndMonth` a month almost
+  // never starts on a Monday, so the week that *contains* the 1st carries the month's line — an
+  // equality test would find nothing there and leave the grid flat (#265). Under `monthAndYear` the
+  // coarser band is the year and January always starts a month cell, so a range inside one calendar
+  // year has no major line at all: at the coarsest shipped preset that is the honest answer, and
+  // `frame.test.ts` pins it.
+  const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
+  const coarserBandStartXs = coarserBandStartsOf(rawBandTicks);
+  // Only lines inside the content. The overscan buffer pulls in ticks on both sides of the visible
+  // window, and a line past `contentWidth` draws nothing a reader can scroll to — but it is a
+  // painted node in the pane, so the browser widens the pane's own scrollable range to reach it and
+  // the pane overscrolls past the content sizer (D-S1.8-1: the timeline's content is `contentWidth`
+  // wide, full stop). `e2e/timeline-content-width.spec.ts` is what states that in a real engine.
+  const tickLines: FrameTickLine[] = markMajorTickLines(
+    finestBandTicks.filter((tick) => tick.x >= 0 && tick.x < scale.contentWidth),
+    coarserBandStartXs,
+  );
+
   const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,
     todayLine: input.todayLine ?? true,
     ...(input.dateLines ? { dateLines: input.dateLines } : {}),
   });
 
+  // What one tick column on screen stands for: the finest band's own step, because that is the band
+  // `tickLines` draws the pane's grid from and the one a reader counts columns on. A preset with no
+  // header bands draws no columns at all, so it states its own `tickUnit` instead — never coarser
+  // than a band's (`presets.test.ts`).
+  const finestBand = bands[bands.length - 1];
   const decorationRunner = decorations ?? new DecorationRunner();
   const { underBars, overBars } = decorationRunner.run({
     providers: input.decorationProviders ?? [],
@@ -511,6 +597,8 @@ export function placeFrame(
     },
     rows,
     timeZone: scale.timeZone,
+    tickUnit: finestBand?.unit ?? preset.tickUnit,
+    tickIncrement: finestBand?.increment ?? preset.tickIncrement,
     xForInstant: (at) => scale.xForInstant(at),
   });
 
@@ -518,6 +606,7 @@ export function placeFrame(
     revision,
     visible,
     header: { bands },
+    tickLines,
     rows,
     rowCount: plan.length,
     tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),

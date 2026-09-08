@@ -214,8 +214,8 @@ describe('row height (#39)', () => {
     container.style.setProperty('--fg-row-height', '48px');
 
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
-    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    expect(bar.style.height).toBe('48px');
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.style.height).toBe('48px');
 
     shell.destroy();
     container.remove();
@@ -224,8 +224,34 @@ describe('row height (#39)', () => {
   it('falls back to a default when --fg-row-height is unset', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.style.height).toBe('32px');
+    shell.destroy();
+  });
+});
+
+// A bar paints at --fg-bar-height, not the row's own height (bar height is its own knob) — the
+// twin of "row height (#39)" above, for the token that now governs the bar box instead.
+describe('bar height', () => {
+  it('reads --fg-bar-height from the container, independent of --fg-row-height', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    container.style.setProperty('--fg-row-height', '48px');
+    container.style.setProperty('--fg-bar-height', '22px');
+
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    expect(bar.style.height).toBe('32px');
+    expect(bar.style.height).toBe('22px');
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('falls back to the shipped default (18px) when --fg-bar-height is unset', () => {
+    const container = document.createElement('div');
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.style.height).toBe('18px');
     shell.destroy();
   });
 });
@@ -417,8 +443,13 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
       return match ? Number(match[1]) : NaN;
     };
 
+    // A bar no longer fills its row (bar height): it centres inside the row's band, so its own top
+    // sits the row's top plus half the leftover between the row and the shorter bar.
+    const rowHeight = 31.5;
+    const barHeightPx = 18; // DEFAULT_BAR_HEIGHT_PX — no --fg-bar-height set on this container.
+    const centringOffset = (rowHeight - barHeightPx) / 2;
     for (let i = 0; i < rows.length; i++) {
-      expect(translateY(rows[i]!)).toBe(translateBarY(bars[i]!));
+      expect(translateBarY(bars[i]!)).toBe(translateY(rows[i]!) + centringOffset);
     }
     // Confirms the case is not vacuous: at least one row sits at a non-integer top.
     expect(rows.some((row) => !Number.isInteger(translateY(row)))).toBe(true);
@@ -892,10 +923,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       expect(computeFrameSpy).not.toHaveBeenCalled();
       expect(mutations).toBe(0);
       const dataStateWrites = setAttributeSpy.mock.calls.filter(([name]) => name === 'data-state').length;
-      // Each of the `bars.length` steps changes at most two bars' `data-state` (the newly hovered one
-      // and the previously hovered one) plus the final clear — a per-mounted-bar write pattern would
-      // instead scale with `bars.length * bars.length`.
-      expect(dataStateWrites).toBeLessThanOrEqual(bars.length * 2 + 2);
+      // Each of the `bars.length` steps writes `data-state` six times at most: two bars (the newly
+      // hovered one and the previously hovered one) and two rows (same pair), each row painting its
+      // grid node and its timeline band. The final clear costs the same six. A per-mounted-bar write
+      // pattern would instead scale with `bars.length * bars.length`, which is the shape this ceiling
+      // exists to catch — the constant is not the point.
+      expect(dataStateWrites).toBeLessThanOrEqual(bars.length * 6 + 6);
 
       setAttributeSpy.mockRestore();
       computeFrameSpy.mockRestore();

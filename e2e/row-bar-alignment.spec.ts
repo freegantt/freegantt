@@ -14,7 +14,11 @@ import { test, expect } from '@playwright/test';
 // element that collapses to zero height there behaves identically to one that doesn't. Only a
 // real browser lays out `.fg-header`/`.fg-band`'s auto height from absolutely positioned children,
 // so this has to be a Playwright test (see also e2e/harness.spec.ts's D1 test, same reasoning).
-test('every grid pane row lines up with its own bar in the timeline pane (I9)', async ({ page }) => {
+//
+// `--fg-bar-height` (bar height): a bar no longer fills its row, it centres in it, so "lines up"
+// no longer means "the same top" — it means the bar's top sits the row's top plus half the
+// leftover between the row's height and the bar's own shorter height.
+test('every grid pane row lines up with its own bar in the timeline pane, centred (I9)', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
@@ -24,19 +28,33 @@ test('every grid pane row lines up with its own bar in the timeline pane (I9)', 
   // legitimately have no bar in view at the current scroll position at some viewport widths).
   // I9 only claims a row and its OWN entry's bar agree in y — not that every row has a bar.
   const pairs = await page.evaluate(() => {
-    const rowTopByEntryId = new Map<string, number>();
+    const rowTopByEntryId = new Map<string, { top: number; height: number }>();
     for (const row of Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'))) {
       const rowId = row.dataset['rowId'];
       const entryId = rowId;
-      if (entryId) rowTopByEntryId.set(entryId, row.getBoundingClientRect().top);
+      const box = row.getBoundingClientRect();
+      if (entryId) rowTopByEntryId.set(entryId, { top: box.top, height: box.height });
     }
-    const matched: Array<{ entryId: string; rowTop: number; barTop: number }> = [];
+    const matched: Array<{
+      entryId: string;
+      rowTop: number;
+      rowHeight: number;
+      barTop: number;
+      barHeight: number;
+    }> = [];
     for (const bar of Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar'))) {
       const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
       const entryId = itemId?.split(':')[0];
-      const rowTop = entryId ? rowTopByEntryId.get(entryId) : undefined;
-      if (entryId && rowTop !== undefined) {
-        matched.push({ entryId, rowTop, barTop: bar.getBoundingClientRect().top });
+      const row = entryId ? rowTopByEntryId.get(entryId) : undefined;
+      if (entryId && row !== undefined) {
+        const barBox = bar.getBoundingClientRect();
+        matched.push({
+          entryId,
+          rowTop: row.top,
+          rowHeight: row.height,
+          barTop: barBox.top,
+          barHeight: barBox.height,
+        });
       }
     }
     return matched;
@@ -45,10 +63,12 @@ test('every grid pane row lines up with its own bar in the timeline pane (I9)', 
   expect(pairs.length).toBeGreaterThan(1);
   // Sub-pixel rounding between the two panes' independent transforms is the only expected slop.
   const PIXEL_TOLERANCE = 1;
-  for (const { entryId, rowTop, barTop } of pairs) {
-    expect(Math.abs(rowTop - barTop), `entry ${entryId}: bar top must match its row top`).toBeLessThanOrEqual(
-      PIXEL_TOLERANCE,
-    );
+  for (const { entryId, rowTop, rowHeight, barTop, barHeight } of pairs) {
+    const expectedBarTop = rowTop + (rowHeight - barHeight) / 2;
+    expect(
+      Math.abs(expectedBarTop - barTop),
+      `entry ${entryId}: bar top must centre inside its row's band`,
+    ).toBeLessThanOrEqual(PIXEL_TOLERANCE);
   }
 });
 

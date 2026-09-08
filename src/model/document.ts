@@ -43,7 +43,7 @@ export type SerializedField = {
   // `Omit<GridColumn, …>` would flatten the sizing union and let a written document name both
   // `width` and `flex` (#249) — built from `GridColumnBase` directly, joined back to
   // `GridColumnSizing`, the same way `Field.column` (`model/field.ts`) stays exclusive.
-  column?: Omit<GridColumnBase, 'field' | 'hidden'> & GridColumnSizing;
+  column?: Omit<GridColumnBase, 'field' | 'hidden' | 'cellRenderer'> & GridColumnSizing;
 };
 
 /** Every plugin's own per-entry rows, keyed first by `PluginId` and then by `EntryId` (D-S5-24).

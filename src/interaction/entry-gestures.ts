@@ -290,6 +290,18 @@ export function attachEntryGestures(
     ctx.setHovered(undefined);
   }
 
+  /** The grid pane's own hover feed. The timeline pane's `onPointerMove` above reports bars, and a
+   *  bar already names its row; this reports the rows the timeline pane never sees — a row hovered
+   *  anywhere along its label and cells, including the stretch past the last bar. */
+  function onRowLayerPointerMove(e: PointerEvent): void {
+    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
+    ctx.setHoveredRow(hit?.kind === 'row' ? hit.rowId : undefined);
+  }
+
+  function onRowLayerPointerLeave(): void {
+    ctx.setHoveredRow(undefined);
+  }
+
   // Bug hunt B6: a browser-issued cancel (touch interrupt, drag into a scrollbar) has no other path
   // to `cancel()` — Escape's own `drag.escape()` needs a keydown that a cancelled touch never sends.
   function onPointerCancel(e: PointerEvent): void {
@@ -302,6 +314,8 @@ export function attachEntryGestures(
   pane.addEventListener('pointerleave', onPointerLeave);
   pane.addEventListener('pointercancel', onPointerCancel);
   rowLayer.addEventListener('pointerup', onRowLayerPointerUp);
+  rowLayer.addEventListener('pointermove', onRowLayerPointerMove);
+  rowLayer.addEventListener('pointerleave', onRowLayerPointerLeave);
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
@@ -315,6 +329,8 @@ export function attachEntryGestures(
       pane.removeEventListener('pointerleave', onPointerLeave);
       pane.removeEventListener('pointercancel', onPointerCancel);
       rowLayer.removeEventListener('pointerup', onRowLayerPointerUp);
+      rowLayer.removeEventListener('pointermove', onRowLayerPointerMove);
+      rowLayer.removeEventListener('pointerleave', onRowLayerPointerLeave);
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);

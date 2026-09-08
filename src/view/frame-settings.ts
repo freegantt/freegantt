@@ -10,6 +10,7 @@
 // `LayoutInput`'s own key names. `toLayoutInput` below is the one place the two meet.
 
 import {
+  DEFAULT_BAR_HEIGHT_PX,
   DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_LANE_GAP_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
@@ -17,6 +18,7 @@ import {
   DEFAULT_TICK_BOX_FLOOR_PX,
 } from '../layout/index.js';
 import type {
+  BarLabels,
   BarRenderer,
   CellRenderer,
   DateLine,
@@ -54,17 +56,22 @@ const MIN_BAR_WIDTH_PROPERTY = '--fg-bar-min-width';
  *  purpose. `DIAMOND_SIZE_POLICY` differs: a zero milestone glyph is never useful. */
 const MIN_BAR_WIDTH_POLICY = { fallback: DEFAULT_MIN_BAR_WIDTH_PX, accepts: 'zeroOrMore' } as const;
 
-/** The five px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
- *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all five together. */
+const BAR_HEIGHT_PROPERTY = '--fg-bar-height';
+/** A zero-height bar is not a bar: only a positive value is an authored bar height. */
+const BAR_HEIGHT_POLICY = { fallback: DEFAULT_BAR_HEIGHT_PX, accepts: 'positive' } as const;
+
+/** The six px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
+ *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all six together. */
 interface PixelMetrics {
   rowHeight: number;
   laneGapPx: number;
   tickBoxFloorPx: number;
   diamondSizePx: number;
   minBarWidthPx: number;
+  barHeightPx: number;
 }
 
-/** The five `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
+/** The six `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
  *  decides whether an authored value is usable, and the metric it answers.
  *  `refreshPixelProperties` below is the whole reader: one loop, no per-property code. */
 interface PixelPropertyRead {
@@ -79,6 +86,7 @@ const PIXEL_PROPERTIES: readonly PixelPropertyRead[] = Object.freeze([
   { property: TICK_BOX_FLOOR_PROPERTY, policy: TICK_BOX_FLOOR_POLICY, metric: 'tickBoxFloorPx' },
   { property: DIAMOND_SIZE_PROPERTY, policy: DIAMOND_SIZE_POLICY, metric: 'diamondSizePx' },
   { property: MIN_BAR_WIDTH_PROPERTY, policy: MIN_BAR_WIDTH_POLICY, metric: 'minBarWidthPx' },
+  { property: BAR_HEIGHT_PROPERTY, policy: BAR_HEIGHT_POLICY, metric: 'barHeightPx' },
 ]);
 
 /** Default for `todayLineMarginTicks`: how many of the current preset's own ticks sit between the
@@ -115,6 +123,7 @@ interface FrameSettingsValues {
   dateLines: readonly DateLine[];
   todayLineMarginTicks: number;
   rowSource: RowSource;
+  barLabels: BarLabels;
   barRenderer: BarRenderer | RendererByKind | undefined;
   cellRenderer: CellRenderer | undefined;
   headerRenderer: HeaderRenderer | undefined;
@@ -143,6 +152,7 @@ function defaultSettings(): FrameSettingsValues {
     dateLines: [],
     todayLineMarginTicks: DEFAULT_TODAY_LINE_MARGIN_TICKS,
     rowSource: DEFAULT_ROW_SOURCE,
+    barLabels: 'fitBar',
     barRenderer: undefined,
     cellRenderer: undefined,
     headerRenderer: undefined,
@@ -165,6 +175,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   dateLines: 'repaint',
   todayLineMarginTicks: 'none',
   rowSource: 'invalidateItems',
+  barLabels: 'repaint',
   barRenderer: 'repaint',
   cellRenderer: 'repaint',
   headerRenderer: 'repaint',
@@ -181,6 +192,7 @@ type SettingLayoutInputKey =
   | 'tickBoxFloorPx'
   | 'diamondSizePx'
   | 'minBarWidthPx'
+  | 'barHeightPx'
   | 'locale'
   | 'todayLine'
   | 'dateLines'
@@ -203,6 +215,7 @@ export class FrameSettings {
     tickBoxFloorPx: DEFAULT_TICK_BOX_FLOOR_PX,
     diamondSizePx: DEFAULT_DIAMOND_SIZE_PX,
     minBarWidthPx: DEFAULT_MIN_BAR_WIDTH_PX,
+    barHeightPx: DEFAULT_BAR_HEIGHT_PX,
   };
 
   /** `initial` is written straight into the values, with no port call. A Gantt under construction
@@ -230,6 +243,10 @@ export class FrameSettings {
 
   get rowSource(): RowSource {
     return this.#values.rowSource;
+  }
+
+  get barLabels(): BarLabels {
+    return this.#values.barLabels;
   }
 
   get barRenderer(): BarRenderer | RendererByKind | undefined {
@@ -294,6 +311,7 @@ export class FrameSettings {
       tickBoxFloorPx: this.#metrics.tickBoxFloorPx,
       diamondSizePx: this.#metrics.diamondSizePx,
       minBarWidthPx: this.#metrics.minBarWidthPx,
+      barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
       dateLines: this.#values.dateLines,
       rows: this.#values.rowSource,
