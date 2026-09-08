@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FreeGantt — branch review: the theme merges, and ADR 0011</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .leak { stroke: #dc2626; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<!-- ============ HEADER ============ -->
+<header class="space-y-3">
+  <h1 class="text-3xl font-serif font-bold">Branch review — <span class="text-slate-500">the theme merges</span></h1>
+  <p class="text-sm text-slate-600 font-mono">2026-09-08 · window <code>5b69cfc...HEAD</code> (d94e19d) · PR #269 <code>design/gantt-demo-theme-port</code> + 3 commits on main · 64 files · +3,535 −220</p>
+  <p class="text-sm text-slate-700 max-w-3xl">One pass, all axes: naming, simplicity and reuse, standards and spec, architecture, and the API surface. <code>harness/main.ts</code> reviewed as required (clean this window — its only two <code>--fg-*</code> writes at <code>:446,452</code> are a consumer recolouring a bar through a published token, which is the seam working). The user also asked for a review of <strong>ADR 0011</strong>, and for the findings here that the ADR would close.</p>
+  <p class="text-sm text-slate-700 max-w-3xl"><strong>Gate:</strong> <code class="bg-emerald-100 px-1">verify:full PASS — all 16 checks green, test:e2e included (75s).</code> That verdict needed two working-tree files moved aside first; both are outside the reviewed range and both are recorded as findings (<strong>F13</strong>, <strong>F14</strong>). Unmodified, the tree answers <code class="bg-red-100 px-1">verify:full FAILED at check 1 of 16: pnpm format:check</code>.</p>
+  <div class="flex gap-4 text-xs text-slate-500 pt-1">
+    <span><span class="inline-block w-3 h-3 bg-red-200 align-middle"></span> stop rule (harness compensating for src/)</span>
+    <span><span class="inline-block w-3 h-3 bg-amber-200 align-middle"></span> ADR 0011 closes or touches this</span>
+  </div>
+</header>
+
+<!-- ============ ROLLUP ============ -->
+<section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <div class="rounded-lg border-2 border-red-200 bg-red-50 p-4">
+    <h2 class="text-xs uppercase tracking-wider text-red-500">API surface / stop rule</h2>
+    <p class="text-2xl font-bold text-red-700">5</p>
+    <p class="text-sm text-slate-700">A theme pin still stops at the Gantt's own container, and the harness writes the theme twice and reads it back out of the library's DOM to compensate.</p>
+    <p class="text-xs text-slate-500 mt-2">Worst: <strong>F1</strong></p>
+  </div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500">Correctness</h2>
+    <p class="text-2xl font-bold">3</p>
+    <p class="text-sm text-slate-600">Two per-bar caches grow without bound and leak on destroy. A move preview never re-tests the label fit.</p>
+    <p class="text-xs text-slate-500 mt-2">Worst: <strong>F6</strong></p>
+  </div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500">Simplify + naming</h2>
+    <p class="text-2xl font-bold">3</p>
+    <p class="text-sm text-slate-600">The major-tick rule collapses a three-band preset's hierarchy into one weight. Reachable today.</p>
+    <p class="text-xs text-slate-500 mt-2">Worst: <strong>F10</strong></p>
+  </div>
+  <div class="rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
+    <h2 class="text-xs uppercase tracking-wider text-amber-700">ADR 0011</h2>
+    <p class="text-2xl font-bold text-amber-800">8</p>
+    <p class="text-sm text-slate-700">The rewrite from a value test to a structural test left three sentences arguing the old rule, and one of them states the opposite of its own table.</p>
+    <p class="text-xs text-slate-500 mt-2">Worst: <strong>F15</strong>, <strong>F16</strong></p>
+  </div>
+</section>
+
+<!-- ============ VERIFIED CLEAN ============ -->
+<section class="space-y-3">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">Verified clean</h2>
+  <p class="text-sm text-slate-700 max-w-4xl">Layer arrows hold: <code>layout/</code> stays DOM-free through the whole tick-line and bar-label addition — geometry in <code>layout/frame.ts</code>, paint in <code>render/dom/tick-lines.ts</code>, measurement in <code>render/dom/text-ruler.ts</code>, and the <code>TextRuler</code> is one per backend instance rather than a module-level canvas (I2). <code>barHeightPx</code> follows the established <code>PixelMetrics</code> path exactly — a token, a policy row, one loop, no per-property code, and no constructor option (#39). <code>barLabels</code> is a real config key with a live setter, a <code>'repaint'</code> invalidation, an <code>etc/freegantt.api.md</code> entry and a shorthand default (<code>'fitBar'</code>) that needs no expert knob. <code>BAR_SHAPE_CLASS</code> stays a lookup after the <code>fg-bar-bracket</code> → <code>fg-bar-summary</code> rename, so no <code>if (kind === …)</code> appeared. The <code>--fg-tick-line-color</code> / <code>--fg-tick-line-strong-color</code> pair is a token-only knob with no boolean beside it, which is the right shape. <code>SHIPPED_FIELD_TYPES</code> is a table, and its own comment names itself as the precedent for the next type. <code>mergeColumn</code>'s one-level merge is the correct reading of #249. <code>harness/main.ts</code> restates nothing the library ships.</p>
+</section>
+
+<!-- ============ API SURFACE / STOP RULE ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">API surface, and the stop rule</h2>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">ID</th><th class="p-2">File:line</th><th class="p-2">Sev</th><th class="p-2">Finding</th><th class="p-2">Verdict</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+
+      <tr class="bg-red-50"><td class="p-2 font-bold">F1</td>
+        <td class="p-2 font-mono text-xs">src/view/styles.ts:159–183<br/>harness/planner.html:141–143<br/>harness/planner.ts:258<br/>harness/planner-toolbar.ts:195</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs">High</span></td>
+        <td class="p-2"><strong>A theme pin on an ancestor governs the whole page except the Gantt.</strong> <code>c781061</code> unscoped the two attribute rules so a pin means the same thing outside the container — and that is true for a <em>sibling</em>. It is false for an <em>ancestor</em>. <code>.fg-container { ${LIGHT_COLOR_TOKENS} }</code> declares those custom properties <em>on the container element itself</em>, and a declaration on the element always beats an inherited value, whatever the ancestor's specificity. So <code>&lt;body data-fg-theme="dark"&gt;</code> leaves the Gantt light. The harness says so in its own words at <code>planner.html:141–143</code>: <em>"the Gantt itself, which re-declares the light set on <code>.fg-container</code> and would otherwise override what it inherits from the page"</em> — and pays for it with a doubled selector there, plus two separate writes of one choice (<code>gantt.theme</code> in <code>planner-toolbar.ts:195</code>, <code>document.body.dataset['fgTheme']</code> in <code>planner.ts:258</code>). One job, two doors, in two files. <strong>Stop rule:</strong> this is <code>src/</code>'s to close, not the harness's to route around.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-red-50"><td class="p-2 font-bold">F2</td>
+        <td class="p-2 font-mono text-xs">src/view/gantt-shell.ts:1555–1557<br/>harness/planner.html:116</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>No getter answers which theme is actually on.</strong> <code>get theme()</code> returns the stored <code>Theme</code>, so a consumer on the default <code>'auto'</code> reads back <code>'auto'</code> and learns nothing. #248's ruling is that <em>getters return what the library resolved</em>. The harness needs the resolved answer to paint its own chrome, and gets it by reading the library's own DOM attribute back through <code>body:has(#gantt[data-fg-theme='dark'])</code> — a consumer reaching into library internals because the published surface will not answer. A <code>resolvedTheme</code> getter (plus a change notification, since <code>'auto'</code> can flip under the reader) is the missing piece. Related to F1: with F1 fixed, most of this need goes away, because the consumer would not have to mirror the choice at all.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-red-50"><td class="p-2 font-bold">F3</td>
+        <td class="p-2 font-mono text-xs">harness/plugins/weekend-shading.ts:20–24, 43–56<br/>src/layout/decorations.ts</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>Adjacent decoration bands show a hairline seam, and the harness merges runs to hide it.</strong> The plugin's own comment states the defect precisely: <em>"Saturday and Sunday as two adjacent rects meet at a fractional pixel, and the sub-pixel remainder shows the pane through as a hairline that splits every stripe in two on a high-DPI screen."</em> That is a library rendering fault at the <code>rangeBand</code> seam, and <code>weekendRuns</code> is a <code>harness/</code> defence against it. Every plugin author that emits neighbouring bands hits it and writes the same helper. <strong>Stop rule:</strong> the fix belongs where bands become pixels.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F4</td>
+        <td class="p-2 font-mono text-xs">harness/planner.ts:223–225<br/>harness/plugins/weekend-shading.ts:18<br/>src/time/presets.ts:116–126</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The planner installs a plugin that paints nothing at the page's own opening state.</strong> <code>weekendShading()</code> returns <code>[]</code> unless <code>tickUnit === 'day' &amp;&amp; tickIncrement === 1</code>. The page opens on <code>preset: 'weekAndMonth'</code>, whose finest header band is <code>week</code>/1. So the comment at <code>planner.ts:223</code> — <em>"Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2)"</em> — is false until a reader zooms in. The page also carries three themes' worth of <code>--demo-weekend-bg</code> for paint that never runs. Either the page opens on a preset where the design's weekends are visible, or the comment says the plugin is there to be seen after a zoom.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F5</td>
+        <td class="p-2 font-mono text-xs">src/layout/decoration.ts:25–32<br/>harness/plugins/weekend-shading.ts:18</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>Two loose numbers where the provider asks one question.</strong> Read the call site aloud: <em>"if tick unit is not day, or tick increment is not one, return nothing."</em> The job the author means is <em>"can a reader see individual days?"</em>. Every provider that cares will write the same two-clause guard, and each will pick its own threshold for <code>tickIncrement</code>. The context already knows the answer; publishing the raw pair pushes the resolution onto every plugin. The doc comment on <code>tickUnit</code> even spells the intended reading out — which is the tell that the code is not saying it. Cheapest shape that keeps the pair honest: keep <code>tickUnit</code>/<code>tickIncrement</code> and add the resolved question beside them.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ CORRECTNESS ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">Correctness</h2>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">ID</th><th class="p-2">File:line</th><th class="p-2">Sev</th><th class="p-2">Finding</th><th class="p-2">Verdict</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+
+      <tr><td class="p-2 font-bold">F6</td>
+        <td class="p-2 font-mono text-xs">src/render/dom/index.ts:430, 434, 1099–1101, 1164–1165, 1520–1522</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>Two new per-bar caches are never cleared.</strong> <code>syncBars</code> opens with <code>barGeomByItemId.clear(); itemIdsByEntryId.clear(); itemIdsBySegmentId.clear();</code> and then writes <code>labelWidthByItemId</code> and <code>labelPlacementByItemId</code> without clearing either. <code>destroy()</code> clears the same three and neither of these. Both are keyed by <code>ItemId</code>, so on a virtualized scroll through a large dataset they accumulate one entry per item ever mounted and are never pruned — <code>syncKeyed</code>'s own prune only reaches the node and geom maps it owns. The entries are small, so this is growth rather than a live paint bug, but it breaks the file's stated invariant that <code>syncBars</code> is the sole writer of a per-frame map, and it survives <code>destroy()</code>, which is what makes it a leak rather than a cache.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F7</td>
+        <td class="p-2 font-mono text-xs">src/render/dom/index.ts:701–712<br/>src/render/dom/index.ts:236–243</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>A move preview never re-tests the label fit, so an outside label can be dragged past the content sizer.</strong> <code>applyBarPreview</code> returns early on <code>preview.dWidth === 0</code>, which is every move. But the outside clause is <code>barX + barWidth + gapPx + textWidth &lt;= contentWidth</code> — a pure function of <em>x</em> as well as width. Drag a bar with an <code>outside</code> label toward the right edge and <code>data-label="outside"</code> stays stamped while the label runs past <code>contentWidth</code>. <code>resolveBarLabelPlacement</code>'s own comment names this as the thing worth breaking a forced mode over (<em>"an <code>'outside'</code> label past <code>contentWidth</code> would inflate the pane's own scrollable extent"</em>), and <code>e2e/timeline-content-width.spec.ts</code> is the test that guards it — for the committed frame only. The resize path was fixed and the move path was not.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F8</td>
+        <td class="p-2 font-mono text-xs">src/render/dom/text-ruler.ts:5–6<br/>src/render/dom/index.ts:1135</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>The header comment claims a cadence the code does not keep.</strong> <em>"<code>syncBars</code> reads this once per label and never mid-gesture."</em> <code>toGeom</code> runs for every bar on every <code>sync()</code>, so <code>measureText</code> runs once per visible bar <em>per frame</em>, not once per label. The mid-gesture half is true (<code>applyBarPreview</code> reads the cache). The per-frame half is not, and it matters because it is the sentence that justifies not caching by text. Frame build is not I5's hot path, so this is a comment defect first and a cost note second — but a reader sizing the ruler's budget will size it wrong. Either cache by label text, or say what the real cadence is.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ SIMPLIFY + NAMING ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">Simplicity, reuse, naming</h2>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">ID</th><th class="p-2">File:line</th><th class="p-2">Sev</th><th class="p-2">Finding</th><th class="p-2">Verdict</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+
+      <tr><td class="p-2 font-bold">F10</td>
+        <td class="p-2 font-mono text-xs">src/layout/frame.ts:369–376, 559–570<br/>src/time/presets.ts:155–170</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>A three-band preset collapses two levels of hierarchy into one <code>major</code> weight.</strong> <code>coarserBandStartsOf</code> takes <code>rawBandTicks.slice(0, -1)</code> and merges <em>every</em> coarser band into one <code>Set</code>. Under <code>dayWeekMonth</code> (headers: month, week, day) a month-opening day and a week-opening day both come back <code>major: true</code> and paint the same <code>--fg-tick-line-strong-color</code>. So the grid says "week boundary" and "month boundary" in one voice, and the reader cannot tell them apart — which is the exact job <code>major</code> was added for. This is reachable today: <code>dayWeekMonth</code>, <code>hourDayWeek</code> and <code>weekMonthYear</code> all ship three bands, and <code>ZOOM_PRESETS</code> steps through <code>hourDayWeekPreset</code>. <code>frame.ts</code>'s own comment reasons only about the two-band cases. Either <code>major</code> becomes a level (0…n−1) and the sheet gets one token per level, or the rule states that only the band immediately coarser than the finest counts.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F9</td>
+        <td class="p-2 font-mono text-xs">harness/plugins/weekend-shading.ts:43–56</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>An injected calendar that the caller already holds.</strong> <code>weekendRuns(days, { isWeekend, nextDay })</code> takes two closures built one line above from the <code>time</code> that is right there in scope. Read the invocation aloud: <em>"weekend runs of these days, given how to tell a weekend and how to get the next day"</em> — the second half is ceremony. The seam buys no test isolation (the function is private to the file and untested) and no reuse (one call site). Passing <code>time</code> reads as the domain: <em>"weekend runs over these days, in this zone"</em>. Subordinate to F3 — if the library merges bands, this helper goes entirely.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F11</td>
+        <td class="p-2 font-mono text-xs">src/data/fields/field-registry.ts:47–62</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>Four throwaway bindings to strip two keys.</strong> <code>mergeColumn</code> destructures <code>_fromWidth</code>, <code>_fromFlex</code>, <code>_ownWidth</code>, <code>_ownFlex</code> purely to build <code>fromRest</code>/<code>ownRest</code>. The rule it encodes is right and matches <code>view/grid-columns.ts</code>; the spelling makes a reader decode four underscored names before finding the one sentence — <em>sizing replaces whole, everything else merges key by key</em>. A named <code>SIZING_KEYS</code> tuple with one omit helper says that once. Cosmetic; noted because this function is the merge rule's only home and will be read often.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ DOCS + GATE ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">Docs drift, and the gate</h2>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">ID</th><th class="p-2">File:line</th><th class="p-2">Sev</th><th class="p-2">Finding</th><th class="p-2">Verdict</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+
+      <tr><td class="p-2 font-bold">F12</td>
+        <td class="p-2 font-mono text-xs">src/view/gantt-shell.ts:1559–1562<br/>src/view/styles.ts:31–36</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>Two files describe one mechanism differently, and the older one is now wrong.</strong> The <code>theme</code> setter still says <em>"Colour tokens are scoped to <code>.fg-container</code>, so the pin wins over the media query even when <code>:root</code> has no attribute."</em> After <code>c781061</code> the tokens are no longer scoped to <code>.fg-container</code> — the two attribute rules select on the attribute alone, and the pin wins by source order at equal specificity, not by scoping. <code>styles.ts</code>'s header carries the current account. The setter's comment was not updated with it.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F13</td>
+        <td class="p-2 font-mono text-xs">.prettierignore<br/>.claude/settings.local.json</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong><code>verify:full</code> fails at check 1 on a machine-local file the repo does not own.</strong> <code>prettier --check .</code> walks the filesystem, and <code>.claude/settings.local.json</code> is git-ignored through the user's <em>global</em> ignore file, which prettier never reads. So the gate's first check reports <code>FAILED at check 1 of 16</code> and the 15 real checks never run. <code>.prettierignore</code> already carries <code>.claude/worktrees</code> with a comment explaining this exact class of miss (<em>"<code>prettier --check .</code> walks the filesystem directly, so <code>.gitignore</code>-only exclusion does not stop from being scanned"</em>). Add <code>.claude/settings.local.json</code> beside it. Not caused by this branch; it blocks anyone verifying this branch.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr><td class="p-2 font-bold">F14</td>
+        <td class="p-2 font-mono text-xs">plans/02-01-API-Redo.md (untracked)</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The API-redo draft names two vendor Gantt products, and <code>pnpm vendor-names</code> refuses it.</strong> <code>verify:full FAILED at check 8 of 16: pnpm vendor-names</code>, naming two banned strings in that file. Run <code>pnpm vendor-names</code> to see which — this report cannot quote them, because the same check reads this report. CLAUDE.md: <em>"Vendor Gantt product names never appear in specs, docs, or code."</em> ADR 0011 gets this right in the same working tree — it writes <em>"a comparable data grid"</em> and <em>"a comparable Gantt"</em> — so the pattern to copy is one file away. This file is untracked WIP and outside the reviewed range, but it will block the commit that lands the API redo, and it blocks the gate for anyone verifying this branch today.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ ADR 0011 ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">ADR 0011 — <span class="text-slate-500">a consumer Field is a plain property, and a derived value never persists</span></h2>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 space-y-2">
+    <p><strong>The case is strong and the code backs it.</strong> Every load-bearing claim about the current codebase checks out, and several were probed rather than taken on trust: <code>CoreFieldKey = keyof Omit&lt;Entry, 'id'&gt;</code> (<code>model/field.ts:10</code>) really does make <code>source: { from: 'entry', field: 'cost' }</code> a type error; <code>metaStrategy.read</code> really does spread the bag on every read (<code>source-strategy.ts:102–104</code> through <code>metaRecord</code> at <code>:19–24</code>); <code>capability.ts:119</code> really does return <code>DERIVED</code> for <code>isRollUpKind &amp;&amp; rollsUp</code>; <code>build-commit-change-set.ts:104</code> really does skip the literal <code>'proposedKeys'</code>; <code>rollup-is-removable</code> really does bound <code>data/rollup.ts</code>'s importers to two files; <code>reportCorrectedRollUps</code> exists at <code>serialization/index.ts:86</code>; <code>EntryDocument.start</code>/<code>.end</code> really are required strings (<code>model/document.ts:23–24</code>); and <code>TMeta</code> is <strong>exactly 93</strong> references in <code>src/</code>. The <code>compute</code>-over-<code>get</code> naming argument is correct — <code>get</code> already names three jobs here.</p>
+    <p><strong>The problem is the revision.</strong> The ADR was rewritten from a <em>value test</em> (does the Rollup reproduce this stored value?) to a <em>structural test</em> (is this a rolling-up kind with children?). The new rule is simpler and buys back the <code>rollup-is-removable</code> exemption the old one had to widen. But three sentences that argued the old rule were left in place, and one of them now states the opposite of the ADR's own table.</p>
+  </div>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">ID</th><th class="p-2">Where</th><th class="p-2">Sev</th><th class="p-2">Finding</th><th class="p-2">Verdict</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F15</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:114, 115, 94<br/>vs :80, :84</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs">High</span></td>
+        <td class="p-2"><strong>Three sentences still argue the retired value test, and one contradicts the table above it.</strong> Line 84 retires the value test explicitly. Then:<br/>• <strong>:114</strong> — <em>"A declining Aggregator keeps its parent's authored value, and that value still persists. The value test gives this for free…"</em> Table row 4 at <strong>:80</strong> says a declining Aggregator on a parent with children is <strong>omitted</strong>. These are opposite answers to one question, six lines apart.<br/>• <strong>:115</strong> — <em>"…because the value test is a pure function of state."</em> Stale referent; the structural test is the pure function now (:73 says so).<br/>• <strong>:94</strong> — <em>"Rejected — see the table above. It needs a cumulative set… that five reachable seams invalidate."</em> The table above no longer makes that argument, and has six rows, not five.<br/>A reader cannot tell which rule the ADR decided. Delete :114 and :115, and rewrite :94's rejection against the structural test.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F16</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:86 vs :78, :107<br/>src/data/rollup.ts:208</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs">High</span></td>
+        <td class="p-2"><strong>The ADR proposes a fix that breaks its own table row 2.</strong> Line 86 calls for <em>"A declining Aggregator should clear the parent's value rather than leave the previous one standing."</em> Table row 2 (<strong>:78</strong>) survives only because it does <em>not</em>: a parent whose last child is removed derives nothing, <code>rollup.ts:208</code> <code>continue</code>s on <code>undefined</code>, the last derived <code>start</code>/<code>end</code> stay in the store, and export writes them — <em>"so the round-trip stays deterministic"</em>. Land :86's clear-on-decline and a childless rolling-up parent is emptied instead; row 2 then writes an Entry with no <code>start</code>/<code>end</code>, and the ADR's own <strong>:107</strong> says <code>fromJSON</code> throws <code>InvalidInstantError</code> on exactly that row. The ADR needs to separate the two cases — <em>an Aggregator that saw children and declined</em> versus <em>a parent with no children to aggregate</em> — or drop :86.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F17</td>
+        <td class="p-2 font-mono text-xs">ADR 0011 frontmatter:3<br/>vs :106, :109, :116, :120</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The frontmatter says <code>decided</code>; four Consequences still end in "either/or — say which".</strong> <strong>:106</strong> <em>"Give <code>proposedKeys</code> the same ingest error the others get, or move it off the edit object."</em> <strong>:109</strong> <em>"Either keep dropping legacy <code>progress</code>, or say what the plugin does…"</em> <strong>:116</strong> <em>"Either sort consumer keys, or narrow the contract to core keys — and say which."</em> <strong>:120</strong> <em>"State whether the internal <code>Entry</code> gains an index signature or accepts under-describing its runtime object."</em> Each is a fork with real consequences for the implementer, and none is a follow-up — :116 changes a documented Document contract and :120 changes what every internal reader of <code>Entry</code> can type. A <code>decided</code> ADR that leaves four forks hands the decision to whoever writes the code first.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F18</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:10, :119<br/>harness/planner.ts:31, 61, 75, 159</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The motivating harness example is only half-closed by the ADR's own remedy, and the ADR should say so.</strong> :10 cites <code>harness/planner.ts:31</code>'s two disagreeing generics — real, and confirmed: <code>Dataset&lt;PlannerMeta, { owner?; progress?; phase? }&gt;</code> where <code>PlannerMeta</code> also declares <code>critical</code> and the second parameter does not. One generic fixes that outright. But the harness's <em>other</em> pain is three casts — <code>entry.meta as PlannerMeta | undefined</code> at <code>:61</code>, <code>:75</code> and <code>:159</code> — and :119's remedy is <em>"a raw property read that answers <code>unknown</code> and throws for nothing"</em>. That is the same cast in a new spelling: <code>readProperty(entry, 'phase') as number</code>. The ADR's stated win at :120 (<em>"one generic rather than two that can disagree, not the removal of the two-typed-views problem"</em>) is honest — but :10 opens with the cast-free promise and the reader has to reach :119 to learn it does not arrive at the renderer. Say it at :10.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F19</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:108, :91</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The version gate guards the newer-file direction only; the collision that flattening creates runs the other way.</strong> :108 refuses <em>"a Document whose <code>schema</code> exceeds this build"</em>, which stops a future core key arriving disguised as consumer data. It does not stop the mirror case: a <code>schema: 5</code> Document carrying a consumer key <code>cost</code>, read by a later build that has since made <code>cost</code> a stored core key. The file is <em>older</em>, so the gate does not fire, and the reader silently adopts a consumer's value as a core one. :91 answers <em>"the core key set is seven names, it is frozen for this release"</em> — a claim about this release, and the hazard is about the next. The rejected <code>data</code>-namespace option exists precisely to make this impossible, and :91 already names itself as <em>"the claim to attack if this ADR is wrong"</em>. This is that attack: name the migration door (a per-key provenance record, or a reserved-prefix rule for future core keys), or the namespace comes back.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F20</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:105</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs">Med</span></td>
+        <td class="p-2"><strong>The typo guard sits on the low-volume door.</strong> <em>"Ingest is open; update is closed."</em> So <code>entries.add()</code> accepts any non-reserved key across a whole dataset with no check, and <code>entries.update()</code> refuses one key at a time. A typo enters through the door that carries thousands of rows and is caught at the door that carries one — and the one that carries one is the door an editor autocompletes. The ADR names the asymmetry (<em>"the asymmetry a reader must learn"</em>) and justifies the closed half (<em>"making a value editable is what a declaration buys"</em>), but never defends the open half. It is defensible — a Dataset must ingest data whose shape it does not govern — but the ADR has to say that, because a reader's first reading is that the guard is on backwards.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F21</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:121, :34<br/>src/data/serialization/field-document.ts:134</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>Deleting <code>FieldSource</code> removes the test that keeps a <code>compute</code> Field out of the Document, and nothing replaces it.</strong> <code>encodeFieldDocument</code>'s contract today is <em>"Core Fields, compute sources, and functions stay out"</em> — it reads <code>source.from === 'compute'</code>. :121 deletes <code>SerializedField.source</code> and <code>FieldSource</code> without naming the successor. The ADR's own example at :34 declares <code>{ key: 'ref', compute: … }</code> as a consumer Field, so it goes through <code>authored</code> and must be excluded by something. The replacement is one line (<code>'compute' in field</code>), which is why it is Low — but the deleted-surface list is the place the implementer will look, and it does not mention it.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+      <tr class="bg-amber-50"><td class="p-2 font-bold">F22</td>
+        <td class="p-2 font-mono text-xs">ADR 0011:55, :121, :122</td>
+        <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Low</span></td>
+        <td class="p-2"><strong>A new error is added without a name.</strong> :55 — <em>"<code>FieldRegistry</code> throws for <code>compute</code> beside <code>rollUp</code> or <code>editable</code>, the same way it already throws <code>UnknownAggregatorError</code>."</em> The precedent is named; the new error is not. :121 retires <code>DuplicateFieldSourceError</code> and <code>InvalidFieldSourceError</code>, and :122 removes <code>plans/02</code> §7's two <code>FieldSource</code> entries — so the ADR balances two deletions against one unnamed addition. Every other error in this codebase is a named type with a §7 row. Name it and add the row.</td>
+        <td class="p-2 text-xs">—</td></tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ CROSSOVER ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">What ADR 0011 would close in this window</h2>
+  <p class="text-sm text-slate-700 max-w-4xl">The user asked which review findings the ADR addresses. The theme merges are almost entirely <code>view/</code>, <code>render/</code> and <code>layout/</code>, so the ADR touches none of F1–F14. It does close four things this window's <em>harness</em> code exposes — which is the stop rule working as designed: the planner page is the first consumer big enough to press on the Field surface, and it bent in exactly the places the ADR names.</p>
+  <table class="w-full text-sm bg-white rounded-lg border border-slate-200">
+    <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+      <th class="p-2">What this window shows</th><th class="p-2">Where</th><th class="p-2">ADR ruling</th><th class="p-2">Closed?</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+      <tr>
+        <td class="p-2">Two generics for one set of values, disagreeing about <code>critical</code> with nothing to catch it</td>
+        <td class="p-2 font-mono text-xs">harness/planner.ts:31<br/>fixtures/planner-dataset.ts:17–27</td>
+        <td class="p-2 text-xs">One generic — <code>Entry&lt;TFields&gt;</code> at the Dataset, plain <code>Entry</code> inside (:120)</td>
+        <td class="p-2 text-xs"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Fully</span></td></tr>
+      <tr>
+        <td class="p-2">Three <code>entry.meta as PlannerMeta | undefined</code> casts inside renderers</td>
+        <td class="p-2 font-mono text-xs">harness/planner.ts:61, 75, 159</td>
+        <td class="p-2 text-xs">A by-key raw property read on <code>BarRendererContext</code>/<code>CellRendererContext</code>, answering <code>unknown</code> (:119)</td>
+        <td class="p-2 text-xs"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800">Partly</span> — see <strong>F18</strong></td></tr>
+      <tr>
+        <td class="p-2"><code>{ key: 'phase' }</code> and <code>{ key: 'critical' }</code> declared with no <code>type</code>, no <code>rollUp</code>, no <code>editable</code>, no <code>column</code> — declarations that exist so the values are reachable, not because the library has a job</td>
+        <td class="p-2 font-mono text-xs">fixtures/planner-dataset.ts:170–171</td>
+        <td class="p-2 text-xs"><em>"Declare a Field when the library has a job to do with the value, not to make the value exist"</em> (:43) — both declarations disappear</td>
+        <td class="p-2 text-xs"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Fully</span></td></tr>
+      <tr>
+        <td class="p-2">A bar renderer reaching past its own context to the module-scope <code>dataset</code> to read one value off the entry it was handed</td>
+        <td class="p-2 font-mono text-xs">harness/planner.ts:147–150, 165, 193</td>
+        <td class="p-2 text-xs">Same by-key reader (:119); <code>progress</code> becomes <code>entry.progress</code> at the Dataset</td>
+        <td class="p-2 text-xs"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800">Partly</span></td></tr>
+      <tr class="bg-stone-50">
+        <td class="p-2 text-slate-600" colspan="4"><strong>Not closed by the ADR:</strong> F1–F14. The theme pin (F1), the resolved-theme getter (F2), the band seam (F3) and the tick-line hierarchy (F10) are all <code>view</code>/<code>render</code>/<code>layout</code> gaps and need their own fixes.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ PASS 2 ============ -->
+<section class="space-y-3">
+  <h2 class="text-2xl font-serif font-bold border-b border-slate-200 pb-2">Pass 2 — verification</h2>
+  <p class="text-sm text-slate-700">A fresh <code>reviewer-planner</code> sub-agent, starting cold, opens every file each finding cites and returns one verdict per id: <code>Confirmed</code>, <code>Mis-described</code>, <code>Wrong</code>, or <code>Unproven</code>. Verdicts land in the right-hand column of each table above. A verified finding does not verify its proposed fix.</p>
+</section>
+
+</main>
+</body>
+</html>
