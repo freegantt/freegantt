@@ -9,6 +9,7 @@ export type HarnessPageId =
   | 'large-dataset'
   | 'mutation'
   | 'editing'
+  | 'planner'
   | 'plugins'
   | 'docs';
 
@@ -27,6 +28,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'large-dataset', label: 'Large dataset', file: 'large-dataset.html' },
   { id: 'mutation', label: 'Mutation & live binding', file: 'data.html' },
   { id: 'editing', label: 'Direct manipulation', file: 'editing.html' },
+  { id: 'planner', label: 'Planner (design)', file: 'planner.html' },
   { id: 'plugins', label: 'Plugin runtime', file: 'plugins.html' },
   { id: 'docs', label: 'Docs', file: 'docs/index.html' },
 ];
@@ -59,6 +61,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'mutation';
     case 'editing.html':
       return 'editing';
+    case 'planner.html':
+      return 'planner';
     case 'plugins.html':
       return 'plugins';
     default:

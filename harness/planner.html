@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — planner</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+
+      /* ---- The Gantt itself ---------------------------------------------------------------- */
+      /* Every value here is a published token. Nothing below reaches into a library class to
+         restyle it, which is the claim this page exists to make: the design is a token set. */
+      #gantt {
+        --fg-row-height: 36px;
+        --fg-band-height: 24px;
+        --fg-cell-padding-inline: 10px;
+        --fg-indent-width: 14px;
+        --fg-bar-radius: 4px;
+        border: 1px solid var(--fg-splitter-color);
+        border-radius: 10px;
+        overflow: hidden;
+        height: 70vh;
+      }
+
+      /* Typography stays harness-owned (D-S1.11-8) — the library sets no font. */
+      #gantt .fg-tick,
+      #gantt .fg-row-cell,
+      #gantt .fg-row-label {
+        font-size: 12px;
+      }
+      #gantt .fg-col-header {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      #gantt .fg-bar {
+        font-size: 11px;
+      }
+
+      /* ---- Phase hues ---------------------------------------------------------------------- */
+      /* The design's five phase colours, named once per theme. A bar renderer points
+         `--fg-bar-fill` at one of these, so the swap happens in CSS and no script re-derives a
+         colour when the theme changes. Lightness is what moves between themes: dark fills carry
+         light labels, light fills carry dark ones. */
+      body {
+        --demo-phase-60: oklch(0.44 0.11 60);
+        --demo-phase-30: oklch(0.44 0.11 30);
+        --demo-phase-285: oklch(0.44 0.11 285);
+        --demo-phase-15: oklch(0.44 0.11 15);
+        --demo-phase-215: oklch(0.44 0.11 215);
+      }
+      @media (prefers-color-scheme: dark) {
+        body:not(.theme-paper) {
+          --demo-phase-60: oklch(0.78 0.12 60);
+          --demo-phase-30: oklch(0.78 0.12 30);
+          --demo-phase-285: oklch(0.78 0.12 285);
+          --demo-phase-15: oklch(0.78 0.12 15);
+          --demo-phase-215: oklch(0.78 0.12 215);
+        }
+      }
+      body:has(#gantt[data-fg-theme='dark']) {
+        --demo-phase-60: oklch(0.78 0.12 60);
+        --demo-phase-30: oklch(0.78 0.12 30);
+        --demo-phase-285: oklch(0.78 0.12 285);
+        --demo-phase-15: oklch(0.78 0.12 15);
+        --demo-phase-215: oklch(0.78 0.12 215);
+      }
+
+      /* ---- Paper ---------------------------------------------------------------------------- */
+      /* The design's third theme, and the reason it is worth having on this page: the library ships
+         Light and Dark, Paper is a consumer class over `--fg-*` alone. No library edit made it
+         possible and no library edit could stop it. Its shadows are hard-offset rather than soft,
+         which is what makes it read as stock rather than glass. */
+      body.theme-paper {
+        background: #f1ede2;
+        --demo-phase-60: oklch(0.42 0.1 60);
+        --demo-phase-30: oklch(0.42 0.1 30);
+        --demo-phase-285: oklch(0.42 0.1 285);
+        --demo-phase-15: oklch(0.42 0.1 15);
+        --demo-phase-215: oklch(0.42 0.1 215);
+      }
+      body.theme-paper #gantt {
+        --fg-pane-bg: #faf7ee;
+        --fg-splitter-color: #d9d2bd;
+        --fg-header-bg: #faf7ee;
+        --fg-header-band-bg: #ece6d4;
+        --fg-header-text: #2a2620;
+        --fg-header-subtext: #6a6253;
+        --fg-header-divider-color: #d9d2bd;
+        --fg-row-odd-bg: #f3eee0;
+        --fg-row-hover-bg: #efe9d5;
+        --fg-row-label-color: #2a2620;
+        --fg-row-unmatched-label-color: #6f6757;
+        --fg-bar-fill: oklch(0.44 0.1 252);
+        --fg-bar-label-color: #faf7ee;
+        --fg-bar-radius: 2px;
+        --fg-selection-color: oklch(0.48 0.18 305);
+        --fg-warn: #96590a;
+        --fg-date-line-color: #b0361f;
+        --fg-date-line-label-color: #faf7ee;
+        --fg-hover-ring: rgb(42 38 32 / 0.24);
+        --fg-drag-shadow: 0 2px 0 rgb(42 38 32 / 0.22);
+        --fg-popup-bg: #faf7ee;
+        --fg-popup-border: #c5bca1;
+        --fg-popup-shadow: 0 2px 0 rgb(42 38 32 / 0.1), 0 10px 24px rgb(42 38 32 / 0.1);
+      }
+
+      /* ---- Cells the page paints itself ------------------------------------------------------ */
+      /* These style the page's own renderer output (`demo-*`), never a library class. */
+      .demo-task-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .demo-task-cell-group {
+        font-weight: 600;
+      }
+      .demo-task-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .demo-phase-tag {
+        flex: none;
+        width: 4px;
+        height: 18px;
+        border-radius: 2px;
+      }
+      /* The letter takes the row's own ink, not --fg-warn. Amber on the pane measures 4.23:1 in the
+         light theme and 3.98:1 on an odd row — fine for the ring, which is a graphic at 3:1, and
+         under the floor for text. So the ring carries the meaning and the letter stays legible. */
+      .demo-permit {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 15px;
+        height: 15px;
+        border-radius: 3px;
+        border: 1px solid var(--fg-warn);
+        color: var(--fg-row-label-color);
+        font-size: 9px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .demo-avatar {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        color: var(--fg-bar-label-color);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .demo-progress {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        width: 100%;
+      }
+      .demo-progress-track {
+        position: relative;
+        flex: 1 1 auto;
+        max-width: 30px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--fg-splitter-color);
+        overflow: hidden;
+      }
+      .demo-progress-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        border-radius: 2px;
+        background: var(--fg-header-subtext);
+      }
+      .demo-progress-text {
+        min-width: 30px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* The critical path: a ring inside the bar's own box, so it never shifts a neighbour. It sits
+         on --fg-warn rather than a sixth hue — a critical row is a warning, and the sheet already
+         owns one colour for that.
+         It is a child element rather than a box-shadow on `.fg-bar`, because the bar's shadow slot
+         is the library's: `hovered` and `dragging` both paint there, and a second box-shadow rule
+         would replace theirs instead of joining it. A nested ring stacks with both. */
+      .demo-critical-ring {
+        position: absolute;
+        inset: 0;
+        border: 1.5px solid var(--fg-warn);
+        border-radius: inherit;
+        pointer-events: none;
+      }
+
+      /* ---- Page chrome ----------------------------------------------------------------------- */
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0 0.5rem;
+        font-size: 0.9rem;
+      }
+      #toolbar button,
+      #toolbar select,
+      #toolbar label {
+        font: inherit;
+      }
+      #page-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.9rem;
+      }
+      #readout {
+        margin: 0.75rem 0 0;
+        font-size: 0.85rem;
+        color: var(--fg-header-subtext);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — planner</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        The <code>Gantt demo sandbox rebuild</code> design, built on the public surface alone. Every colour is
+        a published <code>--fg-*</code> token; every cell the design paints as something other than text is a
+        <code>cellRenderer</code>; every bar colour is a <code>barRenderer</code> pointing
+        <code>--fg-bar-fill</code> at a phase hue. <strong>Paper</strong> is the point of the exercise — the
+        library ships Light and Dark, and Paper is a class this page defines over tokens the library never
+        hears about.
+      </p>
+      <div id="page-brief"></div>
+      <div id="toolbar"></div>
+      <div id="page-controls">
+        <button id="new-task-btn" type="button">+ New task</button>
+        <label><input id="paper-toggle" type="checkbox" /> Paper theme (consumer-set)</label>
+      </div>
+      <div id="gantt"></div>
+      <p id="readout" role="status"></p>
+    </main>
+    <script type="module" src="./planner.ts"></script>
+  </body>
+</html>
