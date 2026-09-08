@@ -50,6 +50,9 @@ export interface BarFlags {
 }
 
 // @public
+export type BarLabelPlacement = 'inside' | 'outside';
+
+// @public
 export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
 
 // @public
@@ -61,6 +64,7 @@ export interface BarRendererContext {
     entry: Entry;
     // (undocumented)
     item: FrameBar;
+    label?: ResolvedBarLabel;
 }
 
 // @public
@@ -1743,6 +1747,14 @@ export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer
 
 // @public
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
+
+// @public
+export interface ResolvedBarLabel {
+    // (undocumented)
+    placement: BarLabelPlacement;
+    // (undocumented)
+    text: string;
+}
 
 // @public
 export interface ResolvedColumn extends FrameColumn {

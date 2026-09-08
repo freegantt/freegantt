@@ -13,9 +13,26 @@ import type { ResolvedColumn } from './column.js';
 /** One of the four renderer points (D-S5-11): one slot each. */
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
 
+/** Which side of the bar the label paints on. This is the *answer* for one bar at one width, not the
+ *  `barLabels` policy that produced it: `'fitBar'` reads `'inside'` for a bar the text fits and
+ *  `'outside'` for one it does not. */
+export type BarLabelPlacement = 'inside' | 'outside';
+
+/** The label the library resolved for one bar — the text, and the side it paints on. A `barRenderer`
+ *  paints it in its own markup and needs no text ruler of its own: the library measures, in one
+ *  place, for its own label and for a renderer's alike (J1). */
+export interface ResolvedBarLabel {
+  text: string;
+  placement: BarLabelPlacement;
+}
+
 export interface BarRendererContext {
   entry: Entry;
   item: FrameBar;
+  /** Absent when the consumer asked for no label (`barLabels: 'none'`) — so a renderer reads "this
+   *  bar has a label, here is where it goes" or nothing, and "a label with nowhere to paint" stays
+   *  unrepresentable. */
+  label?: ResolvedBarLabel;
 }
 /** `undefined` keeps the library's own output for this one bar (D-S5-11). */
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
@@ -73,6 +90,7 @@ export interface ResolvedRenderer<TRenderer> {
  *  and falls back to inside, ellipsised, when neither fits — a family with the shipped
  *  `range: 'fitDataset'` and `gridWidth: 'fitColumns'`. `'inside'` and `'outside'` force one placement
  *  regardless of fit (ellipsised inside, or clipped at the pane edge outside — the same load-bearing
- *  fallback `'fitBar'`'s third clause takes). `'none'` paints no label at all; a dense chart that
- *  cannot afford one otherwise needs a `barRenderer` to reach it. */
+ *  fallback `'fitBar'`'s third clause takes). `'none'` paints no label at all, and a `barRenderer`
+ *  sees no `ctx.label` either — one answer to "did the consumer ask for a label", for the library's
+ *  own paint and for a renderer's alike. */
 export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';

@@ -103,6 +103,8 @@ export type {
   RendererFor,
   ResolvedRenderer,
   BarLabels,
+  BarLabelPlacement,
+  ResolvedBarLabel,
 } from './renderer.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {

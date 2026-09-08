@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
-import type { BarRenderer, ErrorReportInput, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
+import type {
+  BarRenderer,
+  ErrorReportInput,
+  ItemId,
+  ResolvedBarLabel,
+  TimeScale,
+  ViewPreset,
+} from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { segmentId } from '../../layout/index.js';
 
@@ -2272,6 +2279,62 @@ describe('render/dom backend', () => {
       expect(bar.dataset['label']).toBeUndefined();
       expect(bar.querySelector('.fg-bar-label')).toBeNull();
       expect(bar.textContent).toBe('custom');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer reads the label the library resolved for this bar (J1)', () => {
+      withStubRuler();
+      const seen: (ResolvedBarLabel | undefined)[] = [];
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({
+          renderer: (ctx) => {
+            seen.push(ctx.label);
+            return {
+              text: ctx.label === undefined ? 'no label' : `${ctx.label.text}@${ctx.label.placement}`,
+            };
+          },
+        }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+
+      // Wide bar: the text fits, so the answer this renderer paints is `inside`.
+      backend.sync(frameFor(0, 200, 2000));
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('Discovery@inside');
+      // Narrow bar, room in the pane: the same renderer now paints `outside`, with no ruler of its own.
+      backend.sync(frameFor(0, 20, 2000));
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('Discovery@outside');
+      expect(seen.map((label) => label?.placement)).toEqual(['inside', 'outside']);
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer sees no label when the consumer asked for none (J1)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({
+          renderer: (ctx) => ({ text: ctx.label === undefined ? 'no label' : 'a label' }),
+        }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        readBarLabels: () => 'none',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('no label');
 
       backend.destroy();
       grid.remove();
