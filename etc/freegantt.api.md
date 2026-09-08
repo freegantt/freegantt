@@ -50,6 +50,9 @@ export interface BarFlags {
 }
 
 // @public
+export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
+
+// @public
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
 
 // @public (undocumented)
@@ -969,6 +972,8 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get a11yLabel(): string;
     set a11yLabel(value: string);
+    get barLabels(): BarLabels;
+    set barLabels(value: BarLabels);
     get barRenderer(): BarRenderer | RendererByKind | undefined;
     set barRenderer(renderer: BarRenderer | RendererByKind | undefined);
     // (undocumented)
@@ -1131,6 +1136,7 @@ export type GanttOptions<TMeta = unknown, TFields extends Record<string, unknown
 // @public (undocumented)
 export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
     a11yLabel?: string;
+    barLabels?: BarLabels;
     barRenderer?: BarRenderer | RendererByKind;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];

@@ -313,6 +313,7 @@ export type {
   RendererFor,
   BarRenderer,
   BarRendererContext,
+  BarLabels,
   RendererByKind,
   CellRenderer,
   CellRendererContext,
