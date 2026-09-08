@@ -214,8 +214,8 @@ describe('row height (#39)', () => {
     container.style.setProperty('--fg-row-height', '48px');
 
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
-    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    expect(bar.style.height).toBe('48px');
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.style.height).toBe('48px');
 
     shell.destroy();
     container.remove();
@@ -224,8 +224,34 @@ describe('row height (#39)', () => {
   it('falls back to a default when --fg-row-height is unset', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+    expect(row.style.height).toBe('32px');
+    shell.destroy();
+  });
+});
+
+// A bar paints at --fg-bar-height, not the row's own height (bar height is its own knob) — the
+// twin of "row height (#39)" above, for the token that now governs the bar box instead.
+describe('bar height', () => {
+  it('reads --fg-bar-height from the container, independent of --fg-row-height', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    container.style.setProperty('--fg-row-height', '48px');
+    container.style.setProperty('--fg-bar-height', '22px');
+
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    expect(bar.style.height).toBe('32px');
+    expect(bar.style.height).toBe('22px');
+
+    shell.destroy();
+    container.remove();
+  });
+
+  it('falls back to the shipped default (18px) when --fg-bar-height is unset', () => {
+    const container = document.createElement('div');
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.style.height).toBe('18px');
     shell.destroy();
   });
 });

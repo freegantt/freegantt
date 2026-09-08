@@ -22,6 +22,7 @@ import {
 } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
+import { SHIPPED_FIELD_TYPES } from './field-types.js';
 import { storedSourceOf } from './normalize-source.js';
 
 export interface ResolvedField extends Field {
@@ -43,9 +44,26 @@ function metaSlot(source: FieldSource): string | undefined {
   return source.key ?? undefined;
 }
 
+/** #142/percent-shipped: `field.column` and `bundle.column` merge one level deep, not whole-object.
+ *  A shallow `{ ...bundle, ...field }` lets a Field naming only `column: { header }` drop the type's
+ *  whole `column` bundle — its alignment included — the moment it wants to keep its own header.
+ *  `width`/`flex` still merge as the one pair they are (#249, mirrored from `view/grid-columns.ts`):
+ *  a Field that sizes itself at all replaces the type's sizing whole, never key by key. */
+function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column'] {
+  const from = bundle?.column;
+  const own = field.column;
+  if (from === undefined) return own;
+  if (own === undefined) return from;
+  const { width: _fromWidth, flex: _fromFlex, ...fromRest } = from;
+  const { width: _ownWidth, flex: _ownFlex, ...ownRest } = own;
+  const sizing = own.width !== undefined || own.flex !== undefined ? own : from;
+  return { ...fromRest, ...ownRest, ...sizing };
+}
+
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
   const merged: Field = bundle === undefined ? { ...field } : { ...bundle, ...field };
-  return { ...merged, source: storedSourceOf(field) };
+  const column = mergeColumn(field, bundle);
+  return { ...merged, ...(column !== undefined ? { column } : {}), source: storedSourceOf(field) };
 }
 
 /** #142: the only keys a consumer declaration may carry when it names a core Field's key. A core
@@ -89,7 +107,10 @@ export class FieldRegistry {
 
   constructor(options: FieldRegistryOptions = {}) {
     this.#aggregators = { ...SHIPPED_AGGREGATORS, ...options.aggregators };
-    this.#fieldTypes = { ...options.fieldTypes };
+    // A consumer `fieldTypes` name of the same key silently wins this spread — `registerType` on
+    // an already-seeded name still throws (DuplicateFieldKeyError), the asymmetry the option and
+    // the method are meant to have.
+    this.#fieldTypes = { ...SHIPPED_FIELD_TYPES, ...options.fieldTypes };
 
     for (const field of CORE_FIELDS) this.#add(field, false);
     for (const field of options.fields ?? []) this.#add(field, true);

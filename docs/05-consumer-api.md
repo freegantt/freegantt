@@ -88,6 +88,7 @@ no JS reads it.
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-diamond-size` | `10px` | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every kind's own painted-span floor, `max`'d against a milestone's diamond floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched |
+| `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row/lane band |
 | `--fg-bar-radius` | `3px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
 | `--fg-column-min-width` | `40px` | `column-chrome.ts` — floors how far a resize drag or a keyboard step can shrink a column |
@@ -96,6 +97,7 @@ no JS reads it.
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-lane-gap` | `2px` | `.fg-container` declaration + `pixel-property.ts` into `LayoutInput.laneGapPx`, re-read on every pane measurement — gap between a row's packed lanes (`rowSource.heightMode: 'pack'`) |
+| `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label (J1) |
 
 ### Colour and shadow tokens
 
@@ -114,7 +116,8 @@ no JS reads it.
 | `--fg-row-unmatched-label-color` | `#79828F` | `#6D7889` | `.fg-row-label`/`.fg-row-cell` text on a row `data-matched='false'` marks — a grouping row whose value no `groupBy` bucket claimed |
 | `--fg-bar-fill` | `oklch(0.52 0.14 248)` | `oklch(0.74 0.13 248)` | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text |
+| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text, and `.fg-bar-diamond .fg-bar-label` (undoes the diamond glyph's own `color: transparent`) |
+| `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` (J1) |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |

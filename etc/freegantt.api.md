@@ -1922,7 +1922,7 @@ export type SerializedField = {
     };
     rollUp?: AggregatorName;
     editable?: boolean;
-    column?: Omit<GridColumnBase, 'field' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'hidden' | 'cellRenderer'> & GridColumnSizing;
 };
 
 // @public (undocumented)

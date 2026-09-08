@@ -27,7 +27,7 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const light = await paint(page);
-  await page.getByRole('button', { name: 'Dark' }).click();
+  await page.getByRole('button', { name: 'Graphite' }).click();
   await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'dark');
   const dark = await paint(page);
 
@@ -41,7 +41,7 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   // Paper is not a library theme. It rides on top of Light as a class the page defines, and it
   // repaints the Gantt without `data-fg-theme` moving off 'light'.
   await page.getByRole('button', { name: 'Light' }).click();
-  await page.getByLabel(/Paper theme/).check();
+  await page.getByRole('button', { name: 'Paper' }).click();
   const paper = await paint(page);
   await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'light');
   expect(paper.pane).not.toBe(light.pane);
