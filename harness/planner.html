@@ -45,21 +45,26 @@
       }
 
       /* ---- The Gantt itself ---------------------------------------------------------------- */
-      /* Every value here is a published token. Nothing below reaches into a library class to
-         restyle it, which is the claim this page exists to make: the design is a token set. */
+      /* The design's density is the library default now — row height, band height, cell padding,
+         bar radius and the checkpoint diamond all arrive on install, so this page states none of
+         them. One token is left, because it is a choice this page makes and not one the library
+         should make for every consumer. Nothing below reaches into a library class to restyle it,
+         which is the claim this page exists to make: the design is a token set. */
       #gantt {
-        --fg-row-height: 36px;
-        --fg-band-height: 24px;
-        --fg-cell-padding-inline: 10px;
         /* The design does not indent by depth: a phase and its rows start their text at the same x,
            and what tells them apart is the twisty against the row's phase colour tag. The `#` column
            is the row label cell here, so a depth indent would also eat the width the ordinal needs —
-           at 14px a two-digit number ellipsised to `1.`. */
+           at 14px a two-digit number ellipsised to `1.`. The library keeps its own 12px: a 0 default
+           would silently flatten the tree for a consumer who never asked for that. */
         --fg-indent-width: 0px;
+        /* NOT a page choice — 4px is the library's own default, restated here under protest.
+           `.demo-bar-progress` below reads `var(--fg-bar-radius)` so its leading corners match the
+           bar it sits in. A metric token is only declared on `.fg-container` for `--fg-indent-width`
+           and `--fg-lane-gap`; the rest live as `var(--fg-x, default)` fallbacks inside library
+           rules, so consumer CSS cannot read one back. Delete this line and the progress shading
+           goes square in Light and Dark (Paper still works, because Paper declares its own 2px).
+           The library should close this, not this page. */
         --fg-bar-radius: 4px;
-        /* The design's checkpoint is a 15px square on its point (DESIGN-FACTS §2.5). One token moves
-           the glyph and the painted-span floor layout gives it (`size × √2`) together. */
-        --fg-diamond-size: 15px;
         border: 1px solid var(--fg-splitter-color);
         border-radius: 0 0 10px 10px;
         overflow: hidden;
