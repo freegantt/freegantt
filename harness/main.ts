@@ -35,10 +35,6 @@ import { weekendShading } from './plugins/weekend-shading.js';
 // S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Budget take their Fields' own defaults and are editable.
 //
-// End is editable here on purpose. #142 made one answer gate the cell editor and the bar's resize
-// handle alike (I14), so a read-only End would also refuse every end-handle drag — and this page is
-// where resize is demonstrated. The two demos cannot both run on the same Field.
-//
 // Duration still shows a refused cell: it is `compute`-sourced and has no stored home to write back
 // to (ADR 0005: the Rollup would overwrite an edit on the next commit).
 const GRID_COLUMNS: readonly GridColumnInput[] = [
@@ -370,6 +366,24 @@ holdDropCheckbox.addEventListener('change', () => {
   releaseHold = undefined;
   hideToast();
 });
+
+// #256: which cells may change? One row's finish date is fixed by contract. Its End cell refuses the
+// editor, it paints no end handle, and the bar refuses a move — a move writes both dates, so it
+// writes the pinned one too. Its start edge still resizes, because that writes `start` alone. Every
+// other row is untouched.
+//
+// `Field.editable` says which Fields are writable at all; this says which of them are writable
+// *here*. That per-entry axis is what a Field declaration has no room for, and before #256 this page
+// could show no refusal at all: the only lock available was a whole-Field one, on the very Field
+// this page demonstrates resize with.
+const FIXED_FINISH_ENTRY = 'entry-13';
+gantt.setCapabilityRule('edit', (entry, field) =>
+  entry.id === FIXED_FINISH_ENTRY && field === 'end' ? false : undefined,
+);
+
+// A test seam, beside `__dataset`/`__gantt` above: an e2e test asks the page which row it pinned,
+// rather than naming a fixture row of its own.
+window.__fixedFinishEntryId = FIXED_FINISH_ENTRY;
 
 // #195, D-S5-35: the page writes the one gesture it owns. Assigning `gantt.interactions` would
 // restate the whole capability config, and drop any other rule this page had set. Unchecking the box
