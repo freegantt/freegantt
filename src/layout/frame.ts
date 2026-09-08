@@ -567,7 +567,15 @@ export function placeFrame(
   // `frame.test.ts` pins it.
   const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
   const coarserBandStartXs = coarserBandStartsOf(rawBandTicks);
-  const tickLines: FrameTickLine[] = markMajorTickLines(finestBandTicks, coarserBandStartXs);
+  // Only lines inside the content. The overscan buffer pulls in ticks on both sides of the visible
+  // window, and a line past `contentWidth` draws nothing a reader can scroll to — but it is a
+  // painted node in the pane, so the browser widens the pane's own scrollable range to reach it and
+  // the pane overscrolls past the content sizer (D-S1.8-1: the timeline's content is `contentWidth`
+  // wide, full stop). `e2e/timeline-content-width.spec.ts` is what states that in a real engine.
+  const tickLines: FrameTickLine[] = markMajorTickLines(
+    finestBandTicks.filter((tick) => tick.x >= 0 && tick.x < scale.contentWidth),
+    coarserBandStartXs,
+  );
 
   const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,
