@@ -47,16 +47,19 @@ const LIGHT_COLOR_TOKENS = `
   --fg-header-subtext: #5E5A53;
   --fg-header-divider-color: #E6E2D9;
   /* The timeline pane's own vertical grid, one line per finest-band tick boundary (.fg-tick-line).
-     Two opaque tokens, not one colour at two alphas — a compositing cost on a 1px line buys nothing,
-     and the pair gives a consumer the stated opt-out twice over: set either to transparent and that
-     line stops painting, with no config key involved. */
-  /* A line has to stay a line over everything that paints above it — the pane, the zebra's odd row,
-     and a consumer's own band. The first pair (#ECE8DF/#DCD7CB) held 1.07:1 over a warm overlay in
-     the #F3F0E7 family, so the line and the band merged into one soft stripe and no week division
-     read at all. These carry 1.34:1 and 1.62:1 on the pane, and stay over 1.25:1 under such a band. */
-  --fg-tick-line-color: #E3DED2;
+     The ink at a low alpha, not an opaque grey. A line paints over whatever the row already paints —
+     the pane, the zebra's odd row, a consumer's weekend band — and an opaque grey reads as a
+     different weight on each of them. Measured as composited pixels: the opaque pair stepped 23 off
+     an odd row and 30 off an even one, so the same grid line looked hard on one row and soft on the
+     next. An alpha steps the same distance off any of them, because the step *is* a fraction of the
+     distance to the ink. Both are still one token each: set either to transparent and that line
+     stops painting, with no config key involved.
+     The two alphas are the hierarchy, stated as that step: about 20 for a regular line, about 36 for
+     a major one — roughly double, which is what makes a week division read as the coarser of the
+     two without either shouting. */
+  --fg-tick-line-color: rgb(26 24 21 / 0.09);
   /* A line the coarser header band changes over — the week holding the 1st, a week's Monday. */
-  --fg-tick-line-strong-color: #D2CBB9;
+  --fg-tick-line-strong-color: rgb(26 24 21 / 0.16);
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #FAF8F2;
   --fg-row-hover-bg: #F6F3EB;
@@ -121,8 +124,10 @@ const DARK_COLOR_TOKENS = `
   /* 6.3:1 on --fg-header-band-bg (axe color-contrast, S5.11). */
   --fg-header-subtext: #A8A49B;
   --fg-header-divider-color: #2B2F36;
-  --fg-tick-line-color: #25282E;
-  --fg-tick-line-strong-color: #313640;
+  /* The same rule as Light's pair, in the other direction: the theme's own light ink at a low alpha,
+     so a line steps about 20 (regular) and about 36 (major) off whatever row it crosses. */
+  --fg-tick-line-color: rgb(236 234 227 / 0.1);
+  --fg-tick-line-strong-color: rgb(236 234 227 / 0.17);
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #20232A;
   --fg-row-hover-bg: #262A32;
