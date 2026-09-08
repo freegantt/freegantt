@@ -993,7 +993,13 @@ describe('render/dom backend', () => {
 
     const layer = timeline.querySelector('.fg-tick-lines')!;
     const rowBands = timeline.querySelector('.fg-row-bands')!;
-    expect(layer.compareDocumentPosition(rowBands) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const decorationsUnder = timeline.querySelector('.fg-decorations-under')!;
+    const bars = timeline.querySelector('.fg-bars')!;
+    // Row bands and the weekend/decoration layer both precede the lines, so their paint sits under
+    // the lines; the bar layer follows, so every bar paints over them (the design's own order).
+    expect(rowBands.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(decorationsUnder.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(layer.compareDocumentPosition(bars) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const lines = layer.querySelectorAll<HTMLElement>('.fg-tick-line');
     expect(lines).toHaveLength(base.tickLines.length);
@@ -2133,6 +2139,207 @@ describe('render/dom backend', () => {
     backend.destroy();
     grid.remove();
     timeline.remove();
+  });
+
+  describe('J1 — bar label placement', () => {
+    // Stands in for a real canvas 2d context (jsdom has none) — `measureText` reads a text's length
+    // times a fixed per-character width, so every test below can state a label's px width by hand.
+    const PX_PER_CHAR = 5;
+    let originalGetContext: PropertyDescriptor | undefined;
+    let measureTextCalls = 0;
+
+    function withStubRuler(): void {
+      measureTextCalls = 0;
+      originalGetContext = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'getContext');
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: (kind: string) =>
+          kind === '2d'
+            ? {
+                font: '',
+                measureText: (text: string) => {
+                  measureTextCalls += 1;
+                  return { width: text.length * PX_PER_CHAR };
+                },
+              }
+            : null,
+      });
+    }
+
+    function restoreRuler(): void {
+      if (originalGetContext)
+        Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', originalGetContext);
+    }
+
+    // One Entry ("Discovery", 9 chars, PX_PER_CHAR wide = 45px), one bar, geometry fully controlled
+    // by the caller — `x` and `end - start`'s width come from call order (start, then end) rather
+    // than the Instant's own value, because barSpan compares no fixture-friendly identity.
+    function scaleFor(barX: number, barWidth: number, contentWidthPx: number): TimeScale {
+      let call = 0;
+      return {
+        range: sampleEntries[0]!,
+        timeZone: 'UTC',
+        pxPerMs: 1,
+        xForInstant: () => {
+          call += 1;
+          return call % 2 === 1 ? barX : barX + barWidth;
+        },
+        instantForX: () => sampleEntries[0]!.start,
+        widthForDuration: () => barWidth,
+        ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+        contentWidth: contentWidthPx,
+      };
+    }
+
+    function frameFor(barX: number, barWidth: number, contentWidthPx: number) {
+      return computeFrame({
+        entries: sampleEntries.slice(0, 1),
+        scale: scaleFor(barX, barWidth, contentWidthPx),
+        preset,
+        visible: { x: 0, y: 0, width: contentWidthPx, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        itemProducerRegistry,
+      });
+    }
+
+    it('paints the label inside a bar with room to spare (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('moves the label outside to the right when it does not fit the bar, but the pane has room (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('outside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('keeps the label inside, ellipsised by CSS, when neither side has room (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      // A narrow bar flush against the pane's own scrollable edge — no room inside, and no room past
+      // its right edge either, so the fallback (inside, ellipsised) is the only clause left standing.
+      backend.sync(frameFor(180, 20, 200));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer result carries no data-label and no injected label child (D-S5-11)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({ renderer: () => ({ text: 'custom' }) }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('custom');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('barLabels: "none" paints no label at all', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        readBarLabels: () => 'none',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a resize preview that crosses the fit line flips data-label, and a cancelled preview restores it', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      const frame = frameFor(0, 200, 2000);
+      backend.sync(frame);
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      const id = frame.bars[0]!.id;
+      expect(bar.dataset['label']).toBe('inside');
+
+      // [S3-A3]'s own ceiling, applied to this flip: no node created or removed, and the canvas ruler
+      // (the one call this whole check exists to avoid mid-drag) is never touched again.
+      let mutations = 0;
+      const observer = new MutationObserver((records) => {
+        for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
+      });
+      observer.observe(timeline, { childList: true, subtree: true });
+      const measureTextCallsBeforePreview = measureTextCalls;
+
+      // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
+      backend.applyState({ preview: [{ itemId: id, dx: 0, dWidth: -180, extra: false }] });
+      expect(bar.dataset['label']).toBe('outside');
+      observer.disconnect();
+      expect(mutations).toBe(0);
+      expect(measureTextCalls).toBe(measureTextCallsBeforePreview);
+
+      // Clearing the preview (a cancelled drag) restores syncBars's own last committed answer.
+      backend.applyState({ preview: [] });
+      expect(bar.dataset['label']).toBe('inside');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
   });
 
   it('a cellRenderer returning undefined keeps the default cell text (D-S5-10)', () => {

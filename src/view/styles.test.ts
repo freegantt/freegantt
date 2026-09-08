@@ -70,6 +70,8 @@ const COLOR_TOKENS = [
   '--fg-row-label-color',
   '--fg-bar-fill',
   '--fg-bar-label-color',
+  '--fg-bar-label-outside-color',
+  '--fg-bar-label-gap',
   '--fg-warn',
   '--fg-date-line-color',
 ];
@@ -185,6 +187,34 @@ describe('ensureBaseStyles', () => {
     expect(rule).toBeDefined();
     expect(rule).toContain('var(--fg-row-selected-bg)');
     expect(rule).not.toContain('color-mix');
+  });
+
+  // J1: an inside label ellipsises rather than overflowing the bar, and an outside one paints past
+  // the bar's own edge in the pane's own ink, with no ellipsis — the two rules a fit test picks between.
+  it('carries a .fg-bar-label rule that ellipsises, and an outside variant that does not (J1)', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const insideRule = css.split('\n').find((line) => line.startsWith('.fg-bar-label {'));
+    const outsideRule = css.split('\n').find((line) => line.includes("[data-label='outside'] .fg-bar-label"));
+    expect(insideRule).toBeDefined();
+    expect(insideRule).toContain('text-overflow: ellipsis');
+    expect(insideRule).toContain('var(--fg-bar-label-gap');
+    expect(outsideRule).toBeDefined();
+    expect(outsideRule).toContain('var(--fg-bar-label-outside-color)');
+    expect(outsideRule).not.toContain('ellipsis');
+  });
+
+  // Bug hunt: color: transparent on .fg-bar-diamond hid a milestone's own painted glyph from
+  // double-painting under ::before's own fill — but J1 lets a milestone carry a label too, and a
+  // transparent inherited colour would silently hide that label as well without this override.
+  it('gives a milestone label a real colour, undoing .fg-bar-diamond’s own transparent (J1)', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const rule = css.split('\n').find((line) => line.startsWith('.fg-bar-diamond .fg-bar-label {'));
+    expect(rule).toBeDefined();
+    expect(rule).toContain('var(--fg-bar-label-color)');
   });
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer

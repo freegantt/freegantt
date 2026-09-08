@@ -23,6 +23,7 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
+  BarLabels,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
@@ -297,6 +298,9 @@ export interface GanttShellOptions {
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
+   *  a bar's content. Default `'fitBar'`. */
+  barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
@@ -564,6 +568,7 @@ export class GanttShell {
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
+        readBarLabels: () => this.#frameSettings.barLabels,
         resolveBarRenderer: (kind) =>
           this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
@@ -905,6 +910,16 @@ export class GanttShell {
    *  order, with the width it had. */
   showGridColumn(field: FieldKey): void {
     this.#columnChrome.commitHidden(field, false);
+  }
+
+  /** Live (J1). Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
+   *  just below. */
+  get barLabels(): BarLabels {
+    return this.#frameSettings.barLabels;
+  }
+
+  set barLabels(barLabels: BarLabels) {
+    this.#frameSettings.set({ barLabels });
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
@@ -1338,6 +1353,7 @@ export class GanttShell {
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
       ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
+      ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),

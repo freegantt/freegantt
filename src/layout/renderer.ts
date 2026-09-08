@@ -67,3 +67,12 @@ export interface ResolvedRenderer<TRenderer> {
   renderer: TRenderer;
   pluginId?: PluginId;
 }
+
+/** Where the default bar label paints, when no `barRenderer` already owns the bar's content (J1).
+ *  `'fitBar'` (the default) reads inside when the label fits, outside to the right when it does not,
+ *  and falls back to inside, ellipsised, when neither fits — a family with the shipped
+ *  `range: 'fitDataset'` and `gridWidth: 'fitColumns'`. `'inside'` and `'outside'` force one placement
+ *  regardless of fit (ellipsised inside, or clipped at the pane edge outside — the same load-bearing
+ *  fallback `'fitBar'`'s third clause takes). `'none'` paints no label at all; a dense chart that
+ *  cannot afford one otherwise needs a `barRenderer` to reach it. */
+export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';

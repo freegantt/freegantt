@@ -3,6 +3,7 @@
 
 import type {
   BarFlags,
+  BarLabels,
   BarRenderer,
   ElementDescription,
   Entry,
@@ -27,6 +28,9 @@ import { attachDateLines } from './date-line.js';
 import { attachTickLines } from './tick-lines.js';
 import type { DateLineAttachment } from './date-line.js';
 import type { TickLineAttachment } from './tick-lines.js';
+import { createTextRuler } from './text-ruler.js';
+import type { TextRuler } from './text-ruler.js';
+import { readPixelProperty } from './pixel-property.js';
 import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
@@ -76,6 +80,10 @@ export interface DomBackendOptions {
    *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
    *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */
   raiseError?: RaiseError;
+  /** J1. Read fresh every `syncBars` call, same live-reconfiguration posture `resolveBarRenderer`
+   *  below already takes — a closure over `FrameSettings`, not a value snapshotted at construction.
+   *  Omitted — a test backend built with no options — falls back to `'fitBar'`. */
+  readBarLabels?: () => BarLabels;
   resolveBarRenderer: (kind: string) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
@@ -186,6 +194,9 @@ type BarGeom = Pick<
   /** #212: the Segment this bar draws right now, or nothing for a whole-span bar. It is a per-frame
    *  fact, so it rides the geom and the stamp moves with it. */
   segmentId: SegmentId | undefined;
+  /** J1: where this frame's label paints, or `undefined` for no label at all (`barLabels: 'none'`,
+   *  or a `barRenderer` result already owns this bar's content). */
+  labelPlacement: BarLabelPlacement | undefined;
 };
 /** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
 const BAR_SHAPE_CLASS = Object.freeze({
@@ -201,6 +212,39 @@ type RowParity = 'odd' | 'even';
 
 function rowParity(index: number): RowParity {
   return index % 2 === 0 ? 'odd' : 'even';
+}
+
+/** `--fg-bar-label-gap`'s fallback (styles.ts's own literal `8px` states the same number for its CSS
+ *  `padding-inline`) — one design value, read in two places for two different jobs: this file's fit
+ *  test, and the label's own inline padding. */
+const DEFAULT_BAR_LABEL_GAP_PX = 8;
+
+type BarLabelPlacement = 'inside' | 'outside';
+
+/** J1's whole rule, pure arithmetic (no DOM read): `'fitBar'` reads inside when the label fits,
+ *  outside to the right when it does not, and falls back to inside — ellipsised, by the CSS `.fg-
+ *  bar-label` rule already carries — when neither clause holds. `'inside'`/`'outside'` force one
+ *  answer, but still fall back to inside when the forced side has no room: an `'outside'` label past
+ *  `contentWidth` would inflate the pane's own scrollable extent (`e2e/timeline-content-width.spec.ts`),
+ *  which no forced mode is worth breaking for. `undefined` textWidth (no 2d context to measure with)
+ *  always reads `'inside'` — today's exact behaviour, so a stub DOM never invents pixels it cannot
+ *  measure. */
+function resolveBarLabelPlacement(
+  mode: BarLabels,
+  textWidth: number | undefined,
+  barX: number,
+  barWidth: number,
+  gapPx: number,
+  contentWidth: number,
+): BarLabelPlacement | undefined {
+  if (mode === 'none') return undefined;
+  if (textWidth === undefined || mode === 'inside') return 'inside';
+  const fitsOutside = barX + barWidth + gapPx + textWidth <= contentWidth;
+  if (mode === 'outside') return fitsOutside ? 'outside' : 'inside';
+  // 'fitBar': inside first, outside only when it does not fit, inside (ellipsised) as the last resort.
+  const fitsInside = textWidth + 2 * gapPx <= barWidth;
+  if (fitsInside) return 'inside';
+  return fitsOutside ? 'outside' : 'inside';
 }
 
 function barClassName(kind: string): string {
@@ -273,6 +317,7 @@ function cellGeom(item: CellItem): CellGeom {
 
 export function createDomBackend(options: DomBackendOptions): RenderBackend<HTMLElement> {
   const { entryById, resolveBarRenderer, resolveCellRenderer, resolveHeaderRenderer } = options;
+  const readBarLabels = options.readBarLabels ?? ((): BarLabels => 'fitBar');
   // No injected raiser means no bus, so nothing can be subscribed and the fallback always runs.
   const raiseError: RaiseError = options.raiseError ?? ((_report, fallback) => fallback?.());
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
@@ -309,6 +354,16 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let cursorLine: HTMLElement | undefined;
   let cursorLineLabel: HTMLElement | undefined;
   let cursorLineHeight = 0;
+  // J1: one ruler per backend instance (I2 — never module-level). Built in mount(), off the bar
+  // layer's own computed font, and never rebuilt after — a label's font does not change mid-life.
+  let textRuler: TextRuler | undefined;
+  // --fg-bar-label-gap (px), read once at mount (pixel-property.ts's own re-read cadence rule: a
+  // caller states its cadence, and a label's gap does not change with the pane's size).
+  let barLabelGapPx = DEFAULT_BAR_LABEL_GAP_PX;
+  // The last frame's contentWidth (J1's "outside" clause needs it, and it arrives with `sync`, not
+  // with each bar) — read by `toGeom` below, so the fit test always runs against the frame that is
+  // actually being painted.
+  let contentWidthPx = 0;
 
   const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
   // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
@@ -367,6 +422,16 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByItemId = new Map<ItemId, HandleGeom>();
+  /** J1: each mounted bar's label width, measured once in `syncBars`'s own `toGeom` and read again,
+   *  with no re-measurement, by `applyBarPreview`'s mid-drag flip check — "a label's text width does
+   *  not change during a drag" is the fact this cache banks on. `undefined` means either no label
+   *  (`barLabels: 'none'`, or a `barRenderer` owns this bar's content) or no 2d context to measure
+   *  with; both read the same as "never flips to outside". */
+  const labelWidthByItemId = new Map<ItemId, number | undefined>();
+  /** J1: each mounted bar's last-committed label placement — what `restoreBarTransform` puts back on
+   *  `data-label` once a resize preview that flipped it mid-drag clears without a commit. Written in
+   *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByItemId` keeps. */
+  const labelPlacementByItemId = new Map<ItemId, BarLabelPlacement | undefined>();
   /** The mounted bars of each Entry (#185) — the Entry→Items relation, read straight off the frame
    *  `syncBars` synced. It is what turns the Entry-keyed Selection into the bars that paint, so no
    *  paint step ever builds an Item id out of an Entry id. `syncBars` is the only writer. */
@@ -620,6 +685,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     if (!node || !geom) return;
     node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
     node.style.width = `${geom.width}px`;
+    // J1: a resize preview that flipped the label mid-drag (see applyBarPreview) must not leave that
+    // flip stamped once the preview clears without a commit — restore syncBars's own last answer.
+    const committed = labelPlacementByItemId.get(id);
+    if (committed === undefined) delete node.dataset['label'];
+    else node.dataset['label'] = committed;
   }
 
   /** Offsets one bar's transform/width by `preview`'s px delta, on top of its committed geometry —
@@ -628,8 +698,27 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     const node = barLayerCache.node(id);
     const geom = barGeomByItemId.get(id);
     if (!node || !geom) return;
-    node.style.transform = `translate(${geom.x + preview.dx}px, ${geom.y}px)`;
-    if (preview.dWidth !== 0) node.style.width = `${geom.width + preview.dWidth}px`;
+    const x = geom.x + preview.dx;
+    const width = geom.width + preview.dWidth;
+    node.style.transform = `translate(${x}px, ${geom.y}px)`;
+    if (preview.dWidth === 0) return;
+    node.style.width = `${width}px`;
+    // J1: a resize preview can cross the inside/outside fit line mid-drag. Reuse the label width
+    // syncBars already measured — no canvas call on the hot path — and touch the dataset only on an
+    // actual flip, the same diff-and-touch-only posture every other paintedX field in this file keeps.
+    const textWidth = labelWidthByItemId.get(id);
+    if (textWidth === undefined) return;
+    const placement = resolveBarLabelPlacement(
+      readBarLabels(),
+      textWidth,
+      x,
+      width,
+      barLabelGapPx,
+      contentWidthPx,
+    );
+    if (placement === (node.dataset['label'] as BarLabelPlacement | undefined)) return;
+    if (placement === undefined) delete node.dataset['label'];
+    else node.dataset['label'] = placement;
   }
 
   function paintPreview(previews: readonly ItemPreview[] | undefined): void {
@@ -1046,6 +1135,22 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           const entry = entryById(bar.entryId);
           if (entry !== undefined) content = callRenderer('bar', resolved, { entry, item: bar }, raiseError);
         }
+        // J1: a `barRenderer` result already owns this bar's content, so no label is measured, cached
+        // or placed for it — the "no injected child, no data-label" rule pins the S5.4 seam (D-S5-11).
+        const textWidth = content === undefined ? textRuler?.widthOf(bar.label) : undefined;
+        const labelPlacement =
+          content === undefined
+            ? resolveBarLabelPlacement(
+                readBarLabels(),
+                textWidth,
+                bar.x,
+                bar.width,
+                barLabelGapPx,
+                contentWidthPx,
+              )
+            : undefined;
+        labelWidthByItemId.set(bar.id, content === undefined ? textWidth : undefined);
+        labelPlacementByItemId.set(bar.id, labelPlacement);
         return {
           kind: bar.kind,
           label: bar.label,
@@ -1059,6 +1164,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           // #212: the geom carries the Segment, so `shallowEqual` sees a Segment change and patches.
           // The key stays present and may hold `undefined`, which keeps the key count stable.
           segmentId: bar.segmentId,
+          labelPlacement,
           ...(content !== undefined ? { content } : {}),
         };
       },
@@ -1076,11 +1182,22 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (geom.minimumSpan) node.dataset['span'] = 'minimum';
         else delete node.dataset['span'];
         node.dataset['flag'] = flagTokens(geom.flags);
+        // J1: `undefined` covers both `barLabels: 'none'` and a `barRenderer` result — neither gets a
+        // `data-label` stamp, so `.fg-bar-label`'s placement rules never fire for either case.
+        if (geom.labelPlacement === undefined) delete node.dataset['label'];
+        else node.dataset['label'] = geom.labelPlacement;
         node.setAttribute('aria-label', geom.a11yLabel);
         node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
         node.style.width = `${geom.width}px`;
         node.style.height = `${geom.height}px`;
-        applyElementDescription(node, geom.content ?? { text: geom.label });
+        // `content === undefined && labelPlacement === undefined` only happens for `barLabels: 'none'`
+        // (a barRenderer result took the `geom.content` branch instead) — no label child at all, not
+        // an unplaced one, because 'none' means the bar paints no label.
+        const defaultContent: ElementDescription =
+          geom.labelPlacement === undefined
+            ? { text: '' }
+            : { children: [{ key: 'label', class: { 'fg-bar-label': true }, text: geom.label }] };
+        applyElementDescription(node, geom.content ?? defaultContent);
       },
     });
   }
@@ -1133,6 +1250,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       headerLayer.className = 'fg-header';
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
+      // J1: one ruler per mount, off the bar layer's own computed font — the font a label actually
+      // paints in, whatever the consumer's stylesheet cascades onto `.fg-bars`.
+      textRuler = createTextRuler(barLayer);
+      barLabelGapPx = readPixelProperty(barLayer, '--fg-bar-label-gap', {
+        fallback: DEFAULT_BAR_LABEL_GAP_PX,
+        accepts: 'zeroOrMore',
+      });
       // Below the decoration layers `attachDecorations` mounts (it inserts them around `barLayer`),
       // so a plugin's own rowStripe still paints on top of the pane's zebra.
       rowBandLayer = document.createElement('div');
@@ -1174,7 +1298,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       decorations = attachDecorations(timelineHost, barLayer);
       // Inserted between the decorations and the bars, so the lines paint over the zebra, the
       // selected-row band, and weekend shading, and under every bar — the design's own paint
-      // order (`bands` -> `shades` -> `gridLines` -> bars, J2 mount-order fix).
+      // order (`bands` -> `shades` -> `gridLines` -> bars, #<J2 fix>).
       tickLines = attachTickLines(timelineHost, barLayer);
       dateLines = attachDateLines(timelineHost, headerLayer);
       timelineHost.append(cursorLine);
@@ -1192,6 +1316,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       syncGridHeader(frame.columns);
       syncRows(frame.rows, frame.rowCount, frame.tree, frame.columns);
       syncRowBands(frame.rows, frame.contentWidth, frame.visible.width);
+      // J1: banked for `applyBarPreview`'s mid-drag flip check, which never receives a `frame` of its
+      // own — the "outside" fit test runs against the frame actually on screen, not a stale one.
+      contentWidthPx = frame.contentWidth;
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
       // `applyState`'s handle repaint is gated on `resizableEntryId` actually changing — it stays the

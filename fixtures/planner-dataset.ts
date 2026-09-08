@@ -10,8 +10,8 @@
 // checkpoint. "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) —
 // this fixture is a construction plan because a consumer said so, not because the library knows one.
 
-import { addMs, diffMs, instant, MS } from '../src/api/index.js';
-import type { Aggregator, EntryInput, Field, FieldType, InstantInput } from '../src/api/index.js';
+import { addMs, instant, MS } from '../src/api/index.js';
+import type { EntryInput, Field, Instant } from '../src/api/index.js';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
 export interface PlannerMeta {
@@ -24,8 +24,6 @@ export interface PlannerMeta {
   phase?: number;
   /** On the critical path — the design's inset ring. */
   critical?: boolean;
-  /** Needs a permit — the design's `P` badge in the Task cell. */
-  permit?: boolean;
 }
 
 const DAY = MS.DAY;
@@ -39,7 +37,7 @@ const now = new Date();
 const todayMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 const originMs = todayMidnightMs - TODAY_AT_DAY * DAY;
 
-function dayOffset(day: number): InstantInput {
+function dayOffset(day: number): Instant {
   return addMs(instant(originMs), day * DAY);
 }
 
@@ -55,7 +53,7 @@ interface Phase {
 }
 
 /** `[id, name, owner, startDay, durationDays, progress, flags]`. `flags` reads as the design's own:
- *  `m` a checkpoint, `c` on the critical path, `p` needs a permit. */
+ *  `m` a checkpoint, `c` on the critical path. */
 type PlannerRow = readonly [string, string, string, number, number, number, string];
 
 const PHASES: readonly Phase[] = [
@@ -64,7 +62,7 @@ const PHASES: readonly Phase[] = [
     name: 'Pre-Construction',
     hue: 60,
     rows: [
-      ['permits', 'Permits & approvals', 'JR', 0, 12, 100, 'p'],
+      ['permits', 'Permits & approvals', 'JR', 0, 12, 100, ''],
       ['geotech', 'Geotechnical survey', 'AM', 5, 6, 100, ''],
       ['design-review', 'Final design review', 'SK', 8, 10, 100, 'c'],
       ['notice-to-proceed', 'Notice to proceed', '', 18, 0, 100, 'mcp'],
@@ -113,7 +111,7 @@ const PHASES: readonly Phase[] = [
     name: 'MEP Rough-In',
     hue: 215,
     rows: [
-      ['electrical', 'Electrical rough-in', 'EV', 94, 14, 10, 'cp'],
+      ['electrical', 'Electrical rough-in', 'EV', 94, 14, 10, 'c'],
       ['plumbing', 'Plumbing rough-in', 'PL', 96, 13, 5, ''],
       ['hvac', 'HVAC ductwork', 'HV', 98, 12, 0, ''],
       ['fire-suppression', 'Fire suppression', 'FS', 102, 10, 0, ''],
@@ -128,7 +126,6 @@ function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerMeta> {
   const meta: PlannerMeta = { progress, phase: phase.hue };
   if (owner !== '') meta.owner = owner;
   if (flags.includes('c')) meta.critical = true;
-  if (flags.includes('p')) meta.permit = true;
 
   const entry: EntryInput<PlannerMeta> = {
     id,
@@ -151,60 +148,47 @@ export const plannerEntryInputs: readonly EntryInput<PlannerMeta>[] = PHASES.fla
   ...phase.rows.map((row) => entryForRow(row, phase)),
 ]);
 
-/** Percent complete for a phase: its children's own progress, weighted by how long each one runs, so
- *  a two-week row at 50% counts for more than a one-day row at 100%. A plain `sum` would read past
- *  100 and a plain average would call every row the same size.
- *
- *  Registered by name, never passed inline — a name serializes into a Document and a function does
- *  not (`plans/01`, Vocabulary). A checkpoint has no duration to weigh, so it does not vote. */
-const weightedProgress: Aggregator<number> = (children, _parent, ctx) => {
-  let weight = 0;
-  let weighted = 0;
-  for (const child of children) {
-    if (child.kind === 'milestone') continue;
-    const progress = ctx.read(child, 'progress');
-    if (typeof progress !== 'number') continue;
-    const days = Math.max(1, Math.round(diffMs(child.end, child.start) / DAY));
-    weight += days;
-    weighted += days * progress;
-  }
-  return weight === 0 ? undefined : Math.round(weighted / weight);
-};
-
-const percent: FieldType<number> = {
-  rollUp: 'weightedProgress',
-  formatValue: (value) => (typeof value === 'number' ? `${value}%` : ''),
-  parseValue: (text) => {
-    const parsed = Number(text.replace(/[^0-9.-]/g, ''));
-    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : undefined;
-  },
-  editable: true,
-  inputType: 'number',
-  column: { align: 'end', header: 'Done' },
-};
+/** What the `#` column counts: work rows, numbered from 1 in authored order. A phase and a
+ *  checkpoint are both skipped, so the numbers run unbroken down the work itself — the design's own
+ *  reading of the column. Authored order is the fixture's to state, which is why the map is built
+ *  here beside the entries rather than derived from a rendered row. */
+const WORK_ROW_NUMBERS = new Map<string, number>(
+  plannerEntryInputs
+    .filter((entry) => entry.kind === undefined)
+    .map((entry, index) => [String(entry.id), index + 1]),
+);
 
 const PLANNER_FIELDS: readonly Field[] = [
   { key: 'owner', column: { header: 'Own', align: 'center' } },
-  { key: 'progress', type: 'percent' },
+  // Percent complete for a phase: its children's own progress, weighted by how long each one runs,
+  // so a two-week row at 50% counts for more than a one-day row at 100% — `percent` is the shipped
+  // Field type (`data/fields/field-types.ts`), and `weightedMeanByDuration` is the shipped
+  // Aggregator it names; a plain `sum` would read past 100 and a plain average would call every row
+  // the same size. `editable` stays a fact about this dataset, not the unit — the harness lets a
+  // reader double-click the Done cell in place (`harness/planner.ts`).
+  { key: 'progress', type: 'percent', rollUp: 'weightedMeanByDuration', editable: true },
   { key: 'phase' },
   { key: 'critical' },
-  { key: 'permit' },
-  // The design's `#` column: a checkpoint shows a diamond, every other row shows its own id. It has
-  // no stored home and never rolls up, which is exactly what a `compute` source is for (ADR 0005) —
-  // and it is the one column on this page that refuses the editor for a reason a reader can see.
+  // The design's `#` column: a work row shows its own number, a phase shows nothing, and a
+  // checkpoint shows a diamond instead of a number. It has no stored home and never rolls up, which
+  // is exactly what a `compute` source is for (ADR 0005) — and it is the one column on this page
+  // that refuses the editor for a reason a reader can see.
   {
     key: 'ref',
     source: {
       from: 'compute',
-      read: (entry) => (entry.kind === 'milestone' ? '◆' : entry.kind === 'group' ? '' : entry.id),
+      read: (entry) =>
+        entry.kind === 'milestone' ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     },
-    column: { header: '#', width: 116 },
+    // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
+    // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width
+    // gives way, not the number.
+    column: { header: '#', width: 44, align: 'center' },
   },
 ];
 
-/** Everything a `Dataset` needs to read this plan. Spread it into the constructor beside `entries`. */
+/** Everything a `Dataset` needs to read this plan. Spread it into the constructor beside `entries`.
+ *  `percent` and `weightedMeanByDuration` are both shipped — nothing local to register. */
 export const plannerFieldOptions = {
-  aggregators: { weightedProgress: weightedProgress as Aggregator },
-  fieldTypes: { percent: percent as FieldType },
   fields: PLANNER_FIELDS,
 } as const;

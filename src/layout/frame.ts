@@ -52,6 +52,13 @@ export const DEFAULT_DIAMOND_SIZE_PX = 10;
  *  must be free to move apart. */
 export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
 
+/** Shipped bar height (CONTEXT.md) — `--fg-bar-height` fallback, in px. A bar paints shorter than its
+ *  own row on purpose (the row also carries the grid pane's label and cells, at their own line
+ *  height) and sits centred in the row's vertical middle — `barHeightPx` is its own number, not a
+ *  fraction of `rowHeight`, so a denser preset (`{ rowHeight: 30, barHeightPx: 14 }`) can shrink both
+ *  independently. */
+export const DEFAULT_BAR_HEIGHT_PX = 18;
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
@@ -262,6 +269,10 @@ export interface LayoutInput {
    *  larger of the two always wins. View reads `--fg-bar-min-width` and passes it; layout never
    *  restates the stylesheet. */
   minBarWidthPx?: number;
+  /** Painted bar height in px (CONTEXT.md). Default `DEFAULT_BAR_HEIGHT_PX`. A bar centres in its own
+   *  row/lane band at this height; `barSpan`'s width floors are unaffected (a horizontal question).
+   *  View reads `--fg-bar-height` and passes it; layout never restates the stylesheet. */
+  barHeightPx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
   /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
@@ -383,6 +394,7 @@ export function placeFrame(
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const diamondSizePx = input.diamondSizePx ?? DEFAULT_DIAMOND_SIZE_PX;
   const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;
+  const barHeightPx = input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -455,9 +467,11 @@ export function placeFrame(
         kind: item.kind,
         label: item.label,
         x,
-        y: yForLane(top, lane, rowHeight, laneGap),
+        // Centred in its own lane band: yForLane answers the band's own top, at rowHeight tall, and
+        // half the leftover (rowHeight - barHeightPx) sits above the bar, half below.
+        y: yForLane(top, lane, rowHeight, laneGap) + (rowHeight - barHeightPx) / 2,
         width,
-        height: rowHeight,
+        height: barHeightPx,
         lane,
         flags: {},
         minimumSpan,

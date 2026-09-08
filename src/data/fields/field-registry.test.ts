@@ -174,3 +174,39 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
     expect(registry.get('end')?.editable).not.toBe(false);
   });
 });
+
+describe('percent — the shipped Field type', () => {
+  it('a Field naming type: percent resolves with no local registration', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'progress', type: 'percent' }] });
+    const field = registry.get('progress')!;
+    expect(field.inputType).toBe('number');
+    expect(typeof field.formatValue).toBe('function');
+    expect(typeof field.parseValue).toBe('function');
+  });
+
+  it("a Field naming type: percent plus its own column.header still keeps the type's alignment", () => {
+    const registry = new FieldRegistry({
+      fields: [{ key: 'progress', type: 'percent', column: { header: 'Done' } }],
+    });
+    const column = registry.get('progress')?.column;
+    expect(column?.header).toBe('Done');
+    expect(column?.align).toBe('end');
+  });
+
+  it('registerType(percent, …) throws, but the fieldTypes option overrides it silently', () => {
+    const registry = new FieldRegistry();
+    expect(() => registry.registerType('percent', {})).toThrow(DuplicateFieldKeyError);
+
+    const withOverride = new FieldRegistry({
+      fieldTypes: { percent: { inputType: 'text' } },
+      fields: [{ key: 'progress', type: 'percent' }],
+    });
+    expect(withOverride.get('progress')?.inputType).toBe('text');
+  });
+
+  it('a type: percent Field with no rollUp leaves a parent’s stored value untouched (ADR 0008)', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'progress', type: 'percent' }] });
+    expect(registry.get('progress')?.rollUp).toBeUndefined();
+    expect(registry.rollingUpFields().some((field) => field.key === 'progress')).toBe(false);
+  });
+});

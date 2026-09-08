@@ -6,6 +6,7 @@ export {
   DEFAULT_TICK_BOX_FLOOR_PX,
   DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
+  DEFAULT_BAR_HEIGHT_PX,
 } from './frame.js';
 export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 export { pickDefined } from './pick-defined.js';
@@ -101,6 +102,7 @@ export type {
   TooltipRendererContext,
   RendererFor,
   ResolvedRenderer,
+  BarLabels,
 } from './renderer.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
