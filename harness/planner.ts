@@ -12,6 +12,7 @@ import type {
   BarRendererContext,
   ColumnCellRendererContext,
   ElementDescription,
+  EntryId,
   GridColumnInput,
   Instant,
   RendererByKind,
@@ -131,21 +132,29 @@ function progressCell({ value, fieldValue }: ColumnCellRendererContext): Element
 /** The bar's own label, on the side the library placed it (DESIGN-FACTS §2.3). The fit test is the
  *  library's — `label.placement` is the answer for this bar at this width — so this page paints text
  *  and measures none. */
-function barLabel(label: ResolvedBarLabel): ElementDescription & { key: string } {
+function barLabel(label: ResolvedBarLabel, styleClass?: string): ElementDescription & { key: string } {
   return {
     key: 'label',
-    class: { 'demo-bar-label': true, 'demo-bar-label-outside': label.placement === 'outside' },
+    class: {
+      'demo-bar-label': true,
+      'demo-bar-label-outside': label.placement === 'outside',
+      ...(styleClass === undefined ? {} : { [styleClass]: true }),
+    },
     text: label.text,
   };
 }
 
-/** Every bar takes its phase's hue, and a critical-path bar takes an inset ring on top of it. A
- *  span bar also takes the design's progress shading (DESIGN-FACTS §2.2) — a child rect pinned to
- *  its left edge, darkened 22% black over the fill, so a part-done row reads as part-filled. The
- *  shape of a group bracket and of a milestone diamond stays the library's own (D-S4-24, structural
- *  from `entry.kind`) — neither has room for a progress child of its own, and a renderer recolours
- *  them through `--fg-bar-fill` and adds nothing else. `'*'` is the catch-all, so one function
- *  answers for all three kinds. */
+/** How far along one row is, as the percentage the design paints. `undefined` for a row that
+ *  declares no progress at all, which is not the same fact as `0`. */
+function progressOf(entryId: EntryId): number | undefined {
+  const progress = dataset.entries.fieldValue(entryId, 'progress');
+  return typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined;
+}
+
+/** A span bar: its phase's hue, the design's progress shading (DESIGN-FACTS §2.2) — a child rect
+ *  pinned to the left edge, darkened 22% black over the fill, so a part-done row reads part-filled —
+ *  its label, and an inset ring when the row is on the critical path. `'*'` registers it as the
+ *  catch-all, so any kind this page does not answer for by name lands here. */
 function phaseBar({ entry, label }: BarRendererContext): ElementDescription | undefined {
   const meta = entry.meta as PlannerMeta | undefined;
   const fill = phaseFill(meta?.phase);
@@ -153,20 +162,11 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   if (fill !== undefined) description.style = { '--fg-bar-fill': fill };
 
   const children: (ElementDescription & { key?: string })[] = [];
-  if (entry.kind !== 'group' && entry.kind !== 'milestone') {
-    const progress = dataset.entries.fieldValue(entry.id, 'progress');
-    if (typeof progress === 'number') {
-      const percent = Math.max(0, Math.min(100, progress));
-      children.push({
-        key: 'progress',
-        class: { 'demo-bar-progress': true },
-        style: { width: `${percent}%` },
-      });
-    }
+  const percent = progressOf(entry.id);
+  if (percent !== undefined) {
+    children.push({ key: 'progress', class: { 'demo-bar-progress': true }, style: { width: `${percent}%` } });
   }
-  // A group bar carries no label in the design — the rail is the phase's span, and the grid row
-  // beside it already names it. Every other kind paints the label the library resolved.
-  if (label !== undefined && entry.kind !== 'group') children.push(barLabel(label));
+  if (label !== undefined) children.push(barLabel(label));
   // The critical ring is a child, not a box-shadow on the bar. The bar's own shadow slot belongs to
   // the library — `hovered` and `dragging` both paint there — and a second box-shadow rule on
   // `.fg-bar` would replace theirs rather than join it. A nested ring composes with both for free.
@@ -177,7 +177,33 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   return description;
 }
 
-const PHASE_BARS: RendererByKind = { '*': phaseBar };
+/** A phase's rail is the library's own paint, and the design draws exactly that: a solid rail in the
+ *  row ink, with end caps and no label. `undefined` keeps it, so this kind opts out of the page's
+ *  own bar paint rather than restating it. */
+function phaseRail(): ElementDescription | undefined {
+  return undefined;
+}
+
+/** A checkpoint (DESIGN-FACTS §2.5): the library's diamond glyph, filled when the checkpoint is done
+ *  and hollow — the pane's background behind a 1.5px stroke — while it is not. Which one is a fact
+ *  about this page's data, so the page answers it; the shape, its size and its states stay the
+ *  library's, reached through published tokens alone. The label rides in the row ink beside it, not
+ *  in the fill's own ink: there is no fill to read a label against. */
+function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescription | undefined {
+  const done = progressOf(entry.id) === 100;
+  const description: ElementDescription = {
+    style: done
+      ? { '--fg-bar-fill': 'var(--fg-row-label-color)' }
+      : {
+          '--fg-bar-fill': 'var(--fg-pane-bg)',
+          '--fg-diamond-stroke': '1.5px solid var(--fg-row-label-color)',
+        },
+  };
+  if (label !== undefined) description.children = [barLabel(label, 'demo-checkpoint-label')];
+  return description;
+}
+
+const PHASE_BARS: RendererByKind = { '*': phaseBar, group: phaseRail, milestone: checkpointDiamond };
 
 const gantt = new Gantt({
   container: '#gantt',

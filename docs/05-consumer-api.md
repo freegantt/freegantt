@@ -118,6 +118,7 @@ no JS reads it.
 | `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text, and `.fg-bar-diamond .fg-bar-label` (undoes the diamond glyph's own `color: transparent`) |
 | `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` (J1) |
+| `--fg-diamond-stroke` | `none` | — (not theme-dependent) | `.fg-bar-diamond::before`'s own `border` shorthand — a hollow diamond is `--fg-bar-fill` at the pane's background plus a stroke here, which is how a consumer paints "not done yet" on a checkpoint. `box-sizing: border-box`, so a stroke never grows the glyph past `--fg-diamond-size` |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |

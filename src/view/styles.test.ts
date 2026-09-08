@@ -217,6 +217,46 @@ describe('ensureBaseStyles', () => {
     expect(rule).toContain('var(--fg-bar-label-color)');
   });
 
+  // A hollow checkpoint — "not done yet" in every Gantt that draws one — is `--fg-bar-fill` at the
+  // pane's own background behind a stroke. The stroke is the token; when a consumer sets neither,
+  // the glyph paints exactly as it always has.
+  it('paints the diamond glyph from --fg-diamond-stroke, inside its own size', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const rule = css.split('\n').find((line) => line.startsWith('.fg-bar-diamond::before {'));
+
+    expect(rule).toBeDefined();
+    expect(rule).toContain('border: var(--fg-diamond-stroke, none)');
+    // Without border-box a 1.5px stroke would push the glyph past --fg-diamond-size, and layout's
+    // own painted-span floor (size × √2) would no longer contain it.
+    expect(rule).toContain('box-sizing: border-box');
+  });
+
+  // The same split the group rail makes: the box is the hit target, the glyph is the ink. A shared
+  // outline would frame a full-height rectangle of empty pane around a 10px diamond.
+  it('paints a diamond’s hover and selection on the glyph, not on its box', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const lines = css.split('\n');
+    const cancel = lines.find((line) => line.startsWith('.fg-bar-diamond[data-state~="hovered"],'));
+    const selected = lines.find((line) =>
+      line.startsWith('.fg-bar-diamond[data-state~="selected"]::before {'),
+    );
+
+    expect(cancel).toBeDefined();
+    expect(cancel).toContain('outline: none');
+    expect(cancel).toContain('box-shadow: none');
+    expect(selected).toBeDefined();
+    expect(selected).toContain('var(--fg-selection-color)');
+    // Equal specificity with the shared .fg-bar rules, so the running order decides: the diamond's
+    // own rules must come last, or the box paints its outline back.
+    expect(lines.indexOf(cancel!)).toBeGreaterThan(
+      lines.findIndex((line) => line.startsWith('.fg-bar[data-state~="selected"] {')),
+    );
+  });
+
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
   // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.
   // #231 F1: it selects on its own class, so no consumer copying this selector can reach an editor.
