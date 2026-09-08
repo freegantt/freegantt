@@ -35,7 +35,8 @@
     "build": "node scripts/build.mjs",
     "api-report": "node scripts/api-report.mjs",
     "test:e2e": "playwright test",
-    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report"
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report",
+    "verify:full": "node scripts/verify-full.mjs"
   },
   "dependencies": {
     "alien-signals": "^1.0.0",

@@ -485,8 +485,9 @@ To customize dark mode instead of just light mode, scope the override to the dar
 ```
 pnpm install
 pnpm dev        # harness at http://localhost:5173
-pnpm verify     # format/typecheck/lint/boundaries/guards/unit tests/vendor-names/disables
-pnpm test:e2e   # Playwright smoke test against the harness
+pnpm verify:full # the gate: everything below, then Playwright against the harness
+pnpm verify      # CI parity only — no browser, so it cannot see e2e/
+pnpm test:e2e    # Playwright against the harness, on its own
 ```
 
 ### `isDevMode()` is a library-build flag, not a consumer's
