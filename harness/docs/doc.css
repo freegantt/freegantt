@@ -23,7 +23,9 @@
   --api-ink: #6b3f13;
   --stub-bg: #f1f1f3;
   --stub-line: #b3b6c0;
-  --stub-ink: #6c7080;
+  /* #6c7080 on --stub-bg read at 4.36:1 — axe's color-contrast rule (D-S5-27) wants 4.5:1 for
+     normal-size text. This shade keeps the stub tier's muted hue and clears 4.96:1 here. */
+  --stub-ink: #63677a;
   --code-bg: #eef0f4;
   --link: #2c4f8f;
   --link-visited: #4d6ba3;
@@ -477,7 +479,10 @@ figure {
   background: var(--panel);
   padding: 0.85rem 0.95rem;
 }
-.card > h5 {
+/* class selector, not a heading-level tag: a card's own heading level varies by how deep it sits
+   under its section's h2/h3 (heading-order, D-S5-27), so the visual style follows this class
+   instead of a fixed h5. */
+.card-title {
   margin: 0;
   font-family: var(--mono);
   font-size: 0.88rem;
@@ -486,11 +491,11 @@ figure {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.card > h5 a {
+.card-title a {
   color: var(--ink);
   text-decoration: none;
 }
-.card > h5 a:hover {
+.card-title a:hover {
   color: var(--accent);
 }
 .card .path {

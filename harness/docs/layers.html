@@ -30,8 +30,10 @@
         </div>
       </header>
 
+      <main>
       <!-- ══════════════════════════════════════════════════════════ 1 -->
       <section id="s1">
+        <h2><span class="num">1</span>The ten directories</h2>
         <p class="lede">
           Ten directories under <code>src/</code>. Four of them (<code>model</code>, <code>time</code>,
           <code>data</code>, <code>layout</code>) are the mandatory DOM-free core; <code>scheduling</code> is
@@ -137,7 +139,7 @@
           <div class="tier-label">pure — no DOM, unit-tested in plain Node</div>
         </div>
 
-        <h4>Who may import whom</h4>
+        <h3>Who may import whom</h3>
         <p>
           <code>.dependency-cruiser.cjs</code> transcribes the diagram literally: one
           <code>forbid()</code> rule per layer, listing its <em>only</em> legal targets. Anything not listed
@@ -251,6 +253,7 @@
       </section>
 
       <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">

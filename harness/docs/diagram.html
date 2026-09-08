@@ -18,7 +18,10 @@
     --bg: #f1eee3;
     --bg-raised: #e9e5d6;
     --ink: #211f19;
-    --muted: #726b59;
+    /* #726b59 on this page's raised panels (figure/figcaption ~#ebe7d9, .updated ~#e5e6db) read
+       2.89:1-4.2:1 — axe's color-contrast rule (D-S5-27) wants 4.5:1 for normal-size text. This
+       shade keeps the same muted hue and clears 4.96:1 against the lightest of those panels. */
+    --muted: #67604d;
     --border: #c9c1a9;
     --border-strong: #a89f88;
     --accent: #b8541f;
@@ -342,13 +345,14 @@
       animation: rise 0.5s ease-out;
     }
   }
+  /* transform only, never opacity: a figure fading in reads as reduced foreground/background
+     contrast for every frame of the animation, which is what axe's color-contrast rule (D-S5-27)
+     caught mid-fade — flaky by how long the page took to settle before the sweep ran. */
   @keyframes rise {
     from {
-      opacity: 0;
       transform: translateY(6px);
     }
     to {
-      opacity: 1;
       transform: translateY(0);
     }
   }
@@ -379,6 +383,7 @@
     </p>
   </header>
 
+  <main>
   <figure>
     <svg
       viewBox="0 0 1240 960"
@@ -2285,6 +2290,7 @@
   </section>
 
   <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+  </main>
 
   <footer>src/ · 150 non-test files · 10 layers, 9 with code · plans/03-slices.md — slice S5</footer>
 </div>

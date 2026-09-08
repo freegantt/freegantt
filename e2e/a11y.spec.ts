@@ -28,7 +28,29 @@ function readHarnessPageFiles(): string[] {
   return entries;
 }
 
-const HARNESS_PAGE_FILES = readHarnessPageFiles();
+const DOCS_NAV_PATH = fileURLToPath(new URL('../harness/docs/docs-nav.ts', import.meta.url));
+
+// `HARNESS_PAGES` names the docs folder once, by its index page, so the nine pages behind that one
+// entry shipped unswept — D-S5-27 asks for every page the gallery *links*, and the docs nav links
+// all of them. `docs-nav.ts` holds that second list, and it is a browser script for the same reason
+// `harness-nav.ts` is, so it is read the same way: out of the source text, never retyped.
+function readDocsPageFiles(): string[] {
+  const source = readFileSync(DOCS_NAV_PATH, 'utf-8');
+  const arrayMatch = /const DOCS_PAGES: readonly DocsPage\[\] = \[([\s\S]*?)\n\];/.exec(source);
+  if (!arrayMatch?.[1]) {
+    throw new Error('could not find DOCS_PAGES in harness/docs/docs-nav.ts — has its shape changed?');
+  }
+
+  const entries = [...arrayMatch[1].matchAll(/file:\s*'([^']+)'/g)].map((match) => `docs/${match[1]!}`);
+  if (entries.length === 0) {
+    throw new Error('DOCS_PAGES parsed to zero entries — the extraction regex no longer matches');
+  }
+
+  return entries;
+}
+
+// `docs/index.html` sits in both lists, so the set drops the duplicate rather than axing it twice.
+const HARNESS_PAGE_FILES = [...new Set([...readHarnessPageFiles(), ...readDocsPageFiles()])];
 
 // Every page but the docs index mounts at least one Gantt; the docs index is prose. Each branch
 // waits for one real element so axe never inspects a page mid-render (browser-tests skill, rule 2).
