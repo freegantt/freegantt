@@ -10,6 +10,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`plans/02-public-api.md`](../plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
 | [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
 | [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor) |
+| [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
 
 ## S4 surface (hierarchy and rows)
 
@@ -49,6 +50,16 @@ of resolved rows.
 `RowSourceCommon`, `RowHeightMode`, `CustomRowInput`,
 `CollapseChange`, `DatasetHierarchy`, `SerializedField`, and the S4 error classes re-exported from
 `freegantt`.
+
+## S5 (plugins)
+
+FreeGantt takes two plugin contracts: `GanttPlugin` on a `Gantt`, `DatasetPlugin`
+on a `Dataset`. Install one at construction (`plugins: [...]`), or reconfigure
+a `Gantt`'s plugins live (`gantt.plugins = [...]`). `docs/06-plugin-authoring.md`
+covers both contracts, every `register*` seam, the registration gate, disposal,
+`requires`, and the errors an author meets. `tooltips()`, `contextMenu()`, and
+`inlineEditing()` are the three built-in plugins that ship with the package,
+none of them loaded unless a consumer installs them.
 
 ## Harness demos
 

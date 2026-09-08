@@ -2,7 +2,9 @@
   "name": "freegantt",
   "version": "0.0.0",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "src/view/styles.ts"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -34,8 +36,11 @@
     "dev": "vite",
     "build": "node scripts/build.mjs",
     "api-report": "node scripts/api-report.mjs",
+    "check-doc-examples": "node scripts/check-doc-examples.mjs",
+    "bundle-probe": "node scripts/bundle-probe.mjs",
+    "size-limit": "size-limit",
     "test:e2e": "playwright test",
-    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report",
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report && pnpm check-doc-examples",
     "verify:full": "node scripts/verify-full.mjs"
   },
   "dependencies": {
@@ -47,6 +52,7 @@
     "@eslint/js": "^9.9.0",
     "@microsoft/api-extractor": "^7.59.0",
     "@playwright/test": "^1.62.1",
+    "@size-limit/preset-small-lib": "^13.0.3",
     "@types/node": "^22.5.0",
     "@typescript-eslint/parser": "^8.3.0",
     "@typescript-eslint/utils": "^8.3.0",
@@ -57,6 +63,7 @@
     "globals": "^15.9.0",
     "happy-dom": "^15.7.0",
     "prettier": "^3.3.3",
+    "size-limit": "^13.0.3",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.3.0",
     "vite": "^5.4.2",
