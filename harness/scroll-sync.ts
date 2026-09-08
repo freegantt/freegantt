@@ -5,6 +5,10 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'scroll-sync');
 
 const tallDataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 const shortDataset = new Dataset({ entries: demoEntryInputs.slice(0, 20), timeZone: 'UTC' });

@@ -9,6 +9,10 @@ import { Gantt, Dataset } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { multiYearEntryInputs } from '../fixtures/multi-year-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'timeline-navigation');
 
 let dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 let gantt = new Gantt({ container: '#gantt', dataset });

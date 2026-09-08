@@ -5,6 +5,10 @@ import { demoEntryInputs, separateSegments } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing');
 
 // S5.10 visible acceptance (s5.10-dataset-plugins.md §4): a Dataset plugin the page installs through
 // the public API alone. Check the box to lock one entry; drag its neighbour and the locked bar ghosts
