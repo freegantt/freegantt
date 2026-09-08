@@ -143,14 +143,6 @@ export function applyConstructionRollUp(data: TransactionData): void {
   writeConstructionUpdates(data, updated);
 }
 
-/**
- * Applies an already-complete `ChangeSet` straight to the store and fans it out through
- * `beforeChange`/`change` (D-S2-9, D-S2-25) — the notify-and-apply tail every commit shares, with no
- * diffing, no extension hook, and no rollup: the caller hands over the exact rows to write. `runTransaction`
- * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
- * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
- * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`.
- */
 /** Opens the write set on every store one transaction spans. Entries and plugin stores stage
  *  together and close together, so a plugin row and an entry edit are never half-committed. */
 function beginStores(data: TransactionData, token: TxToken): void {
@@ -164,6 +156,14 @@ function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet |
   data.pluginStores.endTransaction(token, changeSet);
 }
 
+/**
+ * Applies an already-complete `ChangeSet` straight to the store and fans it out through
+ * `beforeChange`/`change` (D-S2-9, D-S2-25) — the notify-and-apply tail every commit shares, with no
+ * diffing, no extension hook, and no rollup: the caller hands over the exact rows to write. `runTransaction`
+ * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
+ * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
+ * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`.
+ */
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
     throw new MutationDuringNotificationError('commitChangeSet');
