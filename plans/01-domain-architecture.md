@@ -280,7 +280,7 @@ interface Field<TValue = unknown> {
   type?: FieldTypeName;                             // a bundle; the field's own keys win over it
   source?: FieldSource;                             // default: meta under this Field's key
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
-  editable?: boolean;                               // #142: one home, gates the inline cell editor and bar resize alike (I14); default false
+  editable?: boolean;                               // #142/#256: the Field half of one write answer — gates the cell editor, both resize handles and the bar move alike (I14); default false
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
@@ -728,7 +728,9 @@ Invariants the data-gesture attachments own:
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select' | …, entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-entry answer. The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults. The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
+
+  **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. A `group` with a derived span refuses `move` and `resize` because both of its dates roll up, not because a kind table says so. The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
 
 Attachments talk to `data/` only through drafts and transactions (the shell's `commitEntryEdits`), and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`. `view/` never imports `interaction/`; `api/gantt.ts` injects the attachments into `GanttShell`.
 
@@ -757,7 +759,6 @@ interface PluginContext {
     registerRenderer(point: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): Disposer;
     resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
-    isColumnEditable(field: FieldKey): boolean | undefined;
     overlay: MountLayer;            // #168: the mount layer that escapes the pane
     rowLayer: MountLayer;           // #158: the mount layer that travels with the rows
     renderElement(d: ElementDescription): HTMLElement;   // D-S5-10: the one seam extensions/ has to the reconciler
@@ -779,7 +780,7 @@ interface PluginContext {
     registerKeybinding(b: KeyBinding): Disposer;
     registerKeyHandler(chord: KeyChord, handler: (e: KeyEventLike) => void): () => void;
     registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
-    canEdit(entry: Entry): boolean;
+    canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
     announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
   };
@@ -868,4 +869,4 @@ Rules:
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |
 | I12 | All pixels-from-time via `TimeScale`; all scroll via `ScrollModel` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
-| I14 | Gesture arming and visual affordances come from one capability resolution | shared resolver + interaction test |
+| I14 | Gesture arming and visual affordances come from one capability resolution, and every write asks one `canWrite` (#256) | shared resolver + interaction test + `e2e/write-refusal.spec.ts` |
