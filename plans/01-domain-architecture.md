@@ -738,27 +738,34 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ## 10. `extensions/` — the plugin contract
 
-"Everything is extensible" is only true if the extension contract is specified. It is:
+"Everything is extensible" needs one extension contract for each host a plugin can join.
+FreeGantt ships two: a **Gantt plugin** joins a mounted Gantt, and a **Dataset plugin** joins a
+Dataset while it constructs. Both shipped in S5 (`plans/s5-extensibility-and-editing`).
+
+### 10.1 The Gantt plugin
 
 ```ts
 interface GanttPlugin {
   id: PluginId;
-  /** Called once after the Gantt mounts. Returns a disposer. */
-  setup(ctx: PluginContext): () => void;
+  /** Called once after the Gantt mounts. Returns a Disposer for a resource the plugin owns
+   *  itself, or nothing at all — every register* call below already files its own removal. */
+  setup(ctx: PluginContext): Disposer | void;
 }
 
 interface PluginContext {
-  dataset: DatasetApi;               // full data access via public API (transactions, queries)
-  gantt: Gantt;                     // the public façade: live config and public methods
-  events: EventBus;                 // subscribe to everything, including before* (may veto)
-  commands: CommandRegistry;        // named, invokable actions (also powers context menus)
-  disposables: DisposableStore;     // everything registered auto-unregisters on dispose
+  dataset: Dataset;                  // the public Dataset: no privileged access, no second surface
+  gantt: Gantt;                      // the public façade: live config and public methods
+  events: GanttEvents;               // subscribe to everything, including before* (may veto)
+  raiseError(report: PluginErrorReport): void;   // reports one Error report on this Gantt's own error event
+  commands: CommandRegistry;         // named, invokable actions (also powers context menus)
+  disposables: DisposableStore;      // everything registered auto-unregisters on dispose
   view: {
     registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): Disposer;
-    registerGridColumn(column: GridColumn): Disposer;   // names a field (§2.6); presentation only
+    registerGridColumn(column: GridColumnInput): Disposer;   // names a field (§2.6); presentation only
     registerRenderer(point: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): Disposer;
     resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    resolvedColumns(): readonly GridColumn[];   // every column this Gantt paints now, consumer's and every plugin's
     overlay: MountLayer;            // #168: the mount layer that escapes the pane
     rowLayer: MountLayer;           // #158: the mount layer that travels with the rows
     renderElement(d: ElementDescription): HTMLElement;   // D-S5-10: the one seam extensions/ has to the reconciler
@@ -769,16 +776,12 @@ interface PluginContext {
       options?: { capture?: boolean },
     ): Disposer;
   };
-  data: {
-    registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
-  };
   layout: {
     registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
-    registerController(c: InteractionControllerSpec): void;
     registerKeybinding(b: KeyBinding): Disposer;
-    registerKeyHandler(chord: KeyChord, handler: (e: KeyEventLike) => void): () => void;
+    registerKeyHandler(chord: string, handler: (e: KeyEventLike) => void): () => void;
     registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
     canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
@@ -786,6 +789,57 @@ interface PluginContext {
   };
 }
 ```
+
+A Gantt plugin declares no Field. `registerField` moved off this host during S5 — a Gantt plugin
+shows a Field through `view.registerGridColumn` alone, and a Dataset plugin declares the Field
+itself (§10.2). `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the
+group a plugin reads it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not
+name (D-S5-5).
+
+### 10.2 The Dataset plugin
+
+A Dataset plugin sees only what a Document holds. It stays DOM-free and runs wherever a Dataset
+runs — it never meets a pane, the overlay, or a gesture.
+
+```ts
+interface DatasetPlugin {
+  id: PluginId;
+  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
+   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
+   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. */
+  requires?: readonly PluginId[];
+  /** Called once while the Dataset constructs. Returns a Disposer, or nothing. */
+  setup(ctx: DatasetPluginContext): Disposer | void;
+}
+
+interface DatasetPluginContext {
+  dataset: Dataset;
+  events: DatasetEvents;              // on/off over beforeChange/change; a false return vetoes the ChangeSet
+  fields: {
+    register(field: Field): void;              // §2.6 — rolls up exactly like a core Field
+    registerType(name: FieldTypeName, type: FieldType): void;
+    registerAggregator(name: AggregatorName, fn: Aggregator): void;
+  };
+  edits: {
+    setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
+  };
+  store: {
+    reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
+    read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined; // another plugin's, read-only
+  };
+  disposables: DisposableStore;
+}
+```
+
+`Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
+must exist before the first Rollup, so a consumer who wants a different plugin set builds a new
+Dataset instead of reconfiguring one live. Every register* call above is legal only while `setup`
+runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
+retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
+owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
+"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Document
+keeps them under the plugin's own id as passenger data (D-S5-24), and `store.read` lets a later
+plugin — the setup order `requires` fixes — read an earlier plugin's rows.
 
 `ctx.view.dom` is the whole plugin-to-DOM contract (review N1/A3):
 
@@ -845,10 +899,10 @@ Rules:
 - **One gated shape, once.** `registerWhileOpen` in that same file asserts the gate, registers, invalidates, builds the `Disposer`, and files it with the plugin's own `DisposableStore`. A new `register*` names what registers and what must run again. It transcribes nothing.
 - **A verb says whether an answer comes back.** `propose*` asks, and the caller must read the Veto. `announce*` tells, and returns `void`. `emit*` said neither, so it is retired from the plugin surface.
 
-- Plugins are values a consumer imports and lists (`plugins: [tooltips(), contextMenu({...})]`, S5.1 D-S5-2 — supersedes the `features: { tooltips: true, ... }` name table sketched here originally) and are tree-shakeable — an unused feature costs zero bytes because nothing names it.
-- Setup order = registration order; plugins must not depend on sibling load order (communicate via events/commands only).
-- A plugin may not reach into another plugin or any internal module — the `PluginContext` is its entire world. Enforced by the same import-boundary lint.
-- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use this contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is a second consumer of the same contract.
+- Plugins are values a consumer imports and lists (`plugins: [tooltips(), contextMenu({...})]` on a `Gantt`, `plugins: [lockEntries([...])]` on a `Dataset`; S5.1 D-S5-2 — supersedes the `features: { tooltips: true, ... }` name table sketched here originally) and are tree-shakeable — an unused feature costs zero bytes because nothing names it.
+- A Gantt plugin's setup order is registration order; siblings must not depend on load order and talk only through events and commands. A Dataset plugin's setup order comes from `requires` alone (D-S5-31), because a later plugin composing onto an earlier one, or reading its `PluginStore`, needs that plugin to exist first.
+- A plugin may not reach into another plugin or any internal module — its own `PluginContext` (or `DatasetPluginContext`) is its entire world. Enforced by the same import-boundary lint.
+- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use the Gantt plugin contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is the Dataset plugin contract's own second consumer, occupying the extension hook the identity extender holds today.
 
 ---
 
