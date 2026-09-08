@@ -429,6 +429,57 @@ import { Gantt, tooltips, contextMenu } from 'freegantt';
 const gantt = new Gantt({ container, dataset, plugins: [tooltips(), contextMenu()] });
 ```
 
+### Decorations — painting behind or over the bars
+
+A decoration is a band the timeline paints that is not an Entry: a weekend, a holiday, a freeze
+window, a highlighted row. A plugin registers a provider, and the library calls it with the visible
+window each time that window changes.
+
+```ts
+import type { GanttPlugin } from 'freegantt';
+
+export function weekendShading(): GanttPlugin {
+  return {
+    id: 'demo.weekendShading',
+    setup(ctx) {
+      ctx.view.registerDecoration('underBars', ({ span, time, tickUnit, tickIncrement }) => {
+        // Only where a reader can see individual days — a weekend is meaningless at month zoom.
+        if (tickUnit !== 'day' || tickIncrement !== 1) return [];
+        return time
+          .eachDay(span)
+          .filter((day) => time.dayOfWeek(day) === 6) // Saturday
+          .map((saturday) => ({
+            kind: 'rangeBand' as const,
+            start: saturday,
+            // One band for the whole weekend. Two adjacent one-day bands meet at a fractional
+            // pixel, and the remainder shows through as a hairline splitting every stripe.
+            end: time.addDays(saturday, 2),
+            class: 'demo-weekend-band',
+          }));
+      });
+    },
+  };
+}
+```
+
+Three things make this work, and they are the whole contract:
+
+- **A provider states time, never pixels.** It returns `Instant`s; the library converts them through
+  the bound `TimeScale`. That is what lets two Gantts share one axis without a provider knowing.
+- **`ctx` answers what the window is.** `span` is the visible range (already widened by overscan),
+  `rows` are the rows in it, `time` is zone-bound date maths, and `tickUnit`/`tickIncrement` say what
+  one tick column stands for — so a provider that only makes sense at some granularity can return
+  nothing at the others.
+- **`class` is how it gets its paint.** It lands on the node beside the library's own
+  `.fg-range-band`, so a consumer styles it in CSS. The library never invents a colour for you.
+
+`'underBars'` paints below the bar layer, `'overBars'` above it. The other input kind is
+`{ kind: 'rowStripe', rowId, class }`, for shading a row rather than a date range. Registration is
+retracted with the plugin — `ctx.disposables` already holds it, so there is no disposer to return.
+
+A worked example lives in `harness/plugins/weekend-shading.ts`, written against the public entry
+point only. `docs/06-plugin-authoring.md` has the full contract.
+
 ## Events
 
 Gantt events (`entryMove`, `selectionChange`, `collapseChange`, `navigationChange`, …) fire on the
