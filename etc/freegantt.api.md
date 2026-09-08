@@ -2191,7 +2191,7 @@ export function wholeEntryItem(entry: Entry): Item;
 export type WriteRefusalReason = 'derived-value';
 
 // @public
-export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean);
+export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
 
 // @public
 export type WriteVerdict = {
