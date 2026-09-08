@@ -612,6 +612,8 @@ const bar = ctx.view.dom.barFor(entryId);       // this entry's bar in the curre
 const cell = ctx.view.dom.cellFor(entryId, 'cost');
 ```
 
+**`ctx.view.focusedCell()` answers which cell the keyboard is on** (S5.11, D-S5-39). It hands back `{ entryId, field }`, or `undefined` when focus sits on a row, a bar, a header cell, the splitter, or nothing. It reports a *fact*, never a node: which cell has focus is a view concern, so a plugin reads the answer rather than querying the DOM for it or keeping a focus model of its own. `inlineEditing()`'s `Enter` handler is the first caller — before this port it opened the first editable column of the selected Entry, because per-cell focus did not exist yet.
+
 - **`targetUnder(node)` answers `{ kind, element, entry?, entryIds, segmentIds, field? }`.** `kind`
   is `TargetKind` — `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union
   `CommandTarget.kind` uses. One vocabulary, so a resolved right-click fills a
