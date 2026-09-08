@@ -199,7 +199,7 @@ ${DARK_COLOR_TOKENS}
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
    grid text never sits flush against a column's own edge or its neighbour's. */
-.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
+.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-cell-padding-inline, 10px); padding-block: var(--fg-cell-padding-block, 4px); }
 /* #139: every column is fixed by default — data-fixed is the common case now, not the exception.
    --fg-column-width (default 120, read by ColumnChrome, no rule of its own here — same posture
    --fg-column-min-width takes) sets the width a column falls back to when neither this Gantt's own
@@ -259,7 +259,7 @@ ${DARK_COLOR_TOKENS}
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
 .fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; overflow: hidden; }
-.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 20px); min-height: 0; }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 24px); min-height: 0; }
 /* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
    consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
    clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
@@ -267,7 +267,7 @@ ${DARK_COLOR_TOKENS}
    separate columns, matching .fg-band's existing border-bottom between bands.
    --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
    CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 20px); line-height: var(--fg-band-height, 20px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
+.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, 24px); line-height: var(--fg-band-height, 24px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
 .fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 /* Row parity comes from the frame's absolute row index (render/dom's rowParity), stamped as
    data-parity — not from :nth-child, which counts only the windowed rows and slides the whole zebra
@@ -285,7 +285,7 @@ ${DARK_COLOR_TOKENS}
 .fg-tick-line[data-major] { background: var(--fg-tick-line-strong-color); }
 .fg-row-bands { position: relative; }
 .fg-row-band { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
-.fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
+.fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 10px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 /* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
    an outline (an outline would fight the row's cell layout the way .fg-bar's never has to).
@@ -297,8 +297,8 @@ ${DARK_COLOR_TOKENS}
    paintRowState answer, so a row reads the same on both sides of the splitter. */
 .fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
 .fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: var(--fg-row-selected-bg); }
-.fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
-.fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
+.fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 10px); }
+.fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 10px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
 .fg-row-twisty::before { content: '▸'; }
@@ -318,7 +318,7 @@ ${DARK_COLOR_TOKENS}
    --fg-bar-fill override (set on this element, e.g. by barRenderer) only reaches the painted
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
-.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
+.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 4px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
 /* DESIGN-FACTS §2.4: a group bar is a solid rail 10px high in the row's own label ink, with a 4px
    downward cap at each end — not an outline box at full bar height, which shouted over every span
    bar under it. The box keeps the full bar height because that is the hit target; only the glyph
@@ -442,7 +442,7 @@ ${DARK_COLOR_TOKENS}
 /* The ring is the affordance: a 1px border alone reads as a table cell, and the open editor has to
    read as the one live control on the chart. It uses the Selection token because an open editor IS
    the selection, expressed as a field — which is also why that token had to stop being red. */
-.fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-selection-color); border-radius: 3px; outline: none; background: var(--fg-pane-bg); color: var(--fg-row-label-color); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-selection-color) 20%, transparent); }
+.fg-cell-editor-control { width: 100%; height: 100%; box-sizing: border-box; font: inherit; padding-inline: var(--fg-cell-padding-inline, 10px); border: 1px solid var(--fg-selection-color); border-radius: 3px; outline: none; background: var(--fg-pane-bg); color: var(--fg-row-label-color); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-selection-color) 20%, transparent); }
 /* Invalid swaps the whole ring, not only the border colour, so the state is legible at a glance and
    not just to a reader comparing two 1px lines. */
 .fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-warn) 22%, transparent); padding-inline-end: 22px; }
@@ -462,7 +462,7 @@ ${DARK_COLOR_TOKENS}
    S5.12, D-S5-40: data-reason holds the kebab-case Error report code. This rule matches the attribute
    and never one of its values, so a rename reaches no selector here. A consumer styling one reason
    writes [data-reason='derived-value'], which is also the code they read off the report. */
-.fg-cell-notice { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 8px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
+.fg-cell-notice { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 10px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
 /* S5.11, D-S5-26: the polite live region (view/live-region.ts). Visually hidden, never hidden from
    assistive tech — display: none/visibility: hidden would remove the node from the accessibility
    tree along with the page, and a screen reader would never read a text change it cannot see happen.

@@ -17,6 +17,7 @@ import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
+import { DEFAULT_ROW_HEIGHT } from './frame-settings.js';
 
 // [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
 // injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
@@ -225,7 +226,7 @@ describe('row height (#39)', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const row = container.querySelector<HTMLElement>('.fg-row')!;
-    expect(row.style.height).toBe('32px');
+    expect(row.style.height).toBe(`${DEFAULT_ROW_HEIGHT}px`);
     shell.destroy();
   });
 });
@@ -311,8 +312,8 @@ describe('scroll (D9, #9)', () => {
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-      // 50 rows * 32px default row height = 1600, in a 100px pane -> max.y 1500 for either chart.
-      expect(scroll.state.max.y).toBe(1500);
+      // 50 rows at the default row height, in a 100px pane -> the same max.y for either chart.
+      expect(scroll.state.max.y).toBe(50 * DEFAULT_ROW_HEIGHT - 100);
 
       shellA.destroy();
       shellB.destroy();
@@ -330,7 +331,7 @@ describe('scroll (D9, #9)', () => {
       const container = document.createElement('div');
 
       const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tallEntries(50)), scroll });
-      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 rows @ 32px
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 10 * DEFAULT_ROW_HEIGHT }); // 10 rows
       shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
       const labelsAt = (): string[] =>
@@ -339,7 +340,7 @@ describe('scroll (D9, #9)', () => {
       expect(labelsAt()).toContain('Entry 0');
       expect(labelsAt()).not.toContain('Entry 40');
 
-      scroll.panTo({ y: 40 * 32 }); // scroll 40 rows down
+      scroll.panTo({ y: 40 * DEFAULT_ROW_HEIGHT }); // scroll 40 rows down
       shell.render();
 
       expect(labelsAt()).not.toContain('Entry 0');
@@ -375,9 +376,9 @@ describe('scroll (D9, #9)', () => {
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-      // Loosest bound across both bindings: the tall chart's 500*32-100=15900 dwarfs the short
-      // chart's 5*32-100=60 (D-S1.5-1) — proving both extents actually reached the shared model.
-      expect(scroll.state.max.y).toBe(500 * 32 - 100);
+      // Loosest bound across both bindings: the tall chart's 500 rows dwarf the short chart's 5
+      // (D-S1.5-1) — proving both extents actually reached the shared model.
+      expect(scroll.state.max.y).toBe(500 * DEFAULT_ROW_HEIGHT - 100);
 
       shortShell.destroy();
       tallShell.destroy();
@@ -532,8 +533,8 @@ describe('pane-size attachment (S1.7b, #8)', () => {
 
       // TimeScaleModel: a new paneWidth re-fits pxPerMs.
       expect(oneDayWidth()).not.toBe(widthBefore);
-      // ScrollModel: a new pane height moves max.y (50 * 32 - 400 = 1200).
-      expect(scroll.state.max.y).toBe(1200);
+      // ScrollModel: a new pane height moves max.y (50 rows at the default height, less 400).
+      expect(scroll.state.max.y).toBe(50 * DEFAULT_ROW_HEIGHT - 400);
       expect(scroll.state.max.y).not.toBe(maxYBefore);
       // Re-rendered with the new geometry — no remount, the container keeps its band wrapper.
       expect(container.querySelector('.fg-band')).not.toBeNull();

@@ -341,7 +341,7 @@ gantt.destroy();
 ```
 
 Mounts a Gantt into `container`: a grid pane (configurable columns), a splitter, and a timeline pane
-with header bands and bars. Row height comes from `--fg-row-height` (default 32px) unless
+with header bands and bars. Row height comes from `--fg-row-height` (default 36px) unless
 `heightMode: 'pack'` is set on the row source. Two `Gantt` instances on one page are fully
 independent (I2); two given the same `scale`/`scroll` x-sync (D9).
 

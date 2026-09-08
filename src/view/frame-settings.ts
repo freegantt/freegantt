@@ -35,7 +35,7 @@ import type { PixelPropertyPolicy } from '../render/dom/pixel-property.js';
 /** CSS custom property that owns row height (plans/02 §4, level 1 of the customization ladder) —
  *  not a constructor option (#39). */
 const ROW_HEIGHT_PROPERTY = '--fg-row-height';
-export const DEFAULT_ROW_HEIGHT = 32;
+export const DEFAULT_ROW_HEIGHT = 36;
 /** A zero-height row is not a row: only a positive value is an authored row height. */
 const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } as const;
 
