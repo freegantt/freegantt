@@ -23,6 +23,7 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
+  BarLabels,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
@@ -297,6 +298,9 @@ export interface GanttShellOptions {
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
+   *  a bar's content. Default `'fitBar'`. */
+  barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
@@ -398,6 +402,10 @@ export class GanttShell {
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
+  /** The grid row under the pointer, reported by `EntryGestureContext.setHoveredRow` — undefined
+   *  once the pointer leaves the grid pane. `#hoveredRow()` falls back to the hovered bar's own row,
+   *  so this holds only the half the timeline pane cannot answer. */
+  #hoveredRowId: RowId | undefined;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
    *  by item id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
    *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
@@ -560,6 +568,7 @@ export class GanttShell {
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
+        readBarLabels: () => this.#frameSettings.barLabels,
         resolveBarRenderer: (kind) =>
           this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
@@ -758,6 +767,7 @@ export class GanttShell {
         segmentIdsForItem: (item) => this.#layout.segmentIdsForItem(item),
       },
       setHovered: (item) => this.#setHovered(item),
+      setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
     };
@@ -900,6 +910,16 @@ export class GanttShell {
    *  order, with the width it had. */
   showGridColumn(field: FieldKey): void {
     this.#columnChrome.commitHidden(field, false);
+  }
+
+  /** Live (J1). Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
+   *  just below. */
+  get barLabels(): BarLabels {
+    return this.#frameSettings.barLabels;
+  }
+
+  set barLabels(barLabels: BarLabels) {
+    this.#frameSettings.set({ barLabels });
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
@@ -1333,6 +1353,7 @@ export class GanttShell {
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
       ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
+      ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
@@ -1483,6 +1504,21 @@ export class GanttShell {
     this.#refreshAffordances();
   }
 
+  #setHoveredRow(next: RowId | undefined): void {
+    if (this.#hoveredRowId === next) return;
+    this.#hoveredRowId = next;
+    this.#refreshAffordances();
+  }
+
+  /** Which row reads as hovered. The grid pane names one directly. Over the timeline pane only a bar
+   *  is under the pointer, so the row comes off the frame that drew it. Asked once per affordance
+   *  refresh, never per pointer move beyond that (I5). */
+  #hoveredRow(): RowId | undefined {
+    if (this.#hoveredRowId !== undefined) return this.#hoveredRowId;
+    if (this.#hoveredItemId === undefined) return undefined;
+    return this.#layout.rowIdForEntry(entryIdOfItem(this.#hoveredItemId));
+  }
+
   /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
@@ -1497,6 +1533,7 @@ export class GanttShell {
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
     setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
+    setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
     setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);

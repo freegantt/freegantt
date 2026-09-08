@@ -8,7 +8,7 @@
 // `DecorationContext.rows` is `FrameRow` (layout/'s own row geometry). `model/` may import nothing
 // in `src/` (plans/01 §1), so a type built on either could never live there.
 
-import type { Instant, RowId, TimeSpan } from '../model/index.js';
+import type { Instant, RowId, TimeSpan, TimeUnit } from '../model/index.js';
 import type { ZonedTime } from '../time/index.js';
 import type { FrameRow } from './frame-row.js';
 
@@ -22,6 +22,13 @@ export interface DecorationContext {
   rows: readonly FrameRow[];
   /** Zone-bound date math (D-S5-16). The provider never touches `Date` or a magic constant. */
   time: ZonedTime;
+  /** What one tick column stands for — `'day'` with an increment of 1 means a reader can see
+   *  individual days. A provider that only makes sense at some granularity tests these two and
+   *  returns nothing at the others. Still time, not pixels (I12): the answer is a calendar step, so
+   *  a shared axis (D9) resolves it the same way for every Gantt bound to it. */
+  tickUnit: TimeUnit;
+  /** How many `tickUnit`s one tick column covers — 1 day reads as a day, 2 days does not. */
+  tickIncrement: number;
 }
 
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];

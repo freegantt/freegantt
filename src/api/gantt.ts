@@ -21,6 +21,7 @@ import type {
 } from '../layout/index.js';
 import type { DateLine } from '../layout/index.js';
 import type {
+  BarLabels,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
@@ -130,6 +131,12 @@ export interface GanttOptionsBase<
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
+  /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
+   *  a bar's content. `'fitBar'` (the default): inside when the label fits, outside to the right of
+   *  the bar when it does not, ellipsised inside as the last resort. `'inside'`/`'outside'` force one
+   *  side, and still fall back to ellipsised-inside when the forced side has no room. `'none'` paints
+   *  no label at all. */
+  barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
    *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
    *  branching. `undefined` returned from either form keeps the library's own bar output. */
@@ -247,6 +254,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         'gridColumns',
         'rowSource',
         'collapsed',
+        'barLabels',
         'barRenderer',
         'cellRenderer',
         'headerRenderer',
@@ -412,6 +420,16 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  width it had. Showing a column that is already on screen changes nothing. */
   showGridColumn(field: FieldKey): void {
     this.#shell.showGridColumn(field);
+  }
+
+  /** Live (J1). `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
+   *  `barRenderer`'s own output takes over a bar's content. Default `'fitBar'`. */
+  get barLabels(): BarLabels {
+    return this.#shell.barLabels;
+  }
+
+  set barLabels(value: BarLabels) {
+    this.#shell.barLabels = value;
   }
 
   /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByKind`

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
 import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
-import type { BarRenderer, ErrorReportInput, ItemId, TimeScale, ViewPreset } from '../../layout/index.js';
+import type {
+  BarRenderer,
+  ErrorReportInput,
+  ItemId,
+  ResolvedBarLabel,
+  TimeScale,
+  ViewPreset,
+} from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { segmentId } from '../../layout/index.js';
 
@@ -541,6 +548,49 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('paints hover and selection on a row and on its timeline band, so one row reads as one row', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(frame);
+
+    const firstRow = frame.rows[0]!;
+    const secondRow = frame.rows[1]!;
+    const nodesOf = (rowId: string): HTMLElement[] => [
+      grid.querySelector<HTMLElement>(`.fg-row[data-row-id="${rowId}"]`)!,
+      timeline.querySelector<HTMLElement>(`.fg-row-band[data-row-id="${rowId}"]`)!,
+    ];
+
+    backend.applyState({ hoveredRowId: firstRow.id });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered');
+
+    // Selection wins the paint on a row that is both, and the token set says so in one attribute.
+    backend.applyState({ hoveredRowId: firstRow.id, selectedSegmentIds: firstRow.segmentIds });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered selected');
+
+    // Hover moves on: the row it left keeps only what it still is, and the row it reached gains it.
+    backend.applyState({ hoveredRowId: secondRow.id, selectedSegmentIds: firstRow.segmentIds });
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('selected');
+    for (const node of nodesOf(secondRow.id)) expect(node.dataset['state']).toBe('hovered');
+
+    backend.applyState({});
+    for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('');
+    for (const node of nodesOf(secondRow.id)) expect(node.dataset['state']).toBe('');
+
+    backend.destroy();
+  });
+
   it("gives each timeline row band its row's own top and height (I9: both panes, one geometry)", () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
@@ -918,6 +968,56 @@ describe('render/dom backend', () => {
     backend.destroy();
     grid.remove();
     timeline.remove();
+  });
+
+  // J2: one `.fg-tick-line` per finest-band tick, mounted after `.fg-row-bands` and the decorations
+  // layer, and before `.fg-bars` — the design's own paint order (bands -> shades -> gridLines -> bars).
+  it('paints one tick line per finest-band tick, over the row bands and under the bars, with major stamped', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // Both bands read the fixture scale's fixed `ticks()` output, so the day band's one tick lands
+    // on the same Instant the week band's one tick does — the case `major` exists to catch.
+    const twoHeaderPreset: ViewPreset = {
+      ...preset,
+      headers: [
+        { unit: 'week', increment: 1, format: () => 'w' },
+        { unit: 'day', increment: 1, format: () => 'd' },
+      ],
+    };
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset: twoHeaderPreset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(base);
+
+    const layer = timeline.querySelector('.fg-tick-lines')!;
+    const rowBands = timeline.querySelector('.fg-row-bands')!;
+    const decorationsUnder = timeline.querySelector('.fg-decorations-under')!;
+    const bars = timeline.querySelector('.fg-bars')!;
+    // Row bands and the weekend/decoration layer both precede the lines, so their paint sits under
+    // the lines; the bar layer follows, so every bar paints over them (the design's own order).
+    expect(rowBands.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(decorationsUnder.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(layer.compareDocumentPosition(bars) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const lines = layer.querySelectorAll<HTMLElement>('.fg-tick-line');
+    expect(lines).toHaveLength(base.tickLines.length);
+    expect(lines[0]!.style.transform).toBe(`translateX(${base.tickLines[0]!.x}px)`);
+    expect(lines[0]!.dataset['major']).toBe('');
+
+    // A single-band preset has no coarser band to align to — no line is ever major.
+    backend.sync({ ...base, tickLines: [{ x: 0, major: false }] });
+    expect(layer.querySelector<HTMLElement>('.fg-tick-line')!.dataset['major']).toBeUndefined();
+
+    backend.destroy();
   });
 
   // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
@@ -1871,7 +1971,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('applies bracket and diamond classes off data-kind', () => {
+  it('applies summary and diamond classes off data-kind', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1892,9 +1992,9 @@ describe('render/dom backend', () => {
     const groupBar = timeline.querySelector<HTMLElement>('[data-kind="group"]')!;
     const mileBar = timeline.querySelector<HTMLElement>('[data-kind="milestone"]')!;
     const spanBar = timeline.querySelector<HTMLElement>('[data-kind="span"]')!;
-    expect(groupBar.className.split(' ')).toContain('fg-bar-bracket');
+    expect(groupBar.className.split(' ')).toContain('fg-bar-summary');
     expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
-    expect(spanBar.className.split(' ')).not.toContain('fg-bar-bracket');
+    expect(spanBar.className.split(' ')).not.toContain('fg-bar-summary');
     expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
 
     backend.destroy();
@@ -2046,6 +2146,263 @@ describe('render/dom backend', () => {
     backend.destroy();
     grid.remove();
     timeline.remove();
+  });
+
+  describe('J1 — bar label placement', () => {
+    // Stands in for a real canvas 2d context (jsdom has none) — `measureText` reads a text's length
+    // times a fixed per-character width, so every test below can state a label's px width by hand.
+    const PX_PER_CHAR = 5;
+    let originalGetContext: PropertyDescriptor | undefined;
+    let measureTextCalls = 0;
+
+    function withStubRuler(): void {
+      measureTextCalls = 0;
+      originalGetContext = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'getContext');
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: (kind: string) =>
+          kind === '2d'
+            ? {
+                font: '',
+                measureText: (text: string) => {
+                  measureTextCalls += 1;
+                  return { width: text.length * PX_PER_CHAR };
+                },
+              }
+            : null,
+      });
+    }
+
+    function restoreRuler(): void {
+      if (originalGetContext)
+        Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', originalGetContext);
+    }
+
+    // One Entry ("Discovery", 9 chars, PX_PER_CHAR wide = 45px), one bar, geometry fully controlled
+    // by the caller — `x` and `end - start`'s width come from call order (start, then end) rather
+    // than the Instant's own value, because barSpan compares no fixture-friendly identity.
+    function scaleFor(barX: number, barWidth: number, contentWidthPx: number): TimeScale {
+      let call = 0;
+      return {
+        range: sampleEntries[0]!,
+        timeZone: 'UTC',
+        pxPerMs: 1,
+        xForInstant: () => {
+          call += 1;
+          return call % 2 === 1 ? barX : barX + barWidth;
+        },
+        instantForX: () => sampleEntries[0]!.start,
+        widthForDuration: () => barWidth,
+        ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+        contentWidth: contentWidthPx,
+      };
+    }
+
+    function frameFor(barX: number, barWidth: number, contentWidthPx: number) {
+      return computeFrame({
+        entries: sampleEntries.slice(0, 1),
+        scale: scaleFor(barX, barWidth, contentWidthPx),
+        preset,
+        visible: { x: 0, y: 0, width: contentWidthPx, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        itemProducerRegistry,
+      });
+    }
+
+    it('paints the label inside a bar with room to spare (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('moves the label outside to the right when it does not fit the bar, but the pane has room (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('outside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('keeps the label inside, ellipsised by CSS, when neither side has room (J1)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      // A narrow bar flush against the pane's own scrollable edge — no room inside, and no room past
+      // its right edge either, so the fallback (inside, ellipsised) is the only clause left standing.
+      backend.sync(frameFor(180, 20, 200));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer result carries no data-label and no injected label child (D-S5-11)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({ renderer: () => ({ text: 'custom' }) }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('custom');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer reads the label the library resolved for this bar (J1)', () => {
+      withStubRuler();
+      const seen: (ResolvedBarLabel | undefined)[] = [];
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({
+          renderer: (ctx) => {
+            seen.push(ctx.label);
+            return {
+              text: ctx.label === undefined ? 'no label' : `${ctx.label.text}@${ctx.label.placement}`,
+            };
+          },
+        }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+
+      // Wide bar: the text fits, so the answer this renderer paints is `inside`.
+      backend.sync(frameFor(0, 200, 2000));
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('Discovery@inside');
+      // Narrow bar, room in the pane: the same renderer now paints `outside`, with no ruler of its own.
+      backend.sync(frameFor(0, 20, 2000));
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('Discovery@outside');
+      expect(seen.map((label) => label?.placement)).toEqual(['inside', 'outside']);
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer sees no label when the consumer asked for none (J1)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({
+          renderer: (ctx) => ({ text: ctx.label === undefined ? 'no label' : 'a label' }),
+        }),
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        readBarLabels: () => 'none',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('no label');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('barLabels: "none" paints no label at all', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        readBarLabels: () => 'none',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a resize preview that crosses the fit line flips data-label, and a cancelled preview restores it', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      const frame = frameFor(0, 200, 2000);
+      backend.sync(frame);
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      const id = frame.bars[0]!.id;
+      expect(bar.dataset['label']).toBe('inside');
+
+      // [S3-A3]'s own ceiling, applied to this flip: no node created or removed, and the canvas ruler
+      // (the one call this whole check exists to avoid mid-drag) is never touched again.
+      let mutations = 0;
+      const observer = new MutationObserver((records) => {
+        for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
+      });
+      observer.observe(timeline, { childList: true, subtree: true });
+      const measureTextCallsBeforePreview = measureTextCalls;
+
+      // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
+      backend.applyState({ preview: [{ itemId: id, dx: 0, dWidth: -180, extra: false }] });
+      expect(bar.dataset['label']).toBe('outside');
+      observer.disconnect();
+      expect(mutations).toBe(0);
+      expect(measureTextCalls).toBe(measureTextCallsBeforePreview);
+
+      // Clearing the preview (a cancelled drag) restores syncBars's own last committed answer.
+      backend.applyState({ preview: [] });
+      expect(bar.dataset['label']).toBe('inside');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
   });
 
   it('a cellRenderer returning undefined keeps the default cell text (D-S5-10)', () => {

@@ -2,7 +2,7 @@
 // time-based output into content pixels through the bound `TimeScale`, and memoizes the result so a
 // static provider costs one call per window change, not one per render (D-S5-15).
 
-import type { Instant, TimeSpan } from '../model/index.js';
+import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
 import { createZonedTime } from '../time/index.js';
 import type { DecorationInput, DecorationLayer, DecorationProvider } from './decoration.js';
 import type { FrameRow } from './frame-row.js';
@@ -25,6 +25,9 @@ export interface RunDecorationsInput {
   span: TimeSpan;
   rows: readonly FrameRow[];
   timeZone: string;
+  /** The step one tick column stands for — `DecorationContext.tickUnit`/`tickIncrement`. */
+  tickUnit: TimeUnit;
+  tickIncrement: number;
   xForInstant: (at: Instant) => number;
 }
 
@@ -55,7 +58,11 @@ function memoKey(input: RunDecorationsInput, providerIds: ReadonlyMap<Decoration
   // `range: 'fitDataset'` keeps `span.start`/`span.end` unchanged but moves every pixel, so the key
   // must sample the scale itself, not just the dates it maps.
   const scaleSample = `${input.xForInstant(input.span.start)}|${input.xForInstant(input.span.end)}`;
-  return `${input.timeZone}|${input.span.start}|${input.span.end}|${scaleSample}|${providers}|${rowIds}`;
+  // The tick step is part of the window a provider reads: one that only paints at day granularity
+  // must run again when the preset changes, and switching `dayAndWeek` → `weekAndMonth` can leave
+  // span, rows and scale sample all unchanged.
+  const tick = `${input.tickUnit}/${input.tickIncrement}`;
+  return `${input.timeZone}|${input.span.start}|${input.span.end}|${scaleSample}|${tick}|${providers}|${rowIds}`;
 }
 
 /** One instance per Gantt (I2), held alongside its `FrameLayout` — never shared. `run()` recomputes
@@ -90,7 +97,13 @@ export class DecorationRunner {
     if (key === this.#lastKey) return this.#lastResult;
 
     const time = createZonedTime(input.timeZone);
-    const ctx = { span: input.span, rows: input.rows, time };
+    const ctx = {
+      span: input.span,
+      rows: input.rows,
+      time,
+      tickUnit: input.tickUnit,
+      tickIncrement: input.tickIncrement,
+    };
     const underBars: (RangeBand | RowStripe)[] = [];
     const overBars: (RangeBand | RowStripe)[] = [];
     for (const { layer, provider } of input.providers) {

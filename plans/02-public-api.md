@@ -362,11 +362,15 @@ Both questions — *how does this entry look?* and *what can you do to it?* — 
 ```ts
 barRenderer: {
   milestone: ({ entry }) => diamond(entry),
-  group:     ({ entry }) => bracket(entry),
+  group:     ({ entry }) => summaryRail(entry),
   buffer:    ({ entry }) => hatched(entry),   // consumer-defined kind
   '*':       ({ entry }) => defaultBar(entry),
 }
 ```
+
+**Label placement (J1).** `gantt.barLabels` (`'fitBar' | 'inside' | 'outside' | 'none'`, default `'fitBar'`) picks where the bar label paints, live-reconfigurable (I8). `'fitBar'` paints inside when the label fits, outside to the right when it does not, and falls back to an ellipsised inside label as the last resort; `'inside'`/`'outside'` force one side and still fall back to ellipsised-inside when the forced side has no room; `'none'` paints no label at all. The resolved side is `data-label` on `.fg-bar` (`'inside'` / `'outside'`, absent for `'none'` or a `barRenderer` result) — a level-2 hook for a consumer stylesheet, styled by default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`).
+
+A `barRenderer` result owns its bar's content, so the library injects no label child and stamps no `data-label` for it. It still reads the same answer: `ctx.label` carries the resolved `{ text, placement }` for that bar at that width, and is absent under `barLabels: 'none'`. So a consumer who customises a bar keeps fit-based labelling and never needs a text ruler — the library measures once, in one place, for its own label and a renderer's alike.
 
 **Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
 

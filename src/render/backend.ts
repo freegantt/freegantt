@@ -13,6 +13,10 @@ import type {
 
 export interface InteractionState {
   hoveredItemId?: ItemId;
+  /** The row under the pointer, in whichever pane the pointer is in — the grid row it landed on, or
+   *  the row that owns the hovered bar. A backend paints it on both the grid row and its timeline
+   *  band, so one row reads as one row across the splitter. Undefined parks the paint. */
+  hoveredRowId?: RowId;
   /** The Selection itself (#212, ADR 0010): the Segment ids `Gantt.selectedSegmentIds` holds. A bar
    *  paints selected when the Selection holds that bar's own Segment. A bar that draws an Entry's
    *  whole span — a group, a milestone — paints selected when the Selection holds any Segment of that

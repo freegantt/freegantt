@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 
 test('hovering a bar opens a tooltip with the entry name and dates', async ({ page }) => {
   await page.goto('/');
-  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-bracket)').first();
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
 
   await bar.hover();

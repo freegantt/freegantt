@@ -11,18 +11,29 @@
 // new `freegantt/no-inline-style-outside-geometry` lint rule leaves `transform`/`width`/`height` as the
 // only properties still legitimately written inline.
 //
-// The colour defaults are a cool, blue-shifted drawing-sheet palette: a white chart sheet on a light
-// grey ground, and a deep indigo-slate in the dark theme. They replace the warm cream set D-S1.10-9
-// first shipped. Two reasons. The warm ground clashed with any app shell that is not also warm, and a
-// library's defaults have to sit inside somebody else's page. And the old --fg-selection-color was a
-// red within a few degrees of --fg-date-line-color, so a selected row and a date line were the same
-// paint — the selection is violet now, a hue nothing else in the sheet claims. Colour carries meaning
-// here and each meaning gets its own hue: blue is data, vermilion marks time, amber warns, violet is
-// what the user picked.
+// Colour carries meaning here. Vermilion marks time, amber warns, violet marks keyboard focus — each
+// hue states one meaning only. Selection breaks that rule on purpose: it reuses the bar's own blue,
+// so a chosen item reads as "this data, picked". Role marks the difference — fill paints data,
+// outline paints selection — not hue.
 //
-// Theme tokens live on `.fg-container`. `theme: 'light'|'dark'` writes `data-fg-theme` on that
-// container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
-// would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
+// The values are the `Gantt demo sandbox rebuild` design's Light and Graphite token sets (its
+// Graphite is this sheet's `dark` — one name per concept, and `dark` is the one the public `Theme`
+// type already publishes). The greys carry a trace of yellow, under 0.02 saturation: warm enough that
+// the sheet sits inside a document page without reading as a screenshot, neutral enough that it does
+// not fight a cold page around it. Dark inverts the bar to the light end of the same blue and gives it
+// dark labels, which is what buys its 9:1 label contrast, and lifts every meaning hue together so
+// their separation survives the move.
+//
+// --fg-bar-opacity is 1, not the 0.9 this sheet shipped before. At 0.9 the light theme's bar label
+// measured about 4.1:1 against its own fill, under the 4.5:1 floor; the softening moved into the fill
+// itself, which is a colour the theme controls, instead of an opacity that erodes the label with it.
+//
+// `theme: 'light'|'dark'` writes `data-fg-theme` on the Gantt's own container, not on `:root`: a
+// `:root:not([data-fg-theme])` media query never sees that pin, so Light would leave the Gantt on the
+// system dark tokens. The two attribute rules select on the attribute alone, so a consumer can write
+// `data-fg-theme="dark"` on a wrapper around its own chrome — a toolbar above the Gantt — and
+// `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
+// its own container.
 
 import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_DIAMOND_SIZE_PX } from '../layout/index.js';
 
@@ -30,60 +41,119 @@ const MARKER_ATTR = 'data-freegantt-styles';
 
 const LIGHT_COLOR_TOKENS = `
   --fg-pane-bg: #FFFFFF;
-  --fg-splitter-color: #DDE2E9;
-  --fg-header-bg: #EEF1F5;
-  --fg-header-band-bg: #FFFFFF;
-  --fg-header-text: #16191F;
-  /* #79828F on white read 3.88:1 (axe color-contrast, S5.11) — under the 4.5:1 floor for normal
-     text. #646D7B on white measures 5.23:1. */
-  --fg-header-subtext: #646D7B;
-  --fg-header-divider-color: #DDE2E9;
+  --fg-splitter-color: #E6E2D9;
+  --fg-header-bg: #FFFFFF;
+  --fg-header-band-bg: #F4F2EC;
+  --fg-header-text: #1A1815;
+  /* 6.1:1 on --fg-header-band-bg, the surface a tick label actually sits on (axe color-contrast,
+     S5.11) — the 4.5:1 floor for normal text. */
+  --fg-header-subtext: #5E5A53;
+  --fg-header-divider-color: #E6E2D9;
+  /* The timeline pane's own vertical grid, one line per finest-band tick boundary (.fg-tick-line).
+     The ink at a low alpha, not an opaque grey. A line paints over whatever the row already paints —
+     the pane, the zebra's odd row, a consumer's weekend band — and an opaque grey reads as a
+     different weight on each of them. Measured as composited pixels: the opaque pair stepped 23 off
+     an odd row and 30 off an even one, so the same grid line looked hard on one row and soft on the
+     next. An alpha steps the same distance off any of them, because the step *is* a fraction of the
+     distance to the ink. Both are still one token each: set either to transparent and that line
+     stops painting, with no config key involved.
+     The two alphas are the hierarchy, stated as that step: about 20 for a regular line, about 36 for
+     a major one — roughly double, which is what makes a week division read as the coarser of the
+     two without either shouting. */
+  --fg-tick-line-color: rgb(26 24 21 / 0.09);
+  /* A line the coarser header band changes over — the week holding the 1st, a week's Monday. */
+  --fg-tick-line-strong-color: rgb(26 24 21 / 0.16);
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(22, 25, 31, 0.03);
-  --fg-row-label-color: #16191F;
-  --fg-row-unmatched-label-color: #79828F;
-  --fg-bar-fill: oklch(0.52 0.14 248);
+  --fg-row-odd-bg: #FAF8F2;
+  --fg-row-hover-bg: #F6F3EB;
+  /* A flat band, in the family --fg-row-hover-bg and --fg-row-odd-bg already belong to — not a mix
+     of --fg-selection-color, because that reads against whatever sits behind the container instead
+     of a colour axe can check on its own. */
+  --fg-row-selected-bg: #EEF3FB;
+  --fg-row-label-color: #1A1815;
+  /* Set by its worst case, not its usual one: 5.1:1 on the pane, but a filtered-out row can also be
+     selected, and on --fg-row-selected-bg it drops to 4.6:1 — still past the 4.5:1 floor (axe
+     color-contrast, S5.11). */
+  --fg-row-unmatched-label-color: #726D65;
+  --fg-bar-fill: oklch(0.49 0.13 248);
   --fg-bar-label-color: #FFFFFF;
+  /* J1: a label pushed outside the bar paints on the pane, not on --fg-bar-fill, so it takes the
+     pane's own ink family (--fg-header-subtext's) rather than --fg-bar-label-color. */
+  --fg-bar-label-outside-color: #5E5A53;
+  /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
+     one design value, one token (render/dom/index.ts's own DEFAULT_BAR_LABEL_GAP_PX states the same
+     number as its JS-side fallback). */
+  --fg-bar-label-gap: 8px;
   --fg-warn: #B4690E;
-  --fg-date-line-color: #CF3B26;
-  /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
-     selection outline invisible against it. It must also stay clear of --fg-date-line-color and
-     --fg-warn, which is what the old hue-25 red failed — it landed within a few degrees of the date
-     line's own red, so a selected row and an error read as the same paint. Violet is unclaimed by
-     any other meaning in the sheet: nothing else on the chart is this hue, so it says "picked" and
-     nothing else. */
-  --fg-selection-color: oklch(0.55 0.20 305);
+  /* The design states #CF3B26. A Date line label sits in a header band, and this theme paints that
+     band cream (--fg-header-band-bg) where the old one painted it white — #CF3B26 reads 4.36:1
+     there, under the 4.5:1 floor (axe color-contrast, S5.11). #C93820 is the same vermilion two
+     steps darker: 4.61:1 on the band, 5.16:1 on the pane the stroke itself crosses. */
+  --fg-date-line-color: #C93820;
+  /* Ink on a Date/Cursor line label, which is a filled chip in the time colour — the same
+     fill/label pairing --fg-bar-fill and --fg-bar-label-color already make. */
+  --fg-date-line-label-color: #FFFFFF;
+  /* The hovered bar's inset hairline — D-S3-7's hovered token, unpainted until now. It borrows no
+     meaning hue, so a hovered bar and a selected one are never confusable — and it stays inside the
+     bar's own box, so a hover never shifts a neighbour. */
+  --fg-hover-ring: rgb(26 24 21 / 0.22);
+  /* The dragged bar's lift — D-S3-7's dragging token. One static, hard-offset shadow: no blur to
+     rasterize and no animation, so it never lands on the drag hot path. */
+  --fg-drag-shadow: 0 2px 0 rgb(26 24 21 / 0.18);
+  /* Selection is the accent blue, close to --fg-bar-fill on purpose, and it never touches it: the
+     selected bar's outline sits 2px off the fill (outline-offset below), so the ring lands on the
+     pane beside the bar, not on the fill itself. Keep that offset if this value ever changes. It
+     must also stay clear of --fg-date-line-color and --fg-warn, which is what the old hue-25 red
+     failed — it landed within a few degrees of the date line's own red, so a selected row and an
+     error read as the same paint. This blue sits far from both. */
+  --fg-selection-color: oklch(0.55 0.13 245);
   /* S5.11, D-S5-25/D-S5-26: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
      bar/header-cell/splitter reads as "focused" and never as "selected" (--fg-selection-color) or
-     "conflict"/"pending" (--fg-warn). Cyan sits clear of every other hue this sheet already claims. */
-  --fg-focus-ring: oklch(0.62 0.16 220);
+     "conflict"/"pending" (--fg-warn). This is the violet --fg-selection-color vacated above: the
+     design carries no focus hue of its own, and violet stays unclaimed by every other meaning on
+     this sheet, clear of the blue --fg-bar-fill and --fg-selection-color now share. */
+  --fg-focus-ring: oklch(0.55 0.20 305);
   --fg-popup-bg: #FFFFFF;
-  --fg-popup-border: #DDE2E9;
-  --fg-popup-shadow: 0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22);
+  --fg-popup-border: #E6E2D9;
+  --fg-popup-shadow: 0 8px 24px rgb(26 24 21 / 0.12);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
-  --fg-pane-bg: #171B22;
-  --fg-splitter-color: #262C36;
-  --fg-header-bg: #12161C;
-  --fg-header-band-bg: #171B22;
-  --fg-header-text: #E8ECF3;
-  /* #6D7889 on the pane bg (#171B22) read 3.86:1. #818C9E on the same bg measures 5.08:1. */
-  --fg-header-subtext: #818C9E;
-  --fg-header-divider-color: #262C36;
+  --fg-pane-bg: #1B1D22;
+  --fg-splitter-color: #2B2F36;
+  --fg-header-bg: #1B1D22;
+  --fg-header-band-bg: #22252B;
+  --fg-header-text: #ECEAE3;
+  /* 6.3:1 on --fg-header-band-bg (axe color-contrast, S5.11). */
+  --fg-header-subtext: #A8A49B;
+  --fg-header-divider-color: #2B2F36;
+  /* The same rule as Light's pair, in the other direction: the theme's own light ink at a low alpha,
+     so a line steps about 20 (regular) and about 36 (major) off whatever row it crosses. */
+  --fg-tick-line-color: rgb(236 234 227 / 0.1);
+  --fg-tick-line-strong-color: rgb(236 234 227 / 0.17);
   --fg-row-even-bg: transparent;
-  --fg-row-odd-bg: rgba(232, 236, 243, 0.04);
-  --fg-row-label-color: #E8ECF3;
-  --fg-row-unmatched-label-color: #6D7889;
+  --fg-row-odd-bg: #20232A;
+  --fg-row-hover-bg: #262A32;
+  --fg-row-selected-bg: #1F2A3F;
+  --fg-row-label-color: #ECEAE3;
+  /* Same worst-case rule the light theme takes: 5.8:1 on the pane, 4.9:1 on --fg-row-selected-bg. */
+  --fg-row-unmatched-label-color: #9B978E;
   --fg-bar-fill: oklch(0.74 0.13 248);
-  --fg-bar-label-color: #10131A;
+  --fg-bar-label-color: #16181D;
+  --fg-bar-label-outside-color: #A8A49B;
+  --fg-bar-label-gap: 8px;
   --fg-warn: #E0A340;
   --fg-date-line-color: #FF6F57;
-  --fg-selection-color: oklch(0.76 0.17 305);
-  --fg-focus-ring: oklch(0.78 0.14 220);
-  --fg-popup-bg: #1B2029;
-  --fg-popup-border: #313846;
-  --fg-popup-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+  --fg-date-line-label-color: #1B1D22;
+  /* The ring inverts to the theme's own ink, the same move --fg-bar-fill and --fg-bar-label-color
+     make: a light hairline reads on a dark bar where the light theme's dark one would vanish. */
+  --fg-hover-ring: rgb(236 234 227 / 0.26);
+  --fg-drag-shadow: 0 2px 0 rgb(0 0 0 / 0.45);
+  --fg-selection-color: oklch(0.72 0.13 245);
+  --fg-focus-ring: oklch(0.76 0.17 305);
+  --fg-popup-bg: #22252B;
+  --fg-popup-border: #3A3F48;
+  --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
 `.trimEnd();
 
 const BASE_STYLESHEET = `
@@ -94,17 +164,20 @@ ${LIGHT_COLOR_TOKENS}
 ${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
   --fg-lane-gap: 2px;
-  --fg-bar-opacity: 0.9;
+  --fg-bar-opacity: 1;
 }
 @media (prefers-color-scheme: dark) {
   .fg-container:not([data-fg-theme]) {
 ${DARK_COLOR_TOKENS}
   }
 }
-.fg-container[data-fg-theme='light'] {
+/* Attribute only, no .fg-container: the token set follows the pin wherever the pin is written. Both
+   rules come after the .fg-container block above and match at the same specificity, so a pinned
+   container still reads its own set rather than the default light one. */
+[data-fg-theme='light'] {
 ${LIGHT_COLOR_TOKENS}
 }
-.fg-container[data-fg-theme='dark'] {
+[data-fg-theme='dark'] {
 ${DARK_COLOR_TOKENS}
 }
 
@@ -202,15 +275,28 @@ ${DARK_COLOR_TOKENS}
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
 .fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
 .fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
+/* J2: one line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
+   the zebra, the selected-row band, and weekend shading paint over the lines, and every bar paints
+   over them in turn — the design's own paint order. height is set inline per frame
+   (render/dom/tick-lines.ts), not bottom: 0 — same reason .fg-date-line states: .fg-timeline-pane is
+   both this element's positioned ancestor and its own overflow: auto scroll container. */
+.fg-tick-lines { position: relative; }
+.fg-tick-line { position: absolute; top: 0; left: 0; width: 1px; background: var(--fg-tick-line-color); pointer-events: none; }
+.fg-tick-line[data-major] { background: var(--fg-tick-line-strong-color); }
 .fg-row-bands { position: relative; }
 .fg-row-band { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 /* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
-   an outline (an outline would fight the row's cell layout the way .fg-bar's never has to). Same
-   --fg-selection-color Token .fg-bar[data-state~="selected"] already uses, so a bar click and its
-   matching row read as one selection, not two colours. */
-.fg-row[data-state~='selected'] { background: color-mix(in oklab, var(--fg-selection-color) 16%, transparent); }
+   an outline (an outline would fight the row's cell layout the way .fg-bar's never has to).
+   --fg-row-selected-bg is its own flat token, not a mix of --fg-selection-color: a bar click still
+   ties row and bar to one selection, but an opaque band is what axe's colour-contrast check can
+   read, and it does not depend on whatever sits behind the container. */
+/* Hover, then selection — a selected row that is also hovered reads as selected, because the later
+   rule wins on equal specificity. Both paint the grid row and its timeline band from one
+   paintRowState answer, so a row reads the same on both sides of the splitter. */
+.fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
+.fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: var(--fg-row-selected-bg); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -232,27 +318,71 @@ ${DARK_COLOR_TOKENS}
    --fg-bar-fill override (set on this element, e.g. by barRenderer) only reaches the painted
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
-.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; }
-.fg-bar-bracket { background: transparent; border: 2px solid var(--fg-bar-fill-painted); border-bottom: none; border-radius: 2px 2px 0 0; color: var(--fg-bar-fill-painted); }
+.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 3px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
+/* DESIGN-FACTS §2.4: a group bar is a solid rail 10px high in the row's own label ink, with a 4px
+   downward cap at each end — not an outline box at full bar height, which shouted over every span
+   bar under it. The box keeps the full bar height because that is the hit target; only the glyph
+   inside it is ink, so both pieces read --fg-group-bar-ink and a state can swap that one value.
+   --fg-group-bar-height is an undeclared knob with a default, the shape --fg-bar-radius takes. */
+.fg-bar-summary { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
+.fg-bar-summary::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
+/* One 8x4 cap per end, hung off the rail's bottom edge. The wedge of a conic gradient whose apex
+   sits at the tile's bottom centre is the same downward triangle the design draws with a border
+   trick — and a border trick needs an element of its own, which a rail with two ends does not have. */
+.fg-bar-summary::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
 /* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
    barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
    — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
-   own size share (CONTEXT.md), read the same way as --fg-tick-box-floor. */
+   own size share (CONTEXT.md), read the same way as --fg-tick-box-floor. color: transparent hides
+   the diamond's own painted glyph from double-painting under ::before's own fill — .fg-bar-label
+   opts back into a real ink below, because J1 lets a milestone carry a label same as any other bar. */
 .fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
-.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); transform: translate(-50%, -50%) rotate(45deg); }
+.fg-bar-diamond::before { content: ''; box-sizing: border-box; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); border: var(--fg-diamond-stroke, none); transform: translate(-50%, -50%) rotate(45deg); }
+.fg-bar-diamond .fg-bar-label { color: var(--fg-bar-label-color); }
+/* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
+   positioned and coloured on its own once a barLabels placement pushes it outside the bar.
+   min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
+   it text-overflow never gets the chance to run. */
+.fg-bar-label { min-width: 0; padding-inline: var(--fg-bar-label-gap, 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* data-label='outside' (render/dom/index.ts's own resolveBarLabelPlacement) — the label leaves the
+   bar's own box and paints on the pane beside it, in the pane's own ink rather than the bar fill's
+   label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
+   label already fits past the bar's right edge. */
+.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, 8px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
-   per-bar modifier class (CONTEXT.md's State attribute entry). 'hovered' has no rule of its own yet
-   (S3.2 adds the grab cursor it pairs with); the token still paints so a consumer's own selector can
-   already key off it. */
-.fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
+   per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
+   Hover is a box-shadow and selection an outline, so a bar that is both wears both without either
+   rule overwriting the other. */
+.fg-bar[data-state~="hovered"] { box-shadow: inset 0 0 0 1px var(--fg-hover-ring); }
+/* outline-offset: 2px is not cosmetic. --fg-selection-color now shares --fg-bar-fill's own hue, so
+   an outline flush against the fill would nearly vanish into it. The offset moves the ring onto the
+   pane beside the bar, where it reads against a different colour. */
+.fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
+/* A group bar's box is its hit target, not its ink: the shared outline and the shared inset ring
+   would both frame a full-height rectangle of empty pane around a 10px rail. So the state paints on
+   the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no outer
+   border at all — and hovered rings the rail alone. Both need the box's own state paint cancelled
+   first, and they sit after the shared rules so equal specificity resolves this way. */
+.fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
+.fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
+/* A diamond's box is its hit target, not its ink, exactly as a group bar's is: the shared outline
+   frames a full-height rectangle of empty pane around a glyph the size of a checkbox. Both states
+   paint on the glyph, where they ring the rotated shape itself. Same running order as the rail's —
+   after the shared rules, so equal specificity resolves this way. */
+.fg-bar-diamond[data-state~="hovered"], .fg-bar-diamond[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-diamond[data-state~="hovered"]::before { box-shadow: 0 0 0 1px var(--fg-hover-ring); }
+.fg-bar-diamond[data-state~="selected"]::before { box-shadow: 0 0 0 2px var(--fg-selection-color); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
-.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); }
+.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }
 /* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
-   bar the caller never grabbed, moved by the hook's own cascade. 'dragging' (the caller's own grabbed
-   bar, ItemPreview.extra: false) paints no rule of its own yet, same as 'hovered' above. */
+   bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4); pointer-events: none; }
+/* The caller's own grabbed bar (ItemPreview.extra: false). It comes after 'pending' and 'ghost' so
+   its opacity wins: a bar the pointer is carrying reads solid, whatever else it also is. */
+.fg-bar[data-state~="dragging"] { box-shadow: var(--fg-drag-shadow); opacity: 1; }
 /* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
@@ -269,10 +399,18 @@ ${DARK_COLOR_TOKENS}
    would resolve against the pane's visible clientHeight and cut the line off at the first
    screenful instead of running the full scrollable row content. */
 .fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-.fg-date-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg-date-line-color); }
+/* A label is a filled chip, not bare coloured text. Bare text put a thin time-coloured word on the
+   header band and asked it to clear 4.5:1 there; a chip carries its own ground, so the label reads
+   at any band colour a theme picks.
+   D-S1.13-8 retired the Today-only colour token with no alias: Today is a Date line that carries
+   data-flag="today", not a line with a palette of its own. Paint now stamps that flag on the label
+   as well as the stroke, so a consumer that wants Today apart from the rest can reach both halves —
+   .fg-date-line[data-flag='today'] and .fg-date-line-label[data-flag='today']. The sheet itself
+   states no such rule, which is the decision holding. */
+.fg-date-line-label, .fg-cursor-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--fg-date-line-color); color: var(--fg-date-line-label-color); }
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: 2; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-.fg-cursor-line-label { position: absolute; left: 0; top: 0; z-index: 2; white-space: nowrap; color: var(--fg-date-line-color); pointer-events: none; }
+.fg-cursor-line-label { z-index: 2; pointer-events: none; }
 /* S5.3, D-S5-8: the one overlay layer, above both panes (DOM order alone gives it the top of the
    stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
    panes underneath; a mounted .fg-popup opts back in. */

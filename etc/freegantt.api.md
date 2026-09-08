@@ -50,6 +50,12 @@ export interface BarFlags {
 }
 
 // @public
+export type BarLabelPlacement = 'inside' | 'outside';
+
+// @public
+export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
+
+// @public
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
 
 // @public (undocumented)
@@ -58,6 +64,7 @@ export interface BarRendererContext {
     entry: Entry;
     // (undocumented)
     item: FrameBar;
+    label?: ResolvedBarLabel;
 }
 
 // @public
@@ -436,6 +443,8 @@ export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 export interface DecorationContext {
     rows: readonly FrameRow[];
     span: TimeSpan;
+    tickIncrement: number;
+    tickUnit: TimeUnit;
     time: ZonedTime;
 }
 
@@ -969,6 +978,8 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get a11yLabel(): string;
     set a11yLabel(value: string);
+    get barLabels(): BarLabels;
+    set barLabels(value: BarLabels);
     get barRenderer(): BarRenderer | RendererByKind | undefined;
     set barRenderer(renderer: BarRenderer | RendererByKind | undefined);
     // (undocumented)
@@ -1131,6 +1142,7 @@ export type GanttOptions<TMeta = unknown, TFields extends Record<string, unknown
 // @public (undocumented)
 export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
     a11yLabel?: string;
+    barLabels?: BarLabels;
     barRenderer?: BarRenderer | RendererByKind;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
@@ -1739,6 +1751,14 @@ export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
 
 // @public
+export interface ResolvedBarLabel {
+    // (undocumented)
+    placement: BarLabelPlacement;
+    // (undocumented)
+    text: string;
+}
+
+// @public
 export interface ResolvedColumn extends FrameColumn {
     // (undocumented)
     cellRenderer?: ColumnCellRenderer;
@@ -1922,7 +1942,7 @@ export type SerializedField = {
     };
     rollUp?: AggregatorName;
     editable?: boolean;
-    column?: Omit<GridColumnBase, 'field' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'hidden' | 'cellRenderer'> & GridColumnSizing;
 };
 
 // @public (undocumented)

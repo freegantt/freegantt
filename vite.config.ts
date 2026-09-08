@@ -33,6 +33,7 @@ export default defineConfig({
         data: page('data.html'),
         editing: page('editing.html'),
         hierarchy: page('hierarchy.html'),
+        planner: page('planner.html'),
         plugins: page('plugins.html'),
         // Static architecture pages under harness/docs/ — without an input entry, `pnpm build`
         // would drop them the same way D-S1.11-5 caught the missing demo HTML files.

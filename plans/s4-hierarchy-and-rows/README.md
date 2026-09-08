@@ -187,7 +187,7 @@ gantt.on('collapseChange', ({ to }) => save(to));
 | `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `RowSourceCommon`, `RowHeightMode`, `Gantt.rowSource` | S4.6 |
 | `Gantt.collapsed`, `collapse`, `expand`, `toggleCollapse`, `beforeCollapseChange`/`collapseChange`, `CollapseChange` | S4.6 |
 | `RowFilter`, `RowSort`, `FilterPolicy` | S4.9 |
-| Parts: `fg-row-cell`, `fg-row-twisty`, `fg-bar-bracket`, `fg-bar-diamond`; tokens `--fg-indent-width`, `--fg-lane-gap` | S4.3, S4.6, S4.7, S4.8 |
+| Parts: `fg-row-cell`, `fg-row-twisty`, `fg-bar-summary`, `fg-bar-diamond`; tokens `--fg-indent-width`, `--fg-lane-gap` | S4.3, S4.6, S4.7, S4.8 |
 
 **Not public:** `FieldRegistry`, `readField`/`writeField`, `ItemProducer` registration, `PlannedRow`, `LanePacking`, `FrameMemory` — internal registry and pipeline shapes.
 
