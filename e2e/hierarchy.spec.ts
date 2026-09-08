@@ -129,25 +129,42 @@ test('[S4-A3] switching row source changes the row set and keeps the scroll offs
 });
 
 test('pack mode grows a packed row and shifts the rows below', async ({ page }) => {
-  await gotoHierarchyShort(page);
+  await gotoHierarchy(page);
 
   const entryId = await entryWithSegments(page);
+  // Reveal the packed row by name instead of scrolling blindly to the bottom. This test used
+  // `gotoHierarchyShort`, which sets a 220px pane and scrolls to `scrollHeight` — and then looked
+  // the row up by an id read from the *dataset*, so whether virtualization had kept that row in
+  // the DOM was left to chance. That produced two intermittent failures: the row absent, so
+  // `boundingBox()` waited out the 30s timeout; or the row present but last, so no row sat below
+  // it and the search found nothing. `reveal` states the requirement the test actually has.
+  await page.evaluate((id) => {
+    window.__gantt.reveal(window.__dataset.entries.get(id)!.id);
+  }, entryId);
   const packedRow = page.locator(`.fg-row[data-row-id="${entryId}"]`);
+  await expect(packedRow).toBeVisible();
   const beforePacked = await packedRow.boundingBox();
   expect(beforePacked).not.toBeNull();
 
+  // Name the row below, do not count it. Switching to pack mode re-renders, and virtualization
+  // decides which rows exist — so an `nth(i)` locator captured now re-resolves to a *different*
+  // row after the switch, and the assertion below then measures the wrong box. `data-row-id`
+  // survives the re-render. Same fix, same reason, as the `data-item-id` pinning in
+  // `plugins.spec.ts`, and as this test's own `packedRow` locator above.
   const rows = page.locator('#gantt .fg-row');
   const count = await rows.count();
-  let below: import('@playwright/test').Locator | undefined;
+  let belowRowId: string | null = null;
   for (let i = 0; i < count; i++) {
-    const box = await rows.nth(i).boundingBox();
+    const row = rows.nth(i);
+    const box = await row.boundingBox();
     if (box !== null && box.y > beforePacked!.y + beforePacked!.height - 1) {
-      below = rows.nth(i);
+      belowRowId = await row.getAttribute('data-row-id');
       break;
     }
   }
-  expect(below).toBeDefined();
-  const beforeBelow = await below!.boundingBox();
+  expect(belowRowId).not.toBeNull();
+  const below = page.locator(`.fg-row[data-row-id="${belowRowId}"]`);
+  const beforeBelow = await below.boundingBox();
   expect(beforeBelow).not.toBeNull();
 
   await page.selectOption('#height-mode', 'pack');
@@ -161,7 +178,7 @@ test('pack mode grows a packed row and shifts the rows below', async ({ page }) 
 
   await expect
     .poll(async () => {
-      const afterBelow = await below!.boundingBox();
+      const afterBelow = await below.boundingBox();
       return afterBelow !== null && afterBelow.y > beforeBelow!.y;
     })
     .toBe(true);
