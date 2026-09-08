@@ -326,7 +326,7 @@ ${DARK_COLOR_TOKENS}
    the diamond's own painted glyph from double-painting under ::before's own fill — .fg-bar-label
    opts back into a real ink below, because J1 lets a milestone carry a label same as any other bar. */
 .fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
-.fg-bar-diamond::before { content: ''; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); transform: translate(-50%, -50%) rotate(45deg); }
+.fg-bar-diamond::before { content: ''; box-sizing: border-box; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); border: var(--fg-diamond-stroke, none); transform: translate(-50%, -50%) rotate(45deg); }
 .fg-bar-diamond .fg-bar-label { color: var(--fg-bar-label-color); }
 /* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
@@ -356,6 +356,13 @@ ${DARK_COLOR_TOKENS}
 .fg-bar-bracket[data-state~="hovered"], .fg-bar-bracket[data-state~="selected"] { outline: none; box-shadow: none; }
 .fg-bar-bracket[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
 .fg-bar-bracket[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
+/* A diamond's box is its hit target, not its ink, exactly as a group bar's is: the shared outline
+   frames a full-height rectangle of empty pane around a glyph the size of a checkbox. Both states
+   paint on the glyph, where they ring the rotated shape itself. Same running order as the rail's —
+   after the shared rules, so equal specificity resolves this way. */
+.fg-bar-diamond[data-state~="hovered"], .fg-bar-diamond[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-diamond[data-state~="hovered"]::before { box-shadow: 0 0 0 1px var(--fg-hover-ring); }
+.fg-bar-diamond[data-state~="selected"]::before { box-shadow: 0 0 0 2px var(--fg-selection-color); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }

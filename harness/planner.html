@@ -57,6 +57,9 @@
            at 14px a two-digit number ellipsised to `1.`. */
         --fg-indent-width: 0px;
         --fg-bar-radius: 4px;
+        /* The design's checkpoint is a 15px square on its point (DESIGN-FACTS §2.5). One token moves
+           the glyph and the painted-span floor layout gives it (`size × √2`) together. */
+        --fg-diamond-size: 15px;
         border: 1px solid var(--fg-splitter-color);
         border-radius: 0 0 10px 10px;
         overflow: hidden;
@@ -250,6 +253,13 @@
         padding-inline: var(--fg-bar-label-gap, 8px) 0;
         color: var(--fg-bar-label-outside-color);
         overflow: visible;
+      }
+      /* A checkpoint's label reads on the pane in the row's own ink, 10px off the diamond's point
+         (DESIGN-FACTS §2.5) — the diamond has no fill to read a label against, so the muted outside
+         ink the design gives a span's label would sit next to nothing. */
+      .demo-checkpoint-label {
+        padding-inline-start: 10px;
+        color: var(--fg-row-label-color);
       }
 
       /* The critical path: a ring inside the bar's own box, so it never shifts a neighbour. It sits
