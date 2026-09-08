@@ -144,14 +144,6 @@ function redo(): void {
 undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 
-window.addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-  e.preventDefault();
-  if (e.shiftKey) redo();
-  else undo();
-});
-
 lockResize.addEventListener('change', () => {
   gantt.interactions = lockResize.checked ? { resize: false } : {};
 });

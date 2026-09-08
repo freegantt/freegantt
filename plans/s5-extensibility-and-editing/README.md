@@ -146,7 +146,7 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 | `[S5-A1]` | Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate) | S5.5 | `.dependency-cruiser.cjs` rule + `scripts/guard-red-test.mjs`, `extensions/features/*.test.ts` |
 | `[S5-A2]` | A harness-only third-party-style plugin (weekend shading) is written against the public contract only | S5.6 | `harness/plugins/weekend-shading.ts`, `e2e/plugins.spec.ts` |
 | `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `api/gantt.test.ts`, `layout/items/produce-items.test.ts`, `view/capability.test.ts` |
-| `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/roving-focus.test.ts`, `e2e/a11y.spec.ts` |
+| `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/keyboard-navigation.test.ts`, `e2e/a11y.spec.ts` |
 | `[S5-A5]` | A consumer replaces the entry editor through `beforeEntryEdit` (harness demo) | S5.8 | `extensions/features/inline-editing.test.ts`, `e2e/editing.spec.ts` |
 | `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.13 | `size-limit` budgets + a string probe over the built bundle |
 
@@ -374,7 +374,7 @@ Read these before you touch `src/`.
 | Decorations and time | `layout/decorations.test.ts`, `time/zone.test.ts`, `api/dataset.test.ts` |
 | Grid chrome | `view/grid-columns.test.ts`, `interaction/column-gestures.test.ts` (dom) |
 | Dataset plugins | `data/edit-extension.test.ts`, `data/plugin-store.test.ts`, `api/dataset.test.ts` |
-| A11y | `view/roving-focus.test.ts`, `render/dom/index.test.ts` (dom), `e2e/a11y.spec.ts` |
+| A11y | `view/keyboard-navigation.test.ts`, `render/dom/index.test.ts` (dom), `e2e/a11y.spec.ts` |
 | Integration | `api/gantt.test.ts`, `api/dataset.test.ts` |
 | E2E | `e2e/plugins.spec.ts`, `e2e/editing.spec.ts`, `e2e/a11y.spec.ts` |
 | Guard | `.dependency-cruiser.cjs` `extensions-public-only` rule; `scripts/guard-red-test.mjs` gains the matching red test; `size-limit` budgets |
