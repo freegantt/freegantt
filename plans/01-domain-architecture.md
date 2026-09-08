@@ -738,7 +738,7 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ## 10. `extensions/` — the plugin contract
 
-"Everything is extensible" needs one extension contract for each host a plugin can join.
+"Everything is extensible" needs one extension contract for each object a plugin installs into.
 FreeGantt ships two: a **Gantt plugin** joins a mounted Gantt, and a **Dataset plugin** joins a
 Dataset while it constructs. Both shipped in S5 (`plans/s5-extensibility-and-editing`).
 
@@ -790,7 +790,7 @@ interface PluginContext {
 }
 ```
 
-A Gantt plugin declares no Field. `registerField` moved off this host during S5 — a Gantt plugin
+A Gantt plugin declares no Field. `registerField` moved off this contract during S5 — a Gantt plugin
 shows a Field through `view.registerGridColumn` alone, and a Dataset plugin declares the Field
 itself (§10.2). `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the
 group a plugin reads it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not
