@@ -40,7 +40,7 @@
     "bundle-probe": "node scripts/bundle-probe.mjs",
     "size-limit": "size-limit",
     "test:e2e": "playwright test",
-    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report && pnpm check-doc-examples",
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report && pnpm check-doc-examples && pnpm bundle-probe && pnpm size-limit",
     "verify:full": "node scripts/verify-full.mjs"
   },
   "dependencies": {
