@@ -15,6 +15,7 @@ import type {
   GridColumnInput,
   Instant,
   RendererByKind,
+  ResolvedBarLabel,
 } from '../src/api/index.js';
 import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
 import type { PlannerMeta } from '../fixtures/planner-dataset.js';
@@ -127,6 +128,17 @@ function progressCell({ value, fieldValue }: ColumnCellRendererContext): Element
 
 // ---- Bars ------------------------------------------------------------------------------------
 
+/** The bar's own label, on the side the library placed it (DESIGN-FACTS §2.3). The fit test is the
+ *  library's — `label.placement` is the answer for this bar at this width — so this page paints text
+ *  and measures none. */
+function barLabel(label: ResolvedBarLabel): ElementDescription & { key: string } {
+  return {
+    key: 'label',
+    class: { 'demo-bar-label': true, 'demo-bar-label-outside': label.placement === 'outside' },
+    text: label.text,
+  };
+}
+
 /** Every bar takes its phase's hue, and a critical-path bar takes an inset ring on top of it. A
  *  span bar also takes the design's progress shading (DESIGN-FACTS §2.2) — a child rect pinned to
  *  its left edge, darkened 22% black over the fill, so a part-done row reads as part-filled. The
@@ -134,7 +146,7 @@ function progressCell({ value, fieldValue }: ColumnCellRendererContext): Element
  *  from `entry.kind`) — neither has room for a progress child of its own, and a renderer recolours
  *  them through `--fg-bar-fill` and adds nothing else. `'*'` is the catch-all, so one function
  *  answers for all three kinds. */
-function phaseBar({ entry }: BarRendererContext): ElementDescription | undefined {
+function phaseBar({ entry, label }: BarRendererContext): ElementDescription | undefined {
   const meta = entry.meta as PlannerMeta | undefined;
   const fill = phaseFill(meta?.phase);
   const description: ElementDescription = { class: { 'demo-critical': meta?.critical === true } };
@@ -152,6 +164,9 @@ function phaseBar({ entry }: BarRendererContext): ElementDescription | undefined
       });
     }
   }
+  // A group bar carries no label in the design — the rail is the phase's span, and the grid row
+  // beside it already names it. Every other kind paints the label the library resolved.
+  if (label !== undefined && entry.kind !== 'group') children.push(barLabel(label));
   // The critical ring is a child, not a box-shadow on the bar. The bar's own shadow slot belongs to
   // the library — `hovered` and `dragging` both paint there — and a second box-shadow rule on
   // `.fg-bar` would replace theirs rather than join it. A nested ring composes with both for free.
@@ -186,15 +201,21 @@ gantt.installPlugin(weekendShading());
 const THEME_STORAGE_KEY = 'freegantt-planner-theme';
 
 function isPlannerTheme(value: string | null): value is PlannerThemeChoice {
-  return value === 'light' || value === 'graphite' || value === 'paper';
+  return value === 'light' || value === 'dark' || value === 'paper';
+}
+
+/** What the page opens on when nobody has picked yet: whatever the reader's own system asks for.
+ *  A stored choice always wins — picking Light on a dark desktop is a choice, not a mistake. */
+function preferredTheme(): PlannerThemeChoice {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function readStoredTheme(): PlannerThemeChoice {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isPlannerTheme(stored) ? stored : 'light';
+    return isPlannerTheme(stored) ? stored : preferredTheme();
   } catch {
-    return 'light';
+    return preferredTheme();
   }
 }
 

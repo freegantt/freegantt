@@ -92,8 +92,12 @@
         --demo-phase-215: oklch(0.44 0.11 215);
         /* The weekend column shading `--fg-x-weekend` names in DESIGN-FACTS §7 — a library gap the
            design flags, not something the library ships, so this page names it the way it already
-           names phase hues: once per theme, read by `weekendShading()`'s own `.demo-weekend-band`. */
-        --demo-weekend-bg: #f3f0e7;
+           names phase hues: once per theme, read by `weekendShading()`'s own `.demo-weekend-band`.
+           Each value is stated so that, once the band's own 0.55 has composited it over that theme's
+           pane, the step off the pane is about the same size in every theme. The dark value is not
+           the design's `#1F2126`: the design composites onto a `#15161A` page, our pane is the
+           lighter `#1B1D22`, and at 0.55 that leaves a band nobody can see. */
+        --demo-weekend-bg: #e8e6e0;
       }
       @media (prefers-color-scheme: dark) {
         body:not(.theme-paper) {
@@ -102,7 +106,7 @@
           --demo-phase-285: oklch(0.78 0.12 285);
           --demo-phase-15: oklch(0.78 0.12 15);
           --demo-phase-215: oklch(0.78 0.12 215);
-          --demo-weekend-bg: #1f2126;
+          --demo-weekend-bg: #2d3037;
         }
       }
       body:has(#gantt[data-fg-theme='dark']) {
@@ -111,7 +115,7 @@
         --demo-phase-285: oklch(0.78 0.12 285);
         --demo-phase-15: oklch(0.78 0.12 15);
         --demo-phase-215: oklch(0.78 0.12 215);
-        --demo-weekend-bg: #1f2126;
+        --demo-weekend-bg: #2d3037;
       }
 
       /* ---- Paper ---------------------------------------------------------------------------- */
@@ -126,7 +130,7 @@
         --demo-phase-285: oklch(0.42 0.1 285);
         --demo-phase-15: oklch(0.42 0.1 15);
         --demo-phase-215: oklch(0.42 0.1 215);
-        --demo-weekend-bg: #eae3cc;
+        --demo-weekend-bg: #e3ded0;
       }
       body.theme-paper #gantt {
         --fg-pane-bg: #faf7ee;
@@ -224,6 +228,32 @@
         background: rgb(0 0 0 / 0.22);
         border-radius: var(--fg-bar-radius) 0 0 var(--fg-bar-radius);
         pointer-events: none;
+      }
+
+      /* The bar's own label (DESIGN-FACTS §2.3). Which side it paints on is the library's answer,
+         not this page's: a `barRenderer` receives `label.placement`, already resolved against this
+         bar's width, so nothing here measures text. The two sides differ in more than position —
+         inside is ink-on-fill and ellipsised, outside is the muted pane ink and never clipped. Both
+         inks are the library's own label pair, so a theme swap moves them for free. */
+      .demo-bar-label {
+        position: relative;
+        min-width: 0;
+        padding-inline: var(--fg-bar-label-gap, 8px);
+        color: var(--fg-bar-label-color);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+      .demo-bar-label-outside {
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        padding-inline: var(--fg-bar-label-gap, 8px) 0;
+        color: var(--fg-bar-label-outside-color);
+        overflow: visible;
       }
 
       /* The critical path: a ring inside the bar's own box, so it never shifts a neighbour. It sits

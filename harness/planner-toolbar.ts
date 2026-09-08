@@ -13,7 +13,7 @@
 import type { Gantt, ShippedPresetId, TimeSpan } from '../src/api/index.js';
 import { formatDate, formatEndInclusive } from '../src/api/index.js';
 
-export type PlannerThemeChoice = 'light' | 'graphite' | 'paper';
+export type PlannerThemeChoice = 'light' | 'dark' | 'paper';
 
 export interface PlannerToolbarOptions {
   gantt: Gantt;
@@ -52,7 +52,7 @@ const ZOOM_PRESETS: readonly { readonly value: ShippedPresetId; readonly label: 
 
 const THEME_CHOICES: readonly { readonly value: PlannerThemeChoice; readonly label: string }[] = [
   { value: 'light', label: 'Light' },
-  { value: 'graphite', label: 'Graphite' },
+  { value: 'dark', label: 'Dark' },
   { value: 'paper', label: 'Paper' },
 ];
 
@@ -187,10 +187,12 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
   container.append(row1, row2);
 
   // The theme reaches two places: the Gantt's own token layer (`gantt.theme`), and the page's
-  // Paper class (`planner.ts` owns what it sets). Graphite is the library's `dark`; Paper leaves
-  // `gantt.theme` on `light` and rides the consumer class instead (design source line 66-86).
+  // Paper class (`planner.ts` owns what it sets). Dark is the library's own `dark` — the design
+  // calls it Graphite, and this page publishes the library's name so a reader meets one word for
+  // one thing. Paper leaves `gantt.theme` on `light` and rides the consumer class instead
+  // (design source line 66-86).
   function applyTheme(choice: PlannerThemeChoice): void {
-    gantt.theme = choice === 'graphite' ? 'dark' : 'light';
+    gantt.theme = choice === 'dark' ? 'dark' : 'light';
     theme.setActive(choice);
     onThemeChange(choice);
   }
