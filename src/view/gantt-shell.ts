@@ -676,6 +676,12 @@ export class GanttShell {
     // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
       readGridWidth: () => this.#gridPaneWidth.width,
+      readMinWidth: () => this.#gridPaneWidth.floor,
+      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
+      // names one whenever the columns do. A `flex` column names none, so this falls back to the
+      // container's own outer bound (`PaneLayout.bounds()`, D-S5-8's same clamp). The pane
+      // physically cannot outgrow the Gantt it sits in, ceiling or not.
+      readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
       previewGridWidth: (px) => {
         this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
       },
@@ -1540,6 +1546,10 @@ export class GanttShell {
    *  veto leaves `gridWidth` exactly where it was. */
   set minGridWidth(px: number) {
     this.#gridPaneWidth.setFloor(px);
+    // S5.11: this runs on the common branch too, not only when the floor lifts `gridWidth`.
+    // A lowered floor still changes what `Home` and a screen reader read as the splitter's own
+    // minimum. That cannot wait for `commitWidth`'s own sync alone.
+    this.#splitterAttachment?.syncAria();
   }
 
   get preset(): ViewPreset {
@@ -1733,6 +1743,10 @@ export class GanttShell {
     });
     // #139/#157: the columns just changed, so the width they dictate changed with them.
     this.#gridPaneWidth.resizeToColumns();
+    // S5.11: the #139 ceiling `aria-valuemax` reads can move even when the pane's own width does
+    // not. The columns grew, but the pane was already narrower than either edge — the one branch
+    // `resizeToColumns`'s own commit would otherwise never touch.
+    this.#splitterAttachment?.syncAria();
   }
 
   #columnBind(): ResolveColumnsBind {
@@ -1761,15 +1775,20 @@ export class GanttShell {
       commitWidth: (px) => {
         const from = this.#paneLayout.gridWidth;
         const to = px;
+        // S5.11: every width change lands here, whichever door it came in — a drag, a keyboard
+        // step, or a plain `gantt.gridWidth = …`. So this is the one place that has to keep the
+        // separator's `aria-value*` trio true, on both the apply and the veto-rollback branch.
         return this.#proposeChange(
           'beforeGridWidthChange',
           'gridWidthChange',
           { from, to },
           () => {
             this.#paneLayout.gridWidth = to;
+            this.#splitterAttachment?.syncAria();
           },
           () => {
             this.#paneLayout.gridWidth = from;
+            this.#splitterAttachment?.syncAria();
           },
         );
       },
