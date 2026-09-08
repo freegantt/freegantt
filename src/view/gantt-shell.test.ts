@@ -443,8 +443,13 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
       return match ? Number(match[1]) : NaN;
     };
 
+    // A bar no longer fills its row (bar height): it centres inside the row's band, so its own top
+    // sits the row's top plus half the leftover between the row and the shorter bar.
+    const rowHeight = 31.5;
+    const barHeightPx = 18; // DEFAULT_BAR_HEIGHT_PX — no --fg-bar-height set on this container.
+    const centringOffset = (rowHeight - barHeightPx) / 2;
     for (let i = 0; i < rows.length; i++) {
-      expect(translateY(rows[i]!)).toBe(translateBarY(bars[i]!));
+      expect(translateBarY(bars[i]!)).toBe(translateY(rows[i]!) + centringOffset);
     }
     // Confirms the case is not vacuous: at least one row sits at a non-integer top.
     expect(rows.some((row) => !Number.isInteger(translateY(row)))).toBe(true);
