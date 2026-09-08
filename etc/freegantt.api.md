@@ -1569,6 +1569,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         renderElement(description: ElementDescription): HTMLElement;
         dom: GanttDom;
         onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
+        focusedCell(): {
+            entryId: EntryId;
+            field: FieldKey;
+        } | undefined;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
