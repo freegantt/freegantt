@@ -952,12 +952,12 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // containerA is appended to document.body first. An unscoped document-wide lookup by entry id
     // would find *its* row first, whichever Gantt's own Enter handler actually fired. So B's own
     // handler firing must still resolve to B's own row.
-    const { container: containerA, gantt: ganttA, dataset: datasetA } = makeGantt();
-    const { container: containerB, gantt: ganttB, dataset: datasetB } = makeGantt();
+    const { container: containerA, gantt: ganttA } = makeGantt();
+    const { container: containerB, gantt: ganttB } = makeGantt();
 
-    // #212: the Selection holds Segments, so each Gantt selects the Segment its own Entry draws.
-    ganttA.selectedSegmentIds = datasetA.entries.segmentIdsOfEntries(['e1']);
-    ganttB.selectedSegmentIds = datasetB.entries.segmentIdsOfEntries(['e1']);
+    // D-S5-39: Enter opens the cell that holds keyboard focus, not the selected entry. Real
+    // focus lives on one Gantt's own DOM at a time, so B's own cell must not affect A's.
+    cellFor(containerB, 'e1', 'name').focus();
 
     enter(containerB);
     expect(containerB.querySelector('.fg-cell-editor')).not.toBeNull();

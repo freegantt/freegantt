@@ -114,6 +114,10 @@ export interface GanttShellPorts {
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
   announceEntryEdit(payload: EntryFieldEdit): void;
+  /** S5.11, D-S5-39: the entry id and Field key of the cell real keyboard focus sits on right now.
+   *  `undefined` when focus is not on a cell (a row, a bar, a header cell, the splitter, or nothing).
+   *  `view/roving-focus.ts` owns the fact; this asks it the same way `#buildCommandContext` does. */
+  focusedCell(): { entryId: EntryId; field: FieldKey } | undefined;
 }
 
 /** The parts of one plugin's `PluginContext` that `view/` owns — what `GanttShell` hands to
@@ -262,6 +266,12 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
       handler: DomEventHandler<K>,
       options?: DomEventOptions,
     ): Disposer;
+    /** S5.11, D-S5-39: which cell real keyboard focus sits on right now — an entry id and a Field
+     *  key. `undefined` when focus is not on a cell (a row, a bar, a header cell, the splitter, or
+     *  nothing focused at all). This is a *fact*, not a node: focus is a view concern. This port is
+     *  how a plugin reads it without touching view state or re-deriving it from the DOM itself.
+     *  (`inline-editing.ts`'s `Enter` handler is the first caller — `ctx.view.focusedCell()`.) */
+    focusedCell(): { entryId: EntryId; field: FieldKey } | undefined;
     /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
      *  A consumer's own `GanttOptions.*Renderer` always wins over this. A consumer that wants a
      *  plugin's renderer to win removes its own instead.
@@ -461,6 +471,7 @@ export function buildPluginPorts(
       renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,
+      focusedCell: () => shell.focusedCell(),
       registerRenderer: (point, renderer) =>
         registerWhileOpen(() => shell.registrations.registerRenderer(point, renderer, pluginId)),
       resolveTooltipContent,

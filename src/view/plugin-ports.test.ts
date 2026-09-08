@@ -99,6 +99,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     canWrite: () => ({ ok: true }),
     proposeEntryEdit: () => true,
     announceEntryEdit: vi.fn(),
+    focusedCell: () => undefined,
     // S5.12: no bus behind the fake, so every report falls through to the site's own console line —
     // which is what the `console.error` assertion below still reads.
     raiseError: (_report, fallback) => fallback?.(),

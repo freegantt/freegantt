@@ -489,8 +489,10 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
  *  consumer stylesheet can still win. An inline declaration would outrank one, which is the opposite
  *  of what level-1 tokens are for.
  *
- *  `role="status"` is the strongest thing a plugin can say on its own node today. S5.11 owes the
- *  real announcement, through the per-Gantt polite live region D-S5-27 adds. */
+ *  `role="status"` is the strongest thing a plugin can say on its own node today. The real
+ *  announcement reaches a screen reader another way. `raiseError` below raises the same report on
+ *  this Gantt's `error` event. The per-Gantt polite live region D-S5-26 adds (`view/live-region.ts`)
+ *  reads it from there, not from this node. */
 export function presentRefusal(
   ports: RefusalNoticePorts,
   edited: EditedCell,
@@ -857,27 +859,23 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         openFor(entry, field, target.element);
       });
 
-      /** D-S3-13: `Enter` is reserved for opening the inline editor. No per-cell focus exists yet
-       *  (S5.11 adds roving tabindex, D-S5-25). So this opens the first `editable` column of the
-       *  selected entry. `s5.11-a11y-completion.md` supersedes that pragmatic simplification. */
+      /** D-S3-13: `Enter` is reserved for opening the inline editor. It opens the **focused** cell
+       *  (D-S5-39). `ctx.view.focusedCell()` is roving focus's own answer to "which cell", read
+       *  through the same one capability resolution (`canWrite`, I14) every other write path already
+       *  checks. `Enter` with focus anywhere else (a row, a bar, a header, the splitter) opens
+       *  nothing. */
       const disposeEnter = ctx.interaction.registerKeyHandler('Enter', () => {
-        const entryId = ctx.gantt.selectedEntryIds[0];
-        if (entryId === undefined) return;
+        const focused = ctx.view.focusedCell();
+        if (focused === undefined) return;
+        const { entryId, field: fieldKey } = focused;
         const entry = ctx.dataset.entries.get(entryId);
         if (entry === undefined) return;
-        // `ctx.view.resolvedColumns()`, not `ctx.gantt.gridColumns`: the second answers what the
-        // consumer authored, so it leaves out every column a plugin registered (D-S5-33). `Enter`
-        // opens the first editable column on screen, whoever declared it.
-        for (const column of ctx.view.resolvedColumns()) {
-          const fieldKey = column.field;
-          if (!ctx.interaction.canWrite(entry, fieldKey).ok) continue;
-          const cell = ctx.view.dom.cellFor(entryId, fieldKey);
-          if (cell === undefined) continue;
-          const field = ctx.dataset.field(fieldKey);
-          if (field === undefined) continue;
-          openFor(entry, field, cell);
-          return;
-        }
+        if (!ctx.interaction.canWrite(entry, fieldKey).ok) return;
+        const cell = ctx.view.dom.cellFor(entryId, fieldKey);
+        if (cell === undefined) return;
+        const field = ctx.dataset.field(fieldKey);
+        if (field === undefined) return;
+        openFor(entry, field, cell);
       });
 
       // The two `onDomEvent` listeners above remove themselves through `ctx.disposables`, which
