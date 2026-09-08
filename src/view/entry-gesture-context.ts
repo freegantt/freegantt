@@ -105,10 +105,6 @@ export interface EntryGestureContext {
   /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound `ScrollModel`'s x — content
    *  x for the Cursor line. `interaction/` never reads element scroll (I12). */
   contentXAtPaneOffset(offsetX: number): number;
-  /** When focus is on an expandable tree row, handles ArrowLeft/Right before nudge (D-S4-33). */
-  tryTreeArrow?(direction: 'left' | 'right'): boolean;
-  /** Expands every collapsed row in the current tree (`*` key, D-S4-33). */
-  expandAllRows?(): void;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries, D-S3-19/22). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */

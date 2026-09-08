@@ -412,7 +412,10 @@ test('clicking a bar narrows the handle pair to it, and a resize writes only tha
   expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);
 });
 
-test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', async ({ page }) => {
+// S5.11, D-S5-26: the container itself carries no tabindex any more — `view/roving-focus.ts` owns
+// one tab stop per pane instead. Expand/collapse is the grid pane's own row arrows now, so focus
+// goes on the parent's `.fg-rows` row, not `#gantt` (same pattern e2e/plugins.spec.ts uses).
+test('ArrowRight expands and ArrowLeft collapses; focus stays on the parent row', async ({ page }) => {
   await gotoHierarchy(page);
 
   const parentRow = page
@@ -426,22 +429,21 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the Gantt', asy
   await twisty.click();
   await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toHaveCount(0);
 
-  const ganttRoot = page.locator('#gantt');
   const parentId = await parentRow.getAttribute('data-row-id');
   expect(parentId).toBeTruthy();
-  await page.locator(`#gantt .fg-bar[data-item-id^="${parentId}:"]`).first().click();
-  await ganttRoot.focus();
-  await expect(ganttRoot).toBeFocused();
+  const gridRow = page.locator(`#gantt .fg-rows [data-row-id="${parentId}"]`);
+  await gridRow.focus();
+  await expect(gridRow).toBeFocused();
 
   await page.keyboard.press('ArrowRight');
   await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toBeVisible();
   await expect(twisty).toHaveAttribute('aria-expanded', 'true');
-  await expect(ganttRoot).toBeFocused();
+  await expect(gridRow).toBeFocused();
 
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator(`.fg-row[data-row-id="${childId}"]`)).toHaveCount(0);
   await expect(twisty).toHaveAttribute('aria-expanded', 'false');
-  await expect(ganttRoot).toBeFocused();
+  await expect(gridRow).toBeFocused();
 });
 
 test("Delete on a parent's last Segment removes the parent alone; its child survives and reparents (#212, fix plan R3)", async ({

@@ -118,17 +118,34 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(available).not.toContain('freegantt.zoomIn');
   });
 
-  it('the arrow-pan commands require both keyboardPanEnabled and nothingSelected', () => {
+  it('the pan commands need only keyboardPanEnabled — a selection does not block them (S5.11, D-S5-26)', () => {
     const ports = fakePorts();
     ports.keyboardPanEnabled.mockReturnValue(true);
+    // A focused bar always carries a selection now (Q-A11Y-3), so `nothingSelected` staying
+    // false must not hide `Alt+ArrowRight`'s Gantt-wide pan fallback.
     ports.nothingSelected.mockReturnValue(false);
     const { registry, ctx } = makeRegistry();
     registerCoreCommands(registry, ports);
 
     const available = registry.available(ctx).map((command) => command.id);
-    expect(available).not.toContain('freegantt.panRight');
-    // Page/Home/End only need keyboardPanEnabled, not nothingSelected.
+    expect(available).toContain('freegantt.panRight');
+    expect(available).toContain('freegantt.panLeft');
+    expect(available).toContain('freegantt.panDown');
+    expect(available).toContain('freegantt.panUp');
     expect(available).toContain('freegantt.pageDown');
+  });
+
+  it('the pan commands still need keyboardPanEnabled', () => {
+    const ports = fakePorts();
+    ports.keyboardPanEnabled.mockReturnValue(false);
+    const { registry, ctx } = makeRegistry();
+    registerCoreCommands(registry, ports);
+
+    const available = registry.available(ctx).map((command) => command.id);
+    expect(available).not.toContain('freegantt.panRight');
+    expect(available).not.toContain('freegantt.panLeft');
+    expect(available).not.toContain('freegantt.panDown');
+    expect(available).not.toContain('freegantt.panUp');
   });
 
   it("clearSelection's when reads hasSelection", () => {

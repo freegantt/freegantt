@@ -191,28 +191,34 @@ export function registerCoreCommands(
     when: () => ports.keyboardPanEnabled(),
     run: () => ports.panToEnd(),
   });
+  // S5.11, D-S5-26: `nothingSelected()` used to gate these four, back when a bare arrow chord
+  // panned only when nothing carried an edit focus (D-S3-13's shared-chord disambiguation).
+  // `RovingFocus` now pairs a focused bar with a selection (Q-A11Y-3). That gate would then block
+  // `Alt+Arrow`'s pan the moment any bar has focus. That is the opposite of a Gantt-wide fallback.
+  // Pan and nudge sit on separate chords now, so the gate no longer disambiguates anything. This
+  // drops it.
   register({
     id: 'freegantt.panRight',
     label: 'Pan right',
-    when: () => ports.keyboardPanEnabled() && ports.nothingSelected(),
+    when: () => ports.keyboardPanEnabled(),
     run: () => ports.panRight(),
   });
   register({
     id: 'freegantt.panLeft',
     label: 'Pan left',
-    when: () => ports.keyboardPanEnabled() && ports.nothingSelected(),
+    when: () => ports.keyboardPanEnabled(),
     run: () => ports.panLeft(),
   });
   register({
     id: 'freegantt.panDown',
     label: 'Pan down',
-    when: () => ports.keyboardPanEnabled() && ports.nothingSelected(),
+    when: () => ports.keyboardPanEnabled(),
     run: () => ports.panDown(),
   });
   register({
     id: 'freegantt.panUp',
     label: 'Pan up',
-    when: () => ports.keyboardPanEnabled() && ports.nothingSelected(),
+    when: () => ports.keyboardPanEnabled(),
     run: () => ports.panUp(),
   });
 

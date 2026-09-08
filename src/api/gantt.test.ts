@@ -3728,10 +3728,13 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
 });
 
 describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
-  it('ArrowRight on the container nudges the selected entry, one transaction, undo reverts', () => {
+  it('ArrowRight on the timeline pane nudges the selected entry, one transaction, undo reverts', () => {
+    // S5.11, D-S5-39: `attachKeyboardEditing` scopes to the timeline pane now, not the whole
+    // container — a bar's nudge is that pane's own job.
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
@@ -3750,7 +3753,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
       datasetChanges.push(c);
     });
 
-    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    timeline.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 
     expect(beforeEvents).toHaveLength(1);
     expect(afterEvents).toHaveLength(1);
@@ -3770,13 +3773,14 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const datasetChanges: unknown[] = [];
     dataset.on('change', (c) => {
       datasetChanges.push(c);
     });
 
-    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    timeline.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 
     expect(datasetChanges).toEqual([]);
     gantt.destroy();
@@ -3786,6 +3790,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
     const before = dataset.entries.get(id)!;
@@ -3796,7 +3801,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
       afterEvents.push(p);
     });
 
-    container.dispatchEvent(
+    timeline.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }),
     );
 
@@ -3809,21 +3814,22 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     gantt.destroy();
   });
 
-  it('ArrowDown moves the selection to the next row without writing the dataset', () => {
+  it('ArrowDown in the grid pane moves focus to the next row without writing the dataset', () => {
+    // S5.11, D-S5-26: `view/roving-focus.ts` owns row-to-row movement now — a grid-pane arrow key,
+    // not the timeline's own nudge chord.
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
+    const rows = container.querySelector<HTMLElement>('.fg-rows')!;
 
-    const firstId = entryId(sampleEntries[0]!.id);
     const secondId = entryId(sampleEntries[1]!.id);
-    gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([firstId]);
 
     const datasetChanges: unknown[] = [];
     dataset.on('change', (c) => {
       datasetChanges.push(c);
     });
 
-    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    rows.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 
     expect(gantt.selectedEntryIds).toEqual([secondId]);
     expect(datasetChanges).toEqual([]);
@@ -3966,7 +3972,10 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
     return { container, gantt, dataset, scroll, scale, timeline };
   }
 
-  it('[S3-A7] ctrl+wheel zooms, anchored; shift+wheel pans; Page/Home/End pan; dataset.on("change") never fires', () => {
+  it('[S3-A7] ctrl+wheel zooms, anchored; shift+wheel pans; Mod+Home/End pan; dataset.on("change") never fires', () => {
+    // S5.11, D-S5-26: bare `PageDown`/`Home`/`End` moved off the timeline this slice — the grid
+    // pane's `RovingFocus` now owns them, for paging and jumping between rows (`roving-focus.test.ts`
+    // covers that). The timeline keeps `Mod+Home`/`Mod+End` as its own axis-wide fallback.
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -3990,19 +3999,13 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
       a.timeline.dispatchEvent(wheel({ shiftKey: true, deltaY: 80 }));
       expect(a.scroll.state.position.x).toBe(xBeforePan + 80);
 
-      const yBefore = a.scroll.state.position.y;
       a.container.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }),
-      );
-      expect(a.scroll.state.position.y).toBeGreaterThan(yBefore);
-
-      a.container.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }),
+        new KeyboardEvent('keydown', { key: 'Home', ctrlKey: true, bubbles: true, cancelable: true }),
       );
       expect(a.scroll.state.position.x).toBe(0);
 
       a.container.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }),
+        new KeyboardEvent('keydown', { key: 'End', ctrlKey: true, bubbles: true, cancelable: true }),
       );
       expect(a.scroll.state.position.x).toBe(a.scroll.state.max.x);
 
@@ -4480,7 +4483,10 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
-  it('a plugin binding on ArrowRight wins over core only while its when passes', () => {
+  it('a plugin binding on Mod+A wins over core only while its when passes', () => {
+    // S5.11, D-S5-26: `Mod+A` replaces the old exemplar `ArrowRight` here — plain `ArrowRight` is
+    // no longer a core chord at all (roving focus owns the plain arrows now). `Mod+A` still binds
+    // unconditionally to `freegantt.selectAll`, so it keeps this test's fallback-to-core check.
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
     let overrideEnabled = false;
@@ -4490,27 +4496,28 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       dataset,
       plugins: [
         {
-          id: 'demo.override-arrow',
+          id: 'demo.override-select-all',
           setup(ctx) {
             ctx.commands.register({
-              id: 'demo.arrowOverride',
+              id: 'demo.selectAllOverride',
               label: 'Demo override',
               when: () => overrideEnabled,
               run: () => {
                 overrideRuns += 1;
               },
             });
-            ctx.interaction.registerKeybinding({ chord: 'ArrowRight', command: 'demo.arrowOverride' });
+            ctx.interaction.registerKeybinding({ chord: 'Mod+A', command: 'demo.selectAllOverride' });
             return () => {};
           },
         },
       ],
     });
 
-    // The plugin's own `when` declines: falls through to core's ArrowRight pan, which still runs
-    // and still prevents the browser's own default (a matched-but-declined binding is not a miss).
+    // The plugin's own `when` declines: falls through to core's Mod+A (selectAll), which still
+    // runs and still prevents the browser's own default (a matched-but-declined binding is not a
+    // miss).
     const notOverridden = container.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+      new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }),
     );
     expect(notOverridden).toBe(false);
     expect(overrideRuns).toBe(0);
@@ -4518,7 +4525,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     // Once the plugin's `when` passes, its own, newer binding wins over core — and only it runs.
     overrideEnabled = true;
     container.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+      new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }),
     );
     expect(overrideRuns).toBe(1);
 

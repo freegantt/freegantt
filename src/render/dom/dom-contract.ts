@@ -56,6 +56,9 @@ export const BAR_TESTID = 'fg-bar';
 export const FIELD_ATTRIBUTE = 'data-field';
 /** The Entry id a Row stands for, as a selector name — `[data-entry-id="e1"]`. */
 export const ENTRY_ID_ATTRIBUTE = 'data-entry-id';
+/** The Row a node belongs to, as a selector name — `[data-row-id="r1"]`. `view/roving-focus.ts`
+ *  looks a row back up by id after a scroll-and-flush brings it into the rendered window (S5.11). */
+export const ROW_ID_ATTRIBUTE = 'data-row-id';
 /** The Item id a bar stands for, as a selector name — `[data-item-id="e1:0"]`. */
 export const ITEM_ID_ATTRIBUTE = 'data-item-id';
 /** The Segment id a bar stands for, as a selector name — `[data-segment-id="sg1"]`. */

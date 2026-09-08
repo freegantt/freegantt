@@ -8,6 +8,7 @@ export {
   itemIdFromDataset,
   rowIdFromDataset,
   entryIdFromDataset,
+  segmentIdFromDataset,
   entryIdOfItem,
   segmentIndexOfItem,
   changeSetId,

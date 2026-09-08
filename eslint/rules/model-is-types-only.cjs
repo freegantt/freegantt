@@ -14,6 +14,7 @@ const IDENTITY_CAST_HELPERS = new Set([
   'itemIdFromDataset',
   'rowIdFromDataset',
   'entryIdFromDataset',
+  'segmentIdFromDataset',
   'changeSetId',
   'segmentId',
   'mintedSegmentId',

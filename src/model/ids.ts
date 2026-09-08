@@ -61,6 +61,15 @@ export function entryIdFromDataset(value: string | undefined): EntryId | undefin
   return value === undefined ? undefined : entryId(value);
 }
 
+/** Call: `segmentIdFromDataset(bar.dataset['segmentId'])` — the DOM→brand trust boundary for a
+ *  `.fg-bar` node's `data-segment-id` attribute (`render/dom/index.ts` is what writes it).
+ *  `undefined` in, `undefined` out, mirroring `itemIdFromDataset`. A bar that draws its Entry's
+ *  whole span (a group, a milestone, a plugin's own kind) carries no Segment, so this stays
+ *  `undefined` there too — its caller falls back to the owning Entry. */
+export function segmentIdFromDataset(value: string | undefined): SegmentId | undefined {
+  return value === undefined ? undefined : segmentId(value);
+}
+
 /** Call: `dataset.entries.get(entryIdOfItem(hit.itemId))`. Splits on the last colon so an EntryId that
  *  itself contains a colon still round-trips with `itemId`. */
 export function entryIdOfItem(id: ItemId): EntryId {
