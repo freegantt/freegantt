@@ -443,6 +443,8 @@ export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 export interface DecorationContext {
     rows: readonly FrameRow[];
     span: TimeSpan;
+    tickIncrement: number;
+    tickUnit: TimeUnit;
     time: ZonedTime;
 }
 

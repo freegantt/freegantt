@@ -16,12 +16,16 @@ import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
   createTimeScale,
+  dayAndWeekPreset,
   dayPreset,
   hourPreset,
   instant,
   formatDate,
   formatEndInclusive,
+  weekAndMonthPreset,
 } from '../time/index.js';
+import type { ViewPresetHeader } from '../time/index.js';
+import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
@@ -753,6 +757,41 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     });
     expect(frame.tickLines.length).toBeGreaterThan(0);
     expect(frame.tickLines.every((line) => !line.major)).toBe(true);
+  });
+});
+
+describe('computeFrame — the tick step a decoration provider reads', () => {
+  function tickStepSeenBy(headers: ViewPresetHeader[]): { unit: string; increment: number } {
+    let seen: DecorationContext | undefined;
+    computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset: { ...preset, headers },
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+      decorationProviders: [
+        {
+          layer: 'underBars',
+          provider: (ctx) => {
+            seen = ctx;
+            return [];
+          },
+        },
+      ],
+    });
+    return { unit: seen!.tickUnit, increment: seen!.tickIncrement };
+  }
+
+  it('states the finest (last) header band, not the coarsest', () => {
+    expect(tickStepSeenBy([...weekAndMonthPreset.headers])).toEqual({ unit: 'week', increment: 1 });
+    expect(tickStepSeenBy([...dayAndWeekPreset.headers])).toEqual({ unit: 'day', increment: 1 });
+  });
+
+  it("falls back to the preset's own tick step when it carries no header band", () => {
+    expect(tickStepSeenBy([])).toEqual({ unit: preset.tickUnit, increment: preset.tickIncrement });
   });
 });
 
