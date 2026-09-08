@@ -32,7 +32,7 @@ function treeDataset(
 function costOf(state: DatasetState, id: string): number | undefined {
   const entry = state.entries.get(id);
   if (!entry) return undefined;
-  return state.fieldContext.read<number>(entry, 'cost');
+  return state.fieldContext.read(entry, 'cost') as number | undefined;
 }
 
 describe('rollUpFields (S4.2)', () => {

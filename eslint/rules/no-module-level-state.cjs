@@ -47,18 +47,28 @@ function unwrapAsConst(init) {
   return unwrapAsConst(init.expression);
 }
 
-/** ADR 0007: a module-private `WeakMap<Instance, State>` keyed by instance is the sanctioned way to
- *  attach friend-only state to a class without a public method — each instance's entry is invisible
- *  to every other instance, so nothing is shared across two Gantts the way I2 forbids. */
-function isInstanceKeyedWeakMap(node) {
+/** Matches only the shape `new WeakMap(...)`. It does not check what the WeakMap is keyed on — ADR
+ *  0007's instance-keyed pattern still needs its own `I2-ok:` reason next to the declaration, checked
+ *  by `hasI2OkReason` below. */
+function isWeakMapConstruction(node) {
   return node.type === 'NewExpression' && node.callee.type === 'Identifier' && node.callee.name === 'WeakMap';
 }
 
-function initializerIsMutableState(rawInit) {
+/** ADR 0007's exemption needs a stated reason, not a shape match: a `// I2-ok: <reason>` comment
+ *  leading the statement. `export const x = …` attaches its leading comment to the
+ *  `ExportNamedDeclaration`, one level above the `VariableDeclaration` — so this checks whichever
+ *  of the two is the outermost statement. */
+function hasI2OkReason(sourceCode, declarationNode) {
+  const statement =
+    declarationNode.parent.type === 'ExportNamedDeclaration' ? declarationNode.parent : declarationNode;
+  return sourceCode.getCommentsBefore(statement).some((comment) => /I2-ok:\s*\S/.test(comment.value));
+}
+
+function initializerIsMutableState(rawInit, declarationNode, sourceCode) {
   if (rawInit === null) return false;
   const init = unwrapAsConst(rawInit);
   if (init === null) return false;
-  if (isInstanceKeyedWeakMap(init)) return false;
+  if (isWeakMapConstruction(init)) return !hasI2OkReason(sourceCode, declarationNode);
   if (init.type === 'NewExpression') return true;
   if (init.type === 'ArrayExpression' || init.type === 'ObjectExpression') return true;
   if (init.type === 'CallExpression') return !isFrozenOrPureFactory(init);
@@ -79,11 +89,22 @@ module.exports = {
         'Module-level mutable state makes two Gantt instances share it. Own it on the instance. (plans/01 §6, I2)',
       mutatedExport:
         'Module-level mutable state makes two Gantt instances share it. Own it on the instance. (plans/01 §6, I2)',
+      weakMapNeedsReason:
+        'A module-level WeakMap needs a leading `// I2-ok: <reason>` comment. State it, or own the map on the instance. (plans/01 §6, I2; ADR 0007)',
     },
     schema: [],
   },
   create(context) {
     const exportedNames = new Set();
+    const sourceCode = context.sourceCode;
+
+    function reportIfMutableState(node) {
+      const init = node.init === null ? null : unwrapAsConst(node.init);
+      if (initializerIsMutableState(node.init, node.parent, sourceCode)) {
+        const messageId = init && isWeakMapConstruction(init) ? 'weakMapNeedsReason' : 'mutableInit';
+        context.report({ node, messageId });
+      }
+    }
 
     return {
       'Program > VariableDeclaration[kind="let"], Program > VariableDeclaration[kind="var"]'(node) {
@@ -96,10 +117,10 @@ module.exports = {
       },
       'ExportNamedDeclaration > VariableDeclaration[kind="const"] > VariableDeclarator'(node) {
         if (node.id.type === 'Identifier') exportedNames.add(node.id.name);
-        if (initializerIsMutableState(node.init)) context.report({ node, messageId: 'mutableInit' });
+        reportIfMutableState(node);
       },
       'Program > VariableDeclaration[kind="const"] > VariableDeclarator'(node) {
-        if (initializerIsMutableState(node.init)) context.report({ node, messageId: 'mutableInit' });
+        reportIfMutableState(node);
       },
       'CallExpression[callee.type="MemberExpression"]'(node) {
         const callee = node.callee;

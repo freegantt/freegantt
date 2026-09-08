@@ -86,7 +86,7 @@ describe('createTimeScale', () => {
     // A TickStep is a plain object, so a caller can hand it a unit outside TimeUnit's own closed set
     // at runtime even though the type forbids it statically — hence the cast, exercising that boundary.
     const badStep: TickStep = { unit: 'q' as TickStep['unit'], increment: 1 };
-    expect(() => scale.ticks(badStep, { x: 0, width: 100 })).toThrow(/unsupported unit/);
+    expect(() => scale.ticks(badStep, { x: 0, width: 100 })).toThrow(/no time unit called/);
   });
 
   it('steps month and year units (#29 — a new zoom level is never a library edit)', () => {

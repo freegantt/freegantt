@@ -9,7 +9,7 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tagged } from '../../scripts/slice-gate.mjs';
+import { tagged, provenByLintAndTests } from '../../scripts/slice-gate.mjs';
 
 let tmpDir: string | undefined;
 
@@ -65,5 +65,37 @@ describe('tagged()', () => {
       existsOptions: { cwd },
     });
     expect(check.run()).toBe(false);
+  });
+});
+
+// `[S5-A1]`'s line stands on a lint and a test suite together (D-S5-5), so the composition gets the
+// same red-tested fixture the helper it wraps already has: either half failing must take the line
+// down. A wrapper that forwarded only the runner would report the dogfood gate green over a
+// boundary violation, which is the one thing this line exists to catch.
+describe('provenByLintAndTests()', () => {
+  const passingCheck = (cwd: string) =>
+    tagged('FX-1', ['fake'], 'fixture check', {
+      runnerImpls: { fake: () => true },
+      existsOptions: { cwd },
+    });
+
+  it('passes when the lint and the tagged check both pass', () => {
+    const cwd = makeFixture('FX-1');
+    expect(provenByLintAndTests(passingCheck(cwd), () => true).run()).toBe(true);
+  });
+
+  it('fails when the lint fails, even though the tagged check passes', () => {
+    const cwd = makeFixture('FX-1');
+    expect(provenByLintAndTests(passingCheck(cwd), () => false).run()).toBe(false);
+  });
+
+  it('fails when the tagged check fails, even though the lint passes', () => {
+    const cwd = makeFixture(null);
+    expect(provenByLintAndTests(passingCheck(cwd), () => true).run()).toBe(false);
+  });
+
+  it('keeps the tagged label, so the printed line still names its acceptance id', () => {
+    const cwd = makeFixture('FX-1');
+    expect(provenByLintAndTests(passingCheck(cwd), () => true).label).toBe('[FX-1] fixture check');
   });
 });

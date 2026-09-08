@@ -5,6 +5,10 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'scroll-sync');
 
 const tallDataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
 const shortDataset = new Dataset({ entries: demoEntryInputs.slice(0, 20), timeZone: 'UTC' });
@@ -14,5 +18,7 @@ const shortDataset = new Dataset({ entries: demoEntryInputs.slice(0, 20), timeZo
 const scale = new TimeScaleModel({ fit: 'preset' });
 const scroll = new ScrollModel();
 
-new Gantt({ container: '#tall', dataset: tallDataset, scale, scroll });
-new Gantt({ container: '#short', dataset: shortDataset, scale, scroll });
+// Distinct a11yLabel per instance: the default ('Gantt') is fine for one Gantt on a page, but two
+// sharing it name the same accessible region twice (axe landmark-unique, D-S5-27).
+new Gantt({ container: '#tall', dataset: tallDataset, scale, scroll, a11yLabel: 'Tall Gantt' });
+new Gantt({ container: '#short', dataset: shortDataset, scale, scroll, a11yLabel: 'Short Gantt' });

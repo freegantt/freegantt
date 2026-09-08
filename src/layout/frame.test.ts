@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeFrame, placeFrame, resolveLayoutRows } from './frame.js';
+import {
+  computeFrame,
+  placeFrame,
+  resolveLayoutRows,
+  barSpan,
+  DEFAULT_DIAMOND_SIZE_PX,
+  DEFAULT_MIN_BAR_WIDTH_PX,
+} from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
@@ -15,7 +22,7 @@ import {
   formatDate,
   formatEndInclusive,
 } from '../time/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
 const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
@@ -33,12 +40,51 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.rows).toHaveLength(sampleEntries.length);
     expect(frame.bars).toHaveLength(sampleEntries.length);
     expect(frame.rows[0]?.top).toBe(0);
     expect(frame.rows[1]?.top).toBe(32);
+  });
+
+  it('carries every Entry a custom row owns, not only the first (#185)', () => {
+    const owned = sampleEntries.slice(0, 3);
+    const frame = computeFrame({
+      entries: owned,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+      rows: {
+        source: 'custom',
+        resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
+      },
+    });
+
+    expect(frame.rows).toHaveLength(1);
+    expect(frame.rows[0]?.entryIds).toEqual(owned.map((entry) => entry.id));
+  });
+
+  it('a header row owns no Entry, so it is never selectable (D-S4-23, #185)', () => {
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 4),
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+      rows: { source: 'group', groupBy: (entry) => entry.kind },
+    });
+
+    const header = frame.rows.find((row) => row.kind === 'header');
+    expect(header?.entryIds).toEqual([]);
   });
 
   it('carries the total dataset row count, not the windowed one (D-S1.10-5/7)', () => {
@@ -50,6 +96,7 @@ describe('computeFrame', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.rows.length).toBeLessThan(sampleEntries.length);
@@ -64,12 +111,13 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry.end)}`,
+      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry)}`,
     );
   });
 
@@ -81,6 +129,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const second = computeFrame({
@@ -90,6 +139,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 1,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(first.bars.map((b) => b.id)).toEqual(second.bars.map((b) => b.id));
@@ -104,6 +154,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
@@ -125,16 +176,17 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
         {
-          key: 'name',
+          field: 'name',
           header: 'Name',
           align: 'start',
           format: (entry) => nameField.formatValue(entry.name),
         },
         {
-          key: 'kind',
+          field: 'kind',
           header: 'Kind',
           align: 'start',
           format: (entry) => kindField.formatValue(entry.kind),
@@ -155,14 +207,15 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       columns: [
-        { key: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
-        { key: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
+        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+        { field: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
       ],
     });
     expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.kind]);
-    expect(frame.columns.map((c) => c.key)).toEqual(['name', 'kind']);
+    expect(frame.columns.map((c) => c.field)).toEqual(['name', 'kind']);
   });
 
   it('culls rows outside the vertical window (#20), with overscan disabled', () => {
@@ -174,6 +227,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
@@ -191,6 +245,7 @@ describe('computeFrame', () => {
       visible: { x: 0, y: 64, width: 0, height: 32 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([0, 1, 2, 3, 4]);
@@ -207,6 +262,7 @@ describe('computeFrame', () => {
       overscan: { verticalRows: 1, horizontalPx: 0 },
       rowHeight: 10,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     };
     const plan = resolveLayoutRows(input);
@@ -217,6 +273,7 @@ describe('computeFrame', () => {
       laneGap: DEFAULT_LANE_GAP_PX,
       entries,
       registry: itemProducerRegistry,
+      datasetRevision: 0,
       heightAt: (i) => rowHeights[i]!,
     });
     const windowed = placeFrame(input, plan, memory);
@@ -232,6 +289,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(windowed.rows).toHaveLength(sampleEntries.length);
@@ -245,6 +303,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const windowed = computeFrame({
@@ -255,6 +314,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(windowed.contentHeight).toBe(full.contentHeight);
@@ -270,6 +330,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.header.bands).toHaveLength(1);
@@ -294,6 +355,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.header.bands).toHaveLength(2);
@@ -314,6 +376,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
 
@@ -330,6 +393,7 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars).toMatchSnapshot();
@@ -344,6 +408,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const after = computeFrame({
@@ -354,6 +419,7 @@ describe('computeFrame', () => {
       overscan: TIGHT,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     // The overlap of [0, 64) and [32, 96) is [32, 64) — row index 1 only.
@@ -376,12 +442,14 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     };
     const tree = computeFrame({ ...base, rows: { source: 'entries', tree: true } });
     const grouped = computeFrame({
       ...base,
       revision: 1,
+      datasetRevision: 0,
       rows: { source: 'group', groupBy: (entry) => entry.kind },
     });
     const idsFor = (frame: ReturnType<typeof computeFrame>, id: typeof child.id) =>
@@ -396,8 +464,8 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
       ],
     };
     const frame = computeFrame({
@@ -407,11 +475,37 @@ describe('computeFrame', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
+  });
+
+  it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
+    const entry = {
+      ...sampleEntries[0]!,
+      segments: [
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+      ],
+    };
+    const grouped = { ...sampleEntries[1]!, kind: 'group' };
+    const frame = computeFrame({
+      entries: [entry, grouped],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    const segmentedBars = frame.bars.filter((bar) => bar.entryId === entry.id);
+    expect(segmentedBars.map((bar) => bar.segmentId)).toEqual(entry.segments.map((segment) => segment.id));
+    const groupBar = frame.bars.find((bar) => bar.entryId === grouped.id);
+    expect(groupBar?.segmentId).toBeUndefined();
   });
 });
 
@@ -424,7 +518,16 @@ describe('computeFrame — horizontal culling', () => {
   });
 
   function entryAt(id: string, x: number, width: number): Entry {
-    return { id: entryId(id), name: id, start: instant(x), end: instant(x + width), kind: 'span' };
+    const start = instant(x);
+    const end = instant(x + width);
+    return {
+      id: entryId(id),
+      name: id,
+      start,
+      end,
+      kind: 'span',
+      segments: [{ id: segmentId(`${id}-1`), start, end }],
+    };
   }
 
   const entries: Entry[] = [
@@ -444,6 +547,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 10,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.rows).toHaveLength(entries.length);
@@ -463,6 +567,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 110 },
       rowHeight: 10,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
@@ -477,6 +582,7 @@ describe('computeFrame — horizontal culling', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 10,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
@@ -493,6 +599,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       todayLine: false,
       dateLines: [{ placeAt, label: 'Ship', className: 'fg-deadline-line' }],
@@ -511,6 +618,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       todayLine: outside,
     });
@@ -545,6 +653,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
@@ -574,6 +683,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
@@ -591,6 +701,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
@@ -607,6 +718,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       overscan,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
     };
     const atDefault = computeFrame(input);
@@ -624,13 +736,18 @@ describe(
   'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
-    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => ({
-      id: entryId(input.id),
-      name: input.name,
-      start: instant(input.start as Date),
-      end: instant(input.end as Date),
-      kind: 'span',
-    }));
+    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => {
+      const start = instant(input.start as Date);
+      const end = instant(input.end as Date);
+      return {
+        id: entryId(input.id),
+        name: input.name,
+        start,
+        end,
+        kind: 'span',
+        segments: [{ id: segmentId(`${input.id}-1`), start, end }],
+      };
+    });
     const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
@@ -642,6 +759,7 @@ describe(
         overscan: { verticalRows: 2, horizontalPx: 128 },
         rowHeight: 32,
         revision: 0,
+        datasetRevision: 0,
         itemProducerRegistry,
       });
       expect(frame.rows.length).toBeLessThan(large.length);
@@ -665,6 +783,7 @@ describe('computeFrame row sources (S4.6)', () => {
       overscan: { verticalRows: 0, horizontalPx: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', tree: true },
     });
@@ -680,6 +799,7 @@ describe('computeFrame row sources (S4.6)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', tree: true },
       collapsed: [parent.id],
@@ -693,9 +813,9 @@ describe('computeFrame lanes (S4.8)', () => {
   const overlapping: Entry = {
     ...sampleEntries[0]!,
     segments: [
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-1'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-2'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-3'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
     ],
   };
 
@@ -708,6 +828,7 @@ describe('computeFrame lanes (S4.8)', () => {
       visible,
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', heightMode: 'fixed' },
     });
@@ -726,6 +847,7 @@ describe('computeFrame lanes (S4.8)', () => {
       rowHeight: 32,
       laneGapPx: 2,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry,
       rows: { source: 'entries', heightMode: 'pack' },
     });
@@ -733,5 +855,92 @@ describe('computeFrame lanes (S4.8)', () => {
     expect(frame.rows[0]?.laneCount).toBe(3);
     expect(frame.rows[0]?.height).toBe(32 * 3 + 2 * 2);
     expect(frame.contentHeight).toBe(32 * 3 + 2 * 2 + 32);
+  });
+});
+
+describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () => {
+  const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+
+  it('keeps the Entry itself zero-width — the painted span floors, not the instant', () => {
+    expect(milestone.start).toEqual(milestone.end);
+  });
+
+  it('floors a milestone bar to the rotated diamond bounding box, centred on the instant', () => {
+    const { x, width } = barSpan(milestone, scale);
+    const floor = DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2;
+    expect(width).toBe(floor);
+    expect(width).toBeGreaterThan(0);
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+  });
+
+  it('honours a custom diamondSizePx the same way --fg-diamond-size would', () => {
+    const { x, width } = barSpan(milestone, scale, 20);
+    expect(width).toBe(20 * Math.SQRT2);
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+  });
+
+  it('stamps minimumSpan on a floored milestone bar', () => {
+    const { minimumSpan } = barSpan(milestone, scale);
+    expect(minimumSpan).toBe(true);
+  });
+
+  it("computeFrame's bar and GanttShell.reveal's span agree on the same floored box", () => {
+    const frame = computeFrame({
+      entries: [milestone],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    const bar = frame.bars[0]!;
+    const revealSpan = barSpan(milestone, scale);
+    expect(bar.width).toBe(revealSpan.width);
+    expect(bar.x).toBe(revealSpan.x);
+  });
+});
+
+describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
+  it('floors a zero-width, non-milestone kind at minBarWidthPx and stamps minimumSpan', () => {
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
+    const { x, width, minimumSpan } = barSpan(zeroWidthSpan, scale);
+    expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(minimumSpan).toBe(true);
+    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start));
+  });
+
+  it('never shrinks a milestone floor below its own diamond bounding box', () => {
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+    // A tiny minBarWidthPx must not shrink the milestone floor below diamondSizePx * √2.
+    const { width } = barSpan(milestone, scale, DEFAULT_DIAMOND_SIZE_PX, 1);
+    expect(width).toBe(DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2);
+  });
+
+  it('widens minBarWidthPx past a milestone floor too small for it', () => {
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+    const { width } = barSpan(milestone, scale, 1, 40);
+    expect(width).toBe(40);
+  });
+
+  it('centres a floored, non-zero-width bar on its own midpoint, not on its start', () => {
+    // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
+    // slide the bar 2.5px left of where it belongs.
+    const startX = scale.xForInstant(sampleEntries[0]!.start);
+    const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
+    const { x, width, minimumSpan } = barSpan(narrowSpan, scale);
+    expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(minimumSpan).toBe(true);
+    expect(x + width / 2).toBe(startX + 2.5);
+  });
+
+  it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x, width, minimumSpan } = barSpan(wideSpan, scale);
+    expect(width).toBe(scale.xForInstant(wideSpan.end) - scale.xForInstant(wideSpan.start));
+    expect(width).toBeGreaterThan(DEFAULT_MIN_BAR_WIDTH_PX);
+    expect(x).toBe(scale.xForInstant(wideSpan.start));
+    expect(minimumSpan).toBe(false);
   });
 });

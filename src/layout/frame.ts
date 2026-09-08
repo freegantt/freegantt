@@ -10,32 +10,82 @@ import type {
   Rect,
   TimeUnit,
   FieldContext,
+  SegmentId,
 } from '../model/index.js';
 import { segmentIndexOfItem } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../time/index.js';
-import { dedupeHeaderFormats, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
+import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
-import type { DateLine, DateLineSpec } from './date-line.js';
-import { FrameMemory } from './frame-memory.js';
+import type { DateLine, DateLineDecoration } from './date-line.js';
+import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
+import type { RowMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
-import type { PlannedRow, PlannedRowKind, RowSource } from './rows/row-source.js';
-import { isPlannedHeaderRow } from './rows/row-source.js';
+import type { PlannedRow, RowSource } from './rows/row-source.js';
+import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { Item } from './items/produce-items.js';
 import type { ItemProducerRegistry } from './items/produce-items.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
-import type { PackedRow } from './lanes/pack-lanes.js';
+import type { FrameRow } from './frame-row.js';
+export type { FrameRow };
+import type { RangeBand, RowStripe } from './decoration.js';
+export type { RangeBand, RowStripe } from './decoration.js';
+import { DecorationRunner } from './decorations.js';
+import type { RegisteredDecorationProvider } from './decorations.js';
+export type { RegisteredDecorationProvider } from './decorations.js';
 
 /** Shipped Tick box floor (CONTEXT.md) — `--fg-tick-box-floor` fallback and CSS padding calc. */
 export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
 
+/** Shipped diamond size (CONTEXT.md) — `--fg-diamond-size` fallback: the unrotated square's side, in
+ *  px. `barSpan`'s milestone floor is this rotated 45° (`diamondSizePx * √2`), so the painted diamond
+ *  and its outline always fit inside the bar box (bug hunt: a 0-width milestone bar left the diamond
+ *  and its selection outline hanging off the left edge). */
+export const DEFAULT_DIAMOND_SIZE_PX = 10;
+
+/** Shipped bar min width (CONTEXT.md) — `--fg-bar-min-width` fallback, in px. Every kind's painted
+ *  span floors here at minimum, even a `span` a caller (or a drag) has driven to zero width: a bar
+ *  narrower than this is both invisible and too thin to grab back by its resize handle, which sits
+ *  on an 8px hit box straddling each edge (`.fg-bar-handle`, `view/styles.ts`) — 12px leaves the two
+ *  handles a 4px gap instead of overlapping. Not a multiplier of `DEFAULT_DIAMOND_SIZE_PX`: the two
+ *  floors answer different questions (room for a diamond glyph vs. room for a resize handle) and
+ *  must be free to move apart. */
+export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
- * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp). */
-export function barSpan(entry: Pick<Entry, 'start' | 'end'>, scale: TimeScale): { x: number; width: number } {
+ * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
+ *
+ * A milestone Item/Entry is authored zero-width (`start === end`) — that stays true; nothing here
+ * invents a duration. Painting a zero-width box still leaves the diamond glyph and its selection
+ * outline with nowhere to sit, so a milestone's *painted* span is floored to the diamond's
+ * axis-aligned bounding box (`diamondSizePx * √2`) and centred on the instant. Every other kind still
+ * floors at `minBarWidthPx` — the two floors are just `max`'d together, so milestone's own (larger,
+ * at the shipped default) floor never shrinks. */
+/** Kind → painted-span floor, as a multiplier of `diamondSizePx` (a min-width lookup, not
+ *  `if (kind === 'milestone')` — plans/01 §2.5). Only `milestone` adds its own floor on top of
+ *  `minBarWidthPx`; every other kind floors at `minBarWidthPx` alone. */
+const KIND_SPAN_FLOOR_MULTIPLIER: Readonly<Partial<Record<EntryKind, number>>> = Object.freeze({
+  milestone: Math.SQRT2,
+});
+
+export function barSpan(
+  entry: Pick<Entry, 'start' | 'end' | 'kind'>,
+  scale: TimeScale,
+  diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX,
+  minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
+): { x: number; width: number; minimumSpan: boolean } {
   const x = scale.xForInstant(entry.start);
   const width = Math.max(0, scale.xForInstant(entry.end) - x);
-  return { x, width };
+  const floorMultiplier = KIND_SPAN_FLOOR_MULTIPLIER[entry.kind];
+  const kindFloor = floorMultiplier === undefined ? 0 : diamondSizePx * floorMultiplier;
+  const floor = Math.max(kindFloor, minBarWidthPx);
+  // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
+  // bar (a milestone, or a `start === end` span) has its start for a midpoint, so this reads as the
+  // milestone rule it grew out of; a 5px bar the floor widens to 12px keeps its own centre instead of
+  // sliding left onto its start.
+  if (width < floor) return { x: x - (floor - width) / 2, width: floor, minimumSpan: true };
+  return { x, width, minimumSpan: false };
 }
 
 export interface BarFlags {
@@ -48,27 +98,24 @@ export interface LinkFlags {
   cycle?: boolean;
 }
 
-export interface FrameRow {
-  id: RowId;
-  kind: PlannedRowKind;
-  index: number;
-  top: number;
-  height: number;
-  laneCount: number;
-  depth: number;
-  expandable: boolean;
-  expanded: boolean;
-  /** `false` when the row was kept only because a descendant matched the filter. */
-  matched?: boolean;
-  /** One library-formatted string per configured grid column, in column order (ADR 0005). */
-  cells: readonly string[];
-}
-
 export interface FrameBar {
   id: ItemId;
   entryId: EntryId;
   rowId: RowId;
   kind: EntryKind;
+  /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Item
+   *  that produced it. Absent for a bar that draws the Entry's whole span (a group, a milestone, or
+   *  a plugin's own kind) — that bar draws no single Segment. */
+  segmentId?: SegmentId;
+  /** Every Segment this bar **stands for** (#212, #230, ADR 0010) — the Segments that select it and
+   *  paint it. A bar that drew one Segment stands for that Segment alone, so this holds it and
+   *  `segmentId` names it. A bar that drew its Entry's whole span stands for every Segment of that
+   *  Entry, because any of them selects it, so this holds them all and `segmentId` is absent.
+   *
+   *  The frame states the fact, and a reader never derives it from an Entry of its own: the set and
+   *  the Items it describes come from one cached record of one Entry snapshot, so they cannot fall
+   *  out of step. `FrameLayout.segmentIdsForItem` answers the same fact for a lookup by id. */
+  segmentIds: readonly SegmentId[];
   /** The entry's name — what a backend renders as the bar's label (#26). */
   label: string;
   x: number;
@@ -77,37 +124,36 @@ export interface FrameBar {
   height: number;
   lane: number;
   flags: BarFlags;
-  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`.
+  /** `true` when `barSpan` widened this bar's true `[x, x + width)` extent to reach a floor —
+   *  `minBarWidthPx`, or a milestone's own larger diamond floor on top of it. States a fact about
+   *  the paint, not a judgement on the kind: a milestone carries it exactly like any other floored
+   *  bar (plans/01 §2.5 bans a kind check here), and a consumer tells the two apart by pairing this
+   *  with `kind`. `render/` stamps it as `data-span="minimum"` (`02` §4). */
+  minimumSpan: boolean;
+  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
    * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
    * formatting, both `time/`-only (S1.10, D-S1.10-5). */
   a11yLabel: string;
 }
 
-/** One segment of an SVG-style path, used by link geometry (§4, #16 settles `FrameLink.id`'s brand). */
+/** One straight part of an SVG-style path, used by link geometry (§4). */
 export type PathCommand =
   | { cmd: 'M'; x: number; y: number }
   | { cmd: 'L'; x: number; y: number }
   | { cmd: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number };
 
 export interface FrameLink {
+  /** Plain `string`, never a brand (#136, supersedes #16): `Dependency`/`DependencyId` belong to the
+   *  `entryDependencies()` plugin, and `layout/` may import `time/` and `model/` only — a branded id
+   *  here would make the frame's own type depend on a plugin. The emitter that fills `links` names
+   *  the id; `layout/` only aggregates. */
   id: string;
   path: readonly PathCommand[];
   flags: LinkFlags;
 }
 
-export interface RangeBand {
-  kind: 'rangeBand';
-  x: number;
-  width: number;
-}
-
-export interface RowStripe {
-  kind: 'rowStripe';
-  rowId: RowId;
-}
-
-export type FrameDecoration = DateLine | RangeBand | RowStripe;
+export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -150,6 +196,11 @@ export interface GeometryFrame {
    * virtualization doesn't announce "row 3" with no "of 30" (S1.10, D-S1.10-5/7). Same "always the
    * full extent" shape as `contentHeight`/`contentWidth` below. */
   rowCount: number;
+  /** Whether the row source can put one row under another (`nestsRows`). A backend needs it to pick
+   *  the grid's authoring pattern: only a `treegrid` row may carry `aria-level` and `aria-expanded`,
+   *  so a flat source must emit neither (S5.11, D-S5-25). A fact about the row set, so it is stated
+   *  once here rather than guessed per row from `depth`. */
+  tree: boolean;
   /** Always the full extent, never the window's. */
   contentHeight: number;
   /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
@@ -158,6 +209,10 @@ export interface GeometryFrame {
   bars: FrameBar[];
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
+  /** Registered decoration providers' output, painted below the bar layer (D-S5-15). */
+  underBars: readonly (RangeBand | RowStripe)[];
+  /** Registered decoration providers' output, painted above the bar layer (D-S5-15). */
+  overBars: readonly (RangeBand | RowStripe)[];
   /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1 (D-S4-13). */
   columns: readonly FrameColumn[];
 }
@@ -181,10 +236,19 @@ export interface LayoutInput {
    *  no clock read (S1.12/S1.13, D-S1.12-14, D-S1.13-3). Default `true`. */
   todayLine?: boolean | Instant;
   /** Authored Date lines, resolved on the same path as the today wrapper (S1.13). */
-  dateLines?: readonly DateLineSpec[];
+  dateLines?: readonly DateLine[];
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
    *  `--fg-tick-box-floor` and passes it; layout never restates the stylesheet. */
   tickBoxFloorPx?: number;
+  /** Diamond size in px (CONTEXT.md) — the unrotated square's side. Default `DEFAULT_DIAMOND_SIZE_PX`.
+   *  Drives a milestone bar's painted-span floor (`barSpan`). View reads `--fg-diamond-size` and
+   *  passes it; layout never restates the stylesheet. */
+  diamondSizePx?: number;
+  /** Minimum painted bar width in px (CONTEXT.md). Default `DEFAULT_MIN_BAR_WIDTH_PX`. Drives every
+   *  kind's painted-span floor (`barSpan`), `max`'d against a milestone's own diamond floor so the
+   *  larger of the two always wins. View reads `--fg-bar-min-width` and passes it; layout never
+   *  restates the stylesheet. */
+  minBarWidthPx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
   /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
@@ -198,9 +262,12 @@ export interface LayoutInput {
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
   laneGapPx?: number;
   /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
-  datasetRevision?: number;
+  datasetRevision: number;
   /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
   fieldContext?: FieldContext;
+  /** Registered decoration providers (S5.6, D-S5-15), `ctx.view.registerDecoration`'s own record.
+   *  Omitted or empty → both `underBars`/`overBars` are `[]`. */
+  decorationProviders?: readonly RegisteredDecorationProvider[];
 }
 
 function cellsForRow(
@@ -220,9 +287,11 @@ function cellsForRow(
 function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readonly FrameColumn[] {
   if (columns === undefined) return [];
   return columns.map((column) => {
-    const painted: FrameColumn = { key: column.key, header: column.header, align: column.align };
+    const painted: FrameColumn = { field: column.field, header: column.header, align: column.align };
     if (column.width !== undefined) painted.width = column.width;
     if (column.flex !== undefined) painted.flex = column.flex;
+    if (column.resizable !== undefined) painted.resizable = column.resizable;
+    if (column.movable !== undefined) painted.movable = column.movable;
     return painted;
   });
 }
@@ -239,12 +308,12 @@ function barA11yLabel(
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
-  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item.end, locale)}`;
+  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item, locale)}`;
   if (partCount <= 1) return `${item.label}, ${span}`;
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
-function packedItemsForRow(row: PlannedRow, memory: FrameMemory): PackedRow {
+function packedItemsForRow(row: PlannedRow, memory: FrameMemory): RowMemory {
   return memory.packedRow(row.id);
 }
 
@@ -267,24 +336,31 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
     laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
     entries: input.entries,
     registry: input.itemProducerRegistry,
-    ...(input.datasetRevision !== undefined ? { datasetRevision: input.datasetRevision } : {}),
+    datasetRevision: input.datasetRevision,
   });
   return mem;
 }
 
 /** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
- * renders; a one-shot caller omits it and gets memory built and discarded here. */
-export function computeFrame(input: LayoutInput, memory?: FrameMemory): GeometryFrame {
+ * renders; a one-shot caller omits it and gets memory built and discarded here. `decorations` is the
+ * matching per-Gantt memory for registered decoration providers (D-S5-15) — same one-shot-default rule. */
+export function computeFrame(
+  input: LayoutInput,
+  memory?: FrameMemory,
+  decorations?: DecorationRunner,
+): GeometryFrame {
   const plan = resolveLayoutRows(input);
-  return placeFrame(input, plan, memoryFor(input, plan, memory));
+  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
 }
 
-/** Call: `placeFrame(input, plan, memory)`. Geometry only — the caller already resolved rows. */
+/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
+ *  resolved rows. */
 export function placeFrame(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   memory?: FrameMemory,
+  decorations?: DecorationRunner,
 ): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
@@ -292,6 +368,8 @@ export function placeFrame(
   const mem = memory ?? memoryFor(input, plan);
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
+  const diamondSizePx = input.diamondSizePx ?? DEFAULT_DIAMOND_SIZE_PX;
+  const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;
   const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
   const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
 
@@ -346,13 +424,18 @@ export function placeFrame(
       expanded: planned.expanded,
       ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
       cells: cellsForRow(planned, input.columns, entryById),
+      // A header row stands for no Entry (D-S4-23), so it owns none and never becomes selectable.
+      entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
+      // A reference copy of the set `RowMemory` already resolved for this row (#230 R5) — no
+      // allocation per frame (I5), and the same header rule `entryIds` uses just above.
+      segmentIds: isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : packed.segmentIds,
     });
 
     for (const item of items) {
-      const { x, width } = barSpan(item, scale);
+      const { x, width, minimumSpan } = barSpan(item, scale, diamondSizePx, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       const lane = packing.laneByItem.get(item.id) ?? 0;
-      bars.push({
+      const bar: FrameBar = {
         id: item.id,
         entryId: item.entryId,
         rowId: planned.id,
@@ -364,8 +447,14 @@ export function placeFrame(
         height: rowHeight,
         lane,
         flags: {},
+        minimumSpan,
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
-      });
+        // A reference copy of the set the memory already resolved beside this Item — no allocation
+        // per frame (I5), and no second Entry source for a reader to disagree with (#230).
+        segmentIds: packed.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,
+      };
+      if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
+      bars.push(bar);
     }
   }
 
@@ -388,7 +477,7 @@ export function placeFrame(
   // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
   // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
 
-  const headerFormats = dedupeHeaderFormats(preset.headers);
+  const headerFormats = dropRepeatedGranularity(preset.headers);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
     const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
     return {
@@ -407,10 +496,22 @@ export function placeFrame(
     };
   });
 
-  const decorations: FrameDecoration[] = resolveDateLines({
+  const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,
     todayLine: input.todayLine ?? true,
     ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+  });
+
+  const decorationRunner = decorations ?? new DecorationRunner();
+  const { underBars, overBars } = decorationRunner.run({
+    providers: input.decorationProviders ?? [],
+    span: {
+      start: scale.instantForX(horizontalSpan.x),
+      end: scale.instantForX(horizontalSpan.x + horizontalSpan.width),
+    },
+    rows,
+    timeZone: scale.timeZone,
+    xForInstant: (at) => scale.xForInstant(at),
   });
 
   return {
@@ -419,11 +520,14 @@ export function placeFrame(
     header: { bands },
     rows,
     rowCount: plan.length,
+    tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),
     contentHeight: index.totalHeight,
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations,
+    decorations: dateLineDecorations,
+    underBars,
+    overBars,
     columns: columnsForFrame(input.columns),
   };
 }

@@ -110,12 +110,21 @@ function workstreamOf(id: string): string | undefined {
   return undefined;
 }
 
-function overlappingSegments(start: InstantInput, end: InstantInput) {
+/** Three Segments of one Entry, each separated by a gap. They do not overlap, so the pointer can
+ *  land on every one of them: a Segment drawn under another cannot be picked (#215), and a row has
+ *  no lane rule to draw overlapping Segments apart yet (#217). Until those close, an overlapping
+ *  demo fixture makes ctrl-click multi-select look broken — both clicks reach the same top Segment,
+ *  and the second one toggles the first back off. */
+/** Three separate Segments across ten days from `start` — one Entry that draws three bars (ADR 0010,
+ *  #212). Exported because two demos need a several-Segment Entry: the tree page draws one, and
+ *  `editing.ts` locks one, which is the case an envelope-only cascade refuses (#241). */
+export function separateSegments(start: InstantInput) {
   const startMs = instant(start);
+  const day = (count: number) => addMs(startMs, count * MS.DAY);
   return [
-    { start: startMs, end: addMs(startMs, 4 * MS.DAY) },
-    { start: addMs(startMs, MS.DAY), end: addMs(startMs, 5 * MS.DAY) },
-    { start: addMs(startMs, 2 * MS.DAY), end: instant(end) },
+    { start: day(0), end: day(2) },
+    { start: day(3), end: day(5) },
+    { start: day(6), end: day(9) },
   ];
 }
 
@@ -131,9 +140,21 @@ export const demoFieldOptions = {
               maximumFractionDigits: 0,
             }).format(value)
           : '',
+      // S5.8, D-S5-20, issue #137 F12: the harness's own inverse of `formatValue` above, so the
+      // Budget column (`main.ts`'s own header for this field) is editable in the gallery demo.
+      parseValue: (text: string): number | undefined => {
+        const n = Number(text.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : undefined;
+      },
+      // #142: `editable` moved off the Grid column onto the Field — one home for whether the
+      // Budget cell (`main.ts`'s own header for this field) opens in the gallery demo.
+      editable: true,
       column: { align: 'end' as const, header: 'Cost' },
     },
   },
+  // #142: `end` keeps its demo intent — `harness/index.html`'s own copy names only "Name, Start or
+  // Budget" as editable. `CORE_FIELDS.end` now defaults to editable, so this page states the
+  // override itself, the same way `hierarchy-dataset.ts` does.
   fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;
 
@@ -174,9 +195,10 @@ export const demoTreeEntryInputs: EntryInput<DemoMeta>[] = [
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
     if (id === 'entry-4') next.kind = 'milestone';
-    if (id === 'entry-16' && entry.start !== undefined && entry.end !== undefined) {
-      next.segments = overlappingSegments(entry.start, entry.end);
-    }
+    // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
+    // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
+    // hand to cover a Segment that runs past it.
+    if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
     if (Object.keys(meta).length > 0) next.meta = meta;
     return next;
   }),

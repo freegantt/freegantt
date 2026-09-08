@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeGantt s5-start review — GPT-5.6</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#5d6678; --line:#d9dee8; --paper:#fff; --ground:#f5f3ee; --high:#9f1239; --medium:#a15c00; --low:#475569; --pass:#087a55; --code:#eef1f5; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
+    main { max-width:1120px; margin:auto; padding:40px 24px 80px; }
+    h1,h2,h3 { line-height:1.2; }
+    h1 { font-size:2rem; margin-bottom:8px; }
+    h2 { margin-top:44px; padding-bottom:8px; border-bottom:2px solid var(--ink); }
+    h3 { margin-bottom:6px; }
+    p { max-width:88ch; }
+    code,.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--code); padding:1px 4px; border-radius:3px; }
+    .meta,.note { color:var(--muted); }
+    .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:24px 0; }
+    .metric,.card { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px; }
+    .metric strong { display:block; font-size:1.8rem; }
+    .finding { background:var(--paper); border:1px solid var(--line); border-left:5px solid var(--low); border-radius:8px; padding:16px 18px; margin:14px 0; }
+    .finding.high { border-left-color:var(--high); }
+    .finding.medium { border-left-color:var(--medium); }
+    .finding h3 { font-size:1rem; }
+    .tag { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:999px; font-size:.72rem; font-weight:700; color:white; background:var(--low); vertical-align:1px; }
+    .high .tag { background:var(--high); }
+    .medium .tag { background:var(--medium); }
+    .pass { color:var(--pass); font-weight:700; }
+    table { width:100%; border-collapse:collapse; background:var(--paper); font-size:.88rem; }
+    th,td { text-align:left; vertical-align:top; padding:9px 10px; border:1px solid var(--line); }
+    th { background:#e9edf3; }
+    ul { padding-left:22px; }
+    .call { white-space:nowrap; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>FreeGantt branch review: <span class="mono">s5-start</span></h1>
+    <p class="meta">GPT-5.6 · 2026-09-07 · checkpoint <code>9b2c87c</code> · reviewed HEAD <code>364ac77</code></p>
+    <p>This review uses CLAUDE.md, CONTEXT.md, and invariants I1–I14 as the primary standard.</p>
+    <p>The requested counts were stale. Git reports 35 commits and 86 changed files in the delta.</p>
+  </header>
+
+  <section class="summary">
+    <div class="metric"><strong>4</strong>confirmed defects</div>
+    <div class="metric"><strong>6</strong>public API findings</div>
+    <div class="metric"><strong>4</strong>missing test guards</div>
+    <div class="metric"><strong>0</strong>dependency violations</div>
+  </section>
+
+  <section>
+    <h2>Outcome</h2>
+    <div class="card">
+      <p>The branch is not ready for the S5 gate.</p>
+      <p>A new opacity token breaks consumer bar colors. Three other runtime contracts also fail.</p>
+      <p>The plugin architecture is generally strong. The public surface still mixes app and plugin concerns.</p>
+      <p>The GanttShell split is useful but incomplete. Its grid-width cluster remains a clear extraction target.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tier 1 — delta review</h2>
+    <p class="meta"><code>git log 9b2c87c..HEAD --oneline</code> and <code>git diff 9b2c87c...HEAD</code></p>
+
+    <article class="finding high">
+      <h3><span class="tag">HIGH</span>T1-1 · The opacity token breaks per-bar colors</h3>
+      <p><code>src/view/styles.ts:89-90, 209-216</code></p>
+      <p><strong>Problem.</strong> The container computes <code>--fg-bar-fill-painted</code> from its own fill. Descendant bar overrides cannot change that inherited value.</p>
+      <p><strong>Evidence.</strong> Chromium painted a purple test bar with the container blue. The old rule painted <code>rgb(123, 44, 191)</code>.</p>
+      <p><strong>Rule.</strong> Plans/02 §4 says each Token override must win. S5.4 also requires renderer colors through <code>--fg-bar-fill</code>.</p>
+      <p><strong>Fix.</strong> Compute the color mix on each bar shape. Add a computed-color browser assertion.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>T1-2 · After-events expose a live refusal function</h3>
+      <p><code>src/view/gesture-pipeline.ts:253-280</code></p>
+      <p><strong>Problem.</strong> One payload serves both event phases. Runtime <code>entryMove</code> and <code>entryResize</code> payloads contain <code>refuse</code>.</p>
+      <p><strong>Rule.</strong> <code>src/model/error-report.ts:70-73</code> limits Refusable to <code>before*</code>. Plans/02 §3 gives after-events no veto.</p>
+      <p><strong>Fix.</strong> Build a plain after-payload. Add <code>refuse</code> only to the before-payload.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>T1-3 · ErrorCode omits shipped editor codes</h3>
+      <p><code>src/model/error-report.ts:38-56</code> · <code>src/extensions/features/inline-editing.ts:157-160, 409</code></p>
+      <p><strong>Problem.</strong> The union omits <code>unreadable-value</code>, <code>refused-write</code>, and <code>segmented-entry</code>.</p>
+      <p><strong>Rule.</strong> Plans/02 §4 states that each editor reason is also its Error report code.</p>
+      <p><strong>Fix.</strong> Add all three literals beside the other editor codes. Add an exhaustive built-in-code test.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>T1-4 · The data demo loses error reports after import</h3>
+      <p><code>harness/data.ts:143-156, 241-249</code></p>
+      <p><strong>Problem.</strong> <code>watchAllErrors</code> subscribes once. Import replaces both Dataset and Gantt instances.</p>
+      <p><strong>Rule.</strong> The harness stop rule forbids consumer compensation. This also breaks the page's rebind proof.</p>
+      <p><strong>Fix.</strong> Rebind the error watcher with the new instances. Dispose its prior subscription first.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">TEST</span>T1-5 · The shared-envelope conflict path has no test</h3>
+      <p><code>src/data/build-commit-change-set.ts:89, 164-176</code></p>
+      <p><strong>Problem.</strong> Tests cover agreeing body and extender writes. They do not cover conflicting Segment and envelope writes.</p>
+      <p><strong>Rule.</strong> The data rule requires one atomic result. D-S5-49 records this merge.</p>
+      <p><strong>Fix.</strong> Assert <code>SegmentsOutOfSyncError</code> and no commit for the conflicting path.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">TEST</span>T1-6 · The I5 cache fix has no regression guard</h3>
+      <p><code>src/view/gantt-shell.ts:399-401, 1346-1355</code></p>
+      <p><strong>Problem.</strong> The shell caches a by-id map, but no test guards map identity or invalidation.</p>
+      <p><strong>Rule.</strong> Plans/01 §11 I5 forbids allocation during drag preview.</p>
+      <p><strong>Fix.</strong> Assert stable map identity per revision. Assert invalidation after commit and without a revision.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">TEST</span>T1-7 · SegmentSelection lacks focused unit tests</h3>
+      <p><code>src/view/segment-selection.ts:1-199</code></p>
+      <p><strong>Problem.</strong> Shell tests cover integration. They do not pin the extracted object's ordering and mixed-owner rules.</p>
+      <p><strong>Rule.</strong> CLAUDE.md requires one clear job. Focused tests protect that new boundary.</p>
+      <p><strong>Fix.</strong> Add <code>segment-selection.test.ts</code> against literal ports.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">LOW</span>T1-8 · The issue-wave status table is malformed</h3>
+      <p><code>plans/reviews/2026-09-06-issue-wave-status.md:76-104</code></p>
+      <p><strong>Problem.</strong> Two table rows sit below prose. Candidate 8 also remains open after SegmentSelection landed.</p>
+      <p><strong>Rule.</strong> The branch uses these records as review checkpoints.</p>
+      <p><strong>Fix.</strong> Move the rows into the table. Mark candidate 8 complete.</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Tier 2 — whole-branch API audit</h2>
+    <p class="meta"><code>git diff main...HEAD -- src/api src/model</code>, plus the complete current files.</p>
+
+    <article class="finding high">
+      <h3><span class="tag">HIGH</span>A1 · createPopup requires a hand-built wrapper</h3>
+      <p><code>src/extensions/popup.ts:251</code> · <code>src/api/index.ts:149</code> · <code>harness/plugins/popup-demo.ts:39</code></p>
+      <p><strong>Call.</strong> <code>createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler })</code></p>
+      <p><strong>Problem.</strong> Three production callers build the same one-field adapter. The harness exposes the missing seam.</p>
+      <p><strong>Rule.</strong> CLAUDE.md “Call site first” rejects public one-field wrappers.</p>
+      <p><strong>Fix.</strong> Accept <code>registerKeyHandler</code> directly. Stop exporting <code>KeyHandlerRegistrar</code>.</p>
+    </article>
+
+    <article class="finding high">
+      <h3><span class="tag">HIGH</span>A2 · Dataset.extraEditsFor sits on the app-author class</h3>
+      <p><code>src/api/dataset.ts:244-253</code></p>
+      <p><strong>Call.</strong> No honest app call exists. Core must construct <code>EditRequest.entryAfterEdits</code>.</p>
+      <p><strong>Problem.</strong> The public Dataset exposes an extension-hook execution method used only by core.</p>
+      <p><strong>Rule.</strong> CLAUDE.md “Two callers, two surfaces” keeps hooks away from app authors.</p>
+      <p><strong>Fix.</strong> Put preview resolution on the plugin wiring surface. Remove the method from Dataset.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>A3 · PluginStore requires branded input</h3>
+      <p><code>src/model/plugin.ts:35-49</code></p>
+      <p><strong>Call.</strong> <code>ctx.store.reserve&lt;Lock&gt;().set(entryId('t2'), lock)</code></p>
+      <p><strong>Problem.</strong> Plugin authors must brand ids, while <code>dataset.entries.get('t2')</code> accepts strings.</p>
+      <p><strong>Rule.</strong> Plans/02 §2.1 requires loose input on every input path, including <code>get</code>.</p>
+      <p><strong>Fix.</strong> Accept <code>EntryId | string</code> on <code>get</code>, <code>set</code>, and <code>remove</code>. Brand inside data/.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>A4 · GridColumn permits width and flex together</h3>
+      <p><code>src/model/field.ts:70-77</code> · <code>src/layout/column.ts:50-70</code> · <code>src/layout/frame.ts:281-290</code></p>
+      <p><strong>Call.</strong> <code>{ field: 'cost', width: 120, flex: 1 }</code></p>
+      <p><strong>Problem.</strong> Measurement treats this column as fixed. Paint also gives it flex behavior.</p>
+      <p><strong>Rule.</strong> CLAUDE.md requires illegal combinations to be unrepresentable.</p>
+      <p><strong>Fix.</strong> Use a union with <code>width?: never</code> and <code>flex?: never</code> on opposite branches.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>A5 · Two getters return input types</h3>
+      <p><code>src/api/gantt.ts:530-550</code></p>
+      <p><strong>Call.</strong> <code>diffMs(gantt.dateLines[0].placeAt, now())</code> does not type-check.</p>
+      <p><strong>Problem.</strong> The shell stores Instants. The getters widen them back to <code>InstantInput</code>.</p>
+      <p><strong>Rule.</strong> Plans/02 §2.1 requires loose input and complete stored output.</p>
+      <p><strong>Fix.</strong> Return <code>boolean | Instant</code>. Publish a resolved Date line output type.</p>
+    </article>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>A6 · RaiseError is a public internal port</h3>
+      <p><code>src/model/error-report.ts:122-133</code> · <code>src/api/index.ts:38-46</code></p>
+      <p><strong>Call.</strong> No app or plugin call exists. Core injects this function into internal layers.</p>
+      <p><strong>Rule.</strong> CLAUDE.md permits only useful api/ and model/ types on the public surface.</p>
+      <p><strong>Fix.</strong> Remove the barrel export. Keep the type available to internal modules.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">DOC</span>A7 · Public helper vocabulary is incomplete</h3>
+      <p><code>src/api/watch-all-errors.ts:15</code> · <code>src/api/index.ts:85</code></p>
+      <p><strong>Problem.</strong> <code>ErrorFeed</code> has no glossary entry. <code>fieldRowsOf</code> has no plans/02 call.</p>
+      <p><strong>Rule.</strong> The naming skill starts with the glossary. Plans/02 defines the public contract.</p>
+      <p><strong>Fix.</strong> Define Error feed in CONTEXT.md. Add <code>fieldRowsOf(changeSet)</code> to the History example.</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Architecture, SOLID, and dependency injection</h2>
+
+    <article class="finding medium">
+      <h3><span class="tag">MEDIUM</span>R1 · The I2 lint exception accepts every WeakMap</h3>
+      <p><code>eslint/rules/no-module-level-state.cjs:50-61</code></p>
+      <p><strong>Problem.</strong> The function name says “instance keyed.” Its implementation checks only the constructor name.</p>
+      <p><strong>Rule.</strong> Plans/01 §11 I2 forbids state shared between Gantt instances.</p>
+      <p><strong>Fix.</strong> Require a local instance-key type or an allowlist reason. Add a shared-preset red test.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">DEBT</span>R2 · The GanttShell split remains partial</h3>
+      <p><code>src/view/gantt-shell.ts:461-837, 1672-1756</code></p>
+      <p><strong>Problem.</strong> The constructor still spans 377 lines. Eight methods still own one grid-pane-width job.</p>
+      <p><strong>Rule.</strong> CLAUDE.md requires one responsibility. Plans/01 §8.3 says GanttShell composes.</p>
+      <p><strong>Fix.</strong> Extract <code>GridPaneWidth</code> with a narrow ports interface. Keep the shell as composition root.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">LOW</span>R3 · harness/main.ts duplicates readable Gantt state</h3>
+      <p><code>harness/main.ts:178-220</code></p>
+      <p><strong>Problem.</strong> Local <code>grouped</code> and <code>pack</code> flags mirror <code>gantt.rowSource</code>.</p>
+      <p><strong>Rule.</strong> The harness must expose API gaps. Here, getters already close the gap.</p>
+      <p><strong>Fix.</strong> Read both values from <code>gantt.rowSource</code>. Keep only consumer-owned criteria local.</p>
+    </article>
+
+    <article class="finding">
+      <h3><span class="tag">LOW</span>R4 · Raw NUL characters hide plugin-store.ts from searches</h3>
+      <p><code>src/data/plugin-store.ts:173, 186</code></p>
+      <p><strong>Problem.</strong> Search tools classify the source as binary. Review and navigation can silently skip it.</p>
+      <p><strong>Rule.</strong> CLAUDE.md requires readable and maintainable code.</p>
+      <p><strong>Fix.</strong> Use the escaped spelling <code>\u0000</code>, or use nested Maps.</p>
+    </article>
+
+    <div class="card">
+      <h3>Boundary results</h3>
+      <ul>
+        <li><span class="pass">PASS</span> I1: dependency-cruiser found no violations across 292 modules and 1,301 dependencies.</li>
+        <li><span class="pass">PASS</span> DOM access stays in render/, view/, interaction/, and extensions/.</li>
+        <li><span class="pass">PASS</span> scheduling/ has no edge to render/, view/, or interaction/.</li>
+        <li><span class="pass">PASS</span> Kind behavior uses capability, renderer, and item-producer seams.</li>
+        <li><span class="pass">PASS</span> Plugin runtimes and registries remain per Gantt instance.</li>
+        <li><span class="pass">PASS</span> Renderer and Item producer registrations preserve substitutability.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Public export call-site audit</h2>
+    <p>Each row covers exports that share one caller and one call shape. Type-only exports use their declaration site.</p>
+    <table>
+      <thead><tr><th>New or changed exports</th><th>Real call site</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>DatasetPlugin, DatasetPluginContext, DatasetPluginOf, DatasetPluginContextOf</td><td class="call"><code>new Dataset({ entries, plugins: [locks()] })</code></td><td>Pass</td></tr>
+        <tr><td>DatasetEvents, DatasetFieldRegistrations, DatasetEditHook, DatasetStoreAccess</td><td><code>ctx.fields.register(field)</code>; <code>ctx.edits.setExtender(wrap)</code></td><td>Pass</td></tr>
+        <tr><td>PluginStore, PluginStoreView</td><td><code>ctx.store.reserve&lt;Lock&gt;().set(entryId('t2'), lock)</code></td><td>A3</td></tr>
+        <tr><td>ExtenderWrapper, EditExtender, EditRequest, EntryEdits, StoredEdit, StoredEdits</td><td><code>ctx.edits.setExtender(next =&gt; request =&gt; mergeEntryEdits(next(request), mine(request)))</code></td><td>Plugin surface passes. The Request suffix conflicts with CLAUDE.md.</td></tr>
+        <tr><td>mergeEntryEdits, moveEntryTo</td><td><code>mergeEntryEdits(next(request), new Map([[id, moveEntryTo(entry, start)]]))</code></td><td>Pass</td></tr>
+        <tr><td>watchAllErrors, ErrorFeed</td><td><code>watchAllErrors([dataset, gantt], showError)</code></td><td>A7 glossary gap</td></tr>
+        <tr><td>ErrorReport, ErrorReportInput, ErrorCode, ErrorSeverity, ErrorReporter, Refusable, PluginErrorReport</td><td><code>gantt.on('error', report =&gt; toast(report.message))</code>; <code>move.refuse(reason)</code></td><td>Pass, except T1-3</td></tr>
+        <tr><td>RaiseError</td><td>No external call exists.</td><td>A6</td></tr>
+        <tr><td>PluginStoreName, StoreRowUpdated, UpdatedRow, CoreFieldValues, CoreFieldValue, FieldValue</td><td><code>const rows: readonly UpdatedRow[] = changeSet.updated</code></td><td>Pass</td></tr>
+        <tr><td>ColumnAlign, ColumnCellRenderer, ColumnCellRendererContext</td><td><code>const renderCost: ColumnCellRenderer = ({ fieldValue }) =&gt; ({ text: String(fieldValue) })</code></td><td>Pass</td></tr>
+        <tr><td>fieldRowsOf</td><td><code>const entryRows = fieldRowsOf(changeSet)</code></td><td>A7 documentation gap</td></tr>
+        <tr><td>GanttPlugin, PluginContext, GanttPluginOf, PluginContextOf, PluginContextParts</td><td><code>const plugin: GanttPlugin = { id, setup(ctx) { ... } }</code></td><td>Pass</td></tr>
+        <tr><td>Command, CommandContext, CommandRegistry, CommandTarget, ActedOn, KeyBinding</td><td><code>gantt.commands.run('freegantt.undo')</code>; <code>ctx.target?.segmentIds</code></td><td>Pass</td></tr>
+        <tr><td>BuiltInCommandId, CommandId, CommandOf, CommandContextOf, CommandRegistryOf, KeyBindingOf</td><td><code>const id: CommandId = 'acme.inspect'</code></td><td>Pass</td></tr>
+        <tr><td>TargetKind, GanttEvents, GridColumnsChange, EntryFieldEdit, KindDefaults, GridWidth</td><td><code>gantt.on('gridColumnsChange', onColumns)</code>; <code>ctx.interaction.registerKindDefaults(kind, defaults)</code></td><td>Pass</td></tr>
+        <tr><td>MountLayer, GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions</td><td><code>ctx.view.rowLayer.present(editor)</code>; <code>ctx.view.dom.targetUnder(node)</code></td><td>Pass</td></tr>
+        <tr><td>createPopup, KeyHandlerRegistrar, KeyEventLike, Popup, PopupOptions, PopupPlacement, PopupSurface, DismissTrigger, Anchor</td><td><code>createPopup(ctx.view, { registerHandler: ctx.interaction.registerKeyHandler })</code></td><td>A1</td></tr>
+        <tr><td>tooltips, TooltipsOptions, contextMenu, ContextMenuOptions, MenuItem, MenuEntry</td><td><code>plugins: [tooltips(), contextMenu({ items })]</code></td><td>Pass</td></tr>
+        <tr><td>inlineEditing, InlineEditingOptions, DateInput, DateInputFactory</td><td><code>plugins: [inlineEditing({ dateInput })]</code></td><td>Pass</td></tr>
+        <tr><td>New FreeGanttError subclasses</td><td><code>catch (error) { if (error instanceof PluginSetupError) ... }</code></td><td>Pass</td></tr>
+        <tr><td>itemIdFromDataset, entryIdFromDataset</td><td><code>entryIdFromDataset(dataset, itemId)</code></td><td>Pass</td></tr>
+        <tr><td>PluginId, Disposer, KeyChord, DisposableStore</td><td><code>const dispose: Disposer = ctx.on(...)</code></td><td>Pass</td></tr>
+        <tr><td>Segment, SegmentId, SegmentInput, PluginDocument</td><td><code>dataset.entries.update(id, { segments })</code></td><td>Pass</td></tr>
+        <tr><td>ElementDescription, TooltipColumn</td><td><code>ctx.view.renderElement({ text: entry.name })</code></td><td>Pass</td></tr>
+        <tr><td>RendererPoint, RendererFor, BarRenderer, BarRendererContext, RendererByKind, CellRenderer, CellRendererContext, HeaderRenderer, HeaderRendererContext, TooltipRenderer, TooltipRendererContext</td><td><code>ctx.view.registerRenderer('bar', kind, renderBar)</code></td><td>Pass</td></tr>
+        <tr><td>FrameBar, FrameRow, ResolvedColumn, FrameColumn, BarFlags, PlannedRowKind</td><td><code>const render: BarRenderer = ({ item }: { item: FrameBar }) =&gt; ...</code></td><td>Required callback vocabulary</td></tr>
+        <tr><td>DecorationLayer, DecorationContext, DecorationProvider, DecorationInput, RangeBand, RowStripe</td><td><code>ctx.view.registerDecoration('underBars', provider)</code></td><td>Pass</td></tr>
+        <tr><td>Item, ItemProducer, wholeEntryItem</td><td><code>ctx.layout.registerItemProducer(kind, entry =&gt; [wholeEntryItem(entry)])</code></td><td>Pass</td></tr>
+        <tr><td>diffMs, isTimeUnit, SnapSetting</td><td><code>const delta = diffMs(next.start, entry.start)</code>; <code>gantt.snap = setting</code></td><td>Pass</td></tr>
+        <tr><td>ZonedTime, PlainParts</td><td><code>const parts: PlainParts = dataset.time.toPlain(instant)</code></td><td>Pass</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Problems in the governing records</h2>
+    <ul>
+      <li>CLAUDE.md bans every public <code>*Request</code>. The plugin design publishes <code>EditRequest</code>.</li>
+      <li>Scope that ban to app-author constructor options, or rename the plugin type.</li>
+      <li>Plans/02 does not specify <code>Dataset.extraEditsFor</code>. The method is still public.</li>
+      <li>D-S5-49 appears in the S5 decision table, but its step file lacks the promised full prose.</li>
+      <li>Plans/02 still shows bare <code>return false</code>. It does not teach <code>refuse(reason)</code>.</li>
+      <li>Plans/02 does not mention the new <code>gantt.dataset</code> getter.</li>
+      <li>No plan asked for <code>--fg-bar-opacity</code>. That scope addition caused T1-1.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Verification</h2>
+    <table>
+      <tbody>
+        <tr><th>Dependency boundaries</th><td class="pass">Pass</td><td>292 modules and 1,301 dependencies</td></tr>
+        <tr><th>TypeScript</th><td class="pass">Pass</td><td><code>pnpm typecheck</code></td></tr>
+        <tr><th>ESLint</th><td class="pass">Pass</td><td><code>pnpm lint</code></td></tr>
+        <tr><th>Node tests</th><td class="pass">Pass</td><td>721 tests</td></tr>
+        <tr><th>DOM tests</th><td class="pass">Pass</td><td>943 tests</td></tr>
+      </tbody>
+    </table>
+    <p class="note">The review excluded uncommitted changes in <code>harness/docs/plugins.html</code> and <code>vite.config.ts</code>.</p>
+  </section>
+</main>
+</body>
+</html>

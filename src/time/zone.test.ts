@@ -5,12 +5,15 @@ import {
   startOfDay,
   addDays,
   diffDays,
+  dayOfWeek,
+  eachDay,
   toPlain,
   fromPlain,
   startOf,
   stepBy,
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
+  isTimeUnit,
 } from './zone.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import type { TimeUnit } from '../model/index.js';
@@ -113,6 +116,46 @@ describe('zone-aware date arithmetic', () => {
     const badUnit = 'q' as TimeUnit;
     expect(() => startOf(ZONE, instant('2026-01-01T00:00:00Z'), badUnit)).toThrow(UnsupportedUnitError);
     expect(() => stepBy(ZONE, instant('2026-01-01T00:00:00Z'), badUnit, 1)).toThrow(UnsupportedUnitError);
+  });
+
+  it('isTimeUnit accepts every unit startOf/stepBy step by, and rejects everything else (#201)', () => {
+    for (const unit of SUPPORTED_TIME_UNITS) expect(isTimeUnit(unit)).toBe(true);
+    expect(isTimeUnit('q')).toBe(false);
+    expect(isTimeUnit('')).toBe(false);
+    expect(isTimeUnit('Day')).toBe(false);
+  });
+
+  it('dayOfWeek is ISO (1 = Monday … 7 = Sunday) and stays correct across a southern-hemisphere DST fold', () => {
+    // Australia/Sydney falls back (AEDT -> AEST) on 2026-04-05, a Sunday. The day before is Saturday.
+    const sydney = 'Australia/Sydney';
+    const saturday = startOfDay(sydney, instant('2026-04-04T12:00:00Z'));
+    const sunday = addDays(sydney, saturday, 1);
+    expect(dayOfWeek(sydney, saturday)).toBe(6);
+    expect(dayOfWeek(sydney, sunday)).toBe(7);
+    expect(toPlain(sydney, sunday).dayOfWeek).toBe(7);
+  });
+
+  it('eachDay returns 7 ascending boundaries for a week', () => {
+    const start = startOfDay(ZONE, instant('2026-06-15T12:00:00Z'));
+    const end = addDays(ZONE, start, 7);
+    const days = eachDay(ZONE, { start, end });
+    expect(days).toHaveLength(7);
+    expect(days[0]).toBe(start);
+    for (let i = 1; i < days.length; i++) {
+      expect(days[i]).toBeGreaterThan(days[i - 1]!);
+      expect(diffDays(ZONE, days[i - 1]!, days[i]!)).toBe(1);
+    }
+  });
+
+  it('eachDay skips nothing on a spring-forward day (southern hemisphere)', () => {
+    // Australia/Sydney springs forward (AEST -> AEDT) on 2026-10-04.
+    const sydney = 'Australia/Sydney';
+    const start = startOfDay(sydney, instant('2026-10-01T12:00:00Z'));
+    const end = addDays(sydney, start, 7);
+    const days = eachDay(sydney, { start, end });
+    expect(days).toHaveLength(7);
+    const plainDays = days.map((day) => toPlain(sydney, day).day);
+    expect(plainDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 });
 

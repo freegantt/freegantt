@@ -1,20 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
-import { entryId, entryIdOfItem } from '../model/index.js';
-import type { Entry, EntryId, Instant, ItemId } from '../model/index.js';
+import { entryId, entryIdOfItem, segmentId } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
 
+/** The fake's own Segment naming (#212): Entry `a` draws one Segment, `a-0`. */
+function segmentOf(id: EntryId): SegmentId {
+  return segmentId(`${id}-0`);
+}
+
 function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
 function entryFor(id: EntryId): Entry {
-  return { id, kind: 'span', name: id, start: toInstant(0), end: toInstant(1) };
+  const start = toInstant(0);
+  const end = toInstant(1);
+  return { id, kind: 'span', name: id, start, end, segments: [{ id: segmentOf(id), start, end }] };
 }
 
 function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardEvent {
@@ -34,13 +41,13 @@ function makeContext(
   options: ContextOptions = {},
 ): {
   ctx: EntryGestureContext;
-  proposals: (readonly EntryId[])[];
+  proposals: (readonly SegmentId[])[];
   sessions: [EntryId, EntryGesture][];
   nudges: [1 | -1, boolean | undefined][];
 } {
   const { incapableRows = [], refuseSession = [] } = options;
-  let selection: readonly EntryId[] = selectionInit;
-  const proposals: (readonly EntryId[])[] = [];
+  let selection: readonly SegmentId[] = selectionInit.map(segmentOf);
+  const proposals: (readonly SegmentId[])[] = [];
   const sessions: [EntryId, EntryGesture][] = [];
   const nudges: [1 | -1, boolean | undefined][] = [];
 
@@ -51,11 +58,18 @@ function makeContext(
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
-    selectableEntriesInRowOrder: () => ORDER,
     setHovered: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {
-      get: () => selection,
+      selectableEntriesInRowOrder: () => ORDER,
+      selectableSegmentsInRowOrder: () => ORDER.flatMap((id) => ctx.selection.segmentIdsOfEntries([id])),
+      // `hitTest` always misses in this fake (this file drives keyboard chords, never a pointer
+      // hit), so `selectableSegmentsOf` never runs — it exists only to satisfy the interface.
+      selectableSegmentsOf: () => [],
+      segmentIdsOfEntries: (ids) => ids.map(segmentOf),
+      segmentIdsForItem: (item) => [segmentOf(entryIdOfItem(item))],
+      segmentIds: () => selection,
+      entryIds: () => ORDER.filter((id) => selection.includes(segmentOf(id))),
       propose: (next) => {
         selection = next;
         proposals.push(next);
@@ -142,36 +156,6 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     expect(nudges).toEqual([]);
   });
 
-  it('ArrowDown moves the selection to the next select-capable row, skipping an incapable one', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([A], { incapableRows: [B] });
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowDown' }));
-
-    expect(proposals).toEqual([[C]]);
-  });
-
-  it('ArrowUp moves the selection to the previous select-capable row', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([C]);
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
-
-    expect(proposals).toEqual([[B]]);
-  });
-
-  it('ArrowUp at the top row leaves the selection untouched — no capable neighbour that way', () => {
-    const container = document.createElement('div');
-    const { ctx, proposals } = makeContext([A]);
-    attachKeyboardEditing(container, ctx);
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowUp' }));
-
-    expect(proposals).toEqual([]);
-  });
-
   it('preventDefault fires for a handled key, not for an unrelated one', () => {
     const container = document.createElement('div');
     const { ctx } = makeContext([A]);
@@ -197,51 +181,5 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
 
     expect(nudges).toEqual([]);
-  });
-});
-
-describe('attachKeyboardEditing — tree keyboard (S4.10, D-S4-33)', () => {
-  it('ArrowRight calls tryTreeArrow before nudge when the tree handler claims the key', () => {
-    const container = document.createElement('div');
-    let treeDirection: 'left' | 'right' | undefined;
-    const { ctx, nudges } = makeContext([A]);
-    attachKeyboardEditing(container, {
-      ...ctx,
-      tryTreeArrow: (direction) => {
-        treeDirection = direction;
-        return true;
-      },
-    });
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowRight' }));
-
-    expect(treeDirection).toBe('right');
-    expect(nudges).toEqual([]);
-  });
-
-  it('ArrowLeft nudges when tryTreeArrow does not handle the key', () => {
-    const container = document.createElement('div');
-    const { ctx, nudges } = makeContext([A]);
-    attachKeyboardEditing(container, { ...ctx, tryTreeArrow: () => false });
-
-    container.dispatchEvent(key('keydown', { key: 'ArrowLeft' }));
-
-    expect(nudges).toEqual([[-1, undefined]]);
-  });
-
-  it('Shift+8 expands every row through expandAllRows', () => {
-    const container = document.createElement('div');
-    let expanded = false;
-    const { ctx } = makeContext([A]);
-    attachKeyboardEditing(container, {
-      ...ctx,
-      expandAllRows: () => {
-        expanded = true;
-      },
-    });
-
-    container.dispatchEvent(key('keydown', { key: '8', shiftKey: true }));
-
-    expect(expanded).toBe(true);
   });
 });

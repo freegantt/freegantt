@@ -53,8 +53,12 @@ The first-party plugin that owns the `Dependency` store, the link-create gesture
 _Avoid_: `dependencies()` (collides with npm's "dependencies" at the call site), Link (see Dependency)
 
 **Segment**:
-One contiguous stretch of an Entry's span, when that span is interrupted rather than continuous (`Entry.segments`). Segments are authored — an Entry without them is simply one unbroken stretch — and each one emits its own Item. When Segments are present, `start`/`end` are the envelope of those Segments and stay in the same transaction as any Segment write. A direct `start`/`end` write on an entry that has Segments is refused; the consumer writes `segments` instead.
-_Avoid_: Split, interval, piece
+One contiguous stretch of an Entry's span (`Entry.segments`). Every Entry stores at least one. Ingest fills one over the Entry's whole `[start, end)` when the consumer authors none. A Segment is always there to draw and to select (ADR 0010). Each Segment carries a stable `SegmentId` and emits its own Item. **A Segment is the unit of selection** (ADR 0010, issue #212, supersedes D-S3-10 and the #200/#211 pick rule). A click on the timeline selects the Segment under the pointer. A click in the grid pane selects every Segment of the row. What paints as selected is what moves (`plans/s5-extensibility-and-editing/spec-211-gesture-units.md`). A drag on a selected Segment moves that Segment alone and rewrites the envelope around it. A drag over several selected Segments moves them together. A resize follows the same rule for whichever edge it drags. A consumer moves one Segment through `dataset.entries.update(id, { segments })`, naming its position in the array and no `id`. The Segment already at that position keeps its `SegmentId`, so the write is a move, not a replacement (#212). An `id` named in the write replaces the id at that position instead. A position past the Entry's current Segment count mints a fresh id, the same as an added Segment on `entries.add`. Two Segments in the store — on the same Entry or on two different Entries — never share one `SegmentId`. A write that would create that collision is refused (`DuplicateSegmentIdError`) on every mutating call a consumer writes — `entries.add`, `entries.update`, and construction. `dataset.replay(changeSet)` is the one exception: it applies undo/redo rows with no validation, by design (D-S2-14), so a duplicate id stays representable through that door alone. `start`/`end` on the Entry are the envelope over its Segments, and stay in the same transaction as any Segment write. A direct `start`/`end` write on an entry with several Segments is refused; the consumer writes `segments` instead. The same refusal binds a scheduling plugin's cascade through the `EditExtender` seam (#212 R2 fix-plan review, unified on one refusal at D-S5-44): every edit is reconciled against the Entry's Segments wherever it is written, so a plugin gets no looser a door onto `start`/`end` than `entries.update()` has. A plugin author who means to move every Segment writes `segments` directly, or reaches for `moveEntryTo(entry, start)`, which returns that write already computed. It names `segments` and nothing else, and core derives the envelope (D-S5-50, #239): an envelope stated here would overwrite an earlier plugin's `end` on the documented composition and commit that write away in silence. `dataset.entries.removeSegments(ids)` removes named Segments, across several Entries in one transaction when the ids name several. Removing an Entry's last Segment removes the Entry itself, in the same transaction. That removal never takes the Entry's descendants with it (ADR 0010, #212, fix plan R3). Each direct child re-parents to the removed Entry's own parent, or to the root when it had none. `entries.remove(id)` is the deliberate whole-subtree removal; a last-Segment removal is not that call, so it does not act like it.
+_Avoid_: Split, interval, piece, calling a Segment "drawing only, not a selection unit" (ADR 0010 reverses that premise — see the Selection entry)
+
+**SegmentId**:
+The stable identity of one Segment, carried on the Segment itself and never derived from its position. An index was refused: removing a Segment renumbers the ones after it, so a Selection holding index 2 lights the wrong bar once the Segment at that index changes, and undo repeats the mistake (ADR 0010). The Document carries `SegmentId` at `schema: 4`; a reader of an older Document mints the ids it finds missing.
+_Avoid_: Segment index, position (an index is exactly what this id replaces)
 
 **Field**:
 One named, addressable value on an Entry — declared once and used by every layer that needs it. Core ships `name`, `start` (`min`), `end` (`max`), and the computed `duration` as declarations of exactly the shape a consumer adds to, which is what lets a consumer's `cost` be edited, compared, rolled up and shown by the same code as `start` (ADR 0005, `01` §2.6). A consumer writes a Field with `dataset.entries.update('t1', { cost: 500 })` and reads it with `dataset.entries.fieldValue('t1', 'cost')` — one call for an entry-sourced, meta-sourced, or compute-sourced Field, with no reach into `entry.meta`. `dataset.field('cost')` is the resolved declaration (type merge applied, `source` filled); `dataset.fields.all` lists every declared Field, core Fields included. `kind`, `parentId`, `segments` and `meta` are Fields too, so the changeset has one path, but only a Field that declares `column` is a Grid column candidate. **`progress` is not a core Field** — it is scheduling-plugin data (ADR 0008). Fields belong to the Dataset (`fields`), because the Rollup writes stored, undoable, serialized values and runs at construction, before any Gantt exists. **A Field is what a value _is_; a Grid column is where a Gantt _shows_ it** — the one sentence that separates the pair.
@@ -79,6 +83,11 @@ _Avoid_: Field map, schema registry (this is not a separate persistence layer �
 **Aggregator**:
 The function that turns a set of children's values into a parent's value for one Field — `min`, `max`, `sum`, `count`, `'none'`, a duration-weighted mean, or a consumer's own. Always referenced **by name**, never passed inline: a name is data that serializes into a Document and can be refused when it is not registered, and a function is neither. Returning `undefined` means "no opinion, leave the stored value alone". `'none'` always returns `undefined`, so that Field keeps the parent's authored value. A shipped Aggregator skips holes (`undefined`, non-numeric for `sum`/`min`/`max`, zero-duration children for the weighted mean) and never throws; if every child is skipped it returns `undefined`. The Aggregator is the function; the Rollup is the pass that runs it.
 _Avoid_: Aggregation (the noun for the pass is Rollup — one concept, one word), reducer, accumulator, closure on the Field (the function is registered under a name)
+
+**WBS**:
+The dotted position code an Entry has in the tree — `1`, `1.1`, `1.1.1`, then `2` for the next root. It is **derived, never authored**. The `wbs()` plugin computes it from `parentId` and authored sibling order. No consumer sends one, writes one, or reads one back from a Document. Moving an Entry changes its WBS; the `id` never moves. Depth is unbounded. The number counts the **authored** order — the consumer's `entries` array — not the rows a Gantt shows. A Gantt sorted by `start` therefore reads its WBS column out of sequence. A Gantt that filters half the tree reads it with gaps. Both are correct: order is the Dataset's, sort and filter are the Gantt's (D-S4-28). `wbs({ code })` replaces how a code is built, and `wbs({ compare })` how codes order. The column's header, width and alignment stay on the Gantt's `gridColumns`, like every other Field's.
+_Deliberate vocabulary exception (ADR 0003)_: "work breakdown structure" is the PM word this glossary otherwise keeps out of core. A shift roster has no work to break down. It stays because it is the term every reader arrives with, and because it names the only such concept here. A neutral synonym would cost recognition and buy nothing. The exception covers this word alone.
+_Avoid_: outline number, outline code (rejected synonyms — one name per concept), WBS code (reserved for the frozen, consumer-authored code this is not), id (a WBS changes on a move; an identity does not)
 
 ### Mutation
 
@@ -114,15 +123,18 @@ _Avoid_: Cancel, reject, block (the codebase's one word for this is Veto — ADR
 A held registration on a Dataset or Gantt event, created with `on` and released with `off` — the same pair on both objects (plans/02 §3). `data/` owns the Dataset bus; `layout/`'s Bound value is a different mechanism. `view/dataset-change-subscription.ts`'s `subscribeToDatasetChanges` is the one built-in reaction: it calls `dataset.on('change', …)`, pushes the fresh `entries.all` snapshot into the bound viewport, and requests a frame — using nothing a consumer could not use (D-S2-20, D-S2-24). Its handle's `unsubscribe()` is that helper's own word for calling `off`.
 _Avoid_: Attachment (that wires a DOM element; this touches no DOM), Binding (that is `layout/viewport/`'s word for a Gantt's own data contribution to a shared model)
 
-**EntryEdits**:
-A batch of proposed field changes, keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. The shape a caller writes to `dataset.entries.update()`, a transaction hands to the extension hook as `EditRequest.proposed`, and an extender returns as its own extra writes — one shape for "an edit" wherever one appears, rather than a second type per producer.
-_Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an `EntryEdits` against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
+**EntryEdit**, **EntryEdits**:
+The **write** shape. An `EntryEdit` is what a caller passes to `dataset.entries.update(id, edit)` — dates loose (`InstantInput`), Field keys beside core keys, no `id`. `EntryEdits` is a batch of them keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. An `EditExtender` returns one, `mergeEntryEdits` composes two, and `moveEntryTo` builds a single value of one. **A plugin author names no other type to write a cascade** (#209): the extension hook writes exactly what `update()` takes, and core does the rest — the dataset's zone resolves the dates, the `DateOnlyEndRule` decides what a date-only `end` means, and core derives both `proposedKeys` and the envelope. An extender that hand-builds a storage-shaped literal is an API gap, not a style choice.
+_Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an edit against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
+
+**StoredEdit**, **StoredEdits**:
+The **read** shape: the same edit after core read it, with every date an `Instant` and `proposedKeys` stated. `StoredEdits` is the map of them. A plugin author reads these off `EditRequest.proposed` and never builds one; core builds them, at one door — `DatasetState.extraEditsFor` calls the hook's occupant, then `readEdits` (#209 C2/C3). Every `StoredEdit` is a legal `EntryEdit` and the reverse is not, so a forgotten normalization is a compile error rather than a wrong write. A Draft (`layout/gesture-draft.ts`) and `entries.pendingEdits()` hold `StoredEdits` for the same reason: they feed the `TimeScale`, which takes an `Instant`.
 
 **EditRequest**:
-What a transaction hands the extension hook, once per transaction: the current entries plus the caller's proposed edits (`{ entries, proposed }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally.
+What a transaction hands the extension hook, once per transaction: the current entries, the caller's proposed edits, and a lookup for post-body state (`{ entries, proposed, entryAfterEdits }`). `entries` is a `Map`, keyed by `EntryId`, not an array — `EntryStore` already keeps one internally — and it stays the pre-transaction snapshot, so a cascade can still read it to compute a delta. `entryAfterEdits(id)` answers what `id` looks like once this transaction's own body edits land, which is the state a cascade is actually reconciled against (D-S5-45); it is a per-id lookup, not a second map, because the drag preview calls it every rAF frame and must not copy the dataset to answer it (I5).
 
 **EditExtender**:
-The function type that may occupy the extension hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityExtender`, which returns an empty `EntryEdits`.
+The function type that may occupy the extension hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityExtender`, which returns an empty `EntryEdits`. Its writes go in through the same reading `entries.update()` gets, so a Field no Dataset declares is refused (`UnknownFieldError`), an envelope-only write against a several-Segment Entry is refused (`SegmentsOutOfSyncError`, D-S5-44), and `moveEntryTo` is what a cascade writes instead. **One write is dropped in silence: a cascade onto an Entry this same transaction adds.** `diffEdit` finds no base Entry for that id in the committed store, so the cascade produces no changeset rows and the author gets no error. Ruled deferred to S7, tracked as #235 — a known hole, not an oversight to rediscover.
 _Avoid_: ProposalResolver (superseded); EditAdjustment/`{ patch }` (retired 2026-08-27, along with `FieldPatch` — see EntryEdits. Chosen for a plain, usable API now over matching a scheduling-plugin contract that has not been designed yet; S7 makes its own return-shape call when it exists)
 
 ### Scheduling
@@ -182,12 +194,12 @@ Per-parent ordering on a row source (`RowSort`). `field` names a declared Field;
 _Avoid_: Column sort (sort is field-driven, not column-driven)
 
 **Item**:
-A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`.
-_Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity)
+A derived, renderable piece of geometry produced from an Entry for one Segment of its span — most entries produce exactly one Item, but an Entry with Segments produces one Item per Segment. Items are recomputed on every layout pass and never persisted. `Item.id` is deterministic: `${entryId}:${segmentIndex}`. An Item also names the Segment it draws (`segmentId`): `segmentId` is the stored identity carried over from the Segment, while `Item.id` is frame identity, recomputed fresh on every layout pass. An Item that draws an Entry's whole span names no Segment. Which Segments an Item _stands for_ is a second question: the Segment it drew, or every Segment of its Entry when it drew the whole span. The frame **states** that answer — `FrameBar.segmentIds` carries it on the bar (#230) — and `FrameLayout.segmentIdsForItem` answers the same fact for a lookup by id (#212). Both read one cached record of one Entry snapshot, so a reader never re-derives the set from a Dataset of its own.
+_Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not the identity), reading a Segment set off a rendered node's `data-segment-id` (that stamp says what a bar draws right now, not what it stands for, and the layout owns the second question)
 
-**Item emitter**:
-The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; registration is internal in S4 (D-S4-24).
-_Avoid_: Item producer as two words in prose when naming the seam (the type is `ItemProducer`; the glossary term is Item emitter)
+**Item producer**:
+The per-Kind seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Shipped occupants cover `'span'`, `'group'`, and `'milestone'`; a plugin adds one for a consumer-defined kind via `ctx.layout.registerItemProducer` (S5.9, D-S5-22). `wholeEntryItem(entry)` is the public helper for the common case — one Item over the entry's whole span — so a producer reads `(entry) => [wholeEntryItem(entry)]` and no plugin restates the `${entryId}:${segmentIndex}` id convention (review P3).
+_Avoid_: Item emitter (retired name — `registerItemEmitter` was renamed to `registerItemProducer`, Q16)
 
 **Lane**:
 A sub-track within a Row, assigned by the layout pass so that Items whose spans overlap on the same Row are stacked instead of drawn on top of each other. A Lane is a packing result — always derived, never authored.
@@ -202,12 +214,14 @@ The row-level nesting of the timeline grid (parent/child rows via `parentId`). D
 _Avoid_: Group (ambiguous with the `'group'` kind — say "row grouping" or "the `'group'` kind" explicitly); reading `Row.kind: 'header'` as "a `'group'` Entry"
 
 **Rollup**:
-The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. `rollUpKinds: 'none'` (or `[]`) skips derivation so every parent keeps the values the caller assigned. After Field-type merge, a Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass walks the ancestor chains of touched entries only, deepest first (D-S4-8) — one path for shipped and consumer Aggregators alike. It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children of a rolling-up Kind — not `sum` of Instants.
+The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. `rollUpKinds: 'none'` (or `[]`) skips derivation so every parent keeps the values the caller assigned. After Field-type merge, a Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass walks the ancestor chains of touched entries only, deepest first (D-S4-8) — one path for shipped and consumer Aggregators alike. It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children of a rolling-up Kind — not `sum` of Instants. A rolling-up parent's Segments stay inside its rolled-up span, the same envelope invariant (ADR 0010) an authored Entry keeps: any Segment the new span has moved past clamps to the nearest edge, and whichever Segment still misses an edge widens to reach it (#212 R2 fix-plan review).
 _Avoid_: Group rollup (the pass is not tied to the `'group'` Kind, nor to spans — it is per Field, over any rolling-up Kind), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:
-One vertical slice of the grid pane. A Grid column names a Field that declared `column` and carries presentation only — header, width, alignment, cell renderer, editability. A Field with no `column` key is data only: it rolls up and appears in the changeset, and `gridColumns` may not name it. Grid columns belong to the Gantt (`gridColumns`), because which of the columnable Fields this view shows, and in what order, is a view question. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Default `gridColumns` is `['name']`; naming a Field does not add it to the grid by itself.
-_Avoid_: Column on its own (says nothing about which side it is on), Field (a Grid column names one, it is not one), cell (a cell is one Grid column's value on one Row)
+One vertical slice of the grid pane. A Grid column names a Field that declared `column` and carries presentation only — header, width, alignment, cell renderer, editability. A Field with no `column` key is data only: it rolls up and appears in the changeset, and `gridColumns` may not name it. Grid columns belong to the Gantt (`gridColumns`), because which of the columnable Fields this view shows, and in what order, is a view question. Aggregation never lives on a Grid column: a stored value must not depend on whether a column is visible, and the Rollup has already run before any Gantt is built. Default `gridColumns` is `['name']`; naming a Field does not add it to the grid by itself. A cell renderer receives both readings of one cell: `value`, the string the library painted, and `fieldValue`, the same Field value before formatting (review H3) — so a renderer branches on the number and never parses its own output back.
+A **hidden** Grid column is declared but not painted (D-S5-34): `hidden: true` keeps it in `gridColumns`, keeps its width and keeps its place in the order, and takes it out of the grid, the pane width and `resolvedColumns`. `gantt.hideGridColumn(field)` and `gantt.showGridColumn(field)` write that one key, so hiding one column never restates the list and never drops what the user set on the others.
+**A Field has a `key`; a Grid column carries the `field` it shows** (D-S5-37, #194). One name, on every surface a column reaches: `gridColumns`, the `gridColumnsChange` payload, `ctx.view.resolvedColumns()`, a renderer's `ctx.column.field`, and `CommandTarget.field`/`DomTarget.field`. `render/dom`'s own keyed-children key (`CellItem.key`) is a paint key, a different job with its own word.
+_Avoid_: Column on its own (says nothing about which side it is on), Field (a Grid column names one, it is not one), cell (a cell is one Grid column's value on one Row), invisible/collapsed for a hidden column (Visible is the culled region, and Collapse is the row tree's own state), `column.key` / `columnKey` for a column's identity (retired in #194 — the name is `field`)
 
 **GeometryFrame**:
 The complete, backend-neutral description of one rendered state: the visible Rows, the Items' boxes, the Dependency paths, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no consumer render output, no hit-region index, no DOM.
@@ -231,6 +245,10 @@ _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, no
 What one `computeFrame` pass remembers when `FrameLayout` calls it again — today the `RowHeightIndex` and per-row lane-pack results. Passed as the optional second argument to `computeFrame`; not public (D-S4-19).
 _Avoid_: Frame cache as a consumer term (internal lifetime object only)
 
+**Frame settings**:
+The `view/` object holding every live setting that says what one Gantt's next frame draws (`view/frame-settings.ts`) — locale, today line, date lines, row source, the four renderer slots, and the four px sizes read from `--fg-*` custom properties. It owns the one invalidation table: what a changed setting costs is a row there, not a rule each `GanttShell` setter re-derives (#167). `toLayoutInput` is where these meet what a frame contributes fresh (entries, scale, viewport geometry, registries). DOM-free — pixels arrive through an injected reader — so the table is a Node unit test.
+_Avoid_: Frame plan (Row plan is `resolveRows`'s output, and ADR 0004 retired "Plan"; one word, two meanings is #7), Frame options (options are what a constructor takes; these stay live for the Gantt's life)
+
 **Gantt**:
 The public entry point and a whole mounted instance: one `Gantt` wraps one `container` element, one Dataset, and everything needed to render and interact with it. This is the sense used everywhere the specs discuss the product as a whole — D9's "multi-Gantt sync", I2's "two Gantt instances coexist independently", a consumer page that mounts "two Gantts". A `Gantt` _is_ the class; it is also the name of the concept, so `new Gantt(...)` and "a Gantt" mean the same thing.
 _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambiguously, and is retired from the codebase entirely)
@@ -239,8 +257,12 @@ _Avoid_: Chart (see #7 — "chart" used to name both this and `GanttShell`, ambi
 The internal `view/` class a `Gantt` constructs and owns: the composition root that wires the Pane layout, the render backend, and the viewport attachments together (plans/01 §8.2-8.3, S1.8, "the chart shell" in older text). Never public — `exports` is sealed to `api/` and `model/`. A `Gantt` is a thin façade over one `GanttShell`; the shell _composes_ the Grid pane / Timeline pane / Splitter split, `PaneLayout` _holds_ it.
 _Avoid_: Chart, ChartShell (rejected in #7 — "shell" alone doesn't say what it's a shell _of_; `GanttShell` reads correctly even far from its definition)
 
+**Shell wiring**:
+What `api/gantt.ts` hands a `GanttShell` across the layer boundary — `GanttShellOptions.wiring`, one required member holding seven seams (`entryGestures`, `keyboardEditing`, `columnGestures`, `commitEntryEdits`, `buildPluginContext`, `buildCommandContext`, `now`). Every one of them is a collaborator `view/` may not construct for itself: `interaction/` sits above `view/`, and so do the api `Dataset` and the public `Gantt` façade (D-S5-5). Each member stays optional inside `wiring`, so a test drives the shell with nothing wired by writing `wiring: {}` once. Added in 2026-09-04's review (P5): the seven seams sat loose among real configuration, each carrying its own "omitted only by tests" comment, and the contract "`api/gantt.ts` always supplies these" was nowhere in the type.
+_Avoid_: Options, config (a `Gantt`'s own configuration is the rest of `GanttShellOptions` — `theme`, `locale`, `gridColumns`), dependencies (that word is the npm sense in `plans/04` §1 and the scheduling sense in `Dependency`), Ports (a `*Ports` interface is what a module borrows _from_ the shell; wiring is what the shell is _given_)
+
 **Pane layout**:
-The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and one number only — Grid width — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
+The DOM skeleton one Gantt's container is split into: a Grid pane, a Splitter, and a Timeline pane, built and owned by `view/pane-layout.ts`'s `PaneLayout` class (plans/01 §8.3, S1.8). Structure and its own numbers only — Grid width and, since #126, the grid pane's content width (`contentWidth`, driving its horizontal scroller) — no geometry, no scale, no data, no frame, no events. `GanttShell` composes a Pane layout; it does not build panes itself.
 _Avoid_: Layout (Layout, unqualified, is the `layout/` source directory and its pure geometry types — a different concept)
 
 **Grid pane**:
@@ -258,6 +280,10 @@ _Avoid_: Resizer, drag handle (both describe the affordance, not the domain conc
 **Grid width**:
 The Grid pane's width in px — the one number `PaneLayout` owns and the one thing a Splitter drag changes. Public as `gantt.gridWidth`, with the cancelable `beforeGridWidthChange`/`gridWidthChange` pair (S1.8). Spelled two ways on purpose: `gridWidth` in code, where the object it hangs off disambiguates, but `--fg-grid-pane-width` as a CSS custom property, where there is no object to disambiguate and "grid width" alone would read as gridline spacing among other tick/gridline tokens. Both spellings name the same number.
 _Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane"), gutter width (gutter is retired — see Grid pane)
+
+**Row layer**:
+The element the Grid pane's rows live in (`.fg-rows`, `PaneLayout.panes.rows`), and one of the two Mount layers over it (`PluginContext.view.rowLayer`, #158). The Grid pane owns no vertical scrollbar, so this layer follows the Timeline pane's native scroll by one `translateY` per frame (D-S1.8-1), while the pane scrolls horizontally around it (D-S1.8-13). Content presented here travels with the rows on both axes, in the same frame, with no scroll listener of its own — the whole difference from the Overlay, and why the Cell editor and its Refusal notice mount here and a Popup does not. The layer's own rect answers from the layer itself (`rowLayer.bounds`, #168). Beside the rows, never inside one: a row and its cells are `render/dom`'s reconciled DOM.
+_Avoid_: Row container, Scroll layer (the layer is not the scroller — the Timeline pane is)
 
 **Render surface**:
 One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<TSurface>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-container `mount()`, which reserved the row-label gutter inside the paint layer itself.
@@ -361,7 +387,7 @@ The read-only wheel and keyboard motions that change the Viewport and write noth
 _Avoid_: Navigation (that is the motion itself — Preset, Fit, Range, Pan, Anchored zoom — and the `navigationChange` event), interactions (per-entry data gestures)
 
 **Reveal**:
-Bringing a named Entry into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)`). The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the Entry is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Fit existed, since content width equalled pane width.
+Bringing a named Entry or Segment into view — the intent-level verb a consumer uses (`gantt.reveal(entryId)` or `gantt.reveal(segmentId)`, ADR 0010, #212). An `EntryId` reveals the whole envelope, as it always did; a `SegmentId` reveals that one Segment alone. The library resolves the pixel position from the row geometry it already computes; a consumer never converts an index or a row height into a scroll offset. Nearest-edge, not center: a no-op if the target is already inside Visible, otherwise the Pan moves exactly enough to align the nearest off-screen edge. Landed on both axes at S1.9 (D-S1.9-6) — the x half was a no-op before Fit existed, since content width equalled pane width.
 _Avoid_: ScrollTo, scrollIntoView, goTo, center (Reveal is nearest-edge; centering is a deferred, separate policy)
 
 **Batch**:
@@ -389,7 +415,7 @@ The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt
 _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 
 **Date format**:
-How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dedupeHeaderFormats`).
+How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:
@@ -430,9 +456,13 @@ _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, ST
 
 ### Direct manipulation
 
+**Snap**:
+The calendar grid a drag and a keyboard Nudge write onto: a named unit and increment (`{ unit: 'day', increment: 2 }`), `'tick'` for one Tick of the showing ViewPreset, or `'none'` for raw pixel placement. `SnapSetting` is what a caller states — on one preset (`ViewPreset.snap`) or on one Gantt (`gantt.snap`, which wins and survives a zoom, D-S3-24). `SnapUnit` is what one gesture resolved that to, with `'tick'` already read as the showing preset's own Tick and Alt already read as `'none'` (D-S3-12). The live preview always tracks the pointer unsnapped; Snap applies to the value written on commit.
+_Avoid_: snap unit for the stated setting (that is the resolved value), grid, magnet
+
 **Selection**:
-The set of Entry ids a `Gantt` currently highlights — `Gantt.selection` (loose in, branded out, live) — never Item ids, since "this Segment is selected but its siblings are not" means nothing yet (S3, D-S3-10). Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup, never pointerdown, and not at all when the gesture armed into a drag. `Gantt.selectionEntries` re-reads the bound Dataset for each id in `selection`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing.
-_Avoid_: highlight (paint detail, not the authored concept), `selectedItemIds` unqualified (that is `InteractionState`'s paint-side mirror, Item-keyed, never the public word)
+The set of Segment ids a `Gantt` currently highlights (ADR 0010, issue #212, supersedes D-S3-10). The pane a click lands in decides which Segments enter it: a click on the timeline selects the Segment under the pointer; a click in the grid pane selects every Segment of every Entry the row owns, because the grid pane's unit is the row. Ctrl-click adds or removes the Segments one hit names. A shift-range steps over Segments, not over rows: it runs from the anchor Segment to the Segment the pointer landed on, in the order the panes draw them. So a range that ends mid-row stops there, and takes a whole row only when it ends on that row's last Segment. **The Selection owns the drag**: what a gesture moves or resizes is what is selected, and what paints as selected is what moves (#211, D-S4-30, `plans/s5-extensibility-and-editing/spec-211-gesture-units.md`) — this holds true by construction now, since paint and gesture both read the one Segment set. Per-Gantt, not per-Dataset: two Gantts bound to one Dataset can select differently. Written on pointerup for a plain click, ctrl/⌘-click, shift-click, or a miss — never on pointerdown, and not again on the pointerup that follows a drag. The one exception (#211, D-S4-30): a move drag that arms (crosses the drag threshold) on a bar whose Segment the Selection does not already hold writes the Selection to that one Segment the moment it arms — before the drag previews anything — so the draft it moves reads the same set this write just made, rather than a stale or empty one. A primary button writes it; a right-click writes nothing, except on an empty timeline, where the clearing rule holds for either button (`plans/02`, D-S3-10 amendment). The event pair keeps the concept word (`beforeSelectionChange`/`selectionChange`); the public getters name the readings of it, and the suffix is the only difference between them (#113, ADR 0010): `Gantt.selectedSegmentIds` is the Segment ids (loose in, branded out, live, writable); `Gantt.selectedEntryIds` is derived from it — the Entries those Segments belong to, deduped, in row order; and `Gantt.selectedEntries` re-reads the bound Dataset for each id in `selectedEntryIds`, in order, on every access — skipping an id the store no longer has (e.g. after a `remove`) rather than throwing. Internal holders of the id list keep the concept word (`GanttShell#selection`), because no second reading exists there to tell apart.
+_Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` (retired in #185 — paint keyed by Item let the shell guess which bar an Entry drew), `gantt.selectedIds` (retired in #212, ADR 0010 — the name could not say which unit it held once two units, Segment and Entry, existed)
 
 **EntryGesture**:
 The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
@@ -451,8 +481,11 @@ One keyboard step of a selected entry, sized to one resolved snap unit, committe
 _Avoid_: Step (that is Tick stepping), keyboard drag
 
 **Interaction state**:
-The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedItemIds`, `resizableItemId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
-_Avoid_: Selection (that is the public `Gantt.selection` Entry-id set; this is the paint-side mirror)
+The one long-lived, mutable per-Gantt object `RenderBackend.applyState` diffs against (`hoveredItemId`, `selectedSegmentIds`, `resizableEntryId`, `movableItemId`, `preview`, `pendingItemIds`, `cursorX`, `cursorLabel`). `selectedSegmentIds` is the Selection itself, and a backend paints a bar whenever the Selection holds that bar's Segment (ADR 0010, issue #212 — the retired `selectedItemIds` made the shell guess that, and the retired `pickedItemId` is no longer needed once the Selection carries Segments directly). `resizableEntryId` reads the same way (#200): a resize acts on the Entry's envelope, so the backend puts the `start` handle on the Entry's leftmost bar and the `end` handle on its rightmost one. Hot path: class toggles and transforms only, no frame rebuild (I5, D-S3-6).
+_Avoid_: Selection as this object's own word (the Selection is the public `Gantt.selectedSegmentIds` Segment-id set, which this object carries; the rest of it is paint)
+
+**Picked Item** (retired):
+Retired in #212 (ADR 0010). The Selection now holds the Segment the pointer picked, so no second field is needed to say how far a click's paint reaches.
 
 ### Theming and accessibility
 
@@ -461,7 +494,7 @@ The one stylesheet the library ever writes, injected once per document by `ensur
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Token**:
-A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, `--fg-tick-box-floor`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-date-line-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header).
+A `--fg-*` CSS custom property — level 1 of the Customization ladder (`plans/02` §4). Metrics (`--fg-row-height`, `--fg-grid-pane-width`, `--fg-band-height`, `--fg-tick-box-floor`, `--fg-diamond-size`, `--fg-bar-min-width`, …) are read once through `pixel-property.ts` or consumed as CSS `var()` fallbacks; colour Tokens (`--fg-bar-fill`, `--fg-pane-bg`, `--fg-date-line-color`, `--fg-selection-color`, …) are consumed directly by Base stylesheet rules with no JS in between. A consumer overrides any Token by setting the same property on the container element; the shipped default is always the fallback in `var(--fg-x, default)`, never the winner once a consumer has authored a value. `--fg-header-height` retired at S1.12 in favour of `--fg-band-height` (one band, not the whole header). `--fg-diamond-size` (bug hunt, S5 fixes) is a milestone bar's unrotated diamond side — `layout/frame.ts`'s `barSpan` floors a milestone's painted span to this Token's rotated bounding box (`size × √2`), so a consumer resize moves the bar's own hit box and selection outline along with the glyph, never just the glyph alone. `--fg-bar-min-width` (default `DEFAULT_MIN_BAR_WIDTH_PX`, 12) is every kind's own painted-span floor — the same `barSpan`, `max`'d against a milestone's larger diamond floor so the bigger of the two always wins, closing the same unclickable-bar defect for every other kind (#212 follow-up). `FrameBar.minimumSpan` states whether this floor touched a bar; `render/` stamps it `data-span="minimum"`, milestone included.
 _Avoid_: Variable, custom property (accurate but not this project's term of art — say Token), theme variable
 
 **Part**:
@@ -469,7 +502,7 @@ One of the `fg-*` class names the library's DOM structure carries — level 2 of
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`), `data-movable` (grab cursor), `aria-expanded` on `.fg-row-twisty` (collapsed vs expanded), `data-matched` on `.fg-row` (`false` when a filter kept the ancestor only), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BarFlags`'/`LinkFlags`' own keys, D-S1.10-2: `conflict`, `cycle`; on `.fg-date-line` the Today line wrapper writes `today`), `data-kind` (an Entry's Kind), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and, since the bug hunt ("grid row highlight and row click"), on `.fg-row` as well (`selected` only — a row has no hover/pending/drag/ghost paint of its own; the same `--fg-selection-color` Token as the bar's own outline, painted as a background instead so it does not fight cell layout), `data-movable` (grab cursor), `aria-expanded` on `.fg-row-twisty` (collapsed vs expanded), `data-matched` on `.fg-row` (`false` when a filter kept the ancestor only), `data-testid`/`data-row-id`/`data-item-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
@@ -479,20 +512,186 @@ _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a1
 ### Extension
 
 **Capability**:
-Whether a specific gesture (move, resize, select, link) is permitted on a given Entry, resolved once per Entry from its Kind and gating both the gesture itself and any affordance that hints at it (e.g. a resize handle only renders if resize is capable). `select` is a Capability with no visual affordance — I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selection` setter does not consult it (D-S3-9).
+What the user may do to a given Entry, resolved once and gating both the act itself and any affordance that hints at it. It answers two questions, and each writer needs the ones that apply to it: whether a gesture (move, resize, select, link) is **offered** for that Entry, and whether the values that gesture would write **may change** — the second is **Writability** (#256). `select` Capability has no visual affordance, and I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selectedSegmentIds` setter does not consult it (D-S3-9). A **Capability rule** is one entry in the consumer's own `interactions` config. A gesture rule is a boolean or a per-entry predicate (`CapabilityRule`); the write rule (`edit`) takes the cell and may answer "no opinion" (`WriteRule`). `gantt.setCapabilityRule(name, rule)` and `gantt.clearCapabilityRule(name)` write one; assigning `gantt.interactions` replaces them all (D-S5-35, #195).
 _Avoid_: Permission, ability
 
+**Writability**:
+Whether one Entry's one Field may change. That pair is the unit a write names, and the changeset's own shape. `canWrite` resolves it once. Every writer asks it: the cell editor, each resize handle, and the bar move, which needs `start` and `end` alike. `Field.editable` states which Fields are writable at all. `interactions.edit` states which of them are writable on which Entry (#256). That is the per-entry axis a Field declaration has no room for. A Field with no stored home is writable by nobody, whatever the rules say.
+_Avoid_: Editability (reads as "the cell editor only", and drag-resize asks the same answer), permission, read-only
+
+**KindDefaults**:
+The middle precedence layer `resolveCapabilities` reads between the consumer's own `interactions` config and the library's built-in table — a plugin's per-Kind gesture defaults, registered via `ctx.interaction.registerKindDefaults` (S5.9, D-S5-22). A second registration for the same Kind overrides the first while both plugins stay installed. Disposing one removes exactly that registration, in any order. The newest registration still standing then wins.
+_Avoid_: Interactions (that is the consumer's own per-entry config, one precedence layer above this)
+
+**Registration table**:
+The one mechanism behind every `register*` seam a plugin reaches (`layout/registration-table.ts`,
+#154/#155). A key holds a **stack** of live registrations, not one remembered value: the newest
+registration answers `get`, and the `Disposer` a registration hands back removes exactly that
+registration — never a sibling on the same key, in any disposal order. What answers next is the
+newest registration left, and where the table was built with initial pairs (the shipped item
+producers, the core command catalog) that floor is what a key falls back to. It is what lets
+`gantt.plugins` drop one plugin without disturbing another that claimed the same key. The **initial
+pairs** are the floor nothing disposes; **`active()`** is one value per key — the winning ones — in
+first-registration order, which is why it is not called `values()`.
+_Avoid_: Registry (a Registry is a named seam a plugin registers _into_ — `CommandRegistry`,
+`RendererRegistry`, `ItemProducerRegistry`; the table is the mechanism each of them holds), Map,
+Stack (one key holds a stack; the table holds many)
+
+**Renderer slot**:
+What one `ctx.view.registerRenderer` call claims, and the key `RendererRegistry` refuses a second
+claim on. A `cell`, `header` or `tooltip` registration claims its whole point: those three have no
+key to merge on. The `bar` point's per-kind map (D-S5-12) claims one slot **per kind** — `bar:buffer`
+— so a plugin that defines one kind and a plugin that defines another both install (review P2). Two
+plugins that name the same kind still collide, and `RendererAlreadyRegisteredError.slot` names what
+collided. The whole-point form (`registerRenderer('bar', fn)`) stays exclusive: one function answers
+every kind, so it refuses, and is refused by, any per-kind claim.
+_Avoid_: Renderer point as a synonym (a point is `bar`/`cell`/`header`/`tooltip`; a slot is what one
+registration holds, and the `bar` point holds many)
+
+**Decoration**:
+A pure paint a plugin adds without owning an Item or a Renderer slot — a weekend band, a row
+stripe (`layout/decoration.ts`'s `DecorationInput`, D-S5-15). `ctx.view.registerDecoration(layer,
+provider)` registers a `DecorationProvider`, a function of the visible span and rows that states
+time or a `RowId`, never pixels; `layout/decorations.ts` converts through the bound `TimeScale`
+(I12), so a shared axis keeps every Decoration in step. `layer` picks `underBars` or `overBars`,
+and several providers on one layer all paint, in registration order.
+_Avoid_: Overlay, band (both name one _kind_ of Decoration's shape, not the registration mechanism)
+
 **GanttPlugin**:
-The public extension contract: an `id` plus a `setup(ctx)` that returns a disposer. Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
+The public extension contract: an `id` plus a `setup(ctx)` that returns a `Disposer`, or nothing.
+A plugin returns one only for a resource it owns itself — a timer, a socket, a subscription of its
+own. Every `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so
+most plugins return nothing at all (review P4). Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
 _Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
 
 **PluginContext**:
-The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-emitters/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint).
-_Avoid_: Treating this as settled — the plugin system (`GanttPlugin`/`DatasetPlugin`/`PluginContext`) is still design work in progress; the shape, and possibly this name, may change before it lands
+The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint). Every `register*` on it returns a `Disposer` and lives exactly as long as the plugin does; collisions resolve by one policy per seam shape (`plans/02` §4.4, and the Registration table entry above). `view/plugin-ports.ts` declares the whole shape, grouped the way a plugin reads it (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`); `api/gantt.ts` adds `dataset` and `gantt` and nothing else, so a new seam is one edit in one file.
+**Plugin ports**:
+What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns — the **`PluginContextParts`** — plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
+_Avoid_: `PluginContextPorts` (renamed 2026-09-05, issue #183 — `api/index.ts` exports that member
+list so `etc/freegantt.api.md` keeps the plugin surface member by member (#166), which put the one
+public `*Ports` name on the surface. Every other `*Ports` here names one collaborator's seam back into
+its owner and stays private; the plugin's own context is not that. `Parts` names the pieces a
+composite is made of, the way `PlainParts` already does); a flat bag (retired 2026-09-04 — a flat list
+made `api/gantt.ts` re-group every member by hand, so a seam cost three edits in three layers)
+
+**Declarer** (and **authored**):
+Who made a declaration: the library, the consumer, or one named plugin (D-S5-33, issues #162/#181).
+Every `register*` that declares a Field (`ctx.fields.register`) or a Grid column
+(`ctx.view.registerGridColumn`) records the calling plugin's id. **Authored** is the consumer's half
+of that answer, and it is what the consumer's own surfaces report: `gantt.gridColumns` and both halves
+of a `gridColumnsChange` payload carry the columns the consumer wrote, before and after a resize or a
+reorder; `toJSON` writes the Fields the consumer declared. A plugin's declaration is code, and the
+plugin makes it again on its next install, so a Document never carries one. A `PluginStore`'s rows go
+the other way on purpose: they are data the plugin cannot rebuild, so the Document keeps them under
+their owner's id as passenger data (D-S5-24). Data outlives its plugin; a declaration does not.
+_Avoid_: Owner (a `PluginStore` has an owner, which is who may _write_ it; a declarer is who _made_
+one declaration), provenance as a public word (it names the rule, not an API member)
+
+**Propose / Announce**:
+The two verbs a plugin uses to raise the one event pair it owns (`ctx.interaction.proposeEntryEdit`, `ctx.interaction.announceEntryEdit`). **Propose** asks, and the answer is a Veto: `true`/`undefined`, `false`, or an unsettled `Promise` (D-S3-17). The caller must read it. **Announce** tells, after the commit, and returns `void`. `GanttShell#proposeChange` uses Propose in the same sense for every cancelable Gantt-state change.
+_Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing went out, and says nothing about whether a decision comes back; `EventBus.emit` keeps the word for the bus's own mechanism)
 
 **DatasetPlugin**, **EditExtender**, **PluginStore**:
-Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Design proposals only — not yet implemented or landed in `src/`; do not treat as existing API until #15 lands. Named `ProjectPlugin` before ADR 0004.
-_Avoid_: Treating these as settled — the exact shapes are still open design work
+Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Landed in S5.10 (#15, #156). `DatasetPlugin` and its context live in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
+
+**PluginRuntime**:
+The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `GanttPlugin` list (S5.1, D-S5-1/D-S5-3). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `setup()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `setup()` throw unwinds only the batch just added, leaving the previously installed set untouched.
+_Avoid_: PluginHost (retired — "Host" is repo-wide retired vocabulary, see Consumer)
+
+**Command**:
+One named, invokable action a `CommandRegistry` holds — `id`, an optional `label`, an optional
+`when(ctx)` that gates whether it runs right now, and `run(ctx)` (`api/command.ts`'s `CommandOf`,
+S5.2, D-S5-6). The library's own core catalog and a plugin's own commands are both just Commands;
+a context menu item and a keybinding both resolve to one, so either can invoke the same action.
+_Avoid_: Action (too generic — this repo's own word for one is Command), Menu item (a context menu
+item is one _use_ of a Command, not the Command itself)
+
+**Command registry**:
+The `extensions/commands.ts` class (`CommandRegistry`) a `GanttShell` builds once and holds privately: `register`/`run`/`available`, keyed by a command's own `id` under the `freegantt.*`-namespaced core catalog (`view/core-commands.ts`) or a plugin's own id (D-S5-6). Public as `Gantt.commands`, typed against the api-level `CommandRegistryOf`. `run()` on a command whose `when` declines is a silent no-op, the same posture a disabled menu item takes; `run()` on an unknown id throws.
+_Avoid_: Command palette (a UI a consumer could build on top of `available()`; no such UI ships)
+
+**Keymap**:
+The `extensions/keymap.ts` class that resolves a `KeyboardEvent` against every registered chord, newest-first (D-S5-7): the innermost, most-recently-registered binding wins, which is why a plugin's binding beats core's and a popup's own Escape dismissal beats an outer binding (D-S5-9). Chords are parsed once at registration, never per event. Holds two kinds of entry — a `KeyBinding` naming a Command registry id, and a command-less `registerHandler` callback (C3) — resolved by the same pass and gated by the same editable-target/IME rule either way.
+_Avoid_: Key handler (that names one registered entry, not the resolver that owns all of them)
+
+**Mount layer**:
+The one shape a plugin mounts content into (`view/mount-layer.ts`'s `MountLayer`, #168): `present(node)`, `onResize(callback)`, and the layer's own `bounds`. A Gantt has exactly two — the Overlay and the Row layer — and the difference is the instance, never the interface. Reposition-on-resize belongs to whatever you mounted into, so both carry `onResize`, over one shared `ResizeObserver` per Gantt (`ContainerResize`, issue #137 F9). Before #168 there were two interfaces and only one had `onResize`, so the Cell editor mounted in one layer and borrowed the resize signal from the other.
+_Avoid_: Overlay handle (retired — a one-field wrapper is the inner type, so `present` returns a plain Disposer), Host, Portal
+
+**Overlay**:
+One absolutely positioned layer over the Gantt's Container, owning its own stacking order and lifetime (S5.3, D-S5-8). It is the Mount layer that **escapes the pane box**, which is the whole difference from the Row layer. `PluginContext.view.overlay` hands a third-party plugin the exact same seam a built-in Popup is built over. Geometry and identity are the Gantt DOM's, not the Overlay's: `bounds`, `paneBounds`, `contains` and `elementForEntry` moved to `ctx.view.dom` in 2026-09-04's review (N1), because `overlay.elementForEntry(id)` returned a timeline bar that was never in the overlay — one word covering two concepts, the #7 failure. The layer's _own_ rect is the exception, and stayed with it (`overlay.bounds`, #168).
+_Avoid_: Layer (too generic — Overlay is this one specific layer, not the render/dom layer stack); reading `Overlay` as "everything positioned about the Gantt" (that is the Gantt DOM)
+
+**OverlayHost** (retired name):
+The plan-stage name for this layer, before S5.3 shipped it (`plans/s5-extensibility-and-editing/s5.3-overlay-and-popup.md`). It shipped as the **Overlay** instance of the shared **Mount layer** shape instead, so a plugin author names `MountLayer`/`ctx.view.overlay`, never `OverlayHost`.
+_Avoid_: Treating this as the shipped name — see Overlay, Mount layer
+
+**Gantt DOM**:
+This Gantt's own rendered DOM, read as questions (`view/gantt-dom.ts`'s `GanttDom`, `ContainerDom`; public as `ctx.view.dom`). Three of them: `owns(node)` — is this event mine (I2); `targetUnder(node)` — what is this node; `barFor(id)` / `cellFor(id, field)` — where is this entry's element. It also carries `bounds`, `paneBounds` and `cellText(cell)`. It exists because `extensions/` may not import `render/` (D-S5-5), so every class name crossing that boundary is a contract: `render/dom/dom-contract.ts` declares them, `view/gantt-dom.ts` is the only reader, and `view/gantt-dom.test.ts` paints a real frame and asserts the two still agree. Before it, a plugin retyped eight `.fg-*` selectors and three `data-*` keys, and a rename broke every plugin with a green build.
+_Avoid_: Overlay (that is the mount layer only — see above), DOM helper, selectors
+
+**Pane of a node**:
+`GanttDom.paneOf(node)` (#177): which Pane holds a node — `'grid'`, `'timeline'`, or neither. It answers by element identity, so it is a `contains` check and reads no layout. Pair it against Pane bounds, which answers the _geometric_ question: an ownership question ("whose scroll was that", "which pane did the user act in") goes to `paneOf`; a placement question ("where do I flip and clamp this box") goes to `paneBounds`. Asking geometry about ownership is what kept a Popup's scroll dismissal unscoped, and cost it three `getBoundingClientRect` calls per scroll event anywhere in the document.
+
+**DOM target**:
+What one node in a Gantt's own DOM stands for — `{ kind, element, entry?, entryIds, segmentIds, field? }`, returned by `ctx.view.dom.targetUnder(node)`. `kind` is `model/`'s **TargetKind** (`'row' | 'cell' | 'bar' | 'header' | 'splitter'`), the same union `CommandTarget.kind` uses: one vocabulary for "what did this land on", so a resolved right-click fills a `CommandContext.target` with no translation. The object is frozen and memoized on the element it came from, so a pointer resting on one bar allocates nothing (I5).
+It answers two questions about Entries, because a Row may own several (#185, #199). The **subject** is `entry` — the one Entry whose Fields this node's content shows, which a tooltip describes and the Cell editor anchors on, and which `data-entry-id` names on a row. `entryIds`, alongside `segmentIds` (ADR 0010), is everything the node stands for, and is what an action on the node acts on: for a bar the two agree, and for a row (and every cell of that row) the subject is the row's first Entry while `entryIds`/`segmentIds` name every Entry and Segment the row owns. Both sets come from one read surface, `FrameLayoutView` (`layout/frame-layout.ts`, #230 R3) — `entryIdsForRow` for the Entries, and `segmentIdsForItem` or `segmentIdsForRow` for the Segments. `ContainerDom` holds that one surface rather than a closure per question, so a reader never re-derives either set, and the pointer path and the gesture path can never answer differently. `CommandTarget` carries the same pair, and has no `rowId`: that name said Row and meant Entry. Its `entryIds` is the same word but not always the same set (#199): a `DomTarget` states a DOM fact, and a `CommandTarget` states what the command acts on. A right-click resolves the second from the first and the Selection — the Selection when the thing you clicked is part of it, and the thing you clicked when it is not.
+_Avoid_: HitResult (that is `render/backend.ts`'s own point-based answer, `{ itemId, edge? }` — a different question), a second `*Target` union, `rowId` for an Entry id (retired in #199 — this repo has a real `RowId` brand)
+
+**Acted-on** (ADR 0010, issue #212):
+What one invocation acts on — `CommandTarget`'s `{ segmentIds, entryIds }`, resolved once and read by every path (pointer, context menu, keyboard chord). `entryIds` is a projection of `segmentIds`: the Entries those Segments belong to, deduped, in row order. No command declares its reach: Delete reads `segmentIds`, Lock reads `entryIds` because a lock is a property of the record and not of one drawing of it, and neither command can disagree with the other since both read the one resolution.
+_Avoid_: `actsOn` as a per-command declaration (considered and rejected, ADR 0010 — a declaration adds a state to describe, a default to argue about, and a way for two commands to disagree)
+
+**Scoped DOM listener**:
+`ctx.view.onDomEvent(type, handler, options?)` — one `document` listener, kept to the events this Gantt owns, handing the handler the resolved DOM target and filing its own removal (capture flag included) in `ctx.disposables`. Added in 2026-09-04's review (A4): eleven hand-written `document` listeners each wrote the "is this my Gantt?" guard themselves, and `inlineEditing()`'s `scroll` listener had no guard at all. A listener that must hear events _outside_ its Gantt — a dismiss-on-outside-pointer — is the one exception, and `extensions/popup.ts` is the only place that takes it.
+_Avoid_: `on`/`off` (those name the Gantt event bus — a different mechanism with a different vocabulary)
+
+**Cell editor**:
+The in-place editing control `inlineEditing()` opens over one Grid cell (S5.8, D-S5-19/D-S5-20; `CellEditorSession`, `.fg-cell-editor`). One open at a time. Not a Popup: it owns a live `<input>` end to end, it mounts in the Row layer so the pane's own scroll carries it (#158), and a refused commit keeps it open in the invalid state instead of dismissing it (#137 F5). In the invalid state the editor shows a discard button and names its reason on the wrapper, so Escape is not the only exit (D-S5-47).
+_Avoid_: Inline editor (names the feature — `inlineEditing()` — not the one control it opens), Field editor (a Field is what a value is; this edits one cell of one entry)
+
+**Discard**:
+Closing an open Cell editor and writing nothing (`inlineEditing()`, S5.8, D-S5-47). Escape discards, and so does the `freegantt.discardCellEdit` command and the button the editor shows in the invalid state. The stored value never changed, so a discard restores nothing and produces no ChangeSet, no event and no undo step.
+_Avoid_: Cancel (the library refusing a ChangeSet is a Veto — ADR 0006; the pointer machine's own `cancel` abandons a drag), Revert (that is what undo does to a value already written — see `data/`), Close (an editor closes on a commit too, which writes)
+
+**Popup**:
+The `extensions/popup.ts` anchoring/flipping/clamping/dismissal primitive (S5.3, D-S5-8/D-S5-9) built on `ctx.view` alone — the Overlay it mounts in, plus the Gantt DOM's rects it places against. One implementation serves the tooltip and the context menu. The Cell editor is deliberately not a consumer: it needs a live, listener-attachable control rather than a static Element description, and it follows a scroll rather than dismissing on one (#158). `open()` while already open replaces the current popup (closes it first). Dismisses on Escape (folded into the shared Keymap, C3), an outside pointer, a scroll of the anchor's own pane, or blur, per its `dismissOn` option.
+_Avoid_: Tooltip, Menu (both are one consumer of this shared primitive, not the primitive itself)
+
+**Dismiss trigger**:
+Why a Popup closed _itself_: `'escape' | 'outsidePointer' | 'scroll' | 'blur'`. `PopupOptions.dismissOn` names which ones apply; `PopupOptions.onDismiss(trigger)` tells the owner which one fired, after the close. A `close()` the owner called is not a dismissal and never fires it — the owner already knows. Added in 2026-09-04's review (C3): without it an owner either leaked its listeners or polled `isOpen` on every click in the page, and `createPopup` is public, so every third-party plugin inherited that choice.
+_Avoid_: Close reason, dismissal cause (the type is `DismissTrigger` — one name)
+
+**DisposableStore**:
+The `extensions/disposables.ts` collection of cleanup callbacks a `PluginRuntime` or a Popup accumulates and frees together with one `disposeAll()` call; latches after disposal (cannot be reused — a fresh instance replaces it instead, e.g. `Popup.close()`). Deliberately reuses "Store" outside `data/`'s own sense (a normalized entity collection like `Dataset.entries`) — spec-mandated name (S5.1); the two senses do not overlap in any one file, so no rename is planned.
+_Avoid_: Confusing with `data/`'s Store sense — see above
+
+**ElementDescription**:
+The plain, DOM-free data shape (`layout/` — `render/dom/element-description.ts`'s `buildElement` is its one-shot build function, S5.3/D-S5-10) describing a node's tag, attrs/class/style, and text-or-`html`-or-keyed-children content. The one seam `extensions/` has into the reconciler, since it may not import `render/dom` itself (D-S5-5): a Popup or a plugin builds one and hands it to `ctx.view.renderElement()`. Raw `html` is explicit opt-in only (I13); `text` is always `textContent`.
+_Avoid_: Vnode, template (both imply a framework-shaped diffing/compilation step this plain data shape does not have)
+
+### Errors
+
+**Refusal**:
+The library saying no on purpose — a `beforeChange` veto, a capability that resolved false, a value a Field cannot read back, a gesture a plugin declined. A Refusal is the library working correctly, so it reports at `severity: 'info'` and is never a Fault. Core is the only thing that can observe one: `transaction.ts` throws `MutationCancelledError` after `beforeChange` returns false, and a plugin's own handler ran beside the vetoing one and never learns the outcome (ADR 0009). Three type families carry one, at three layers, and no single type joins them. `RefusalNote` (`data/event-bus.ts`, re-exported by `view/event-bus.ts`) holds the words a `before*` handler wrote through `refuse(reason)`. `GestureRefusal` (`view/gesture-pipeline.ts`) is what one refused move or resize reports. `CellEditorCommitRefusal` (`extensions/features/inline-editing.ts`) names why a cell editor's commit left the editor invalid; "Commit" names the act there, the one sense ADR 0006 keeps the word for. `buildRefusalReport` (`data/error-reporting.ts`) is the one builder that turns a refused `before*` veto into an `ErrorReport`, so `severity: 'info'` and `by: 'consumer'` are stated once and no raise site restates them. All four are internal — none of them reaches `etc/freegantt.api.md`.
+_Avoid_: Error (the concept is not an error, even though it travels on the `error` event — see Severity), rejection, denial, failure (nothing failed)
+
+**Error report**:
+One `ErrorReport` — what the `error` event carries on both the Dataset and the Gantt: `at`, `code`, `message`, `severity`, `by`, and the optional `entryId`, `field` and `cause`. It is a notification record, never something a consumer catches — the thrown class is `FreeGanttError`, a different thing with a near-identical name. Core raises reports and retains none: there is no `gantt.errors` array, because the cap, the overflow rule and the dedupe are the consumer's policy (ADR 0009). `by` names who refused — `'core'`, `'consumer'`, or a `PluginId` — because `origin` and `source` are both already spoken for.
+_Avoid_: Problem, diagnostic (Diagnostic is the scheduling engine's own word — see above), log entry (nothing is logged), GanttError (one letter from `FreeGanttError`, which is the class you catch)
+
+**Severity**:
+How bad an Error report is: `'info'` — a Refusal, so nothing is broken; `'warning'` — degraded but recovered, such as a renderer that threw and fell back to the default output, or a Document key dropped on read; `'error'` — something broke and nothing caught it. Three levels rather than a `'refusal' | 'fault'` pair, because those are two different things and not two levels, and a field named `severity` whose values are not severities would cover two concepts with one word. Telemetry routes on `severity !== 'info'`; a toast styles on all three.
+_Avoid_: Level, kind (Kind classifies an Entry — `EntryKind`, `TargetKind`, `RollUpKinds` all claim it), category, `'fault'` as a stored value (it is the shape of `'warning'` and `'error'`, not a level of its own)
+
+**Error feed**:
+`ErrorFeed` (`api/watch-all-errors.ts`) — the structural shape a Dataset and a Gantt both satisfy: an `on`/`off` pair for the `error` event. `watchAllErrors(feeds, handler)` subscribes `handler` to every feed once and returns one `Disposer` that unsubscribes all of them. It de-duplicates by emitter identity, so `[dataset, gantt1, gantt2]` sharing one Dataset object subscribes that Dataset once. `gantt1` and `gantt2` still each report through their own feed.
+_Avoid_: Listener, subscription (both name the mechanism, not the thing subscribed to), error stream (nothing streams — each feed raises discrete reports)
+
+**Refusal notice**:
+What a cell mounts when it will not open an editor and owes the user a reason (`inlineEditing()`, S5.8). It is the same `.fg-cell-editor` wrapper the editor itself mounts, in the same Row layer (#158), carrying `data-state="invalid"`, `data-reason="<key>"`, the reason as its text and the same words as its `title`. It mounts no control, takes no focus, and sets `pointer-events: none`, so the next double-click reaches the cell below it. Five things clear it: the next pointer press in this Gantt, Escape, a scroll, a Dataset change, and the next open. `inline-editing.ts`'s `REFUSAL_TEXT` holds every message, so no call site spells one. Which refusals speak and which stay silent is one seven-row table in [`s5.8-inline-editing.md`](plans/s5-extensibility-and-editing/s5.8-inline-editing.md) §1, under one rule: a cell that offers no editor refuses in silence, and a cell that offers one and cannot open it here names the reason. Added in 2026-09-04's review (SP1): four different refusals all looked like a dead double-click.
+_Avoid_: Error for the notice itself (nothing is broken — the cell is stating a rule), warning, tooltip (a Tooltip is a hover affordance built on Popup; a refusal notice answers one action and is not a Popup at all). A Refusal does travel on the `error` event, at `severity: 'info'` — the payload carries the distinction this line protects (ADR 0009).
 
 ### Process
 

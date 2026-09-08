@@ -18,10 +18,7 @@ import type { ViewPreset } from './scale.js';
  * 32 }` until this check caught it). */
 function validatePresetTickWidths(preset: ViewPreset): void {
   if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
-    throw new InvalidPresetError(
-      `preset "${preset.id}": minTickWidthPx (${preset.minTickWidthPx}) exceeds preferredTickWidthPx ` +
-        `(${preset.preferredTickWidthPx}) — the floor would be unreachable at the preset's own preferred zoom`,
-    );
+    throw new InvalidPresetError(preset.id, preset.minTickWidthPx, preset.preferredTickWidthPx);
   }
 }
 
@@ -62,9 +59,10 @@ export const dayPreset: ViewPreset = freezePreset({
   headers: [{ unit: 'day', increment: 1, format: DAY_FORMAT }],
   preferredTickWidthPx: 112,
   // S1.12, D-S1.12-3, revised (header readability follow-up): a lone day band's label is the full
-  // "Sep 21, 2026" — nothing coarser above it to dedupe against — and that clips below 96px at a
-  // 12px tick label. Multi-band presets below don't need this much: `dedupeHeaderFormats` leaves
-  // their day band showing only the day number once a coarser band already states the month/year.
+  // "Sep 21, 2026" — nothing coarser above it to drop granularity against — and that clips below
+  // 96px at a 12px tick label. Multi-band presets below don't need this much:
+  // `dropRepeatedGranularity` leaves their day band showing only the day number once a coarser band
+  // already states the month/year.
   minTickWidthPx: 96,
 });
 
@@ -150,8 +148,8 @@ export const hourDayWeekPreset: ViewPreset = freezePreset({
     { unit: 'hour', increment: 1, format: formatHour },
   ],
   preferredTickWidthPx: 56,
-  // Floors the hour band exactly like `hourPreset` — the week/day bands above it dedupe away their
-  // year/month and stay legible at far less width (header readability follow-up).
+  // Floors the hour band exactly like `hourPreset` — the week/day bands above it drop repeated
+  // granularity (year/month) and stay legible at far less width (header readability follow-up).
   minTickWidthPx: 48,
 });
 
@@ -165,8 +163,8 @@ export const dayWeekMonthPreset: ViewPreset = freezePreset({
     { unit: 'day', increment: 1, format: DAY_FORMAT },
   ],
   preferredTickWidthPx: 32,
-  // The day band dedupes to a bare day number under the month band above it — "21" needs far less
-  // room than a full date (header readability follow-up).
+  // The day band drops its repeated granularity to a bare day number under the month band above it —
+  // "21" needs far less room than a full date (header readability follow-up).
   minTickWidthPx: 28,
 });
 
@@ -235,6 +233,6 @@ export function resolvePreset(ref: PresetRef): ViewPreset {
     return ref;
   }
   const preset = presets[ref];
-  if (!preset) throw new UnknownPresetError(ref);
+  if (!preset) throw new UnknownPresetError(ref, Object.keys(presets));
   return preset;
 }

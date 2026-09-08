@@ -76,12 +76,12 @@ test('dragging the end handle resizes the bar', async ({ page }) => {
 
 // Regression: after a resize commit, the resized entry commonly stays both hovered (the pointer is
 // still sitting over it) and selected. `GanttShell#refreshAffordances` only repaints the handle pair
-// when `resizableItemId`'s identity changes — it stays the same item across the commit in that case,
+// when `resizableEntryId`'s identity changes — it stays the same Entry across the commit in that case,
 // so the gate alone left the handle pair glued to its pre-commit position while the bar itself
 // repainted at its new, wider geometry. A second resize attempt at the bar's new visible edge then
 // hit nothing, because the real (invisible) handle was still sitting at the old edge. Fix: the
 // handle pair's geometry now tracks `syncBars` every frame in `render/dom/index.ts`'s `sync()`, the
-// same way a bar's own transform does, not just on `resizableItemId` identity change.
+// same way a bar's own transform does, not just on `resizableEntryId` identity change.
 test('a second resize at the bar edge still works after the entry stays selected from the first', async ({
   page,
 }) => {
@@ -97,4 +97,79 @@ test('a second resize at the bar edge still works after the entry stays selected
   await dragBarEndEdgeBy(page, bar, 60);
   const afterSecond = (await bar.boundingBox())!;
   expect(afterSecond.width).toBeGreaterThan(afterFirst.width);
+});
+
+/** Drags from the bar's own visible left edge — the symmetric case of `dragBarEndEdgeBy`. */
+async function dragBarStartEdgeBy(
+  page: import('@playwright/test').Page,
+  bar: Locator,
+  dx: number,
+): Promise<void> {
+  const box = (await bar.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.move(box.x, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + dx, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+}
+
+/** The committed span for `entryId`, read back through the public Dataset — the one ground truth
+ *  for what a drag actually wrote, as opposed to what the bar's own (possibly stale) box reports. */
+async function committedSpan(
+  page: import('@playwright/test').Page,
+  entryId: string,
+): Promise<{ start: number; end: number }> {
+  return page.evaluate((id) => {
+    const entry = window.__dataset.entries.get(id)!;
+    return { start: Number(entry.start), end: Number(entry.end) };
+  }, entryId);
+}
+
+// #240: dragging one edge past the opposite one must never commit `end < start` —
+// `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge to zero length (D-S5-46 keeps
+// that legal), never past it. `data-item-id` is `${entryId}:${segmentIndex}` (`model/ids.ts`'s
+// `itemId`), so the bar's own attribute is the DOM→Entry trust boundary — no re-derivation of that
+// mapping here.
+test('dragging the end handle past start commits a zero-length span, never an inverted one (#240)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const bar = await visibleResizableBar(page);
+  const box = (await bar.boundingBox())!;
+  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+
+  // Past the bar's own start, and well past — this must clamp, not overshoot into an inversion.
+  await dragBarEndEdgeBy(page, bar, -(box.width + 400));
+
+  const after = await committedSpan(page, entryId);
+  expect(after.end).toBeGreaterThanOrEqual(after.start);
+});
+
+test('dragging the start handle past end commits a zero-length span, never an inverted one (#240)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const bar = await visibleResizableBar(page);
+  const box = (await bar.boundingBox())!;
+  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+
+  await dragBarStartEdgeBy(page, bar, box.width + 400);
+
+  const after = await committedSpan(page, entryId);
+  expect(after.end).toBeGreaterThanOrEqual(after.start);
+});
+
+test('a second end-handle drag after the first clamps to zero length still refuses to invert (#240)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const bar = await visibleResizableBar(page);
+  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+  const box = (await bar.boundingBox())!;
+
+  await dragBarEndEdgeBy(page, bar, -(box.width + 400)); // clamps to zero length
+  await dragBarEndEdgeBy(page, bar, -50); // dragging further left from an already zero-width bar
+
+  const after = await committedSpan(page, entryId);
+  expect(after.end).toBeGreaterThanOrEqual(after.start);
 });

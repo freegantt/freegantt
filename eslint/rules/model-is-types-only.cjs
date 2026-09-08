@@ -11,7 +11,13 @@ const IDENTITY_CAST_HELPERS = new Set([
   'dependencyId',
   'rowId',
   'itemId',
+  'itemIdFromDataset',
+  'rowIdFromDataset',
+  'entryIdFromDataset',
+  'segmentIdFromDataset',
   'changeSetId',
+  'segmentId',
+  'mintedSegmentId',
 ]);
 
 /** Readers of an ItemId (D-S4-25). They parse; they are not identity casts. */

@@ -1,13 +1,13 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
-import type { Entry, EntryEdits, EntryId } from '../model/index.js';
+import type { Entry, EntryId, StoredEdits } from '../model/index.js';
 import { overlayStoredEdit } from './fields/field-access.js';
 
 export function buildEffectiveEntries(
   committed: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
-  proposed: EntryEdits,
+  proposed: StoredEdits,
 ): ReadonlyMap<EntryId, Entry> {
   const map = new Map(committed);
   for (const entry of removed) map.delete(entry.id);
@@ -17,6 +17,40 @@ export function buildEffectiveEntries(
     if (current) map.set(id, overlayStoredEdit(current, edit));
   }
   return map;
+}
+
+/** The entries `ids` names, as this transaction's body leaves them. Builds one entry per named id
+ *  instead of copying the whole dataset, because the drag preview runs this on every frame and the
+ *  hot path allocates only what it uses (I5). `buildEffectiveEntries` above stays the commit path's
+ *  form: a commit must also apply `added` and `removed`, which a per-id read cannot see. */
+export function effectiveEntriesFor(
+  committed: ReadonlyMap<EntryId, Entry>,
+  proposed: StoredEdits,
+  ids: Iterable<EntryId>,
+): ReadonlyMap<EntryId, Entry> {
+  const map = new Map<EntryId, Entry>();
+  for (const id of ids) {
+    const current = committed.get(id);
+    if (current === undefined) continue;
+    const edit = proposed.get(id);
+    map.set(id, edit === undefined ? current : overlayStoredEdit(current, edit));
+  }
+  return map;
+}
+
+/** `id` as `proposed` leaves it, without allocating a map to answer it — `EditRequest.entryAfterEdits`
+ *  (D-S5-45)'s own implementation for a preview frame, where `effectiveEntriesFor` above (built for a
+ *  named few ids at once) would still allocate a one-entry `Map` on every call. `overlayStoredEdit`
+ *  itself allocates only when `id` actually has an edit pending. */
+export function entryAfterEdits(
+  committed: ReadonlyMap<EntryId, Entry>,
+  proposed: StoredEdits,
+  id: EntryId,
+): Entry | undefined {
+  const current = committed.get(id);
+  if (current === undefined) return undefined;
+  const edit = proposed.get(id);
+  return edit === undefined ? current : overlayStoredEdit(current, edit);
 }
 
 export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {

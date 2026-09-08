@@ -64,6 +64,59 @@ test('resizing the window re-fits the axis (#8)', async ({ page }) => {
   expect(Math.abs(after - paneWidth)).toBeLessThan(2);
 });
 
+// #139: dragging the splitter to the right used to open dead space beside the last column, because
+// nothing capped the grid pane at its own content. The drag now stops at the last column's right
+// edge — the pane can still be dragged narrower, and the columns then overflow and scroll (#126).
+test('the splitter stops at the last column instead of opening dead space (#139)', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const columnsWidth = await page
+    .locator('#gantt .fg-col-header')
+    .evaluateAll((cells) => cells.reduce((sum, cell) => sum + cell.getBoundingClientRect().width, 0));
+  const gridPane = page.locator('#gantt .fg-grid-pane');
+  const paneWidth = async (): Promise<number> => gridPane.evaluate((el) => el.clientWidth);
+
+  // The page asks for `gridWidth: 'fitColumns'` (#157), so the pane opens on its columns' edge
+  // before the first paint rather than on a number the page hand-computed.
+  expect(await paneWidth()).toBe(columnsWidth);
+
+  // Narrower is always legal: the columns overflow and the pane scrolls to reach them (#126).
+  await dragSplitterBy(page, -200);
+  expect(await paneWidth()).toBeLessThan(columnsWidth);
+  expect(await gridPane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeGreaterThan(0);
+
+  // Dragging back out stops hard against the columns' edge, not 600px past it.
+  await dragSplitterBy(page, 600);
+  expect(await paneWidth()).toBe(columnsWidth);
+  expect(await gridPane.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+});
+
+// #157: `gridWidth: 'fitColumns'` is a standing instruction, not a width read once. The harness
+// toggles its Budget column at runtime, which is the honest test — a real column set changing under
+// a pane that was never told a number.
+test("'fitColumns' re-measures when the column set changes (#157)", async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const gridPane = page.locator('#gantt .fg-grid-pane');
+  const paneWidth = async (): Promise<number> => gridPane.evaluate((el) => el.clientWidth);
+  const columnsWidth = async (): Promise<number> =>
+    page
+      .locator('#gantt .fg-col-header')
+      .evaluateAll((cells) => cells.reduce((sum, cell) => sum + cell.getBoundingClientRect().width, 0));
+
+  const withBudget = await paneWidth();
+  expect(withBudget).toBe(await columnsWidth());
+
+  await page.locator('#toggle-budget-btn').click();
+  await expect.poll(paneWidth, { timeout: 2000 }).toBeLessThan(withBudget);
+  expect(await paneWidth()).toBe(await columnsWidth());
+
+  await page.locator('#toggle-budget-btn').click();
+  await expect.poll(paneWidth, { timeout: 2000 }).toBe(withBudget);
+});
+
 // U1/U4 (plans/s1.8-pane-layout/README.md §0): dragging the splitter moves both panes live, and
 // re-fits the time axis with no reload and no explicit render()/setPaneSize() call from the test —
 // the timeline pane's own ResizeObserver is the only thing that has to fire.
@@ -77,12 +130,14 @@ test('dragging the splitter re-fits the axis with no other call (U4)', async ({ 
   const gridWidthBefore = await page.locator('.fg-grid-pane').evaluate((el) => el.clientWidth);
   const contentRightBefore = await contentSizerRight(page);
 
-  await dragSplitterBy(page, 120);
+  // Drags left: this page's grid pane already sits at its columns' own edge, and #139 will not let
+  // a drag take it past that, so leftward is the direction that still moves it.
+  await dragSplitterBy(page, -120);
 
   const gridWidthAfter = await page.locator('.fg-grid-pane').evaluate((el) => el.clientWidth);
-  expect(gridWidthAfter).toBeGreaterThan(gridWidthBefore);
+  expect(gridWidthAfter).toBeLessThan(gridWidthBefore);
 
-  // The timeline pane shrank, so fitDataset re-fits pxPerMs down — the sizer's right edge moves
+  // The timeline pane grew, so fitDataset re-fits pxPerMs up — the sizer's right edge moves
   // with no call this test made beyond the drag itself.
   await expect.poll(async () => contentSizerRight(page), { timeout: 2000 }).not.toBe(contentRightBefore);
 

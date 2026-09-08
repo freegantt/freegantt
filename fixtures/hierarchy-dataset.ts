@@ -85,8 +85,22 @@ export const hierarchyFieldOptions = {
               maximumFractionDigits: 0,
             }).format(value)
           : '',
+      // S5.8, D-S5-20, issue #137 F12: `formatValue` is not invertible in general (a
+      // currency-formatted "$1,234" cannot be parsed back without knowing the format that
+      // produced it) — the library ships no default. This is the harness's own inverse of the
+      // `formatValue` above, so `inlineEditing()`'s cost cell is editable in the demo.
+      parseValue: (text: string): number | undefined => {
+        const n = Number(text.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : undefined;
+      },
+      // #142: `editable` moved off the Grid column onto the Field — one home for whether
+      // `inlineEditing()`'s cost cell opens.
+      editable: true,
       column: { align: 'end' as const, header: 'Cost' },
     },
   },
+  // #142: `end` keeps its demo purpose — a column closed on purpose, not by omission (the harness
+  // page's own copy: "End stays read-only on purpose: a column is editable only when you say so").
+  // `CORE_FIELDS.end` now defaults to editable, so this page states the override itself.
   fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
 } as const;

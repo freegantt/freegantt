@@ -137,7 +137,18 @@ ledger row can now be written.
 
 ---
 
-## OQ8 — "Occupies the hook **exclusively**" — does the scheduling plugin *own* the slot, or is the slot simply *single-occupant*?
+## OQ8 — **CLOSED** — the slot is single-occupant; installing composes
+
+**Closed as reading (b), in S5.10 (2026-09-04)** — `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`
+D-S5-23. `ctx.edits.setExtender(wrap)` takes an `ExtenderWrapper`, so a plugin receives the current
+occupant and adds to it. D4's sentence now reads *"the hook has one occupant at a time; a scheduling
+plugin is one candidate occupant, with no special claim on it"*, and the same correction landed in
+`CLAUDE.md`, `plans/01` §7 and `plans/03` §S3, with a superseding note on ADR 0002.
+`EditExtenderConflictError` was never written: there is no conflict to report when installing composes.
+Wrapping order is the order `requires` resolves, never the `plugins` array's own order (D-S5-31) — the
+one correction to the reasoning below, which assumed the install site's order.
+
+The question as it stood:
 
 **Blocks:** nothing in S2 — S2 ships the hook as one internal field with one call site (D-S2-6) and is
 compatible with either answer · **Decides:** S3's installation API (#15), and the wording of a locked

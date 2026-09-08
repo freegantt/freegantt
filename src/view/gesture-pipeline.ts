@@ -6,36 +6,73 @@
 // "Host" is a retired word, D-S1.11-6/#64, for smuggling two concepts under one name.)
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
-import type { ItemPreview, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
-import type { Entry, EntryEdits, EntryId, ItemId, TimeSpan } from '../model/index.js';
-import { itemId, segmentIndexOfItem } from '../model/index.js';
-import { identityExtender, type EditExtender } from '../data/edit-extension.js';
+import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
+import type {
+  Entry,
+  EntryId,
+  ErrorCode,
+  ItemId,
+  RaiseError,
+  Refusable,
+  SegmentId,
+  StoredEdits,
+} from '../model/index.js';
+import { itemId } from '../model/index.js';
+import type { EditRequest } from '../data/edit-extension.js';
+import { buildRefusalReport } from '../data/error-reporting.js';
+import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
+import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
+import { RefusalNote } from './event-bus.js';
 import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
-import type { Interactions } from './capability.js';
+import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
+
+/** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
+ *  allocates nothing (I5). */
+const NO_EXTRA_EDITS: StoredEdits = Object.freeze(new Map());
+/** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
+const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
 
 export interface GesturePipelineDeps {
   timeZone(): string;
   timeScale(): TimeScale;
   preset(): ViewPreset;
-  selection(): readonly EntryId[];
+  /** D-S3-24: what this Gantt snaps to — `GanttShell` has already resolved its own `snap` over the
+   *  showing preset's. `'tick'` still arrives unresolved: only a gesture knows which preset is
+   *  measuring it. */
+  snap(): SnapSetting;
+  /** The Selection (#212, ADR 0010) — the same Segment ids `render/dom` paints from. A draft reads
+   *  it, so a gesture acts on exactly the bars that paint selected, never more. */
+  selectedSegmentIds(): readonly SegmentId[];
+  /** The Entries those Segments belong to, deduped, in row order — one projection, resolved by the
+   *  shell, so this file never turns a Segment into an Entry itself. */
+  selectedEntryIds(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
-   *  path and the affordance ids resolve through, never re-derived here. */
-  canGesture(capability: keyof Interactions, id: EntryId): boolean;
-  commitEntryEdits(edits: EntryEdits): boolean;
+   *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
+   *  question to one handle (#142); every other capability ignores it. */
+  canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean;
+  commitEntryEdits(edits: StoredEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
+  /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
+   *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
+  raiseError: RaiseError;
   /** D-S3-18, S3.6, P1: an installed extension hook, read for **preview only** — the real hook still
    *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
-   *  `undefined` (S3's default: no public install API yet) previews no ghost extras, same as
-   *  `data/edit-extension.ts`'s `identityExtender`. */
-  extend?: EditExtender;
-  /** Committed entries `extend`'s `EditRequest.entries` argument reads — a snapshot map, built only
-   *  when a preview frame actually calls `extend` (an installed extender may cascade to an entry
-   *  outside the caller's own draft, so `entryById` alone cannot answer it). */
-  allEntries?(): ReadonlyMap<EntryId, Entry>;
+   *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
+   *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
+   *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
+  extraEditsFor?: (request: EditRequest) => StoredEdits;
+  /** What `extraEditsFor`'s `EditRequest.entries` reads — the *committed* Entries keyed by id, never
+   *  the in-flight draft (D-S5-45). An installed extender may cascade to an Entry outside the
+   *  caller's own draft, so `entryById` alone cannot answer it.
+   *
+   *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
+   *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
+   *  `datasetRevision`, which rises once per committed change. */
+  committedEntriesById?(): ReadonlyMap<EntryId, Entry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
@@ -49,13 +86,19 @@ export interface GesturePipelineDeps {
   ): void;
 }
 
-/** The span `#stepPx` measures a snap unit against: the grabbed segment when one is grabbed and the
- *  entry actually has segments, the whole entry otherwise. */
-function grabbedSpanOf(anchor: Entry, segmentIndex: number | undefined): TimeSpan {
-  if (segmentIndex !== undefined && anchor.segments && anchor.segments.length > 0) {
-    return anchor.segments[segmentIndex]!;
-  }
-  return anchor;
+/** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
+ *  already in hand, and read by `#settle` on whichever of its two veto paths runs.
+ *
+ *  `note` rather than a finished message, because the reason arrives after this is built: a sync veto
+ *  states it during the emit, an async one states it before it resolves (#210). `#reportRefusal`
+ *  hands this straight to `buildRefusalReport` (`data/error-reporting.ts`), which derives the
+ *  sentence's noun from `event` alone — that is what lets this carry no separate `kind`. */
+interface GestureRefusal {
+  code: ErrorCode;
+  /** The `before*` name whose handler refused. */
+  event: 'beforeEntryMove' | 'beforeEntryResize';
+  entryId: EntryId;
+  note: RefusalNote;
 }
 
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
@@ -66,7 +109,7 @@ export class GesturePipeline {
   #deps: GesturePipelineDeps;
   /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
-  #scheduledDraft: EntryEdits | undefined;
+  #scheduledDraft: StoredEdits | undefined;
   #previewFrame: FrameScheduler;
   /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
@@ -90,26 +133,28 @@ export class GesturePipeline {
    *  session closed over exactly those entries and this one `gesture` shape — `undefined` when
    *  nothing capable is grabbed, replacing the length check a caller used to make by hand against
    *  `entriesForGesture()`'s result. */
-  session(grabbed: EntryId, gesture: EntryGesture, grabbedItemId?: ItemId): EntryGestureSession | undefined {
+  session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
     if (this.#heldItemIds !== undefined) return undefined;
-    const capability: keyof Interactions = gesture.kind === 'resize' ? 'resize' : 'move';
-    const entries = this.#entriesForGesture(grabbed, capability);
+    const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
+    const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
+    const entries = this.#entriesForGesture(grabbed, capability, edge);
     if (entries.length === 0) return undefined;
     const anchor = entries[0]!;
-    const grabbedSegmentIndex =
-      grabbedItemId !== undefined && anchor.segments !== undefined && anchor.segments.length > 0
-        ? segmentIndexOfItem(grabbedItemId)
-        : undefined;
+    // Review finding 9: the Selection cannot change mid-drag — the arming grab is the last write it
+    // sees before `commit`/`cancel` ends the gesture — so this `Set` is built once here, not once per
+    // rAF inside `#draftFor`. A select-all held through a drag no longer allocates a Set of every
+    // Segment in the Dataset sixty times a second.
+    const selectedSegmentIds = new Set(this.#deps.selectedSegmentIds());
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex), options?.cursorX);
+        this.#preview(this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
       },
       nudge: (direction, options) => {
-        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap, grabbedSegmentIndex) * direction;
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, grabbedSegmentIndex));
+        const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
+        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
       },
       cancel: () => {
         this.#preview(undefined);
@@ -118,9 +163,16 @@ export class GesturePipeline {
   }
 
   /** D-S3-19: just the grabbed entry when it is not part of a multi-entry selection; else every
-   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking. */
-  #entriesForGesture(grabbedId: EntryId, capability: keyof Interactions): readonly Entry[] {
-    const selection = this.#deps.selection();
+   *  *capable* selected entry, grabbed first (D-S3-22) — an incapable one is skipped, not blocking.
+   *  `edge` (#142) is the grabbed handle on a resize: a multi-select drag on the `end` handle pulls
+   *  in only the co-selected entries whose own `end` is capable, so a Field closed on one entry never
+   *  blocks the whole drag — it just sits out of it. */
+  #entriesForGesture(
+    grabbedId: EntryId,
+    capability: GestureCapability,
+    edge?: 'start' | 'end',
+  ): readonly Entry[] {
+    const selection = this.#deps.selectedEntryIds();
     const inMultiSelection = selection.includes(grabbedId) && selection.length > 1;
     const candidateIds = inMultiSelection ? selection : [grabbedId];
     const entries: Entry[] = [];
@@ -128,7 +180,7 @@ export class GesturePipeline {
     const pushCapable = (id: EntryId): void => {
       if (seen.has(id)) return;
       const entry = this.#deps.entryById(id);
-      if (entry && this.#deps.canGesture(capability, id)) {
+      if (entry && this.#deps.canGesture(capability, id, edge)) {
         entries.push(entry);
         seen.add(id);
       }
@@ -138,14 +190,15 @@ export class GesturePipeline {
     return entries;
   }
 
-  /** D-S3-12: an unset/`'tick'` `ViewPreset.snap` resolves to the current preset's own tick unit;
-   *  Alt (`suspendSnap`) always wins and falls back to raw millisecond placement. */
+  /** D-S3-12: a `'tick'` snap resolves to the current preset's own tick unit; Alt (`suspendSnap`)
+   *  always wins and falls back to raw millisecond placement. D-S3-24: which setting arrives here —
+   *  the Gantt's own or the showing preset's — is `GanttShell`'s answer, not this file's. */
   #resolveSnap(suspendSnap: boolean | undefined): SnapUnit {
-    const preset = this.#deps.preset();
     if (suspendSnap) return 'none';
-    const snap = preset.snap ?? 'tick';
+    const snap = this.#deps.snap();
     if (snap === 'none') return 'none';
     if (snap === 'tick') {
+      const preset = this.#deps.preset();
       return { unit: preset.tickUnit, increment: preset.tickIncrement };
     }
     return snap;
@@ -156,19 +209,12 @@ export class GesturePipeline {
    *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
    *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
    *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
-  #stepPx(
-    gesture: EntryGesture,
-    anchor: Entry,
-    suspendSnap: boolean | undefined,
-    segmentIndex?: number,
-  ): number {
+  #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
     const snap = this.#resolveSnap(suspendSnap);
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
-    const span = grabbedSpanOf(anchor, segmentIndex);
-    const anchorInstant =
-      gesture.kind === 'resize' ? (gesture.edge === 'start' ? span.start : span.end) : span.start;
+    const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 
@@ -177,8 +223,8 @@ export class GesturePipeline {
     entries: readonly Entry[],
     dxPx: number,
     options: DraftOptions | undefined,
-    grabbedSegmentIndex?: number,
-  ): EntryEdits {
+    selectedSegmentIds: ReadonlySet<SegmentId>,
+  ): StoredEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
     const base = {
       zone: this.#deps.timeZone(),
@@ -186,7 +232,7 @@ export class GesturePipeline {
       snap,
       entries,
       dxPx,
-      ...(grabbedSegmentIndex !== undefined ? { grabbedSegmentIndex } : {}),
+      selectedSegmentIds,
     };
     if (gesture.kind === 'resize') {
       return draftForResize({ ...base, edge: gesture.edge });
@@ -199,7 +245,7 @@ export class GesturePipeline {
    *  `commitEntryEdits` does the actual write and folds a sync veto and a `MutationCancelledError`
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles (D-S3-17). */
-  #commit(gesture: EntryGesture, draft: EntryEdits): Promise<boolean> {
+  #commit(gesture: EntryGesture, draft: StoredEdits): Promise<boolean> {
     this.#scheduledCursorX = undefined;
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
@@ -210,27 +256,37 @@ export class GesturePipeline {
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);
     const itemIds = spans.map((span) => itemId(span.entry));
+    // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
+    // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
+    // the `before*` payload alone (event-bus.ts's map already types `entryMove`/`entryResize`
+    // without it) — the after-emit below gets its own payload, built from the same base but never
+    // carrying `refuse`.
+    const note = new RefusalNote();
     const event =
       gesture.kind === 'resize'
         ? {
             before: 'beforeEntryResize' as const,
             after: 'entryResize' as const,
-            payload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
+            afterPayload: { ...grabbed, entries: spans, edge: gesture.edge } satisfies EntryResize,
           }
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
-            payload: { ...grabbed, entries: spans } satisfies EntryMove,
+            afterPayload: { ...grabbed, entries: spans } satisfies EntryMove,
           };
-    const before =
-      event.before === 'beforeEntryResize'
-        ? this.#deps.emit(event.before, event.payload)
-        : this.#deps.emit(event.before, event.payload);
-    return this.#settle(before, draft, itemIds, () => {
+    // One payload shape, spelled once. The `before*` copy adds the note; nothing removes it again.
+    const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
+    const before = this.#deps.emit(event.before, beforePayload);
+    const refusal: GestureRefusal = {
+      code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
+      event: event.before,
+      entryId: grabbed.entry,
+      note,
+    };
+    return this.#settle(before, draft, itemIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(draft);
       if (committed) {
-        if (event.after === 'entryResize') this.#deps.emit(event.after, event.payload);
-        else this.#deps.emit(event.after, event.payload);
+        this.#deps.emit(event.after, event.afterPayload);
       }
       return committed;
     });
@@ -241,12 +297,14 @@ export class GesturePipeline {
    *  settle — `false` clears the hold and writes nothing. */
   #settle(
     result: boolean | Promise<boolean>,
-    draft: EntryEdits,
+    draft: StoredEdits,
     itemIds: readonly ItemId[],
+    refusal: GestureRefusal,
     finish: () => boolean,
   ): Promise<boolean> {
     if (result === false) {
       this.#preview(undefined);
+      this.#reportRefusal(refusal);
       return Promise.resolve(false);
     }
     if (result === true) {
@@ -261,15 +319,32 @@ export class GesturePipeline {
         return committed;
       }
       this.#releaseHold();
+      this.#reportRefusal(refusal);
       return false;
     });
+  }
+
+  /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-40). A
+   *  refused *commit* reports from `data/transaction.ts` instead, so `commitEntryEdits` returning
+   *  `false` adds nothing here — one refusal is one record. `buildRefusalReport`
+   *  (`data/error-reporting.ts`) is the one place the shape is built; no `fallback` here, because
+   *  this site printed nothing before and stays silent. */
+  #reportRefusal(refusal: GestureRefusal): void {
+    this.#deps.raiseError(
+      buildRefusalReport({
+        code: refusal.code,
+        event: refusal.event,
+        note: refusal.note,
+        entryId: refusal.entryId,
+      }),
+    );
   }
 
   /** D-S3-17: only reached for a `before*` handler's unsettled Promise. Holds the commit draft (not
    *  the last unsnapped pointer preview, not the stored origin) and arm-locks `session()` until
    *  `result` settles. Paint is one immediate `applyGestureState`, not a rAF-cleared preview plus a
    *  separate pending write. */
-  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: EntryEdits): Promise<boolean> {
+  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: StoredEdits): Promise<boolean> {
     this.#heldItemIds = itemIds;
     this.#scheduledDraft = draft;
     this.#previewFrame.flush();
@@ -287,7 +362,7 @@ export class GesturePipeline {
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
    *  draft, but only the last one before the next frame is ever painted. */
-  #preview(draft: EntryEdits | undefined, cursorX?: number): void {
+  #preview(draft: StoredEdits | undefined, cursorX?: number): void {
     this.#scheduledDraft = draft;
     this.#scheduledCursorX = draft === undefined ? undefined : cursorX;
     this.#previewFrame.request();
@@ -307,7 +382,7 @@ export class GesturePipeline {
     };
   }
 
-  #computePreview(draft: EntryEdits | undefined): readonly ItemPreview[] | undefined {
+  #computePreview(draft: StoredEdits | undefined): readonly ItemPreview[] | undefined {
     if (!draft || draft.size === 0) return undefined;
     const extra = this.#extraFor(draft);
     const entries: Entry[] = [];
@@ -330,12 +405,38 @@ export class GesturePipeline {
     });
   }
 
-  /** D-S3-18, S3.6: `extra = extend({ entries: committed, proposed: draft })` — the exact pseudocode
-   *  the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on every
-   *  `pointermove`. No installed hook (P1's default): `identityExtender`, so `previewOffsets` paints
-   *  no ghost — behaviorally identical to before this hook existed. */
-  #extraFor(draft: EntryEdits): EntryEdits {
-    const entries = this.#deps.allEntries?.() ?? new Map<EntryId, Entry>();
-    return (this.#deps.extend ?? identityExtender)({ entries, proposed: draft });
+  /** D-S3-18, S3.6: `extra = extraEditsFor({ entries: committed, proposed: draft })` — the exact
+   *  pseudocode the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on
+   *  every `pointermove`. No wired seam (P1's default) means no ghost, which is what an unoccupied
+   *  hook writes anyway — behaviorally identical to before this hook existed. The seam hands over
+   *  storage-shaped edits, because `api/Dataset.extraEditsFor` reads the occupant's loose writes
+   *  through the dataset's own zone first (#209 C3): pixels need an `Instant`, and `layout/` may not
+   *  derive one (I10).
+   *
+   *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
+   *  at commit, against the same effective state (committed entries overlaid with this draft) — so a
+   *  drag previews exactly what it commits (#212 R2 fix-plan review). Before this, the preview
+   *  painted the hook's raw, unreconciled edit — a plugin cascading `start` alone onto a
+   *  several-Segment Entry could preview one span and then commit a different one.
+   *
+   *  This runs inside a rAF callback with nothing to catch a throw, and the reconciliation a several-
+   *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
+   *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
+   *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
+  #extraFor(draft: StoredEdits): StoredEdits {
+    const extraEditsFor = this.#deps.extraEditsFor;
+    if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
+    const entries = this.#deps.committedEntriesById?.() ?? NO_ENTRIES;
+    const raw = extraEditsFor({
+      entries,
+      proposed: draft,
+      entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),
+    });
+    // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
+    // allocates nothing (I5). A hook that did write costs one entry per id it named:
+    // `reconcileExtenderEditsForPreview` reads only the ids its own edits name, and `entries` above
+    // is the supplier's cached map, not a copy this frame made.
+    if (raw.size === 0) return raw;
+    return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
   }
 }

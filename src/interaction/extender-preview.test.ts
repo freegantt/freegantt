@@ -28,24 +28,26 @@ const X_START = instant('2026-09-05T00:00:00Z');
 const X_END = instant('2026-09-06T00:00:00Z');
 
 /** Cascades `x` (never grabbed) by the same delta a move on `a` proposes — the shape D-S3-18's
- *  pseudocode names: `extra = extender({ entries: committed, proposed: draft })`. */
+ *  pseudocode names: `extra = extender({ entries: committed, proposed: draft })`.
+ *
+ *  It writes the loose shape (#209 C3): plain epoch milliseconds, which are a legal `InstantInput`
+ *  and not an `Instant`. Core reads them through the dataset's zone at the hook boundary, which is
+ *  what lets this file compute a delta at all — `interaction/` may not import `time/` (I1), and the
+ *  branded casts this helper used to need were that ban showing through.
+ */
 function makeCascadeExtender(): EditExtender {
   return ({ entries, proposed }) => {
     const aEdit = proposed.get(entryId('a'));
     const x = entries.get(entryId('x'));
     if (!aEdit || aEdit.start === undefined || !x) return new Map();
-    // I10 bans arithmetic directly on an Instant outside time/ (interaction/ may not import it) —
-    // unbrand to plain numbers first, same as gesture-pipeline.test.ts's own `as unknown as Instant`
-    // fakes.
-    const startMs = aEdit.start as unknown as number;
-    const aStartMs = A_START as unknown as number;
-    const deltaMs = startMs - aStartMs;
-    const xStartMs = X_START as unknown as number;
-    const xEndMs = X_END as unknown as number;
+    const deltaMs = (aEdit.start as unknown as number) - (A_START as unknown as number);
     return new Map([
       [
         entryId('x'),
-        { start: (xStartMs + deltaMs) as unknown as Instant, end: (xEndMs + deltaMs) as unknown as Instant },
+        {
+          start: (X_START as unknown as number) + deltaMs,
+          end: (X_END as unknown as number) + deltaMs,
+        },
       ],
     ]);
   };
@@ -58,9 +60,9 @@ function stubPointerCapture(el: HTMLElement): void {
 
 /** Builds a real `GanttShell` over a real `DatasetState` — `commitEntryEdits` writes through
  *  `state.transaction()`/`state.entries.update()`, the same shape `api/gantt.ts` wires for real
- *  Gantt usage (D-S3-16). `editExtender` is a `GanttShellOptions`-only field (P1: no public install
+ *  Gantt usage (D-S3-16). `extraEditsFor` is a `GanttShellOptions`-only field (P1: no public install
  *  API in S3, so `api/gantt.ts` never passes one) — this is the "internal option" the S3.6 plan names. */
-function buildShell(overrides: Partial<GanttShellOptions> = {}): {
+function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShellOptions> } = {}): {
   shell: GanttShell;
   container: HTMLElement;
   timeline: HTMLElement;
@@ -73,18 +75,26 @@ function buildShell(overrides: Partial<GanttShellOptions> = {}): {
       { id: 'x', name: 'x', start: X_START, end: X_END },
     ],
   });
+  // The extender occupies the Dataset's own hook, and the shell reads it through the one door every
+  // real caller uses (#209 C3, `api/gantt.ts` wires exactly this arrow). Handing a raw occupant to
+  // the shell alone, as this file used to, skipped the normalizing step the commit path takes — so
+  // the preview could paint from a shape the commit would never see.
+  if (options.extender) state.setExtender(() => options.extender!);
   const container = document.createElement('div');
   const shell = new GanttShell({
     container,
     dataset: state,
-    entryGestures: attachEntryGestures,
-    commitEntryEdits: (edits) => {
-      state.transaction(() => {
-        for (const [id, edit] of edits) state.entries.update(id, edit);
-      });
-      return true;
+    wiring: {
+      entryGestures: attachEntryGestures,
+      commitEntryEdits: (edits) => {
+        state.transaction(() => {
+          for (const [id, edit] of edits) state.entries.update(id, edit);
+        });
+        return true;
+      },
     },
-    ...overrides,
+    ...(options.extender ? { extraEditsFor: (request) => state.extraEditsFor(request) } : {}),
+    ...options.shell,
   });
   const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
   return { shell, container, timeline, state };
@@ -102,7 +112,7 @@ function stubElementFromPoint(at: { x: number; y: number; el: Element }): () => 
 
 describe('[S3-A4] extender preview', () => {
   it('ghosts the extension hook’s own extra on the same preview frame as the caller’s drag', async () => {
-    const { shell, container, timeline } = buildShell({ editExtender: makeCascadeExtender() });
+    const { shell, container, timeline } = buildShell({ extender: makeCascadeExtender() });
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
     function transformXOf(el: HTMLElement): number {
@@ -133,7 +143,7 @@ describe('[S3-A4] extender preview', () => {
   });
 
   it('Escape mid-drag clears the ghost and writes nothing (P1 identity contrast, [S3-A2])', async () => {
-    const { shell, container, timeline, state } = buildShell({ editExtender: makeCascadeExtender() });
+    const { shell, container, timeline, state } = buildShell({ extender: makeCascadeExtender() });
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
     const xBefore = state.entries.get(entryId('x'))!;
@@ -158,7 +168,39 @@ describe('[S3-A4] extender preview', () => {
     shell.destroy();
   });
 
-  it('no editExtender (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
+  // #167: the trap the S5.10 author flagged. `api/gantt.ts` passes an *arrow*
+  // (`(request) => options.dataset.extraEditsFor(request)`), never the function the Dataset holds at
+  // construction. A Dataset plugin composes onto that hook later (D-S5-23, S5.10), so anything that
+  // stored the arrow's result would silently ghost nothing from that moment on. That is invisible
+  // today and wrong the moment S7's scheduling plugin installs after the Gantt is built.
+  it('reads the Dataset’s occupant live, so a plugin installed after the Gantt still ghosts', async () => {
+    // The arrow closes over `built`, and is only ever called from a later drag. So it reads whatever
+    // occupies the Dataset's hook at that moment, which is the whole point.
+    const built: ReturnType<typeof buildShell> = buildShell({
+      shell: { extraEditsFor: (request) => built.state.extraEditsFor(request) },
+    });
+    // Composed after the shell already exists — exactly what `Gantt.plugins = [...]` does later.
+    built.state.setExtender(() => makeCascadeExtender());
+
+    const { shell, container, timeline } = built;
+    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    stubPointerCapture(timeline);
+    const restore = stubElementFromPoint({ x: 5, y: 5, el: barA });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(barA.dataset['state']).toContain('dragging');
+    expect(barX.dataset['state']).toContain('ghost');
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 55, clientY: 5, pointerId: 1 }));
+    restore();
+    shell.destroy();
+  });
+
+  it('no extraEditsFor (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
     const { shell, container, timeline } = buildShell();
     const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
     const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;

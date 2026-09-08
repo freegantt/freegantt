@@ -7,7 +7,8 @@
 
 import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
-import type { EntryEdits } from './edit-extension.js';
+import type { StoredEdits } from './edit-extension.js';
+import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
 import {
   createRollUpContext,
@@ -20,9 +21,9 @@ import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** The transaction body's edits — the Rollup yields to a field proposed here (D-S2-22). */
-  readonly body: EntryEdits;
+  readonly body: StoredEdits;
   /** Body plus extension-hook edits — used to read effective child values. */
-  readonly merged: EntryEdits;
+  readonly merged: StoredEdits;
 }
 
 /** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
@@ -36,7 +37,7 @@ function collectTouchedIds(
   entries: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
-  proposed: EntryEdits,
+  proposed: StoredEdits,
 ): ReadonlySet<EntryId> {
   const touched = new Set<EntryId>();
   for (const entry of added) touched.add(entry.id);
@@ -86,10 +87,53 @@ function parentsToRecompute(
   return filtered.sort((a, b) => depthById.get(b)! - depthById.get(a)!);
 }
 
+/**
+ * The Rollup writes `start`/`end` straight onto a roll-up-kind parent, the way `field.rollUp: 'min'`
+ * / `'max'` above does — that pass alone can leave the parent's own Segments behind, drawing the span
+ * they had before this commit (#212 R2 fix-plan review, finding B1). The envelope is the earliest
+ * `start` and the latest `end` among the Segments (ADR 0010), so restoring it happens in two steps.
+ * First, every Segment clamps into the parent's new `[start, end)` — a Segment the new span has moved
+ * past no longer belongs outside it, so it collapses to the nearest edge rather than keeping a stretch
+ * the parent no longer covers. Second, whichever Segment still does not reach an edge exactly —
+ * because every Segment already sat inside the new span, or clamping only shortened it — widens to
+ * reach that edge: the Segment with the earliest `start` moves it to the parent's new `start`, the one
+ * with the latest `end` moves it to the parent's new `end`. One Segment plays both roles when the
+ * parent draws only one, which is why this reduces to the old sole-Segment pairing in that case. A tie
+ * picks the first Segment in array order, the same determinism `entries.add`/`entries.update` already
+ * use for a positional match. This is chosen over the two other candidates the #212 R2 fix-plan review
+ * named: rejecting a several-Segment roll-up parent at ingest would make `rollUpKinds` and "how many
+ * Segments a consumer authors" interact, for no reason a consumer could predict; making the rolled-up
+ * value computed-on-read for this case only would split `start`/`end`'s `field source` (`plans/01` §6,
+ * ADR 0005) between stored and computed depending on how many Segments a parent happens to draw, which
+ * is exactly the kind of `if (kind === ...)`-shaped special case the seams exist to avoid. Widening
+ * alone — moving only the two extremal Segments, with no clamp — was tried first and rejected here: a
+ * rolled-up span can also *shrink* past an interior Segment (a child removed, or moved to a narrower
+ * range), and widening only the Segment that used to be extremal leaves the one it displaced still
+ * outside the new envelope, so the invariant this function exists to restore would fail again one
+ * Segment over.
+ */
+function widenSegmentsToEnvelope(
+  parent: Entry,
+  registry: FieldRegistry,
+  ctx: FieldContext,
+  parentId: EntryId,
+  updated: FieldUpdated[],
+): Entry {
+  const segmentsField = registry.get('segments');
+  if (!segmentsField || parent.segments.length === 0) return parent;
+
+  const nextSegments = fitSegmentsToEnvelope(parent.segments, parent);
+  if (nextSegments === parent.segments) return parent;
+
+  const from = readField(parent, segmentsField, ctx);
+  updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });
+  return writeOntoEntry(parent, segmentsField, nextSegments);
+}
+
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
-  merged: EntryEdits,
+  merged: StoredEdits,
   computed: ReadonlyMap<EntryId, Entry>,
 ): Entry | undefined {
   const rolled = computed.get(id);
@@ -118,7 +162,7 @@ export function rollUpFields(
 
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
-  const emptyEdits: EntryEdits = new Map();
+  const emptyEdits: StoredEdits = new Map();
   const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
   // Effective tree includes extender and autoGroup overlays so a parent promoted on this commit
@@ -170,6 +214,7 @@ export function rollUpFields(
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
+    effectiveParent = widenSegmentsToEnvelope(effectiveParent, registry, ctx, parentId, updated);
     computed.set(parentId, effectiveParent);
   }
 

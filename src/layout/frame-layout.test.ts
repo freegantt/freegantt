@@ -7,7 +7,7 @@ import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
 import type { Entry } from '../model/index.js';
-import { changeSetId, entryId } from '../model/index.js';
+import { changeSetId, entryId, itemId, rowId, segmentId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -42,6 +42,9 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
     visible,
     rowHeight: 32,
     revision: 0,
+    // A stable value, so repeated calls with the same `input()` object cache instead of
+    // rebuilding every read (#243) — an omitted `datasetRevision` now invalidates every call.
+    datasetRevision: 0,
     todayLine: false as const,
     itemProducerRegistry,
     ...overrides,
@@ -49,8 +52,15 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
 }
 
 function overlappingEntry(base: Entry, copies: number): Entry {
-  const span = { start: base.start, end: base.end };
-  return { ...base, segments: Array.from({ length: copies }, () => span) };
+  const { start, end } = base;
+  return {
+    ...base,
+    segments: Array.from({ length: copies }, (_, index) => ({
+      id: segmentId(`${base.id}-${index}`),
+      start,
+      end,
+    })),
+  };
 }
 
 describe('FrameLayout', () => {
@@ -109,6 +119,131 @@ describe('FrameLayout', () => {
     for (const [index, row] of frame.rows.entries()) {
       expect(layout.rowTop(index)).toBe(row.top);
     }
+  });
+
+  it('itemIdsForEntry answers every bar a segmented entry draws (#185)', () => {
+    const layout = new FrameLayout();
+    const segmented = overlappingEntry(sampleEntries[0]!, 3);
+    const frame = layout.computeFrame(input({ entries: [segmented] }));
+
+    expect(layout.itemIdsForEntry(segmented.id)).toEqual(frame.bars.map((bar) => bar.id));
+    expect(layout.itemIdsForEntry(segmented.id)).toHaveLength(3);
+  });
+
+  it('itemIdsForEntry answers a plugin Kind that draws its own Items (#185)', () => {
+    // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
+    const kind = 'twin';
+    const registry = createItemProducerRegistry();
+    registry.register(kind, (entry) => [
+      {
+        id: itemId(entry.id, 7),
+        entryId: entry.id,
+        kind,
+        label: entry.name,
+        start: entry.start,
+        end: entry.end,
+      },
+      {
+        id: itemId(entry.id, 9),
+        entryId: entry.id,
+        kind,
+        label: entry.name,
+        start: entry.start,
+        end: entry.end,
+      },
+    ]);
+    const entry: Entry = { ...sampleEntries[0]!, kind };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [entry], itemProducerRegistry: registry }));
+
+    expect(layout.itemIdsForEntry(entry.id)).toEqual([itemId(entry.id, 7), itemId(entry.id, 9)]);
+  });
+
+  it('itemIdsForEntry answers empty for an entry no row carries (#185)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
+
+    expect(layout.itemIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
+  });
+
+  it('segmentIdsForItem names the one Segment a Segment bar drew (#212)', () => {
+    const layout = new FrameLayout();
+    const segmented = overlappingEntry(sampleEntries[0]!, 3);
+    const frame = layout.computeFrame(input({ entries: [segmented] }));
+
+    expect(frame.bars.map((bar) => layout.segmentIdsForItem(bar.id))).toEqual(
+      segmented.segments.map((segment) => [segment.id]),
+    );
+  });
+
+  it('segmentIdsForItem names every Segment of the Entry for a group or milestone bar (#212)', () => {
+    // A milestone draws one bar over the whole Entry, so it drew no single Segment. It still stands
+    // for all of them: a click on it selects the Entry's work, whichever stretch that is.
+    const layout = new FrameLayout();
+    const milestone: Entry = { ...overlappingEntry(sampleEntries[0]!, 2), kind: 'milestone' };
+    const frame = layout.computeFrame(input({ entries: [milestone] }));
+
+    expect(frame.bars).toHaveLength(1);
+    expect(frame.bars[0]!.segmentId).toBeUndefined();
+    expect(layout.segmentIdsForItem(frame.bars[0]!.id)).toEqual(
+      milestone.segments.map((segment) => segment.id),
+    );
+  });
+
+  it('segmentIdsForItem answers empty for an Item no current frame planned (#212)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
+
+    expect(layout.segmentIdsForItem(itemId(sampleEntries[1]!.id, 0))).toEqual([]);
+    expect(layout.segmentIdsForItem(itemId(sampleEntries[0]!.id, 4))).toEqual([]);
+  });
+
+  it('segmentIdsForRow names every Segment of every Entry the row owns, in row order (#199, #212)', () => {
+    // Only a custom row source can put several Entries on one Row, which is the shape this answers.
+    const owned = sampleEntries.slice(0, 3).map((entry) => overlappingEntry(entry, 2));
+    const oneRowForAll: LayoutInput['rows'] = {
+      source: 'custom',
+      resolve: ({ entries }) => [{ id: 'lane-1', entryIds: entries.map((entry) => entry.id) }],
+    };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: owned, rows: oneRowForAll }));
+
+    expect(layout.segmentIdsForRow(rowId('lane-1'))).toEqual(
+      owned.flatMap((entry) => entry.segments.map((segment) => segment.id)),
+    );
+    expect(layout.segmentIdsForRow(rowId('no-such-row'))).toEqual([]);
+  });
+
+  it('a row collapse hid still names its Segments, exactly as it still names its Entries (#230 R1)', () => {
+    // `segmentIdsForRow` reads the frame's Entry map, not its planned rows, for one reason: it must
+    // agree with `entryIdsForRow`, which answers for a hidden row. Reading the planned rows instead
+    // would silently narrow one of the pair and not the other.
+    const parent = overlappingEntry(sampleEntries[0]!, 2);
+    const child: Entry = { ...overlappingEntry(sampleEntries[1]!, 2), parentId: parent.id };
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [parent, child], rows: tree }));
+    const childRow = layout.rowIdForEntry(child.id)!;
+
+    layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
+
+    expect(layout.entryIdsForRow(childRow)).toEqual([child.id]);
+    expect(layout.segmentIdsForRow(childRow)).toEqual(child.segments.map((segment) => segment.id));
+  });
+
+  it('a grouping header row stands for no Segment, on both paths (#230 R0)', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(
+      input({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: (entry) => entry.kind },
+      }),
+    );
+
+    const header = frame.rows.find((row) => row.kind === 'header');
+    expect(header).toBeDefined();
+    expect(header!.entryIds).toEqual([]);
+    expect(layout.segmentIdsForRow(header!.id)).toEqual([]);
   });
 });
 

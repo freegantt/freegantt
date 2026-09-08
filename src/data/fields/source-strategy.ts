@@ -34,9 +34,23 @@ export function withProposedKeys(edit: StoredEdit, keys: Iterable<string>): Stor
   return { ...edit, proposedKeys: new Set(keys) };
 }
 
+/** The keys the edit states it writes. Empty when it states none — ask `statesProposedKeys` first
+ *  whenever the empty answer and the absent one mean different things (#238). */
 export function proposedKeysOf(edit: StoredEdit | undefined): ReadonlySet<string> {
   if (!edit) return new Set();
   return edit.proposedKeys ?? new Set();
+}
+
+/**
+ * Does this edit state which Fields it writes at all?
+ *
+ * "Stated nothing" and "stated the empty set" are two different edits, and `proposedKeysOf` returns
+ * the same empty set for both (#238). An edit that states nothing is read by the keys it holds; an
+ * edit that states the empty set writes no Field. Every caller that acts on the difference asks here,
+ * so the distinction lives in one function rather than in four inline `!== undefined` checks.
+ */
+export function statesProposedKeys(edit: StoredEdit | undefined): boolean {
+  return edit?.proposedKeys !== undefined;
 }
 
 export interface SourceStrategy {
@@ -61,7 +75,7 @@ const entryStrategy = {
   read(entry, field) {
     const source = field.source;
     if (source.from !== 'entry') return undefined;
-    return (entry as unknown as Record<string, unknown>)[source.field];
+    return entry[source.field];
   },
   write(edit, _entry, field, value) {
     const source = field.source;
@@ -73,7 +87,7 @@ const entryStrategy = {
   proposes(edit, field) {
     const source = field.source;
     if (source.from !== 'entry') return false;
-    return (edit as Record<string, unknown>)[source.field] !== undefined;
+    return edit[source.field] !== undefined;
   },
   serialize(source) {
     if (source.from !== 'entry') return undefined;
@@ -95,6 +109,8 @@ const metaStrategy = {
     if (value === undefined) delete record[key];
     else record[key] = value;
     const next: StoredEdit = { ...edit };
+    // Deliberate exactOptionalPropertyTypes escape: an explicit `undefined` clears a prior meta
+    // write, which is not the same as the key being absent.
     if (Object.keys(record).length === 0) (next as Record<string, unknown>)['meta'] = undefined;
     else next.meta = record;
     return withProposedKeys(next, proposedKeysOf(edit));

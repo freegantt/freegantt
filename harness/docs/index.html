@@ -21,10 +21,10 @@
           maintainer can open the Gantt and the explanation in one session. Start below with how to run the
           harness and what the smallest working Gantt looks like, then follow a page from §3.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
           <span>location: <code>harness/docs/</code></span>
-          <span>maintainer maps — may lag the current slice</span>
+          <span>maintainer maps of src/ as S5 runs it</span>
           <span>keeping them true: <a href="./maintaining.html">Maintaining</a></span>
         </div>
         <nav aria-label="Sections on this page">
@@ -34,8 +34,9 @@
         </nav>
       </header>
 
-      <!-- ══════════════════════════════════════════════════════════ 1 -->
-      <section id="s1">
+      <main>
+        <!-- ══════════════════════════════════════════════════════════ 1 -->
+        <section id="s1">
         <h2><span class="num">1</span>Run the harness</h2>
         <p class="lede">
           The harness is the library's first consumer: plain TypeScript against
@@ -76,6 +77,13 @@ pnpm build          # production build of the same pages into dist-harness/</cod
             <td><a href="./classes.html">Class map</a> §1</td>
           </tr>
           <tr>
+            <td class="mono">grid-scroll.html</td>
+            <td>
+              The grid pane as its own vertical scroll surface, kept in step with the timeline rows.
+            </td>
+            <td><a href="./lifecycle.html">Lifecycle</a> §2</td>
+          </tr>
+          <tr>
             <td class="mono">zoom.html</td>
             <td>Presets, zoom in/out, pan to a date, pan to today, and the header bands.</td>
             <td><a href="./timeline.html">Timeline render</a></td>
@@ -92,8 +100,19 @@ pnpm build          # production build of the same pages into dist-harness/</cod
           </tr>
           <tr>
             <td class="mono">editing.html</td>
-            <td>Direct manipulation: drag to move, resize, keyboard editing, snapping.</td>
+            <td>
+              Direct manipulation: drag to move, resize, keyboard editing, snapping, inline cell edit, and
+              the lock Dataset plugin.
+            </td>
             <td><a href="./lifecycle.html">Lifecycle</a> §3</td>
+          </tr>
+          <tr>
+            <td class="mono">plugins.html</td>
+            <td>
+              The plugin runtime: renderers by kind, weekend shading, extra kinds, commands, and a popup
+              demo. Driven by <code>harness/plugins.ts</code>.
+            </td>
+            <td><a href="./plugins.html">Plugin lifecycle</a></td>
           </tr>
         </table>
 
@@ -186,8 +205,10 @@ gantt.collapse('p1'); // per-Gantt view state, never in the dataset</code></pre>
         <p>
           Every config key is a live property: assign <code>gantt.preset</code>,
           <code>gantt.gridColumns</code>, <code>gantt.rowSource</code>, <code>gantt.theme</code> and the
-          rest without remounting. Two Gantts on one page stay independent (I2); give them the same
-          <code>scale</code> or <code>scroll</code> and they x-sync (D9).
+          rest without remounting. Pass <code>plugins: [tooltips(), contextMenu(), inlineEditing()]</code>
+          on the Gantt, or call <code>gantt.installPlugin</code> later. Two Gantts on one page stay
+          independent (I2); give them the same <code>scale</code> or <code>scroll</code> and they x-sync
+          (D9).
         </p>
 
         <h3>Events</h3>
@@ -215,20 +236,20 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
 
         <div class="cards">
           <article class="card">
-            <h5><a href="./layers.html">Layers &amp; import rules</a></h5>
+            <h3><a href="./layers.html">Layers &amp; import rules</a></h3>
             <p class="path">layers.html</p>
             <p>
-              The ten directories under <code>src/</code>, which of them may import which, and the five
-              custom lint rules that hold the line.
+              The ten directories under <code>src/</code>, which of them may import which, and the custom
+              lint rules that hold the line.
             </p>
           </article>
           <article class="card">
-            <h5><a href="./files.html">File inventory</a></h5>
+            <h3><a href="./files.html">File inventory</a></h3>
             <p class="path">files.html</p>
             <p>Every non-test file in <code>src/</code>, with the one thing it is for.</p>
           </article>
           <article class="card">
-            <h5><a href="./lifecycle.html">Construction, render, notification</a></h5>
+            <h3><a href="./lifecycle.html">Construction, render, notification</a></h3>
             <p class="path">lifecycle.html</p>
             <p>
               What <code>new Gantt(…)</code> builds, what one <code>render()</code> does, and how an edit
@@ -236,16 +257,16 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./classes.html">Class map</a></h5>
+            <h3><a href="./classes.html">Class map</a></h3>
             <p class="path">classes.html</p>
             <p>
               Every class in the built layers — <code>layout/</code>, <code>view/</code>,
-              <code>time/</code>, <code>model/</code>, <code>render/</code>, <code>api/</code> — plus the
-              consumer boundary and the harness reading.
+              <code>time/</code>, <code>model/</code>, <code>render/</code>, <code>api/</code>,
+              <code>extensions/</code> — plus the consumer boundary and the harness reading.
             </p>
           </article>
           <article class="card">
-            <h5><a href="./timeline.html">Timeline render</a></h5>
+            <h3><a href="./timeline.html">Timeline render</a></h3>
             <p class="path">timeline.html</p>
             <p>
               How the header, density floor, sticky tick labels, and today line paint. Includes a pipeline
@@ -253,7 +274,16 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./diagram.html">Module map diagrams</a></h5>
+            <h3><a href="./plugins.html">Plugin lifecycle</a></h3>
+            <p class="path">plugins.html</p>
+            <p>
+              What <code>installPlugin</code> and <code>uninstallPlugin</code> do, when the registration
+              gate is open, how <code>install()</code> diffs a plugin list by id, and how a Dataset plugin's
+              setup order resolves from <code>requires</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3><a href="./diagram.html">Module map diagrams</a></h3>
             <p class="path">diagram.html</p>
             <p>
               The layer graph as a picture: the DOM-free core on the left, the DOM column on the right, the
@@ -261,7 +291,7 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="./maintaining.html">Maintaining these pages</a></h5>
+            <h3><a href="./maintaining.html">Maintaining these pages</a></h3>
             <p class="path">maintaining.html</p>
             <p>
               What to update when a file changes, the rules for the content, and the recipe that re-measures
@@ -269,7 +299,16 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             </p>
           </article>
           <article class="card">
-            <h5><a href="../../docs/05-consumer-api.md">Consumer API index</a></h5>
+            <h3><a href="./api-reference.html">API reference</a></h3>
+            <p class="path">api-reference.html</p>
+            <p>
+              The full exported surface, rendered straight from the committed
+              <code>etc/freegantt.api.md</code> — not a maintainer map like the pages above, the consumer
+              reference itself, one folder over.
+            </p>
+          </article>
+          <article class="card">
+            <h3><a href="../../docs/05-consumer-api.md">Consumer API index</a></h3>
             <p class="path">docs/05-consumer-api.md</p>
             <p>
               Outside this folder: links to the README, <code>plans/02</code>, <code>CONTEXT.md</code>, and
@@ -279,7 +318,8 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
         </div>
       </section>
 
-      <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+        <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">

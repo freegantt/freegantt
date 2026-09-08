@@ -8,11 +8,13 @@ export {};
 
 type DocsPageId =
   | 'overview'
+  | 'api-reference'
   | 'layers'
   | 'files'
   | 'lifecycle'
   | 'classes'
   | 'timeline'
+  | 'plugins'
   | 'diagram'
   | 'maintaining';
 
@@ -25,11 +27,18 @@ type DocsPage = {
 
 const DOCS_PAGES: readonly DocsPage[] = [
   { id: 'overview', label: 'Overview', file: 'index.html', title: 'Harness docs — overview and usage' },
+  {
+    id: 'api-reference',
+    label: 'API reference',
+    file: 'api-reference.html',
+    title: 'API reference — the generated export list',
+  },
   { id: 'layers', label: 'Layers', file: 'layers.html', title: 'Layer map & import rules' },
   { id: 'files', label: 'Files', file: 'files.html', title: 'File inventory' },
   { id: 'lifecycle', label: 'Lifecycle', file: 'lifecycle.html', title: 'Construction, render, notification' },
   { id: 'classes', label: 'Class map', file: 'classes.html', title: 'Class map, layer by layer' },
   { id: 'timeline', label: 'Timeline', file: 'timeline.html', title: 'How the timeline paints' },
+  { id: 'plugins', label: 'Plugins', file: 'plugins.html', title: 'Plugin lifecycle' },
   { id: 'diagram', label: 'Diagrams', file: 'diagram.html', title: 'Module map diagrams' },
   { id: 'maintaining', label: 'Maintaining', file: 'maintaining.html', title: 'How to keep these pages true' },
 ];

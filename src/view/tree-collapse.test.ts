@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { entryId, rowId } from '../model/index.js';
+import { entryId, rowId, segmentId } from '../model/index.js';
 import type { Entry, EntryId, Instant, RowId } from '../model/index.js';
 import { TreeCollapse } from './tree-collapse.js';
 import type { TreeCollapseContext, TreeCollapseRow } from './tree-collapse.js';
@@ -10,12 +10,15 @@ function instant(n: number): Instant {
 }
 
 function entry(id: string, parentId?: string): Entry {
+  const start = instant(0);
+  const end = instant(1);
   const record: Entry = {
     id: entryId(id),
     name: id,
-    start: instant(0),
-    end: instant(1),
+    start,
+    end,
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start, end }],
   };
   if (parentId !== undefined) record.parentId = entryId(parentId);
   return record;

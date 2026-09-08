@@ -1,11 +1,15 @@
-type HarnessPageId =
+// `harness/docs/page-brief.ts` reads this id too — one page identifies itself with the same value
+// both modules key on, so a page's nav entry and its explanatory block never drift apart.
+export type HarnessPageId =
   | 'generic-demo'
   | 'hierarchy'
   | 'scroll-sync'
+  | 'grid-scroll'
   | 'timeline-navigation'
   | 'large-dataset'
   | 'mutation'
   | 'editing'
+  | 'plugins'
   | 'docs';
 
 type HarnessPage = {
@@ -18,10 +22,12 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'generic-demo', label: 'Generic demo', file: 'index.html' },
   { id: 'hierarchy', label: 'Hierarchy & rows', file: 'hierarchy.html' },
   { id: 'scroll-sync', label: 'Scroll sync', file: 'scroll-sync.html' },
+  { id: 'grid-scroll', label: 'Grid pane scroll', file: 'grid-scroll.html' },
   { id: 'timeline-navigation', label: 'Timeline & navigation', file: 'zoom.html' },
   { id: 'large-dataset', label: 'Large dataset', file: 'large-dataset.html' },
   { id: 'mutation', label: 'Mutation & live binding', file: 'data.html' },
   { id: 'editing', label: 'Direct manipulation', file: 'editing.html' },
+  { id: 'plugins', label: 'Plugin runtime', file: 'plugins.html' },
   { id: 'docs', label: 'Docs', file: 'docs/index.html' },
 ];
 
@@ -43,6 +49,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'hierarchy';
     case 'scroll-sync.html':
       return 'scroll-sync';
+    case 'grid-scroll.html':
+      return 'grid-scroll';
     case 'zoom.html':
       return 'timeline-navigation';
     case 'large-dataset.html':
@@ -51,6 +59,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'mutation';
     case 'editing.html':
       return 'editing';
+    case 'plugins.html':
+      return 'plugins';
     default:
       return 'generic-demo';
   }

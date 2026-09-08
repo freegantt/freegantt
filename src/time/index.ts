@@ -1,4 +1,4 @@
-export { instant, now, toISO, addMs, diffMs, MS } from './instant.js';
+export { instant, now, toISO, addMs, diffMs, envelopeOfSegments, MS } from './instant.js';
 export { toInstant, toEndInstant } from './input.js';
 export {
   toPlain,
@@ -8,13 +8,18 @@ export {
   addMonths,
   addYears,
   diffDays,
+  dayOfWeek,
+  eachDay,
   startOf,
   stepBy,
   weekOfYear,
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
+  isTimeUnit,
 } from './zone.js';
 export type { PlainParts } from './zone.js';
+export { createZonedTime } from './zoned-time.js';
+export type { ZonedTime } from './zoned-time.js';
 export {
   formatDate,
   formatEndInclusive,
@@ -22,7 +27,7 @@ export {
   resolveDateFormat,
   formatWeekNumber,
   formatHour,
-  dedupeHeaderFormats,
+  dropRepeatedGranularity,
 } from './format.js';
 export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset } from './scale.js';
 export { snapInstant, stepsBetween } from './snap.js';
@@ -33,6 +38,7 @@ export type {
   ViewPreset,
   ViewPresetHeader,
   TickStep,
+  SnapSetting,
   Tick,
   HeaderFormat,
   DateFormat,

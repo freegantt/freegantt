@@ -19,9 +19,12 @@ test("[today line] spans the full scrollable row content, not just the pane's in
   await expect(line).toHaveAttribute('data-flag', 'today');
 
   const pane = page.locator('.fg-timeline-pane');
-  const { scrollHeight, clientHeight } = await pane.evaluate((el) => ({
+  // The pane scrolls its header plus its rows; the line spans the rows, so the header's own height
+  // comes off the scroll extent before the two are compared.
+  const { scrollHeight, clientHeight, headerHeight } = await pane.evaluate((el) => ({
     scrollHeight: el.scrollHeight,
     clientHeight: el.clientHeight,
+    headerHeight: (el.querySelector('.fg-header') as HTMLElement).offsetHeight,
   }));
   // The dataset must actually be taller than one screenful, or this test proves nothing.
   expect(scrollHeight).toBeGreaterThan(clientHeight);
@@ -32,5 +35,5 @@ test("[today line] spans the full scrollable row content, not just the pane's in
   // The regression this guards: the old CSS gave the line exactly `clientHeight`, however tall the
   // dataset actually was.
   expect(lineBox.height).toBeGreaterThan(clientHeight);
-  expect(lineBox.height).toBeGreaterThanOrEqual(scrollHeight - 2);
+  expect(lineBox.height).toBeGreaterThanOrEqual(scrollHeight - headerHeight - 2);
 });

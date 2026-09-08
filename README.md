@@ -351,38 +351,46 @@ and so on without remounting.
 ### Selection (S3)
 
 Selection is **Gantt state**, not **Dataset** state — two `Gantt` instances on one `Dataset` can
-hold different selections. The library exposes two getters; they answer different questions:
+hold different selections. The Selection holds Segments, not Entries. The library exposes it three
+ways, and the suffix says which one you get: segment ids, entry ids, or `Entry` records.
 
-| Getter                   | Type                 | Writable                    | What it is                                        |
-| ------------------------ | -------------------- | --------------------------- | ------------------------------------------------- |
-| `gantt.selection`        | `readonly EntryId[]` | yes (`gantt.selection = …`) | Which entry ids are selected                      |
-| `gantt.selectionEntries` | `readonly Entry[]`   | no                          | The bound dataset's `Entry` records for those ids |
+| Getter                     | Type                   | Writable                             | What it is                                                        |
+| -------------------------- | ---------------------- | ------------------------------------ | ----------------------------------------------------------------- |
+| `gantt.selectedSegmentIds` | `readonly SegmentId[]` | yes (`gantt.selectedSegmentIds = …`) | Which Segment ids are selected                                    |
+| `gantt.selectedEntryIds`   | `readonly EntryId[]`   | no                                   | The Entry each selected Segment belongs to, deduped, in row order |
+| `gantt.selectedEntries`    | `readonly Entry[]`     | no                                   | The bound dataset's `Entry` records for those ids                 |
 
-Use **`selection`** when you only need ids, or when you want to **set** selection (click parity:
-assignment runs `beforeSelectionChange` → `selectionChange` and opens no transaction).
+A click in the grid pane selects every Segment of every Entry the row owns. A click on a bar in the timeline
+selects only the Segment under the pointer. `selectedEntryIds` and `selectedEntries` cover both
+cases without asking a reader to track which Segments made up the click.
 
-Use **`selectionEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
+Assign **`selectedSegmentIds`** to **set** the selection (click parity: assignment runs
+`beforeSelectionChange` → `selectionChange` and opens no transaction). Read **`selectedEntryIds`**
+when you only need which records are involved, not which Segments.
+
+Use **`selectedEntries`** when you need entry **fields** — `name`, `start`, `end`, and so on — for
 a toolbar, bulk rename, or any "act on the selected rows" control:
 
 ```ts
 gantt.on('selectionChange', () => {
-  const names = gantt.selectionEntries.map((entry) => entry.name);
+  const names = gantt.selectedEntries.map((entry) => entry.name);
   toolbar.textContent = names.join(', ');
 });
 
 renameBtn.addEventListener('click', () => {
   dataset.transaction(() => {
-    for (const entry of gantt.selectionEntries) {
+    for (const entry of gantt.selectedEntries) {
       dataset.entries.update(entry.id, { name: input.value });
     }
   });
 });
 ```
 
-`selectionEntries` re-reads the store on every access, so field edits show up without a selection
-change. It keeps `selection` order and **skips** ids that no longer exist — for example after
-`dataset.entries.remove` left a stale id in `selection`. To change which entries are selected,
-assign `selection`; `selectionEntries` is read-only.
+`selectedEntries` re-reads the store on every access, so field edits show up without a selection
+change. It keeps Selection order and **skips** ids that no longer exist — for example after
+`dataset.entries.remove` left a stale Segment behind in `selectedSegmentIds`. To change which
+entries are selected, assign `selectedSegmentIds`; `selectedEntryIds` and `selectedEntries` are
+read-only.
 
 `selectionDataset` was not used: **`Dataset`** is already the name of the entry store (`new
 Dataset({ … })`), so a getter named `selectionDataset` reads like a second `Dataset` instance rather
@@ -407,6 +415,19 @@ Holding **Alt** during a drag suspends snapping for that one gesture, regardless
 `snap` — useful for fine placement without changing the preset. The harness (`harness/index.html`)
 has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
 `gantt.preset` assignment — try it against a live drag at `pnpm dev`.
+
+## Plugins
+
+`docs/06-plugin-authoring.md` covers both plugin contracts (`GanttPlugin`, `DatasetPlugin`), every
+registration seam, and the errors an author meets. `tooltips()`, `contextMenu()`, and
+`inlineEditing()` ship as built-in plugins; installing none of them keeps them out of a consumer's
+bundle.
+
+```ts
+import { Gantt, tooltips, contextMenu } from 'freegantt';
+
+const gantt = new Gantt({ container, dataset, plugins: [tooltips(), contextMenu()] });
+```
 
 ## Events
 
@@ -463,23 +484,55 @@ To customize dark mode instead of just light mode, scope the override to the dar
 
 ## Further reading
 
-| Doc                       | Audience                                                                |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `plans/02-public-api.md`  | Full consumer API — events, errors, serialization, customization ladder |
-| `docs/05-consumer-api.md` | Consumer API index and S4 surface summary                               |
-| `CONTEXT.md`              | Glossary (Entry, Field, Row, Row source, Rollup, …)                     |
-| `plans/03-slices.md`      | Delivery roadmap and acceptance criteria                                |
-| `etc/freegantt.api.md`    | Generated TypeScript export report (api-extractor)                      |
-| `harness/docs/`           | Internal module maps for maintainers (may lag the current slice)        |
+| Doc                           | Audience                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `plans/02-public-api.md`      | Full consumer API — events, errors, serialization, customization ladder          |
+| `docs/05-consumer-api.md`     | Consumer API index and S4 surface summary                                        |
+| `CONTEXT.md`                  | Glossary (Entry, Field, Row, Row source, Rollup, …)                              |
+| `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                         |
+| `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                               |
+| `docs/06-plugin-authoring.md` | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
+| `harness/docs/`               | Internal module maps for maintainers (may lag the current slice)                 |
 
 ## Development
 
 ```
 pnpm install
 pnpm dev        # harness at http://localhost:5173
-pnpm verify     # format/typecheck/lint/boundaries/guards/unit tests/vendor-names/disables
-pnpm test:e2e   # Playwright smoke test against the harness
+pnpm verify:full # the gate: everything below, then Playwright against the harness
+pnpm verify      # CI parity only — no browser, so it cannot see e2e/
+pnpm test:e2e    # Playwright against the harness, on its own
 ```
+
+### `isDevMode()` is a library-build flag, not a consumer's
+
+`src/data/dev-mode.ts` reads `import.meta.env.DEV`. Vite resolves that constant when **this repo**
+builds `dist/`, not when a consumer builds their app. It bakes to `false`, and Rollup then drops
+every `if (isDevMode())` branch from the shipped bundle.
+
+The built output shows it. `src/render/dom/index.ts:81`'s "falling back to the default output"
+message sits behind the guard and appears **zero** times in `dist/api/index.js`. The two disposer
+`console.error` calls that carry no guard both survive. Three `console.` calls reach the bundle in
+total.
+
+So `isDevMode()` is true in exactly one place: this repo's own harness, running from source through
+`pnpm dev`. It is a **library-development** flag. It is not a consumer-environment flag, and a
+consumer's own dev server never turns it on.
+
+Two consequences for anyone adding a call site:
+
+- Use it for an assertion that helps **us** develop the library. That is what the existing sites
+  read as.
+- Never use it to give a consumer different behaviour in their dev and their production. One `dist/`
+  serves everyone, and their mode is invisible when we build it. `docs/adr/0009` records the three
+  mechanisms that _can_ see a consumer's mode, and why this project rejects all three.
+
+**Not yet audited:** thirteen further `isDevMode()` call sites exist in `src/` — `data/transaction.ts`,
+`data/build-commit-change-set.ts`, `data/serialization/`, `extensions/plugin-runtime.ts`,
+`view/plugin-ports.ts` and `view/gantt-shell.ts`. Each is dead-code-eliminated from `dist/` the same
+way. The ones read so far are genuine library-development assertions, which is the correct use. None
+has been checked against the question "was this written expecting a _consumer's_ dev build to reach
+it?" Parked here until it gets its own issue.
 
 The dev harness (`harness/`) is the library's first consumer. Open `http://localhost:5173` after
 `pnpm dev` — the main page demos tree rows, grid columns, field rollups, live `rowSource` switching,

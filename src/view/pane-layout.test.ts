@@ -16,7 +16,7 @@ describe('PaneLayout', () => {
     expect(container.querySelector('.fg-grid-pane')).not.toBeNull();
     expect(container.querySelector('.fg-splitter')).not.toBeNull();
     expect(container.querySelector('.fg-timeline-pane')).not.toBeNull();
-    expect(paneLayout.panes.grid).toBeInstanceOf(HTMLElement);
+    expect(paneLayout.panes.rows).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.splitter).toBeInstanceOf(HTMLElement);
     expect(paneLayout.panes.timeline).toBeInstanceOf(HTMLElement);
 
@@ -106,6 +106,17 @@ describe('PaneLayout', () => {
 
     expect(paneLayout.minGridWidth).toBe(120);
     expect(paneLayout.gridWidth).toBe(200);
+    paneLayout.destroy();
+  });
+
+  it('#126: contentWidth writes --fg-grid-content-width onto the grid pane', () => {
+    const container = el();
+    const paneLayout = new PaneLayout({ container });
+    const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;
+
+    paneLayout.contentWidth = 240;
+
+    expect(getComputedStyle(gridPane).getPropertyValue('--fg-grid-content-width').trim()).toBe('240px');
     paneLayout.destroy();
   });
 

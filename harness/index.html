@@ -2,182 +2,141 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FreeGantt harness — generic demo</title>
-    <link rel="stylesheet" href="./harness-nav.css" />
-    <style>
-      :root {
-        --page-bg: #fafaf7;
-        --page-ink: #1a1815;
-        --page-muted: #5e5a53;
-        --page-border: #e6e2d9;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-theme]) {
-          --page-bg: #15161a;
-          --page-ink: #eceae3;
-          --page-muted: #a8a49b;
-          --page-border: #2b2f36;
-        }
-      }
-      :root[data-theme='light'] {
-        --page-bg: #fafaf7;
-        --page-ink: #1a1815;
-        --page-muted: #5e5a53;
-        --page-border: #e6e2d9;
-      }
-      :root[data-theme='dark'] {
-        --page-bg: #15161a;
-        --page-ink: #eceae3;
-        --page-muted: #a8a49b;
-        --page-border: #2b2f36;
-      }
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 2rem;
-        background: var(--page-bg);
-        color: var(--page-ink);
-      }
-      .theme-toggle {
-        display: inline-flex;
-        gap: 0.25rem;
-        margin-bottom: 1rem;
-      }
-      .theme-toggle button {
-        font: inherit;
-        font-size: 0.85rem;
-        padding: 0.3rem 0.7rem;
-        border: 1px solid var(--page-border);
-        background: var(--page-bg);
-        color: var(--page-ink);
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      .theme-toggle button[aria-pressed='true'] {
-        background: var(--page-ink);
-        color: var(--page-bg);
-      }
-      #gantt {
-        /* Level-1 theming (plans/02 §4): row height is a CSS custom property the library reads,
-           not a restated constructor default (#39). */
-        --fg-row-height: 32px;
-        /* Grid pane width; PaneLayout owns applying this to the grid pane and its row layer so
-           they share one coordinate frame with the timeline pane (S1.8, D-S1.8-1/D-S1.8-2) — this
-           harness no longer restates it as raw CSS. Renamed from --fg-row-label-width: the gutter
-           is a pane width now, not a backend reservation. */
-        --fg-grid-pane-width: 720px;
-        border: 1px solid var(--page-border);
-        /* No overflow/position rule here any more (S1.8): PaneLayout builds the grid pane / splitter
-           / timeline pane structure inline, and the timeline pane is the library's own native
-           scroller (D-D, D-S1.8-1). This container only sizes the whole shell. */
-        height: 70vh;
-      }
-      /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar, and their
-         top/left origin, now ship in the library's own base stylesheet (S1.10/S1.11, view/styles.ts)
-         — this harness keeps only the typography that stays legitimately harness-owned (D-S1.11-8). */
-      .fg-tick {
-        font-size: 10px;
-      }
-      .fg-row {
-        font-size: 11px;
-        line-height: var(--fg-row-height);
-        padding: 0 6px;
-        box-sizing: border-box;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .fg-bar {
-        font-size: 11px;
-        line-height: var(--fg-row-height);
-        padding: 0 6px;
-        box-sizing: border-box;
-        white-space: nowrap;
-        overflow: hidden;
-      }
-      #toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 1rem;
-        margin: 1rem 0;
-        font-size: 0.9rem;
-      }
-      #toolbar select,
-      #toolbar button {
-        font: inherit;
-      }
-      #controls {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-        margin: 1rem 0;
-      }
-      #controls label {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.9rem;
-      }
-      #selection-readout {
-        margin: 0;
-        font-size: 0.85rem;
-        color: var(--page-muted);
-      }
-      #controls button {
-        font: inherit;
-        font-size: 0.9rem;
-      }
-      #controls input {
-        font: inherit;
-      }
-    </style>
+    <link rel="stylesheet" href="./harness-chrome.css" />
   </head>
   <body>
-    <h1>FreeGantt — generic demo</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      Fixture dataset as a four-level tree with grid columns. Switch to grouped rows, pack lanes, filter by
-      team, or hide Budget. The S4.11 acceptance playground with the changeset log stays on
-      <a href="./hierarchy.html">hierarchy.html</a>.
-    </p>
-    <div class="theme-toggle" role="group" aria-label="Theme">
-      <button type="button" data-theme-choice="auto">Auto</button>
-      <button type="button" data-theme-choice="light">Light</button>
-      <button type="button" data-theme-choice="dark">Dark</button>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <h1>Generic demo</h1>
+          <p>
+            A four-level fixture tree with grid columns. The strip on the chart is the surface a consumer
+            ships; everything under the torn rule drives the demo. The S4.11 acceptance playground with its
+            changeset log stays on <a href="./hierarchy.html">hierarchy.html</a>.
+          </p>
+        </div>
+
+        <div id="page-brief"></div>
+
+        <!-- The library's own surface: toolbar, chart and readout share one border and one rule
+           rhythm, so they read as a single instrument. -->
+        <section class="workbench" aria-label="Generic demo workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="selection-readout">No selection</span>
+          </div>
+        </section>
+
+        <!-- Everything below the torn rule is apparatus. It exercises the library; it ships to
+           nobody. The dashed rule and the plainer controls say so without a label having to. -->
+        <section class="bench" aria-label="Harness controls">
+          <div class="bench-head">
+            <h2>Harness bench</h2>
+            <p>Demo-only controls. None of this is library UI.</p>
+          </div>
+
+          <div class="bench-grid">
+            <div class="panel">
+              <h3>Rows and columns</h3>
+              <p>Row source, lane packing, filtering and column visibility.</p>
+              <div class="control-row">
+                <button id="rows-source-btn" type="button">Group by team</button>
+                <button id="pack-rows-btn" type="button">Pack overlapping bars</button>
+                <button id="filter-team-btn" type="button">Filter team: off</button>
+                <button id="sort-name-btn" type="button">Sort by name: off</button>
+              </div>
+              <div class="control-row">
+                <button id="toggle-budget-btn" type="button">Hide Budget</button>
+                <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Mutation</h3>
+              <p>
+                Every write goes through one transaction and one changeset. Double-click Name, Start or Budget
+                in the grid to edit in place.
+              </p>
+              <div class="control-row">
+                <input id="rename-input" type="text" size="16" aria-label="New name" />
+                <button id="rename-btn" type="button">Rename</button>
+                <button id="remove-btn" type="button">Remove</button>
+              </div>
+              <div class="control-row">
+                <button id="add-entry" type="button">Add entry</button>
+                <button id="cost-btn" type="button">Set cost 500</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Vetoes and capabilities</h3>
+              <p>
+                A Mobilization date line marks a hard boundary — <code>beforeEntryMove</code> refuses a drop
+                before it. Hold drop proves the async veto path.
+              </p>
+              <div class="control-row">
+                <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry</label>
+              </div>
+              <div class="control-row">
+                <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
+                <label><input id="lock-resize" type="checkbox" /> Lock resize</label>
+              </div>
+              <div class="notice" id="toast" hidden></div>
+            </div>
+
+            <div class="panel">
+              <h3>Plugins and renderers</h3>
+              <p>
+                Each control is a plugin over the public contract alone. <code>Mod+K</code> clears the
+                selection through a plugin-registered command.
+              </p>
+              <div class="control-row">
+                <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
+                <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+              </div>
+              <div class="control-row">
+                <label>
+                  <input id="renderers-toggle" type="checkbox" checked /> Custom milestone and cost renderers
+                </label>
+                <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Document</h3>
+              <p>
+                Round-trips the dataset through the public <code>toJSON</code>/<code>fromJSON</code> pair.
+              </p>
+              <div class="control-row">
+                <button id="export-btn" type="button">Export</button>
+                <button id="import-btn" type="button">Import</button>
+              </div>
+              <textarea
+                id="document-json"
+                rows="5"
+                aria-label="Dataset document JSON"
+                placeholder="Export writes the document here."
+              ></textarea>
+            </div>
+          </div>
+
+          <details class="log-panel" open>
+            <summary>Event log</summary>
+            <div id="log" role="log" aria-label="Event log"></div>
+          </details>
+        </section>
+      </main>
     </div>
-    <div id="controls">
-      <p id="selection-readout">Selection: (none)</p>
-      <label>Name <input id="rename-input" type="text" size="20" /></label>
-      <button id="rename-btn" type="button">Rename</button>
-      <button id="remove-btn" type="button">Remove</button>
-      <button id="undo-btn" type="button">Undo</button>
-      <button id="redo-btn" type="button">Redo</button>
-      <button id="toggle-budget-btn" type="button">Hide Budget</button>
-      <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
-      <button id="rows-source-btn" type="button">Group by team</button>
-      <button id="pack-rows-btn" type="button">Pack overlapping bars</button>
-      <button id="filter-team-btn" type="button">Filter team: off</button>
-      <button id="sort-name-btn" type="button">Sort by name: off</button>
-      <button id="expand-all-btn" type="button">Expand all</button>
-      <button id="collapse-all-btn" type="button">Collapse all</button>
-      <label>
-        Snap
-        <select id="snap-unit">
-          <option value="tick">Auto (preset's tick)</option>
-          <option value="none">Off</option>
-          <option value="hour">Hour</option>
-          <option value="day">Day</option>
-          <option value="week">Week</option>
-        </select>
-      </label>
-      <label>
-        Every
-        <input id="snap-increment" type="number" min="1" step="1" value="1" size="3" />
-      </label>
-    </div>
-    <div id="toolbar"></div>
-    <div id="gantt"></div>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

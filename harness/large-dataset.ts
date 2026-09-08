@@ -5,6 +5,10 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, TimeScaleModel } from '../src/api/index.js';
 import { seededEntryInputs } from '../fixtures/seeded-dataset.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'large-dataset');
 
 const dataset = new Dataset({ entries: seededEntryInputs({ count: 5000 }), timeZone: 'UTC' });
 const scale = new TimeScaleModel({ fit: 'preset' });

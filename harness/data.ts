@@ -1,9 +1,10 @@
 // e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): the mutation half of the live
 // binding, exercised the way an app author would — add/rename/move/remove buttons calling
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
-// re-read (D-S2-17). Rename/move/remove target `gantt.selection` (S3.1), not a parallel entry picker.
+// re-read (D-S2-17). Rename/move/remove target `gantt.selectedEntryIds` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
-// not move and `attemptMutation` returns `false` instead of throwing.
+// not move and `attemptMutation` returns `false` instead of throwing. S5.10 moved the veto itself
+// into a Dataset plugin (`plugins/lock-entries.ts`), so the flag lives in that plugin's own store.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -14,10 +15,15 @@
 // rebind (or the finding against destroy() if it does not).
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MS, attemptMutation, addMs, now } from '../src/api/index.js';
-import type { DatasetDocument, DatasetEventMap } from '../src/api/index.js';
+import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
+import type { DatasetDocument, DatasetEventMap, Disposer } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { lockEntries } from './plugins/lock-entries.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'mutation');
 
 declare global {
   interface Window {
@@ -25,9 +31,19 @@ declare global {
   }
 }
 
+// #142 shipped the core-Field override, and #256 gave it its first call site. This page declares
+// End read-only for the whole Dataset, which is the blunt, document-level lock. It can, because it
+// demonstrates mutation and serialization rather than drag-resize. `main.ts` shows the other half:
+// the same answer narrowed to one row through `interactions.edit`.
+//
+// The lock rides in the Document too. `editable` serializes on the Field, so an exported Document
+// carries it and an import puts it back (`data/serialization/field-document.ts`).
 const COST_FIELDS = {
   fieldTypes: { money: { rollUp: 'sum' as const } },
-  fields: [{ key: 'cost' as const, type: 'money' }],
+  fields: [
+    { key: 'cost' as const, type: 'money' },
+    { key: 'end' as const, editable: false },
+  ],
 };
 
 // S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
@@ -51,10 +67,17 @@ const ROLLUP_TREE = [
   },
 ];
 
+// S5.10, D-S5-24: the lock checkbox writes this plugin's own store instead of the page keeping a
+// flag of its own, and the plugin's `beforeChange` is what refuses the write. `Dataset.plugins` is
+// read-only, so every Dataset this page builds — including the imported one below — installs a
+// fresh one at construction.
+let locks = lockEntries();
+
 let dataset = new Dataset<{ cost: number }, { cost: number }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
+  plugins: [locks],
 });
 let gantt = new Gantt({ container: '#gantt', dataset });
 window.__dataset = dataset;
@@ -87,7 +110,7 @@ function firstEntryId(): string | undefined {
 }
 
 function refreshNameInput(): void {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) {
     nameInput.value = '';
     return;
@@ -97,7 +120,7 @@ function refreshNameInput(): void {
 }
 
 function refreshMutationButtons(): void {
-  const none = gantt.selectionEntries.length === 0;
+  const none = gantt.selectedEntries.length === 0;
   nameInput.disabled = none;
   renameBtn.disabled = none;
   moveBackBtn.disabled = none;
@@ -107,7 +130,7 @@ function refreshMutationButtons(): void {
 }
 
 function renderSelectionReadout(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedEntryIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -132,30 +155,42 @@ function onChange({ changeSet }: DatasetEventMap['change']): void {
   refreshHistoryButtons();
 }
 
-// D-S2-25: while the checkbox is on, refuse any changeset touching the current first entry. Four
-// lines, and it makes the veto visible on the same page as everything else.
-function onBeforeChange({ changeSet }: DatasetEventMap['beforeChange']): void | false {
-  if (!lockCheckbox.checked) return undefined;
-  const lockedId = firstEntryId();
-  const touchesLocked =
-    changeSet.updated.some((u) => u.id === lockedId) ||
-    changeSet.removed.some((r) => r.entity.id === lockedId);
-  if (!touchesLocked) return undefined;
-  logLine(`entries · ${lockedId} · refused (locked)`);
-  return false;
-}
-
 function bindGantt(): void {
   gantt.on('selectionChange', syncSelectionUi);
 }
 
 function bindDataset(): void {
   dataset.on('change', onChange);
-  dataset.on('beforeChange', onBeforeChange);
 }
+
+// Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
+// plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
+// `watchAllErrors` returns a `Disposer` for exactly this: an import below replaces both `dataset`
+// and `gantt`, so the old subscription is disposed first, alongside `bindDataset`/`bindGantt`'s own
+// rebind — calling `watchAllErrors` twice on the module-scope pair would otherwise leak a stale
+// subscription to entries the import just discarded (T1-4).
+let stopWatchingErrors: Disposer = () => {};
+
+function bindErrors(): void {
+  stopWatchingErrors();
+  stopWatchingErrors = watchAllErrors([dataset, gantt], (report) => {
+    const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+    logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
+  });
+}
+
+// D-S2-25, made visible: checking the box locks the current first entry, and the plugin refuses
+// every later changeset that touches it. The lock itself is a dataset write, so it logs like any
+// other change and one undo lifts it (#156).
+lockCheckbox.addEventListener('change', () => {
+  const id = firstEntryId();
+  if (id === undefined) return;
+  attemptMutation(() => (lockCheckbox.checked ? locks.lock(id) : locks.unlock(id)));
+});
 
 bindDataset();
 bindGantt();
+bindErrors();
 
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
@@ -164,7 +199,7 @@ addBtn.addEventListener('click', () => {
 });
 
 renameBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -174,7 +209,7 @@ renameBtn.addEventListener('click', () => {
 });
 
 function move(deltaMs: number): void {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -192,7 +227,7 @@ moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 costBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -202,7 +237,7 @@ costBtn.addEventListener('click', () => {
 });
 
 removeBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
@@ -226,12 +261,15 @@ exportBtn.addEventListener('click', () => {
 importBtn.addEventListener('click', () => {
   try {
     const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, COST_FIELDS);
+    locks = lockEntries();
+    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, { ...COST_FIELDS, plugins: [locks] });
+    lockCheckbox.checked = false;
     window.__dataset = dataset;
     gantt.destroy();
     gantt = new Gantt({ container: '#gantt', dataset });
     bindDataset();
     bindGantt();
+    bindErrors();
     toolbar.innerHTML = '';
     mountTimelineToolbar({ gantt, container: toolbar });
     syncSelectionUi();

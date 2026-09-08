@@ -6,7 +6,19 @@
 
 const layer = (name) => `^src/${name}(/|$)`;
 
-function forbid(name, from, allowedTargets) {
+// Leaf-only widenings (plans/01-domain-architecture.md §1, "render/ --> data/dev-mode.ts" and
+// "extensions/ --> data/dev-mode.ts"): names one file, not a whole layer — `pathNot` excludes it from
+// the forbidden set below without opening a general edge to the rest of that layer. Every other file
+// in `data/` stays unreachable from `render/`/`extensions/`.
+const DEV_MODE_LEAF = '^src/data/dev-mode\\.ts$';
+// The same widening for the one registration mechanism every `register*` seam shares (#154, #155):
+// a stack per key, a `Disposer` that removes exactly its own registration. It imports one type from
+// `model/` and nothing else, so naming it here routes no `layout/` behaviour into `extensions/` —
+// `extensions/commands.ts` is the only importer, and it needs the identical stack-and-restore the
+// three view-side seams already take. Duplicating the mechanism there is what this leaf prevents.
+const REGISTRATION_TABLE_LEAF = '^src/layout/registration-table\\.ts$';
+
+function forbid(name, from, allowedTargets, allowedLeaves = []) {
   const others = [
     'model',
     'time',
@@ -23,9 +35,11 @@ function forbid(name, from, allowedTargets) {
   return {
     name,
     severity: 'error',
-    comment: `plans/01 §1: src/${from} may only import ${allowedTargets.length ? allowedTargets.join(', ') : 'nothing in src/'}.`,
+    comment: `plans/01 §1: src/${from} may only import ${allowedTargets.length ? allowedTargets.join(', ') : 'nothing in src/'}${allowedLeaves.length ? `, plus the named leaf(s): ${allowedLeaves.join(', ')}` : ''}.`,
     from: { path: layer(from) },
-    to: { path: others.map(layer) },
+    to: allowedLeaves.length
+      ? { path: others.map(layer), pathNot: allowedLeaves }
+      : { path: others.map(layer) },
   };
 }
 
@@ -53,15 +67,41 @@ module.exports = {
     // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO, time/instant.ts's
     // toISO) and mutation-time input reading (time/input.ts's toInstant/toEndInstant) both need it.
     forbid('data-boundary', 'data', ['time', 'model']),
-    forbid('render-boundary', 'render', ['layout']),
+    // data/dev-mode.ts: S5.4 QC — render/dom/index.ts and extensions/plugin-runtime.ts each hand-
+    // copied this one-line import.meta.env.DEV check because neither may reach data/ generally; this
+    // names the single zero-dependency file both may import instead (plans/01 §1).
+    forbid('render-boundary', 'render', ['layout'], [DEV_MODE_LEAF]),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
-    forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model']),
+    // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginRuntime` and hands it the
+    // public `Gantt` façade; the arrow is view/ -> extensions/, never the reverse (see the
+    // `extensions-public-only` rule below — extensions/ may not import view/ back).
+    forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model', 'extensions']),
     // model: Entry/EntryId/ItemId types flow through interaction/ as type-only params (S3, D-S3-4/
     // D-S3-5, plans/s3-direct-manipulation/README.md P3 — landed with S3.2). One arrow, nothing else:
     // interaction/ still may not reach time/, layout/ or render/ — every date/pixel computation a
     // gesture needs is a pure layout/ function the shell hands back through EntryGestureContext.
     forbid('interaction-boundary', 'interaction', ['view', 'data', 'model']),
-    forbid('extensions-boundary', 'extensions', ['view', 'interaction']),
+    // S5.1, D-S5-5: the dogfood gate as a lint rule, not a review note — replaces the old placeholder
+    // extensions-boundary rule (which allowed view/interaction and forbade api/model, backwards from
+    // what this slice needs). `extensions/` (the plugin runtime plus every built-in feature) may see
+    // only what a third-party plugin author can import — `api/` and `model/`. When a built-in cannot
+    // do its job through that surface, the public API has a gap: close the gap, never widen this
+    // rule. `scripts/guard-red-test.mjs` proves it actually blocks a violation.
+    // data/dev-mode.ts is the one named exception (S5.4 QC, see render-boundary above): a zero-
+    // dependency leaf, not a `data/` edge — every other file under `data/` stays unreachable here.
+    {
+      name: 'extensions-public-only',
+      severity: 'error',
+      comment:
+        'plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md D-S5-5: src/extensions may only ' +
+        'import src/api and src/model, plus the named leaves src/data/dev-mode.ts and ' +
+        'src/layout/registration-table.ts.',
+      from: { path: '^src/extensions' },
+      to: {
+        path: '^src/(?!extensions|api|model)',
+        pathNot: [DEV_MODE_LEAF, REGISTRATION_TABLE_LEAF],
+      },
+    },
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
     // TimeScaleModel/ScrollModel by issue #91 §9-I — D9 names both as public, consumer-constructed
@@ -75,7 +115,10 @@ module.exports = {
     // itself takes it structurally-typed, no import of its own — see gantt-shell.ts's
     // `AttachEntryGestures` comment), the same way it already wires view/, data/, model/, time/ and
     // layout/ together for a plain `new Gantt(...)`.
-    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction']),
+    // extensions: S5.1, D-S5-1/D-S5-5 — `api/plugin.ts` types `PluginContext.disposables` against
+    // `extensions/disposables.ts`'s `DisposableStore` (a leaf with no further imports of its own, so
+    // this one addition carries no risk of routing api/ through the DOM-touching parts of extensions/).
+    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction', 'extensions']),
     // D-S2-23: the first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
     // path) and `transaction.ts` (construction path) may import the Rollup — delete src/data/rollup.ts
     // and groups keep their authored values, the same result `rollUpKinds: 'none'` already gives a

@@ -3,13 +3,14 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, ScrollModel, attemptMutation } from '../src/api/index.js';
+import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
 import type {
   DatasetDocument,
   DatasetEventMap,
   Entry,
   EntryInput,
   FieldContext,
+  GridColumnsChange,
   GridColumnInput,
   RowHeightMode,
   RowSource,
@@ -17,14 +18,24 @@ import type {
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarchy');
 
 declare global {
   interface Window {
     __dataset: Dataset<{ cost: number }, { cost: number }>;
     __gantt: Gantt;
+    /** `main.ts`'s own seam (#256) — declared once, here, beside the two globals it joins. */
+    __fixedFinishEntryId: string;
   }
 }
 
+// S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
+// Name, Start, End and Cost stay open on `CORE_FIELDS`'/`hierarchyFieldOptions`'s own defaults.
+// End stays editable here: this page drags the handle pair, and one answer gates the cell editor and
+// that handle alike. `main.ts` shows the refusal instead, on one row (#256).
 const GRID_WITH_COST: readonly GridColumnInput[] = [
   'name',
   'start',
@@ -43,6 +54,7 @@ const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn'
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 const autoGroupCheckbox = document.querySelector<HTMLInputElement>('#autogroup-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-editor-checkbox')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
@@ -51,6 +63,7 @@ const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
 
 let autoGroup = true;
 let costColumnVisible = true;
@@ -82,6 +95,7 @@ function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
     rowSource: buildRowSource(),
     range: 'fitDataset',
     scroll: paneScroll,
+    plugins: [inlineEditing()],
   });
 }
 
@@ -102,7 +116,7 @@ function buildRowSource(): RowSource {
   if (rowsMode === 'grouped') {
     return {
       source: 'group',
-      groupBy: (entry: Entry, fields?: FieldContext) => fields?.read<string>(entry, 'team') ?? 'unassigned',
+      groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
       ...shared,
     };
   }
@@ -133,14 +147,22 @@ function logLine(text: string): void {
 }
 
 function renderSelection(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedEntryIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
+}
+
+/** S5.7, D-S5-18: one status line for every `gridColumnsChange` — a resize drag, a reorder drop, and
+ *  the `toggle-cost-col` button's own `gantt.gridColumns = […]` assignment all fire it through the
+ *  same commit sequence, so this one line covers all three. */
+function renderGridColumns({ to }: GridColumnsChange): void {
+  gridColumnsReadout.textContent = `Columns: ${to.map((column) => `${String(column.field)} (${column.width ?? 'flex'}px)`).join(', ')}`;
+  logLine(`[gridColumnsChange] ${to.map((column) => String(column.field)).join(', ')}`);
 }
 
 function refreshHistoryButtons(): void {
   undoBtn.disabled = !dataset.canUndo;
   redoBtn.disabled = !dataset.canRedo;
-  costBtn.disabled = gantt.selectionEntries.length === 0;
+  costBtn.disabled = gantt.selectedEntries.length === 0;
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
@@ -157,6 +179,23 @@ function bindGantt(): void {
   gantt.on('selectionChange', () => {
     renderSelection();
     refreshHistoryButtons();
+  });
+  gantt.on('gridColumnsChange', renderGridColumns);
+  // S5.8, D-S5-19, U8: with the checkbox on, a Name edit never opens the built-in editor — this
+  // opens `window.prompt` instead and writes through the ordinary `dataset.entries.update` path,
+  // so the change log shows one `[change]` row either way (D-S5-19: "there is no second write
+  // channel"). Only `field === 'name'` is intercepted — Start and Cost keep the built-in editor
+  // even with the checkbox on, so the page can show both paths side by side.
+  gantt.on('beforeEntryEdit', ({ entry, field }) => {
+    if (!customEditorCheckbox.checked || field !== 'name') return;
+    const next = window.prompt(`Rename "${entry.name}"`, entry.name);
+    if (next !== null && next !== entry.name) {
+      attemptMutation(() => dataset.entries.update(entry.id, { name: next }));
+    }
+    return false;
+  });
+  gantt.on('entryEdit', ({ entry, field, to }) => {
+    logLine(`[entryEdit] ${String(entry.id)}.${String(field)} -> ${JSON.stringify(to)}`);
   });
 }
 
@@ -217,7 +256,7 @@ reparentBtn.addEventListener('click', () => {
 });
 
 costBtn.addEventListener('click', () => {
-  const entries = gantt.selectionEntries;
+  const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {

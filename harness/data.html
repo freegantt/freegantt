@@ -92,42 +92,45 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S2 mutation, live binding, undo/redo, export/import</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): every button below is a plain call on
-      the public <code>dataset.entries.add/update/remove</code> surface (D-S2-17). Click a bar to select it.
-      Rename, move, and remove act on <code>gantt.selection</code>. The log below is built from each committed
-      <code>ChangeSet</code>, never by re-reading the dataset, and subscribes to
-      <code>dataset.on('change')</code> the same way <code>GanttShell</code>'s own live binding does (D-S2-24)
-      — the honest proof that nothing here reaches past the public API. S4.1: a declared
-      <code>cost</code> Field writes <code>entry.meta.cost</code>. Select a bar and press
-      <strong>Set cost 500</strong>, or in the console
-      <code>window.__dataset.entries.update('task-a', { cost: 500 })</code> — the log shows the
-      <code>cost</code> row on the task and on <code>phase</code> in the same changeset; Undo reverts both in
-      one press (S4.2).
-    </p>
-    <div id="controls">
-      <button id="add-entry" type="button">Add entry</button>
-      <p id="selection-readout">Selection: (none)</p>
-      <label>Name <input id="rename-input" type="text" size="20" /></label>
-      <button id="rename-btn" type="button">Rename</button>
-      <button id="move-back-btn" type="button">Move −1 day</button>
-      <button id="move-fwd-btn" type="button">Move +1 day</button>
-      <button id="remove-btn" type="button">Remove</button>
-      <button id="cost-btn" type="button">Set cost 500</button>
-      <button id="undo-btn" type="button">Undo</button>
-      <button id="redo-btn" type="button">Redo</button>
-      <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>
-    </div>
-    <div id="toolbar"></div>
-    <div id="gantt"></div>
-    <div id="document-controls">
-      <button id="export-btn" type="button">Export</button>
-      <button id="import-btn" type="button">Import</button>
-      <textarea id="document-json" rows="10" cols="80" aria-label="Dataset document JSON"></textarea>
-    </div>
-    <div id="log" aria-label="Changeset log"></div>
+    <main>
+      <h1>FreeGantt — S2 mutation, live binding, undo/redo, export/import</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): every button below is a plain call
+        on the public <code>dataset.entries.add/update/remove</code> surface (D-S2-17). Click a bar to select
+        it. Rename, move, and remove act on <code>gantt.selection</code>. The log below is built from each
+        committed <code>ChangeSet</code>, never by re-reading the dataset, and subscribes to
+        <code>dataset.on('change')</code> the same way <code>GanttShell</code>'s own live binding does
+        (D-S2-24) — the honest proof that nothing here reaches past the public API. S4.1: a declared
+        <code>cost</code> Field writes <code>entry.meta.cost</code>. Select a bar and press
+        <strong>Set cost 500</strong>, or in the console
+        <code>window.__dataset.entries.update('task-a', { cost: 500 })</code> — the log shows the
+        <code>cost</code> row on the task and on <code>phase</code> in the same changeset; Undo reverts both
+        in one press (S4.2).
+      </p>
+      <div id="page-brief"></div>
+      <div id="controls">
+        <button id="add-entry" type="button">Add entry</button>
+        <p id="selection-readout">Selection: (none)</p>
+        <label>Name <input id="rename-input" type="text" size="20" /></label>
+        <button id="rename-btn" type="button">Rename</button>
+        <button id="move-back-btn" type="button">Move −1 day</button>
+        <button id="move-fwd-btn" type="button">Move +1 day</button>
+        <button id="remove-btn" type="button">Remove</button>
+        <button id="cost-btn" type="button">Set cost 500</button>
+        <button id="undo-btn" type="button">Undo</button>
+        <button id="redo-btn" type="button">Redo</button>
+        <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>
+      </div>
+      <div id="toolbar"></div>
+      <div id="gantt"></div>
+      <div id="document-controls">
+        <button id="export-btn" type="button">Export</button>
+        <button id="import-btn" type="button">Import</button>
+        <textarea id="document-json" rows="10" cols="80" aria-label="Dataset document JSON"></textarea>
+      </div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+    </main>
     <script type="module" src="./data.ts"></script>
   </body>
 </html>
