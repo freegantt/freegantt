@@ -6,10 +6,14 @@ import { changeSetId } from '../model/index.js';
 /** A minimal fake — `on`/`off` are the only members this file is allowed to touch on a Dataset;
  *  `entries`/`timeZone` are unused stubs, present only to satisfy the `Dataset` contract. */
 function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void } {
-  const handlers = new Set<(payload: { changeSet: ChangeSet }) => void | false>();
+  // `DatasetEventMap` now carries `error` beside the two change events (S5.12), so one Set cannot be
+  // typed against a single payload shape. `on`/`off` still store whatever handler they are given;
+  // `emit` below only ever hands them a `change` payload.
+  const handlers = new Set<(payload: never) => void | false>();
   const dataset: Dataset = {
     entries: undefined as unknown as Dataset['entries'],
     timeZone: 'UTC',
+    datasetRevision: 0,
     isRollUpKind: () => false,
     fields: { all: [] },
     field: () => undefined,
@@ -23,7 +27,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
   return {
     dataset,
     emit: (changeSet) => {
-      for (const handler of handlers) handler({ changeSet });
+      for (const handler of handlers) (handler as (payload: { changeSet: ChangeSet }) => void)({ changeSet });
     },
   };
 }

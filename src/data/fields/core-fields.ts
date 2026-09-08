@@ -1,17 +1,21 @@
 // data/ — core Fields are ordinary declarations (D-S4-4). They always set `source` explicitly so
 // omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
 
-import type { Duration, Entry, Field, Instant } from '../../model/index.js';
+import type { Duration, Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
+// Segment identity is part of the value (#212, ADR 0010): an id-only write — the same start and end,
+// a different `SegmentId` — must reach the changeset, or the Selection silently loses what it holds.
 const segmentsEqual = (from: unknown, to: unknown): boolean => {
   const a = from as Entry['segments'];
   const b = to as Entry['segments'];
   if (a === b) return true;
   if (a === undefined || b === undefined || a.length !== b.length) return false;
-  return a.every((span, index) => span.start === b[index]?.start && span.end === b[index]?.end);
+  return a.every(
+    (span, index) => span.id === b[index]?.id && span.start === b[index]?.start && span.end === b[index]?.end,
+  );
 };
 
 /** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */
@@ -27,9 +31,14 @@ function formatStart(value: unknown, ctx: { timeZone: string; locale: Intl.Local
   return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
 }
 
-function formatEnd(value: unknown, ctx: { timeZone: string; locale: Intl.LocalesArgument }): string {
+function formatEnd(
+  value: unknown,
+  ctx: { timeZone: string; locale: Intl.LocalesArgument },
+  entry: Entry,
+): string {
   if (value === undefined || value === null) return '';
-  return formatEndInclusive(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
+  const span = { start: entry.start, end: value as Instant };
+  return formatEndInclusive(ctx.timeZone, span, ctx.locale, DATE_TIME_FORMAT);
 }
 
 function formatDuration(value: unknown): string {
@@ -52,7 +61,12 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     source: { from: 'entry', field: 'name' },
     equals: byReference,
     formatValue: stringifyPrimitive,
-    column: { header: 'Name' },
+    // #142: a stored, ordinary value with nothing else that ever rewrites it — nothing refuses an
+    // edit here by default.
+    editable: true,
+    // #139: the Name column carries the tree indent and twisty on top of its text, so its natural
+    // width is wider than a date's.
+    column: { header: 'Name', width: 240 },
   },
   {
     key: 'start',
@@ -60,7 +74,10 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     rollUp: 'min',
     equals: byReference,
     formatValue: formatStart,
-    column: { header: 'Start' },
+    // #142: one answer gates the inline cell editor and bar drag-resize alike (I14) — `true` is
+    // what every span kind already allowed a resize drag to write before this Field existed.
+    editable: true,
+    column: { header: 'Start', width: 120 },
   },
   {
     key: 'end',
@@ -68,14 +85,16 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     rollUp: 'max',
     equals: byReference,
     formatValue: formatEnd,
-    column: { header: 'End' },
+    // #142: see `start` above — the same one answer, the same reason.
+    editable: true,
+    column: { header: 'End', width: 120 },
   },
   {
     key: 'kind',
     source: { from: 'entry', field: 'kind' },
     equals: byReference,
     formatValue: stringifyPrimitive,
-    column: { header: 'Kind' },
+    column: { header: 'Kind', width: 100 },
   },
   {
     key: 'parentId',
@@ -100,6 +119,12 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     },
     compare: compareDuration,
     formatValue: formatDuration,
-    column: { header: 'Duration', align: 'end' },
+    column: { header: 'Duration', align: 'end', width: 100 },
   },
 ]);
+
+/** Whether `key` names one of the Fields above. `data/` asks twice: the codec never writes a core
+ *  Field into a Document, and `FieldRegistry.authored` never reports one as consumer-written. */
+export function isCoreFieldKey(key: FieldKey): boolean {
+  return CORE_FIELDS.some((field) => field.key === key);
+}

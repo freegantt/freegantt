@@ -73,7 +73,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Undo/redo: transaction = atomic unit; recorded changesets replayed exactly; history API (`canUndo`, capacity).
 - Changesets: `{ added, removed, updated: {field, from, to} }` (`01` §6); `dataset.on('change')`. the key type is **`FieldKey`** (retiring `EntryField`, one concept with two names) and it stays **open**, validated at runtime rather than typed `keyof Omit<Entry, 'id'>` — it is public through `FieldUpdated` and the undo record, and S4's field registry (`01` §2.6, ADR 0005) cannot open it later without a breaking change. `dataset.apply(changeSet)` is deferred to the slice that ships a sync adapter (D-S2-11) — `plans/02` §6's "sync adapter is an extension, not a core change" promise is discharged by the changeset contract itself (`from`/`to` on `on('change')`), which S2 ships either way; `apply` is what such an extension would write.
 - Serialization: `toJSON()`/`fromJSON()` with `schema: 1`, ISO instants, opaque `meta` round-trip.
-- Public mutation API: `dataset.entries.add/update/remove`, typed, validating. `dataset.dependencies.*` is not S2's — `StoreName` is `'entries'` only until the first plugin store exists (S5 runtime; scheduling's `Dependency` store in S7).
+- Public mutation API: `dataset.entries.add/update/remove`, typed, validating. `dataset.dependencies.*` is not S2's — `StoreName` was `'entries'` only until the first plugin store existed. **Satisfied in S5.10 (2026-09-04):** `StoreName` is now `'entries' | \`plugin:${PluginId}\``, and `ctx.store.reserve()` makes the first such store (D-S5-24); scheduling's `Dependency` store is the second, in S7, and needs no core change to arrive.
 - View binding: committed changesets invalidate layout incrementally as defined and asserted by D-S2-16 — a changeset with only `updated` rows never rebuilds the row-height index, one with `added`/`removed` rows does; row-level incrementality inside `computeFrame` is not S2's, and is S6's to decide.
 - Harness: mutation playground — edit fixture via console/buttons, watch the Gantt update; undo/redo buttons; changeset log panel; export/import JSON.
 
@@ -150,12 +150,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Snapping via the preset's `snap` spec; modifier key for fine placement.
 - Capabilities: the `interactions` config resolved per entry over per-kind defaults (`02` §4.1); one resolution gates gesture arming *and* affordance rendering — handles, cursors (I14). `select` has no affordance; pointer and keyboard still refuse off the same `can('select')`. Link ports wait for S7.
 - Cancelable events: `beforeEntryMove` / `beforeEntryResize` / `beforeSelectionChange` + after-events; async veto suspends with pending state (`02` §3). `beforeLinkCreate` waits for S7.
-- Speculative preview: once per animation frame, call the **same** `EditExtender` the commit path uses, with a draft `proposed`. Paint the user's draft and the extender's extra `EntryEdits` as ghosts (transforms on existing nodes). Discard on cancel. Identity extender → only the dragged bar ghosts. A test injects an extender (same seam as S2) to prove extra bars ghost without `scheduling/`. `interaction/` never imports `schedule()` (`01` §7).
+- Speculative preview: once per animation frame, call the **same** `EditExtender` the commit path uses, with a draft `proposed`. Paint the user's draft and the extender's extra `EntryEdits` as ghosts (transforms on existing nodes). Discard on cancel. Identity extender → only the dragged bar ghosts. A test injects an extender (same seam as S2) to prove extra bars ghost without `scheduling/`; S5.10 wires the public route, so `api/gantt.ts` hands the bound Dataset's own occupant to the preview and an installed Dataset plugin ghosts through the same path. `interaction/` never imports `schedule()` (`01` §7).
 - One transaction per gesture at commit (I6); undo reverts the user's edit and any extender extras in one step.
 - Keyboard parity begins: selected bar nudges by snap with arrow keys, one transaction per press; Escape clears the selection and hands the arrows back to panning. `Enter` is reserved and a no-op — it opens the inline editor, which is S5 (D-S3-13).
 - Timeline navigation gestures (S3.7, D-S3-14, closed D-S1.12-17): ctrl/⌘+wheel anchored zoom calling `zoomIn`/`zoomOut` (one `zoomPresets` step per wheel notch); shift+wheel horizontal pan; `PageUp`/`PageDown`/`Home`/`End`/arrow keys for pan. These write nothing to the dataset, so the arm-threshold, escape-cancel and one-transaction-per-gesture invariants do not apply to them — they are read-only viewport gestures over the surface S1.12 ships. Continuous `zoomBy` stays an expert call; the wheel does not use it.
 - Cursor date hairline (deferred here from S1.13, D-S1.13-9, issue #99 gap 5): show the instant under the pointer during a drag, via `instantForX` over the `DateLine` seam S1.13 ships. Read-only, same invariant exemption as the line above; pairs with #100's gesture work.
-- Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast). The lock-style injected extender that makes extra ghosts visible **moves to S5** (listed there): the public way to claim the extender slot lands with the plugin runtime (D-S2-6), and until it does, a harness page cannot install one without reaching past the public API — which the harness rule (CLAUDE.md) forbids. S3 proves the same behaviour in a `dom` test through the internal seam S2 already sanctions (`plans/s3-direct-manipulation/README.md` §0 P1).
+- Harness: editing playground; a veto demo (drop before a boundary date is rejected with a toast). The lock-style injected extender that makes extra ghosts visible **moves to S5** (listed there): the public way to claim the extender slot lands with the plugin runtime (D-S2-6), and until it does, a harness page cannot install one without reaching past the public API — which the harness rule (CLAUDE.md) forbids. S3 proves the same behaviour in a `dom` test through the internal seam S2 already sanctions (`plans/s3-direct-manipulation/README.md` §0 P1). **The public route landed in S5.10:** the hook has one occupant at a time and installing composes (D-S5-23), so `DatasetOptions.plugins` is how a page claims it.
 
 **Acceptance**
 
@@ -209,7 +209,13 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ## S5 — Extensibility, editing surfaces, a11y completion
 
-**Position:** after S4, before S6. **Spec drafted, not started.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.12-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.12-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+**Position:** after S4, before S6. **Done, gate passing.** Tracker: [`plans/s5-extensibility-and-editing/README.md`](./s5-extensibility-and-editing/README.md); work splits into [`s5.1-plugin-runtime.md`](./s5-extensibility-and-editing/s5.1-plugin-runtime.md)–[`s5.13-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.13-gallery-and-gate.md). That spec settles seventeen scope calls, including OQ8 — `setExtender` composes rather than replaces (answered 2026-09-01), which rewords locked D4 in the same change as S5.10's code.
+
+**Scope calls that changed this slice's own scope, settled in [`s5.13-gallery-and-gate.md`](./s5-extensibility-and-editing/s5.13-gallery-and-gate.md):**
+
+- The `features: { tooltips: true, ... }` name table this section first sketched never shipped. A plugin is a value, not a name in a table: `Gantt.plugins` and `Dataset.plugins` each take an array of factories (`plugins: [tooltips(), contextMenu({...})]`), so an unused feature costs zero bundle bytes because nothing names it (D-S5-2, gate `[S5-A6]`).
+- The entry editor is a plugin, not a core feature. `inlineEditing()` ships from `extensions/features/` and installs through `Gantt.plugins`, the same route `tooltips()` and `contextMenu()` take — proof that the dogfood rule (`[S5-A1]`) covers editing too.
+- `registerField` moved contract. A Gantt plugin's `PluginContext` no longer carries it: a Gantt plugin shows a Field through `view.registerGridColumn` alone, and only a Dataset plugin declares a Field, through `ctx.fields.register` on the Dataset plugin contract S5.10 shipped (`01` §10.2).
 
 **Goal:** the library's extension story is real and dogfooded (gate: a non-trivial built-in feature uses only the public plugin API), the grid grows into a proper editable table, and accessibility reaches its full committed level (D11).
 
@@ -219,7 +225,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - `extensions/`: plugin runtime implementing the full `PluginContext` (`01` §10) — decorations, columns, renderers, overlay anchor, controllers, keybindings, commands, disposables. Public claim of `data/`'s extender slot (`DatasetOptions.plugins`, `setExtender`, #15) lands here so a later plugin can occupy it. S7 is the first-party occupant; until then the slot stays identity.
 - Built-in features **as plugins**: tooltips (shared `Popup` primitive: anchoring, flipping, clamping, focus trap), context menu (command-registry-driven), row highlight decorations, today line.
-- Harness: the lock-style extender demo deferred here from S3 — drag one bar, watch a locked second bar ghost — now that a page can install an extender through the public claim above. S3 already proves the preview path; this makes it pokeable.
+- Harness: the lock-style extender demo deferred here from S3 — drag one bar, watch a locked second bar ghost — now that a page can install an extender through the public claim above. S3 already proves the preview path; this makes it pokeable. **Landed in S5.10:** `harness/plugins/lock-entries.ts`, installed by `harness/editing.html` (`e2e/plugins.spec.ts`).
 - Grid maturation: grid-column **presentation** over S4's fields — header, width, alignment, `cellRenderer`; inline editors (text, date via a pluggable date-input seam — no bundled date-picker dependency), column resize/reorder; `beforeEntryEdit` veto/replace flow. There is no second definition system: a column names a field, and a consumer field and a core field take the same path (ADR 0005).
 - `PluginContext.data.registerField` / `view.registerGridColumn` (`01` §10): a plugin declares a field that aggregates exactly like a core one, and shows it like any other.
 - Renderer callbacks at every declared point (`bar`, `cell`, `header`, `tooltip`), text-safe by default (I13).
@@ -228,12 +234,12 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [ ] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
-- [ ] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
-- [ ] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
-- [ ] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
-- [ ] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
-- [ ] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
+- [x] `[S5-A1]` Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate).
+- [x] `[S5-A2]` A harness-only third-party-style plugin (e.g., a "weekend shading" plugin) is written against the public contract only. (Was "weekend shading + jump-to-today"; the today line and `panToToday` ship in core at S1.12, so shading alone carries the gate.)
+- [x] `[S5-A3]` A consumer-defined entry kind (custom renderer + capabilities + context-menu `when` items, registered via config/plugin only) renders and behaves correctly with zero core edits — the §2.5 open-set claim, proven.
+- [x] `[S5-A4]` Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages.
+- [x] `[S5-A5]` Consumer replaces the entry editor via `beforeEntryEdit` (demo in harness).
+- [x] `[S5-A6]` Unused features are absent from a consumer bundle (tree-shaking test in CI).
 
 ---
 
@@ -267,6 +273,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Split, settled since this section was written (2026-09-02):** the S5.0 grill on #111 split "this plugin" into two, one-way — `entryDependencies()` (the `Dependency` store, the link-create gesture, link rendering) and `scheduling()` (propagation, pins, `SchedulingPolicy`, diagnostics), with `scheduling()` requiring `entryDependencies()` and never the reverse (`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` D-S5-30/D-S5-31). The scope below still reads as one plugin; #136 carries the reusable design forward and re-splitting this section across the two factories is scoped work for whoever opens S7. #136 also has an **open, undecided proposal** for the link-emitter boundary (a Gantt-side plugin reading a Dataset-side plugin's store) — settle that before writing the `layout/` line below.
 
+**Blocking prerequisite — #197, met (2026-09-05).** The plugin contract used to publish `merge(next(request), mine(request))` while the library exported no `merge`. `mergeEntryEdits` is now a package export, re-exported from `api/dataset-plugin.ts` beside the `DatasetEditHook` contract that hands a plugin the occupant it has to merge with. Every doc example composes with it, and `src/data/edit-extension.test.ts` pins the law extenders on **one** entry obey **at any depth**: every write survives, and every `proposedKeys` with it. The law was first pinned at two extenders only, and it broke at three — `mergeStoredEdits` stamped an empty `proposedKeys` when neither side stated one, so a third merge read the first two plugins' writes as nothing and dropped them from the store, the changeset and undo (#238, fixed 2026-09-06). The depth-three case is pinned now. Two follow-on defects the export uncovered are fixed in the same change — `mergeStoredEdits` lost a raw patch's writes when the other side proposed Field keys, and I4's dev guard read `proposedKeys` as a Field name and refused any composed extender edit. `scheduling()` composing over `entryDependencies()` (D-S5-30/D-S5-31) can now stand on the seam. Gate row: `00` §4, S6 → S7.
+
 **Scope**
 
 - `scheduling/`: `schedule(request) → { patch, diagnostics }` — pure, deterministic; worklist-loop propagation (I3) with the 5,000-link chain fixture; lag per dependency type (FS/SS/FF/SF, negative legal); cycle diagnostics naming members; pinned-entry semantics (report, never move — the pin flag lives in the plugin's own per-entry storage per the #12 contract, not on `Entry`). Kind semantics owned by the policy per `01` §2.5. The engine moves children and stops; span rollup stays `data/`'s commit step (D-S2-22).
@@ -289,6 +297,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] Dragging a predecessor shows successors' ghost positions live; cancel discards them — via the S3 extender preview, not a `schedule()` call in `interaction/`.
 - [ ] The plugin uses only the public plugin contract (zero private imports into `src/scheduling/` from `view/`/`render/`/`interaction/`, and the reverse).
 - [ ] `scheduling/` has zero imports from view/render/interaction (lint-proven), >90% coverage — it's pure; no excuse.
+- [ ] `AGENTS.md`/`CLAUDE.md` no longer says the API can change freely because nothing has shipped — this is the last slice, so drop that framing as the final step of S7 (the API is public now).
 
 ---
 

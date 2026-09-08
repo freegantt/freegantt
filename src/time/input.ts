@@ -25,8 +25,31 @@ function isDateOnly(input: InstantInput): boolean {
   return typeof input === 'string' && DATE_ONLY.test(input);
 }
 
-function invalid(input: InstantInput, reason: string): InvalidInstantError {
-  return new InvalidInstantError(`toInstant(): ${JSON.stringify(input)} ${reason}`);
+// The name the consumer knows their own call by, for the message a bad value produces (#237, #239).
+// `toInstant` is reached from `entries.add`, `entries.update`, an `EditExtender` cascade,
+// `gantt.dateLines` and more. A prefix baked in here would tell all but one of those callers about a
+// call they never made, which is the wrong-door fault #237 exists to close. So the name comes from
+// the caller, exactly as `data/entry-reader.ts` threads its own `EditOrigin`.
+//
+// The parameter is optional, because a caller that names nothing gets a message with no prefix, and
+// no prefix beats a wrong one. Every caller should still name itself; the ones in `src/api/gantt.ts`
+// do not yet.
+
+/** What to write instead. Two of the three faults below end with this sentence. */
+const WRITE_A_DATE = 'Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
+const UNREADABLE = `is not a date this library reads. ${WRITE_A_DATE}`;
+const NO_SUCH_DATE = 'names a date the calendar does not have. Write a date the calendar has.';
+const NOT_FINITE = `is not a finite count of epoch milliseconds. ${WRITE_A_DATE}`;
+
+/** Builds the fault one bad value produces. The value is a member as well as a sentence: a bulk
+ *  loader catches this and names the row it came from, instead of parsing our wording (#237).
+ *
+ *  A string is quoted, so an empty string and a stray space are both visible. Everything else prints
+ *  as itself — `String(new Date(NaN))` is already the words "Invalid Date". */
+function invalid(input: InstantInput, reason: string, operation: string | undefined): InvalidInstantError {
+  const wrote = typeof input === 'string' ? JSON.stringify(input) : String(input);
+  const where = operation === undefined ? '' : `${operation}: `;
+  return new InvalidInstantError(`${where}${wrote} ${reason}`, input);
 }
 
 /**
@@ -37,7 +60,7 @@ function invalid(input: InstantInput, reason: string): InvalidInstantError {
  * mode to catch. Only the date is compared — a Plain time inside a DST gap legitimately shifts its
  * hour, and that is a resolution, not an error.
  */
-function fromPlainString(zone: string, value: string): Instant | undefined {
+function fromPlainString(zone: string, value: string, operation: string | undefined): Instant | undefined {
   const parts = DATE_ONLY.exec(value) ?? PLAIN_DATE_TIME.exec(value);
   if (!parts) return undefined;
 
@@ -58,12 +81,12 @@ function fromPlainString(zone: string, value: string): Instant | undefined {
   try {
     resolved = fromPlain(zone, plain);
   } catch {
-    throw invalid(value, 'names a date the calendar does not have');
+    throw invalid(value, NO_SUCH_DATE, operation);
   }
 
   const readBack = toPlain(zone, resolved);
   if (readBack.year !== plain.year || readBack.month !== plain.month || readBack.day !== plain.day) {
-    throw invalid(value, 'names a date the calendar does not have');
+    throw invalid(value, NO_SUCH_DATE, operation);
   }
 
   // A fractional second is added to the resolved Instant rather than carried into the zone lookup:
@@ -81,21 +104,21 @@ function fromPlainString(zone: string, value: string): Instant | undefined {
  * absolute and ignores `zone`. Every other string is a Plain time and resolves through `zone`, with
  * a date-only string meaning that day's start.
  */
-export function toInstant(zone: string, input: InstantInput): Instant {
+export function toInstant(zone: string, input: InstantInput, operation?: string): Instant {
   if (typeof input === 'string') {
-    const plain = fromPlainString(zone, input);
+    const plain = fromPlainString(zone, input, operation);
     if (plain !== undefined) return plain;
     try {
       return instant(input);
     } catch {
-      throw invalid(input, 'is not a date the library can read');
+      throw invalid(input, UNREADABLE, operation);
     }
   }
   if (input instanceof Date && Number.isNaN(input.getTime())) {
-    throw invalid('Invalid Date', 'is not a date the library can read');
+    throw invalid(input, UNREADABLE, operation);
   }
   if (typeof input === 'number' && !Number.isFinite(input)) {
-    throw invalid(input, 'is not a finite epoch millisecond count');
+    throw invalid(input, NOT_FINITE, operation);
   }
   return instant(input);
 }
@@ -108,8 +131,13 @@ export function toInstant(zone: string, input: InstantInput): Instant {
  * under `'inclusive'` a date-only input advances one day. Everything else — an `Instant`, a `Date`,
  * a string with a time of day — is already a boundary and is read literally, under either rule.
  */
-export function toEndInstant(zone: string, input: InstantInput, rule: DateOnlyEndRule): Instant {
-  const boundary = toInstant(zone, input);
+export function toEndInstant(
+  zone: string,
+  input: InstantInput,
+  rule: DateOnlyEndRule,
+  operation?: string,
+): Instant {
+  const boundary = toInstant(zone, input, operation);
   if (rule === 'exclusive' || !isDateOnly(input)) return boundary;
   return addDays(zone, boundary, 1);
 }

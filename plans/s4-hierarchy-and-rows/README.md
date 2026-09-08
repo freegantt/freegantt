@@ -231,7 +231,7 @@ Full prose lives in the step file that implements each decision.
 | D-S4-27 | `heightMode` on the row source; scroll is a pixel position | S4.8 |
 | D-S4-28 | Sort and filter belong to the row source | S4.9 |
 | D-S4-29 | Filter keeps ancestors; sort stays within a parent | S4.9 |
-| D-S4-30 | A Segment drag writes `segments` and the envelope | S4.10 |
+| D-S4-30 | The Selection owns the drag: what paints as selected is what moves (#200 amendment withdrawn by #211; the pick clause dropped in #212, ADR 0010, once the Selection itself held Segments) | S4.10 |
 | D-S4-31 | Row reorder and reparent **by drag** are not S4's | S4.10 |
 | D-S4-32 | `rowOrder()` retires | S4.10 |
 | D-S4-33 | Keyboard collapse and expand | S4.10 |
@@ -275,7 +275,7 @@ Read these before you touch `src/`.
 | Switching `rows` scrolls the user to the top | Scroll is a pixel position, clamped against the new content height (D-S4-27) |
 | Two Gantts on one Dataset fight over collapse | Collapse is per Gantt, like selection (D-S4-22) |
 | `Row.kind: 'header'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
-| A segment drag moves the whole entry | The grabbed `ItemId` carries the segment index and the draft writes `segments` (D-S4-30) |
+| A drag on one bar moves only that Segment | It depends on the Selection, by construction: a click on that bar selected only that Segment, so it alone moves and the envelope follows; a grid-row click selected every Segment of the row, so a drag steps them all by the same delta instead (D-S4-30, ADR 0010, `spec-211-gesture-units.md`). One Segment moves through `entries.update(id, { segments })` |
 | I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.meta.cost` (D-S4-35). Use `update({ cost })` or read through the Field. |
 | A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `meta`, or write it through `update({ cost })` after construction (D-S4-35). |
 | Two Fields silently share `meta.cost` | They cannot. That is `DuplicateFieldSourceError` at construction (D-S4-35). |

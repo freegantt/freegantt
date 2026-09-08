@@ -21,14 +21,15 @@
           <a href="./classes.html">Class map</a> for what the class does, and into
           <a href="./lifecycle.html">Lifecycle</a> for when it runs.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
-          <span>97 non-test files in src/</span>
+          <span>slice: S5</span>
+          <span>150 non-test files in src/</span>
           <span>barrels listed only where they do more than re-export</span>
         </div>
       </header>
 
+      <main>
       <!-- ══════════════════════════════════════════════════════════ 1 -->
       <section id="s1">
         <p class="lede">
@@ -109,11 +110,10 @@
             </tr>
             <tr>
               <td class="mono">model/errors.ts</td>
-              <td class="mono">FreeGanttError, UnsupportedUnitError, InvalidInstantError, UnknownFieldError, MutationCancelledError, FieldNotColumnableError</td>
+              <td class="mono">FreeGanttError and the catchable subclasses</td>
               <td>
-                The public error base, carrying a stable <code>code</code>. Errors are part of the API
-                surface, so they live where the public surface lives. The subclasses each name a failure a
-                consumer can hit and recover from.
+                The public error base, carrying a stable <code>code</code>. Subclasses name failures a
+                consumer can hit: dates, fields, plugins, commands, serialization, and mutation.
               </td>
             </tr>
             <tr>
@@ -138,6 +138,38 @@
               <td class="mono">model/document.ts</td>
               <td class="mono">DatasetDocument</td>
               <td>The schema-2 serialization shape — the field half plus entries, version-dispatched on read.</td>
+            </tr>
+            <tr>
+              <td class="mono">model/command.ts</td>
+              <td class="mono">KeyChord, TargetKind</td>
+              <td>
+                Zero-dep command primitives. The bound <code>Command</code> types live in
+                <code>api/command.ts</code>, which may name <code>Gantt</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">model/error-report.ts</td>
+              <td class="mono">ErrorReport, ErrorCode, RaiseError</td>
+              <td>
+                What the <code>error</code> event carries on Dataset and Gantt (ADR 0009). Types only; the
+                catchable class is <code>FreeGanttError</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">model/plugin.ts</td>
+              <td class="mono">PluginId, Disposer, PluginStore, ExtenderWrapper</td>
+              <td>
+                Plugin primitives that name nothing outside <code>model/</code>.
+                <code>GanttPlugin</code> lives in <code>api/plugin.ts</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">model/render.ts</td>
+              <td class="mono">ElementDescription</td>
+              <td>
+                The reconciler's vocabulary as plain data. A plugin returns this instead of a live node;
+                <code>render/dom/element-description.ts</code> is the only place that turns it into DOM.
+              </td>
             </tr>
             <tr>
               <td class="mono">model/index.ts</td>
@@ -193,9 +225,17 @@
               </td>
             </tr>
             <tr>
+              <td class="mono">time/zoned-time.ts</td>
+              <td class="mono">ZonedTime, createZonedTime()</td>
+              <td>
+                The zone-bound façade a plugin author reaches through <code>Dataset.time</code> (D-S5-16).
+                Every method forwards to <code>zone.ts</code>; no extra arithmetic.
+              </td>
+            </tr>
+            <tr>
               <td class="mono">time/scale.ts</td>
               <td class="mono">
-                createTimeScale(), TimeScale, ViewPreset, the five presets, pxPerMsForPreset()
+                createTimeScale(), TimeScale, ViewPreset, pxPerMsForPreset()
               </td>
               <td>
                 Instants ⇄ pixels, plus the shipped zoom presets as frozen config objects.
@@ -205,7 +245,7 @@
             </tr>
             <tr>
               <td class="mono">time/format.ts</td>
-              <td class="mono">formatDate(), formatDuration(), formatInstant()</td>
+              <td class="mono">formatDate(), formatEndInclusive(), dropRepeatedGranularity()</td>
               <td>
                 The display-side formatting helpers — inclusive ends, locale-bound labels. Kept small and
                 pure so any consumer-facing text goes through one path.
@@ -221,10 +261,11 @@
             </tr>
             <tr>
               <td class="mono">time/snap.ts</td>
-              <td class="mono">snapInstant(), SnapSpec, resolveSnapForPreset()</td>
+              <td class="mono">snapInstant(), SnapUnit, stepsBetween()</td>
               <td>
-                Snap resolution for gestures: where a drag's committed value lands, driven by the live preset's
-                <code>snap</code> field. Pure — the gesture pipeline calls this, never arithmetic of its own.
+                Snap resolution for gestures: where a drag's committed value lands. Pure — the gesture
+                pipeline calls this, never arithmetic of its own. A preset's <code>'tick'</code> is resolved
+                to a unit and increment before this file sees it.
               </td>
             </tr>
             <tr>
@@ -345,7 +386,31 @@
               <td class="mono">EditRequest, EditExtender, identityExtender</td>
               <td>
                 The extension hook shape. <code>identityExtender</code> returns an empty map (the unoccupied
-                default); a scheduling plugin occupies this slot in S7.
+                default); a Dataset plugin or a scheduling plugin occupies this slot by wrapping.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/plugin-store.ts</td>
+              <td class="mono">PluginStores, pluginStoreName()</td>
+              <td>
+                Per-plugin per-entry rows, staged through the same write-set a transaction already uses for
+                entries. Not <code>Entry.meta</code> (ADR 0002).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/error-reporting.ts</td>
+              <td class="mono">raiseErrorOn(), createErrorRaiser()</td>
+              <td>
+                Stamps an Error report with <code>now()</code> and raises it on a bus. <code>render/</code>
+                and <code>extensions/</code> take a <code>RaiseError</code> by injection instead.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/dev-mode.ts</td>
+              <td class="mono">isDevMode()</td>
+              <td>
+                One home for the Vite/dev-mode flag. The named leaf <code>render/</code> and
+                <code>extensions/</code> may import without opening a <code>data/</code> edge.
               </td>
             </tr>
             <tr>
@@ -394,6 +459,21 @@
               <td>
                 The one switch over <code>FieldSource</code>: reads, writes, merges and overlays field values
                 on entries/stored-edits.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/normalize-source.ts</td>
+              <td class="mono">storedSourceOf()</td>
+              <td>
+                One Field-source normalizer. Fills an omitted source as <code>{ from: 'meta', key }</code>
+                (D-S4-35). Registry resolve and the schema-2 codec both ask here.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">data/fields/source-strategy.ts</td>
+              <td class="mono">withProposedKeys(), proposedKeysOf(), FieldReadMemo</td>
+              <td>
+                One FieldSource strategy table so <code>from</code> is not switched in four places.
               </td>
             </tr>
             <tr>
@@ -502,6 +582,39 @@
               </td>
             </tr>
             <tr>
+              <td class="mono">layout/decoration.ts</td>
+              <td class="mono">DecorationLayer, DecorationProvider, RangeBand, RowStripe</td>
+              <td>The decoration seam's own types — range bands and row stripes as pixel-resolved shapes.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/decorations.ts</td>
+              <td class="mono">DecorationRunner</td>
+              <td>Runs registered decoration providers into the frame's under-bar and over-bar layers.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/frame-row.ts</td>
+              <td class="mono">FrameRow</td>
+              <td>The painted-row shape <code>computeFrame</code> emits and a cell renderer reads.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/pick-defined.ts</td>
+              <td class="mono">pickDefined()</td>
+              <td>Copies only defined keys from a patch onto a settings object.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/registration-table.ts</td>
+              <td class="mono">createRegistrationTable()</td>
+              <td>
+                Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf
+                that <code>extensions/</code> may import.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/renderer.ts</td>
+              <td class="mono">BarRenderer, CellRenderer, HeaderRenderer, TooltipRenderer</td>
+              <td>Renderer callback vocabulary. Plugin and consumer options share these types.</td>
+            </tr>
+            <tr>
               <td class="mono">layout/items/produce-items.ts</td>
               <td class="mono">produceItemsForRow(), createItemProducerRegistry()</td>
               <td>
@@ -556,6 +669,21 @@
                 Adapts a consumer-supplied <code>resolve()</code> callback's <code>CustomRow[]</code> into
                 <code>UnindexedRow[]</code>.
               </td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/collapse.ts</td>
+              <td class="mono">applyCollapse()</td>
+              <td>Drops descendants of collapsed row ids from the unindexed row list.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/filter.ts</td>
+              <td class="mono">applyFilter(), visibleRowIds()</td>
+              <td>Applies the row-source filter, with hide vs. keep-ancestors policy.</td>
+            </tr>
+            <tr>
+              <td class="mono">layout/rows/sort.ts</td>
+              <td class="mono">applySort()</td>
+              <td>Applies the row-source sort inside each sibling group.</td>
             </tr>
             <tr>
               <td class="mono">layout/viewport/batched-notifier.ts</td>
@@ -655,6 +783,36 @@
               </td>
             </tr>
             <tr>
+              <td class="mono">render/dom/decorations.ts</td>
+              <td class="mono">DecorationsAttachment</td>
+              <td>Turns <code>RangeBand</code>/<code>RowStripe</code> into keyed DOM nodes.</td>
+            </tr>
+            <tr>
+              <td class="mono">render/dom/dom-contract.ts</td>
+              <td class="mono">BAR_CLASS, ROW_CLASS, …</td>
+              <td>
+                Class names and data attributes this backend writes. Nothing outside
+                <code>render/dom</code> may retype them; <code>view/gantt-dom.ts</code> resolves a node from
+                these constants alone.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">render/dom/element-description.ts</td>
+              <td class="mono">buildElement()</td>
+              <td>
+                Turns one <code>ElementDescription</code> into a live DOM subtree. Stays inside the
+                reconciler's hard-bounded scope.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">render/dom/css-escape.ts</td>
+              <td class="mono">cssEscapeAttr()</td>
+              <td>
+                One place for the <code>CSS.escape</code> feature-detect every
+                <code>[data-field="…"]</code> selector needs.
+              </td>
+            </tr>
+            <tr>
               <td class="mono">render/dom/row-twisty.ts</td>
               <td class="mono">rowIdFromTwistyClick()</td>
               <td>
@@ -691,9 +849,89 @@
               <td>
                 The composition root. Constructs the <code>Viewport</code>, <code>FrameLayout</code>,
                 <code>PaneLayout</code>, <code>RenderBackend</code>, <code>EventBus</code>,
-                <code>FrameScheduler</code>, <code>GesturePipeline</code>, <code>CollapseState</code> and
-                every attachment; exposes live-reconfigurable properties.
+                <code>FrameScheduler</code>, <code>GesturePipeline</code>, <code>PluginRuntime</code>,
+                <code>CollapseState</code> and every attachment; exposes live-reconfigurable properties.
               </td>
+            </tr>
+            <tr>
+              <td class="mono">view/frame-settings.ts</td>
+              <td class="mono">FrameSettings, DEFAULT_ROW_HEIGHT</td>
+              <td>
+                Every live setting that says what the next frame draws, plus the table of what each change
+                invalidates.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/plugin-ports.ts</td>
+              <td class="mono">buildPluginPorts(), PluginContextParts</td>
+              <td>
+                Everything a <code>PluginContext</code> carries that <code>GanttShell</code> owns. Spread
+                into the public context; <code>api/gantt.ts</code> adds only <code>dataset</code> and
+                <code>gantt</code>.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/plugin-registrations.ts</td>
+              <td class="mono">PluginRegistrations</td>
+              <td>
+                The five seams a plugin registers into — renderer, decoration, item producer, kind default,
+                grid column — each with the refresh it owes.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/renderer-registry.ts</td>
+              <td class="mono">RendererRegistry</td>
+              <td>
+                Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over
+                a plugin (D-S5-11).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/gantt-dom.ts</td>
+              <td class="mono">GanttDom, ContainerDom, DomTarget</td>
+              <td>
+                This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the
+                element for this entry.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/mount-layer.ts</td>
+              <td class="mono">MountLayer</td>
+              <td>
+                Where a plugin mounts and how it stays put. Overlay escapes the pane box; row layer travels
+                with the rows.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/column-chrome.ts</td>
+              <td class="mono">ColumnChrome</td>
+              <td>
+                Grid-column resolve, live resize/reorder preview, and the one commit sequence pointer drag
+                and <code>gantt.gridColumns = …</code> share.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/column-gesture-context.ts</td>
+              <td class="mono">ColumnGestureContext</td>
+              <td>
+                The seam <code>interaction/column-gestures.ts</code> drives and <code>GanttShell</code>
+                implements.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">view/core-commands.ts</td>
+              <td class="mono">registerCoreCommands()</td>
+              <td>The core command catalog, split out of the shell so it is reviewable as a table.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/tree-collapse.ts</td>
+              <td class="mono">TreeCollapse</td>
+              <td>Collapse set plus tree-arrow and ancestor-expand policy.</td>
+            </tr>
+            <tr>
+              <td class="mono">view/today-landing.ts</td>
+              <td class="mono">panToTodayLine()</td>
+              <td>Today-landing policy. The shell asks this; Viewport only pans.</td>
             </tr>
             <tr>
               <td class="mono">view/pane-layout.ts</td>
@@ -847,19 +1085,27 @@
               <td>Wires pointer events on entries into the <code>EntryGestureContext</code>'s session lifecycle.</td>
             </tr>
             <tr>
+              <td class="mono">interaction/column-gestures.ts</td>
+              <td class="mono">attachColumnGestures()</td>
+              <td>
+                Resize and reorder pointer sequences for grid columns, over the same
+                <code>createPointerGesture</code> controller.
+              </td>
+            </tr>
+            <tr>
               <td class="mono">interaction/keyboard-editing.ts</td>
               <td class="mono">attachKeyboardEditing()</td>
               <td>Handles Delete/arrow-key edits on selected entries.</td>
             </tr>
             <tr>
               <td class="mono">interaction/pointer-gesture.ts</td>
-              <td class="mono">attachPointerGesture()</td>
-              <td>Low-level pointer capture/release and move/up dispatch.</td>
+              <td class="mono">createPointerGesture()</td>
+              <td>Low-level pointer capture/release and move/up dispatch. Owns no DOM listeners of its own.</td>
             </tr>
             <tr>
               <td class="mono">interaction/index.ts</td>
               <td class="mono">barrel</td>
-              <td>Re-exports the three attach functions.</td>
+              <td>Re-exports the attach functions and <code>createPointerGesture</code>.</td>
             </tr>
 
             <tr>
@@ -889,7 +1135,49 @@
               <td class="mono">Gantt, GanttOptions</td>
               <td>
                 The public <code>Gantt</code> class. Constructs one <code>GanttShell</code> and forwards;
-                exposes the live properties (preset, range, gridColumns, rowSource, collapsed, selection, …).
+                exposes the live properties (preset, range, gridColumns, rowSource, collapsed, selection,
+                plugins, commands, …).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">api/plugin.ts</td>
+              <td class="mono">GanttPluginOf, PluginContextOf</td>
+              <td>
+                The public Gantt-plugin contract, generic over <code>TGantt</code> so this file never
+                imports <code>Gantt</code> (no cycle).
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">api/dataset-plugin.ts</td>
+              <td class="mono">DatasetPluginOf, mergeEntryEdits(), moveEntryTo()</td>
+              <td>
+                The public Dataset-plugin contract, plus the one legal merge of two extenders' writes.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">api/command.ts</td>
+              <td class="mono">CommandOf, CommandContextOf, BuiltInCommandId</td>
+              <td>The public command and keybinding contract, generic over <code>TGantt</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono">api/attempt-mutation.ts</td>
+              <td class="mono">attemptMutation()</td>
+              <td>
+                Runs a mutating body and returns <code>false</code> when <code>beforeChange</code> refuses,
+                instead of throwing.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">api/watch-all-errors.ts</td>
+              <td class="mono">watchAllErrors()</td>
+              <td>One handler over the Dataset <code>error</code> feed and the Gantt's, de-duplicated.</td>
+            </tr>
+            <tr>
+              <td class="mono">api/time-facade.ts</td>
+              <td class="mono">formatDate, formatEndInclusive</td>
+              <td>
+                Narrow slice of <code>time/</code> that <code>extensions/features/tooltips.ts</code> needs
+                without importing the public barrel (that barrel re-exports <code>tooltips</code>).
               </td>
             </tr>
             <tr>
@@ -897,9 +1185,98 @@
               <td class="mono">the public surface</td>
               <td>
                 The allow-list with a sealed <code>exports</code> map. Re-exports
-                <code>Gantt</code>/<code>Dataset</code>/the two viewport models plus the <code>model/</code>
-                types and <code>time/</code> presets a consumer needs.
+                <code>Gantt</code>/<code>Dataset</code>/the viewport models, the plugin and command
+                contracts, the shipped built-ins, and the <code>model/</code> and <code>time/</code>
+                types a consumer needs.
               </td>
+            </tr>
+
+            <tr>
+              <td
+                colspan="3"
+                style="
+                  background: var(--dom-bg);
+                  font-weight: 600;
+                  font-family: var(--mono);
+                  font-size: 0.78rem;
+                  color: var(--dom-ink);
+                "
+              >
+                extensions/ &nbsp;<span class="tag dom">DOM</span> &nbsp;plugin runtime + shipped built-ins
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/plugin-runtime.ts</td>
+              <td class="mono">PluginRuntime, RegistrationGate</td>
+              <td>
+                Installs, uninstalls, and sets up Gantt plugins. The shell constructs one; a built-in never
+                imports the shell.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/install-dataset-plugins.ts</td>
+              <td class="mono">installDatasetPlugins(), resolveSetupOrder()</td>
+              <td>Orders Dataset plugins by <code>requires</code> and installs them onto a Dataset.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/disposables.ts</td>
+              <td class="mono">DisposableStore</td>
+              <td>A plugin's cleanup list. Runs on uninstall or <code>Gantt.destroy()</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/commands.ts</td>
+              <td class="mono">CommandRegistry</td>
+              <td>Command registry, generic over its Gantt type. Core commands and plugin commands share it.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/keymap.ts</td>
+              <td class="mono">Keymap, normalizeChord()</td>
+              <td>Newest-first key handler resolver. Innermost popup wins (D-S5-9).</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/popup.ts</td>
+              <td class="mono">createPopup()</td>
+              <td>
+                Anchoring, flipping, clamping, and dismissal. Tooltips and the context menu build on this.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/focus-trap.ts</td>
+              <td class="mono">activateFocusTrap()</td>
+              <td>Tab cycling and focus restore for <code>Popup</code>'s trap policy.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/features/tooltips.ts</td>
+              <td class="mono">tooltips()</td>
+              <td>Shipped tooltip plugin. Ordinary <code>GanttPlugin</code>; dogfoods the public contract.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/features/context-menu.ts</td>
+              <td class="mono">contextMenu()</td>
+              <td>Shipped context-menu plugin. Asks <code>ctx.view.dom</code> what a node is.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/features/menu-view.ts</td>
+              <td class="mono">MenuItem, MenuEntry</td>
+              <td>Menu vocabulary and <code>ElementDescription</code> builder. Pure; no DOM mount.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/features/inline-editing.ts</td>
+              <td class="mono">inlineEditing()</td>
+              <td>
+                Shipped cell editor. Owns a live control rather than a static <code>Popup</code> content
+                tree.
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/features/date-input.ts</td>
+              <td class="mono">DateInput, DateInputFactory</td>
+              <td>Default date seam: wraps <code>&lt;input type="date"&gt;</code>. No extra runtime dep.</td>
+            </tr>
+            <tr>
+              <td class="mono">extensions/index.ts</td>
+              <td class="mono">barrel</td>
+              <td>Re-exports the runtime, commands, keymap, and the shipped built-ins.</td>
             </tr>
 
             <tr>
@@ -921,16 +1298,12 @@
               <td class="mono">—</td>
               <td>S7. The first-party default plugin's pure engine + the <code>EditExtender</code> occupancy.</td>
             </tr>
-            <tr>
-              <td class="mono">extensions/index.ts</td>
-              <td class="mono">—</td>
-              <td>S6. Plugin runtime; built-ins dogfood the public plugin contract.</td>
-            </tr>
           </table>
         </div>
       </section>
 
       <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">

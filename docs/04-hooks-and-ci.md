@@ -24,8 +24,11 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `disables` | `scripts/audit-disables.mjs` | <1s |
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating; shipped S2.7, name corrected from the plan's `api:report`) | ~10s |
 | `verify` | `format:check && typecheck && lint && boundaries && guards && test:node && test:dom && vendor-names && disables && build && api-report` | ~45s |
+| `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then `test:e2e` | ~60s |
 
-`pnpm verify` is the whole gate, runnable by a human, an agent, or CI. If it passes locally it passes in CI, modulo the jobs that need a browser.
+`pnpm verify` is **CI parity**, not the gate. It runs every job `ci.yml` defines, and it never starts a browser, so it cannot see `e2e/**`.
+
+`pnpm verify:full` is **the gate**: `verify`, then the browser check no CI job runs. It is what `pre-push` runs, and what a human or an agent runs to prove a change. It reads its check list from the `verify` script at run time, so the two cannot drift (§3.2).
 
 ---
 
@@ -84,22 +87,60 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 
 | Hook | Runs | Rationale |
 |---|---|---|
-| `pre-commit` | `format` (auto-fix) on all staged files + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
-| `pre-push` | `pnpm verify`, then `pnpm test:e2e` | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
+| `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
+| `pre-push` | `pnpm verify:full` (`verify`, then `test:e2e`) | The full gate before it becomes anyone else's problem — and, while CI is dispatch-only, the *only* gate |
+
+### 3.0 A partially staged file is never formatted (#203)
+
+`prettier --write` edits the working tree, so the hook must re-stage what it formatted. `git add -- <file>` stages that file **whole**. On a file the author staged in part — `git add -p`, `git apply --cached`, an editor's stage-this-hunk — that commits the hunks they left out, under their message.
+
+So the hook skips any file that is both staged and unstaged-modified, and says which on stderr. That file commits unformatted; `pnpm format:check` in `verify` still catches it. Losing a format pass is a nuisance. Committing someone else's sentence under your name is a correctness failure.
+
+The warning names the **intersection** only, never every dirty file. A warning that fires on most commits is a warning people stop reading.
 
 `--no-verify` exists and is not fought. But the old rationale for that ("CI is the authority; hooks buy latency, not enforcement") does not currently hold: `.github/workflows/ci.yml` is `workflow_dispatch:` only — its `push`/`pull_request` triggers are commented out — so no check runs on the server unless a human clicks the button. Until those triggers come back, `pre-push` *is* the enforcement, and skipping it is a decision rather than a shortcut.
 
-### 3.1 e2e runs in the hook, and only in the hook
+### 3.1 e2e runs in the full gate, and nowhere else
 
 `pnpm test:e2e` is the one check with **no CI job behind it**. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`), and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable.
 
 **This is a recorded decision, not an oversight (S1.11, D-S1.11-12):** the repository owner chose to keep `ci.yml`'s `push`/`pull_request` triggers off. So `pnpm gate` (and the S1 → S2 condition it proves) is provable **locally** — via `pre-push`, or by a human/agent running it directly — and **not** on the server, until those triggers come back. When they do, e2e gets its own CI job (`pnpm exec playwright install --with-deps chromium`, then `pnpm test:e2e`) and this hook line stays as the local half.
 
-It sits **beside** `pnpm verify` in `pre-push`, not inside it. `verify` is kept at CI parity (below), and e2e is not a CI job — folding it in would make `verify` claim a parity it no longer has, and would demand a browser everywhere `verify` runs. When the `push`/`pull_request` triggers come back, e2e gets its own job and this line stays as the local half.
+It sits **outside** `pnpm verify`, in the `verify:full` wrapper. `verify` is kept at CI parity (below), and e2e is not a CI job — folding it in would make `verify` claim a parity it no longer has, and would demand a browser everywhere `verify` runs. A wrapper adds the browser half without touching that claim. When the `push`/`pull_request` triggers come back, e2e gets its own job, and `verify:full` stays as the local gate.
+
+Before #255 the hook ran the two halves as two lines, and everyone else ran only `verify`. So the hook and the agent proved different things, and the agent's half was the one that reported completion.
 
 The cost is small: the whole suite runs in about a second, and `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
 
-So `pnpm verify` is kept at **CI parity**: it runs every job `ci.yml` defines, in the same order, `build` included. That parity is itself guarded — `test/guards/verify-covers-ci.test.ts` (§4) asserts every `pnpm <script>` any CI job runs also appears in `verify`, and that `pre-push` invokes `verify`. Adding a job without extending `verify` fails the guards suite, so the hook cannot silently drift into reporting green over a check it no longer performs.
+So `pnpm verify` is kept at **CI parity**: it runs every job `ci.yml` defines, in the same order, `build` included. That parity is itself guarded — `test/guards/verify-covers-ci.test.ts` (§4) asserts every `pnpm <script>` any CI job runs also appears in `verify`, and that `pre-push` invokes the gate. Adding a job without extending `verify` fails the guards suite, so the hook cannot silently drift into reporting green over a check it no longer performs.
+
+### 3.2 The last line is the verdict (#255)
+
+An exit code only reaches a reader who transcribes it, and the pattern this repo used transcribed the wrong one:
+
+```bash
+pnpm verify 2>&1 | tail -4; echo "EXIT: $?"      # `$?` is tail's status. Prints EXIT: 0 over a failure.
+pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log   # correct — redirect, and read the verdict
+```
+
+Two agents hit this on #142. Both reported green, both told the truth, and `e2e/resize.spec.ts` was fully red. The failure surfaced at the push, after the review and after the merge.
+
+Documenting the capture rule is not enough on its own: it is exactly the instruction a tired reader skips. So `verify:full` states its own result **inside the output stream**, where no plumbing strips it. Every run prints exactly one verdict line:
+
+```
+verify:full PASS — all 13 checks green, test:e2e included (58s).
+verify:full FAILED at check 7 of 13: pnpm test:dom (exit code 1). 6 later checks did not run. (21s)
+```
+
+It is the last line the gate itself prints. `pnpm` adds one `[ELIFECYCLE]` line after it on a failure, which is why the capture above reads three lines, not one.
+
+Three properties follow, and they are the reason this is a script rather than a `&&` chain:
+
+- **Every window onto the run carries the verdict.** A redirect, a `tail -3`, or the whole log — all show it. Even the wrong capture above now prints `EXIT: 0` two lines under a line that says `FAILED`.
+- **Green needs a positive token.** The completion test is "quote the last line", not "report a number". A run that a signal kills, or a pipe truncates, has no verdict line, so it reads as **unproven** — never as green.
+- **The failing check names itself.** `[ELIFECYCLE] Command failed with exit code 1` says a step failed, not which one, and says nothing at all when the run passes.
+
+The wrapper never holds its own copy of the check list. It parses the `verify` script and appends `test:e2e`, so a new CI job joins the gate the moment it joins `verify`. A `verify` step it cannot parse, or a check no script defines, is a loud failure — never a silently skipped check.
 
 ---
 

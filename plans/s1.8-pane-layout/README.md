@@ -186,6 +186,22 @@ The residue is real and is recorded, not hidden: sub-pixel disagreement between 
 
 ---
 
+### D-S1.8-13 — The grid pane gains its own horizontal scroller; D-S1.8-1 splits by axis (#126)
+
+D-S1.8-1 said "the grid pane has no scrollbar," full stop. Two bugs made that too strong:
+
+1. Nothing forwarded wheel input from the grid pane into the timeline's shared scroll at all — a plain wheel over the grid pane did nothing, since the grid pane was never a scroller and the timeline's `scroll`/wheel listeners were never attached to it either (issue #126).
+2. A grid column can already be given a fixed pixel `width` (`GridColumn.width`), which does not shrink (`flex: 0 0 auto`). Several such columns summing past `gridWidth` silently clipped — `.fg-grid-pane` was `overflow: hidden`, with no way to reach them.
+
+The fix splits D-S1.8-1 by axis instead of revoking it:
+
+- **Vertical** stays exactly as D-S1.8-1 describes: the timeline pane remains the only native vertical scroller; the grid pane's row layer still follows by `translateY` transform only, never becomes a second real vertical scroller (I9 unaffected). `attachWheelNavigation` (`view/wheel-navigation.ts`) is now attached to the grid pane too, forwarding plain wheel, shift+wheel, and ctrl/⌘+wheel into the exact same `Viewport`/`ScrollModel` the timeline pane already writes into — a second *input* path into one existing scroll state, not a second scroll state.
+- **Horizontal** is new: the grid pane (`.fg-grid-pane`) is now `overflow-x: auto` — a real, independent native horizontal scroller, unrelated to and unsynced with the timeline's own (time-axis) horizontal scroll, because grid-column pixels and timeline time-pixels are different quantities with no shared meaning. `layout/column.ts`'s `gridContentWidth(columns, paneWidth)` is pure and DOM-free: it returns `paneWidth` unchanged unless fixed-width columns alone sum past it, in which case the excess becomes genuinely reachable via scroll instead of clipped. `PaneLayout#contentWidth` writes that number as `--fg-grid-content-width`, which `.fg-grid-spacer`/`.fg-rows-clip` fall back from to `100%` — so a Gantt with no fixed-width overflow renders byte-identical to before.
+
+This does not touch `element.scrollLeft`/`scrollTop` from JS anywhere new: the horizontal scroller is plain CSS + a native browser scrollbar, with nothing reading its position back, so I12/`no-scroll-outside-scroll-model.cjs` is not implicated.
+
+---
+
 ## 3. API
 
 ### 3.1 `src/view/pane-layout.ts` — the DOM skeleton

@@ -1,19 +1,43 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation, now } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from '../src/api/index.js';
 import type { DatasetEventMap } from '../src/api/index.js';
-import type { TimeUnit } from '../src/model/index.js';
-import { demoEntryInputs } from '../fixtures/demo-dataset.js';
+import { demoEntryInputs, separateSegments } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
-import { prependChangeSet } from './change-log.js';
+import { prependChangeSet, prependLogLine } from './change-log.js';
+import { lockEntries } from './plugins/lock-entries.js';
+import { mountPageBrief } from './docs/page-brief.js';
 
-const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing');
+
+// S5.10 visible acceptance (s5.10-dataset-plugins.md §4): a Dataset plugin the page installs through
+// the public API alone. Check the box to lock one entry; drag its neighbour and the locked bar ghosts
+// alongside it — the plugin's extender wrote its dates too — then the drop is refused.
+// `entry-15` sits beside `entry-14` in the fixture's own window around today, so both bars are on
+// screen when the page opens and a reader sees the ghost without panning first. The box starts
+// unchecked, so this page's other demos drag against an empty lock store, cascading nothing.
+const LOCKABLE_ENTRY_ID = 'entry-15';
+const locks = lockEntries();
+
+// #241: the locked Entry draws three Segments on purpose. A cascade that wrote `{ start, end }`
+// would refuse here — an envelope names no Segment to move, so core has nothing to translate
+// (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44) — and the demo would teach the shape the
+// library rejects. So the page locks the hard case, and `lock-entries.ts` answers it with
+// `moveEntryTo`. All three bars ghost together when `entry-14` drags.
+const lockDemoEntryInputs = demoEntryInputs.map((entry) =>
+  entry.id === LOCKABLE_ENTRY_ID && entry.start !== undefined
+    ? { ...entry, segments: separateSegments(entry.start) }
+    : entry,
+);
+
+const dataset = new Dataset({ entries: lockDemoEntryInputs, timeZone: 'UTC', plugins: [locks] });
 const mobilization = now();
 
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
   todayLine: false,
-  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'fg-mobilization-line' }],
+  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
 gantt.panToToday();
 
@@ -27,9 +51,10 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
+const lockEntryCheckbox = document.querySelector<HTMLInputElement>('#lock-entry')!;
 
 function renderSelection(): void {
-  const ids = gantt.selection;
+  const ids = gantt.selectedEntryIds;
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
@@ -48,15 +73,32 @@ function hideToast(): void {
   toast.textContent = '';
 }
 
+// S5.12, D-S5-42: one subscription over both emitters. Every refusal and every recovered fault the
+// Dataset or the Gantt observes arrives here, and the page decides what to keep. Retention is the
+// page's policy, so core keeps nothing: there is no `gantt.errors` to read.
+//
+// A Fault always toasts. A Refusal toasts when its author said why: `report.reason` is the words the
+// vetoing handler passed to `refuse` (#210), so the page shows the library's own record instead of
+// keeping a second copy of the same sentence. The mobilization veto below is that case.
+//
+// The lock plugin refuses through `refuse(reason)` too, so this page keeps no refusal callback of
+// its own — every refusal, whoever raised it, arrives here.
+watchAllErrors([dataset, gantt], (report) => {
+  const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
+  prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
+  if (report.severity !== 'info' || report.reason !== undefined) showToast(report.message);
+});
+
 let releaseHold: ((allow: boolean) => void) | undefined;
 
 gantt.on('selectionChange', renderSelection);
-gantt.on('beforeEntryMove', ({ start }) => {
+gantt.on('beforeEntryMove', ({ start, refuse }) => {
   if (start < mobilization) {
-    showToast('Too early — drop is before mobilization');
     releaseHold?.(false);
     releaseHold = undefined;
-    return false;
+    // The page says why once, here. Core carries the words to the report, and the one
+    // `watchAllErrors` subscription above toasts them (#210).
+    return refuse('Too early — the drop is before mobilization.');
   }
   hideToast();
   if (!holdDrop.checked) return undefined;
@@ -73,39 +115,49 @@ holdDrop.addEventListener('change', () => {
   hideToast();
 });
 
+// Locking is a real dataset write: it commits, it logs like every other change, and Ctrl+Z lifts
+// it (#156) — which is what a plugin store buys over a `Set` on the page (D-S5-24).
+lockEntryCheckbox.addEventListener('change', () => {
+  attemptMutation(() =>
+    lockEntryCheckbox.checked ? locks.lock(LOCKABLE_ENTRY_ID) : locks.unlock(LOCKABLE_ENTRY_ID),
+  );
+});
+
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   renderSelection();
   refreshHistoryButtons();
 });
 
+// The page runs the library's own commands rather than calling `dataset.undo()` itself, so the
+// buttons and a future default chord are one implementation, not two that can drift or double-fire
+// (D-S5-26). The `window` listener below is the page's stand-in until a default keymap ships; it
+// goes when one does.
 function undo(): void {
-  attemptMutation(() => dataset.undo());
+  attemptMutation(() => gantt.commands.run('freegantt.undo'));
 }
 
 function redo(): void {
-  attemptMutation(() => dataset.redo());
+  attemptMutation(() => gantt.commands.run('freegantt.redo'));
 }
 
 undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 
-window.addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-  e.preventDefault();
-  if (e.shiftKey) redo();
-  else undo();
-});
-
 lockResize.addEventListener('change', () => {
   gantt.interactions = lockResize.checked ? { resize: false } : {};
 });
 
+// `gantt.snap =`, never `gantt.preset = { ...gantt.preset, snap }`: the old spelling built a one-off
+// copy of a shipped preset, and the next `zoomIn()` threw the snap away with it (`api/gantt.ts`).
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
-  const snap = unit === 'tick' || unit === 'none' ? unit : { unit: unit as TimeUnit, increment: 1 };
-  gantt.preset = { ...gantt.preset, snap };
+  if (unit === 'tick' || unit === 'none') {
+    gantt.snap = unit;
+    return;
+  }
+  if (!isTimeUnit(unit)) return;
+  gantt.snap = { unit, increment: 1 };
 }
 
 snapUnitSelect.addEventListener('change', applySnapChoice);

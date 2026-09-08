@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import { dayPreset, instant, MS } from '../../time/index.js';
-import { entryId, UnknownPresetError } from '../../model/index.js';
+import { entryId, segmentId, UnknownPresetError } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 
 function entry(id: string, start: string, end: string): Entry {
+  const startInstant = instant(start);
+  const endInstant = instant(end);
   return {
     id: entryId(id),
     name: id,
-    start: instant(start),
-    end: instant(end),
+    start: startInstant,
+    end: endInstant,
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
   };
 }
 

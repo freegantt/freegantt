@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON, readDocument, warnIfRollUpsWereCorrected } from './index.js';
-import { FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
+import { toJSON, readDocument, reportCorrectedRollUps } from './index.js';
+import { createErrorRaiser } from '../error-reporting.js';
+import type { ErrorReport } from '../../model/index.js';
+import { entryId, FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument } from '../../model/index.js';
 import type { EntryInput } from '../../model/index.js';
+import { instant } from '../../time/index.js';
 
 function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
   return {
@@ -17,7 +20,7 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
 
 function fromJSON(doc: DatasetDocument): DatasetState {
   const state = new DatasetState(readDocument(doc));
-  warnIfRollUpsWereCorrected(doc, state);
+  reportCorrectedRollUps(doc, state, createErrorRaiser(state.bus));
   return state;
 }
 
@@ -36,6 +39,68 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     roundTrip(dataset);
   });
 
+  // #212 fix-plan review, finding B1: the Rollup wrote a rolled-up `start`/`end` straight onto the
+  // group without ever touching its Segment, so `toJSON` published an Entry whose envelope disagreed
+  // with its own Segments. Reading that document back with `rollUpKinds: []` (no Rollup to paper over
+  // it) then derived `start`/`end` from the stale Segment instead — the authored 2026 span was gone.
+  it('a rolled-up group survives toJSON -> fromJSON with rollUpKinds: [], no lost span', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1', kind: 'group', start: 0, end: 1 },
+        span('c1', { parentId: 'p1', start: '2026-01-01T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' }),
+      ],
+    });
+    const rolledUp = dataset.entries.get('p1')!;
+    expect(rolledUp.start).toBe(instant('2026-01-01T00:00:00.000Z'));
+    expect(rolledUp.end).toBe(instant('2026-01-10T00:00:00.000Z'));
+    // The writer keeps the group's one Segment paired with the envelope it just rolled up — no
+    // document can carry the disagreement this defect used to publish.
+    expect(rolledUp.segments).toEqual([
+      { id: rolledUp.segments[0]!.id, start: rolledUp.start, end: rolledUp.end },
+    ]);
+
+    const doc = { ...toJSON(dataset), rollUpKinds: [] };
+    const reread = new DatasetState(readDocument(doc));
+    const p1 = reread.entries.get('p1')!;
+    expect(p1.start).toBe(rolledUp.start);
+    expect(p1.end).toBe(rolledUp.end);
+  });
+
+  // #212 R2 fix-plan review, finding B1 remainder: B1's own fix only paired a rolled-up envelope onto
+  // a group's Segment when it drew exactly one. A group drawing several had no such pairing, so
+  // `toJSON` could still publish a group whose Segments disagreed with its rolled-up `start`/`end` —
+  // this is that second case, closed by `widenSegmentsToEnvelope` (`data/rollup.ts`).
+  it('a rolled-up group drawing several Segments still matches them, and survives toJSON round-tripped', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        {
+          id: 'p1',
+          name: 'p1',
+          kind: 'group',
+          segments: [
+            { id: 'ps1', start: '2026-05-01T00:00:00.000Z', end: '2026-05-05T00:00:00.000Z' },
+            { id: 'ps2', start: '2026-05-10T00:00:00.000Z', end: '2026-05-15T00:00:00.000Z' },
+          ],
+        },
+        span('c1', { parentId: 'p1', start: '2026-01-01T00:00:00.000Z', end: '2026-01-10T00:00:00.000Z' }),
+      ],
+    });
+
+    const rolledUp = dataset.entries.get('p1')!;
+    expect(rolledUp.start).toBe(instant('2026-01-01T00:00:00.000Z'));
+    expect(rolledUp.end).toBe(instant('2026-01-10T00:00:00.000Z'));
+    // Neither authored Segment falls anywhere near the rolled-up span any more, so both clamp onto
+    // it: the earliest-starting one supplies the new `start`, the latest-ending one the new `end`.
+    expect(rolledUp.segments).toEqual([
+      { id: 'ps1', start: rolledUp.start, end: rolledUp.end },
+      { id: 'ps2', start: rolledUp.end, end: rolledUp.end },
+    ]);
+
+    roundTrip(dataset);
+  });
+
   it('writes every optional field when present, and omits them when absent', () => {
     const withAll = new DatasetState({
       timeZone: 'UTC',
@@ -43,7 +108,13 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         span('t1', {
           parentId: 'p1',
           kind: 'milestone',
-          segments: [{ start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' }],
+          // Two Segments, not one (#212, finding 4): a sole Segment ingest reads always becomes the
+          // Entry's own envelope, so it round-trips as the entry's plain `start`/`end` and never
+          // reaches this array. Two Segments spanning the same envelope are what still gets written.
+          segments: [
+            { start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+            { start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
+          ],
           meta: { team: 'A' },
         }),
         { id: 'p1', kind: 'group', name: 'Parent' },
@@ -53,7 +124,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(present?.parentId).toBe('p1');
     expect(present?.kind).toBe('milestone');
     expect(present?.segments).toEqual([
-      { start: '2026-09-01T00:00:00.000Z', end: '2026-09-02T00:00:00.000Z' },
+      { id: 'sg1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+      { id: 'sg2', start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
     ]);
     expect(present?.meta).toEqual({ team: 'A' });
     roundTrip(withAll);
@@ -69,6 +141,27 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(bare && 'parentId' in bare).toBe(false);
     expect(bare && 'segments' in bare).toBe(false);
     expect(bare && 'meta' in bare).toBe(false);
+  });
+
+  it('round-trips a plain entry and a multi-segment entry byte-stable at schema: 4', () => {
+    const dataset = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        span('plain'),
+        span('multi', {
+          segments: [
+            { id: 'first-half', start: '2026-09-01T00:00:00.000Z', end: '2026-09-06T00:00:00.000Z' },
+            { id: 'second-half', start: '2026-09-06T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' },
+          ],
+        }),
+      ],
+    });
+    const first = toJSON(dataset);
+    expect(first.schema).toBe(4);
+    const multiRow = first.entries.find((row) => row.id === 'multi');
+    expect(multiRow?.segments?.map((segment) => segment.id)).toEqual(['first-half', 'second-half']);
+    const second = toJSON(fromJSON(first));
+    expect(second).toEqual(first);
   });
 
   it('preserves meta nested objects, arrays, and key order by reference', () => {
@@ -239,6 +332,54 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     warn.mockRestore();
   });
 
+  it('a corrected roll-up raises at warning, and the console line is the unsubscribed fallback (D-S5-41)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const disagreeing: DatasetDocument = {
+      schema: 1,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      entries: [
+        {
+          id: 'p1',
+          kind: 'group',
+          name: 'Sitework',
+          start: '2020-01-01T00:00:00.000Z',
+          end: '2020-01-02T00:00:00.000Z',
+        },
+        {
+          id: 't1',
+          parentId: 'p1',
+          name: 'Groundwork',
+          start: '2026-09-01T00:00:00.000Z',
+          end: '2026-09-11T00:00:00.000Z',
+        },
+      ],
+    };
+
+    // No subscriber: the console line fires, exactly as it did before this seam existed.
+    const unwatched = new DatasetState(readDocument(disagreeing));
+    reportCorrectedRollUps(disagreeing, unwatched, createErrorRaiser(unwatched.bus));
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // One subscriber: the console stays silent and the consumer gets the whole report.
+    warn.mockClear();
+    const watched = new DatasetState(readDocument(disagreeing));
+    const reports: ErrorReport[] = [];
+    watched.on('error', (report) => {
+      reports.push(report);
+    });
+    reportCorrectedRollUps(disagreeing, watched, createErrorRaiser(watched.bus));
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('rollup-corrected');
+    expect(reports[0]?.severity).toBe('warning');
+    expect(reports[0]?.by).toBe('core');
+    expect(reports[0]?.entryId).toBe(entryId('p1'));
+    warn.mockRestore();
+  });
+
   it('fromJSON throws FreeGanttError (InvalidInstantError), not a bare RangeError, on a zoneless stored date', () => {
     const doc: DatasetDocument = {
       schema: 1,
@@ -252,7 +393,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 3,
+      schema: 5,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
       rollUpKinds: [],
@@ -265,8 +406,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
         expect(error.code).toBe('unsupported-schema');
-        expect(error.schema).toBe(3);
-        expect(error.supported).toEqual([1, 2]);
+        expect(error.schema).toBe(5);
+        expect(error.supported).toEqual([1, 2, 3, 4]);
       }
     }
   });
@@ -277,5 +418,70 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     const restored = fromJSON(toJSON(dataset));
     expect(restored.canUndo).toBe(false);
     expect(restored.canRedo).toBe(false);
+  });
+});
+
+// D-S5-24: plugin rows serialize under `plugins: { [id]: … }` at `schema: 3`. A Document an
+// application reads without installing that plugin keeps the rows untouched — passenger data, the
+// posture an undeclared `meta` key already has.
+describe('plugin rows (schema: 3, D-S5-24)', () => {
+  function withLockedT1(): DatasetState {
+    const dataset = new DatasetState({ timeZone: 'UTC', entries: [span('t1'), span('t2')] });
+    dataset.pluginStores.reserve<{ locked: true }>('demo.lock').set(entryId('t1'), { locked: true });
+    return dataset;
+  }
+
+  it('writes the plugins key and round-trips it byte-stably', () => {
+    const dataset = withLockedT1();
+    const doc = toJSON(dataset);
+    expect(doc.schema).toBe(4);
+    expect(doc.plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
+    roundTrip(dataset);
+  });
+
+  it('omits the plugins key when no plugin holds a row', () => {
+    const doc = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
+    expect('plugins' in doc).toBe(false);
+  });
+
+  it('carries the rows of a plugin this Dataset never installs', () => {
+    const doc = toJSON(withLockedT1());
+    // A second application reads the same Document with no plugin installed at all.
+    const passenger = fromJSON(doc);
+    expect(passenger.pluginStores.read('demo.lock')).toBeUndefined();
+    expect(JSON.stringify(toJSON(passenger))).toBe(JSON.stringify(doc));
+  });
+
+  it('hands the rows back to the plugin that reserves the store on the reading side', () => {
+    const doc = toJSON(withLockedT1());
+    const reopened = fromJSON(doc);
+    const lock = reopened.pluginStores.reserve<{ locked: true }>('demo.lock');
+    expect(lock.get(entryId('t1'))).toEqual({ locked: true });
+    expect(lock.get(entryId('t2'))).toBeUndefined();
+  });
+
+  it('reads a schema 2 document, which carries no plugin rows, and writes it back at schema 3', () => {
+    const older: DatasetDocument = {
+      schema: 2,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
+    };
+    const written = toJSON(fromJSON(older));
+    expect(written.schema).toBe(4);
+    expect('plugins' in written).toBe(false);
+  });
+
+  it('ignores a plugins key on a schema 1 document — that schema has no such key', () => {
+    const mislabelled = {
+      schema: 1 as const,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      rollUpKinds: ['group'],
+      plugins: { 'demo.lock': { t1: { locked: true } } },
+      entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
+    };
+    expect('plugins' in toJSON(fromJSON(mislabelled))).toBe(false);
   });
 });

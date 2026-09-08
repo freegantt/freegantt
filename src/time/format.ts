@@ -3,7 +3,7 @@
 // codebase. Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a
 // caller-chosen locale (D-S1.12-11); `weekOfYear` (zone.ts) is the one thing Intl has no field for.
 
-import type { Instant } from '../model/index.js';
+import type { Instant, TimeSpan } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
 import type { DateFormat, HeaderFormat, ViewPresetHeader } from './scale.js';
@@ -35,7 +35,8 @@ function toJsDate(i: Instant): Date {
  * equivalent, stateless formatter. Keyed by the `options` object's own identity (frozen preset
  * headers and a caller's own literal are both stable references), nested under a zone/locale string
  * so two Gantts sharing one preset but different locales never collide. Module-level `WeakMap` is the
- * sanctioned shape for this (ADR 0007 — see `layout/viewport/time-scale-model.ts`'s `internals`). */
+ * sanctioned shape for this (ADR 0007 — see `layout/viewport/time-scale-model.ts`'s `internals`).
+ * I2-ok: keyed by the caller's own options object; two Gantts share nothing, only a stateless formatter. */
 const formatterCache = new WeakMap<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>();
 
 function intlFormatter(
@@ -85,14 +86,19 @@ export function formatDate(
 
 /** The one place half-open `end` becomes an inclusive display value: the last millisecond the span
  * actually covers, read back through the dataset zone. No `end - 1` anywhere else in the codebase
- * (plans/01 §5, promised since S0). */
+ * (plans/01 §5, promised since S0).
+ *
+ * Takes the whole span, not `end` alone, because a zero-length span (`end === start`, legal under
+ * D-S5-46) has no millisecond before its own start to display — `end - 1` there reads as one minute
+ * earlier than `start` (#240). A zero-length span displays its own `end` unchanged instead. */
 export function formatEndInclusive(
   zone: string,
-  end: Instant,
+  span: TimeSpan,
   locale?: Intl.LocalesArgument,
   options?: Intl.DateTimeFormatOptions,
 ): string {
-  return formatDate(zone, addMs(end, -1), locale, options);
+  const displayed = span.end === span.start ? span.end : addMs(span.end, -1);
+  return formatDate(zone, displayed, locale, options);
 }
 
 /** `W37`. The escape-hatch callback shipped as a named value, because Intl has no week field
@@ -110,10 +116,11 @@ export const formatHour: HeaderFormat = (i, zone) => {
   return `${hour}:${String(minute).padStart(2, '0')}`;
 };
 
-/** Per-`headers`-array memo of `dedupeHeaderFormats`'s result (below) — the stripped
+/** Per-`headers`-array memo of `dropRepeatedGranularity`'s result (below) — the stripped
  *  `Intl.DateTimeFormatOptions` objects need one stable identity across frames, or `intlFormatter`'s
- *  own `options`-keyed cache would rebuild an `Intl.DateTimeFormat` every frame instead of once. */
-const dedupedHeaderFormats = new WeakMap<readonly ViewPresetHeader[], readonly DateFormat[]>();
+ *  own `options`-keyed cache would rebuild an `Intl.DateTimeFormat` every frame instead of once.
+ *  I2-ok: keyed by the caller's own headers array; two Gantts share nothing, only a derived memo. */
+const repeatedGranularityDropped = new WeakMap<readonly ViewPresetHeader[], readonly DateFormat[]>();
 
 /** A header whose `format` states `year` or `month` shows it to the reader once, at the coarsest
  *  band that states it — a day band under a month band reads "21", not "Sep 21, 2026" (S1.12
@@ -122,9 +129,10 @@ const dedupedHeaderFormats = new WeakMap<readonly ViewPresetHeader[], readonly D
  *  strips that field from every later band's `format` — unless that band set `repeatCoarserUnits`.
  *  A callback `format` (e.g. `formatWeekNumber`) passes through untouched: only
  *  `Intl.DateTimeFormatOptions` fields are ever inspected. Memoized by `headers`' own identity
- *  (a shipped preset's frozen array, or a caller's stable custom one) — see `dedupedHeaderFormats`. */
-export function dedupeHeaderFormats(headers: readonly ViewPresetHeader[]): readonly DateFormat[] {
-  const cached = dedupedHeaderFormats.get(headers);
+ *  (a shipped preset's frozen array, or a caller's stable custom one) — see
+ *  `repeatedGranularityDropped`. */
+export function dropRepeatedGranularity(headers: readonly ViewPresetHeader[]): readonly DateFormat[] {
+  const cached = repeatedGranularityDropped.get(headers);
   if (cached) return cached;
 
   const shownByEarlierBand = new Set<'year' | 'month'>();
@@ -145,6 +153,6 @@ export function dedupeHeaderFormats(headers: readonly ViewPresetHeader[]): reado
     return effective;
   });
 
-  dedupedHeaderFormats.set(headers, formats);
+  repeatedGranularityDropped.set(headers, formats);
   return formats;
 }

@@ -1,7 +1,21 @@
-// data/ — Document reader (D-S2-12, D-S4-15, D-S4-16). A `readers` map keyed by schema version;
-// this build writes `schema: 2` and reads `1` and `2`. An unknown schema throws
+// data/ — Document reader (D-S2-12, D-S4-15, D-S4-16, D-S5-24). A `readers` map keyed by schema
+// version; this build writes `schema: 4` and reads `1`, `2`, `3` and `4`. An unknown schema throws
 // `UnsupportedSchemaError`. Keys the reader does not know are dropped: top level belongs to the
 // schema, `meta` is the consumer's namespace.
+//
+// #192 — a `schema: 3` Document written before D-S5-33 is not supported. Such a Document can carry a
+// plugin's own Field declaration, because the writer only narrowed later. A `SerializedField` row
+// says nothing about who declared it, so this reader reads that row as the consumer's own. Read with
+// the plugin installed, the plugin's `ctx.fields.register` collides and `Dataset.fromJSON` throws
+// `PluginSetupError` wrapping `DuplicateFieldKeyError`. Read without it, the row is re-authored and
+// `toJSON` writes it again.
+//
+// That stands, and no migration exists. A repair would drop a declaration the reading application
+// cannot back. A consumer's own declaration of that key writes the same bytes as the plugin's, so
+// the repair would discard a live, supported declaration as well. It would trade a real case for a
+// document that cannot exist: this project has never shipped, and only this build writes `schema: 3`.
+// The throw names the plugin and the key, so the answer is one edit to the document.
+// `src/api/dataset.test.ts` pins both readings.
 
 import type {
   Aggregator,
@@ -12,7 +26,7 @@ import type {
   FieldType,
   Instant,
 } from '../../model/index.js';
-import type { DatasetDocument, EntryDocument, SerializedField } from '../../model/index.js';
+import type { DatasetDocument, EntryDocument, PluginDocument, SerializedField } from '../../model/index.js';
 import { InvalidInstantError, UnsupportedSchemaError } from '../../model/index.js';
 import { instant } from '../../time/index.js';
 import { decodeFieldDocument } from './field-document.js';
@@ -28,9 +42,12 @@ export interface DatasetDocumentRead {
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** Plugin rows the Document carried. Rows whose plugin the reading application does not install are
+   *  kept untouched and written back — passenger data (D-S5-24). */
+  pluginRows?: PluginDocument;
 }
 
-type SchemaRead = Omit<DatasetDocumentRead, 'fields' | 'fieldTypes' | 'aggregators'>;
+type SchemaRead = Omit<DatasetDocumentRead, 'fields' | 'fieldTypes' | 'aggregators' | 'pluginRows'>;
 
 type Reader = (doc: DatasetDocument) => SchemaRead;
 
@@ -41,7 +58,10 @@ function readInstant(value: string): Instant {
   try {
     return instant(value);
   } catch {
-    throw new InvalidInstantError(`fromJSON(): "${value}" is not a stored date this library can read`);
+    throw new InvalidInstantError(
+      `fromJSON: the stored date "${value}" is not one this library can read. Export the document again from the build that wrote it.`,
+      value,
+    );
   }
 }
 
@@ -56,6 +76,8 @@ function readEntryDocument(row: EntryDocument): EntryInput {
     ...(row.segments !== undefined
       ? {
           segments: row.segments.map((segment) => ({
+            // Absent below `schema: 4`, where a Segment had no id to write; ingest mints one (#212).
+            ...(segment.id !== undefined ? { id: segment.id } : {}),
             start: readInstant(segment.start),
             end: readInstant(segment.end),
           })),
@@ -88,10 +110,20 @@ function readSchema2(doc: DatasetDocument): SchemaRead {
   };
 }
 
+/** `schema: 3` adds the `plugins` key and changes nothing else, so it reads exactly as `2` does —
+ *  `readDocument` picks the `plugins` key up separately, the same way it picks up `fields`. */
+const readSchema3: Reader = readSchema2;
+
+/** `schema: 4` adds an id to each written Segment (#212). `readEntryDocument` carries an id when the
+ *  row has one, so the earlier schemas read through the same function and mint theirs at ingest. */
+const readSchema4: Reader = readSchema2;
+
 /** The migration seam. A second schema is a map addition, not a rewrite (`plans/02` §6). */
 export const readers: Record<number, Reader> = Object.freeze({
   1: readSchema1,
   2: readSchema2,
+  3: readSchema3,
+  4: readSchema4,
 });
 
 export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): DatasetDocumentRead {
@@ -100,8 +132,9 @@ export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): D
     throw new UnsupportedSchemaError(doc.schema, Object.keys(readers).map(Number));
   }
   const base = reader(doc);
-  const documentRows: readonly SerializedField[] | undefined = doc.schema === 2 ? doc.fields : undefined;
+  const documentRows: readonly SerializedField[] | undefined = doc.schema >= 2 ? doc.fields : undefined;
   const { fields, fieldTypes } = decodeFieldDocument(documentRows, options);
+  const pluginRows = doc.schema >= 3 ? doc.plugins : undefined;
   return {
     timeZone: base.timeZone,
     dateOnlyEnd: base.dateOnlyEnd,
@@ -110,5 +143,6 @@ export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): D
     ...(fields.length > 0 ? { fields } : {}),
     ...(fieldTypes !== undefined ? { fieldTypes } : {}),
     ...(options?.aggregators !== undefined ? { aggregators: options.aggregators } : {}),
+    ...(pluginRows !== undefined ? { pluginRows } : {}),
   };
 }

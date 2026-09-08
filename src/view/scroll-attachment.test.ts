@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { attachScroll } from './scroll-attachment.js';
 import { Viewport } from '../layout/index.js';
 import type { DatasetBinding } from '../layout/index.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
 
 // view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
@@ -13,7 +13,16 @@ function instant(iso: string): Instant {
 }
 
 function entry(id: string, start: string, end: string): Entry {
-  return { id: entryId(id), name: id, start: instant(start), end: instant(end), kind: 'span' };
+  const startInstant = instant(start);
+  const endInstant = instant(end);
+  return {
+    id: entryId(id),
+    name: id,
+    start: startInstant,
+    end: endInstant,
+    kind: 'span',
+    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+  };
 }
 
 const dataset: DatasetBinding = {

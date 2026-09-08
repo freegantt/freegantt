@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { EntryStore } from './entry-store.js';
-import { entryId } from '../model/index.js';
+import { entryId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 import { instant } from '../time/index.js';
+import type { EntryReadContext } from './entry-reader.js';
 
-const context = {
-  timeZone: 'UTC',
-  dateOnlyEnd: 'inclusive' as const,
-  referenceDate: instant('2026-01-01T00:00:00Z'),
-  rollUpKinds: new Set(['group']),
-};
+// Each test gets its own counter, so no test can see another test's minted ids (I2).
+function createContext(): EntryReadContext {
+  let mintedCount = 0;
+  return {
+    timeZone: 'UTC',
+    dateOnlyEnd: 'inclusive' as const,
+    referenceDate: instant('2026-01-01T00:00:00Z'),
+    rollUpKinds: new Set(['group']),
+    mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
+  };
+}
 
 function entry(id: string, parentId?: string): Entry {
   const base: Entry = {
@@ -18,6 +24,7 @@ function entry(id: string, parentId?: string): Entry {
     start: 0 as Entry['start'],
     end: 1 as Entry['end'],
     kind: 'span',
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
   };
   if (parentId !== undefined) base.parentId = entryId(parentId);
   return base;
@@ -25,12 +32,12 @@ function entry(id: string, parentId?: string): Entry {
 
 describe('EntryStore', () => {
   it('all returns the same array identity across reads (D-S2-3)', () => {
-    const store = new EntryStore([entry('t1')], context);
+    const store = new EntryStore([entry('t1')], createContext());
     expect(store.all).toBe(store.all);
   });
 
   it('get/has/size read the seeded fixture', () => {
-    const store = new EntryStore([entry('t1'), entry('t2')], context);
+    const store = new EntryStore([entry('t1'), entry('t2')], createContext());
     expect(store.get(entryId('t1'))?.id).toBe(entryId('t1'));
     expect(store.get(entryId('missing'))).toBeUndefined();
     expect(store.has(entryId('t2'))).toBe(true);
@@ -41,13 +48,13 @@ describe('EntryStore', () => {
   it('childrenOf returns children in insertion order', () => {
     const store = new EntryStore(
       [entry('root'), entry('a', 'root'), entry('b', 'root'), entry('c')],
-      context,
+      createContext(),
     );
     expect(store.childrenOf('root').map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
   });
 
   it('an entry with no children returns an empty array, not undefined', () => {
-    const store = new EntryStore([entry('leaf')], context);
+    const store = new EntryStore([entry('leaf')], createContext());
     expect(store.childrenOf(entryId('leaf'))).toEqual([]);
   });
 });

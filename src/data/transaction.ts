@@ -13,11 +13,15 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  StoreRowUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
-import type { EditExtender, EntryEdits } from './edit-extension.js';
+import { buildRefusalReport, raiseErrorOn } from './error-reporting.js';
+import type { EditRequest, StoredEdits } from './edit-extension.js';
+import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
+import { RefusalNote } from './event-bus.js';
 import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -38,10 +42,22 @@ export interface TransactionalEntryStore {
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
-  pendingEdits(): EntryEdits;
+  pendingEdits(): StoredEdits;
+  /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
+   *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */
+  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
+}
+
+/** What `runTransaction` reads off the plugin stores (D-S5-24) — the same three transaction steps
+ *  `TransactionalEntryStore` has, and deliberately not the concrete `PluginStores` type, for this
+ *  file's usual cycle-avoidance reason. `reserve`/`read` exist for a plugin, never for this file. */
+export interface TransactionalPluginStores {
+  beginTransaction(token: TxToken): void;
+  pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
+  endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
 }
 
 /** What `runTransaction` needs from a Dataset's live state. Structural, not `DatasetState` itself, for
@@ -49,7 +65,18 @@ export interface TransactionalEntryStore {
  *  file must not import `dataset-state.ts` back. */
 export interface TransactionData {
   readonly entries: TransactionalEntryStore;
-  readonly editExtender: EditExtender;
+  readonly pluginStores: TransactionalPluginStores;
+  /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and returns
+   *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
+   *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5).
+   *
+   *  Reports each Entry's authored envelope keys alongside the reconciled `StoredEdits`, because the
+   *  commit path needs to tell the hook's own `start`/`end`/`segments` write from one
+   *  `reconcileEnvelope` derived on the hook's behalf, and `StoredEdit.proposedKeys` conflates the two
+   *  (#232). `DatasetState.readExtenderEdits` is this method's one implementation; the friend function
+   *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
+   *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
+  readExtenderEdits(request: EditRequest): EditsReading;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule). */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is
@@ -116,6 +143,19 @@ export function applyConstructionRollUp(data: TransactionData): void {
   writeConstructionUpdates(data, updated);
 }
 
+/** Opens the write set on every store one transaction spans. Entries and plugin stores stage
+ *  together and close together, so a plugin row and an entry edit are never half-committed. */
+function beginStores(data: TransactionData, token: TxToken): void {
+  data.entries.beginTransaction(token);
+  data.pluginStores.beginTransaction(token);
+}
+
+/** Closes every store's write set, applying `changeSet` or — with `undefined` — discarding it. */
+function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet | undefined): void {
+  data.entries.endTransaction(token, changeSet);
+  data.pluginStores.endTransaction(token, changeSet);
+}
+
 /**
  * Applies an already-complete `ChangeSet` straight to the store and fans it out through
  * `beforeChange`/`change` (D-S2-9, D-S2-25) — the notify-and-apply tail every commit shares, with no
@@ -126,13 +166,11 @@ export function applyConstructionRollUp(data: TransactionData): void {
  */
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
-    throw new MutationDuringNotificationError(
-      'commitChangeSet: cannot commit while beforeChange/change handlers are running',
-    );
+    throw new MutationDuringNotificationError('commitChangeSet');
   }
 
   const token: TxToken = {} as TxToken;
-  data.entries.beginTransaction(token);
+  beginStores(data, token);
 
   if (isDevMode()) {
     Object.freeze(changeSet.added);
@@ -142,22 +180,37 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   }
 
   data.notifying = true;
+  // #210: `refuse(reason)` is the one way a vetoing handler says why. The note collects the words;
+  // the bus still answers the same boolean it always did.
+  const note = new RefusalNote();
   let allowed: boolean;
   try {
-    allowed = data.bus.emit('beforeChange', { changeSet });
+    allowed = data.bus.emit('beforeChange', { changeSet, refuse: note.refuse });
   } catch (error) {
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     throw error;
   } finally {
     data.notifying = false;
   }
 
   if (!allowed) {
-    data.entries.endTransaction(token, undefined);
-    throw new MutationCancelledError(changeSet);
+    endStores(data, token, undefined);
+    const refusal = new MutationCancelledError(changeSet, note.reason);
+    // S5.12, D-S5-40: the refusal is reported as well as thrown. A `beforeChange` handler that ran
+    // beside the vetoing one never learns the outcome, and `attemptMutation` swallows the throw — so
+    // the throw alone reaches nobody who needs to show the user what happened. `buildRefusalReport`
+    // (`data/error-reporting.ts`) is the one place that shape is built; it reads `refusal.message`
+    // rather than rebuilding it, since `model/errors.ts` already owns that wording. No `fallback`:
+    // this site printed nothing before and stays silent. `changeSet` is not copied onto the report —
+    // `cause` already holds the error that carries it.
+    raiseErrorOn(
+      data.bus,
+      buildRefusalReport({ code: 'mutation-cancelled', event: 'beforeChange', note, cause: refusal }),
+    );
+    throw refusal;
   }
 
-  data.entries.endTransaction(token, changeSet);
+  endStores(data, token, changeSet);
 
   data.bumpDatasetRevision();
 
@@ -185,22 +238,20 @@ export function runTransaction<T>(
   origin: ChangeOrigin,
 ): T {
   if (data.notifying) {
-    throw new MutationDuringNotificationError(
-      'transaction: cannot start a transaction while beforeChange/change handlers are running',
-    );
+    throw new MutationDuringNotificationError('dataset.transaction');
   }
 
   const token: TxToken = {} as TxToken;
   const outermost = data.openTransactions === 0;
   data.openTransactions += 1;
-  if (outermost) data.entries.beginTransaction(token);
+  if (outermost) beginStores(data, token);
 
   let result: T;
   try {
     result = body(token);
   } catch (error) {
     data.openTransactions -= 1;
-    if (outermost) data.entries.endTransaction(token, undefined);
+    if (outermost) endStores(data, token, undefined);
     throw error;
   }
   data.openTransactions -= 1;
@@ -210,17 +261,17 @@ export function runTransaction<T>(
     const changeSet = buildCommitChangeSet(data, origin);
 
     if (!changeSet) {
-      data.entries.endTransaction(token, undefined);
+      endStores(data, token, undefined);
       return result;
     }
 
     // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
     // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     commitChangeSet(data, changeSet);
     return result;
   } catch (error) {
-    data.entries.endTransaction(token, undefined);
+    endStores(data, token, undefined);
     throw error;
   }
 }

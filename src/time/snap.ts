@@ -3,8 +3,20 @@
 // (plans/s3-direct-manipulation/README.md D-S3-12).
 
 import type { Instant, TimeUnit } from '../model/index.js';
+import { InvalidSnapIncrementError } from '../model/index.js';
 import { diffMs } from './instant.js';
 import { startOf, stepBy } from './zone.js';
+
+/** Both loops below walk one `increment`-sized step at a time until they pass a target. A `0`
+ *  returns the same instant forever; a negative or fractional value never lands on the target
+ *  either. `time/` is reachable from `layout/` without going through `Gantt.snap`'s own setter guard
+ *  (a custom `ViewPreset`'s tick, for one), so this checks again rather than trusting the caller
+ *  already did (#201). */
+function assertAdvances(unit: TimeUnit, increment: number): void {
+  if (!Number.isInteger(increment) || increment <= 0) {
+    throw new InvalidSnapIncrementError(unit, increment);
+  }
+}
 
 /** What a gesture snaps to: a named unit/increment, or `'none'` for raw pixel-to-millisecond
  *  conversion with no rounding. `ViewPreset.snap`'s `'tick'` member is resolved to a concrete
@@ -19,6 +31,7 @@ export type SnapUnit = { unit: TimeUnit; increment: number } | 'none';
 export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant {
   if (snap === 'none') return at;
   const { unit, increment } = snap;
+  assertAdvances(unit, increment);
   let lower = startOf(zone, at, unit);
   let upper = stepBy(zone, lower, unit, increment);
   while (diffMs(upper, at) <= 0) {
@@ -40,6 +53,7 @@ export function stepsBetween(
   from: Instant,
   to: Instant,
 ): number {
+  assertAdvances(unit, increment);
   const direction = diffMs(to, from) > 0 ? 1 : diffMs(to, from) < 0 ? -1 : 0;
   if (direction === 0) return 0;
   let steps = 0;

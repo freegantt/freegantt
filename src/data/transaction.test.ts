@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { runTransaction } from './transaction.js';
 import { DatasetState } from './dataset-state.js';
-import { MutationCancelledError, MutationDuringNotificationError, entryId } from '../model/index.js';
+import { fieldRowsOf } from './change-set.js';
+import {
+  MutationCancelledError,
+  MutationDuringNotificationError,
+  SegmentsOutOfSyncError,
+  UnknownFieldError,
+  entryId,
+  segmentId,
+} from '../model/index.js';
+import type { ChangeSet, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdits, StoredEdit } from './edit-extension.js';
 
@@ -94,6 +103,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('t9-seg'), start: 0 as never, end: 1 as never }],
         });
         state.entries.stageRemove(token, entryId('t9'));
       },
@@ -121,6 +131,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('t1-reborn-seg'), start: 0 as never, end: 1 as never }],
         });
       },
       'user',
@@ -192,6 +203,7 @@ describe('runTransaction', () => {
           start: 0 as never,
           end: 1 as never,
           kind: 'span',
+          segments: [{ id: segmentId('child-seg'), start: 0 as never, end: 1 as never }],
         });
         sizeDuring = state.entries.size;
         childDuring = state.entries.childrenOf(entryId('root')).map((e) => e.id);
@@ -306,6 +318,77 @@ describe('runTransaction', () => {
     ).toThrow(/I4/);
   });
 
+  // #197: `proposedKeys` is bookkeeping on a `StoredEdit`, not a Field. The body edit always carries
+  // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
+  // extender composed with `mergeEntryEdits` now does. The extender states no keys of its own since
+  // #209 C3: it writes `{ cost: 500 }`, the same object `entries.update()` takes, and core derives
+  // the set. A hand-built `proposedKeys` here is now an undeclared Field key and is refused (Q2).
+  it('I4 reads proposedKeys as the Fields proposed, not as a Field named "proposedKeys"', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500 });
+  });
+
+  it('I4 still fires when body and extender propose the same meta-sourced Field', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            meta: { cost: 1 },
+            proposedKeys: new Set(['cost']),
+          }),
+        'user',
+      ),
+    ).toThrow(/I4/);
+  });
+
+  // #209: the raw loop in `fieldsWrittenBy` used to add the `meta` container key even when an edit
+  // already stated `proposedKeys`, so two different meta-sourced Fields intersected on "meta" and I4
+  // refused a transaction that writes no Field twice.
+  it('I4 does not fire when the body and the extender write two different meta-sourced Fields', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [
+        { key: 'cost', type: 'money' },
+        { key: 'risk', type: 'money' },
+      ],
+      editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            meta: { risk: 1 },
+            proposedKeys: new Set(['risk']),
+          }),
+        'user',
+      ),
+    ).not.toThrow();
+
+    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500, risk: 1 });
+  });
+
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
     const state = dataset([{ id: 't1' }]);
     let sawFrozen = false;
@@ -364,6 +447,99 @@ describe('runTransaction', () => {
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
   });
 
+  it('veto: the refusal also raises one Error report, carrying the MutationCancelledError (D-S5-40)', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', () => false);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports).toHaveLength(1);
+    const [report] = reports;
+    expect(report?.code).toBe('mutation-cancelled');
+    expect(report?.severity).toBe('info');
+    expect(report?.by).toBe('consumer');
+    expect(typeof report?.at).toBe('number');
+    const cause = report?.cause;
+    expect(cause).toBeInstanceOf(MutationCancelledError);
+    expect((cause as MutationCancelledError).changeSet.updated).toHaveLength(1);
+  });
+
+  it('veto: a handler that calls refuse puts its own words on the report and on the error (#210)', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', ({ refuse }) => refuse('"t1" is locked.'));
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.reason).toBe('"t1" is locked.');
+    expect(reports[0]?.message).toBe(
+      'Nothing was saved. A beforeChange handler refused this change and said: ""t1" is locked.". Read "changeSet" on this error to see what it refused.',
+    );
+    expect((reports[0]?.cause as MutationCancelledError).reason).toBe('"t1" is locked.');
+  });
+
+  it('veto: a bare false still refuses, and states no reason', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', () => false);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports[0]?.reason).toBeUndefined();
+    expect(reports[0]?.message).toBe(
+      'Nothing was saved. A beforeChange handler refused this change. Read "changeSet" on this error to see what it refused.',
+    );
+  });
+
+  it('veto: two handlers both refuse — the first reason is kept, and the two are never joined', () => {
+    const state = dataset([{ id: 't1' }]);
+    const reports: ErrorReport[] = [];
+    state.on('beforeChange', ({ refuse }) => refuse('first'));
+    state.on('beforeChange', ({ refuse }) => refuse('second'));
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(MutationCancelledError);
+
+    expect(reports[0]?.reason).toBe('first');
+  });
+
   it('a beforeChange handler that throws still discards the write set — not left open for the next transaction', () => {
     const state = dataset([{ id: 't1' }]);
     const explode = (): void => {
@@ -417,7 +593,7 @@ describe('runTransaction', () => {
     });
     let seenFields: readonly string[] = [];
     state.on('beforeChange', ({ changeSet }) => {
-      seenFields = changeSet.updated.map((row) => row.field);
+      seenFields = fieldRowsOf(changeSet).map((row) => row.field);
     });
 
     runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
@@ -502,7 +678,7 @@ describe('runTransaction', () => {
     const costOf = (id: string): number | undefined => {
       const entry = state.entries.get(id);
       if (!entry) return undefined;
-      return state.fieldContext.read<number>(entry, 'cost');
+      return state.fieldContext.read(entry, 'cost') as number | undefined;
     };
 
     let changeCount = 0;
@@ -539,5 +715,300 @@ describe('runTransaction', () => {
     expect(parent.kind).toBe('group');
     expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+  });
+});
+
+// #212 R2 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
+// `StoredEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
+// onto `start`/`end`.
+describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-plan review)', () => {
+  it("pairs a plugin's direct start/end write onto the Entry's one Segment, the same as entries.update()", () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' }],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [
+            entryId('t1'),
+            {
+              start: toInstant('UTC', '2026-02-01'),
+              end: toEndInstant('UTC', '2026-02-05', 'inclusive'),
+            },
+          ],
+        ]),
+    });
+
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+
+    const entry = state.entries.get(entryId('t1'))!;
+    expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+    expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
+  });
+
+  it(
+    'refuses a plugin writing start alone against a several-Segment Entry, the same as ' +
+      'entries.update() (unified at D-S5-44; a computed answer was tried and rejected)',
+    () => {
+      const state = new DatasetState({
+        entries: [
+          {
+            id: 't1',
+            name: 't1',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [
+              { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
+              { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
+            ],
+          },
+        ],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits =>
+          new Map<ReturnType<typeof entryId>, StoredEdit>([
+            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+          ]),
+      });
+
+      expect(() =>
+        runTransaction(
+          state,
+          (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+          'user',
+        ),
+      ).toThrow(SegmentsOutOfSyncError);
+    },
+  );
+
+  it('refuses a plugin writing both start and end against a several-Segment Entry, whatever duration they imply', () => {
+    const state = new DatasetState({
+      entries: [
+        {
+          id: 't1',
+          name: 't1',
+          start: '2026-01-01',
+          end: '2026-01-10',
+          segments: [
+            { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
+            { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
+          ],
+        },
+      ],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits =>
+        new Map<ReturnType<typeof entryId>, StoredEdit>([
+          [
+            entryId('t1'),
+            { start: toInstant('UTC', '2026-01-03'), end: toEndInstant('UTC', '2026-01-04', 'inclusive') },
+          ],
+        ]),
+    });
+
+    expect(() =>
+      runTransaction(
+        state,
+        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        'user',
+      ),
+    ).toThrow(SegmentsOutOfSyncError);
+  });
+
+  it(
+    'reconciles an extender cascade against an Entry this same transaction adds, not just one ' +
+      'the store already committed (#212 R2 fix-plan review, finding A, hole 1)',
+    () => {
+      const state = new DatasetState({
+        entries: [],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits =>
+          new Map<ReturnType<typeof entryId>, StoredEdit>([
+            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+          ]),
+      });
+
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageAdd(token, {
+            id: entryId('t1'),
+            name: 't1',
+            // The cascade below moves start to 2026-02-01, so the added entity's own end sits after
+            // that or the move itself would be an inverted span the #143 ruling now refuses — not the
+            // reconciliation-target bug this test is about.
+            start: toInstant('UTC', '2026-01-01'),
+            end: toInstant('UTC', '2026-03-01'),
+            kind: 'span',
+            segments: [
+              {
+                id: segmentId('sg1'),
+                start: toInstant('UTC', '2026-01-01'),
+                end: toInstant('UTC', '2026-03-01'),
+              },
+            ],
+          }),
+        'user',
+      );
+
+      // Before the fix, `byId` (committed, pre-transaction state) held nothing for `t1`, so the
+      // extender's cascade reconciled against `undefined` and passed through unreconciled — and
+      // separately, `addedEntitiesForFold` only overlaid hierarchy edits, so even a correctly
+      // reconciled cascade never reached the entity the changeset published. One Segment (rather than
+      // several) keeps this test about that reconciliation-target bug, not about the several-Segment
+      // envelope-only refusal a different pair of tests above covers.
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(entry.segments).toHaveLength(1);
+      expect(entry.segments[0]!.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(entry.segments[0]!.end).toBe(entry.end);
+    },
+  );
+
+  it(
+    "hands the hook `entryAfterEdits`, which sees this transaction's own body rewrite, not just " +
+      '`entries` — the pre-transaction snapshot the hook is no longer graded against alone (D-S5-45)',
+    () => {
+      let sawSegmentCount: number | undefined;
+      const state = new DatasetState({
+        entries: [
+          {
+            id: 't1',
+            name: 't1',
+            start: '2026-01-01',
+            end: '2026-01-10',
+            segments: [{ id: 'sg1', start: '2026-01-01', end: '2026-01-10' }],
+          },
+        ],
+        timeZone: 'UTC',
+        editExtender: (request): EntryEdits => {
+          // The pre-transaction snapshot still shows one Segment — this is the split the hook must not
+          // be graded against (`entries.get` alone answers the wrong question here).
+          expect(request.entries.get(entryId('t1'))?.segments).toHaveLength(1);
+          sawSegmentCount = request.entryAfterEdits(entryId('t1'))?.segments.length;
+          return new Map();
+        },
+      });
+
+      runTransaction(
+        state,
+        (token) =>
+          state.entries.stageUpdate(token, entryId('t1'), {
+            segments: [
+              {
+                id: segmentId('sg1'),
+                start: toInstant('UTC', '2026-01-01'),
+                end: toInstant('UTC', '2026-01-04'),
+              },
+              {
+                id: segmentId('sg2'),
+                start: toInstant('UTC', '2026-01-04'),
+                end: toInstant('UTC', '2026-01-07'),
+              },
+              {
+                id: segmentId('sg3'),
+                start: toInstant('UTC', '2026-01-07'),
+                end: toInstant('UTC', '2026-01-10'),
+              },
+            ],
+          }),
+        'user',
+      );
+
+      expect(sawSegmentCount).toBe(3);
+    },
+  );
+
+  it(
+    'a body-authored start and an EditExtender-cascaded end on a one-Segment Entry commit as one ' +
+      'row per field, not two rows for the same field with two different `to` values (#232)',
+    () => {
+      const state = new DatasetState({
+        entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-03-01' }],
+        timeZone: 'UTC',
+        editExtender: (): EntryEdits => new Map([[entryId('t1'), { end: '2026-02-05' }]]),
+      });
+
+      let captured: ChangeSet | undefined;
+      state.on('change', ({ changeSet }) => {
+        captured = changeSet;
+      });
+
+      expect(() => state.entries.update('t1', { start: '2026-01-05' })).not.toThrow();
+
+      const rows = fieldRowsOf(captured!);
+      const fieldsSeen = rows.map((row) => row.field);
+      expect(new Set(fieldsSeen).size).toBe(fieldsSeen.length);
+
+      const startRow = rows.find((row) => row.field === 'start');
+      const endRow = rows.find((row) => row.field === 'end');
+      expect(startRow?.to).toBe(toInstant('UTC', '2026-01-05'));
+      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+
+      const entry = state.entries.get(entryId('t1'))!;
+      expect(entry.start).toBe(toInstant('UTC', '2026-01-05'));
+      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+      expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
+    },
+  );
+});
+
+// #209 C3: the extension hook writes what `update()` takes. Everything a plugin author used to have
+// to learn — a storage-shaped `Instant`, the end rule, `proposedKeys` — is core's job now, done in
+// one place (`DatasetState.extraEditsFor` -> `readEdits` -> `readEdit`), the same road every other
+// write takes.
+describe('the extension hook writes the loose shape (#209)', () => {
+  function datasetCascading(edit: Record<string, unknown>, timeZone = 'UTC'): DatasetState {
+    return new DatasetState({
+      entries: [
+        { id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 't2', name: 't2', start: '2026-01-01', end: '2026-01-02' },
+      ],
+      timeZone,
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      editExtender: (): EntryEdits => new Map([[entryId('t2'), edit]]),
+    });
+  }
+
+  function renameT1(state: DatasetState): void {
+    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+  }
+
+  it('reads a loose date in the dataset’s own zone, so a plugin never calls time/', () => {
+    // Both dates, because the cascade moves the whole span — a `start` past the stored `end` is an
+    // inverted span, and `readEdit` refuses one for a plugin exactly as it does for `update()`.
+    const state = datasetCascading({ start: '2026-02-01', end: '2026-02-03' }, 'America/Denver');
+    renameT1(state);
+    expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01'));
+  });
+
+  it('reads a date-only end by the dataset’s DateOnlyEndRule, not as a raw midnight', () => {
+    const state = datasetCascading({ end: '2026-02-05' });
+    renameT1(state);
+    expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06'));
+  });
+
+  it('derives the proposed keys, so a meta-sourced Field write is still recognized', () => {
+    const state = datasetCascading({ cost: 500 });
+    let rows: readonly { field: string }[] = [];
+    state.on('change', ({ changeSet }) => {
+      rows = changeSet.updated as readonly { field: string }[];
+    });
+
+    renameT1(state);
+
+    expect(state.entries.fieldValue(entryId('t2'), 'cost')).toBe(500);
+    expect(rows.some((row) => row.field === 'cost')).toBe(true);
+  });
+
+  it('refuses a Field no Dataset declares, the same way entries.update() refuses one (Q2)', () => {
+    const state = datasetCascading({ nope: 1 });
+    expect(() => renameT1(state)).toThrow(UnknownFieldError);
+  });
+
+  // The two shapes stay apart for good: `proposedKeys` is core's bookkeeping on a `StoredEdit`, and
+  // it is not a Field anybody may write — not through `update()`, and not through the hook.
+  it('proposedKeys is not writable from outside', () => {
+    const state = dataset([{ id: 't1' }]);
+    expect(() => state.entries.update(entryId('t1'), { proposedKeys: new Set() })).toThrow(UnknownFieldError);
   });
 });

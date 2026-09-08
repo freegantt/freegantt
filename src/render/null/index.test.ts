@@ -34,6 +34,7 @@ describe('null render backend', () => {
       visible: { x: 0, y: 0, width: 0, height: 0 },
       rowHeight: 32,
       revision: 0,
+      datasetRevision: 0,
       itemProducerRegistry: createItemProducerRegistry(),
     });
     backend.mount({ grid: undefined, timeline: undefined });

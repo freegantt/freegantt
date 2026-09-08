@@ -1,0 +1,1187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review — s5-start: the R1–R7 review work and the #158 overlay fix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .hatch {
+        background-image: repeating-linear-gradient(45deg, #e7e5e4 0 6px, #f5f5f4 6px 12px);
+      }
+      code { font-size: 0.86em; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <!-- ══════════════════════════ HEADER ══════════════════════════ -->
+      <header class="space-y-6">
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 class="font-serif text-4xl tracking-tight">FreeGantt — branch review</h1>
+          <span class="text-sm text-slate-500 font-mono">2026-09-04</span>
+        </div>
+        <p class="text-slate-600 max-w-3xl">
+          Branch <code class="font-mono">s5-start</code>, 22 commits since
+          <code class="font-mono">d67f34c</code>: the R1–R7 review-fix work merged from
+          <code class="font-mono">s5-review-fixes</code>, and the #158 cell-editor fix merged from
+          <code class="font-mono">fix/158-editor-follows-scroll</code>.
+          82 files, +5,421 / −2,532.
+        </p>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <div class="text-xs uppercase tracking-wider text-emerald-700">Gate</div>
+            <div class="text-2xl font-semibold text-emerald-900 mt-1">green</div>
+            <div class="text-xs text-emerald-700 mt-1 font-mono">pnpm verify → 0</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">Tests</div>
+            <div class="text-2xl font-semibold mt-1">1,282</div>
+            <div class="text-xs text-slate-500 mt-1 font-mono">92 guard · 519 node · 671 dom</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">Boundaries</div>
+            <div class="text-2xl font-semibold mt-1">271</div>
+            <div class="text-xs text-slate-500 mt-1 font-mono">modules, 0 violations</div>
+          </div>
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div class="text-xs uppercase tracking-wider text-amber-700">Findings</div>
+            <div class="text-2xl font-semibold text-amber-900 mt-1">4 + 6 + 10 + 1</div>
+            <div class="text-xs text-amber-700 mt-1">hard · deepening · quality · API trap</div>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 flex flex-wrap gap-x-6 gap-y-2">
+          <span class="font-semibold uppercase tracking-wider text-slate-500">Legend</span>
+          <span><span class="inline-block w-4 h-3 border-2 border-slate-800 align-middle"></span> module</span>
+          <span><svg class="inline align-middle" width="24" height="8"><line class="seam" x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="2"/></svg> seam</span>
+          <span><svg class="inline align-middle" width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span><span class="inline-block w-4 h-3 deep align-middle rounded-sm"></span> deep module</span>
+        </div>
+
+        <div class="rounded-lg border-l-4 border-slate-800 bg-white p-5">
+          <p class="text-sm text-slate-700 leading-relaxed">
+            <span class="font-semibold">Verdict.</span> The branch is good work. R2's port module,
+            R3's <code class="font-mono">ctx.view.dom</code> seam, R5's per-kind renderer slot and
+            #158's mount-where-the-scroll-already-moves are all fixes at the right depth, and every
+            one is tested. Nothing here blocks S5.10. The four hard findings are
+            <em>documentation falling behind code</em>, not defects — three of them were introduced
+            by the #158 merge landing after R7 declared the plan closed. The six deepening
+            candidates are about what the next slice costs, not about what this one broke.
+          </p>
+        </div>
+      </header>
+
+      <!-- ══════════════════════════ HARD ══════════════════════════ -->
+      <section class="space-y-6">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-3xl">Hard findings</h2>
+          <span class="text-sm text-slate-500">a documented standard is breached</span>
+        </div>
+
+        <p class="text-sm text-slate-600 max-w-3xl">
+          Three of the four share one cause: <code class="font-mono">fix/158</code> merged
+          <em>after</em> R7 ticked its last box and deleted the source review. R7's closing claims
+          were true when written and are false at <code class="font-mono">HEAD</code>.
+        </p>
+
+        <!-- H1 -->
+        <article class="rounded-lg border border-red-200 bg-white overflow-hidden">
+          <div class="bg-red-50 px-5 py-3 border-b border-red-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-red-600 text-white px-2 py-0.5 rounded">H1</span>
+            <h3 class="font-semibold">The ASD-STE100 pass regressed after ST1 closed</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-red-700">hard</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <p><span class="font-semibold">Standard.</span> <code class="font-mono">CLAUDE.md</code> —
+              "Short sentences: 20 words for instructions, 25 for descriptions", "One instruction per
+              sentence", "Simple tenses". R6 records the pass as
+              <em>"174 sentences over the 25-word ceiling became <strong>zero</strong>, across all
+              fourteen files in scope"</em>.</p>
+            <p><span class="font-semibold">At HEAD it is 25, in ST1's own scope.</span> Counted with
+              a detector that treats one backticked code span as one token, which is the generous
+              reading R7 itself argued for:</p>
+            <div class="overflow-x-auto">
+              <table class="text-xs font-mono w-full">
+                <thead class="text-slate-500 border-b border-slate-200">
+                  <tr><th class="text-left py-1 pr-6">file</th><th class="text-left py-1 pr-6">over 25w</th><th class="text-left py-1">worst</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr><td class="py-1 pr-6">src/view/gantt-shell.ts</td><td class="py-1 pr-6 text-red-600">11</td><td class="py-1">48w</td></tr>
+                  <tr><td class="py-1 pr-6">src/view/row-layer.ts</td><td class="py-1 pr-6 text-red-600">4</td><td class="py-1">38w</td></tr>
+                  <tr><td class="py-1 pr-6">src/view/plugin-ports.ts</td><td class="py-1 pr-6 text-red-600">4</td><td class="py-1">31w</td></tr>
+                  <tr><td class="py-1 pr-6">src/api/plugin.ts</td><td class="py-1 pr-6 text-red-600">3</td><td class="py-1">34w</td></tr>
+                  <tr><td class="py-1 pr-6">src/extensions/features/inline-editing.ts</td><td class="py-1 pr-6 text-red-600">2</td><td class="py-1">52w</td></tr>
+                  <tr><td class="py-1 pr-6">src/view/gantt-dom.ts</td><td class="py-1 pr-6 text-red-600">1</td><td class="py-1">28w</td></tr>
+                  <tr class="text-slate-400"><td class="py-1 pr-6">context-menu · date-input · menu-view · tooltips · dom-contract</td><td class="py-1 pr-6">0</td><td class="py-1">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Every non-zero file is one the post-ST1 merges rewrote.
+              <code class="font-mono">src/view/row-layer.ts</code> is a new file that never had the
+              pass run on it at all. Separately,
+              <code class="font-mono">src/view/plugin-ports.ts:222</code> breaks simple tense:
+              "one of the twelve hand-written listeners <em>had forgotten</em> to".</p>
+            <p class="text-slate-600"><span class="font-semibold">Fix.</span> Re-run ST1 over the six
+              files. Every breach splits at an em-dash it already contains. Then add the detector to
+              the gate, so the next merge cannot quietly undo the pass — this is the second time the
+              rule has been breached and caught by eye rather than by CI.</p>
+          </div>
+        </article>
+
+        <!-- H2 -->
+        <article class="rounded-lg border border-red-200 bg-white overflow-hidden">
+          <div class="bg-red-50 px-5 py-3 border-b border-red-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-red-600 text-white px-2 py-0.5 rounded">H2</span>
+            <h3 class="font-semibold"><code class="font-mono">ctx.view.rowLayer</code> shipped without reaching the specs</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-red-700">hard</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <p><span class="font-semibold">Standard.</span> R2 and R3 both carry the same box:
+              <em>"Update <code class="font-mono">plans/01</code> §10 and
+              <code class="font-mono">plans/02</code> §4"</em> for any change to the port shape.
+              <code class="font-mono">plans/01</code> §10 is the declared home of the
+              <code class="font-mono">PluginContext</code> block.</p>
+            <p>#158 added two public members and updated neither:</p>
+            <ul class="list-disc pl-5 space-y-1 text-slate-700">
+              <li><code class="font-mono">PluginContext.view.rowLayer</code> — <code class="font-mono">src/api/plugin.ts:147</code></li>
+              <li><code class="font-mono">GanttDom.rowLayerBounds</code> — <code class="font-mono">src/view/gantt-dom.ts:86</code></li>
+            </ul>
+            <p>Both are in <code class="font-mono">CONTEXT.md:266</code> and both are in
+              <code class="font-mono">etc/freegantt.api.md:1297,1451</code> — so
+              <code class="font-mono">pnpm api-report</code> ran and the glossary was updated, but the
+              two architecture specs were skipped. <code class="font-mono">plans/01:741</code> still
+              lists the view group as <code class="font-mono">overlay</code>,
+              <code class="font-mono">dom</code>, <code class="font-mono">onDomEvent</code> and
+              nothing else. The API report and the spec now disagree.</p>
+            <p class="text-slate-600"><span class="font-semibold">Why it matters now.</span> S5.10
+              adds four more plugin seams and its author will read that block as the contract. It is
+              the block R2 was written to make authoritative.</p>
+          </div>
+        </article>
+
+        <!-- H3 -->
+        <article class="rounded-lg border border-red-200 bg-white overflow-hidden">
+          <div class="bg-red-50 px-5 py-3 border-b border-red-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-red-600 text-white px-2 py-0.5 rounded">H3</span>
+            <h3 class="font-semibold">Three docs still say the cell editor mounts in the Overlay</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-red-700">hard</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <p>Commit <code class="font-mono">2e5b640</code> moved the editor out of the Overlay and
+              into the Row layer — the whole point of #158. Its own commit body claims only
+              <em>"Glossary: adds Row layer and Cell editor"</em>, and it updated
+              <code class="font-mono">CONTEXT.md</code> alone. Three statements are now false:</p>
+            <div class="space-y-2 font-mono text-xs">
+              <div class="bg-stone-100 rounded p-3">
+                <div class="text-slate-500">plans/02-public-api.md:260</div>
+                <div class="text-red-700">"<code>.fg-cell-editor</code> … mounted through the overlay layer directly"</div>
+              </div>
+              <div class="bg-stone-100 rounded p-3">
+                <div class="text-slate-500">plans/s5-extensibility-and-editing/s5.8-inline-editing.md:97</div>
+                <div class="text-red-700">"It uses the same Overlay layer the editor uses"</div>
+              </div>
+              <div class="bg-stone-100 rounded p-3">
+                <div class="text-slate-500">plans/s5-extensibility-and-editing/s5.8-inline-editing.md:171</div>
+                <div class="text-red-700">"It mounts directly through <code>Overlay.present</code>/<code>.render</code>"</div>
+              </div>
+            </div>
+            <p>R4's own ticked box in the closed fix plan is wrong for the same reason: it records the
+              refusal notice as mounting <em>"on the same Overlay layer"</em>.</p>
+            <p class="text-slate-600"><span class="font-semibold">Fix.</span> Three edits, plus one
+              line in the fix plan's §6 recording that #158 superseded R4's mount claim. The code is
+              right; only the record is behind.</p>
+          </div>
+        </article>
+
+        <!-- H4 -->
+        <article class="rounded-lg border border-red-200 bg-white overflow-hidden">
+          <div class="bg-red-50 px-5 py-3 border-b border-red-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-red-600 text-white px-2 py-0.5 rounded">H4</span>
+            <h3 class="font-semibold">A second, diverging <code class="font-mono">CSS.escape</code> feature-detect</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-red-700">hard · duplicated code</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <p><code class="font-mono">src/render/dom/css-escape.ts</code> exists for exactly this
+              job, and says so: <em>"one place for the <code class="font-mono">CSS.escape</code>
+              feature-detect every <code class="font-mono">[data-field="…"]</code> attribute selector
+              needs"</em>. <code class="font-mono">src/view/column-chrome.ts:13</code> already imports
+              it across the allowed view→render edge.</p>
+            <p><code class="font-mono">src/view/gantt-dom.ts:230</code> declares a private copy — and
+              the copy <em>behaves differently</em>:</p>
+            <div class="grid md:grid-cols-2 gap-3 font-mono text-xs">
+              <div class="rounded border border-slate-200 bg-white p-3">
+                <div class="text-slate-500 mb-1">render/dom/css-escape.ts</div>
+                <pre class="whitespace-pre-wrap">CSS.escape(value)
+  : value</pre>
+              </div>
+              <div class="rounded border border-red-300 bg-red-50 p-3">
+                <div class="text-slate-500 mb-1">view/gantt-dom.ts:230</div>
+                <pre class="whitespace-pre-wrap">CSS.escape(value)
+  : value.replace(/["\\]/g, '\\$&amp;')</pre>
+              </div>
+            </div>
+            <p>Two escape behaviours for one selector shape, in a codebase whose whole
+              <code class="font-mono">dom-contract.ts</code> exercise was about having one owner for
+              what crosses that boundary.
+              <code class="font-mono">gantt-dom.ts</code> already imports from
+              <code class="font-mono">render/dom</code>, so the import costs nothing.</p>
+            <p class="text-slate-600"><span class="font-semibold">Fix.</span> Delete the local
+              function; import <code class="font-mono">cssEscapeAttr</code>. If the extra fallback is
+              wanted, it belongs in the shared one, where both callers get it.</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- ══════════════════════════ CANDIDATES ══════════════════════════ -->
+      <section id="candidates" class="space-y-10">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-3xl">Deepening candidates</h2>
+          <span class="text-sm text-slate-500">what the next slice costs</span>
+        </div>
+
+        <!-- C1 -->
+        <article id="c1" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">1 · The plugin surface is declared twice</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-emerald-600 text-white px-2.5 py-1 rounded">Strong</span>
+            <span class="text-xs uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded">in-process</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">
+            src/view/plugin-ports.ts:120 · src/api/plugin.ts:68 · src/view/gantt-shell.ts:1146
+          </div>
+
+          <div class="p-6 grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — 4 declarations</div>
+              <pre class="mermaid">
+flowchart TB
+  F["GanttShell fields"] --> GSP["GanttShellPorts<br/>~25 members"]
+  GSP --> SP["#shellPorts()<br/>~25 closures"]
+  SP --> PCP["PluginContextPorts<br/>~25 members"]
+  PCP -.retyped by hand.-> PCO["PluginContextOf<br/>~25 members + docs"]
+  classDef leak stroke:#dc2626,stroke-width:3px,color:#991b1b;
+  class PCO leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">After — 2 declarations</div>
+              <pre class="mermaid">
+flowchart TB
+  F2["GanttShell fields"] --> GSP2["GanttShellPorts"]
+  GSP2 --> SP2["#shellPorts()"]
+  SP2 --> PCP2["PluginContextPorts<br/>the one member list"]
+  PCP2 ==>|projection| PCO2["PluginContextOf<br/>Omit + 3 generic members"]
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a,stroke-width:2px;
+  class PCP2 deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="px-6 pb-6 space-y-3 text-sm">
+            <p><span class="font-semibold">Problem.</span>
+              <code class="font-mono">PluginContextOf</code> is a shallow adapter: apart from
+              <code class="font-mono">commands</code>, <code class="font-mono">dataset</code> and
+              <code class="font-mono">gantt</code>, which are genuinely generic over
+              <code class="font-mono">TGantt</code>/<code class="font-mono">TDataset</code>, every
+              member is a character-for-character copy of
+              <code class="font-mono">PluginContextPorts</code>, doc comments included. Nothing
+              type-checks the copy. Adding one capability is five edits.</p>
+            <p><span class="font-semibold">Solution.</span> Derive the public type from the ports
+              type — <code class="font-mono">Omit&lt;PluginContextPorts, 'commands'&gt; &amp; {
+              dataset: TDataset; gantt: TGantt; commands: CommandRegistryOf&lt;…&gt; }</code>.
+              <code class="font-mono">GanttShellPorts</code> stays: a real transformation happens
+              across it. The api-level retype does not earn its place.</p>
+            <div class="rounded bg-amber-50 border border-amber-200 p-3 text-amber-900">
+              <span class="font-semibold">Why now.</span> S5.10 adds four dataset-plugin seams. On
+              today's shape that is four more hand-copied twins, and R2 was written precisely to make
+              a new seam one edit in one file.
+            </div>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5 text-slate-700">
+              <li>locality: one member list</li>
+              <li>leverage: one edit per new seam</li>
+              <li>interface shrinks; drift stops compiling</li>
+              <li><code class="font-mono">plugin-ports.test.ts</code> covers the public contract</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- C2 -->
+        <article id="c2" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">2 · <code class="font-mono text-xl">GanttShell</code>'s frame configuration wants to be a module</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-emerald-600 text-white px-2.5 py-1 rounded">Strong</span>
+            <span class="text-xs uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded">in-process</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">
+            src/view/gantt-shell.ts:824–1000, 1252–1352, 1557–1620
+          </div>
+
+          <div class="p-6 grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — 12 fields, 12 bespoke setters</div>
+              <svg viewBox="0 0 320 300" class="w-full">
+                <rect x="8" y="8" width="304" height="284" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <text x="16" y="26" class="text-[10px]" font-family="ui-monospace" font-size="10" fill="#64748b" letter-spacing="1">GANTTSHELL — 1,646 LINES</text>
+                <g font-family="ui-monospace" font-size="8.5" fill="#334155">
+                  <rect x="18" y="38" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="50">#rowHeight → request()</text>
+                  <rect x="18" y="58" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="70">#laneGapPx → request()</text>
+                  <rect x="18" y="78" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="90">#tickBoxFloorPx → …</text>
+                  <rect x="18" y="98" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="110">#diamondSizePx → …</text>
+                  <rect x="18" y="118" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="130">#locale → +bindColumns</text>
+                  <rect x="18" y="138" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="150">#rowSource → +invalidate</text>
+                  <rect x="18" y="158" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="170">#todayLine → request()</text>
+                  <rect x="18" y="178" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="190">#dateLines → request()</text>
+                  <rect x="18" y="198" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="210">#fieldCompares → …</text>
+                  <rect x="18" y="218" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="230">#barRenderer → repaint</text>
+                  <rect x="18" y="238" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="250">#cellRenderer → repaint</text>
+                  <rect x="18" y="258" width="130" height="16" fill="#fee2e2" stroke="#fca5a5"/><text x="24" y="270">… + 4 more</text>
+                </g>
+                <path d="M152 150 L 196 150" stroke="#475569" stroke-width="1.5" marker-end="url(#a2)"/>
+                <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#475569"/></marker></defs>
+                <rect x="200" y="110" width="102" height="80" fill="#f1f5f9" stroke="#94a3b8"/>
+                <text x="208" y="128" font-family="ui-monospace" font-size="9" fill="#334155">render()</text>
+                <text x="208" y="144" font-family="ui-monospace" font-size="8" fill="#64748b">hand-assembles</text>
+                <text x="208" y="156" font-family="ui-monospace" font-size="8" fill="#64748b">LayoutInput</text>
+                <text x="208" y="176" font-family="ui-monospace" font-size="8" fill="#dc2626">12 reads</text>
+              </svg>
+              <p class="text-xs text-slate-500 mt-2">Twelve independent invalidation decisions. Testable only through a mounted <code class="font-mono">Gantt</code>.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">After — one table, DOM-free</div>
+              <svg viewBox="0 0 320 300" class="w-full">
+                <rect x="8" y="8" width="304" height="284" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <text x="16" y="26" font-family="ui-monospace" font-size="10" fill="#64748b" letter-spacing="1">GANTTSHELL</text>
+                <rect x="18" y="38" width="130" height="20" fill="#dcfce7" stroke="#86efac"/>
+                <text x="24" y="52" font-family="ui-monospace" font-size="9" fill="#166534">#framePlan</text>
+                <text x="24" y="76" font-family="ui-monospace" font-size="8" fill="#94a3b8">12 fields gone</text>
+                <text x="24" y="90" font-family="ui-monospace" font-size="8" fill="#94a3b8">12 setters → 1 line each</text>
+                <path d="M152 48 L 196 48" stroke="#475569" stroke-width="1.5" marker-end="url(#a3)"/>
+                <defs><marker id="a3" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#475569"/></marker></defs>
+                <rect x="196" y="120" width="106" height="150" rx="3" fill="#0f172a"/>
+                <text x="204" y="140" font-family="ui-monospace" font-size="9.5" fill="#fff">FramePlan</text>
+                <g font-family="ui-monospace" font-size="8" fill="#cbd5e1">
+                  <text x="204" y="160">set(patch)</text>
+                  <text x="204" y="174">refreshMetrics(el)</text>
+                  <text x="204" y="188">toLayoutInput(…)</text>
+                  <text x="204" y="202">dirty</text>
+                </g>
+                <line class="seam" x1="196" y1="212" x2="302" y2="212" stroke="#64748b" stroke-width="1.5"/>
+                <g font-family="ui-monospace" font-size="7.5" fill="#94a3b8">
+                  <text x="204" y="228">12 config fields</text>
+                  <text x="204" y="240">4 pixel policies</text>
+                  <text x="204" y="252">1 invalidation table</text>
+                </g>
+                <text x="196" y="286" font-family="ui-monospace" font-size="8" fill="#16a34a">no DOM · unit-testable</text>
+              </svg>
+              <p class="text-xs text-slate-500 mt-2">Interface: 4 methods. Implementation: everything the twelve setters knew.</p>
+            </div>
+          </div>
+
+          <div class="px-6 pb-6 space-y-3 text-sm">
+            <p><span class="font-semibold">Problem.</span> <code class="font-mono">GanttShell</code>
+              is still the ball-of-mud risk after R2 and R6 shrank it — 1,646 lines, ~50 private
+              fields, ~35 getter/setter pairs. But the residue is not random. About a dozen fields
+              exist only to be read once in <code class="font-mono">render()</code> and assembled
+              into <code class="font-mono">LayoutInput</code>, and each setter re-derives its own
+              invalidation rule by hand. That rule table is knowledge spread across twelve setters,
+              verified only by mounting a real <code class="font-mono">Gantt</code> — which is why
+              <code class="font-mono">api/gantt.test.ts</code> is 3,777 lines.</p>
+            <p><span class="font-semibold">Solution.</span> A <code class="font-mono">FramePlan</code>
+              module owning those fields plus the four pixel-property policies. Setters become one
+              line. <code class="font-mono">render()</code> becomes
+              <code class="font-mono">computeFrame(this.#framePlan.toLayoutInput(…))</code>.</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5 text-slate-700">
+              <li>locality: "what invalidates what" is one table</li>
+              <li>leverage: <code class="font-mono">render()</code> is about the DOM again</li>
+              <li>the invalidation matrix becomes a DOM-free unit test</li>
+              <li>no seam anyone depends on moves</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- C3 -->
+        <article id="c3" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">3 · <code class="font-mono text-xl">Overlay</code> and <code class="font-mono text-xl">RowLayer</code> are one shape, declared twice</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded">Worth exploring</span>
+            <span class="text-xs uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded">ports &amp; adapters</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">
+            src/view/overlay.ts:14 · src/view/row-layer.ts:22 · src/view/gantt-dom.ts:86 · src/extensions/features/inline-editing.ts:150–166, 444
+          </div>
+
+          <div class="p-6 grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — the editor stitches two halves</div>
+              <pre class="mermaid">
+flowchart TB
+  CE["CellEditorSession"]
+  CE -->|present| RL["RowLayer<br/>present(): Disposer"]
+  CE -.->|onResize borrowed| OV["Overlay<br/>present(): OverlayHandle<br/>render · onResize"]
+  CE -.->|rowLayerBounds| GD["GanttDom"]
+  classDef leak stroke:#dc2626,stroke-width:3px,color:#991b1b;
+  class OV,GD leak
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">Three modules answer "where do I mount, and how do I stay put".</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">After — one interface, two instances</div>
+              <pre class="mermaid">
+flowchart TB
+  CE2["CellEditorSession"] -->|one port| ML["MountLayer<br/>present(): Disposer<br/>onResize(cb)<br/>bounds"]
+  ML --> A["overlay<br/>escapes the pane"]
+  ML --> B["rowLayer<br/>travels with the rows"]
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a,stroke-width:2px;
+  class ML deep
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">Two instances of one interface: the "two adapters = a real seam" test passing.</p>
+            </div>
+          </div>
+
+          <div class="px-6 pb-6 space-y-3 text-sm">
+            <p><span class="font-semibold">Problem.</span> The #158 mount choice is the right root
+              cause — the row layer is the element the scroll already moves, so nothing chases a
+              paint from a <code class="font-mono">scroll</code> listener. But
+              <code class="font-mono">RowLayer</code> ships a 40-line module whose whole
+              implementation is <code class="font-mono">layer.append(el); return () =&gt;
+              el.remove()</code>, identical to <code class="font-mono">Overlay.present</code>, and it
+              returns a bare <code class="font-mono">Disposer</code> where
+              <code class="font-mono">Overlay</code> returns
+              <code class="font-mono">OverlayHandle{ detach }</code>. Then the seam leaks: the editor
+              mounts in one layer and borrows <code class="font-mono">onResize</code> from the other,
+              with a comment at <code class="font-mono">inline-editing.ts:444</code> apologising for
+              the wrapping — because reposition-on-resize belongs to whatever you mounted into, and
+              only one of the two layers has it.</p>
+            <p><span class="font-semibold">Deletion test.</span> Deleting
+              <code class="font-mono">DomRowLayer</code> concentrates nothing — one line moves.
+              Deleting the <em>distinction</em> would concentrate real complexity: the scroll-follow
+              argument is load-bearing. So the concept survives and the second interface should not.</p>
+            <p><span class="font-semibold">Solution.</span> One
+              <code class="font-mono">MountLayer</code> —
+              <code class="font-mono">present(el): Disposer</code>,
+              <code class="font-mono">onResize(cb): Disposer</code>,
+              <code class="font-mono">bounds: DOMRect</code> — with two instances.
+              <code class="font-mono">rowLayerBounds</code> then leaves
+              <code class="font-mono">GanttDom</code> and lives on the layer it describes.
+              <code class="font-mono">OverlayHandle</code> goes with it: CLAUDE.md's own rule is that
+              a one-field wrapper is the inner type, not a new name, and a plugin author currently
+              meets three shapes for "un-mount this" —
+              <code class="font-mono">OverlayHandle</code>,
+              <code class="font-mono">Disposer</code>, and
+              <code class="font-mono">Overlay.onResize</code>'s bare
+              <code class="font-mono">() =&gt; void</code>.</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5 text-slate-700">
+              <li>locality: mount and stay-positioned are one interface</li>
+              <li><code class="font-mono">CellEditorPorts</code> loses two members</li>
+              <li>one fake serves popup, editor and notice tests</li>
+              <li>removes the third mount concept before a fourth arrives</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- C4 -->
+        <article id="c4" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">4 · <code class="font-mono text-xl">inlineEditing()</code>'s closure holds a state machine</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded">Worth exploring</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">
+            src/extensions/features/inline-editing.ts:402–409, 669–676
+          </div>
+          <div class="p-6 grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">Before — invariant held by discipline</div>
+              <svg viewBox="0 0 320 210" class="w-full">
+                <rect x="8" y="8" width="304" height="194" fill="#fff7ed" stroke="#fdba74" stroke-width="2" stroke-dasharray="4 3"/>
+                <text x="16" y="26" font-family="ui-monospace" font-size="9.5" fill="#9a3412">setup() closure</text>
+                <g font-family="ui-monospace" font-size="9">
+                  <rect x="20" y="38" width="86" height="22" fill="#fed7aa" stroke="#fb923c"/><text x="26" y="53" fill="#7c2d12">session</text>
+                  <rect x="116" y="38" width="86" height="22" fill="#fed7aa" stroke="#fb923c"/><text x="122" y="53" fill="#7c2d12">notice</text>
+                  <rect x="212" y="38" width="88" height="22" fill="#fed7aa" stroke="#fb923c"/><text x="218" y="53" fill="#7c2d12">openRequestId</text>
+                </g>
+                <text x="20" y="82" font-family="ui-monospace" font-size="8" fill="#9a3412">invariant: at most one of session / notice is showing</text>
+                <text x="20" y="96" font-family="ui-monospace" font-size="8" fill="#dc2626">enforced across 7 call sites:</text>
+                <g font-family="ui-monospace" font-size="7.5" fill="#7c2d12">
+                  <text x="28" y="112">refuse()</text><text x="128" y="112">dismissRefusal()</text><text x="236" y="112">closeSession()</text>
+                  <text x="28" y="126">openFor()</text><text x="128" y="126">onDatasetChange()</text><text x="236" y="126">onDomEvent×2</text>
+                </g>
+                <rect x="20" y="142" width="280" height="46" fill="#fee2e2" stroke="#fca5a5"/>
+                <text x="28" y="158" font-family="ui-monospace" font-size="8" fill="#991b1b">async-veto race guard (:669)</text>
+                <text x="28" y="172" font-family="ui-monospace" font-size="7.5" fill="#991b1b">real logic — reachable only by dispatching DOM events</text>
+                <text x="28" y="183" font-family="ui-monospace" font-size="7.5" fill="#991b1b">through a full plugin context</text>
+              </svg>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-3">After — one state, called directly</div>
+              <svg viewBox="0 0 320 210" class="w-full">
+                <rect x="8" y="8" width="304" height="194" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+                <text x="16" y="26" font-family="ui-monospace" font-size="9.5" fill="#64748b">inlineEditing() — wiring only</text>
+                <text x="20" y="44" font-family="ui-monospace" font-size="8" fill="#94a3b8">resolve target · ask · delegate</text>
+                <rect x="40" y="60" width="240" height="128" rx="3" fill="#0f172a"/>
+                <text x="52" y="80" font-family="ui-monospace" font-size="10" fill="#fff">CellEditing</text>
+                <g font-family="ui-monospace" font-size="8.5" fill="#cbd5e1">
+                  <text x="52" y="100">open(entry, field, cell)</text>
+                  <text x="52" y="115">commit() · revert()</text>
+                  <text x="52" y="130">onAnchorLost() · clear()</text>
+                </g>
+                <line class="seam" x1="40" y1="142" x2="280" y2="142" stroke="#64748b" stroke-width="1.5"/>
+                <text x="52" y="160" font-family="ui-monospace" font-size="8" fill="#94a3b8">state: session | notice | none</text>
+                <text x="52" y="174" font-family="ui-monospace" font-size="8" fill="#94a3b8">open-request generation</text>
+                <text x="40" y="200" font-family="ui-monospace" font-size="7.5" fill="#16a34a">race + mutual exclusion are method calls</text>
+              </svg>
+            </div>
+          </div>
+          <div class="px-6 pb-6 space-y-3 text-sm">
+            <p><span class="font-semibold">Problem.</span>
+              <code class="font-mono">CellEditorSession</code> genuinely is a deep module, and
+              <code class="font-mono">commit()</code> returning "did it close" instead of a shared
+              flag (R1's C2b) is a good call. The friction is above it: the
+              <code class="font-mono">setup</code> closure holds three coordinated mutables with the
+              invariant "at most one of session / notice is showing" enforced by discipline across
+              seven call sites, and the async-veto race guard is real logic that only a choreographed
+              <code class="font-mono">dblclick</code> sequence can exercise.</p>
+            <p><span class="font-semibold">Solution.</span> Promote the closure state into a
+              <code class="font-mono">CellEditing</code> module owning
+              <code class="font-mono">session | notice | none</code> as one state, plus the
+              open-request generation. <code class="font-mono">inlineEditing()</code> becomes thin
+              wiring.</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5 text-slate-700">
+              <li>locality: mutual exclusion is one state, not seven sites</li>
+              <li>the stale-veto race becomes a direct method call</li>
+              <li>fixes Q2 for free — one anchor lookup for both</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- C5 -->
+        <article id="c5" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">5 · Five registration seams, five mechanisms</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded">Worth exploring</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">
+            src/layout/registration-table.ts · src/view/gantt-shell.ts:401,1161 · src/view/renderer-registry.ts:68 · src/view/plugin-ports.ts:196–231
+          </div>
+          <div class="p-6">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <pre class="mermaid">
+flowchart LR
+  subgraph now["Before"]
+    direction TB
+    RT["createRegistrationTable<br/>(deep: newest-wins, precise disposal)"]
+    R1["renderers ✓"] --> RT
+    R2["kindDefaults ✓"] --> RT
+    R3["itemProducers ✓"] --> RT
+    R4["gridColumns ✓"] --> RT
+    R5["decorations ✗<br/>hand-rolled array + indexOf/splice<br/>inside the god object"]
+    BP["buildPluginPorts<br/>re-derives 'what must run again' per seam"]
+  end
+  classDef leak stroke:#dc2626,stroke-width:3px,color:#991b1b;
+  class R5 leak
+              </pre>
+            </div>
+          </div>
+          <div class="px-6 pb-6 space-y-3 text-sm">
+            <p><span class="font-semibold">Problem.</span>
+              <code class="font-mono">createRegistrationTable</code> is already a deep module and
+              four of five registration points use it. Decorations open-code the same lifetime by
+              hand, in a closure inside <code class="font-mono">GanttShell</code>. Separately,
+              <code class="font-mono">buildPluginPorts</code> re-derives the invalidation each seam
+              owes (<code class="font-mono">repaint</code>,
+              <code class="font-mono">reproduceItems</code>,
+              <code class="font-mono">refreshCapabilities</code>) one layer away from the
+              registration itself.</p>
+            <p><span class="font-semibold">Solution.</span> One
+              <code class="font-mono">PluginRegistrations</code> module holding all five tables and,
+              per key, the refresh it owes.</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5 text-slate-700">
+              <li>locality: #154/#155 disposal asserted once</li>
+              <li>leverage: a sixth seam is a table entry</li>
+              <li>shell loses five fields and the decoration array</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- C6 -->
+        <article id="c6" class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-6 pt-6 flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-2xl mr-auto">6 · <code class="font-mono text-xl">Gantt</code> mirrors <code class="font-mono text-xl">GanttShell</code> pair for pair — leave it</h3>
+            <span class="text-xs font-semibold uppercase tracking-wider bg-slate-500 text-white px-2.5 py-1 rounded">Speculative — do not act</span>
+          </div>
+          <div class="px-6 pt-3 font-mono text-xs text-slate-500">src/api/gantt.ts:272–570 vs src/view/gantt-shell.ts:824–1445</div>
+          <div class="p-6 pt-4 space-y-3 text-sm">
+            <p>Roughly 35 getter/setter pairs appear in both classes. It reads like a shallow
+              pass-through, and it is recorded here because a future reviewer will suspect it too.
+              The deletion test says otherwise: <code class="font-mono">Gantt</code> does the
+              loose→branded coercion, and deleting it would force
+              <code class="font-mono">GanttShell</code> — which may not import
+              <code class="font-mono">time/</code>'s <code class="font-mono">now()</code> or name api
+              types (D-S5-5, I10) — to become the public surface. Complexity would concentrate in the
+              wrong layer.</p>
+            <p class="text-slate-600">The transcription cost is real but it is the price of a rule
+              already recorded. The way to reduce it is candidate 2 — fewer pairs to mirror — not a
+              change here.</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- ══════════════════════════ QUALITY ══════════════════════════ -->
+      <section class="space-y-6">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-3xl">Quality findings</h2>
+          <span class="text-sm text-slate-500">judgement calls · fix as you pass</span>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="text-left px-4 py-2.5 w-12">#</th>
+                <th class="text-left px-4 py-2.5">Finding</th>
+                <th class="text-left px-4 py-2.5 w-32">Kind</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 align-top">
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q1</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">The refusal notice paints itself, over a stylesheet that already owns its class</div>
+                  <div class="text-slate-600 mt-1"><code class="font-mono text-xs">inline-editing.ts:332</code> —
+                    <code class="font-mono">paintRefusal</code> writes eleven inline declarations. The notice carries
+                    <code class="font-mono">.fg-cell-editor</code> and <code class="font-mono">data-state="invalid"</code>,
+                    both already styled at <code class="font-mono">view/styles.ts:255–257</code>, and it restates
+                    <code class="font-mono">--fg-warn</code>/<code class="font-mono">--fg-pane-bg</code> with hardcoded
+                    light-theme fallbacks. Inline styles outrank a consumer stylesheet, which is the opposite of the
+                    level-1-token intent stated three lines above. Only <code class="font-mono">pointer-events: none</code>
+                    is load-bearing.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> one
+                    <code class="font-mono">.fg-cell-editor[data-state='invalid'][data-reason]</code> rule in
+                    <code class="font-mono">styles.ts</code>; delete <code class="font-mono">paintRefusal</code>.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">wrong layer</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q2</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">One file gives two answers to "did virtualization recycle my cell?"</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">inline-editing.ts:280</code> —
+                    <code class="font-mono">CellEditorSession.reposition()</code> deliberately re-asks
+                    <code class="font-mono">cellFor</code>, and its doc says why.
+                    <code class="font-mono text-xs">inline-editing.ts:381</code> —
+                    <code class="font-mono">presentRefusal</code> captures the <code class="font-mono">cell</code> node and
+                    repositions against that same node on every resize. Same hazard, opposite answer.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> give the notice the same
+                    <code class="font-mono">EditedCell</code> lookup. Candidate 4 does this for free.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">inconsistency</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q3</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold"><code class="font-mono">grid</code> names two different elements, and #158 made it load-bearing</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">pane-layout.ts:132</code> —
+                    <code class="font-mono">panes.grid</code> <em>is the row layer</em>
+                    (<code class="font-mono">.fg-rows</code>).
+                    <code class="font-mono text-xs">pane-layout.ts:190</code> —
+                    <code class="font-mono">paneBounds().grid</code> is
+                    <code class="font-mono">#gridPane</code>. The file's own comment has to say
+                    "unlike <code class="font-mono">paneBounds().grid</code> this one <em>is</em>
+                    <code class="font-mono">panes.grid</code>" — the #7 failure exactly: one word covering two
+                    concepts, and a comment doing the work a name should.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> rename
+                    <code class="font-mono">panes.grid</code> → <code class="font-mono">panes.rows</code>.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">naming · #7</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q4</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">Three hand-rolled disposer lists beside <code class="font-mono">DisposableStore</code></div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">inline-editing.ts:192,381</code> and
+                    <code class="font-mono text-xs">renderer-registry.ts:51</code>.
+                    <code class="font-mono">extensions/disposables.ts</code> is the reverse-order, latching, idempotent
+                    version of all three, and the sibling files <code class="font-mono">popup.ts</code> and
+                    <code class="font-mono">context-menu.ts</code> already use it.
+                    <code class="font-mono">presentRefusal</code> hand-rolls the <code class="font-mono">let open</code>
+                    latch the store already provides;
+                    <code class="font-mono">renderer-registry</code>'s <code class="font-mono">disposeAll</code> already
+                    differs — forward order, and a double dispose runs twice.
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">duplication</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q5</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">Per-cell renderer resolution survives the A6 fix</div>
+                  <div class="text-slate-600 mt-1">
+                    A6 is real — <code class="font-mono">ColumnChrome#adoptColumns</code> is the only writer of both the
+                    array and the index, so the map cannot go stale, and the O(rows × columns²) claim is exact. But
+                    <code class="font-mono text-xs">gantt-shell.ts:555</code> still calls
+                    <code class="font-mono">resolveCellRenderer</code> inside the per-cell
+                    <code class="font-mono">.map</code>: two allocations per painted cell per frame, and frames fire on
+                    scroll. The resolution depends only on the column, never on the row.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> resolve once per column per frame,
+                    before the row loop. Also: <code class="font-mono">FieldKey</code> is already a string type, so both
+                    <code class="font-mono">String()</code> calls are ceremony.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">efficiency</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q6</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold"><code class="font-mono">cellFor</code> is O(rows) of DOM work per scroll event</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">gantt-dom.ts:154</code> does
+                    <code class="font-mono">querySelectorAll('.fg-row')</code> and loops;
+                    <code class="font-mono text-xs">inline-editing.ts:483</code> calls it through
+                    <code class="font-mono">stillAnchored()</code> on every capture-phase scroll while an editor is open.
+                    <code class="font-mono">barFor</code> has the same shape. plans/01 §8: the hot path is class toggles
+                    and transforms, zero allocation.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> add
+                    <code class="font-mono">ENTRY_ID_ATTRIBUTE</code>/<code class="font-mono">ITEM_ID_ATTRIBUTE</code>
+                    beside the existing <code class="font-mono">FIELD_ATTRIBUTE</code> in
+                    <code class="font-mono">dom-contract.ts</code> and collapse both to one
+                    <code class="font-mono">querySelector</code> — the CSS engine already indexes attributes.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">efficiency</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q7</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold"><code class="font-mono">popup.ts</code>'s scroll dismiss asks geometry a question about ownership</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">popup.ts:193</code> — <code class="font-mono">onScroll</code> reads
+                    <code class="font-mono">ctx.dom.paneBounds</code> (two forced
+                    <code class="font-mono">getBoundingClientRect</code>) plus the target's own rect, on every scroll
+                    anywhere in the document, to answer "did my anchor's pane scroll". That is element identity, not
+                    geometry. It also happens to be why this listener is unscoped — and
+                    <code class="font-mono">plans/01</code> §10 grants the exception in the singular, for
+                    dismiss-on-outside-pointer, while <code class="font-mono">popup.ts</code> takes it twice.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> a
+                    <code class="font-mono">paneOf(node)</code> on <code class="font-mono">GanttDom</code>, so the trigger
+                    is a <code class="font-mono">contains</code> check and the listener can move onto
+                    <code class="font-mono">onDomEvent</code>. Then the one remaining holdout is
+                    <code class="font-mono">outsidePointer</code>, whose missing concept is "the user acted outside me" —
+                    <code class="font-mono">onDomEvent(type, handler, { outside: true })</code> inverts the
+                    <code class="font-mono">dom.owns</code> check the seam already computes.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">altitude</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q8</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">A module-level singleton in the harness, which is an API gap</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">harness/plugins/popup-demo.ts:14</code> —
+                    <code class="font-mono">let demoView</code>, justified as "one stash serves every page, because each
+                    page mounts one Gantt". CLAUDE.md: "No module-level singletons anywhere; two Gantt instances on one
+                    page must be fully independent" — and harness code breaking a library rule is a gap to record in
+                    <code class="font-mono">src/</code>, never to tidy in the harness.
+                    <span class="block mt-1"><span class="font-semibold">The gap:</span> nothing gets from a
+                    <code class="font-mono">Gantt</code> back to an installed plugin's own
+                    <code class="font-mono">ctx.view</code>. Every page-scope caller must stash it during
+                    <code class="font-mono">setup()</code>. Record against S5 and close it in
+                    <code class="font-mono">src/</code>.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">API gap</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q9</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">A doc comment that the code contradicts</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">plugin-ports.ts:65</code> — "<code class="font-mono">GanttShell</code>
+                    builds one of these per Gantt". <code class="font-mono text-xs">gantt-shell.ts:616</code> calls
+                    <code class="font-mono">this.#shellPorts()</code> per plugin install, allocating a fresh ~25-member
+                    object each time.
+                    <span class="block mt-1"><span class="font-semibold">Fix:</span> build it once into a field — which is
+                    what the comment already promises — or correct the sentence.</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">self-documentation</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-mono text-xs text-slate-400">Q10</td>
+                <td class="px-4 py-3">
+                  <div class="font-semibold">The e2e test id is the CSS class, silently</div>
+                  <div class="text-slate-600 mt-1">
+                    <code class="font-mono text-xs">render/dom/index.ts:658,773</code> —
+                    <code class="font-mono">node.dataset['testid'] = ROW_CLASS</code> /
+                    <code class="font-mono">BAR_CLASS</code>. The whole point of
+                    <code class="font-mono">dom-contract.ts</code> is that a class crossing a boundary is a declared
+                    contract; this makes the e2e contract rename itself whenever the class does, with nothing failing at
+                    the rename. Give the test id its own constant beside the class.
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-slate-500">coupling</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ RIGHT ══════════════════════════ -->
+      <section class="space-y-4">
+        <h2 class="font-serif text-3xl">What this branch got right</h2>
+        <p class="text-sm text-slate-600 max-w-3xl">Recorded so a later reviewer does not re-open settled ground.</p>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">#158 is a root-cause fix, not a patch</div>
+            <p class="text-emerald-800 mt-1">The first attempt repositioned from a
+              <code class="font-mono">scroll</code> listener and chased a paint that had already happened. The second
+              mounts in the element the scroll already moves, and needs no listener at all. It is covered by a real
+              browser e2e (<code class="font-mono">e2e/editing.spec.ts:73</code>) and two dom tests.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">No dead code from the superseded attempt</div>
+            <p class="text-emerald-800 mt-1"><code class="font-mono">cellInRow</code>,
+              <code class="font-mono">findCell</code> and the scroll-reposition path are gone;
+              <code class="font-mono">onScroll</code> is back to a pure anchorage check.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">R2's premise holds</div>
+            <p class="text-emerald-800 mt-1"><code class="font-mono">registerWhileOpen</code> and
+              <code class="font-mono">listenWhileInstalled</code> factor twelve register/listen sites down to two shapes
+              with no repetition. #158 added a seam through exactly that path, which is the working proof S5.10 needs.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">The <code class="font-mono">.fg-*</code> read side is closed</div>
+            <p class="text-emerald-800 mt-1">No plugin and no harness page reads a
+              <code class="font-mono">.fg-*</code> selector or a <code class="font-mono">data-*</code> key of the rendered
+              Gantt. <code class="font-mono">dom-contract.ts</code> is the single owner, and
+              <code class="font-mono">gantt-dom.test.ts</code> paints a real frame to assert the two still agree.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">A6's column index is exact</div>
+            <p class="text-emerald-800 mt-1"><code class="font-mono">#adoptColumns</code> is the only writer of both the
+              array and the map, and every mutation path routes through
+              <code class="font-mono">#bindColumns</code>. The map cannot go stale on its own.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+            <div class="font-semibold text-emerald-900">Lazy where it counts</div>
+            <p class="text-emerald-800 mt-1"><code class="font-mono">DomOverlay.onResize</code> observes lazily and
+              disconnects at zero listeners. <code class="font-mono">targetUnder</code>'s one-slot memo stamps
+              item/entry/field, so a recycled row invalidates it and a scroll target returns before touching it.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ SECOND PASS ══════════════════════════ -->
+      <section class="space-y-6">
+        <div class="flex items-baseline gap-3">
+          <h2 class="font-serif text-3xl">Second pass</h2>
+          <span class="text-sm text-slate-500">read from a consumer's and a plugin author's seat</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          A re-read of the public surface as an app author meets it, rather than as the diff presents
+          it. One API trap, one idea confirmed as correctly rejected, and one piece of house style
+          worth copying.
+        </p>
+
+        <!-- S1 -->
+        <article class="rounded-lg border border-amber-300 bg-white overflow-hidden">
+          <div class="bg-amber-50 px-5 py-3 border-b border-amber-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-amber-600 text-white px-2 py-0.5 rounded">S1</span>
+            <h3 class="font-semibold"><code class="font-mono">gantt.gridColumns</code> changes meaning after the user's first column drag</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-amber-700">API trap</span>
+          </div>
+          <div class="p-5 space-y-4 text-sm">
+            <div class="font-mono text-xs text-slate-500">
+              src/view/column-chrome.ts:94–105, 111–130, 280–294 · src/view/gantt-shell.ts:836
+            </div>
+            <p>The behaviour is deliberate and the comment at
+              <code class="font-mono">column-chrome.ts:70</code> states it exactly: plugin columns are
+              appended by <code class="font-mono">effectiveInput()</code>, never stored, and
+              <em>"a plugin column reaches the getter only once a resize/reorder/plain assignment
+              commits it"</em>. But follow what that means for the consumer:</p>
+            <div class="rounded-lg border border-slate-200 overflow-hidden">
+              <div class="grid grid-cols-[auto_1fr] text-xs font-mono">
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t0</div>
+                <div class="px-3 py-2 border-b border-slate-200">
+                  <code>gantt.gridColumns</code> → the 3 columns the consumer authored
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t1</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-slate-600">
+                  a plugin installs and registers <code>'risk'</code> — getter unchanged, correctly
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t2</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-amber-700">
+                  the user drags <em>any</em> column edge → commit bakes <code>effectiveInput()</code> in
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500 border-b border-slate-200">t3</div>
+                <div class="px-3 py-2 border-b border-slate-200 text-red-700">
+                  <code>gantt.gridColumns</code> → 4 columns. One the consumer never authored.
+                </div>
+                <div class="bg-stone-100 px-3 py-2 text-slate-500">t4</div>
+                <div class="px-3 py-2 text-red-700">
+                  <code>gantt.on('gridColumnsChange', ({ to }) =&gt; save(to.map((c) =&gt; c.field)))</code>
+                  persists it
+                </div>
+              </div>
+            </div>
+            <p>On the next load, without that plugin, the saved config authors a column for a field
+              with nothing behind it. The round-trip in that last line is the documented pattern
+              (<code class="font-mono">plans/s5-extensibility-and-editing/handoff-s5.7-in-progress.md:58</code>),
+              and it is the natural thing an app author writes.</p>
+            <div class="rounded bg-slate-100 border border-slate-200 p-3 text-slate-700">
+              <span class="font-semibold">This was predicted.</span> The S5.9 review wrote:
+              <em>"The unfriendly part is silent: <code class="font-mono">gantt.gridColumns</code> can
+              grow a field the consumer never assigned, with no event that says 'a plugin column was
+              adopted'. If adoption stays, raise <code class="font-mono">gridColumnsChange</code> with
+              a <code class="font-mono">from</code> that the consumer actually authored, and say so on
+              <code class="font-mono">registerGridColumn</code>."</em> It is still open at HEAD:
+              <code class="font-mono">registerPluginColumn</code> calls
+              <code class="font-mono">rebindFields()</code> and
+              <code class="font-mono">requestFrame()</code> and raises no event pair at all.
+            </div>
+            <p class="text-slate-600"><span class="font-semibold">Fix, cheapest first.</span> Mark a
+              baked plugin column so the getter and the event payload can tell the two apart — the
+              consumer then saves what they authored and the library re-adopts the rest. Failing
+              that, do what the S5.9 review asked: say it on
+              <code class="font-mono">registerGridColumn</code>'s own doc, and give the event a
+              <code class="font-mono">from</code> the consumer recognises. Either way this is a
+              <code class="font-mono">src/</code> fix, and CLAUDE.md's rule applies — the gap is real
+              whether or not a lint fires.</p>
+          </div>
+        </article>
+
+        <!-- S2 -->
+        <article class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="bg-stone-100 px-5 py-3 border-b border-slate-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-slate-500 text-white px-2 py-0.5 rounded">S2</span>
+            <h3 class="font-semibold">A <code class="font-mono">registerKind()</code> shorthand — checked, and correctly rejected</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-slate-500">recorded, not raised</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p>Defining one Kind takes four calls on four different groups, and the kind string is
+              repeated four times. CLAUDE.md says "Common case is a shorthand; the long form is
+              expert", so this pass tested whether
+              <code class="font-mono">ctx.registerKind(kind, { items, bar, defaults, commands })</code>
+              is owed. It is not. The S5.9 review already ruled on it:
+              <em>"Do <strong>not</strong> add
+              <code class="font-mono">registerKind({ producer, renderer, defaults, commands })</code>.
+              D-S5-22 wants four seams so a plugin can fill one. The call sites already read as
+              English."</em></p>
+            <p>Confirmed against the real call sites.
+              <code class="font-mono">harness/plugins/buffer-kind.ts</code> and
+              <code class="font-mono">risk-kind.ts</code> are four lines of registration, each
+              answering the question written above it. A plugin that only wants a renderer writes one
+              of the four and nothing else — which a bundled shorthand would tax.</p>
+            <p class="text-slate-600">Recorded here so a third review does not re-raise it a third time.</p>
+          </div>
+        </article>
+
+        <!-- S3 -->
+        <article class="rounded-lg border border-emerald-200 bg-white overflow-hidden">
+          <div class="bg-emerald-50 px-5 py-3 border-b border-emerald-200 flex flex-wrap items-center gap-3">
+            <span class="font-mono text-xs bg-emerald-600 text-white px-2 py-0.5 rounded">S3</span>
+            <h3 class="font-semibold">The demo plugins are the branch's best self-documentation — make it the house style</h3>
+            <span class="ml-auto text-xs uppercase tracking-wider text-emerald-700">pattern to copy</span>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p><code class="font-mono">harness/plugins/buffer-kind.ts</code> and
+              <code class="font-mono">risk-kind.ts</code> label each registration with the question it
+              answers — "What shape does it draw?", "How does it look?", "What can you do to it?",
+              "What actions does it offer?" — so the four seams read as one story rather than four
+              API calls. It is the clearest code on the branch and it cost four comments.</p>
+            <p>The contrast is <code class="font-mono">src/view/gantt-shell.ts</code>, where the same
+              information is spread across ~50 fields and ~35 setter pairs and every comment explains
+              a mechanism rather than a question. Candidate 2 is what closes that gap structurally;
+              this pattern is what closes it in prose meanwhile.</p>
+            <p class="text-slate-600">Two caveats already filed against these files:
+              <a href="#" class="underline decoration-slate-400">Q8</a> (the module-level
+              <code class="font-mono">demoView</code> stash in
+              <code class="font-mono">popup-demo.ts</code>) and H1's comment-length rule, which the
+              demo files themselves pass.</p>
+          </div>
+        </article>
+
+        <!-- ball of mud -->
+        <div class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <h3 class="font-semibold text-lg">Ball-of-mud check</h3>
+          <p class="text-sm text-slate-600">One question per module: how many unrelated reasons does
+            it have to change?</p>
+          <div class="space-y-2">
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/gantt-shell.ts</span>
+                <span class="text-red-700 font-semibold">7 reasons · 1,646 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-red-500" style="width:100%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">composition root · config store · render loop · event bus · plugin host · capability resolver · keymap wiring</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">extensions/features/inline-editing.ts</span>
+                <span class="text-amber-700 font-semibold">3 reasons · 683 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-amber-500" style="width:44%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">session lifecycle · refusal policy and wording · open/close coordination (candidate 4 splits the third out)</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/column-chrome.ts</span>
+                <span class="text-slate-600 font-semibold">2 reasons · 329 lines</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-slate-400" style="width:24%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">column resolution and the commit sequence — wide, but cohesive</div>
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between text-sm">
+                <span class="font-mono">view/plugin-ports.ts · view/gantt-dom.ts · layout/registration-table.ts</span>
+                <span class="text-emerald-700 font-semibold">1 reason each</span>
+              </div>
+              <div class="h-3 bg-stone-100 rounded overflow-hidden mt-1"><div class="h-full bg-emerald-500" style="width:9%"></div></div>
+              <div class="text-xs text-slate-500 mt-1">deep modules: narrow interface, real implementation behind it. This is what the branch added.</div>
+            </div>
+          </div>
+          <p class="text-sm text-slate-700 pt-2 border-t border-slate-200">
+            <span class="font-semibold">Verdict.</span> The branch moved the codebase away from a ball
+            of mud, not toward one: every module it <em>added</em> has one reason to change. The risk
+            is unchanged and concentrated in one file, and candidate 2 is the cheapest cut into it.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ TOP REC ══════════════════════════ -->
+      <section id="top-recommendation">
+        <div class="rounded-xl deep text-white p-8 space-y-4">
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Top recommendation</div>
+          <h2 class="font-serif text-3xl">Fix the four hard findings this week. Then take candidate 1 before S5.10 starts, and candidate 2 after.</h2>
+          <div class="grid md:grid-cols-3 gap-5 text-sm text-slate-300 pt-2">
+            <div class="space-y-2">
+              <div class="font-semibold text-white">First — H1 to H4</div>
+              <p>All four are hours, not days, and three exist only because
+                <code class="font-mono">fix/158</code> landed after R7 closed the plan. Leaving them turns a closed record
+                into a misleading one, and <code class="font-mono">plans/01</code> §10 is the block S5.10's author will
+                read as the contract.</p>
+            </div>
+            <div class="space-y-2">
+              <div class="font-semibold text-white">Then — <a href="#c1" class="underline decoration-slate-500">candidate 1</a>, before S5.10</div>
+              <p>Ordering matters. S5.10 adds four dataset-plugin seams; on today's shape each one also gets a
+                hand-copied twin in <code class="font-mono">PluginContextOf</code> that nothing type-checks. Landing S5.10
+                first doubles the transcription the fix has to undo — the same argument R2 itself won.</p>
+            </div>
+            <div class="space-y-2">
+              <div class="font-semibold text-white">Then — <a href="#c2" class="underline decoration-slate-500">candidate 2</a>, the real hot spot</div>
+              <p><code class="font-mono">GanttShell</code> is the one ball-of-mud risk: 1,646 lines, ~50 fields, and the
+                file this diff rewrote hardest. <code class="font-mono">FramePlan</code> removes a dozen fields and a
+                dozen setters without moving a seam anyone depends on, and turns "which setter invalidates what" into one
+                DOM-free table. It is also the prerequisite that makes candidate 5 cheap.</p>
+            </div>
+          </div>
+          <p class="text-slate-400 text-sm pt-2 border-t border-slate-700">
+            Candidates 3 and 4 are worth doing but not urgent — re-measure after 2 lands. Candidates 6 and S2 are
+            recorded as checked-and-rejected, so they do not get re-raised. <span class="text-amber-300">S1 is the one
+            finding here that can reach a shipped consumer’s saved config, so file it as an issue even if it waits.</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ S5.10 BLOCKING AUDIT ══════════════════════════ -->
+      <section class="space-y-6" id="audit">
+        <div class="space-y-1">
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-400">S5.10 blocking audit</div>
+          <h2 class="font-serif text-3xl">Read again, one question: does it block S5.10?</h2>
+        </div>
+        <p class="text-slate-600 max-w-3xl text-sm">
+          Every finding above was re-checked against the source at
+          <code class="font-mono">afdafe9</code>. No finding blocks S5.10. The two documentation
+          findings whose fix is self-contained are done here. Everything else is recorded below,
+          with the reason it stays.
+        </p>
+
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-5 space-y-3 text-sm text-emerald-900">
+          <div class="font-semibold">Fixed in this pass</div>
+          <ul class="space-y-2">
+            <li><span class="font-mono">- [x]</span> <strong>H2 — the port block names the two new members.</strong>
+              <code class="font-mono">plans/01</code> §10 now lists
+              <code class="font-mono">rowLayer: RowLayer</code> in the <code class="font-mono">view</code> group and
+              <code class="font-mono">rowLayerBounds</code> on <code class="font-mono">GanttDom</code>. One rule line
+              says which of the two mount layers a plugin picks, and why the scroll decides.</li>
+            <li><span class="font-mono">- [x]</span> <strong>H3 — the three mount claims say the row layer.</strong>
+              <code class="font-mono">plans/02</code> §4 and
+              <code class="font-mono">plans/s5.8-inline-editing.md</code> §§ now name
+              <code class="font-mono">ctx.view.rowLayer</code>, not the Overlay.
+              <code class="font-mono">plans/reviews/2026-09-04-s5-extensibility-fixes.md</code> §6 records that
+              #158 superseded R4's mount claim.</li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-200 text-sm font-semibold text-slate-700">
+            Recorded, not fixed
+          </div>
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-slate-500 text-xs uppercase tracking-wider">
+              <tr><th class="text-left px-5 py-2">Finding</th><th class="text-left px-5 py-2">Why it stays</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 align-top">
+              <tr><td class="px-5 py-3 font-semibold">H1 — the ASD-STE100 pass regressed</td>
+                <td class="px-5 py-3 text-slate-600">A comment pass over six files, plus a detector in the gate. It is
+                  real, and it is a standards job with its own scope. S5.10 writes new prose in new files, so it
+                  inherits no sentence from the six.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">H4 — a second <code class="font-mono">CSS.escape</code> detect</td>
+                <td class="px-5 py-3 text-slate-600">Confirmed at <code class="font-mono">view/gantt-dom.ts:230</code>,
+                  and the two fallbacks do differ. It is a <code class="font-mono">src/</code> change in
+                  <code class="font-mono">view/</code>. S5.10 lands in
+                  <code class="font-mono">data/</code>, <code class="font-mono">model/</code> and
+                  <code class="font-mono">extensions/</code>, and touches neither file.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Candidate 1 — the plugin surface is declared twice</td>
+                <td class="px-5 py-3 text-slate-600">The duplication is real. The ordering claim is not: S5.10's four
+                  seams are <code class="font-mono">DatasetPluginContext</code> in
+                  <code class="font-mono">model/plugin.ts</code>, a separate type from
+                  <code class="font-mono">PluginContextOf</code>, and they add no twin to it. So S5.10 doubles nothing,
+                  and the two changes are independent.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Candidates 2–5</td>
+                <td class="px-5 py-3 text-slate-600">All in <code class="font-mono">view/</code> and
+                  <code class="font-mono">extensions/features/</code>. None of them is a premise S5.10 rests on.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">Q1–Q10</td>
+                <td class="px-5 py-3 text-slate-600">Judgement calls in the view and inline-editing files. Q8's API gap
+                  (a plugin cannot read its own <code class="font-mono">ctx.view</code> back from a Gantt) stays open
+                  against S5, and it is a Gantt-plugin gap, not a Dataset-plugin one.</td></tr>
+              <tr><td class="px-5 py-3 font-semibold">S1 — <code class="font-mono">gantt.gridColumns</code> bakes a plugin column</td>
+                <td class="px-5 py-3 text-slate-600">Confirmed: <code class="font-mono">#withWidth</code> and
+                  <code class="font-mono">#reordered</code> both build from
+                  <code class="font-mono">effectiveInput()</code>
+                  (<code class="font-mono">column-chrome.ts:253,259</code>), and
+                  <code class="font-mono">commit</code> writes that list into
+                  <code class="font-mono">#gridColumnInput</code> (<code class="font-mono">:284</code>). It is a
+                  <code class="font-mono">view/</code> fix and needs a decision on provenance, so it goes to an issue.
+                  S5.10 inherits no line of this code — but it meets the same question at
+                  <code class="font-mono">ctx.fields.register</code>, because
+                  <code class="font-mono">toJSON</code> writes every declared Field with no author on it
+                  (<code class="font-mono">serialization/index.ts:50</code>). Decide provenance once, for both.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-6 border-t border-slate-200">
+        Reviewed at <span class="font-mono">3977818</span>. S5.10 blocking audit at
+        <span class="font-mono">afdafe9</span>. Standards axis, spec axis, architecture walk, reuse ·
+        simplification, and efficiency · altitude passes, rolled up. Gate re-run at review time:
+        <span class="font-mono">pnpm verify</span> exit 0.
+      </footer>
+    </main>
+  </body>
+</html>

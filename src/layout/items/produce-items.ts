@@ -3,9 +3,10 @@
 // and an agent learn one name. Header rows (`kind: 'header'`) produce no Items.
 
 import { itemId } from '../../model/index.js';
-import type { Entry, EntryId, EntryKind, ItemId, Instant } from '../../model/index.js';
+import type { Disposer, Entry, EntryId, EntryKind, ItemId, Instant, SegmentId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
+import { createRegistrationTable } from '../registration-table.js';
 
 export interface Item {
   id: ItemId;
@@ -14,65 +15,98 @@ export interface Item {
   label: string;
   start: Instant;
   end: Instant;
+  /** The one Segment this Item draws (#212, ADR 0010) — set only when the Item stands for a real
+   *  Segment of the Entry, never for an Item that draws the Entry's whole span (`wholeEntryItem`). */
+  segmentId?: SegmentId;
 }
 
-type ItemProducer = (entry: Entry) => readonly Item[];
+export type ItemProducer = (entry: Entry) => readonly Item[];
 
-function wholeEntryItem(entry: Entry, end: Instant): Item {
-  return {
-    id: itemId(entry.id, 0),
+/** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer below
+ *  builds its Items here, so no producer restates it. `segmentId` is the caller's own Segment, not
+ *  re-derived from `segmentIndex` — a caller with no Segment in hand (a milestone instant, a whole
+ *  Entry) simply omits it. */
+function entryItem(
+  entry: Entry,
+  segmentIndex: number,
+  start: Instant,
+  end: Instant,
+  segmentId?: SegmentId,
+): Item {
+  const item: Item = {
+    id: itemId(entry.id, segmentIndex),
     entryId: entry.id,
     kind: entry.kind,
     label: entry.name,
-    start: entry.start,
+    start,
     end,
   };
+  if (segmentId !== undefined) item.segmentId = segmentId;
+  return item;
+}
+
+/** One Item covering the entry's whole span — what almost every `ItemProducer` returns, and the
+ *  common case a plugin author writes (review P3): `ctx.layout.registerItemProducer(MY_KIND,
+ *  (entry) => [wholeEntryItem(entry)])`. Public because the alternative is eight hand-written
+ *  lines that must get the Item id convention right from documentation alone. Pure and DOM-free,
+ *  like every other `layout/` function. */
+export function wholeEntryItem(entry: Entry): Item {
+  return entryItem(entry, 0, entry.start, entry.end);
 }
 
 export interface ItemProducerRegistry {
   /** The producer for `kind`, or the `'span'` producer when nothing is registered. Never throws. */
   producerFor(kind: EntryKind): ItemProducer;
+  /** S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)` — a plugin claiming what
+   *  shape a consumer-defined kind draws. Replaces whichever producer `kind` resolved to before
+   *  (the shipped three included — a plugin may re-skin `'span'` itself). The returned `Disposer`
+   *  restores whichever registration is newest among the rest, the same "undo on plugin disposal"
+   *  every other `register*` gives (D-S5-4). Disposing one plugin's producer never disturbs
+   *  another plugin's registration on the same Kind. */
+  register(kind: EntryKind, producer: ItemProducer): Disposer;
 }
 
 function produceSpanItems(entry: Entry): readonly Item[] {
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
-    return segments.map((segment, index) => ({
-      id: itemId(entry.id, index),
-      entryId: entry.id,
-      kind: entry.kind,
-      label: entry.name,
-      start: segment.start,
-      end: segment.end,
-    }));
+    return segments.map((segment, index) => entryItem(entry, index, segment.start, segment.end, segment.id));
   }
-  return [wholeEntryItem(entry, entry.end)];
+  return [wholeEntryItem(entry)];
 }
 
 // render/ draws the bracket off data-kind (D-S4-24).
 function produceGroupItems(entry: Entry): readonly Item[] {
-  return [wholeEntryItem(entry, entry.end)];
+  return [wholeEntryItem(entry)];
 }
 
-// render/ draws the diamond off data-kind (D-S4-24).
+// render/ draws the diamond off data-kind (D-S4-24). A milestone marks one instant, so its Item
+// ends where it starts.
 function produceMilestoneItems(entry: Entry): readonly Item[] {
-  return [wholeEntryItem(entry, entry.start)];
+  return [entryItem(entry, 0, entry.start, entry.start)];
+}
+
+/** `Object.entries` types a value as `ItemProducer | undefined` under `noUncheckedIndexedAccess` —
+ *  a partial record's key can be absent even though its declared value type says otherwise. This
+ *  narrows to the pairs that are actually there. */
+function definedProducers(
+  extras: Readonly<Partial<Record<EntryKind, ItemProducer>>>,
+): ReadonlyArray<readonly [EntryKind, ItemProducer]> {
+  return Object.entries(extras).filter((entry): entry is [EntryKind, ItemProducer] => entry[1] !== undefined);
 }
 
 /** Call: `createItemProducerRegistry()` once in the Gantt constructor; tests pass extras for a Kind. */
 export function createItemProducerRegistry(
-  extras: Readonly<Record<string, ItemProducer>> = {},
+  extras: Readonly<Partial<Record<EntryKind, ItemProducer>>> = {},
 ): ItemProducerRegistry {
-  const producers = new Map<string, ItemProducer>([
+  const producers = createRegistrationTable<EntryKind, ItemProducer>([
     ['span', produceSpanItems],
     ['group', produceGroupItems],
     ['milestone', produceMilestoneItems],
+    ...definedProducers(extras),
   ]);
-  for (const [kind, producer] of Object.entries(extras)) producers.set(kind, producer);
   return {
-    producerFor(kind) {
-      return producers.get(kind) ?? produceSpanItems;
-    },
+    producerFor: (kind) => producers.get(kind) ?? produceSpanItems,
+    register: (kind, producer) => producers.register(kind, producer),
   };
 }
 

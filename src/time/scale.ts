@@ -13,6 +13,12 @@ export interface TickStep {
   readonly increment: number;
 }
 
+/** What a caller states that a drag snaps to (D-S3-12, D-S3-24): a named unit and increment, one
+ *  tick of whatever preset is showing, or `'none'` for raw pixel placement. `ViewPreset.snap` states
+ *  it for one preset; `Gantt.snap` states it for one Gantt, over whatever preset is showing. The
+ *  gesture resolves it to a `SnapUnit` at commit time, when the preset's own tick is known. */
+export type SnapSetting = TickStep | 'tick' | 'none';
+
 export interface Tick {
   instant: Instant;
   x: number;
@@ -49,7 +55,9 @@ export interface ViewPreset {
   /** The density floor: below this, this preset's labels stop being legible. Defaults to
    *  `preferredTickWidthPx` when omitted, which makes a custom preset never compress. */
   minTickWidthPx?: number;
-  snap?: { unit: TimeUnit; increment: number } | 'tick' | 'none';
+  /** What a drag snaps to under this preset. Unset reads as `'tick'`. `Gantt.snap` overrides it for
+   *  one Gantt (D-S3-24). */
+  snap?: SnapSetting;
 }
 
 export interface TimeScale {

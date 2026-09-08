@@ -37,6 +37,28 @@ nav.harness-site-nav a[aria-current='page'] {
   pointer-events: none;
 }
 
+/* D-S5-29: the block above the Gantt that names what a page demonstrates, the config that does it,
+ * and the spec section that governs it. `harness/docs/page-brief.ts` fills it in; this file only
+ * gives it a quiet, readable frame that stays out of the Gantt's own way. */
+.harness-page-brief {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--harness-nav-border, #e6e2d9);
+  border-radius: 6px;
+  background: var(--harness-nav-bg, #f5f4f0);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.harness-page-brief p {
+  margin: 0.2rem 0;
+}
+
+.harness-page-brief code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8em;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --harness-nav-border: #2b2f36;

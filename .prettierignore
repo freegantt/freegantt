@@ -18,3 +18,8 @@ CLAUDE.md
 # top, and reformatting it would fight the tool's own next `--local` run.
 etc
 
+# A concurrent agent's own git worktree, checked out under the repo root (`.git/info/exclude`
+# already keeps it out of git) — not ours to reformat, and `prettier --check .` walks the
+# filesystem directly, so a `.gitignore`-only exclusion does not stop it from being scanned.
+.claude/worktrees
+

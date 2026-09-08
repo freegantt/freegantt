@@ -1,10 +1,12 @@
 # S5 — Extensibility, editing surfaces, a11y completion
 
-**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** spec drafted, not started
+**Slice:** S5 (`plans/03` §S5) · **Position:** after S4, before S6 · **Status:** in progress — S5.0–S5.10 and S5.12 done, the 2026-09-04 branch review is closed, and the 2026-09-05 branch review (#212) is closed. S5.11's design questions are answered and its gate has lifted. Its keyboard design is settled — D-S5-39 and a rewritten D-S5-26 — and every question is closed: §0.3's own three by the design, Q22 by the renumber, Q21 by filing it as [#218](https://github.com/Pawel-IT/FreeGantt/issues/218) and proceeding without it. S5.12 ran ahead of S5.11 because the three-handoff plan dispatched it in wave 1; that turned out to help, because S5.11's live region now rides S5.12's `error` event.
 **Form:** the same settled-spec form as [`plans/s4-hierarchy-and-rows/README.md`](../s4-hierarchy-and-rows/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
-**Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.12 or the slice gate.
+**Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Do not wait for S5.13 or the slice gate.
 **Governed by:** `plans/00` D3/D4/D5/D11/D12, `plans/01` §2.5/§2.6/§8/§9/§10, `plans/02` §3/§4/§4.1/§4.2/§7, ADR [0002](../../docs/adr/0002-scheduling-is-a-plugin-not-a-core-layer.md), ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
 **Builds on:** S2's extension hook (`data/edit-extension.ts`, D-S2-6), S3's capability resolver and gesture pipeline, S4's Field registry, Grid columns and `ItemProducer` seam.
+**Review fixes — closed 2026-09-04:** [`plans/reviews/2026-09-04-s5-extensibility-fixes.md`](../reviews/2026-09-04-s5-extensibility-fixes.md) records what the branch review asked and what landed. All seven slices R1–R7 are done, so the review HTML is deleted. R2 lifted the plugin ports into `view/plugin-ports.ts` before S5.10, which is what that step builds on.
+**Review fixes — closed 2026-09-06:** [`plans/reviews/2026-09-05-212-segment-selection-fixes.md`](../reviews/2026-09-05-212-segment-selection-fixes.md) records the #212 branch review (`830800d..c305e3a`) and what landed. All seven slices R1–R7 are done, so the review HTML is deleted. R1–R3 fixed correctness defects in `data/` that every gate passed: a duplicate `SegmentId` was representable, the documented way to move a Segment minted a new id, and the envelope invariant had no owner.
 **Closes:** issue #15 (the install API for the extension hook), `plans/s2-data-core/OPEN-QUESTIONS.md` OQ8, `plans/03` §S5's six acceptance boxes, S4's deferred list rows 1–5.
 
 **Start constraint (from `plans/03` §S5):** the `GanttShell` split in [`c4-split-gantt-shell.md`](../s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed. Plugin wiring must not grow tree-collapse policy back into `view/gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`. The shell gains **one** wiring list (S5.1, D-S5-5); every attach point goes in it.
@@ -16,7 +18,9 @@
 
 ## 0. Scope calls — proposed
 
-Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. Everything else is settled by this spec. The S5.0 grill on issue #111 may add rows here before S5.1 starts.
+Q2 needed the user's sign-off before S5.10 started; it reworded a locked decision. It is answered, and S5.10 shipped it.
+
+**Q21 and Q22 blocked S5.11 and are both closed (2026-09-05).** Nothing in this table is open.
 
 | # | Question | Answer |
 |---|---|---|
@@ -33,6 +37,9 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 | **Q11** | Is the inline editor core or a plugin? | **A plugin** (`inlineEditing()`), like tooltips and the context menu. `plans/01` §10 already names editors as a dogfood case. It also makes `[S5-A6]` honest: a read-only Gantt ships no editor code. §S5.8, D-S5-19. |
 | **Q12** | How does a date cell edit without a date-picker dependency? | **A `dateInput` seam.** The default is `<input type="date">`, read and written through the dataset's zone. A consumer passes its own factory. `plans/04` §1 budgets two runtime dependencies and a picker is not one of them. §S5.8, D-S5-20. |
 | **Q13** | Which pane carries the grid a11y pattern? | **The grid pane is the `treegrid`/`grid`.** The timeline pane stays a labelled region of focusable bars, and roving focus keeps the two in step. `aria-owns` across two scrollers was considered and rejected: it is fragile under virtualization, where the owned node may not exist. §S5.11, D-S5-25. |
+| **Q20** | One chord meant three things. Which wins? | **Whichever the focus scope names.** `TargetKind` (`'row' \| 'cell' \| 'bar' \| 'header' \| 'splitter'`) already exists and a command's `when` already reads it; S5.7 shipped the first scoped chord without naming the pattern. So a chord is scoped, the narrower binding wins by registration order, and one keystroke can mean three things safely. The cost is that the grid pane's plain arrows must move focus, so eight default pan bindings move to `Alt+Arrow` and to focus movement. §S5.11, D-S5-39. |
+| **Q21** | Does `Mod+ArrowLeft` / `Mod+ArrowRight` step the pick along a row? | **Yes, implemented — [#218](https://github.com/Pawel-IT/FreeGantt/issues/218).** `Mod+Arrow` was free in every scope and reads as *move, do not act*, so it won over the pattern's own alternative, `Tab` within a row: a packed row can draw forty items, and forty presses to leave a pane breaks the two-tab-stop promise D-S5-39 makes. `Mod+ArrowRight` / `Mod+ArrowLeft` now run `freegantt.selectNextSegment` / `selectPreviousSegment`. §S5.11, D-S5-26. |
+| **Q22** | Do the S5.12 decision ids renumber to D-S5-40/41/42? | **Yes — done 2026-09-05**, 58 lines across 33 files. D-S5-35, D-S5-36 and D-S5-37 each name one S5.12 decision and one S5.9/S5.1/S5.7 decision; the S5.12 trio was minted by a session working in isolation. About 35 comments in `src/` cite one of the six, and `api/gantt.ts` and `view/gantt-shell.ts` each cite **both** senses of D-S5-35, so a reader following the id cannot land on the right one. S5.11 adds D-S5-39 and writes more such comments, so answering after that step is a second sweep over the same files. The work is mechanical either way. |
 | **Q14** | Does a third-party plugin get zone-aware date math? | **Yes — `dataset.time`, a zone-bound façade.** A weekend-shading plugin cannot import `time/` (the exports map seals it), so without this the gate box `[S5-A2]` is unreachable. `PlainParts` gains `dayOfWeek`. §S5.6, D-S5-16. |
 | **Q15** | Does `StoreName` widen this slice? | **Yes, with a shipped occupant.** `PluginStore` gives a `DatasetPlugin` reserved per-entry data (ADR 0002: not `Entry.meta`, to stop host/plugin collisions). The harness lock plugin is its first occupant, so the mechanism ships with a user, not as decoration (I11). S7's `Dependency` store is the second. §S5.10, D-S5-24. |
 | **Q16** | Does `registerItemEmitter` keep that name? | **No — `registerItemProducer`.** S4 named the seam `ItemProducer` and the call `produceItemsForRow`. `plans/01` §10 still says emitter; one concept keeps one name (CLAUDE.md, #7). §S5.9, D-S5-22. |
@@ -47,8 +54,8 @@ Q2 needs the user's sign-off before S5.10 starts; it rewords a locked decision. 
 Each story names the step that owns it. Acceptance boxes live in the step files.
 
 - **U1.** (consumer) I write `plugins: [tooltips(), contextMenu({ items })]`. Both features appear. I imported exactly what I use. → S5.1, S5.5
-- **U2.** (consumer) I ship a Gantt with no plugins. My bundle contains no tooltip, menu or editor code. → S5.1, S5.12
-- **U3.** (plugin author) I write a weekend-shading plugin against the published types alone. I never import a path inside `freegantt/`. → S5.6, S5.12
+- **U2.** (consumer) I ship a Gantt with no plugins. My bundle contains no tooltip, menu or editor code. → S5.1, S5.13
+- **U3.** (plugin author) I write a weekend-shading plugin against the published types alone. I never import a path inside `freegantt/`. → S5.6, S5.13
 - **U4.** (plugin author) My plugin adds a command, a keybinding and a context-menu item for it. One command id serves all three. → S5.2, S5.5
 - **U5.** (consumer) I hover a bar and read a tooltip. I press Escape and it goes away. Focus never left my bar. → S5.3, S5.5
 - **U6.** (consumer) I pass `barRenderer: { milestone: …, '*': … }`. My milestone draws my way; everything else keeps the library's look. → S5.4
@@ -58,7 +65,7 @@ Each story names the step that owns it. Acceptance boxes live in the step files.
 - **U10.** (consumer) I declare a `'buffer'` kind in one plugin: shape, renderer, capabilities and menu items. I edited no library file. → S5.9
 - **U11.** (plugin author) I install a `DatasetPlugin` that locks an entry. Dragging its neighbour ghosts the locked bar and the drop is refused. → S5.10
 - **U12.** (keyboard user) I reach every row, cell, bar and command with the keyboard alone. Screen-reader labels name dates. → S5.11
-- **U13.** (reviewer) I run `pnpm gate` on `.slice` = `S5` and read six lines, each naming an acceptance box from `plans/03`, each backed by a test that ran. → S5.12
+- **U13.** (reviewer) I run `pnpm gate` on `.slice` = `S5` and read six lines, each naming an acceptance box from `plans/03`, each backed by a test that ran. → S5.13
 - **U14.** (consumer) I set `gantt.plugins = [...gantt.plugins, myPlugin()]` at runtime. Nothing remounts. → S5.1
 
 ---
@@ -125,7 +132,8 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 | S5.9 | [`s5.9-plugin-registrations.md`](./s5.9-plugin-registrations.md) | a consumer-defined kind, whole, from one plugin |
 | S5.10 | [`s5.10-dataset-plugins.md`](./s5.10-dataset-plugins.md) | the lock plugin ghosts a second bar in the harness |
 | S5.11 | [`s5.11-a11y-completion.md`](./s5.11-a11y-completion.md) | roving tabindex, keyboard parity, axe green in CI |
-| S5.12 | [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) | the example gallery, the tree-shaking budget, gate green |
+| S5.12 | [`s5.12-error-reporting.md`](./s5.12-error-reporting.md) | one `error` event, one feed, no log core owns |
+| S5.13 | [`s5.13-gallery-and-gate.md`](./s5.13-gallery-and-gate.md) | the example gallery, the tree-shaking budget, gate green |
 
 ---
 
@@ -137,10 +145,10 @@ Thirteen steps, in order. S5.0 is the blocking pre-step: the grill on issue #111
 |---|---|---|---|
 | `[S5-A1]` | Context menu and tooltips are plugins with zero private imports (lint-proven — the dogfood gate) | S5.5 | `.dependency-cruiser.cjs` rule + `scripts/guard-red-test.mjs`, `extensions/features/*.test.ts` |
 | `[S5-A2]` | A harness-only third-party-style plugin (weekend shading) is written against the public contract only | S5.6 | `harness/plugins/weekend-shading.ts`, `e2e/plugins.spec.ts` |
-| `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `extensions/plugin-host.test.ts`, `api/gantt.test.ts` |
+| `[S5-A3]` | A consumer-defined kind (renderer + capabilities + `when` menu items, registered by config or plugin) works with zero core edits | S5.9 | `api/gantt.test.ts`, `layout/items/produce-items.test.ts`, `view/capability.test.ts` |
 | `[S5-A4]` | Every S3 pointer capability has a keyboard path; axe reports no violations on harness pages | S5.11 | `view/keyboard-navigation.test.ts`, `e2e/a11y.spec.ts` |
 | `[S5-A5]` | A consumer replaces the entry editor through `beforeEntryEdit` (harness demo) | S5.8 | `extensions/features/inline-editing.test.ts`, `e2e/editing.spec.ts` |
-| `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.12 | `size-limit` budgets + a string probe over the built bundle |
+| `[S5-A6]` | Unused features are absent from a consumer bundle (tree-shaking test in CI) | S5.13 | `size-limit` budgets + a string probe over the built bundle |
 
 **Gate S5 → S6** (`plans/00` §4): a non-trivial feature exists as a plugin using only the public plugin API. `[S5-A1]` and `[S5-A2]` together discharge it — `[S5-A1]` proves the built-ins took no back door, `[S5-A2]` proves an outside author can do the same.
 
@@ -266,15 +274,41 @@ Full prose lives in the step file that implements each decision.
 | D-S5-20 | The `dateInput` seam, with no picker dependency | S5.8 |
 | D-S5-21 | A Field registers on the Dataset side; its column on the Gantt side | S5.9 |
 | D-S5-22 | One kind, four seams, one plugin, zero core edits | S5.9 |
-| D-S5-23 | `setExtender` composes over the current occupant (needs sign-off) | S5.10 |
+| D-S5-23 | `setExtender` composes over the current occupant | S5.10 |
 | D-S5-24 | `PluginStore` holds per-plugin per-entry data, never `Entry.meta` | S5.10 |
 | D-S5-25 | The grid pane carries the `treegrid` pattern; the timeline is a labelled region | S5.11 |
-| D-S5-26 | Every pointer gesture has a chord over the same command | S5.11 |
+| D-S5-26 | The chord map: the grid pane's arrows move focus, the timeline pane's arrows edit | S5.11 |
 | D-S5-27 | Axe runs on every harness page in CI | S5.11 |
-| D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.12 |
-| D-S5-29 | The API reference renders the existing API report — no new dependency | S5.12 |
+| D-S5-28 | The tree-shaking budget is a probe plus a size limit | S5.13 |
+| D-S5-29 | The API reference renders the existing API report — no new dependency | S5.13 |
+| D-S5-40 | Core raises an Error report; the consumer retains it | S5.12 |
+| D-S5-41 | `severity` is `error`/`warning`/`info`, so a Refusal is not a Fault | S5.12 |
+| D-S5-42 | `watchAllErrors` gives one feed over two emitters | S5.12 |
 | D-S5-30 | `PluginStore` gets a read-only cross-plugin view, `store.read()` | S5.10 |
 | D-S5-31 | `requires` orders setup; the `plugins` array's own order never matters | S5.10 |
+| D-S5-35 | One gesture's rule is written by a verb, not by restating `interactions` | S5.9 |
+| D-S5-36 | One plugin is installed by a verb, not by restating the set | S5.1 |
+| D-S5-37 | A column is named by its `field`, everywhere a column is named | S5.7 |
+| D-S5-38 | A plugin owns its own column's geometry; the library stores it for nobody | S5.9 |
+| D-S5-39 | Focus scope decides what a chord means; the narrower binding wins | S5.11 |
+| D-S5-44 | An `EditExtender`'s cascade owes the envelope invariant a refusal, not a computed answer | S5.10 |
+| D-S5-45 | `EditRequest.entryAfterEdits(id)` reads the state the hook is judged against | S5.10 |
+| D-S5-46 | An inverted span is refused at the mutation boundary; a zero-length span stays legal | S5.10 |
+| D-S5-47 | The invalid Cell editor has a visible exit, and one command behind it | S5.8 |
+| D-S5-49 | The commit keeps the body's and the extender's authored envelope keys apart from `proposedKeys`, merges the two authors' edits once, and diffs the merge once (#232) | S5.10 |
+| D-S5-50 | `moveEntryTo` names `segments` only, takes an `Instant` `start`, and lets core derive the envelope | S5.10 |
+
+> **Three ids used to be used twice; fixed 2026-09-05 (Q22).** D-S5-35, D-S5-36 and D-S5-37 each
+> named an S5.12 decision **and** an S5.9/S5.1/S5.7 one — the error-reporting trio was minted by a
+> session working in isolation. `api/gantt.ts` and `view/gantt-shell.ts` each cited both senses of
+> D-S5-35, so a reader following the id could not land on the right one. The S5.12 trio renumbered to
+> **D-S5-40/41/42** across 58 lines in 33 files; the earlier claimants keep their ids, because they
+> were first and because their `#194`/`#195` citations pin them. Every id in this table is now unique.
+
+> **D-S5-43 is skipped on purpose (2026-09-06).** A caller-identity split in `data/entry-reader.ts` —
+> a computed answer for an `EditExtender`'s cascade, a refusal for `entries.update()` — carried that
+> id in code comments only; no row was ever added here. The split is reversed at D-S5-44 below, which
+> reads as the id this decision should have had, so D-S5-43 is retired rather than reused.
 
 ---
 
@@ -292,7 +326,7 @@ Read these before you touch `src/`.
 8. **`interaction/` still never imports `scheduling/`.** S5 adds no scheduling anything. `Interactions.linkCreate` stays off the type until S7 (I11).
 9. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). This slice's harness pages are also the example gallery, so a workaround there is doubly visible.
 10. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`, `pnpm api-report`.
-11. **`.slice` bumps only at S5.12** — not before the gate is green.
+11. **`.slice` bumps only at S5.13** — not before the gate is green.
 12. **Every new public key must work on the day it appears** (I11). `editable`, `resizable`, `movable` join `GridColumn` in the step that honours them, not in S5.1.
 
 ---
@@ -307,7 +341,7 @@ Read these before you touch `src/`.
 | `plugins` assignment remounts the Gantt | It does not. Same-`id` plugins are left alone; only the difference is disposed and set up (D-S5-3) |
 | A plugin registers a Field after construction | `RegistrationClosedError`. A Field must exist before the first Rollup (D-S5-4, D-S5-21) |
 | A tooltip steals focus from the bar | It cannot. A tooltip declares `focus: 'none'`; only the menu and the editor trap (D-S5-9) |
-| The editor commits per keystroke | It commits on Enter or blur, in one transaction. Escape reverts and writes nothing (D-S5-19, I6) |
+| The editor commits per keystroke | It commits on Enter or blur, in one transaction. Escape discards the edit and writes nothing (D-S5-19, D-S5-47, I6) |
 | `beforeEntryEdit` returning `false` still opens the editor | It does not, and the veto path is the same one `beforeEntryMove` uses (D-S5-19) |
 | A weekend-shading plugin computes days with `86400000` | I10 forbids it in `src/`, and a consumer has `dataset.time` instead. The harness plugin uses the façade (D-S5-16) |
 | Column reorder rewrites the Dataset | It cannot. Columns are Gantt view state; the Field registry never changes (ADR 0005, D-S5-18) |
@@ -360,6 +394,16 @@ Read these before you touch `src/`.
 | Column groups (a header spanning two columns) | not scheduled | A real ask; no consumer yet |
 | Async command results and a progress affordance | not scheduled | A real ask; commands stay sync in S5 |
 
+### API gaps the `harness/main.ts` review found and did not close here
+
+CLAUDE.md asks for a read of `harness/main.ts` on every commit. What it exposed during S5 is recorded here, never tidied away in the harness. All three below are now closed in `src/` — #184 by D-S5-34, #195 by D-S5-35/D-S5-36/D-S3-24, and #194 by D-S5-37.
+
+| Gap | Where it shows | State |
+|---|---|---|
+| No way to hide one Grid column, so the page declared its column list twice and a toggle discarded the widths and the order the user had set (#184) | `GRID_WITH_BUDGET` / `GRID_WITHOUT_BUDGET`, plus a `budgetVisible` flag | **Closed** by D-S5-34: `GridColumn.hidden`, `gantt.hideGridColumn` / `showGridColumn` / `hiddenGridColumns`. The harness now declares one list |
+| One resolved column carries two public names: a renderer context hands a consumer `column.key`, and every other surface names the same column `field` (#194) | `demoCellRenderer` reads `column.key === 'cost'`, six lines from `{ field: 'cost' }` | **Closed** by D-S5-37: `FrameColumn.key` and `CommandTarget.columnKey` both become `field`. A Field has a `key`; a Grid column carries the `field` it shows |
+| Three more whole-object setters need the read-modify-write #184 removed from `gridColumns` (#195) | `gantt.interactions = { resize: false }`, `gantt.preset = { ...gantt.preset, snap }`, `gantt.plugins = [...gantt.plugins, x]` | **Closed** by three separate answers, one per setter: D-S5-35 (`setCapabilityRule`/`clearCapabilityRule`), D-S3-24 (`gantt.snap`) and D-S5-36 (`installPlugin`/`uninstallPlugin`/`hasPlugin`). The harness restates no config |
+
 ---
 
 ## 11. Settled by the user
@@ -368,17 +412,18 @@ Read these before you touch `src/`.
 
 `plans/s2-data-core/OPEN-QUESTIONS.md` OQ8 closes on reading (b): the hook has one occupant at a time, and a scheduling plugin is one candidate occupant with no special claim on it. `EditExtenderConflictError` is never written.
 
-The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002 lands in **S5.10**, beside the code that makes it true — not before. Until then those documents still say "exclusively", and this line is the record that they are due an edit.
+The wording change to locked **D4** (`plans/00`), `CLAUDE.md`, `plans/01` §7, `plans/03` §S3 and ADR 0002 **landed in S5.10 (2026-09-04)**, beside the code that makes it true, and OQ8 is closed against it.
 
 ---
 
 ## 12. Spec edits
 
-Landed in the step that proves each one, except the batch at S5.12. Full list in [`s5.12-gallery-and-gate.md`](./s5.12-gallery-and-gate.md) §4. The six that change settled text rather than adding to it:
+Landed in the step that proves each one, except the batch at S5.13. Full list in [`s5.13-gallery-and-gate.md`](./s5.13-gallery-and-gate.md) §4. The six that change settled text rather than adding to it:
 
 1. `plans/03` §S5 — the six acceptance boxes gain ids `[S5-A1]`–`[S5-A6]` and a tracker pointer. **Landed with this spec.**
 2. `plans/01` §10 and `plans/02` §2 — `features: { … }` becomes `plugins: [ … ]` (Q3, D-S5-2).
 3. `plans/01` §10 — `registerItemEmitter` becomes `registerItemProducer`; `data.registerField` moves to the Dataset plugin context (Q4, Q16).
-4. `plans/00` D4, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3, ADR 0002 — exclusivity is arity, not ownership (Q2, answered; the edit lands in S5.10).
+4. `plans/00` D4, `CLAUDE.md`, `plans/01` §7, `plans/03` §S3, ADR 0002 — exclusivity is arity, not ownership (Q2, answered). **Landed in S5.10**, with OQ8 closed and `plans/03` §S2's `StoreName` note marked satisfied.
 5. `src/view/capability.ts` — the comment says `edit` waits for S5; this slice is S5, so the key ships with the editor (S5.8).
+7. The 2026-09-04 review's own edits, landed in slices R1–R6 (fix plan §4): `emitBeforeEntryEdit`/`emitEntryEdit` become `proposeEntryEdit`/`announceEntryEdit`; `resolveTooltip` becomes `resolveTooltipContent`; `PluginContextParts` is declared in the grouped shape a plugin sees; `Overlay` keeps `{ present, render }` and the DOM questions move to `ctx.view.dom`; `PopupOptions` gains `onDismiss`; the per-kind bar renderer composes across plugins on a slot key; `CellRendererContext` and `ColumnCellRendererContext` gain `fieldValue`; `setup()` may return `void`; `wholeEntryItem` is public. `CONTEXT.md` gained **Shell wiring** and **Refusal notice**.
 6. `CONTEXT.md` — the **Dependency** and **Scheduling plugin** entries, plus a new **`entryDependencies()`** entry: `Dependency` is owned by `entryDependencies()`, not the scheduling plugin, which `requires` and reads it (S5.0 grill, issue #111; Q18, Q19). **Landed with this spec.**

@@ -71,7 +71,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm boundaries
 
-  vendor-names-and-disables:
+  # The documented-standards checks: no vendor product name, no sentence over the ASD-STE100
+  # ceiling, no undeclared lint disable. None of them needs a build, so they share one job.
+  standards:
     needs: install
     runs-on: ubuntu-latest
     steps:
@@ -83,6 +85,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm vendor-names
+      - run: pnpm sentence-length
       - run: pnpm disables
 
   guards:
@@ -125,7 +128,7 @@ jobs:
       - run: pnpm test:dom
 
   build:
-    needs: [test-dom, guards, vendor-names-and-disables]
+    needs: [test-dom, guards, standards]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

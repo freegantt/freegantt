@@ -16,6 +16,10 @@ export default defineWorkspace([
         'src/scheduling/**/*.test.ts',
         'src/data/**/*.test.ts',
         'src/render/null/**/*.test.ts',
+        // #167: `view/` is a DOM-touching layer, and this one file in it is not. `FrameSettings`
+        // takes every pixel through an injected reader, so its invalidation table is a plain Node
+        // test. Running it here is what proves that, instead of a comment claiming it.
+        'src/view/frame-settings.test.ts',
         'test/pure/**/*.test.ts',
         'fixtures/**/*.test.ts',
       ],
@@ -30,6 +34,7 @@ export default defineWorkspace([
         'src/render/dom/**/*.test.ts',
         'src/view/**/*.test.ts',
         'src/interaction/**/*.test.ts',
+        'src/extensions/**/*.test.ts',
         'src/api/**/*.test.ts',
         'test/dom/**/*.test.ts',
       ],

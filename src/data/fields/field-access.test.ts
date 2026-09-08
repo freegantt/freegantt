@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { entryId } from '../../model/index.js';
-import type { Entry } from '../../model/index.js';
+import { entryId, segmentId } from '../../model/index.js';
+import type { Entry, StoredEdit } from '../../model/index.js';
 import {
   createFieldContext,
   createRollUpContext,
   editProposesField,
   mergeStoredEdits,
   overlayStoredEdit,
+  proposedKeysOf,
   readField,
+  statesProposedKeys,
   withProposedKeys,
   writeField,
   writeOntoEntry,
@@ -21,6 +23,7 @@ const span = (meta?: unknown): Entry => {
     kind: 'span',
     start: 0 as Entry['start'],
     end: 1 as Entry['end'],
+    segments: [{ id: segmentId('t1-seg'), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
   };
   if (meta !== undefined) entry.meta = meta;
   return entry;
@@ -87,6 +90,48 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(spread.proposedKeys?.has('cost')).toBe(true);
     const merged = mergeStoredEdits({ name: 'x' }, authored);
     expect(editProposesField(merged, cost)).toBe(true);
+  });
+
+  // #197: the two sides may state their writes differently. One extender proposes Field keys; another
+  // returns a raw storage patch. The merged edit must still show every write, or `diffEdit` emits no
+  // row for the raw side and that write is lost.
+  it('mergeStoredEdits states a raw patch keys when the other side proposes Field keys', () => {
+    const authored = withProposedKeys(writeField({}, span(), cost, 3), ['cost']);
+    const raw: StoredEdit = { name: 'Moved' };
+
+    const rawFirst = mergeStoredEdits(raw, authored);
+    expect([...proposedKeysOf(rawFirst)].sort()).toEqual(['cost', 'name']);
+
+    const authoredFirst = mergeStoredEdits(authored, raw);
+    expect([...proposedKeysOf(authoredFirst)].sort()).toEqual(['cost', 'name']);
+  });
+
+  it('mergeStoredEdits leaves two raw patches on the raw path, where an undeclared key survives', () => {
+    const merged = mergeStoredEdits({ name: 'a' }, { end: 9 as Entry['end'] });
+    expect(proposedKeysOf(merged).size).toBe(0);
+    expect(merged.name).toBe('a');
+    expect(merged.end).toBe(9);
+  });
+
+  // #238: the merged edit must stay *unstated*, not state the empty set. A third merge asks whether
+  // the base states its keys; a stamped empty set answered "it writes nothing", and the first two
+  // plugins' writes were dropped there.
+  it('mergeStoredEdits states nothing when neither side does, so a third merge still reads raw keys', () => {
+    const first = mergeStoredEdits({ name: 'a' }, { kind: 'milestone' });
+    expect(statesProposedKeys(first)).toBe(false);
+
+    const second = mergeStoredEdits(first, { parentId: entryId('p') });
+    expect(statesProposedKeys(second)).toBe(false);
+    expect(second.name).toBe('a');
+    expect(second.kind).toBe('milestone');
+    expect(second.parentId).toBe(entryId('p'));
+  });
+
+  it('statesProposedKeys tells an edit that stated the empty set from one that stated nothing', () => {
+    expect(statesProposedKeys({ name: 'a' })).toBe(false);
+    expect(statesProposedKeys(withProposedKeys({ name: 'a' }, []))).toBe(true);
+    expect(statesProposedKeys(undefined)).toBe(false);
+    expect(proposedKeysOf({ name: 'a' }).size).toBe(proposedKeysOf(withProposedKeys({}, [])).size);
   });
 });
 

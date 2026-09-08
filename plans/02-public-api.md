@@ -45,6 +45,10 @@ const dataset = new Dataset<{ team: string }, { cost: number }>({
     { key: 'cost', type: 'money' },
     { key: 'team' },
   ],
+
+  // Dataset plugins (S5.10, D-S5-24) — an unordered set: installation resolves setup order from each
+  // plugin's own `requires`, never from this array's order.
+  plugins: [entryDependencies(), scheduling()],
 });
 
 // ── View: binds dataset to DOM ──────────────────────────────────
@@ -68,17 +72,23 @@ const gantt = new Gantt({
   interactions: {
     move: true,
     resize: t => t.kind !== 'group',      // boolean or per-entry predicate — see §4.1
+    edit: (t, field) =>                   // #256: the write rule names a cell, not an entry
+      t.id === 'fixed' && field === 'end' ? false : undefined,   // `undefined` = no opinion
     linkCreate: true,
   },
   viewportGestures: { wheelZoom: true },  // or `false` to turn wheel/keyboard pan+zoom off
 
-  features: {
-    links: { allowCreate: true },
-    tooltips: true,
-    contextMenu: { items: ({ entry, defaults }) => [...defaults, myItem(entry)] },
-  },
+  // Values a consumer imports and lists, never names in a table (S5.1, D-S5-2 — supersedes the
+  // `features: { tooltips: true, ... }` sketch this example originally showed; a name-keyed table
+  // would force the Gantt to import every built-in it can name, so an unused one still shipped).
+  plugins: [
+    tooltips(),
+    contextMenu({ items: ({ entry, defaults }) => [...defaults, myItem(entry)] }),
+  ],
 });
 ```
+
+`gantt.dataset` reads back the Dataset instance the constructor took (#226). It carries the same `TMeta`/`TFields`, so `gantt.dataset.on('change', …)` and `gantt.dataset.canUndo` type correctly. A helper that needs both objects takes the Gantt alone and reads `dataset` off it — `mountGanttToolbar({ gantt, container })`. This beats taking the pair and trusting the caller to keep them matched. The getter is read-only: a Gantt binds one Dataset at construction and never rebinds it. A consumer who wants a different Dataset builds a second Gantt.
 
 ### Programmatic mutation — always transactional
 
@@ -97,9 +107,52 @@ dataset.undo();  dataset.redo();
 dataset.canUndo; dataset.canRedo;
 ```
 
+- **`dataset.entries.update(id, { segments })` is how a consumer moves one Segment** (#212, ADR
+  0010, fix plan R1). A Segment named by position and no `id` keeps the `SegmentId` already at that
+  position — a move, not a replacement — the same way `entries.update(id, { start })` moves an
+  Entry's own envelope. Naming an `id` replaces the id at that position instead; a position past the
+  Entry's current Segment count mints a fresh id, the same as an added Segment on `entries.add`. Two
+  Segments never share one `SegmentId` — on the same Entry, on two different Entries, or authored
+  twice in one construction-time `entries` list — and a write that would create that collision
+  throws `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`) before anything stages — on
+  every mutating call a consumer writes. `dataset.replay(changeSet)` is the one exception: it
+  applies undo/redo rows with no validation, by design (D-S2-14, §2), so a duplicate id stays
+  representable through that one door.
+  `segments: []` throws `EmptySegmentsError` (`code: 'empty-segments'`): every stored Entry keeps at
+  least one Segment, and an update has no whole-span input to mint a replacement from the way
+  `entries.add({ segments: [] })` does — so it refuses rather than silently dropping the Segment ids
+  already there (#212 fix-plan review, finding S2). A `start`/`end` written in the same edit as
+  `segments` must agree with that write's own envelope — `envelopeOfSegments` over the Segments named
+  — or the edit throws `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`): the caller cannot
+  propose one span through `start`/`end` and a different one through `segments` and have the library
+  silently pick a winner (#212 fix-plan review, finding S3). Naming `segments` alone, with neither
+  `start` nor `end`, keeps its documented silent derivation: the Entry's own span reads back off the
+  Segments just written.
+- **`dataset.entries.removeSegments(ids)` removes Segments in one transaction and one changeset**,
+  across several Entries when the ids name several (ADR 0010). Removing an Entry's last Segment
+  removes the Entry too, in the same transaction. **It never removes that Entry's descendants**
+  (#212, ADR 0010, fix plan R3): each direct child re-parents to the removed Entry's own parent, or
+  to the root when it had none. `entries.remove(id)` is the separate, deliberate call that takes a
+  whole subtree; `removeSegments` never does, even when its last Segment happens to be the Entry's
+  own. One undo step restores the Entry, its Segment, and every promoted child's `parentId`.
+- **`dataset.entries.entryIdOfSegment(id)`** answers the Entry that draws a given Segment, or
+  `undefined` when no Entry does (ADR 0010, #212). **`entryIdsOfSegments(ids)`** answers every Entry
+  named by at least one id in `ids`, deduped, in the order first named — the projection a Selection
+  runs to turn its Segments into the Entries they belong to. Both read the Segment→Entry index
+  `data/` maintains on write, so neither call scans the dataset. **`segmentIdsOfEntries(ids)`** is
+  the reverse projection: every Segment id these Entries draw, deduped, each Entry named once in the
+  order first named, and each Entry's own Segments in Entry order — an id no Entry currently draws,
+  or an Entry already named, contributes nothing (#212 R2 fix-plan review, finding E). It is the
+  published way to select an
+  Entry (#212 fix-plan review, finding 10): `gantt.selectedSegmentIds =
+  dataset.entries.segmentIdsOfEntries([id])`. The Selection itself stays Segment-only (ADR 0010) —
+  this is a lookup a caller composes with the setter, not a second selection action alongside it.
+
 Single mutations outside an explicit transaction are auto-wrapped in one — convenience without a second code path (D-S2-8). Each mutator validates against its own in-progress write set before staging anything, so a rejected call leaves the store untouched and a stack trace points at the call that made the bad edit, not at a transaction's closing brace.
 
 `transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
+
+`dataset.plugins` is **read-only**, unlike `gantt.plugins`. A Dataset plugin may declare a Field, and a Field must exist before the first Rollup walks (D-S5-4) — adding one later would mean re-rolling the whole dataset under a Field the Document never had. So a Dataset installs its plugins once, in its constructor, and a consumer who wants a different plugin set builds a Dataset with it (`Dataset.fromJSON` takes the same `plugins` for that reason: a Document stores a plugin's rows, never its behaviour). A Gantt has no such moment — its plugins register paint and gesture seams that are re-resolved on the next frame — so `gantt.plugins = [...]` stays assignable. Uninstalling a Dataset plugin is `dataset.destroy()`, which releases every installed plugin in reverse setup order.
 
 `autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
 
@@ -107,7 +160,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 
 `undo()`/`redo()` return nothing — like every other commit, what they did arrives on `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`; a caller that needs to know what an undo did reads the event, not a return value. `canUndo`/`canRedo` answer "is there anything to undo/redo" without a caller needing to try and catch. `history: { capacity: 200 }` at construction keeps 200 undoable transactions; the default is 100. An undo replays a cascade exactly as it committed — it never re-runs the extension hook, so an engine whose behaviour changed between library versions cannot rewrite history (`01` §6, `plans/s2-data-core/s2.5-undo-redo.md`).
 
-`dataset.replay(changeSet)` is the write path `undo()`/`redo()` are built on, published so a consumer can write their own History against the public surface alone: `on('change')`, `invertChangeSet`, and `replay` — no `data/` import needed. `replay` writes the rows exactly as given, through the same `beforeChange`/`change` channel, with no extension hook and no rollup. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (§6). An empty changeset is a no-op (`plans/s2-data-core/s2b-undo-replay-seam.md`).
+`dataset.replay(changeSet)` is the write path `undo()`/`redo()` are built on, published so a consumer can write their own History against the public surface alone: `on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` — no `data/` import needed. `replay` writes the rows exactly as given, through the same `beforeChange`/`change` channel, with no extension hook and no rollup. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (§6). An empty changeset is a no-op (`plans/s2-data-core/s2b-undo-replay-seam.md`). A History panel lists what a step changed with `fieldRowsOf(changeSet).map((row) => row.field)`, dropping the plugin-store rows `updated` also carries.
 
 ### Reconfiguration is just assignment
 
@@ -115,11 +168,35 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 gantt.preset = 'dayAndWeek';
 gantt.rowSource = { source: 'group', groupBy: (entry, fields) => fields?.read<string>(entry, 'team') ?? 'unassigned' };
 gantt.gridColumns = [...gantt.gridColumns, 'cost'];
+gantt.snap = { unit: 'day', increment: 2 };   // D-S3-24 — this Gantt's own snap, over the showing preset's
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
+gantt.gridWidth = 'fitColumns';         // #157 — as wide as the columns, and stays that way
 gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clamps gridWidth to (default 40)
 ```
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
+
+**A config value is a value, not a mutable object (#187).** Assignment compares against what the property already holds, by identity. So a mutation of the object you already handed over, followed by an assignment of that same object, changes nothing and paints nothing. Assign a copy to ask for the repaint:
+
+```ts
+gantt.barRenderer = { ...gantt.barRenderer, milestone: paintMilestone };   // repaints
+gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };                 // re-resolves rows
+```
+
+One rule covers every config key, object-valued ones included. A per-key exemption would put the rule back in each setter, which is what `frame-settings.ts`'s one invalidation table exists to prevent. It also keeps a repeated assignment of an unchanged value off the frame path.
+
+**Assignment replaces the whole value. A verb writes one key (#184, #195).** The rule above says what assignment is, and the consequence is that a consumer who changes one key must restate the rest. Anything they forget to carry is dropped, with no error and no event. So where changing one key is the common case, the library ships a verb for that key:
+
+```ts
+gantt.setCapabilityRule('resize', false);   // this one gesture; every other rule stands
+gantt.clearCapabilityRule('resize');        // the per-kind table answers that gesture again
+gantt.hideGridColumn('cost');               // D-S5-34 — the widths and the order stay as the user set them
+gantt.installPlugin(tooltips());            // D-S5-36 — the installed set is not restated
+```
+
+**A verb does not merge into the value, and it never mutates it.** It reads the current value, computes the next one, and assigns that copy. So the paragraph above still holds in full: the object a consumer handed over is never written to, and the property still compares by identity. A merging setter was considered for `interactions` and rejected for the same reason — it would make assignment mean two things, and it would leave no way to *remove* a key.
+
+The setter is the long form: restate a whole config, reorder a whole list. The verb is the shorthand for the common case. That is CLAUDE.md's "common case is a shorthand; the long form is expert", and both write the same stored value.
 
 
 ### 2.1 What a consumer writes, and what the library stores
@@ -148,24 +225,49 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
+| `beforeGridColumnsChange` | `gridColumnsChange` |
 | `beforeCollapseChange` | `collapseChange` |
 | — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
+| — | `error` (every refusal and every recovered fault; **the one name on both buses**) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 `navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters.
 
-`beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind.
+`beforeGridWidthChange`/`gridWidthChange` (S1.8) carry `{ from, to }` in px. Fired by both a Splitter drag's commit and a direct `gantt.gridWidth = px` assignment — one commit sequence, one place it lives (`GanttShell`). A veto restores the width the drag started from, so a rejected drag leaves nothing behind. The grid pane never sits wider than its own columns (#139): every path that sets a width — the constructor option, a live assignment, a drag — is capped at the columns' total width, because past the last column's right edge there is nothing to draw. So `gantt.gridWidth = 900` against 360px of columns reads back `360` and fires `to: 360`, and hiding a column brings the pane in with it through this same sequence. Narrower is always legal — the columns overflow and the pane scrolls to reach them (#126) — and a column set holding a `flex` column has no cap at all, since a flex column has no fixed edge to stop at.
 
-`minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag can reach, and nothing else: a written width is written as given, so `gantt.gridWidth = 0` collapses the grid pane on purpose. Default `40` — wide enough for one narrow column, so a drag cannot take the pane to nothing by accident; `minGridWidth: 0` restores an unfloored splitter. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to lift it — the same commit sequence a drag would use, so a veto leaves the width exactly where it was.
+`gridWidth` also takes `'fitColumns'` (#157): the pane sits exactly on the columns' edge, and keeps sitting there as the columns change — a column resize, a hidden column, a plugin-registered column all move it, in both directions, through this same commit sequence. It is a standing instruction, not a width read once, so a consumer never restates a number the library already computes. The getter still answers in px: "how wide is the pane" is a question about pixels. Two things end the instruction: a later `gantt.gridWidth = px`, and a Splitter drag, which is the consumer changing their mind (a vetoed drag ends nothing). A column set holding a `flex` column names no edge to sit on, so the pane keeps the width it has until the set names one again.
 
-`beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selection` already does.
+`minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag can reach, and nothing else: no floor applies to a written width, so `gantt.gridWidth = 0` collapses the grid pane on purpose. (#139's ceiling is the one bound that does reach a written width — a floor guards against a user accident, which an app author is allowed past; a ceiling states a layout fact.) Default `40` — wide enough for one narrow column, so a drag cannot take the pane to nothing by accident; `minGridWidth: 0` restores an unfloored splitter. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to lift it — the same commit sequence a drag would use, so a veto leaves the width exactly where it was.
 
-S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `EntryId[]` — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only.
+
+`beforeGridColumnsChange`/`gridColumnsChange` (S4.3, S5.7) carry `{ from, to }` as `GridColumn[]` — the consumer's own authored columns, before the change and after it, never the layout-only `ResolvedColumn`. So a consumer holds `to` and hands it straight back as `gridColumns`, and that round-trip can never save a column a plugin declared (#162, #181). Every column change raises the one pair: a resize drag's commit, a reorder drop, `hideGridColumn`/`showGridColumn` (S5.7), and a direct `gantt.gridColumns = [...]` assignment. Hiding raises no pair of its own, so a handler that guards every other column change refuses a hide too. A veto restores the column list the interaction started from. `registerGridColumn` is the deliberate exception (D-S5-33): a plugin's own registration changes nothing the consumer authored, so it raises nothing and never appears in `gantt.gridColumns`.
+`beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedSegmentIds` already does.
+
+`error` (S5.12, D-S5-40/41/42) is the one event name that lives on **both** buses, and it carries the
+same `ErrorReport` on each. That is not the "every event name exists exactly once" rule breaking. The
+rule keeps one *concept* to one name, and a report is one concept: a Dataset raises what a Dataset
+observes, a Gantt raises what a Gantt observes, and neither forwards the other's. Two Gantts on one
+Dataset therefore deliver a Dataset report once, not twice, and a report raised inside
+`new Dataset(...)` is not lost for want of a Gantt to raise it on. A consumer who wants the two feeds
+as one calls `watchAllErrors([dataset, gantt], handler)`, which de-duplicates by emitter identity and
+returns one disposer. There is no `before*` pair: a report states what already happened.
+
+The payload is flat — `at`, `code`, `message`, `severity`, `by`, and the optional `entryId`, `field`
+and `cause` — so it renders and serializes with no type test. `severity` is `'info'` for a Refusal
+(the library said no on purpose), `'warning'` for something it recovered from, `'error'` for
+something it did not. Core raises and retains nothing: there is no `gantt.errors` array, because the
+cap, the overflow rule and the dedupe are the consumer's policy.
+
+S3 data-gesture payloads (D-S3-22): `beforeEntryMove`/`entryMove` carry `ProposedSpan` (`entry`, `start`, `end`) plus `entries` (grabbed first; extender extras never included). `beforeEntryResize`/`entryResize` add `edge: 'start' | 'end'`. `beforeSelectionChange`/`selectionChange` carry `{ from, to }` as `SegmentId[]` (ADR 0010, #212 — `EntryId[]` until then) — Gantt state, no Dataset transaction. `beforeEntryMove`/`beforeEntryResize` handlers may return `Promise<void | false>` (D-S3-17); every other Gantt event stays sync-only. One case fires `selectionChange` with no `before*`: a Dataset write that removes a selected Entry's Segments has already committed, so the Selection can only drop the dead ids after the fact — there is nothing left to veto (#212, finding 19).
+
+`beforeEntryEdit`/`entryEdit` (S5.8, D-S5-19) carry `EntryFieldEdit` — `entry`, `field` (a `FieldKey`), `from`, `to` (both `unknown`: a Field's stored type is open). `beforeEntryEdit` fires **before `inlineEditing()`'s built-in editor opens**, not before the write, so `from`/`to` are both the entry's current stored value at that point — nothing has been typed yet. `entryEdit` fires after the commit, `to` the value actually written. `beforeEntryEdit` joins `beforeEntryMove`/`beforeEntryResize` as the third handler that may return `Promise<void | false>` (D-S3-17) — the async veto is what lets a consumer `await myDialog.open(entry)` before deciding whether to suppress the built-in editor (the sample below).
+
+**A plugin raises this one pair itself, through two verbs that differ.** `ctx.interaction.proposeEntryEdit(payload)` asks: it raises `beforeEntryEdit` and hands back what the handlers answered — `true`/`undefined`, `false`, or an unsettled `Promise`. The caller must read that answer. `ctx.interaction.announceEntryEdit(payload)` tells: it raises `entryEdit` after the commit and returns `void`. One verb per job, so a plugin author sees from the name whether a decision comes back. (`emit*` said neither, and is retired.) Every other `before*` event stays core's own to raise, so no plugin can forge `selectionChange` or any event core owns.
 
 ```ts
-gantt.on('beforeEntryMove', ({ entry, start, end }) => {
-  if (start < mobilization) { toast('Too early'); return false; }   // veto
+gantt.on('beforeEntryMove', ({ entry, start, end, refuse }) => {
+  if (start < mobilization) { toast('Too early'); return refuse('The drop is before mobilization.'); }
 });
 
 gantt.on('beforeEntryEdit', async ({ entry }) => {
@@ -179,8 +281,8 @@ gantt.on('navigationChange', ({ canZoomIn, canZoomOut, presetId }) => {
   presetSelect.value = presetId;
 });
 
-dataset.on('beforeChange', ({ changeSet }) => {
-  if (changeSet.updated.some(u => locked.has(u.id))) return false;   // veto — refuses the whole change
+dataset.on('beforeChange', ({ changeSet, refuse }) => {
+  if (changeSet.updated.some(u => locked.has(u.id))) return refuse('One of these entries is locked.');
 });
 
 dataset.on('change', ({ changeSet }) => save(changeSet));           // persistence hook (D7)
@@ -188,10 +290,13 @@ dataset.on('change', ({ changeSet }) => save(changeSet));           // persisten
 
 Rules:
 
-- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`.
+- Cancelable handlers may return `false` or `Promise<false>`; an async veto suspends the gesture with a visible pending state — it never commits optimistically. **`beforeChange` is the one exception: it is sync-only.** A data commit has nothing to suspend into — the store would have to hold its write set across an `await`, and every mutator would have to turn `async` to make that safe. The async path stays where gestures already are, one layer up in `interaction/`. `beforeChange`, `beforeEntryMove`, and `beforeEntryResize` carry `refuse(reason)` on their payload (#210): call `return refuse('…')` to veto and state why in one line. It still returns `false`, so a bare `return false` still refuses with no reason. `refuse` puts the handler's own words on the `ErrorReport` core raises for the veto. The other `before*` events raise no report, so they take a plain `false` only.
 - Pointer/gesture events fire on the `Gantt` (view concern); data events fire on the `Dataset` (data concern). Every event name exists exactly once.
 - Payloads are typed, stable, and carry entities plus context — no "re-read everything" events.
-- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is.
+- `change` is the only path out of a commit: the view's live binding and the undo history are both ordinary subscribers to it, not privileged internals with a second, private channel. `beforeChange` may refuse a changeset but never edit one — rewriting a proposed edit is the extension hook's job, and it has exactly one owner. A vetoed programmatic call (e.g. `entries.update()`) throws `MutationCancelledError` carrying the refused changeset, because a function with a return contract cannot quietly not honour it; a vetoed gesture is silent, the way `beforeGridWidthChange` already is. **Silent in the UI, not
+unrecorded (S5.12, D-S5-40):** nothing is drawn and nothing throws, and one `ErrorReport` goes out on
+`error` at `severity: 'info'`, so a consumer can say what happened without reading a veto they did
+not write.
 
 ---
 
@@ -207,41 +312,34 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | full `GanttPlugin` (see `01` §10): fields, decorations, columns, controllers, commands |
 
-Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — `--fg-row-height` rejects zero (a zero-height row is not a row), `--fg-grid-pane-width` keeps it (a consumer turning the grid pane off authored that). Re-read cadence stays the caller's and is stated at each call site: the grid pane's width is read once at construction (renamed from `--fg-row-label-width`, S1.8 — the gutter is a pane width now, not a backend reservation), row height again on every pane measurement, neither per render. Two more tokens joined at S1.8: `--fg-splitter-width` (fallback `4`) and `--fg-header-height` (fallback `20`, **retired at S1.12** — migration: `--fg-header-height: 40px` on a two-band preset becomes `--fg-band-height: 20px`). The grid pane's spacer now mirrors one empty `.fg-band` per header band, so both panes size from `--fg-band-height`.
+Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — a property whose zero value would be nonsense (a zero-height row is not a row) rejects it; a property whose zero value is a real, intentional choice (a consumer turning the grid pane off) keeps it. Re-read cadence stays the caller's own choice, and is stated at each call site — some properties read once at construction, others read again on every pane measurement, none per render.
 
-**The complete level-1 `--fg-*` table (S1.10, D-S1.10-1/D-S1.10-9).** A consumer with no CSS of its own gets these defaults; every one is overridable by setting the same property on the container element, which `view/styles.ts`'s `var(--fg-x, default)` always prefers over its own fallback (U4). Metrics are read through `pixel-property.ts` (above); colour tokens are plain CSS custom properties consumed directly by the base stylesheet's class rules — no JS reads them.
-
-| Token | Default (light) | Default (dark) | Read by |
-|---|---|---|---|
-| `--fg-row-height` | `32px` | — (not theme-dependent) | `pixel-property.ts`, re-read on pane measurement |
-| `--fg-grid-pane-width` | `220px` | — | `pixel-property.ts`, read once at construction |
-| `--fg-splitter-width` | `4px` | — | `pixel-property.ts` |
-| `--fg-band-height` | `20px` | — | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12) |
-| `--fg-tick-box-floor` | `9px` | — | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
-| `--fg-bar-radius` | `3px` | — | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
-| `--fg-pane-bg` | `#FAFAF7` | `#15161A` | `.fg-grid-pane`, `.fg-timeline-pane` background |
-| `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
-| `--fg-header-bg` | `#F4F2EC` | `#22252B` | `.fg-header` background |
-| `--fg-header-band-bg` | `#FFFFFF` | `#1B1D22` | `.fg-band` background |
-| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text |
-| `--fg-header-subtext` | `#9A958B` | `#6E6A62` | `.fg-tick` text |
-| `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands |
-| `--fg-row-even-bg` | `transparent` | `transparent` | `.fg-row:nth-child(even)` |
-| `--fg-row-odd-bg` | `rgba(26,24,21,.028)` | `rgba(255,255,255,.032)` | `.fg-row:nth-child(odd)` |
-| `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label` text |
-| `--fg-bar-fill` | `oklch(.55 .13 245)` | `oklch(.72 .13 245)` | `.fg-bar` background |
-| `--fg-bar-label-color` | `#FFFFFF` | `#1A1815` | `.fg-bar` text |
-| `--fg-warn` | `#D97706` | `#FBBF24` | `.fg-bar[data-flag~="conflict"]` outline (U2) |
-| `--fg-date-line-color` | `#DC2626` | `#F87171` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
-| `--fg-selection-color` | `oklch(.55 .19 25)` | `oklch(.75 .19 25)` | `.fg-bar[data-state~="selected"]` outline; pending uses the same token, dotted |
-| `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
-| `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
-
-Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere (D-S1.10-9) — only the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in specs/docs/code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block applies: `'auto'` writes no `data-fg-theme` attribute and follows `prefers-color-scheme`; `'light'`/`'dark'` write the attribute and always win over the media query on specificity. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live (deferred to S5, D-S1.10-9).
+**The complete level-1 `--fg-*` reference — every token, its light/dark defaults, what reads it, and the retired/renamed tokens' migration notes — moved to [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (issue #221).** Level 1 stays documented here as a level of the ladder; the token-by-token values are a reference that drifts out of date faster than this design statement does, so they live beside the rest of the consumer-facing surface instead.
 
 **`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
 
 S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
+
+**D-S3-10 amendment (bug hunt, "grid row highlight and row click" — locked pre-1.0, no compat shim needed).** A click on a `.fg-row` in the grid pane is the same select as a click on that row's own bar: plain replaces, ctrl/⌘ toggles, and shift ranges over the Segments in draw order (ADR 0010, #212). A grid-row click names every Segment its row owns, so a range that ends on one takes that whole row. It never arms move or resize — a grid-row pointerdown never grabs `EntryGestureSession`. A click on `.fg-row-twisty` is not a row hit at all: collapse stays on the twisty, never selection. An empty *timeline* click still clears `gantt.selectedSegmentIds` (ADR 0010, #212 — `gantt.selectedIds` until then), with either button — a right-click is a click for this rule (#199/#205 follow-up). A miss on the grid pane (a header row, padding, a twisty) never does — only the timeline's own empty click is "the" clearing gesture. `data-state~="selected"` paints on the matching `.fg-row` the same way it already does on `.fg-bar` — same `--fg-selection-color` Token, a background instead of an outline (`.fg-bar[data-state~="selected"]`, `.fg-row[data-state~="selected"]`). A row click selects **every Segment of every Entry** the row owns (`FrameRow.entryIds`, #185; widened to Segments by ADR 0010, #212, because the grid pane's unit is the row); the row's cells still describe the first Entry. A grouping header row carries no entry and is never selectable.
+
+Three reasons support this rule. First, D-S3-10 already names the empty timeline click as "the" clearing gesture. The same pixels must not give two different answers for two different buttons. Second, common desktop file managers clear a selection on a background right-click. The background menu that opens acts on the container, and a surviving highlight would misstate the menu's scope. Third, on a bar or a row the pointer path writes nothing; `contextMenu()` decides what the Selection becomes (§4.5, the right-click rule).
+
+The clear rides on `pointerup`. `contextmenu` fires before `pointerup` on macOS and Linux, and after `pointerup` on Windows. So the empty-timeline clear can land before or after the menu opens, depending on the platform. A command's `when` always sees the Selection as of the moment the menu opens, on every platform — it never sees a fixed ordering guarantee against the clear.
+
+A background menu whose commands never read the Selection could keep it. FreeGantt's menu is consumer-registered, so it carries no such guarantee.
+
+**Rejected:** clear the Selection only when the open menu holds no selection-scoped command. We reject this: the same click would clear, or not clear, by which plugins the page installs. A click's outcome must not depend on what else is installed.
+
+S5.5 Parts (D-S5-13/14, both mounted inside S5.3's `.fg-popup`): `.fg-tooltip`, `.fg-tooltip-title`, `.fg-tooltip-dates` (`tooltips()`); `.fg-menu`, `.fg-menu-item`, `.fg-menu-separator` (`contextMenu()`).
+
+S5.8 Parts (D-S5-19, D-S5-47): `.fg-cell-editor`, `.fg-cell-editor-control`, `.fg-cell-editor-discard`, `.fg-cell-notice` (`inlineEditing()`) — mounted through the row layer (`ctx.view.rowLayer`) directly, not inside `.fg-popup` (the cell editor has no flip/clamp; it always sits at the cell's own rect). #158 moved this mount out of the Overlay: the row layer travels with the rows on both axes, so the editor stays on its cell through a scroll with no scroll listener. State attribute `data-state="invalid"` on `.fg-cell-editor` marks a failed `parseValue`, a `beforeChange` veto, or the default `dateInput`'s non-midnight refusal (issue #137 F11/F12). In that state the editor also carries `data-reason` (shipped values: `unreadable-value`, `refused-write`) and shows `.fg-cell-editor-discard`, so Escape is not its only exit (D-S5-47). A cell that offers an editor which cannot open at all mounts a `.fg-cell-notice` instead: words over the cell, no control, `pointer-events: none`, and its own `data-reason` (shipped values: `derived-value`, `no-parse-value`, `no-date-value`, `time-of-day`, `unsaved-value`, `segmented-entry`). The two carry two classes so a stylesheet for one never reaches the other (#231 F1). Each reason key is machine-readable and is also the `code` of the Error report the editor raises, so one refusal has one spelling (#234, D-S5-40); the words the user reads sit beside it on the wrapper's own `title`.
+
+A cell renderer reads its cell two ways. `value` is the string the library painted, through the
+Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
+`dataset.entries.fieldValue(id, column.field)` answers, for an `entry`-, `meta`- or `compute`-sourced
+Field alike. A renderer that paints text reads `value`; one that branches on magnitude reads
+`fieldValue`, and never parses the library's own output back with a regex. Reaching into
+`entry.meta` is not the alternative: a `compute`-sourced Field has no stored home (ADR 0005).
 
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only. `class` is `Readonly<Record<string, boolean>>` everywhere on `ElementDescription`, including its `children` (S5.4, D-S5-10) — this sample used a bare string until issue #137 F15 caught that it did not typecheck against its own referenced type.
 
@@ -259,7 +357,7 @@ barRenderer: ({ entry, item }) => ({
 
 Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (`kind`, fields, typed `meta`):
 
-**Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — consumer-defined kinds slot in by name:
+**Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). A bar whose painted span was widened to `--fg-bar-min-width` or a milestone's own diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-kind` to style a floored span differently from a floored milestone (`.fg-bar[data-kind="span"][data-span="minimum"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — consumer-defined kinds slot in by name:
 
 ```ts
 barRenderer: {
@@ -270,7 +368,21 @@ barRenderer: {
 }
 ```
 
-**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`, `edit`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection of that entry and skips it in a shift-range. The public `gantt.selection` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+
+**`interactions.edit` names a cell, not an entry** (#256). Its predicate takes `(entry, field)`, because a write names one Entry and one Field — the changeset's own shape. It is the one override above `Field.editable` (§2.6), and the only per-entry axis that key has: a Field states which values are writable at all, and this states which of them are writable *here*. It answers for every writer at once — the cell editor, both resize handles, and the bar move — because all three write a cell. A predicate returns `undefined` for a cell it has no opinion about, and the rules below it decide that cell, so locking one End does not open every derived value on the page. A bare boolean pins every cell with no fall-through.
+
+**A gesture asks two questions, and needs both.** `move`/`resize`/`select` say whether the gesture is *offered*; `edit` says whether the values it writes *may change*. `move` writes `start` and `end`, so it needs both cells. `resize` writes the dragged edge's own Field. `select` writes nothing, so it never asks. This is why `resize: true` opens a handle the library would have closed and still cannot write a Field the consumer locked — to open that, open the Field, or answer `edit` for the cell.
+
+**Keyboard bindings on the Selection.** The full pane-scoped chord map is
+`plans/s5-extensibility-and-editing/s5.11-a11y-completion.md`'s D-S5-26; these two act on the
+Selection and belong on any consumer's cheat sheet:
+
+| Chord | Command | What it does |
+|---|---|---|
+| `Delete` | `freegantt.deleteSelection` | Removes the Selection's Segments (`dataset.entries.removeSegments`), across every Entry the Selection touches, in one transaction. A `beforeChange` veto leaves the Selection untouched. |
+| `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextSegment` / `selectPreviousSegment` | Steps the Selection between the Segments of the row it already sits on (#212, ADR 0010, issue #218). A row that draws one bar has nowhere to step, so the chord writes nothing; it clamps at both ends. |
+| `Escape` | `freegantt.discardCellEdit` | Closes an open Cell editor and writes nothing (`inlineEditing()`, D-S5-47, issue #160). Escape runs the command itself, and so does the editor's own discard button, shown in the invalid state — one road, so overriding the command changes both (#231 F2). A Gantt with no `inlineEditing()` answers the id with an inert registration and holds no editor code. |
 
 **Division of labor:** capabilities answer the *static* question ("groups don't resize"); `before*` events answer the *contextual* one ("not before mobilization"). Use the shallowest one that fits.
 
@@ -350,7 +462,21 @@ dataset.fields.all;                            // every declared Field, core inc
 
 An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
 
+**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256): `{ key: 'cost', editable: true }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too — one answer gates every writer (I14), so a consumer states it once. A Field states which values are writable at all; `interactions.edit` states which of them are writable on *which entry* (§4.1). Default is `false`. Core's own `name`, `start` and `end` default to `true`, matching the resize a bar already allowed before this Field existed; overriding a core field's `editable` alone is legal (`{ key: 'end', editable: false }` closes it without redeclaring `end`'s source or rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name).
+
 **Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
+
+**Hiding one column is one call, not a restated list** (S5.7, D-S5-34, #184):
+
+```ts
+gantt.hideGridColumn('cost');
+gantt.showGridColumn('cost');
+gantt.hiddenGridColumns; // ['cost'] while it is hidden
+```
+
+`hidden: true` on the column is the stored state; the two verbs write it. The hidden column keeps its width, keeps its place in the order, and stays in `gridColumns` as `{ field: 'cost', hidden: true }`, so a saved list restores it hidden and `showGridColumn` puts it back where it was. Assignment cannot do this: `gantt.gridColumns = shorterList` replaces the whole authored list, and drops every width and every position the user set on the other columns. A hidden column leaves the grid, the pane width, and `ctx.view.resolvedColumns()` — that seam answers what this Gantt paints right now.
+
+**No new event pair.** Hiding runs the same commit sequence a resize drag and a reorder drop run, so it raises `beforeGridColumnsChange`/`gridColumnsChange` and a handler can refuse it. This is the opposite call from `registerGridColumn` (D-S5-33), which got no pair: a plugin's registration changes nothing the consumer owns, so its `from` would always equal its `to`. Hiding changes what `gantt.gridColumns` answers, so the pair is already the right one and a second pair would only split one veto across two names. A hidden column that a plugin declared is the plugin's own, so it reports no change — the same truthful answer a resize of one already gives. `UnknownGridColumnError` (`code: 'unknown-grid-column'`) names a field no declared column carries: neither verb adds a column, so there is nothing to act on.
 
 **Row-source sort** names a declared Field, not a visible column — `sort: { field: 'cost' }` orders by the stored value through `FieldCompare`, even when `gridColumns` is `['name']` only (`01` §2.6, S4.9, D-S4-13/D-S4-28).
 
@@ -358,7 +484,7 @@ An unregistered key is an `UnknownFieldError`, never a silent write. A missing i
 
 ### 4.3 Row sources, collapse, and tree
 
-A **Row** is a derived horizontal track — not an Entry. One Row may carry many Entries' items; a row source may produce Rows that stand for no Entry at all. **`gantt.rowSource`** names the config that decides what the Rows are for this Gantt. The name matches its type (`RowSource`) and leaves `rows` free for a future getter of the derived rows themselves.
+A **Row** is a derived horizontal track — not an Entry. One Row may carry many Entries' items; a row source may produce Rows that stand for no Entry at all. **`gantt.rowSource`** names the config that decides what the Rows are for this Gantt. It leaves `rows` free for a future getter of the derived rows themselves. The setter takes a `RowSource`; the getter reads back a `ResolvedRowSource`, which fills every key `layout/` defaults at consumption — `heightMode`, `filterPolicy`, and the entries source's `tree` (#248). So a consumer reads the value the library uses, and never has to know a default to read it.
 
 Default: `{ source: 'entries', tree: false }` — a flat list, exactly what S1 drew. Three occupants ship:
 
@@ -406,13 +532,161 @@ gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
 gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
 ```
 
-For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')` names the parent entry. A grouping header uses a derived `RowId` from the `groupBy` value. Collapsed subtrees are absent from the row list, not merely hidden — `rowCount`, `aria-setsize`, and the scrollbar stay honest. The collapsed set survives data edits; a stale id simply matches nothing, the same way a removed entry id can linger in `selection`.
+For `{ source: 'entries' }`, a `RowId` equals the `EntryId`, so `collapse('p1')` names the parent entry. A grouping header uses a derived `RowId` from the `groupBy` value. Collapsed subtrees are absent from the row list, not merely hidden — `rowCount`, `aria-setsize`, and the scrollbar stay honest. The collapsed set survives data edits; a stale id simply matches nothing, the same way a removed entry's Segments can linger in `selectedSegmentIds`.
 
 **Live reconfiguration.** Assigning `gantt.rowSource` re-resolves rows, invalidates the height index from 0, and requests one frame — no remount. Scroll survives as a pixel position, clamped against the new content height.
 
 Group header rows show the `groupBy` label in column 0 and blank cells elsewhere. Per-group aggregates are the caller's data — declare a computed Field or write through a group entry; the grid does not invent them (D-S4-11).
 
-Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`.
+Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`, and the four the getter reads back — `ResolvedRowSource`, `ResolvedEntriesRowSource`, `ResolvedGroupRowSource`, `ResolvedCustomRowSource`.
+
+### 4.4 Plugin registrations: one collision policy, one lifetime (#155)
+
+A `PluginContext` hands a plugin six `register*` seams. They answer a collision the same way, so an
+app author installing two plugins meets one rule rather than one rule per seam.
+
+| Seam shape | Two plugins claim the same thing | Seams |
+|---|---|---|
+| **A single paint slot** | **Throws** `RendererAlreadyRegisteredError`, naming the slot and both plugin ids. Two plugins painting one slot is an authoring mistake, and silence would make it look like the second plugin did nothing. | `view.registerRenderer` |
+| **Keyed by an identifier** | **The newest registration wins**, and the one it covered is still there. | `commands.register`, `interaction.registerKindDefaults`, `view.registerGridColumn`, `layout.registerItemProducer` |
+| **Additive, no key** | No collision to have — every registration runs. | `view.registerDecoration`, `interaction.registerKeybinding` (newest-first at resolve time) |
+
+**Lifetime is the same for all six: a registration lives exactly as long as the plugin that made it.**
+Uninstalling a plugin (`gantt.plugins = […]` without it) removes its registrations, whatever order
+plugins are dropped in. What answers next is the newest registration still standing — the library's
+own default where nothing else claimed the key, and core's own command where a plugin had overridden
+one. So `plugins = [p] → [] → [p]` is an ordinary sequence, not a plugin colliding with what its
+earlier installation left behind.
+
+**Every `register*` returns a `Disposer`.** Ignoring it is the common case, because the plugin's own
+teardown already holds a copy. A plugin that shows a column, a key binding or a decoration in one
+mode only calls it to retract that registration while the plugin keeps running. Calling it twice is
+safe.
+
+**A paint slot is not always a whole point.** `cell`, `header` and `tooltip` are: one plugin claims
+each, because a cell belongs to a column and a header to a band, so neither has a key to merge on.
+The `bar` point already takes a per-kind map (D-S5-12), and that map **is** the key. So
+`registerRenderer('bar', { buffer: … })` claims `bar:buffer` alone. A plugin that defines one kind
+and a plugin that defines another both install, and both paint. Two plugins that name the same kind
+still throw. The whole-point form, `registerRenderer('bar', fn)`, stays exclusive: one function
+answers every kind, so it refuses, and is refused by, any per-kind claim. A consumer's own
+`barRenderer` still wins over every plugin slot (D-S5-11), and a registered `'*'` still answers every
+kind the exact slots miss.
+
+**A plugin's `setup(ctx)` returns a `Disposer`, or nothing.** Every `register*` and every
+`onDomEvent` files its own removal in `ctx.disposables`, so a plugin that owns no timer, socket or
+subscription of its own has nothing left to return. `return () => {};` was ceremony, and to a
+newcomer it read as if something were missing.
+
+**`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, which is
+what almost every item producer wants: `ctx.layout.registerItemProducer(kind, (entry) =>
+[wholeEntryItem(entry)])`. It is pure and DOM-free, and it is the one owner of the
+`${entryId}:${segmentIndex}` Item id convention — the one thing a plugin could otherwise get wrong
+from documentation alone.
+
+One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that
+writes its own stack-and-restore bookkeeping is a bug, not a variation.
+
+**One module declares the whole context.** `view/plugin-ports.ts` types every member in the group a
+plugin reads it in (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`).
+`api/gantt.ts` adds `dataset` and `gantt`, and nothing else. Adding a seam is therefore one edit in
+one file. A member declared in the wrong group does not compile.
+
+**A read seam is not a registration.** `ctx.view.resolveTooltipContent(entryId)` returns an
+`ElementDescription` — the tooltip's *body*, which `tooltips()` then mounts. It pairs with
+`ctx.view.resolveTooltipColumns(entry)` and `ctx.interaction.canWrite(entry, field)` (#256). None of the three is
+gated: a plugin reads them for as long as it runs, not only while `setup` runs.
+
+### 4.5 The plugin-to-DOM seam: `ctx.view.dom` and `ctx.view.onDomEvent`
+
+A plugin never writes a `.fg-*` selector or a `data-*` key of the rendered Gantt. It asks
+`ctx.view.dom` instead:
+
+```ts
+ctx.view.onDomEvent('dblclick', (event, target) => {
+  if (target?.kind !== 'cell') return;
+  openEditor(target.entry, target.field, target.element);
+});
+
+const bar = ctx.view.dom.barFor(entryId);       // this entry's bar in the current frame
+const cell = ctx.view.dom.cellFor(entryId, 'cost');
+```
+
+**`ctx.view.focusedCell()` answers which cell the keyboard is on** (S5.11, D-S5-39). It hands back `{ entryId, field }`, or `undefined` when focus sits on a row, a bar, a header cell, the splitter, or nothing. It reports a *fact*, never a node: which cell has focus is a view concern, so a plugin reads the answer rather than querying the DOM for it or keeping a focus model of its own. `inlineEditing()`'s `Enter` handler is the first caller — before this port it opened the first editable column of the selected Entry, because per-cell focus did not exist yet.
+
+- **`targetUnder(node)` answers `{ kind, element, entry?, entryIds, segmentIds, field? }`.** `kind`
+  is `TargetKind` — `'row' | 'cell' | 'bar' | 'header' | 'splitter'`, the same union
+  `CommandTarget.kind` uses. One vocabulary, so a resolved right-click fills a
+  `CommandContext.target` with no translation table. `undefined` means the node is outside this
+  Gantt, or inside it and on none of the five.
+- **A target answers two questions about Entries, because a Row may own several** (#185, #199).
+  `entry` is the node's **subject**: the one Entry whose Fields the node's content shows. A tooltip
+  describes it, and the cell editor anchors on it. `entryIds`, alongside `segmentIds` (ADR 0010,
+  #212), is everything the node stands for, and is what an action on the node acts on. For a bar the
+  two agree. For a row, and for every cell of that row, `entry` is the row's first Entry, and
+  `entryIds`/`segmentIds` name every Entry and Segment the row owns. Both are always present, and
+  empty for a header cell, for the splitter, and for a grouping header row.
+- **`owns(node)` is the one answer to "is this event mine?"** (I2). `onDomEvent` asks it for every
+  listener, so no plugin writes that guard again.
+- **`onDomEvent(type, handler, options?)` listens on `document`, filtered to this Gantt.** It hands
+  the handler the resolved target and files its own removal — with the capture flag it added — in
+  `ctx.disposables`. The returned `Disposer` removes it sooner, for a listener a plugin attaches per
+  open popup.
+- **`bounds` and `paneBounds` are the rects a popup places against**, and `cellText(cell)` is the
+  string the grid already painted. `Overlay` keeps only `present`, `render` and `onResize` — the
+  mount layer, and nothing else.
+- **`createPopup(ctx.view, keymap)`** takes the whole view surface now, because a `Popup` needs the
+  overlay to mount in and `ctx.view.dom` to place against.
+
+**`CommandTarget` carries what the invocation acts on, as ids: `segmentIds` and `entryIds`** (#199,
+widened by ADR 0010, #212). A command reads whichever one it needs from `ctx.target` — neither
+command declares its reach, and the two answers can never disagree, because both come from one
+resolution:
+
+```ts
+gantt.commands.register({
+  id: 'app.lockRow',
+  label: 'Lock',
+  run: (ctx) => ctx.target?.entryIds.forEach((id) => locks.lock(id)),
+});
+
+gantt.commands.register({
+  id: 'app.deleteSegment',
+  label: 'Delete',
+  run: (ctx) => dataset.entries.removeSegments(ctx.target?.segmentIds ?? []),
+});
+```
+
+- **`segmentIds: readonly SegmentId[]`** is every Segment the invocation acts on. **`entryIds:
+  readonly EntryId[]`** is a projection of `segmentIds` — the Entries those Segments belong to,
+  deduped, in row order. `entryIds` is the same word `DomTarget.entryIds` uses, and not always the
+  same set. A `DomTarget` states a DOM fact: what the node stands for. A `CommandTarget` states what
+  the command acts on. Lock reads `entryIds`, because a lock is a property of the record and not of
+  one drawing of it; Delete reads `segmentIds`.
+- **The right-click rule (#199), restated over Segments (ADR 0010, #212).** *A right-click acts on
+  the Selection when the thing you clicked is part of it. It acts on the thing you clicked when it
+  is not.* So a right-click on an unselected grid row names every Segment of every Entry that row
+  owns; a right-click on one bar of a multi-bar row names that one Segment; and a right-click on one
+  of three selected bars names all three. A node stands inside the Selection only when every Segment
+  it names is selected. A node that stands for no Segment — a header cell, the splitter, a grouping
+  header row — is part of nothing.
+- **A right-click outside the Selection replaces the Selection with what you clicked**, before the
+  menu opens. It runs the same cancelable `beforeSelectionChange` an assignment runs. Otherwise the
+  command acts on Segments the user cannot see highlighted.
+- **The keyboard runs the same rule** (D-S5-14, #205). `Shift+F10` and the Menu key open the menu
+  for the Selection, so three selected bars reach one menu that acts on three. The bar of the first
+  selected Segment stays the popup's anchor, because a popup needs a box on screen.
+- **A command that wants exactly one Entry says so**: `when: (ctx) => ctx.target?.entryIds.length
+  === 1`, and reads `ctx.entry` for it. `ctx.entry` is the subject, never the set. A command that
+  wants exactly one Segment reads `ctx.target?.segmentIds.length === 1` the same way.
+- `kind` and `field` are the same two words `DomTarget` uses. There is no `rowId`: a row's identity
+  is a `RowId`, and this names Segments and Entries, never rows.
+
+**`PopupOptions.onDismiss(trigger)`** tells a popup's owner that the popup closed *itself* —
+`'escape' | 'outsidePointer' | 'scroll' | 'blur'`. It runs after the close, so `isOpen` reads
+`false` inside it. `close()` called by the owner never fires it. Without this an owner had two
+choices, and `contextMenu()` took the worse one: leave two `document` listeners attached and poll
+`isOpen` on every click and keystroke in the page.
 
 ---
 
@@ -443,19 +717,22 @@ const p2  = Dataset.fromJSON(doc, { aggregators, fieldTypes, fields });
 
 ```ts
 export interface DatasetDocument {
-  schema: 2;
+  schema: 4;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
   rollUpKinds: readonly EntryKind[];
   fields?: readonly SerializedField[];
+  plugins?: PluginDocument;
   entries: readonly EntryDocument[];
 }
 ```
 
-This build writes `schema: 2` (`rollUpKinds`, `fields`). `schema: 1` still reads (`derivedSpanKinds` lands on `rollUpKinds`; Fields come from `options.fields` only). `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
+This build writes `schema: 4` (`rollUpKinds`, `fields`, a plugin's own rows at `schema: 3` and above, and an Entry's `segments` at `schema: 4` and above — #212). `schema: 1`, `2` and `3` still read (`derivedSpanKinds` lands on `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each Entry's whole `[start, end)`). `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
+
+**`plugins` is the plugin half of the Document (S5.10, D-S5-24), and it holds rows, never behaviour.** Each key is a plugin id, and its value is that plugin's own rows. The key arrived at `schema: 3`, and `toJSON` omits it when no plugin holds a row. A Dataset carries the rows of a plugin it never installed, unchanged, so an application that reads a Document without the plugin still writes those rows back — they ride as passenger data. `schema: 1` and `2` have no such key, so a `plugins` key on a Document labelled `schema: 1` is dropped, not read.
 
 - The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
-- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `plugins`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
 - `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 
@@ -465,7 +742,7 @@ This build writes `schema: 2` (`rollUpKinds`, `fields`). `schema: 1` still reads
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `reveal(entryId)` (S1.9), `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3) for an id the Dataset has no entry for — its message names the call that failed. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3), for an id the Dataset has no entry for — its message names the call that failed. `SegmentNotFoundError` (`code: 'segment-not-found'`, ADR 0010, #212) is thrown by `entries.removeSegments(ids)` for an id that names no Segment on any Entry — the same before-anything-stages posture `EntryNotFoundError` takes for `entries.remove`. `RevealTargetNotFoundError` (`code: 'reveal-target-not-found'`, ADR 0010, issue #227) is thrown by `reveal(id)` for an id the Dataset reads as neither an Entry nor a Segment; `reveal` alone takes `EntryId | SegmentId`, and once neither reading resolves nothing says which one the caller meant, so this names both rather than reusing `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to match. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`, #212) is thrown by a Segment write that would make two Segments share one `SegmentId` — construction, `entries.add`, or `entries.update`; its message names which. `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`, #212) is thrown by `entries.update` two ways: naming `start`/`end` with no `segments` on an Entry that draws several (`'ambiguous'` — moving the envelope alone says nothing about which Segment moved), or naming both in one edit with disagreeing spans (`'conflicting'` — the #212 fix-plan review, finding S3). An installed `EditExtender`'s cascade owes `entries.update()` the same refusal, on both edges (D-S5-44, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): the commit path throws it for real, and the drag preview, which runs with nothing to catch a throw, drops the offending edit instead and paints no ghost for it that frame. `data/entry-reader.ts`'s `moveEntryTo(entry, start)` is the write a plugin author reaches for instead of the refused envelope-only one. This refusal is judged against `EditRequest.entryAfterEdits(id)` — the Entry as this transaction's own body edits leave it — not against `EditRequest.entries.get(id)`, which stays the pre-transaction snapshot (D-S5-45, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): a cascade that reasons from the stale snapshot can propose a write this same refusal then rejects, over Segments the body already replaced. `EmptySegmentsError` (`code: 'empty-segments'`, #212 fix-plan review, finding S2) is thrown by `entries.update(id, { segments: [] })` — every stored Entry keeps at least one Segment, and an update has no whole-span input to mint a replacement from. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

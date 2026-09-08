@@ -82,7 +82,47 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     expect(cost?.source).toEqual({ from: 'meta', key: 'budget' });
     expect(cost?.rollUp).toBe('sum');
     expect(cost?.column).toEqual({ header: 'Cost' });
-    expect(cost?.formatValue?.(500, null as never)).toBe('$500');
+    expect(cost?.formatValue?.(500, null as never, null as never)).toBe('$500');
+  });
+
+  it('#142: reads a legacy Document whose editable key still sits on column, not on the row', () => {
+    // A Document written before `editable` moved onto the Field carried it on `column`
+    // (`GridColumnBase.editable`, since removed). `SerializedField.column`'s type no longer names it,
+    // but a legacy row still has the key at runtime — `editableFromLegacyColumn` reads it there.
+    const read = readDocument({
+      schema: 2,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      fields: [
+        {
+          key: 'cost',
+          source: { from: 'meta', key: 'cost' },
+          column: { header: 'Cost', editable: true },
+        },
+      ],
+      entries: [span('t1')],
+    } as unknown as DatasetDocument);
+    expect(read.fields?.find((field) => field.key === 'cost')?.editable).toBe(true);
+  });
+
+  it('#142: a top-level editable on the row wins over a stale editable left on column', () => {
+    const read = readDocument({
+      schema: 2,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive',
+      rollUpKinds: ['group'],
+      fields: [
+        {
+          key: 'cost',
+          source: { from: 'meta', key: 'cost' },
+          editable: false,
+          column: { header: 'Cost', editable: true },
+        },
+      ],
+      entries: [span('t1')],
+    } as unknown as DatasetDocument);
+    expect(read.fields?.find((field) => field.key === 'cost')?.editable).toBe(false);
   });
 
   it('adds an option-only Field whole', () => {
@@ -114,7 +154,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
     const doc = {
-      schema: 3,
+      schema: 5,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive' as const,
       rollUpKinds: [],
@@ -126,10 +166,24 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
-        expect(error.schema).toBe(3);
-        expect(error.supported).toEqual([1, 2]);
+        expect(error.schema).toBe(5);
+        expect(error.supported).toEqual([1, 2, 3, 4]);
       }
     }
+  });
+
+  it('mints a Segment id for a schema: 3 Entry, which stores no ids of its own (#212)', () => {
+    const doc = {
+      schema: 3,
+      timeZone: 'UTC',
+      dateOnlyEnd: 'inclusive' as const,
+      rollUpKinds: [],
+      entries: [span('t1')],
+    };
+    const read = readDocument(doc as unknown as DatasetDocument);
+    const restored = new DatasetState(read);
+    expect(restored.entries.get('t1')?.segments).toHaveLength(1);
+    expect(restored.entries.get('t1')?.segments[0]?.id).toBeDefined();
   });
 });
 

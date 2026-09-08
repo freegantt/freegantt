@@ -72,6 +72,7 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
 - **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts`, `data/history.ts`, and `data/serialization/**` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
 - **The commit path ends at `change`; `History` subscribes like any other consumer (D-S2-24):** `data/transaction.ts` commits a `ChangeSet` and emits `change`; it imports no history and no view. `History` and `view/dataset-change-subscription.ts` are both ordinary `on('change')` subscribers, not privileged callers on the commit path — the same discipline that makes both removable leaves above.
+- **`render/ --> data/dev-mode.ts` and `extensions/ --> data/dev-mode.ts` (leaf-only widening, S5.4 QC):** neither layer gains a `data/` edge — `data/dev-mode.ts` is the one file dependency-cruiser lets both reach, because it is a zero-dependency, one-line `import.meta.env.DEV` read with no state and no further imports of its own, the same shape that already justifies `model/`'s `FreeGanttError` carve-out. Before this, `render/dom/index.ts` and `extensions/plugin-runtime.ts` each hand-copied the check with a comment citing the boundary; two copies of one line is the smaller problem, so this stays a named single-file exception rather than a general `render --> data` or `extensions --> data` arrow — every other `data/` file is still unreachable from either layer.
 
 ### 1.1 Directory shape
 
@@ -228,10 +229,10 @@ rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-de
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemEmitter` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default emitter; a consumer-defined kind registers its own via `layout.registerItemEmitter` (§10) — unregistered kinds fall back to the `span` emitter (§2.5).
+Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemProducer` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default producer; a consumer-defined kind registers its own via `layout.registerItemProducer` (§10, S5.9, D-S5-22) — unregistered kinds fall back to the `span` producer (§2.5).
 
 ```ts
-type ItemEmitter = (entry: Entry) => readonly Item[];
+type ItemProducer = (entry: Entry) => readonly Item[];
 ```
 
 ### 2.4 Item identity is deterministic
@@ -245,7 +246,7 @@ type ItemEmitter = (entry: Entry) => readonly Item[];
 | Layer | What `kind` selects | Seam |
 |---|---|---|
 | `scheduling/` | schedule semantics, *when a scheduling plugin is installed* — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7), plugin-owned |
-| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → item-emitter registration in the §2.3 pipeline |
+| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → `ItemProducer` registration in the §2.3 pipeline |
 | `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
 | `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
 
@@ -254,6 +255,7 @@ Rules:
 - **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For kinds in `rollUpKinds`, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2, the default) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
 - **`rollUpKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up value for **every** rolling-up Field (`start`/`end` and a consumer `cost` alike). A consumer's own kind (say `'phase'`) opts in the same way. `'none'` or `[]` keeps authored parent values. The Rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
 - **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
+- **A painted-span floor is a lookup, not a kind check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every kind floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a milestone's own larger diamond floor (`diamondSizePx * √2`). The lookup, not an `if (kind === 'milestone')`, is what lets milestone's extra floor sit on top without a branch. `FrameBar.minimumSpan` states the fact for every kind this floor touched, milestone included. `render/` stamps it as `data-span="minimum"` — a milestone carries it exactly like any other floored bar (CONTEXT.md, `02` §4).
 - **Group *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
@@ -278,10 +280,11 @@ interface Field<TValue = unknown> {
   type?: FieldTypeName;                             // a bundle; the field's own keys win over it
   source?: FieldSource;                             // default: meta under this Field's key
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
+  editable?: boolean;                               // #142/#256: the Field half of one write answer — gates the cell editor, both resize handles and the bar move alike (I14); default false
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
-  column?: Omit<GridColumn, 'field'>;               // presentation defaults, declared once with the field
+  column?: Omit<GridColumn, 'field' | 'hidden' | 'editable'>;    // presentation defaults, declared once with the field; which columns show is the Gantt's question
 }
 
 /** Presentation only. Never carries an aggregate — see the rules below. */
@@ -289,8 +292,10 @@ interface GridColumn {
   field: FieldKey;
   header?: string;
   width?: number; flex?: number;
-  align?: 'start' | 'end';
-  // cellRenderer and editable arrive in S5, on the Gantt column, when code honours them (I11).
+  align?: 'start' | 'end' | 'center';
+  hidden?: boolean;                                 // S5, D-S5-34: declared and not painted; keeps its width and its place
+  // cellRenderer arrives in S5, on the Gantt column, when code honours it (I11).
+  // #142: editable lives on the Field only, not here — a Grid column carries no override of its own.
 }
 
 /** Registered by name, never passed inline — a name serializes, a function does not. */
@@ -397,6 +402,11 @@ interface GeometryFrame {
     depth: number; expandable: boolean; expanded: boolean;
     matched?: boolean;   // false when kept only because a descendant matched the filter
     cells: readonly string[];
+    /** Every Entry the row owns, and every Segment those Entries own, in the same order (#212,
+     *  ADR 0010, #230 R5). A row click selects the Segment set, and `render/dom` diffs it against
+     *  the Selection to decide the row's own paint. The frame states both, so the row paint never
+     *  reads a second Entry source. Both are empty for a header row, which stands for no Entry. */
+    entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[];
   }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
@@ -407,6 +417,14 @@ interface GeometryFrame {
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
     kind: EntryKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
+    /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
+     *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
+    segmentId?: SegmentId;
+    /** Every Segment this bar *stands for* — the Segments that select it and paint it (#230). One
+     *  Segment for a Segment bar; every Segment of the Entry for a whole-span bar. The frame states
+     *  it, so no reader derives it from an Entry source of its own; `FrameLayout.segmentIdsForItem`
+     *  answers the same fact for a lookup by id. */
+    segmentIds: readonly SegmentId[];
     /** The entry's name — what a backend renders as the bar's label (#26). */
     label: string;
     x: number; y: number; width: number; height: number; lane: number;
@@ -420,10 +438,12 @@ interface GeometryFrame {
   }>;
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
    *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
-   *  plugin-contributed emission seam mirroring `registerItemProducer` above — exact registration
-   *  contract (a `registerLinkEmitter`-shaped seam) and `id`'s brand type are tracked in #136
-   *  (supersedes #16). #136 has an open, undecided proposal for how the Gantt-side emitter reads the
-   *  Dataset-side plugin's store; not settled here. Shape lands in S1 (#30), contents in S7. */
+   *  plugin-contributed emission seam — `ctx.layout.registerLinkEmitter(emitter)`, aggregating like
+   *  `decorationProviders` rather than replacing like `registerItemProducer`. `id` stays a plain
+   *  `string`: a brand would make `layout/` depend on plugin-owned types. The emitter reads the
+   *  Dataset-side plugin's store through the Gantt-side `ctx.store.read(pluginId)`, D-S5-30's own
+   *  name on the second surface. Full design in #136 (supersedes #16); it lands in S7, after S5.10
+   *  ships `PluginStore`. Shape lands in S1 (#30), contents in S7. */
   links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
   decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }
@@ -512,6 +532,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 - **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
+- **The envelope has one function, and now one owner on every write path** (#212, finding 4; closed by the 2026-09-06 fix-plan review, R2, findings B1 and its remainder): an Entry's `start`/`end` are meant to be the envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — and `time/`'s `envelopeOfSegments` is the one function that computes it. Every path that writes `start`/`end` now goes through it or a function built on it. Ingest, a plain `entries.update(id, { segments })`, and a drag/resize gesture call it directly. The Rollup (`data/rollup.ts`, `widenSegmentsToEnvelope`) restores the invariant on a roll-up-kind parent in two steps: every Segment first clamps into the parent's newly rolled-up `[start, end)` (a Segment the new span has moved past collapses to the nearest edge, rather than keeping a stretch the parent no longer covers), and then whichever Segment does not yet reach an edge exactly widens to it — the earliest-starting Segment supplies the new `start`, the latest-ending one the new `end`. One Segment plays both roles when the parent draws only one, which is why a several-Segment parent was the harder case: a rolled-up span can shrink past an interior Segment as easily as it can grow past every one, so widening only the two extremal Segments (with no clamp) is not enough on its own. Rejecting a several-Segment roll-up parent at ingest, or making the rolled-up value computed-on-read for that case only, were both considered and rejected: the first makes `rollUpKinds` and "how many Segments a consumer authors" interact for no reason a consumer could predict, and the second would split `start`/`end`'s `field source` (ADR 0005) between stored and computed depending on Segment count, which is exactly the kind of `if (kind === ...)`-shaped special case the seams below exist to avoid. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does, and now gets it, on one refusal rather than two answers for one input (D-S5-44; a caller-identity split — a computed translate for the extender's cascade, a refusal for `entries.update()` — was tried and rejected): `data/entry-reader.ts`'s `reconcileEnvelope` is the one function that decides a `StoredEdit` against an Entry's Segments, and every caller reaches it. `readEdit` calls it directly for `entries.update()`. An `EditExtender`'s cascade reaches it through `reconcileExtenderEdits`, called once per edit from both `build-commit-change-set.ts` at commit and, as `reconcileExtenderEditsForPreview`, from `view/gesture-pipeline.ts`'s drag preview — the preview's copy runs inside a rAF callback with nothing to catch a throw, so it drops a refused edit instead of throwing (that Entry paints no ghost for the frame) while the commit path still throws for real. A direct `start`/`end` write against a several-Segment Entry with no `segments` of its own is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) from every one of these callers alike, because a `StoredEdit` is one shape with one meaning regardless of who wrote it. `data/entry-reader.ts`'s `moveEntryTo` is the escape a plugin author reaches for instead: it writes every Segment of an Entry translated rigidly to a new `start`, which is what the refused envelope-only write could not say. `envelopeOfSegments` itself lives in `time/`, not in `data/` or `layout/` (both call it): those two layers may not import each other (§1), and `time/` is the one layer both already reach through for zone-aware date arithmetic (I10) — this is a plain numeric min/max over two `Instant`s, not date arithmetic, but the placement still keeps every caller on one function instead of a copy in each layer.
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
 ```ts
@@ -546,7 +567,7 @@ A field whose `from` equals `to` under its per-field comparator (`===` for primi
 
 ## 7. `scheduling/` — pure engine, pluggable policy
 
-This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). It occupies the extension hook (D4; §1) exclusively when installed; when nothing is installed, none of what follows runs. The hook's own contract (where per-entry plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
+This section describes FreeGantt's **first-party default scheduling plugin** — the bars + dependencies engine bundled with the library (D3) — not a mandatory core layer (D4). The hook (D4; §1) has one occupant at a time, and this plugin is one candidate occupant with no special claim on it (D-S5-23, S5.10): installing composes, so a second plugin wraps this one's writes rather than evicting them. When nothing is installed, none of what follows runs. The hook's own contract (where per-entry plugin data like the pin flag lives, how hot-path preview and commit-time resolution share one call) is separate, ongoing design work tracked in issue #12. The plugin's own public API and its re-spec against that hook are tracked in issue #14. What follows is still an accurate description of the engine's internals — propagation, cycle detection, the policy seam — just reframed as *this plugin's* internals rather than a core module's.
 
 ```mermaid
 flowchart LR
@@ -688,7 +709,9 @@ flowchart TB
 
 ### 8.3 Split pane (D8)
 
-`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native scroller for both axes (D-D, D-S1.8-1) — the grid pane has no scrollbar of its own. Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S4–S5 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
+`GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native *vertical* scroller (D-D, D-S1.8-1) — the grid pane never becomes a second one. Horizontally the grid pane is its own independent native scroller when fixed-width columns overflow it, unsynced with the timeline's own time-axis horizontal scroll (D-S1.8-13, #126). Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S4–S5 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
+
+**`GanttShell` composes; it does not own the Selection (#230 R4).** `view/segment-selection.ts`'s `SegmentSelection` holds the selected Segment ids, the row-rank cache, and the pane rule that decides what a pointer hit would add to them (ADR 0010). The shell keeps the composition — it builds the class and passes it the ports it needs — but the six members that answer "what is selected" moved out, because a shell that changes for selection reasons changes for every reason. `interaction/entry-gestures.ts` asks `selectableSegmentsOf` rather than re-deriving the pane rule with a second switch on hit kind. `SegmentSelection` publishes `segmentIds` and `entryIds` on one object, and that object is structurally the `ActedOn` a Command already takes, so the gesture path and the Command path read one shape instead of two (#216 Q3).
 
 ---
 
@@ -705,7 +728,9 @@ Invariants the data-gesture attachments own:
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select' | …, entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults (e.g. a `group` with a derived span doesn't resize). The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* per-entry answer. The public `gantt.selection` setter is not a controller and does not consult `can('select')`.
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1) over per-kind defaults. The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
+
+  **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. A `group` with a derived span refuses `move` and `resize` because both of its dates roll up, not because a kind table says so. The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
 
 Attachments talk to `data/` only through drafts and transactions (the shell's `commitEntryEdits`), and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`. `view/` never imports `interaction/`; `api/gantt.ts` injects the attachments into `GanttShell`.
 
@@ -713,45 +738,171 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ## 10. `extensions/` — the plugin contract
 
-"Everything is extensible" is only true if the extension contract is specified. It is:
+"Everything is extensible" needs one extension contract for each object a plugin installs into.
+FreeGantt ships two: a **Gantt plugin** joins a mounted Gantt, and a **Dataset plugin** joins a
+Dataset while it constructs. Both shipped in S5 (`plans/s5-extensibility-and-editing`).
+
+### 10.1 The Gantt plugin
 
 ```ts
 interface GanttPlugin {
-  id: string;
-  /** Called once after the Gantt mounts. Returns a disposer. */
-  setup(ctx: PluginContext): () => void;
+  id: PluginId;
+  /** Called once after the Gantt mounts. Returns a Disposer for a resource the plugin owns
+   *  itself, or nothing at all — every register* call below already files its own removal. */
+  setup(ctx: PluginContext): Disposer | void;
 }
 
 interface PluginContext {
-  dataset: DatasetApi;               // full data access via public API (transactions, queries)
-  events: EventBus;                 // subscribe to everything, including before* (may veto)
+  dataset: Dataset;                  // the public Dataset: no privileged access, no second surface
+  gantt: Gantt;                      // the public façade: live config and public methods
+  events: GanttEvents;               // subscribe to everything, including before* (may veto)
+  raiseError(report: PluginErrorReport): void;   // reports one Error report on this Gantt's own error event
+  commands: CommandRegistry;         // named, invokable actions (also powers context menus)
+  disposables: DisposableStore;      // everything registered auto-unregisters on dispose
   view: {
-    registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): void;
-    registerGridColumn(column: GridColumn): void;   // names a field (§2.6); presentation only
-    registerRenderer(kind: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): void;
-    overlay: OverlayHost;           // positioned DOM (popups, tooltips) with anchoring/flipping
-  };
-  data: {
-    registerField(field: Field): void;   // §2.6 — a plugin's field rolls up like a core one
+    registerDecoration(layer: 'underBars' | 'overBars', d: DecorationProvider): Disposer;
+    registerGridColumn(column: GridColumnInput): Disposer;   // names a field (§2.6); presentation only
+    registerRenderer(point: 'bar' | 'cell' | 'header' | 'tooltip', r: Renderer): Disposer;
+    resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;   // the body, not a tooltip
+    resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    resolvedColumns(): readonly GridColumn[];   // every column this Gantt paints now, consumer's and every plugin's
+    overlay: MountLayer;            // #168: the mount layer that escapes the pane
+    rowLayer: MountLayer;           // #158: the mount layer that travels with the rows
+    renderElement(d: ElementDescription): HTMLElement;   // D-S5-10: the one seam extensions/ has to the reconciler
+    dom: GanttDom;                  // this Gantt's own DOM, as questions — see below
+    onDomEvent<K extends keyof DocumentEventMap>(   // one document listener, scoped to this Gantt
+      type: K,
+      handler: (event: DocumentEventMap[K], target: DomTarget | undefined) => void,
+      options?: { capture?: boolean },
+    ): Disposer;
   };
   layout: {
-    registerItemEmitter(kind: string, emitter: ItemEmitter): void;
+    registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
-    registerController(c: InteractionControllerSpec): void;
-    registerKeybinding(b: KeyBinding): void;
+    registerKeybinding(b: KeyBinding): Disposer;
+    registerKeyHandler(chord: string, handler: (e: KeyEventLike) => void): () => void;
+    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+    canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
+    proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
+    announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
   };
-  commands: CommandRegistry;        // named, invokable actions (also powers context menus)
-  disposables: DisposableStore;     // everything registered auto-unregisters on dispose
+}
+```
+
+A Gantt plugin declares no Field. `registerField` moved off this contract during S5 — a Gantt plugin
+shows a Field through `view.registerGridColumn` alone, and a Dataset plugin declares the Field
+itself (§10.2). `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the
+group a plugin reads it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not
+name (D-S5-5).
+
+### 10.2 The Dataset plugin
+
+A Dataset plugin sees only what a Document holds. It stays DOM-free and runs wherever a Dataset
+runs — it never meets a pane, the overlay, or a gesture.
+
+```ts
+interface DatasetPlugin {
+  id: PluginId;
+  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
+   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
+   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. */
+  requires?: readonly PluginId[];
+  /** Called once while the Dataset constructs. Returns a Disposer, or nothing. */
+  setup(ctx: DatasetPluginContext): Disposer | void;
+}
+
+interface DatasetPluginContext {
+  dataset: Dataset;
+  events: DatasetEvents;              // on/off over beforeChange/change; a false return vetoes the ChangeSet
+  fields: {
+    register(field: Field): void;              // §2.6 — rolls up exactly like a core Field
+    registerType(name: FieldTypeName, type: FieldType): void;
+    registerAggregator(name: AggregatorName, fn: Aggregator): void;
+  };
+  edits: {
+    setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
+  };
+  store: {
+    reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
+    read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined; // another plugin's, read-only
+  };
+  disposables: DisposableStore;
+}
+```
+
+`Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
+must exist before the first Rollup, so a consumer who wants a different plugin set builds a new
+Dataset instead of reconfiguring one live. Every register* call above is legal only while `setup`
+runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
+retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
+owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
+"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Document
+keeps them under the plugin's own id as passenger data (D-S5-24), and `store.read` lets a later
+plugin — the setup order `requires` fixes — read an earlier plugin's rows.
+
+`ctx.view.dom` is the whole plugin-to-DOM contract (review N1/A3):
+
+```ts
+interface GanttDom {
+  owns(node: Node): boolean;                        // is this event mine? (I2)
+  targetUnder(node: Node): DomTarget | undefined;   // { kind, element, entry?, field? }
+  barFor(id: EntryId): HTMLElement | undefined;
+  cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
+  cellText(cell: HTMLElement): string;
+  readonly bounds: DOMRect;                                       // the container's rect
+  readonly paneBounds: { grid: DOMRect; timeline: DOMRect };      // each pane's own rect
+  paneOf(node: Node): PaneName | undefined;                       // #177: which pane holds it, by identity
+}
+```
+
+Both mount layers are one shape (#168):
+
+```ts
+interface MountLayer {
+  present(content: HTMLElement): Disposer;    // mount here; the Disposer un-mounts
+  onResize(callback: () => void): Disposer;   // the container resized, so re-place your content
+  readonly bounds: DOMRect;                   // this layer's own rect — the frame content sits in
 }
 ```
 
 Rules:
 
-- Plugins are configured declaratively (`features: { tooltips: true, contextMenu: {...} }`) and are tree-shakeable — an unused feature costs zero bytes.
-- Setup order = registration order; plugins must not depend on sibling load order (communicate via events/commands only).
-- A plugin may not reach into another plugin or any internal module — the `PluginContext` is its entire world. Enforced by the same import-boundary lint.
-- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use this contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is a second consumer of the same contract.
+- **One seam answers "is this node mine, and what is it?"** `extensions/` may not import `render/`,
+  so a class name crossing that boundary is a contract. `render/dom/dom-contract.ts` declares every
+  such class and `data-*` key; `view/gantt-dom.ts` is the only reader; `view/gantt-dom.test.ts`
+  paints a real frame and asserts the two still agree. A plugin names none of them.
+- **`DomTarget.kind` is `model/`'s `TargetKind`** — the same five words `CommandTarget.kind` uses.
+  One vocabulary for "what did this land on", so a resolved right-click fills a `CommandContext`
+  directly.
+- **A document listener is scoped, or it is a bug.** `ctx.view.onDomEvent` filters to this Gantt,
+  hands the handler the resolved target, and files its own removal (capture flag included) in
+  `ctx.disposables`. A plugin that must hear events *outside* its Gantt — a dismiss-on-outside-pointer
+  — is the one exception, and `extensions/popup.ts` is the only place that takes it. It took it twice
+  until #177: the scroll dismissal stayed unscoped because it asked "whose pane scrolled?" as
+  geometry. `paneOf` answers that by identity, so the listener moved onto `onDomEvent`.
+- **Identity questions go to `paneOf`, geometric ones to `paneBounds`.** "Whose scroll was that" and
+  "which pane did the user act in" are about ownership, so they are a `contains` check that costs no
+  layout. "Where do I place and clamp this box" is geometry, and reads the rects.
+- **One mount shape, two instances (#168).** `MountLayer` answers "where do I mount, and how do I
+  stay put": `present`, `onResize`, `bounds`. Identity and whole-Gantt geometry stay on
+  `ctx.view.dom` (review N1): `overlay.elementForEntry(id)` returned a timeline bar that was never in
+  the overlay, which is the #7 failure of one word covering two concepts. A layer's *own* rect is
+  the exception, and it lives on the layer it describes.
+- **The scroll decides which layer (#158).** `ctx.view.rowLayer.present(node)` mounts beside the
+  rows, inside the pane. The scroll that moves the rows moves that node in the same frame, so nothing
+  repositions it from a scroll listener. The Cell editor and its refusal notice mount here, and they
+  position once against `ctx.view.rowLayer.bounds`. `ctx.view.overlay` stays the layer for content
+  that must escape the pane box — a tooltip and a menu, which dismiss on a scroll rather than follow
+  it. Reposition-on-resize belongs to whatever you mounted into, so both layers carry `onResize`.
+- **One module declares the groups.** `view/plugin-ports.ts` types every member a plugin sees, in the group a plugin reads it in, and `buildPluginPorts(shellPorts, pluginId)` builds one set per installed plugin. `api/gantt.ts` adds `dataset` and `gantt` — the two api-level members `view/` may not name (D-S5-5) — and nothing else. So a new seam is one edit in one file, and a member declared in the wrong group does not compile.
+- **One gated shape, once.** `registerWhileOpen` in that same file asserts the gate, registers, invalidates, builds the `Disposer`, and files it with the plugin's own `DisposableStore`. A new `register*` names what registers and what must run again. It transcribes nothing.
+- **A verb says whether an answer comes back.** `propose*` asks, and the caller must read the Veto. `announce*` tells, and returns `void`. `emit*` said neither, so it is retired from the plugin surface.
+
+- Plugins are values a consumer imports and lists (`plugins: [tooltips(), contextMenu({...})]` on a `Gantt`, `plugins: [lockEntries([...])]` on a `Dataset`; S5.1 D-S5-2 — supersedes the `features: { tooltips: true, ... }` name table sketched here originally) and are tree-shakeable — an unused feature costs zero bytes because nothing names it.
+- A Gantt plugin's setup order is registration order; siblings must not depend on load order and talk only through events and commands. A Dataset plugin's setup order comes from `requires` alone (D-S5-31), because a later plugin composing onto an earlier one, or reading its `PluginStore`, needs that plugin to exist first.
+- A plugin may not reach into another plugin or any internal module — its own `PluginContext` (or `DatasetPluginContext`) is its entire world. Enforced by the same import-boundary lint.
+- **Dogfooding is the test:** built-in features (tooltips, context menu, editors) use the Gantt plugin contract with no private back-doors. If a built-in needs a back-door, the contract is wrong — fix the contract (gate S5 → S6). The first-party scheduling plugin (S7) is the Dataset plugin contract's own second consumer, occupying the extension hook the identity extender holds today.
 
 ---
 
@@ -772,4 +923,4 @@ Rules:
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |
 | I12 | All pixels-from-time via `TimeScale`; all scroll via `ScrollModel` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
-| I14 | Gesture arming and visual affordances come from one capability resolution | shared resolver + interaction test |
+| I14 | Gesture arming and visual affordances come from one capability resolution, and every write asks one `canWrite` (#256) | shared resolver + interaction test + `e2e/write-refusal.spec.ts` |

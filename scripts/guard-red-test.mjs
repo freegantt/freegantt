@@ -82,4 +82,25 @@ checkRedTestFile(
   'serialization-is-removable: second importer',
 );
 
+// D-S5-5 (plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md): extensions/ may import only
+// api/ and model/ — the dogfood gate that proves a built-in feature took no back door.
+checkRedTestFile(
+  'src/extensions/__boundary_red_test__.ts',
+  "// Deliberate boundary violation — extensions/ may import api/ and model/ only (D-S5-5).\nimport '../view/styles.js';\nexport {};\n",
+  'extensions/ -> view/ boundary violation (D-S5-5, the dogfood gate)',
+);
+
+// S5.4 QC (plans/01 §1, "render/ --> data/dev-mode.ts"): render/ and extensions/ may each reach that
+// one named leaf, not `data/` generally — a different `data/` file must still be blocked.
+checkRedTestFile(
+  'src/render/dom/__dev_mode_leaf_red_test__.ts',
+  "// Deliberate boundary violation — render/ may reach data/dev-mode.ts only, not data/ generally.\nimport '../../data/transaction.js';\nexport {};\n",
+  'render/ -> data/transaction.js boundary violation (dev-mode.ts leaf stays scoped)',
+);
+checkRedTestFile(
+  'src/extensions/__dev_mode_leaf_red_test__.ts',
+  "// Deliberate boundary violation — extensions/ may reach data/dev-mode.ts only, not data/ generally.\nimport '../data/transaction.js';\nexport {};\n",
+  'extensions/ -> data/transaction.js boundary violation (dev-mode.ts leaf stays scoped)',
+);
+
 console.log('guard-red-test: all boundary and removable-leaf rules correctly blocked their violations.');

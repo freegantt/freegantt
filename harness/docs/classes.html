@@ -6,6 +6,7 @@
     <title>FreeGantt — Class map, layer by layer</title>
     <link rel="stylesheet" href="./doc.css" />
     <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
   </head>
   <body>
     <div class="wrap">
@@ -13,25 +14,28 @@
         <nav class="harness-site-nav" aria-label="Harness pages"></nav>
         <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
         <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
         <h1>Class map, layer by layer</h1>
         <p class="tagline">
           What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
           first. For when these run, read <a href="./lifecycle.html">Lifecycle</a>; for the file each one
           lives in, read <a href="./files.html">File inventory</a>.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-08-31 — slice S4</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
-          <span>slice: S4</span>
-          <span>layout/ · view/ · time/ · model/ · render/ · api/</span>
+          <span>slice: S5</span>
+          <span>layout/ · view/ · time/ · model/ · render/ · api/ · extensions/</span>
           <span>harness/main.ts reviewed every commit</span>
         </div>
         <nav aria-label="Sections on this page">
           <a href="#s1"><b>1</b><code>layout/</code> &amp; <code>view/</code></a>
           <a href="#s2"><b>2</b><code>time/</code> &amp; <code>model/</code></a>
           <a href="#s3"><b>3</b><code>render/</code> &amp; <code>api/</code></a>
+          <a href="#s4"><b>4</b><code>extensions/</code></a>
         </nav>
       </header>
 
+      <main>
       <!-- ══════════════════════════════════════════════════════════ 1 -->
       <section id="s1">
         <h2><span class="num">1</span><code>layout/</code> &amp; <code>view/</code></h2>
@@ -40,7 +44,7 @@
         <h3>layout/ <span class="tag pure">pure</span></h3>
         <div class="cards">
           <div class="card">
-            <h5>Viewport <span class="tag pure">class</span></h5>
+            <h4 class="card-title">Viewport <span class="tag pure">class</span></h4>
             <div class="path">layout/viewport/viewport.ts</div>
             <p>
               One Gantt's whole view state: which slice of content is on screen, at what zoom, with what
@@ -75,7 +79,7 @@
           </div>
 
           <div class="card">
-            <h5>TimeScaleModel <span class="tag pure">class</span></h5>
+            <h4 class="card-title">TimeScaleModel <span class="tag pure">class</span></h4>
             <div class="path">layout/viewport/time-scale-model.ts</div>
             <p>
               Shareable x-axis. Takes <em>intent</em>; derives zone, span and pixel density from whoever binds
@@ -98,7 +102,7 @@
           </div>
 
           <div class="card">
-            <h5>ScrollModel <span class="tag pure">class</span></h5>
+            <h4 class="card-title">ScrollModel <span class="tag pure">class</span></h4>
             <div class="path">layout/viewport/scroll-model.ts</div>
             <p>
               Shareable scroll position. Owns <em>one</em> shared position; each bound Gantt clamps it locally
@@ -119,7 +123,7 @@
           </div>
 
           <div class="card">
-            <h5>BoundValue&lt;B, V&gt; <span class="tag pure">class</span></h5>
+            <h4 class="card-title">BoundValue&lt;B, V&gt; <span class="tag pure">class</span></h4>
             <div class="path">layout/viewport/bound-value.ts</div>
             <p>
               The binding side both models share. Scoped to <code>layout/viewport/</code> on purpose — it must
@@ -134,7 +138,7 @@
           </div>
 
           <div class="card">
-            <h5>FrameLayout <span class="tag pure">class</span></h5>
+            <h4 class="card-title">FrameLayout <span class="tag pure">class</span></h4>
             <div class="path">layout/frame-layout.ts</div>
             <p>
               The stateful wrapper that keeps the row-height index and per-row pack memo alive across renders.
@@ -150,7 +154,7 @@
           </div>
 
           <div class="card">
-            <h5>FrameMemory <span class="tag pure">class</span></h5>
+            <h4 class="card-title">FrameMemory <span class="tag pure">class</span></h4>
             <div class="path">layout/frame-memory.ts</div>
             <p>
               The cross-render memory of one layout pass. Kept behind <code>FrameLayout</code> so a later frame
@@ -165,7 +169,7 @@
           </div>
 
           <div class="card">
-            <h5>PrefixSumHeightIndex <span class="tag pure">class</span></h5>
+            <h4 class="card-title">PrefixSumHeightIndex <span class="tag pure">class</span></h4>
             <div class="path">layout/row-height-index.ts</div>
             <p>
               Lazy prefix sums, cached, with binary search for <code>indexAtY</code>. <code>#validUpTo</code>
@@ -184,7 +188,7 @@
           </div>
 
           <div class="card">
-            <h5>computeFrame() <span class="tag pure">function</span></h5>
+            <h4 class="card-title">computeFrame() <span class="tag pure">function</span></h4>
             <div class="path">layout/frame.ts</div>
             <p>
               The full layout pass. Pure, stateless. Resolves rows → produces items → packs lanes → culls to
@@ -205,7 +209,7 @@
           </div>
 
           <div class="card">
-            <h5>produceItemsForRow() <span class="tag pure">function</span></h5>
+            <h4 class="card-title">produceItemsForRow() <span class="tag pure">function</span></h4>
             <div class="path">layout/items/produce-items.ts</div>
             <p>
               Per-row item production, dispatched by <code>EntryKind</code> through the shipped registry:
@@ -221,7 +225,7 @@
           </div>
 
           <div class="card">
-            <h5>packRow() / packLanes <span class="tag pure">function</span></h5>
+            <h4 class="card-title">packRow() / packLanes <span class="tag pure">function</span></h4>
             <div class="path">layout/lanes/pack-lanes.ts</div>
             <p>
               Greedy first-fit lane packing. Each item takes the first lane whose last occupant ends at or
@@ -238,7 +242,7 @@
           </div>
 
           <div class="card">
-            <h5>resolveRows() <span class="tag pure">function</span></h5>
+            <h4 class="card-title">resolveRows() <span class="tag pure">function</span></h4>
             <div class="path">layout/rows/resolve-rows.ts</div>
             <p>
               Dispatches to the correct row source based on <code>source.source</code>: entries (flat or tree),
@@ -259,7 +263,7 @@
           </div>
 
           <div class="card">
-            <h5>draftForMove() / draftForResize() <span class="tag pure">function</span></h5>
+            <h4 class="card-title">draftForMove() / draftForResize() <span class="tag pure">function</span></h4>
             <div class="path">layout/gesture-draft.ts</div>
             <p>
               Pure gesture math for drag previews — <code>draftForMove</code>, <code>draftForResize</code>,
@@ -269,7 +273,7 @@
           </div>
 
           <div class="card">
-            <h5>resolveDateLines() <span class="tag pure">function</span></h5>
+            <h4 class="card-title">resolveDateLines() <span class="tag pure">function</span></h4>
             <div class="path">layout/date-line.ts</div>
             <p>
               Resolves the today-line and authored date lines into positioned <code>DateLine</code>
@@ -278,7 +282,7 @@
           </div>
 
           <div class="card">
-            <h5>ResolvedColumn <span class="tag pure">types</span></h5>
+            <h4 class="card-title">ResolvedColumn <span class="tag pure">types</span></h4>
             <div class="path">layout/column.ts</div>
             <p>
               Pure data types for the grid-column paint shape (<code>FrameColumn</code>,
@@ -291,11 +295,11 @@
         <h3>view/ <span class="tag dom">DOM</span></h3>
         <div class="cards">
           <div class="card">
-            <h5>GanttShell <span class="tag dom">class</span></h5>
+            <h4 class="card-title">GanttShell <span class="tag dom">class</span></h4>
             <div class="path">view/gantt-shell.ts</div>
             <p>
               The composition root, and the only class in <code>src/</code> that holds references to the
-              backend, viewport, layout, gesture pipeline, collapse state, and the event bus.
+              backend, viewport, layout, gesture pipeline, plugin runtime, collapse state, and the event bus.
             </p>
             <dl>
               <dt>#phase: 'constructing' | 'live'</dt>
@@ -317,8 +321,11 @@
               <dt>live properties</dt>
               <dd>
                 Every config key a live-reconfigurable property: preset, range, gridColumns, rowSource,
-                collapsed, selection, locale, theme, todayLine, interactions, viewportGestures, …
+                collapsed, selection, locale, theme, todayLine, interactions, plugins, commands,
+                viewportGestures, …
               </dd>
+              <dt>installPlugin / uninstallPlugin</dt>
+              <dd>Forwards to <code>PluginRuntime</code>. One occupant per plugin id.</dd>
               <dt>destroy()</dt>
               <dd>
                 Idempotent. Detaches the attachments, unbinds the viewport, destroys the backend, clears the
@@ -328,7 +335,7 @@
           </div>
 
           <div class="card">
-            <h5>attachScroll() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">attachScroll() <span class="tag dom">function</span></h4>
             <div class="path">view/scroll-attachment.ts</div>
             <p>
               The one file exempted from <code>no-scroll-outside-scroll-model</code>. Owns no binding — it
@@ -348,7 +355,7 @@
           </div>
 
           <div class="card">
-            <h5>attachPaneSize() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">attachPaneSize() <span class="tag dom">function</span></h4>
             <div class="path">view/pane-size-attachment.ts</div>
             <p>
               The only file that observes element size. Reports a box and stops — no pixel math, no scale
@@ -364,7 +371,7 @@
           </div>
 
           <div class="card">
-            <h5>attachSplitter() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">attachSplitter() <span class="tag dom">function</span></h4>
             <div class="path">view/splitter.ts</div>
             <p>
               Pointer-drag handler on the splitter chrome that resizes the grid pane relative to the timeline
@@ -373,7 +380,7 @@
           </div>
 
           <div class="card">
-            <h5>ensureBaseStyles() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">ensureBaseStyles() <span class="tag dom">function</span></h4>
             <div class="path">view/styles.ts</div>
             <p>
               Idempotently injects the library's base stylesheet once per <code>document</code>, scoped to the
@@ -383,7 +390,7 @@
           </div>
 
           <div class="card">
-            <h5>FrameScheduler <span class="tag dom">class</span></h5>
+            <h4 class="card-title">FrameScheduler <span class="tag dom">class</span></h4>
             <div class="path">view/frame-scheduler.ts</div>
             <p>
               Coalesces render requests into at most one <code>requestAnimationFrame</code> per tick. The
@@ -392,7 +399,7 @@
           </div>
 
           <div class="card">
-            <h5>subscribeToDatasetChanges() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">subscribeToDatasetChanges() <span class="tag dom">function</span></h4>
             <div class="path">view/dataset-change-subscription.ts</div>
             <p>
               Bridges the dataset's <code>change</code> event into the shell's render pipeline —
@@ -402,7 +409,7 @@
           </div>
 
           <div class="card">
-            <h5>resolveCapabilities() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">resolveCapabilities() <span class="tag dom">function</span></h4>
             <div class="path">view/capability.ts</div>
             <p>
               Merges the consumer's <code>Interactions</code> overrides with the per-kind default table and
@@ -412,7 +419,7 @@
           </div>
 
           <div class="card">
-            <h5>projectAffordances() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">projectAffordances() <span class="tag dom">function</span></h4>
             <div class="path">view/affordance-projection.ts</div>
             <p>
               Pure projection of hovered/movable/resizable paint tokens from hover, selection, and capability
@@ -421,7 +428,7 @@
           </div>
 
           <div class="card">
-            <h5>GesturePipeline <span class="tag dom">class</span></h5>
+            <h4 class="card-title">GesturePipeline <span class="tag dom">class</span></h4>
             <div class="path">view/gesture-pipeline.ts</div>
             <p>
               Owns the full gesture lifecycle for move/resize — entry resolution, draft math from
@@ -432,7 +439,7 @@
           </div>
 
           <div class="card">
-            <h5>CollapseState <span class="tag dom">class</span></h5>
+            <h4 class="card-title">CollapseState <span class="tag dom">class</span></h4>
             <div class="path">view/collapse-state.ts</div>
             <p>
               Holds collapsed <code>RowId</code>s as per-Gantt view state. Propose/commit two-step so a
@@ -441,7 +448,7 @@
           </div>
 
           <div class="card">
-            <h5>attachRowTwisty() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">attachRowTwisty() <span class="tag dom">function</span></h4>
             <div class="path">view/attach-row-twisty.ts</div>
             <p>
               Grid-pane click on a row twisty toggles collapse (S4.6). Lives here, not in
@@ -451,7 +458,7 @@
           </div>
 
           <div class="card">
-            <h5>attachKeyboardNavigation() / attachWheelNavigation() <span class="tag dom">functions</span></h5>
+            <h4 class="card-title">attachKeyboardNavigation() / attachWheelNavigation() <span class="tag dom">functions</span></h4>
             <div class="path">view/keyboard-navigation.ts · view/wheel-navigation.ts</div>
             <p>
               Keydown handler for viewport navigation when nothing is selected; ctrl/cmd+wheel zoom and
@@ -460,7 +467,7 @@
           </div>
 
           <div class="card">
-            <h5>EventBus / GanttEventMap <span class="tag dom">types</span></h5>
+            <h4 class="card-title">EventBus / GanttEventMap <span class="tag dom">types</span></h4>
             <div class="path">view/event-bus.ts</div>
             <p>
               Declares the ten-plus Gantt event names and payload types (<code>entryMove</code>,
@@ -470,7 +477,7 @@
           </div>
 
           <div class="card">
-            <h5>EntryGestureContext <span class="tag dom">interface</span></h5>
+            <h4 class="card-title">EntryGestureContext <span class="tag dom">interface</span></h4>
             <div class="path">view/entry-gesture-context.ts</div>
             <p>
               The type-seam between <code>view/</code> (the shell realises it) and <code>interaction/</code>
@@ -912,7 +919,7 @@
 
         <div class="cards">
           <div class="card">
-            <h5>createDomBackend() <span class="tag dom">factory</span></h5>
+            <h4 class="card-title">createDomBackend() <span class="tag dom">factory</span></h4>
             <div class="path">render/dom/index.ts</div>
             <p>
               A closure, not a class — the ten caches and the layer references are private by construction.
@@ -944,7 +951,7 @@
           </div>
 
           <div class="card">
-            <h5>syncKeyed() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">syncKeyed() <span class="tag dom">function</span></h4>
             <div class="path">render/dom/sync-keyed.ts</div>
             <p>
               The entire reconciler, in 30 lines. Three phases per call: look-up-or-create by key → patch only
@@ -967,7 +974,7 @@
           </div>
 
           <div class="card">
-            <h5>readPixelProperty() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">readPixelProperty() <span class="tag dom">function</span></h4>
             <div class="path">render/dom/pixel-property.ts</div>
             <p>
               Level 1 of the customization ladder: read a <code>--fg-*</code> custom property off the
@@ -984,7 +991,7 @@
           </div>
 
           <div class="card">
-            <h5>syncDateLine() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">syncDateLine() <span class="tag dom">function</span></h4>
             <div class="path">render/dom/date-line.ts</div>
             <p>
               Renders the today-line and authored date lines as positioned decoration elements, keyed by
@@ -994,7 +1001,7 @@
           </div>
 
           <div class="card">
-            <h5>rowIdFromTwistyClick() <span class="tag dom">function</span></h5>
+            <h4 class="card-title">rowIdFromTwistyClick() <span class="tag dom">function</span></h4>
             <div class="path">render/dom/row-twisty.ts</div>
             <p>
               When a click lands on a <code>.fg-row-twisty</code> inside the grid pane, returns that row's
@@ -1004,7 +1011,7 @@
           </div>
 
           <div class="card">
-            <h5>createNullBackend() <span class="tag dom">factory</span></h5>
+            <h4 class="card-title">createNullBackend() <span class="tag dom">factory</span></h4>
             <div class="path">render/null/index.ts</div>
             <p>
               <code>RenderBackend&lt;void&gt;</code> that records the last frame and does nothing else. For
@@ -1023,7 +1030,7 @@
           </div>
 
           <div class="card">
-            <h5>Gantt <span class="tag api">public class</span></h5>
+            <h4 class="card-title">Gantt <span class="tag api">public class</span></h4>
             <div class="path">api/gantt.ts</div>
             <p>
               The public <code>Gantt</code> class. Constructs one <code>GanttShell</code> and forwards, and
@@ -1035,17 +1042,19 @@
                 <code>container</code>, <code>dataset</code>, optional shared <code>scale</code> <em>or</em>
                 <code>preset</code>/<code>range</code>/<code>fit</code>, optional <code>scroll</code>,
                 <code>gridColumns</code>, <code>rowSource</code>, <code>interactions</code>,
-                <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>, <code>todayLine</code>,
+                <code>plugins</code>, <code>viewportGestures</code>, <code>theme</code>, <code>locale</code>,
+                <code>todayLine</code>,
                 …
               </dd>
               <dt>live properties</dt>
               <dd>
                 <code>preset</code>, <code>range</code>, <code>fit</code>, <code>zoomIn</code>/<code
                   >zoomOut</code
-                >, <code>zoomPresets</code>, <code>panToDate</code>/<code>panToToday</code>,
+                >, <code>zoomPresets</code>, <code>panToInstant</code>/<code>panToToday</code>,
                 <code>gridColumns</code>, <code>rowSource</code>, <code>collapsed</code>,
                 <code>collapse</code>/<code>expand</code>, <code>selection</code>,
-                <code>selectionEntries</code>, <code>interactions</code>, <code>viewportGestures</code>,
+                <code>selectionEntries</code>, <code>interactions</code>, <code>plugins</code>,
+                <code>commands</code>, <code>viewportGestures</code>,
                 <code>theme</code>, <code>locale</code>, <code>todayLine</code>, <code>gridWidth</code>, …
               </dd>
               <dt>destroy()</dt>
@@ -1054,7 +1063,7 @@
           </div>
 
           <div class="card">
-            <h5>Dataset <span class="tag api">public class</span></h5>
+            <h4 class="card-title">Dataset <span class="tag api">public class</span></h4>
             <div class="path">api/dataset.ts</div>
             <p>
               Everything is delegated into <code>data/</code> — the public class is a thin façade over
@@ -1070,7 +1079,7 @@
               <dt>fields</dt>
               <dd><code>field(key)</code>, <code>fields.all</code>, <code>fieldTypes</code>, <code>aggregators</code>.</dd>
               <dt>serialization</dt>
-              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators })</code>.</dd>
+              <dd><code>toJSON()</code>, <code>Dataset.fromJSON(doc, { aggregators, plugins })</code>.</dd>
               <dt>undo / redo</dt>
               <dd><code>undo()</code>, <code>redo()</code>, <code>canUndo</code>, <code>canRedo</code>, <code>replay(changeSet)</code>.</dd>
               <dt>implements DatasetContract</dt>
@@ -1086,16 +1095,25 @@
         <p>
           <code>harness/main.ts</code> is the library's first consumer and gets reviewed on every commit,
           changed or not: code there that re-derives what the library already computes is an API gap even when
-          no lint fires. At S4 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
-          switching, selection, and timeline controls; <code>harness/data.html</code> demos transactions and
-          undo. It still reads clean —
+          no lint fires. At S5 it demos tree rows, grid columns, field rollups, live <code>rowSource</code>
+          switching, selection, timeline controls, shipped plugins, and Dataset plugins;
+          <code>harness/plugins.html</code> is the plugin playground;
+          <code>harness/data.html</code> demos transactions and undo. It still reads clean —
         </p>
-        <pre><code>import { Gantt, Dataset } from '../src/api/index.js';
-import { sampleEntries } from '../fixtures/sample-dataset.js';
+        <pre><code>import { Gantt, Dataset, tooltips, contextMenu, inlineEditing } from '../src/api/index.js';
+import { demoTreeEntryInputs, demoFieldOptions } from '../fixtures/demo-dataset.js';
 
-const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+const dataset = new Dataset({
+  entries: demoTreeEntryInputs,
+  timeZone: 'UTC',
+  ...demoFieldOptions,
+});
 
-const gantt = new Gantt({ container: '#gantt', dataset });
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  plugins: [tooltips(), contextMenu(), inlineEditing()],
+});
 gantt.rowSource = { source: 'entries', tree: true };</code></pre>
         <p>
           — no restated <code>rowHeight</code>, no hand-built <code>TimeScaleModel</code> standing in for
@@ -1104,7 +1122,58 @@ gantt.rowSource = { source: 'entries', tree: true };</code></pre>
         </p>
       </section>
 
+      <section id="s4">
+        <h2><span class="num">4</span><code>extensions/</code></h2>
+        <p class="src"><b>derived from</b> src/extensions/**</p>
+        <p class="lede">
+          The plugin runtime and the three shipped built-ins. This layer may import only
+          <code>api/</code> and <code>model/</code> (D-S5-5). The shell constructs the runtime; a built-in
+          never imports <code>view/</code>.
+        </p>
+        <div class="cards">
+          <div class="card">
+            <h3 class="card-title">PluginRuntime <span class="tag dom">class</span></h3>
+            <div class="path">extensions/plugin-runtime.ts</div>
+            <p>
+              Installs and uninstalls Gantt plugins, builds each <code>PluginContext</code>, and runs
+              <code>setup()</code>. One occupant per plugin id.
+            </p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">CommandRegistry <span class="tag dom">class</span></h3>
+            <div class="path">extensions/commands.ts</div>
+            <p>
+              Core commands and plugin commands share one registry. Generic over its Gantt type so
+              <code>view/</code> can construct it without importing <code>api/</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">Keymap <span class="tag dom">class</span></h3>
+            <div class="path">extensions/keymap.ts</div>
+            <p>Newest-first chord resolver. The innermost popup wins Escape (D-S5-9).</p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">createPopup() <span class="tag dom">function</span></h3>
+            <div class="path">extensions/popup.ts</div>
+            <p>
+              Anchoring, flipping, clamping, dismissal. Tooltips and the context menu build on this.
+              Inline editing does not — it needs a live input node.
+            </p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">tooltips() / contextMenu() / inlineEditing() <span class="tag api">factories</span></h3>
+            <div class="path">extensions/features/</div>
+            <p>
+              The three shipped built-ins. Values a consumer imports
+              (<code>plugins: [tooltips(), contextMenu(), inlineEditing()]</code>), never names in a config
+              table. Each is an ordinary <code>GanttPlugin</code>.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
     </div>
 
     <footer class="wrap">

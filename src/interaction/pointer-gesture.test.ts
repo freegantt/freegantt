@@ -183,6 +183,34 @@ describe('createPointerGesture — Escape and detach', () => {
     expect(calls).toEqual([]);
   });
 
+  it('pointercancel mid-drag releases capture and reports cancel, not commit (B6)', () => {
+    const pane = document.createElement('div');
+    const { releaseCapture } = mockPointerCapture(pane);
+    const { callbacks, calls } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks);
+
+    drag.down(down(0, { pointerType: 'mouse' }));
+    drag.move(move(DRAG_THRESHOLD_PX + 1, { pointerType: 'mouse' }));
+    drag.pointercancel(new PointerEvent('pointercancel', { pointerId: 1 }));
+
+    expect(calls).toEqual(['start', 'move', 'cancel']);
+    expect(releaseCapture).toHaveBeenCalledWith(1);
+  });
+
+  it('pointercancel for an unrelated pointer id is a no-op', () => {
+    const pane = document.createElement('div');
+    const { releaseCapture } = mockPointerCapture(pane);
+    const { callbacks, calls } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks);
+
+    drag.down(down(0, { pointerType: 'mouse' }));
+    drag.move(move(DRAG_THRESHOLD_PX + 1, { pointerType: 'mouse' }));
+    drag.pointercancel(new PointerEvent('pointercancel', { pointerId: 2 }));
+
+    expect(calls).toEqual(['start', 'move']);
+    expect(releaseCapture).not.toHaveBeenCalled();
+  });
+
   it('detach() releases capture without calling cancel', () => {
     const pane = document.createElement('div');
     const { releaseCapture } = mockPointerCapture(pane);

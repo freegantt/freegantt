@@ -35,7 +35,7 @@
         white-space: nowrap;
         overflow: hidden;
       }
-      .fg-mobilization-line {
+      .demo-mobilization-line {
         border-left-style: dashed;
         border-left-width: 2px;
       }
@@ -101,35 +101,46 @@
     </style>
   </head>
   <body>
-    <h1>FreeGantt — S3 direct manipulation</h1>
-    <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-    <p>
-      Drag a bar to move it. Drag an edge handle to resize. Click to select; Shift-click extends the
-      selection. Arrow keys nudge a selection by one snap; Escape clears it and hands the arrows back to
-      panning. Ctrl/⌘+Z undoes the last gesture. A drop before the dashed mobilization line is refused. Check
-      “Hold drop” to keep the commit as a pending ghost until you uncheck it.
-    </p>
-    <div id="controls">
-      <p id="selection-readout">Selection: (none)</p>
-      <button id="undo-btn" type="button">Undo</button>
-      <button id="redo-btn" type="button">Redo</button>
-      <label><input id="lock-resize" type="checkbox" /> Disable resize</label>
-      <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
-      <label>
-        Snap
-        <select id="snap-unit">
-          <option value="tick">Auto (preset's tick)</option>
-          <option value="none">Off</option>
-          <option value="hour">Hour</option>
-          <option value="day">Day</option>
-          <option value="week">Week</option>
-        </select>
-      </label>
-    </div>
-    <div id="toolbar"></div>
-    <div id="gantt"></div>
-    <div id="log" aria-label="Changeset log"></div>
-    <div id="toast" role="status" hidden></div>
+    <main>
+      <h1>FreeGantt — S3 direct manipulation</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        Drag a bar to move it. Drag an edge handle to resize. Click to select; Shift-click extends the
+        selection. Arrow keys nudge a selection by one snap; Escape clears it and hands the arrows back to
+        panning. Ctrl/⌘+Z undoes the last gesture. A drop before the dashed mobilization line is refused.
+        Check “Hold drop” to keep the commit as a pending ghost until you uncheck it.
+      </p>
+      <div id="page-brief"></div>
+      <p id="lock-readout">
+        Check “Lock entry-15” and a Dataset plugin locks that entry (S5.10). Drag <code>entry-14</code>: the
+        locked bars ghost alongside it, because the plugin's extender wrote their dates too — and the drop is
+        refused. <code>entry-15</code> draws three bars from one Entry, which is the case the cascade has to
+        get right: it moves every Segment rigidly through <code>moveEntryTo</code>, because a start and an end
+        alone name no bar to move.
+      </p>
+      <div id="controls">
+        <p id="selection-readout">Selection: (none)</p>
+        <button id="undo-btn" type="button">Undo</button>
+        <button id="redo-btn" type="button">Redo</button>
+        <label><input id="lock-resize" type="checkbox" /> Disable resize</label>
+        <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
+        <label><input id="lock-entry" type="checkbox" /> Lock entry-15, three bars (Dataset plugin)</label>
+        <label>
+          Snap
+          <select id="snap-unit">
+            <option value="tick">Auto (preset's tick)</option>
+            <option value="none">Off</option>
+            <option value="hour">Hour</option>
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+          </select>
+        </label>
+      </div>
+      <div id="toolbar"></div>
+      <div id="gantt"></div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+      <div id="toast" role="status" hidden></div>
+    </main>
     <script type="module" src="./editing.ts"></script>
   </body>
 </html>

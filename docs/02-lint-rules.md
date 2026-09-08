@@ -108,7 +108,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 | Path | Seam |
 |---|---|
 | `src/scheduling/policy/default-policy.ts` | schedule semantics per kind |
-| `src/layout/item-emitters.ts` | item emission per kind |
+| `src/layout/items/produce-items.ts` | item production per kind |
 | `src/render/dom/renderer-registry.ts` | appearance per kind |
 | `src/interaction/capabilities.ts` | affordances per kind |
 
