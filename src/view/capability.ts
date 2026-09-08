@@ -16,9 +16,20 @@ import type { Entry, EntryKind, Field, FieldKey } from '../model/index.js';
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 /** #256: the write rule takes the cell, because a write names one. Call:
- *  `interactions: { edit: (entry, field) => entry.id !== 'locked' || field !== 'end' }`. A boolean
- *  pins every cell the same way. */
-export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean);
+ *  `interactions: { edit: (entry, field) => (entry.id === 'fixed' && field === 'end' ? false : undefined) }`.
+ *
+ *  `undefined` is "no opinion about this cell" — the library rules below answer it, and a roll-up
+ *  parent's derived cell stays refused. A predicate names one cell out of every (Entry × Field) pair
+ *  on the page, so no opinion is the answer it gives most of the time. A rule that returned a bare
+ *  `boolean` for the whole space made a consumer restate every library rule to lock one cell, and
+ *  the harness's own first call site opened every derived cell by accident.
+ *
+ *  `undefined` reads the same way an `Aggregator`'s does (`model/field.ts`) and the same way a
+ *  `before*` handler's does. A boolean pins every cell the same way, with no fall-through.
+ *
+ *  `move`/`resize`/`select` keep a plain `CapabilityRule` on purpose: each names one gesture over one
+ *  Entry, so a predicate that answers every Entry is a reasonable thing to ask for. */
+export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
 
 /** The gestures that arm and paint. A write is not one of them — it is what a gesture, a cell
  *  editor, or a keyboard nudge asks permission to do, and `canWrite` answers that. */
@@ -34,7 +45,7 @@ export interface Interactions {
    *  override above `Field.editable`, and the only per-entry axis that key has. It gates the inline
    *  cell editor, the bar's resize handles, and the bar move alike, because all three write a cell
    *  (I14). `Field.editable` states which Fields are writable at all; this states which of them are
-   *  writable *here*. */
+   *  writable *here*. Answer `undefined` for every cell this rule has no opinion about. */
   edit?: WriteRule;
 }
 
@@ -148,10 +159,8 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const rule = interactions?.edit;
-    if (rule !== undefined) {
-      const allowed = typeof rule === 'function' ? rule(entry, field) : rule;
-      return allowed ? WRITABLE : NOT_WRITABLE;
-    }
+    const answer = typeof rule === 'function' ? rule(entry, field) : rule;
+    if (answer !== undefined) return answer ? WRITABLE : NOT_WRITABLE;
     const registered = registeredDefaultsFor?.(entry.kind)?.edit;
     if (registered !== undefined) return registered ? WRITABLE : NOT_WRITABLE;
     return libraryWriteRule(entry, fieldFor(field), isRollUpKind);

@@ -195,6 +195,24 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
 });
 
 describe('interactions.edit answers the cell, not the entry (#256)', () => {
+  it('answers undefined for a cell it has no opinion about, and the library rules decide it', () => {
+    const caps = capabilities(
+      {
+        isRollUpKind: isGroup,
+        interactions: { edit: (_entry, field) => (field === 'name' ? false : undefined) },
+      },
+      lockedEnd,
+    );
+    // The rule speaks for `name` and for nothing else, so every other cell keeps the answer it had.
+    expect(caps.canWrite(entry(), 'name').ok).toBe(false);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(true);
+    expect(caps.canWrite(entry(), 'end').ok).toBe(false);
+    expect(caps.canWrite(entry({ kind: 'group' }), 'start')).toEqual({
+      ok: false,
+      reason: 'derived-value',
+    });
+  });
+
   it('a predicate sees both the entry and the field', () => {
     const seen: Array<[string, FieldKey]> = [];
     const edit: Interactions['edit'] = (e, field) => {
@@ -213,8 +231,9 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
 
   it('locks one Entry’s end and leaves every other Entry alone — the harness lock #256 asked for', () => {
     const locked = entryId('locked');
+    // The exact shape `harness/main.ts` writes: name the one cell, say nothing about the rest.
     const caps = capabilities({
-      interactions: { edit: (e, field) => !(e.id === locked && field === 'end') },
+      interactions: { edit: (e, field) => (e.id === locked && field === 'end' ? false : undefined) },
     });
     expect(caps.can('resize', entry({ id: locked }), 'end')).toBe(false);
     expect(caps.can('resize', entry({ id: locked }), 'start')).toBe(true);
