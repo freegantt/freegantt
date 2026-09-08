@@ -117,10 +117,11 @@ no JS reads it.
 | `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
-| `--fg-selection-color` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | `.fg-bar[data-state~="selected"]` outline (pending uses the same token, dotted); `.fg-row[data-state~="selected"]` background; the column reorder drop indicator; the open cell editor's ring |
+| `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
+| `--fg-row-selected-bg` | `#EEF3FB` | `#1F2A3F` | `.fg-row[data-state~="selected"]`/`.fg-row-band[data-state~="selected"]` background — a flat token, not a mix of `--fg-selection-color` |
 | `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
 | `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
-| `--fg-focus-ring` | `oklch(0.62 0.16 220)` | `oklch(0.78 0.14 220)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
+| `--fg-focus-ring` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
 | `--fg-popup-bg` | `#FFFFFF` | `#1B2029` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
 | `--fg-popup-border` | `#DDE2E9` | `#313846` | `.fg-popup` border |
 | `--fg-popup-shadow` | `0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22)` | `0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6)` | `.fg-popup` box-shadow; also the grabbed header cell's lifted shadow during a column reorder drag |

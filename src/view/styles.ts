@@ -11,16 +11,17 @@
 // new `freegantt/no-inline-style-outside-geometry` lint rule leaves `transform`/`width`/`height` as the
 // only properties still legitimately written inline.
 //
-// Colour carries meaning here and each meaning gets its own hue: blue is data, vermilion marks time,
-// amber warns, violet is what the user picked, cyan is what the keyboard focused. Nothing else on the
-// sheet claims any of the five, so a reader never has to ask which of two meanings a colour states.
+// Colour carries meaning here. Vermilion marks time, amber warns, violet marks keyboard focus — each
+// hue states one meaning only. Selection breaks that rule on purpose: it reuses the bar's own blue,
+// so a chosen item reads as "this data, picked". Role marks the difference — fill paints data,
+// outline paints selection — not hue.
 //
 // The values are the `Gantt demo sandbox rebuild` design's Light and Graphite token sets (its
 // Graphite is this sheet's `dark` — one name per concept, and `dark` is the one the public `Theme`
 // type already publishes). The greys carry a trace of yellow, under 0.02 saturation: warm enough that
 // the sheet sits inside a document page without reading as a screenshot, neutral enough that it does
 // not fight a cold page around it. Dark inverts the bar to the light end of the same blue and gives it
-// dark labels, which is what buys its 9:1 label contrast, and lifts all five meaning hues together so
+// dark labels, which is what buys its 9:1 label contrast, and lifts every meaning hue together so
 // their separation survives the move.
 //
 // --fg-bar-opacity is 1, not the 0.9 this sheet shipped before. At 0.9 the light theme's bar label
@@ -48,10 +49,15 @@ const LIGHT_COLOR_TOKENS = `
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #FAF8F2;
   --fg-row-hover-bg: #F6F3EB;
+  /* A flat band, in the family --fg-row-hover-bg and --fg-row-odd-bg already belong to — not a mix
+     of --fg-selection-color, because that reads against whatever sits behind the container instead
+     of a colour axe can check on its own. */
+  --fg-row-selected-bg: #EEF3FB;
   --fg-row-label-color: #1A1815;
-  /* Deliberately only a little past the floor (4.9:1 on the pane): dim enough to read as filtered
-     out, still legible. */
-  --fg-row-unmatched-label-color: #757068;
+  /* Set by its worst case, not its usual one: 5.1:1 on the pane, but a filtered-out row can also be
+     selected, and on --fg-row-selected-bg it drops to 4.6:1 — still past the 4.5:1 floor (axe
+     color-contrast, S5.11). */
+  --fg-row-unmatched-label-color: #726D65;
   --fg-bar-fill: oklch(0.49 0.13 248);
   --fg-bar-label-color: #FFFFFF;
   --fg-warn: #B4690E;
@@ -70,18 +76,19 @@ const LIGHT_COLOR_TOKENS = `
   /* The dragged bar's lift — D-S3-7's dragging token. One static, hard-offset shadow: no blur to
      rasterize and no animation, so it never lands on the drag hot path. */
   --fg-drag-shadow: 0 2px 0 rgb(26 24 21 / 0.18);
-  /* Distinct hue from --fg-bar-fill (S3, D-S3-7): the same colour as the bar's own fill would make the
-     selection outline invisible against it. It must also stay clear of --fg-date-line-color and
-     --fg-warn, which is what the old hue-25 red failed — it landed within a few degrees of the date
-     line's own red, so a selected row and an error read as the same paint. Violet is unclaimed by
-     any other meaning in the sheet: nothing else on the chart is this hue, so it says "picked" and
-     nothing else. */
-  --fg-selection-color: oklch(0.55 0.20 305);
+  /* Selection is the accent blue, close to --fg-bar-fill on purpose, and it never touches it: the
+     selected bar's outline sits 2px off the fill (outline-offset below), so the ring lands on the
+     pane beside the bar, not on the fill itself. Keep that offset if this value ever changes. It
+     must also stay clear of --fg-date-line-color and --fg-warn, which is what the old hue-25 red
+     failed — it landed within a few degrees of the date line's own red, so a selected row and an
+     error read as the same paint. This blue sits far from both. */
+  --fg-selection-color: oklch(0.55 0.13 245);
   /* S5.11, D-S5-25/D-S5-26: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
      bar/header-cell/splitter reads as "focused" and never as "selected" (--fg-selection-color) or
-     "conflict"/"pending" (--fg-warn). Cyan sits clear of every other hue this sheet already claims.
-     The design carries no focus hue of its own, so this pair stays as S5.11 set it. */
-  --fg-focus-ring: oklch(0.62 0.16 220);
+     "conflict"/"pending" (--fg-warn). This is the violet --fg-selection-color vacated above: the
+     design carries no focus hue of its own, and violet stays unclaimed by every other meaning on
+     this sheet, clear of the blue --fg-bar-fill and --fg-selection-color now share. */
+  --fg-focus-ring: oklch(0.55 0.20 305);
   --fg-popup-bg: #FFFFFF;
   --fg-popup-border: #E6E2D9;
   --fg-popup-shadow: 0 8px 24px rgb(26 24 21 / 0.12);
@@ -99,9 +106,10 @@ const DARK_COLOR_TOKENS = `
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #20232A;
   --fg-row-hover-bg: #262A32;
+  --fg-row-selected-bg: #1F2A3F;
   --fg-row-label-color: #ECEAE3;
-  /* 4.8:1 on the pane — the same "filtered out, still legible" reading the light theme takes. */
-  --fg-row-unmatched-label-color: #8B8880;
+  /* Same worst-case rule the light theme takes: 5.8:1 on the pane, 4.9:1 on --fg-row-selected-bg. */
+  --fg-row-unmatched-label-color: #9B978E;
   --fg-bar-fill: oklch(0.74 0.13 248);
   --fg-bar-label-color: #16181D;
   --fg-warn: #E0A340;
@@ -111,8 +119,8 @@ const DARK_COLOR_TOKENS = `
      make: a light hairline reads on a dark bar where the light theme's dark one would vanish. */
   --fg-hover-ring: rgb(236 234 227 / 0.26);
   --fg-drag-shadow: 0 2px 0 rgb(0 0 0 / 0.45);
-  --fg-selection-color: oklch(0.76 0.17 305);
-  --fg-focus-ring: oklch(0.78 0.14 220);
+  --fg-selection-color: oklch(0.72 0.13 245);
+  --fg-focus-ring: oklch(0.76 0.17 305);
   --fg-popup-bg: #22252B;
   --fg-popup-border: #3A3F48;
   --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
@@ -239,14 +247,15 @@ ${DARK_COLOR_TOKENS}
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 /* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
-   an outline (an outline would fight the row's cell layout the way .fg-bar's never has to). Same
-   --fg-selection-color Token .fg-bar[data-state~="selected"] already uses, so a bar click and its
-   matching row read as one selection, not two colours. */
+   an outline (an outline would fight the row's cell layout the way .fg-bar's never has to).
+   --fg-row-selected-bg is its own flat token, not a mix of --fg-selection-color: a bar click still
+   ties row and bar to one selection, but an opaque band is what axe's colour-contrast check can
+   read, and it does not depend on whatever sits behind the container. */
 /* Hover, then selection — a selected row that is also hovered reads as selected, because the later
    rule wins on equal specificity. Both paint the grid row and its timeline band from one
    paintRowState answer, so a row reads the same on both sides of the splitter. */
 .fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
-.fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: color-mix(in oklab, var(--fg-selection-color) 16%, transparent); }
+.fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: var(--fg-row-selected-bg); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 8px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 8px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -282,10 +291,13 @@ ${DARK_COLOR_TOKENS}
    Hover is a box-shadow and selection an outline, so a bar that is both wears both without either
    rule overwriting the other. */
 .fg-bar[data-state~="hovered"] { box-shadow: inset 0 0 0 1px var(--fg-hover-ring); }
-.fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); }
+/* outline-offset: 2px is not cosmetic. --fg-selection-color now shares --fg-bar-fill's own hue, so
+   an outline flush against the fill would nearly vanish into it. The offset moves the ring onto the
+   pane beside the bar, where it reads against a different colour. */
+.fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
-.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); }
+.fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }
 /* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
    bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4); pointer-events: none; }
