@@ -46,6 +46,13 @@ const LIGHT_COLOR_TOKENS = `
      S5.11) — the 4.5:1 floor for normal text. */
   --fg-header-subtext: #5E5A53;
   --fg-header-divider-color: #E6E2D9;
+  /* The timeline pane's own vertical grid, one line per finest-band tick boundary (.fg-tick-line).
+     Two opaque tokens, not one colour at two alphas — a compositing cost on a 1px line buys nothing,
+     and the pair gives a consumer the stated opt-out twice over: set either to transparent and that
+     line stops painting, with no config key involved. */
+  --fg-tick-line-color: #ECE8DF;
+  /* A line a coarser header band also starts at — a week's Monday, a month's first day. */
+  --fg-tick-line-strong-color: #DCD7CB;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #FAF8F2;
   --fg-row-hover-bg: #F6F3EB;
@@ -103,6 +110,8 @@ const DARK_COLOR_TOKENS = `
   /* 6.3:1 on --fg-header-band-bg (axe color-contrast, S5.11). */
   --fg-header-subtext: #A8A49B;
   --fg-header-divider-color: #2B2F36;
+  --fg-tick-line-color: #25282E;
+  --fg-tick-line-strong-color: #313640;
   --fg-row-even-bg: transparent;
   --fg-row-odd-bg: #20232A;
   --fg-row-hover-bg: #262A32;
@@ -242,6 +251,14 @@ ${DARK_COLOR_TOKENS}
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
 .fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
 .fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
+/* J2: one line per finest-band tick boundary, mounted between the header and .fg-row-bands (D-S1.7-4)
+   so the zebra and the selected-row band paint over the lines, the design's own paint order. height
+   is set inline per frame (render/dom/tick-lines.ts), not bottom: 0 — same reason .fg-date-line
+   states: .fg-timeline-pane is both this element's positioned ancestor and its own overflow: auto
+   scroll container. */
+.fg-tick-lines { position: relative; }
+.fg-tick-line { position: absolute; top: 0; left: 0; width: 1px; background: var(--fg-tick-line-color); pointer-events: none; }
+.fg-tick-line[data-major] { background: var(--fg-tick-line-strong-color); }
 .fg-row-bands { position: relative; }
 .fg-row-band { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 8px); padding-block: var(--fg-cell-padding-block, 4px); }

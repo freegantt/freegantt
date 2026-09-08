@@ -170,6 +170,16 @@ export interface FrameHeaderBand {
   ticks: readonly FrameHeaderTick[];
 }
 
+/** One vertical line in the timeline pane, at every finest-band tick boundary. `major` marks a line
+ *  a coarser band also starts at — a week's Monday under `dayAndWeek`, a month under `weekAndMonth` —
+ *  so the pane's own grid states the same boundaries the header already draws, with no calendar
+ *  knowledge of its own. `x` is unclamped, unlike a header tick's: the line paints wherever its
+ *  instant falls, even off-screen inside the overscan buffer. */
+export interface FrameTickLine {
+  x: number;
+  major: boolean;
+}
+
 export interface FrameHeader {
   bands: readonly FrameHeaderBand[];
 }
@@ -190,6 +200,9 @@ export interface GeometryFrame {
   /** The culled region, in timeline-content coordinates (conventions §1, D-S1.7-3). Was `viewport`. */
   visible: Rect;
   header: FrameHeader;
+  /** One line per finest-band tick boundary, in the culled window (D-S1.7-4's overscan, unchanged).
+   *  Empty when the preset carries no headers. */
+  tickLines: readonly FrameTickLine[];
   /** Only rows in the vertical window; `top` in absolute content coordinates. */
   rows: FrameRow[];
   /** Total row count across the whole dataset, never the window's — what `aria-setsize` needs so
@@ -478,12 +491,18 @@ export function placeFrame(
   // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
 
   const headerFormats = dropRepeatedGranularity(preset.headers);
+  // Raw ticks per band, coarsest first (D-S1.7-6) — computed once and shared by `bands`' clamped
+  // labels below and `tickLines`' unclamped lines: both read the same `scale.ticks` call per band,
+  // so a preset's own boundaries never drift between the header and the pane under it.
+  const rawBandTicks = preset.headers.map((header) =>
+    scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
+  );
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
     const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
     return {
       unit: header.unit,
       increment: header.increment,
-      ticks: scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan).map((tick) => {
+      ticks: rawBandTicks[i]!.map((tick) => {
         // Only the one tick whose cell actually straddles the clamp line is "stuck" — a tick
         // that ends before it (fully behind the visible edge, kept around only by the overscan
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
@@ -495,6 +514,19 @@ export function placeFrame(
       }),
     };
   });
+
+  // One line per finest-band tick — the last raw ticks array, bands run coarsest first (D-S1.7-6).
+  // `major` when a coarser band starts at the same Instant, so the pane's own boundaries always
+  // match the header's without either side deriving a calendar rule the other does not already have.
+  const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
+  const coarserBandStarts = new Set<Instant>();
+  for (const bandTicks of rawBandTicks.slice(0, -1)) {
+    for (const tick of bandTicks) coarserBandStarts.add(tick.instant);
+  }
+  const tickLines: FrameTickLine[] = finestBandTicks.map((tick) => ({
+    x: tick.x,
+    major: coarserBandStarts.has(tick.instant),
+  }));
 
   const dateLineDecorations: FrameDecoration[] = resolveDateLines({
     scale,
@@ -518,6 +550,7 @@ export function placeFrame(
     revision,
     visible,
     header: { bands },
+    tickLines,
     rows,
     rowCount: plan.length,
     tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),

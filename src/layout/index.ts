@@ -52,6 +52,7 @@ export type {
   FrameHeader,
   FrameHeaderBand,
   FrameHeaderTick,
+  FrameTickLine,
   Overscan,
   PathCommand,
   RangeBand,

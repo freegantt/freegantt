@@ -24,7 +24,9 @@ import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import { itemIdFromDataset, rowIdFromDataset } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
+import { attachTickLines } from './tick-lines.js';
 import type { DateLineAttachment } from './date-line.js';
+import type { TickLineAttachment } from './tick-lines.js';
 import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
@@ -297,6 +299,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let rowBandLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
   let dateLines: DateLineAttachment | undefined;
+  let tickLines: TickLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
   // D-S3-8: one shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
@@ -1166,6 +1169,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       cursorLineLabel.setAttribute('aria-hidden', 'true');
       cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, rowBandLayer, barLayer, contentSizer);
+      // Inserted between the header and the row bands (D-S1.7-4): the zebra and the selected-row
+      // band paint over the lines, matching the design's own paint order.
+      tickLines = attachTickLines(timelineHost, rowBandLayer);
       // S5.6, D-S5-15: mounted before Date lines, so a registered decoration paints below the
       // today wrapper and any authored Date line — those stay the topmost stroke either way.
       decorations = attachDecorations(timelineHost, barLayer);
@@ -1195,6 +1201,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (paintedResizable !== undefined) {
         paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable), paintedResizableEdges);
       }
+      tickLines?.sync(frame.tickLines, frame.contentHeight, frame.visible.height);
       dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
       decorations?.sync(
         frame.underBars,
@@ -1357,6 +1364,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     destroy() {
       dateLines?.destroy();
       dateLines = undefined;
+      tickLines?.destroy();
+      tickLines = undefined;
       decorations?.destroy();
       decorations = undefined;
       gridLayer?.replaceChildren();

@@ -62,6 +62,8 @@ const COLOR_TOKENS = [
   '--fg-header-text',
   '--fg-header-subtext',
   '--fg-header-divider-color',
+  '--fg-tick-line-color',
+  '--fg-tick-line-strong-color',
   '--fg-row-even-bg',
   '--fg-row-odd-bg',
   '--fg-row-selected-bg',

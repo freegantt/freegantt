@@ -963,6 +963,50 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  // J2: one `.fg-tick-line` per finest-band tick, mounted before `.fg-row-bands` so the zebra and
+  // the selected-row band paint over the lines (the design's own order).
+  it('paints one tick line per finest-band tick, before the row bands, with major stamped', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    // Both bands read the fixture scale's fixed `ticks()` output, so the day band's one tick lands
+    // on the same Instant the week band's one tick does — the case `major` exists to catch.
+    const twoHeaderPreset: ViewPreset = {
+      ...preset,
+      headers: [
+        { unit: 'week', increment: 1, format: () => 'w' },
+        { unit: 'day', increment: 1, format: () => 'd' },
+      ],
+    };
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset: twoHeaderPreset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    backend.sync(base);
+
+    const layer = timeline.querySelector('.fg-tick-lines')!;
+    const rowBands = timeline.querySelector('.fg-row-bands')!;
+    expect(layer.compareDocumentPosition(rowBands) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const lines = layer.querySelectorAll<HTMLElement>('.fg-tick-line');
+    expect(lines).toHaveLength(base.tickLines.length);
+    expect(lines[0]!.style.transform).toBe(`translateX(${base.tickLines[0]!.x}px)`);
+    expect(lines[0]!.dataset['major']).toBe('');
+
+    // A single-band preset has no coarser band to align to — no line is ever major.
+    backend.sync({ ...base, tickLines: [{ x: 0, major: false }] });
+    expect(layer.querySelector<HTMLElement>('.fg-tick-line')!.dataset['major']).toBeUndefined();
+
+    backend.destroy();
+  });
+
   // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
   // bars whose token set actually changed.
   it('applyState paints hovered/selected data-state tokens and clears them on the next call', () => {
