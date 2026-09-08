@@ -140,10 +140,12 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
   // getBoundingClientRect() is viewport-relative, so a scrolled pane (e.g. panToToday on load)
   // moves the sizer's painted rect left by exactly el.scrollLeft — add it back so this reads the
   // sizer's extent against the pane's unscrolled content origin, matching scrollWidth's own frame.
+  // `.fg-content-sizer` is the sizer's own name (render/dom/index.ts). This read used to take the
+  // pane's first `aria-hidden` child instead, which was the sizer only for as long as the sizer was
+  // the pane's one hidden layer — the tick-line layer (J2) is hidden too, mounts earlier, and is
+  // pane-wide rather than content-wide, so the old scan measured that and read 7154px of gap.
   const sizerRight = await pane.evaluate((el) => {
-    const sizer = Array.from(el.children).find(
-      (child) => child instanceof HTMLElement && child.getAttribute('aria-hidden') === 'true',
-    ) as HTMLElement;
+    const sizer = el.querySelector<HTMLElement>('.fg-content-sizer')!;
     return sizer.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft;
   });
 

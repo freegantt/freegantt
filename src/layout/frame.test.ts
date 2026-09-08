@@ -720,6 +720,26 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     expect(frame.tickLines.every((line) => !line.major)).toBe(true);
   });
 
+  it('emits no line outside the content, so the overscan buffer cannot widen the pane', () => {
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: dayAndWeekHeaders,
+      // Parked at the right edge, where the overscan buffer reaches past the content extent.
+      visible: { x: gridScale.contentWidth - 200, y: 0, width: 200, height: 400 },
+      overscan: { verticalRows: 0, horizontalPx: 300 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      itemProducerRegistry,
+    });
+    expect(frame.tickLines.length).toBeGreaterThan(0);
+    for (const line of frame.tickLines) {
+      expect(line.x).toBeGreaterThanOrEqual(0);
+      expect(line.x).toBeLessThan(gridScale.contentWidth);
+    }
+  });
+
   it('marks no line major on a single-band preset — no coarser band to align to', () => {
     const frame = computeFrame({
       entries: gridEntries,
