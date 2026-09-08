@@ -51,7 +51,11 @@
         --fg-row-height: 36px;
         --fg-band-height: 24px;
         --fg-cell-padding-inline: 10px;
-        --fg-indent-width: 14px;
+        /* The design does not indent by depth: a phase and its rows start their text at the same x,
+           and what tells them apart is the twisty against the row's phase colour tag. The `#` column
+           is the row label cell here, so a depth indent would also eat the width the ordinal needs —
+           at 14px a two-digit number ellipsised to `1.`. */
+        --fg-indent-width: 0px;
         --fg-bar-radius: 4px;
         border: 1px solid var(--fg-splitter-color);
         border-radius: 0 0 10px 10px;
