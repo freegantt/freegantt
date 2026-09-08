@@ -1,3 +1,5 @@
+This review is a stale.
+
   Verdict
 
   The diagnosis is directionally correct, but its ownership claim is too broad.
