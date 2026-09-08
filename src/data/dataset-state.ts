@@ -79,11 +79,11 @@ export interface DatasetStateOptions {
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
   referenceDate?: Instant;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
-   *  unreachable through the package's `exports` map, so a plugin-facing install API lands in **S5**
-   *  with the plugin runtime (#15), not on this option; the first-party scheduler occupies the slot in
-   *  S7. Until then this is how a test installs one (D-S2-6, "How it is tested without a public
-   *  claim") — S3's drag preview and undo tests use exactly this route. Defaults to
-   *  `identityExtender`: an unoccupied hook is the identity function (D4).
+   *  unreachable through the package's `exports` map. S5 shipped the plugin-facing route instead: a
+   *  `DatasetPlugin` installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
+   *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (D-S2-6,
+   *  "How it is tested without a public claim") — S3's drag preview and undo tests take it. Defaults
+   *  to `identityExtender`: an unoccupied hook is the identity function (D4).
    *
    *  Said "S3's own job" until 2026-08-29: written the day before `87af449` moved the scheduling
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
