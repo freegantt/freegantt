@@ -63,6 +63,20 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: '§4.1 — Per-entry looks and actions', href: `${PUBLIC_API}#41-per-entry-looks-and-actions` },
     ],
   },
+  planner: {
+    demonstrates:
+      'A shipped design, built on the public surface alone. Colour is tokens, cells the design draws ' +
+      'as pictures are cell renderers, and a third theme the library never heard of is a consumer class.',
+    config: [
+      "gridColumns: [{ field: 'owner', cellRenderer }, …]",
+      "barRenderer: { '*': ({ entry }) => ({ style: { '--fg-bar-fill': … } }) }",
+      "body.theme-paper #gantt { --fg-pane-bg: …; --fg-bar-fill: … }",
+    ],
+    specLinks: [
+      { label: 'plans/02 §4.1 — Per-entry looks and actions', href: `${PUBLIC_API}#41-per-entry-looks-and-actions` },
+      { label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` },
+    ],
+  },
   hierarchy: {
     demonstrates:
       'A tree of entries groups, sorts, filters and packs its rows. Grid columns resize and reorder ' +
