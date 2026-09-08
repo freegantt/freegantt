@@ -225,6 +225,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeLinkCreate` | `linkCreate` |
 | `beforeSelectionChange` | `selectionChange` |
 | `beforeGridWidthChange` | `gridWidthChange` |
+| `beforeGridColumnsChange` | `gridColumnsChange` |
 | `beforeCollapseChange` | `collapseChange` |
 | — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
@@ -239,6 +240,8 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `minGridWidth` (#127) is a live, plain-reconfiguration property — not a gesture, so it carries no `before*`/`*Change` pair of its own. It floors what the Splitter drag can reach, and nothing else: no floor applies to a written width, so `gantt.gridWidth = 0` collapses the grid pane on purpose. (#139's ceiling is the one bound that does reach a written width — a floor guards against a user accident, which an app author is allowed past; a ceiling states a layout fact.) Default `40` — wide enough for one narrow column, so a drag cannot take the pane to nothing by accident; `minGridWidth: 0` restores an unfloored splitter. Raising `minGridWidth` above the current `gridWidth` fires `beforeGridWidthChange`/`gridWidthChange` to lift it — the same commit sequence a drag would use, so a veto leaves the width exactly where it was.
 
+
+`beforeGridColumnsChange`/`gridColumnsChange` (S4.3, S5.7) carry `{ from, to }` as `GridColumn[]` — the consumer's own authored columns, before the change and after it, never the layout-only `ResolvedColumn`. So a consumer holds `to` and hands it straight back as `gridColumns`, and that round-trip can never save a column a plugin declared (#162, #181). Every column change raises the one pair: a resize drag's commit, a reorder drop, `hideGridColumn`/`showGridColumn` (S5.7), and a direct `gantt.gridColumns = [...]` assignment. Hiding raises no pair of its own, so a handler that guards every other column change refuses a hide too. A veto restores the column list the interaction started from. `registerGridColumn` is the deliberate exception (D-S5-33): a plugin's own registration changes nothing the consumer authored, so it raises nothing and never appears in `gantt.gridColumns`.
 `beforeCollapseChange`/`collapseChange` (S4.6, D-S4-22) carry `{ from, to }` as `RowId[]` — Gantt view state, no Dataset transaction. Fired by a twisty click, keyboard collapse/expand, and a direct `gantt.collapsed = ids` assignment. A veto restores the set the interaction started from. Collapse is per Gantt: two Gantts on one Dataset collapse independently, the same way `selectedSegmentIds` already does.
 
 `error` (S5.12, D-S5-40/41/42) is the one event name that lives on **both** buses, and it carries the
@@ -717,14 +720,17 @@ export interface DatasetDocument {
   dateOnlyEnd: DateOnlyEndRule;
   rollUpKinds: readonly EntryKind[];
   fields?: readonly SerializedField[];
+  plugins?: PluginDocument;
   entries: readonly EntryDocument[];
 }
 ```
 
 This build writes `schema: 4` (`rollUpKinds`, `fields`, a plugin's own rows at `schema: 3` and above, and an Entry's `segments` at `schema: 4` and above — #212). `schema: 1`, `2` and `3` still read (`derivedSpanKinds` lands on `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each Entry's whole `[start, end)`). `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
 
+**`plugins` is the plugin half of the Document (S5.10, D-S5-24), and it holds rows, never behaviour.** Each key is a plugin id, and its value is that plugin's own rows. The key arrived at `schema: 3`, and `toJSON` omits it when no plugin holds a row. A Dataset carries the rows of a plugin it never installed, unchanged, so an application that reads a Document without the plugin still writes those rows back — they ride as passenger data. `schema: 1` and `2` have no such key, so a `plugins` key on a Document labelled `schema: 1` is dropped, not read.
+
 - The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
-- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `plugins`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
 - `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 
