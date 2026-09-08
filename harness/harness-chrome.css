@@ -255,6 +255,35 @@ nav.harness-site-nav a[aria-current='page'] {
   text-underline-offset: 2px;
 }
 
+/* -------------------------------------------------------------- page brief */
+
+/* D-S5-29: the block above the Gantt that names what a page demonstrates, the config that does it,
+ * and the spec section that governs it. `harness/docs/page-brief.ts` fills it in. */
+.harness-page-brief {
+  margin: 14px 0 20px;
+  padding: 11px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.harness-page-brief p {
+  margin: 3px 0;
+  color: var(--ink-2);
+}
+
+.harness-page-brief code {
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  color: var(--ink);
+}
+
+.harness-page-brief a {
+  color: var(--accent);
+}
+
 /* ------------------------------------------------------- workbench (library) */
 
 /* One instrument: the toolbar sits INSIDE this border, divided from the chart by the same hairline

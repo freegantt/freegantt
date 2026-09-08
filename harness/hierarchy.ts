@@ -18,6 +18,10 @@ import type {
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarchy');
 
 declare global {
   interface Window {

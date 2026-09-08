@@ -31,6 +31,11 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
+// and the spec section that governs it — the one thing a reader new to the library needs first.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'generic-demo');
 
 // S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Budget take their Fields' own defaults and are editable.

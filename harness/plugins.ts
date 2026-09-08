@@ -8,6 +8,10 @@ import { riskKind } from './plugins/risk-kind.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
+import { mountPageBrief } from './docs/page-brief.js';
+
+// D-S5-29: what this page demonstrates, the config that does it, and the spec section that governs it.
+mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'plugins');
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke

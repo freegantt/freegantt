@@ -1,4 +1,6 @@
-type HarnessPageId =
+// `harness/docs/page-brief.ts` reads this id too — one page identifies itself with the same value
+// both modules key on, so a page's nav entry and its explanatory block never drift apart.
+export type HarnessPageId =
   | 'generic-demo'
   | 'hierarchy'
   | 'scroll-sync'
