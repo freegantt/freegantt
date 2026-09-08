@@ -131,6 +131,10 @@
         --demo-phase-215: oklch(0.42 0.1 215);
         --demo-weekend-bg: #e3ded0;
       }
+      /* Both selectors, one token set: the page (so the toolbar's own `--fg-*` reads Paper too) and
+         the Gantt itself, which re-declares the light set on `.fg-container` and would otherwise
+         override what it inherits from the page. */
+      body.theme-paper,
       body.theme-paper #gantt {
         --fg-pane-bg: #faf7ee;
         --fg-splitter-color: #d9d2bd;

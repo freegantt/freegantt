@@ -28,9 +28,12 @@
 // measured about 4.1:1 against its own fill, under the 4.5:1 floor; the softening moved into the fill
 // itself, which is a colour the theme controls, instead of an opacity that erodes the label with it.
 //
-// Theme tokens live on `.fg-container`. `theme: 'light'|'dark'` writes `data-fg-theme` on that
-// container, not on `:root`. A `:root:not([data-fg-theme])` media query never sees the pin, so Light
-// would leave the Gantt on the system dark tokens. `.fg-container[data-fg-theme='light']` always wins.
+// `theme: 'light'|'dark'` writes `data-fg-theme` on the Gantt's own container, not on `:root`: a
+// `:root:not([data-fg-theme])` media query never sees that pin, so Light would leave the Gantt on the
+// system dark tokens. The two attribute rules select on the attribute alone, so a consumer can write
+// `data-fg-theme="dark"` on a wrapper around its own chrome — a toolbar above the Gantt — and
+// `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
+// its own container.
 
 import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_DIAMOND_SIZE_PX } from '../layout/index.js';
 
@@ -168,10 +171,13 @@ ${LIGHT_COLOR_TOKENS}
 ${DARK_COLOR_TOKENS}
   }
 }
-.fg-container[data-fg-theme='light'] {
+/* Attribute only, no .fg-container: the token set follows the pin wherever the pin is written. Both
+   rules come after the .fg-container block above and match at the same specificity, so a pinned
+   container still reads its own set rather than the default light one. */
+[data-fg-theme='light'] {
 ${LIGHT_COLOR_TOKENS}
 }
-.fg-container[data-fg-theme='dark'] {
+[data-fg-theme='dark'] {
 ${DARK_COLOR_TOKENS}
 }
 

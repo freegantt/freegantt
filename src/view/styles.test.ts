@@ -104,14 +104,17 @@ describe('ensureBaseStyles', () => {
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(before);
   });
 
-  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the container theme pins', () => {
+  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the theme pins', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     const [rootBlock] = css.match(/:root\s*{[^}]*}/) ?? [''];
     const [containerBlock] = css.match(/\.fg-container\s*{[^}]*}/) ?? [''];
-    const [lightBlock] = css.match(/\.fg-container\[data-fg-theme='light'\]\s*{[^}]*}/) ?? [''];
-    const [darkBlock] = css.match(/\.fg-container\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
+    // Attribute only, no `.fg-container`: a consumer's own chrome outside the Gantt — a toolbar above
+    // it — carries the pin and reads the same token set. Scoping these to the container left every
+    // element outside it on the light set for good, whatever theme the Gantt was on.
+    const [lightBlock] = css.match(/\n\[data-fg-theme='light'\]\s*{[^}]*}/) ?? [''];
+    const [darkBlock] = css.match(/\n\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
     const [autoDarkBlock] = css.match(/\.fg-container:not\(\[data-fg-theme\]\)\s*{[^}]*}/) ?? [''];
     for (const token of COLOR_TOKENS) {
       expect(rootBlock, `:root missing ${token}`).toContain(token);

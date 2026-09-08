@@ -252,6 +252,10 @@ function readStoredTheme(): PlannerThemeChoice {
 // class wins on specificity.
 function applyPlannerTheme(choice: PlannerThemeChoice): void {
   document.body.classList.toggle('theme-paper', choice === 'paper');
+  // The toolbar sits above the Gantt, outside `.fg-container`, and paints from `--fg-*` like
+  // everything else on this page. The same pin the library writes on its own container, written here
+  // on the page, gives the chrome the theme's token set — no hex value is restated for it.
+  document.body.dataset['fgTheme'] = choice === 'dark' ? 'dark' : 'light';
   try {
     localStorage.setItem(THEME_STORAGE_KEY, choice);
   } catch {
