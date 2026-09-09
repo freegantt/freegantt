@@ -81,22 +81,26 @@ type Field<TValue = unknown> =
 
 | | today | after |
 |---|---|---|
-| Stored Entry | `meta?: TMeta` | `data: TData`, always present (`{}` when absent), like `segments` |
-| `EntryInput` | `meta?: TMeta` | `data?: TData` — a record |
+| Stored Entry | `meta?: TMeta` | `data: Readonly<Partial<TData>>`, always present (`{}` when absent), like `segments` |
+| `EntryInput` | `meta?: TMeta` | `data?: Partial<TData>` — a record |
 | `EntryEdit` | `meta?: TMeta`, **replaces** | `data?: DataEdit<TData>`, **merges** |
-| `EntryDocument` | `meta?: TMeta` | `data?: TData` |
+| `EntryDocument` | `meta?: TMeta` | `data?: Partial<TData>` |
 | Field address | `source: FieldSource`, three arms | the Field key, or `compute` |
 | Generics | `Dataset<TMeta, TFields>` — two, can disagree | `Dataset<TData>` — one |
 | Internal `Entry` | `meta?: unknown`, needs a cast | `data: Readonly<Record<string, unknown>>`, reads as `unknown` |
-| Rolling-up parent value | stored **and** written | stored, **never** written |
+| Rolling-up parent value | stored **and** written to the Document | stored, **never** written to the Document |
 | `start` / `end` | required except on a rolling-up kind | optional on every kind |
 | Schema | 4 | 5 |
 
+**`Partial` at every door, and `TData` never claims a key exists.** `Readonly<TData>` beside an ingest fill of `{}` is a required-key lie the compiler cannot catch. It also costs the widening: probed at HEAD, `Dataset<A>` is assignable to the bare `Dataset` when every `data` door is `Partial`, and is **not** when `EntryInput.data` is `TData` and `TData` carries one required key — `entries.add` fails the bivariant method check. The widening is what deletes `harness/main.ts:89`'s double cast through `unknown`, which that file's own comment calls *evidence, not a shortcut*.
+
 **One key space, two homes.** Field keys stay in a single namespace — that is what lets one name serve `field` on a changeset row, `canWrite(entry, field)`, and `gridColumns: ['name', 'cost']`. Storage is namespaced underneath: core keys on the Entry, everything else in `data`.
 
-## Fix before the redesign
+## Fix before the redesign — **done 2026-09-09**
 
-One live defect in `main`, in code the redesign keeps. It is independent of the ADR, so it does not wait for the ADR to be accepted.
+One live defect in `main`, in code the redesign keeps. It is independent of the ADR, so it did not wait for the ADR to be accepted.
+
+**Fixed.** `mergeColumn` now spreads `sizingPairOf(…)` — the `width`/`flex` pair alone — instead of the whole declaration that owns the sizing. Four test rows landed in `field-registry.test.ts` under *a Field column and its type bundle merge key by key, sizing apart*. Rows 1 and 2 fail without the fix and pass with it; rows 3 and 4 pass either way and guard the fix's shape. `verify:full PASS — all 16 checks green, test:e2e included`. The description below is kept as the record of what was wrong.
 
 ### A Field's own `column` keys lose to its `type` bundle's
 
@@ -126,22 +130,44 @@ Latent today only because the one shipped `FieldType` carries no header of its o
 
 **Fix:** spread the sizing **pair** only, never the whole object. `#249`'s rule stands as written — a Field that sizes itself at all replaces the type's sizing whole — and only the extraction of that pair is wrong.
 
-**Test:** `field-registry.test.ts` needs three rows, not two — a bundle carrying both a header and a width, a bundle carrying no sizing at all (the second probe row above), and a Field that sizes itself over an already-sized bundle. The third pins #249's rule; the first two pin the fix.
+**Test:** `field-registry.test.ts` needs four rows, not two:
+
+1. a bundle carrying both a header and a width, against a Field carrying only a header — pins the fix;
+2. a bundle carrying no sizing at all (the second probe row above) — pins that the trigger is a shared non-sizing key, not a `width`;
+3. a Field that sizes itself over an already-sized bundle — pins #249's rule;
+4. a bundle that sets `width` and a Field that sets `flex`. **This row passes today** — probed. It takes the `sizing = own` branch, and that branch is never the broken one, because `own ⊇ ownRest` makes the last spread a no-op. It is not a defect case, and it is worth a row anyway: it guards against a *wrong fix*. A per-key fallback (`width: own.width ?? from.width`) makes rows 1 and 2 pass and leaks the bundle's `width: 100` into a Field that declared `flex`, which is exactly what #249's rule forbids. Row 3 pins #249 for a Field that re-declares the same key; row 4 pins it for a Field that declares the *other* key.
 
 ## The work
 
-Five groups of work and one of prose. The order is **A → B → C → D**, with F throughout and `mergeColumn` first. **Group E is dissolved**: each Document change lands in the group that causes it — the `data` rename and the `source` removal in A, the omission rule in C, the optional dates in D — because a separate serialization group invites writing the Document against rules that have not landed. Schema 5 is then a version bump at the end of D, not a work group. The real constraint follows: **there is no green commit between A and D**, because the Document version bumps once.
+Five groups of work and one of prose. The order is **A → B → C → D**, with F throughout and `mergeColumn` first. **Group E is dissolved**: each Document change lands in the group that causes it — the `data` rename and the `source` removal in A, the omission rule in C, the optional dates in D — because a separate serialization group invites writing the Document against rules that have not landed. Schema 5 is then a version bump at the end of D, not a work group. The real constraint follows: **there is no green commit between A and D on this branch**, because the Document version bumps once. That is a statement about the branch, not about `main`: `pnpm verify:full` runs green before the PR merges, and the pre-push hook is the backstop.
 
 ### A. The address rule, and the storage rename
 
 The key decides the home, so no declaration carries one.
 
-- `Entry.meta` → `Entry.data`, non-optional, filled `{}` at ingest. `EntryInput.data?: TData`. `EntryDocument.data?: TData`.
-- `EntryEdit` restates `data?: DataEdit<TData>` rather than inheriting it — `Partial` reaches one level only, and cannot express a removal under `exactOptionalPropertyTypes`.
+- `Entry.meta` → `Entry.data`, non-optional, filled `{}` at ingest. `Entry.data: Readonly<Partial<TData>>`, `EntryInput.data?: Partial<TData>`, `EntryDocument.data?: Partial<TData>`.
+- **One mapped type serves both edit shapes.** Write the type, not the sentence — and do **not** write `Partial` on the envelope. `Partial<Omit<EntryInput<TData>, 'id' | 'data'>>` refuses group D's un-date verb `update(id, { start: undefined, end: undefined })` under `exactOptionalPropertyTypes` (`TS2379`, probed), for the identical reason `Partial<TData>` refuses a removal inside `data`. `Partial` on one half and the mapped type on the other publishes a remove verb that works on `cost` and fails on `start`.
+  ```ts
+  /** An edit of `T`: every key optional, an already-optional key removable by an explicit
+   *  `undefined`. Not exported — `DataEdit` and `EntryEdit` are the names a consumer reads. */
+  type EditOf<T> = { [K in keyof T]?: {} extends Pick<T, K> ? T[K] | undefined : T[K] };
+
+  export type DataEdit<TData> = EditOf<TData>;
+  export type EntryEdit<TData> =
+    EditOf<Omit<EntryInput<TData>, 'id' | 'data'>> & { data?: DataEdit<TData> };
+  ```
+  `data` is omitted before it is restated, because an intersection cannot narrow a property the interface already declares. Probed: `{ start: undefined }` compiles, `{ name: undefined }` does not — `name` is required, so an Entry cannot lose it. Pin all three in a type test.
+- `DataEdit<TData>` is exported from `api/` and gets a `plans/02` type row. An app author writes the name only when they factor a helper, and the type they would otherwise reach for — `Partial<TData>` — is the one that cannot say *remove*.
+- **The public plugin surface carries the generic too**, and it is easy to miss: `DatasetPlugin<TMeta, TFields>`, `DatasetPluginContext<TMeta, TFields>` (`src/api/dataset.ts:45-52`), `DatasetOptions<TMeta, TFields>` (`:54-57`) and `Dataset.fromJSON<TMeta, TFields>` (`:326`). All four are published; all four lose a generic.
+- Delete `harness/main.ts:89`'s `as unknown as` and the comment at `:81-88` explaining it. That comment already names the cause — *"the mismatch is between two harness pages' declared field shapes"* — and the single `Partial` generic gives those two shapes a common type. If the cast does **not** delete, the generic is wrong; do not keep both.
+- **`StoredEdit` → `ProposedEdit`, with serena** (CLAUDE.md — serena follows the symbol). `ProposedEdit`/`ProposedEdits`, `toProposedEdit`/`toProposedEdits`, `EditReading.proposed`, about 184 occurrences. It lands in A because A already renames the type's own field, and a half-renamed edit type across two groups is worse than a large rename inside one.
+- `change-set.ts:72-85`'s `fieldsWrittenBy` still skips `'meta'`, and `isOptionalEntryKey` (`fields/field-access.ts:26`) still names it. Both follow the rename.
+- Delete `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey`. A consumer declaration on a core key falls through to the `DuplicateFieldKeyError` already sitting there. **Check before this lands:** whether `Field.editable: false` also refuses `entries.update()` — see the ordering constraints.
+- Two ingest warnings, one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'data'`: an unknown key at the top level, and a key inside `data` that names a core key. The second is the unreachable-value case — `entry.data.start` stores and `fieldValue(id, 'start')` never answers it.
 - Delete `FieldSource` and all three arms (`model/field.ts:44-47`), `Field.source`, `SerializedField.source` (`model/document.ts:40`), `data/fields/source-strategy.ts`'s strategy table, `normalize-source.ts`, `metaRecord` / `metaKey` / `metaSlot`, `DuplicateFieldSourceError`, `InvalidFieldSourceError`.
 - Delete the `meta` core Field (`data/fields/core-fields.ts:109-112`) with **no successor**. A whole namespace is not a value a grid shows or a Rollup aggregates.
 - `CoreFieldKey = keyof Omit<Entry, 'id' | 'data'>`, and the same exclusion in `CoreFieldValues`.
-- The registry refuses `{ key: 'data' }`. That is the **one** reserved key — no reserved *set*, because a consumer key never sits at the top level of an edit or a `StoredEdit`, so `proposedKeys` needs no guard of its own.
+- The registry refuses `{ key: 'data' }`. That is the **one** reserved key — no reserved *set*, because a consumer key never sits at the top level of an edit or a `ProposedEdit`, so `proposedKeys` needs no guard of its own.
 - `'compute' in field` replaces `computeStrategy.serialize()` in `encodeFieldDocument`. Easy to miss: the strategy table is what keeps a `compute` Field out of the Document today, and its test goes with it.
 - `view/capability.ts:132`'s `hasSomewhereToWrite` becomes `!('compute' in field)`.
 - One generic. `harness/planner.ts:31` currently writes `Dataset<PlannerMeta, { owner?; progress?; phase? }>`, whose two halves disagree about `critical` with nothing noticing.
@@ -150,23 +176,49 @@ The key decides the home, so no declaration carries one.
 
 ### B. The merging patch
 
-- `toStoredEdit` (`data/entry-reader.ts`) merges the `data` patch onto the Entry's own record, so a `StoredEdit` always carries a **complete** `data`.
-- **The merge belongs on the read side, not the apply side.** `EditRequest.proposed` is documented as *"storage-shaped and complete, the same as `entries`"* — a plugin cascade compares proposed against current with no normalizing step. A partial `StoredEdit.data` would make every extender merge for itself, which is the harness-patches-the-library shape one layer down.
+Group A renames the type, so this group is written in the new names: `toProposedEdit`, `ProposedEdit`.
+
+- `toProposedEdit` (`data/entry-reader.ts`) merges the `data` patch onto the Entry's own record, so a `ProposedEdit` always carries a **complete** `data`.
+- **The merge belongs on the read side, not the apply side.** `EditRequest.proposed` is documented as *"storage-shaped and complete, the same as `entries`"* — a plugin cascade compares proposed against current with no normalizing step. A partial `ProposedEdit.data` would make every extender merge for itself, which is the harness-patches-the-library shape one layer down.
 - `entryAfterEdit` (`data/fields/field-access.ts`) merges `data` rather than replacing it.
 - An explicit `undefined` inside a patch clears that one key. It is the only way to say *remove*, and today's write path already reads it that way.
-- An undeclared key inside a patch stays `UnknownFieldError`. That is the typo guard, and it is the only thing the rule buys — see Open 1.
 - `diffEdit` emits one row per Field key, never a path into `data`. The whole-bag write that emits two rows for one value has nothing left to come from.
+
+**An undeclared key inside a patch is writable** (Open 1, settled). Putting the key in `proposedKeys` is necessary and **not sufficient** — three edits make the settled rule true, and they stand or fall together. Ship them together or the ruling ships as a silent write: no ChangeSet row, no undo step, no subscriber.
+
+- **a. Seed the proposed set from inside the namespace.** `toEditReading` seeds it from the edit's *top-level* keys, and after this ADR the only top-level key that can hold a consumer value is `data`:
+  ```ts
+  const proposed = new Set<string>(Object.keys(edit).filter((key) => key !== 'data'));
+  for (const key of Object.keys(edit.data ?? {})) proposed.add(key);
+  ```
+- **b. Give `diffEdit` a second pass.** It walks `registry.all` when `proposedKeys` is set, so a key in the set and *not* in the registry is never visited. Keep the registry walk for row order, then drain the rest:
+  ```ts
+  for (const key of authored) {
+    if (registry.get(key)) continue;
+    emit(key, current.data[key], next.data[key]);
+  }
+  ```
+- **c. Read by key never throws.** After (b) a ChangeSet carries rows naming undeclared keys, so every read door has to be able to answer one: `entries.fieldValue` and `ctx.read` answer `entry.data[key]` for an undeclared key, and `undefined` for a key nothing holds.
+
+**The rule, in one line: read by key never throws; declare by key still does.** `gridColumns`, `rollUp` and the editors keep their errors. `UnknownFieldError` keeps firing for an unknown key at the **top level** of an edit, where the schema owns the names.
+
+**One loss, accepted and written down:** `fieldValue(id, 'ownr')` answers `undefined` where it throws today. If that reads as too loose once the code lands, the answer is a dev-time warning — never a second key space.
 
 ### C. A derived value never persists
 
-One structural question — *is this a rolling-up kind, and is this a rolling-up Field?* — asked at four doors.
+One structural question — *is this a rolling-up kind, and is this a rolling-up Field?* — asked at every door. I14 is the **write** half: one resolution behind every gesture and every write. `toDocument` is not a write, so it is the same question asked by the writer, not a fifth `canWrite`. Do not claim I14 for the omission.
 
 | Door | Answer | State |
 |---|---|---|
 | cell editor, bar drag | refused | already true (`view/capability.ts:119`) |
 | `entries.update()` | refused | **the change** — move the `rollsUp` test into `data/`, where `rollsUp` already lives |
-| `entries.add()`, `fromDocument` | value **dropped**, report raised | **the change** |
+| `entries.add()`, `new Dataset({ entries })`, `fromDocument` | value **dropped**, report raised | **the change** |
+| the extension hook (a plugin cascade) | **open — ADR Open 5** | not refused, by where the guard sits. Settle before this group starts |
+| autoGroup promotion | dates change owner mid-commit | **unowned until now** — see below |
 | `toDocument` | key **omitted** | **the change** |
+
+- **Promotion is the third door into a rolling-up kind**, beside `kind` at ingest and a `rollUpKinds` flip, and nobody aimed at it. `fixtures/hierarchy-dataset.ts` authors a plain parent with dates; reparent a child onto it and autoGroup promotes it, so those authored dates become derived in that commit with no call naming a derived Field. The Rollup recomputes them from the new child. Acceptance check: promote a dated plain parent, and assert its dates come from the child and its Document omits them.
+- **A parent that later loses its last child keeps no dates and draws no bar.** That is a behaviour change: today a childless rolling-up parent keeps the last value the Aggregator produced (`rollup.ts` skips it before it reaches an Aggregator). It is the same finding as #270, seen from the other side.
 
 - The report goes through `raiseError` at `severity: 'warning'` (ADR 0009), **always**. Not `isDevMode()`-gated: that flag resolves when *this repo* builds `dist/`, so a gated pass is eliminated from every consumer build (D-S5-41).
 - Delete `reportCorrectedRollUps`. With no reproducible derived value in the Document there is nothing to correct.
@@ -175,13 +227,29 @@ One structural question — *is this a rolling-up kind, and is this a rolling-up
 
 ### D. Optional dates, on every kind
 
+- **State it once, as a biconditional: an Entry has dates if and only if it holds at least one Segment**, and `start`/`end` are always the envelope. Everything else in this group follows from that one sentence rather than from a list of cases.
+  - `add({ start, end })` mints one Segment, as today.
+  - `add({ segments })` with no dates derives the envelope.
+  - `add({})` stores no dates and no Segments.
+  - `update(id, { start: undefined, end: undefined })` is the un-date verb, and it clears the Segments in the same write.
+  - Two refusals stay: one date without the other, and `segments: []` on its own (`EmptySegmentsError`). The empty case is `add({})`, which names no segments rather than naming none.
+  - `start` and `end` join `isOptionalEntryKey` (`fields/field-access.ts:26`). `serialization/index.ts` and `entry-reader.ts` each branch on `segments.length === 1` today; each gains a `length === 0` arm.
+- `FieldContext.durationOf` returns `Duration | undefined` (`src/model/field.ts:189`). It is **plugin-author surface**, so it is a published change, not an internal one, and it reaches further than the signature:
+  - `core-fields.ts:118` — the shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm. So the `duration` **column answers `undefined` on a dateless row**. That is the consumer-visible half of this change; it needs a row in the change table and an answer for what the cell shows.
+  - `field-access.ts:92` — the canonical implementation.
+  - `aggregators.ts:14` (`durationMs`, behind `weightedMeanByDuration` at `:51`) — skips a dateless child rather than weighting it at zero.
+  - `inline-editing.ts:113` is a **provider**, not a caller: `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`. It changes as an implementation.
+  - `etc/freegantt.api.md` — the API report gates on I11, so the signature change lands there or CI fails.
+  - Four test stubs build a `FieldContext` by hand: `layout/rows/filter.test.ts`, `layout/rows/sort.test.ts`, `data/fields/field-types.test.ts`, `data/fields/field-access.test.ts`.
 - `Entry.start` / `Entry.end` and `EntryDocument.start` / `.end` all become optional — on every kind, a `'span'` included, not only on a rolling-up parent.
-- Delete the `referenceDate` fill (`data/entry-reader.ts:168-172`) — a clock reading taken at construction and never saved, so an empty group reloads somewhere else. Nothing takes its place: an absent date stays absent, all the way to the Document.
+- Delete the `referenceDate` fill (`data/entry-reader.ts:168-172`) — a clock reading taken at construction and never saved, so an empty group reloads somewhere else. Nothing takes its place: an absent date stays absent, all the way to the Document. **It is written down under D-S2-10 *and* D-S2-22** (`plans/s2-data-core/README.md:278` and `:592`, change row `:842`; `s2.3-mutation-api.md:91` heads the section with both ids). It is **not** written down under D-S5-46 — that decision's reasons are the half-open interval and the resize clamp, and it survives this ADR unedited.
 - An Entry with no span draws **no bar** and still shows its grid row.
 - Reaches further than one fill: bar geometry, the Segment invariant (*never empty*, #212), sort comparators, and `range: 'fitDataset'` each gain an absent case.
 - `InvalidInstantError` keeps refusing an *unreadable* date, and an Entry that authors one date without the other. It stops refusing an Entry that authors neither.
 
-### E. Document, schema 5
+### E. Document, schema 5 — lands inside A, C and D
+
+**E is not a work group.** It is kept as a section because it is the only place the file's four changes are described together. Each one lands in the group that causes it: the `data` rename and the `source` removal in **A**, the omission rule in **C**, the optional dates in **D**. Schema 5 is a version bump at the end of D.
 
 Four things change in the file: `meta` → `data`, `source` leaves `SerializedField`, `start`/`end` become optional, and a rolling-up parent's rolling-up keys are omitted.
 
@@ -204,10 +272,21 @@ Each of these says something the ADR makes false.
 | `CONTEXT.md:72` | the whole **Field source** glossary entry — deleted, and one entry for the `data` namespace is owed in its place. No glossary term names the consumer's own per-Entry values today, so every name built on the concept (the harness's `PlannerMeta`, the `TData` generic) is named after the storage key instead of after the thing |
 | `plans/01:273-281` | the `FieldSource` type and its default |
 | `plans/01:330` | "Source decides stored or computed" |
-| `plans/02:454` | the same sentence again |
+| `plans/02` §2.6 | the same rule again, in the paragraph on what a Source decides for a parent's aggregate. Cite the paragraph, not a copied title — `:454` reads *"Source decides what happens to a parent's aggregate"*, which is not the `plans/01:330` sentence |
 | `plans/02:738` | "anything of yours goes in `meta` and survives byte for byte" — the rule survives, the word does not |
-| `plans/02:749` | `DuplicateFieldSourceError` and `InvalidFieldSourceError` rows |
+| `plans/02:749` | `DuplicateFieldSourceError` and `InvalidFieldSourceError` rows leave; `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError` and `EmptySegmentsError` arrive (plus `RollUpKindsWouldDropValuesError` if Open 6 lands that way) |
+| `plans/02` §"common case is a shorthand" | `update('t1', { start, cost })` is the shipped example and it stops compiling. Either the principle drops for Field writes, or the ADR re-opens the flat edit. It cannot stay as written — see *The write, and what the namespace costs* in the ADR |
+| `plans/02` Document section | a Document is our **save format**, not an interchange format. The ADR decides it; `plans/02` is where a reader looks for it |
+| `plans/02` type rows | `DataEdit<TData>` and `EntryEdit<TData>` are public and need rows |
+| `plans/s2-data-core/s2.6-serialization.md:76` | states the consumer rule in the old word. A person missed this one; the grep is why |
+| `plans/s2-data-core/README.md` | three separate rows in one file: D-S2-22's **precedence clause** (the yield-to-the-body paragraph, *not* the decision — D-S2-22 is "the Rollup is a core step"); D-S2-10's and D-S2-22's `referenceDate` fill (`:278`, `:592`, change row `:842`); D-S2-7's `meta` carve-out (the equality-table row at `:224`, not the decision) |
+| `plans/s4-hierarchy-and-rows/README.md` | D-S4-35 / Q17 (*omitted `source` is `meta` under the Field key*), and the rule table's *"Whole-`meta` write after a declared Field exists"* row |
+| `plans/s4-hierarchy-and-rows/s4.1-field-registry.md` | D-S4-2's adapter — *one adapter reads and writes a `FieldSource`* — and the whole-`meta` write rule inside it |
+| `plans/02-01-API-Redo.md` | already opens with *"This review is a stale."* Say **superseded by ADR 0011** in the same line, because it still argues for flat runtime keys and will otherwise be read as a source |
 | ADR 0005 | its `meta` rulings, superseded if this is accepted |
+| `CONTEXT.md` | the new glossary entry (see below) |
+
+**The glossary entry is owed, and it has to fix a collision.** `data/` is a core layer and `entry.data` is the consumer's bag. The call site `entry.data.owner` is fine and does not change. The *spec sentence* "`data/` merges `data`" is not. The rule: **in prose, write `data/` for the layer and `entry.data` for the bag — never the bare word.** `values` was considered as a rename and rejected: it collides with `RollUpContext.values`.
 
 ## Issues
 
@@ -215,7 +294,7 @@ Each of these says something the ADR makes false.
 
 | Issue | How |
 |---|---|
-| [#208](../../issues/208) | *`EntryInput` cannot carry a declared Field value.* The defect it names is that a page must know **where** a value lives to author it, and gets no warning when that knowledge goes stale: declare `source: { from: 'meta', key: 'budget' }` and `meta: { cost }` silently stops filling the Field. Deleting `FieldSource` removes the aliasing, so the key **is** the address and the failure cannot be expressed. **Its proposed shape is rejected**: the ADR rules `data: { cost: 1500 }`, not a flat `cost: 1500` on `EntryInput`, because ingest supplies a record while an edit patches one. Its first open question dissolves — an undeclared key inside `data` stays opaque. **Its second is unanswered — see Open 2.** |
+| [#208](../../issues/208) | *`EntryInput` cannot carry a declared Field value.* The defect it names is that a page must know **where** a value lives to author it, and gets no warning when that knowledge goes stale: declare `source: { from: 'meta', key: 'budget' }` and `meta: { cost }` silently stops filling the Field. Deleting `FieldSource` removes the aliasing, so the key **is** the address and the failure cannot be expressed. **Its proposed shape is rejected**: the ADR rules `data: { cost: 1500 }`, not a flat `cost: 1500` on `EntryInput`, because ingest supplies a record while an edit patches one. Both of its open questions are answered: an undeclared key inside `data` is **writable and named on the ChangeSet** (Open 1), and `add({ data })` emits **one `EntityAdded` row** (Open 2). |
 
 ### Related, and **not** closed
 
@@ -237,15 +316,21 @@ Each of these says something the ADR makes false.
 2. **The `compute` + `rollUp` registry refusal must land before [#213](../../issues/213)'s own fix.** Today a `compute` Field that also declares `rollUp` writes a phantom changeset row (`data/rollup.ts:213-214` pushes to `updated` before `writeOntoEntry`). Fix #213 first and the Rollup starts throwing instead.
 3. **Group B before group C.** The refusal at `entries.update()` is written against the merged patch.
 4. **Group D before [#242](../../issues/242).**
+5. **Blocking B1 before group A**, and **Open 5 before group C**. Both are on this page; neither is a question the implementer may answer in passing.
+6. **[#270](../../issues/270) before or with group C.** Group C makes a reload correct and leaves the live store stale, so the two disagree until #270 lands. The first save-and-load after a child disappears is where a consumer sees it.
+7. **Answer *does `Field.editable: false` refuse `entries.update()`?* before group A deletes `CORE_FIELD_OVERRIDABLE_KEYS`.** `interactions.edit` gates the cell editor and the drags only. If `update()` still writes, the deletion needs a data-level replacement, and [#256](../../issues/256) is where it belongs. This is the same two-doors-one-answer shape as group C, at a different Field.
 
 ## Still open
 
-Each of these changes something a reader can observe, so none can be settled silently during implementation.
+Each of these changes something a reader can observe, so none can be settled silently during implementation. **These numbers are shared with the ADR's Open list** — Open *n* is the same question in both files. The **Blocking B1–B3** below are a separate list, because they gate group A.
 
-1. ~~**May an undeclared key travel in a `data` patch?**~~ **Settled: yes.** The guard bought only a typo check, and it never covered `add()`. Group B must put undeclared `data` keys into `proposedKeys`, or an undeclared write produces no ChangeSet row and no undo step.
+1. ~~**May an undeclared key travel in a `data` patch?**~~ **Settled: yes.** The guard bought only a typo check, and it never covered `add()`. Group B's three edits are what make the ruling real — `proposedKeys` alone ships it as a silent write.
 2. ~~**Does `entries.add({ data })` emit one `EntityAdded` row, or an added row plus a Field row for each key?**~~ **Settled: one `EntityAdded` row, carrying the whole Entry.** Per-Field rows would undo one user action in several steps, and they say nothing the added row does not already carry. This closes [#208](../../issues/208)'s second question.
-3. **What an S7 plugin does when it meets a `progress` value it did not write.** #192 rules the declaration case unrepairable; the value case has no rule. Observable the first time the plugin is installed on saved data.
-4. ~~**The schema number.**~~ **Settled: `5` now, `1` at release.** `5` keeps the count monotonic while the library is unreleased, so a stale local file fails loudly. The count restarts at `1` when the library first ships. Fixtures are regenerated by `toDocument`, never hand-edited.
+3. ~~**The schema number.**~~ **Settled: `5` now, `1` at release.** `5` keeps the count monotonic while the library is unreleased, so a stale local file fails loudly. The count restarts at `1` when the library first ships. Fixtures are regenerated by `toDocument`, never hand-edited. *One half stays open:* after the restart, a pre-release `schema: 3` and a released `schema: 3` are the same number in two shapes. Nothing reads schema 3 today, so nothing breaks now — the question is whether the release gate owes a rule that a released reader refuses a file it did not write.
+4. ~~**What `InvalidInstantError` still guards.**~~ **Settled:** an *unreadable* date, and an Entry that authors one date without the other. It stops refusing an Entry that authors neither.
+5. **What a plugin cascade's write to a derived cell does.** **Open, and it gates group C.** The guard sits on `EntryStore.update()`, so the hook is exempt from the throw — but exempt from the throw is not *the write survives*. Verified at HEAD: `rollup.ts:196` reads the transaction **body** (`build-commit-change-set.ts:301` binds `body` to the body alone; the extender's edits reach only `merged`), so a cascade's parent write commits, lands in the ChangeSet, enters undo, and the same pass overwrites it — `foldChangeSet` does no per-field dedupe, so **both rows sit in one undo step**. Answer it before group C deletes the `body`/`merged` split.
+6. **Whether a `rollUpKinds` flip refuses or destroys.** **Open, and it has no work group either way.** See the ADR's Open 6.
+7. **What an S7 plugin does when it meets a `progress` value it did not write.** #192 rules the declaration case unrepairable; the value case has no rule. Observable the first time the plugin is installed on saved data. This is **Blocking B3**, and it is downstream of B1.
 
 ## Blocking — settle before group A starts
 
@@ -267,6 +352,15 @@ Today a plugin's Field values sit in the same bag as the consumer's, so `Entry.d
 
 The same rule applies to every question below: **show the call site before you choose.**
 
+**Input, not a ruling (2026-09-09 review): it recommends C.** Every supporting fact was verified at HEAD:
+
+- `PluginStores` (`plugin-store.ts:42`), `reserve<T>()` (`:62`), `read<T>()` (`:74`), and `PluginStore` / `PluginStoreView` already public from `api/dataset-plugin.ts:29`. C adds no store and no Document key.
+- D-S5-24 opens with the reason: *"ADR 0002 named the problem: per-plugin per-entry data must not live in `Entry.meta`, or a host and a plugin collide in one field."* Option A re-opens that collision under a new name, one level up.
+- C closes **B3** at no extra cost: a consumer's `progress` in `data` and the plugin's in `plugin:s7` cannot be confused.
+- **C's real cost, and it is not free:** with two homes for Field values, `fieldValue(id, key)` has to resolve *which* home. `FieldRegistry.#declaringPlugin` (`field-registry.ts:99`) already records the owner, so the routing exists — but the **read path for both callers** has to be written, not just the write path. C is also the largest change of the three, and it has no work group in this plan.
+
+A is the industry's shared-metadata-bag pattern (last writer wins at a key); C is the slice-per-owner pattern. The ADR's consequences now say plainly that they describe HEAD rather than a ruling — do not read them as a decision already taken.
+
 ### B2 — What does a `compute` Field show on a rolling-up parent?
 
 A computed Field cannot roll up; the union forbids it. So on a group row, does `compute(entry, ctx)` run against the group Entry and show its answer, or does the cell stay empty?
@@ -274,6 +368,8 @@ A computed Field cannot roll up; the union forbids it. So on a group row, does `
 If it runs, a `compute` Field reading `entry.data.cost` returns the group's **rolled-up** `cost` — a derived value reaching a computed Field through a door the union looks like it closed. If it does not run, a `ref: (entry) => rowNumber(entry.id)` Field goes blank on every group, which a consumer reads as a bug.
 
 Held open on 2026-09-08 at the author's request, pending a clarification of what the Field is for. Settle it with sample code: one `compute` Field of each kind, and the group row beside the leaf row.
+
+**Input, not a ruling (2026-09-09 review): run `compute` on every row.** The union closes *storage*, not *reading*. A `compute` Field reading `entry.data.cost` on a group sees the value the Rollup already put in the store — that is a stored read, not a second rollup, and the door was never closed. The alternative blanks `ref` on every group row, which a consumer reads as a bug. The review also argues this does **not** gate group C: it changes what a cell shows, not what the store holds. If that holds, B2 comes off the Blocking list and becomes an ordinary Open item. The limit worth pointing #214 at is the real one: a `compute` Field cannot ask *am I a parent?*
 
 ### B3 — What does an S7 plugin do with a `progress` value it did not write?
 
@@ -291,13 +387,17 @@ Raised 2026-09-08, during this ADR's review. **It changes nothing in this plan.*
 
 ## Gate
 
-**The prose sweep is mechanical, not a reading.** Section F lists what a person found. A person missed `plans/s2-data-core/s2.6-serialization.md:76`, which states the consumer rule in the old word. After group A, this must return nothing outside the ADR's own history:
+**The prose sweep is mechanical, not a reading.** Section F lists what a person found. A person missed `plans/s2-data-core/s2.6-serialization.md:76`, which states the consumer rule in the old word. Keep the F table as well — it tells a reader what changed and why. The grep only proves nothing was missed.
+
+**The grep has to be scoped, or it is not a gate.** Over `plans/ docs/ src/` it returns **648 hits across 121 files** at HEAD — `import.meta`, every superseded ADR, and this folder's own review files. ADR 0006 rules that an ADR is superseded, never edited, so history is *supposed* to keep the old word. Scope it to the live surface:
 
 ```
-grep -rn '\bmeta\b\|FieldSource\|source: {' plans/ docs/ src/
+grep -rn '\bmeta\b\|FieldSource\|source: {' src/ harness/ CONTEXT.md CLAUDE.md \
+  plans/00-overview.md plans/01-domain-architecture.md plans/02-public-api.md \
+  | grep -v 'import\.meta'
 ```
 
-Keep the F table as well — it tells a reader what changed and why. The grep only proves nothing was missed.
+**Which `plans/` files are live spec:** `00`–`04` only. Everything under `plans/s*/` is the record of a finished slice — it is edited when a decision it records is retired (that is section F's job, listed row by row), and it is **not** part of the gate. This grep returns **453** at HEAD and must return **0** after group A. A non-zero count is a missed row in F, not a reason to widen the exclusions.
 
 `pnpm verify:full`, and its **last line** is the answer — `verify:full PASS — …` or `verify:full FAILED at check N of M: …`. Capture it with a redirect, never a pipe: `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`. A pipe makes `$?` read `tail`.
 
@@ -306,3 +406,7 @@ Review `harness/main.ts` and `harness/planner.ts` on every commit here, changed 
 ## Naming already landed
 
 `9c3f704` renamed the conversion family before this work started, so write against the current names: `toStoredEdit` / `toStoredEdits` (was `readEdit`), `toEditReading` / `toEditsReading`, `toEntry` / `toEntries`, `fromDocument` (was `readDocument`), `toDocument` (was `toJSON` inside `data/serialization`), `entryAfterEdit` (was `overlayStoredEdit`), `extraEditsReadingFor` (was `DatasetState.readExtenderEdits`). Result nouns kept their word: `EditReading`, `EntryReadContext`, `readers`, `entry-reader.ts`.
+
+**One rename is still owed, and it is group A's:** `StoredEdit` → `ProposedEdit`, and `toStoredEdit` → `toProposedEdit` with it. The ADR gives the word *stored* to the Field union, and a `StoredEdit` is never stored — it is a write nobody has applied, published as `request.proposed`. Groups B onward are written in the new names. Until A lands, today's code still reads `toStoredEdit`.
+
+**Two Document doors, two levels, and they are not synonyms.** Public: `dataset.toJSON()` and `Dataset.fromJSON()` (`src/api/dataset.ts:312,326`). Internal: `toDocument` and `fromDocument` in `data/serialization`, which the public pair calls. This plan names the function it changes; the ADR names the door a consumer calls. Neither file may use one word for the other.
