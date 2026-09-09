@@ -96,19 +96,21 @@ with the value** — a type, a rollup, a column, an editor. Editing is *not* one
 ```ts
 dataset.entries.get('t1')?.data.owner            // 'Jo' — typed by PlannerEntryData
 dataset.entries.get('t1')?.data.phase            // 2 — typed, undeclared, and that is fine
-dataset.entries.fieldValue('t1', 'owner')        // 'Jo' — unknown
-dataset.entries.fieldValue('t1', 'start')        // an Instant — unknown
-dataset.entries.fieldValue('t1', 'ref')          // the compute answer — unknown
+dataset.entries.fieldValue('t1', 'owner')        // 'Jo' — string, from TData
+dataset.entries.fieldValue('t1', 'start')        // an Instant — from CoreFieldValues
+dataset.entries.fieldValue('t1', 'ref')          // the compute answer — unknown, owns no TData key
 dataset.entries.fieldValue('t1', 'ownr')         // undefined — see the loss below
 ```
 
 **Two doors read one value, and each answers a different question.** `entry.data.x` is the stored
-bag, typed. `fieldValue(id, key)` reads *any* Field key — a core key, a `compute` Field, a plugin's
-— and answers `unknown`. Both stay; a data grid publishes the same pair.
+bag, typed. `fieldValue(id, key)` reads *any* Field key — a core key, a `compute` Field, a plugin's.
+Both stay; every comparable library publishes the same pair (§16.2).
 
-**The crooked half, said out loud.** After this ADR the **typed** door is the bag and the
-**Field-aware** door is the weak one. A renderer that wants a type reaches into `data` and cannot
-see a `compute` Field at all. That is [#267](../../issues/267) and this ADR does not close it.
+**The by-key door keeps its type, and an earlier draft of this file said it lost it.**
+`model/dataset.ts:41` types it `FieldValue<TFields, K>` at HEAD, and `FieldValue` maps over the
+**generic**, never the registry — so one generic carries it across as `FieldValue<TData, K>`. What
+stays `unknown` is what owns no `TData` key: a `compute` Field's answer, and a plugin's Field. That
+residue is [#267](../../issues/267) and this ADR does not close it. See §16.2, which is rewritten.
 
 **One loss, accepted:** `fieldValue(id, 'ownr')` answers `undefined` where it throws
 `UnknownFieldError` today. **Read by key never throws; declare by key still does** — `gridColumns`,
@@ -835,47 +837,45 @@ as evidence, and it became a justification inside a governing document. It is ev
 and a false one look identical. **Suggested change:** fix the three harness declarations now, in their
 own commit, ahead of group A — then group A inherits a cast-free file instead of claiming credit.
 
-### 16.2 `fieldValue` can never be typed, because the registry erases `TValue`
+### 16.2 `fieldValue` keeps its type. The registry was never what carried it
 
-**The call site that suffers:**
-
-```ts
-const cost: unknown = dataset.entries.fieldValue('t1', 'cost');   // always unknown
-const n = (cost as number) + 1;                                   // every consumer casts
-```
-
-**The cause is a code shape, not a type-system limit.** `Field<TValue>` carries the value type at
-the declaration, and then every holder throws it away:
+**This section said the opposite, and it was wrong.** It claimed `fieldValue` can never be typed
+because the registry erases `TValue`. The registry never carried the typing. `model/dataset.ts:41`
+ships this at HEAD:
 
 ```ts
-readonly #byKey = new Map<string, ResolvedField>();     // field-registry.ts:114 — bare Field
-get all(): readonly ResolvedField[]                     // :140
-fields?: readonly Field[]                               // DatasetOptions — bare Field
+fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
 ```
 
-`ResolvedField extends Field` is non-generic, so `TValue` is dead the moment a declaration enters
-the registry. §8 states this honestly ("a declaration-site aid, nothing reads it back"), which is
-the right thing to *document* and the wrong thing to *accept permanently*.
+`FieldValue` maps over the **generic**, not over the registry. So the drafted ADR does not fail to
+close a standing gap — **it removes typing that ships today**, and §2 above showed
+`fieldValue('t1', 'start')` answering `unknown` where it answers `Instant` now.
 
-**Suggested change, and it is additive.** Keep the registry storing bare `Field` — the runtime needs
-no types — and let `Dataset` infer a key→value map from the `fields` option literal, then give
-`fieldValue` a typed overload:
+**The fix is a rename of a live type.** One generic carries it across unchanged:
 
 ```ts
-const dataset = new Dataset({
-  fields: [{ key: 'cost', type: 'number' }, { key: 'owner' }] as const,
-  // …
-});
-dataset.entries.fieldValue('t1', 'cost');    // number | undefined
-dataset.entries.fieldValue('t1', 'nope');    // unknown — undeclared, and that is legal (§4)
+fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TData, K> | undefined;
 ```
 
-**Cost, stated plainly:** it needs `as const` on `fields` to preserve the literal keys, and it
-reintroduces a second inferred type — which is what this ADR just deleted. The difference is that it
-would be *inferred from one declaration* rather than hand-written beside another, so the two cannot
-disagree. **This is [#267](../../issues/267) and it should stay out of ADR 0011** — but the ADR
-should stop implying the gap is inherent. It is a consequence of erasing `TValue` at the registry
-boundary, and it is reversible.
+A core key reads as its shipped type, through `CoreFieldValues`. A key `TData` declares reads as the
+type the consumer wrote. Nothing about `Field<TValue>` or `ResolvedField` changes.
+
+**What is genuinely untyped, and it is a much smaller claim.** Only a value that owns no `TData`
+key: a `compute` Field's answer, and a plugin's Field. `TValue` *is* dead at the registry — §8 states
+that correctly — but that erasure only reaches the `compute` arm.
+
+**Where the generic cannot know, the caller names it.** AG Grid publishes exactly this as
+`getCellValue<TValue>`, and it is the same assertion a consumer writes today, moved to where it
+reads better:
+
+```ts
+const cost = dataset.entries.fieldValue<number>('t1', 'cost');    // number | undefined
+```
+
+**The `as const` route is rejected.** Inferring a key→value map from the `fields` literal needs
+`as const` on every declaration, and it reintroduces a second inferred type beside the first — the
+disagreement this ADR exists to delete. It also serves only the `compute` arm, which is the rarest
+Field. **#267 survives as one sentence:** a `compute` Field's value type is not inferable.
 
 ### 16.3 The cascade's honesty problem is a `body`/`merged` split, not a design choice
 
