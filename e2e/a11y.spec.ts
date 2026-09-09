@@ -30,7 +30,7 @@ function readHarnessPageFiles(): string[] {
 
 const DOCS_NAV_PATH = fileURLToPath(new URL('../harness/docs/docs-nav.ts', import.meta.url));
 
-// `HARNESS_PAGES` names the docs folder once, by its index page, so the nine pages behind that one
+// `HARNESS_PAGES` names the docs folder once, by its index page, so the docs pages behind that one
 // entry shipped unswept — D-S5-27 asks for every page the gallery *links*, and the docs nav links
 // all of them. `docs-nav.ts` holds that second list, and it is a browser script for the same reason
 // `harness-nav.ts` is, so it is read the same way: out of the source text, never retyped.

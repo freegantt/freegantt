@@ -21,7 +21,7 @@
           maintainer can open the Gantt and the explanation in one session. Start below with how to run the
           harness and what the smallest working Gantt looks like, then follow a page from §3.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-09 — slice S5</div>
         <div class="meta">
           <span>location: <code>harness/docs/</code></span>
           <span>maintainer maps of src/ as S5 runs it</span>
@@ -254,6 +254,14 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
             <p>
               What <code>new Gantt(…)</code> builds, what one <code>render()</code> does, and how an edit
               reaches the screen. With measured pass counts.
+            </p>
+          </article>
+          <article class="card">
+            <h3><a href="./refusals.html">How a refusal reaches the caller</a></h3>
+            <p class="path">refusals.html</p>
+            <p>
+              A <code>beforeChange</code> veto from the mutator to the Error report and the thrown
+              <code>MutationCancelledError</code>, plus the gesture and cell-editor doors.
             </p>
           </article>
           <article class="card">
