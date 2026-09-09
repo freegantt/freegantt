@@ -2,7 +2,7 @@
 
 **Governing decision:** [`docs/adr/0011-consumer-values-live-in-data-and-a-derived-value-never-persists.md`](../../docs/adr/0011-consumer-values-live-in-data-and-a-derived-value-never-persists.md) — status `proposed`, still a draft.
 
-The ADR carries the reasoning. This file carries the shape, the order of work, the issues, and what is still undecided.
+The ADR carries the reasoning. This file carries the shape, the order of work, the issues, and what is still undecided. [`api.md`](api.md) carries the call sites, before and after; [`api-open-questions.md`](api-open-questions.md) carries questions raised against that surface that have no answer yet.
 
 The working review is [`reviews/2026-09-09.md`](reviews/2026-09-09.md). It merges the 8 September API-surface review, the 8 September draft fixes, the 8 September consistency review, the 9 September consumer-call review, and a second 9 September review of the merged result. Delete it once each finding is settled here or in an issue — **seven decisions (D1–D7) are still unread**, and they live nowhere else in summary form.
 

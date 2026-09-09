@@ -7,6 +7,9 @@ and after, for every surface the ADR moves.
 Written 2026-09-09. Nothing here is implemented — the ADR is `proposed` and **group A has not
 started**, because [Blocking B1](README.md#b1--where-does-a-plugins-own-field-value-live) gates it.
 
+Unanswered questions raised against this surface live in
+[`api-open-questions.md`](api-open-questions.md), not here.
+
 > **How to read the status marks.** Every block carries one.
 >
 > | Mark | Means |
