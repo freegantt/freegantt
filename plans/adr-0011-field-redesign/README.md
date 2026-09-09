@@ -4,7 +4,7 @@
 
 The ADR carries the reasoning. This file carries the shape, the order of work, the issues, and what is still undecided.
 
-An open review sits beside this file: [`review-2026-09-08-api-surface.md`](review-2026-09-08-api-surface.md). It checks every proposed API against the code at `33aceec`. Delete it once each finding is settled here or in an issue.
+Two open working files sit beside this one. [`review-2026-09-08-api-surface.md`](review-2026-09-08-api-surface.md) checks every proposed API against the code at `33aceec`. [`draft-fixes-2026-09-08.md`](draft-fixes-2026-09-08.md) drafts a fix for each major finding, reviewed once more for a smaller surface. Delete both once each finding is settled here or in an issue.
 
 ## The shape
 
