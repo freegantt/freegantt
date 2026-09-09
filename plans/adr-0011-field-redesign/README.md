@@ -144,12 +144,12 @@ One structural question at every door: *is this a rolling-up kind, and is this a
 | cell editor, bar drag | refused | already true (`view/capability.ts:119`) |
 | `entries.update()` | refused | **the change** — move `rollsUp` into `data/` |
 | `entries.add()`, `new Dataset({ entries })`, `fromJSON` | value **dropped**, report raised | **the change** |
-| the extension hook | **decision 5** | not refused, by where the guard sits |
+| the extension hook | write **dropped**, warning raised | **decision 5, closed** — exempt from the throw only |
 | autoGroup promotion | dates change owner mid-commit | **unowned until now** |
 | `toJSON` | key **omitted** | **the change** |
 
-- Promotion is the third door into a rolling-up kind. Conversion **promotes and demotes**, and stays automatic. What demotion returns to is decision **8** — answer before this group, because omission turns a stale `'group'` into a row with no dates and no bar.
-- **Demotion is what a childless rolling-up parent gets, not a dateless row.** An earlier draft of this line said such a parent keeps no dates and draws no bar. That was the promote-only consequence, and the conversion demotes now. It also mis-tied the case to #270: that issue is a **declining Aggregator that saw children** (ADR *One finding this exposes*), and a childless parent never reaches an Aggregator at all. #270 stands on its own and demotion does not touch it.
+- Promotion is the third door into a rolling-up kind. Conversion **promotes and demotes**, and stays automatic. What kind demotion returns to is decision **8** — answer before this group. Dates on demotion are settled: the Entry becomes a **normal Entry with no dates** (no children left to calculate from). It can be dated later.
+- **Demotion yields a dateless normal Entry, not a stale rolling-up row.** An earlier line here said demotion is "not a dateless row". That was wrong: there is nothing to calculate, so `start`/`end` are absent. What it is *not* is a childless `'group'` that stays rolling-up and draws no bar. #270 is a **declining Aggregator that saw children** (ADR *One finding this exposes*); a childless parent never reaches an Aggregator at all, so #270 stands on its own and demotion does not touch it.
 - The report goes through `raiseError` at `severity: 'warning'`, **always**. Not `isDevMode()`-gated (D-S5-41).
 - Delete `reportCorrectedRollUps`.
 - On a rolling-up parent, an Aggregator’s `undefined` means **no value**.
@@ -208,7 +208,7 @@ Group F may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). `p
 | `plans/02` §2.6 | the same rule; `:454` reads *"Source decides what happens to a parent's aggregate"* |
 | `plans/02:738` | "anything of yours goes in `meta` and survives byte for byte" — the rule survives, the word does not |
 | `CONTEXT.md:127` | names `DataEdit` and its `data` key from this ADR — both renamed (`PropsEdit`, `props`) |
-| `plans/02:749` | `DuplicateFieldSourceError` / `InvalidFieldSourceError` leave; `DerivedFieldNotWritableError` / `ComputedFieldCannotBeWrittenError` / `FieldNotEditableError` arrive. `RollUpKindsWouldDropValuesError` if decision **6** refuses. `PluginFieldNotInDataError` if decision **9** lands on the store. `EmptySegmentsError` already ships |
+| `plans/02:749` | `DuplicateFieldSourceError` / `InvalidFieldSourceError` leave; `DerivedFieldNotWritableError` / `ComputedFieldCannotBeWrittenError` / `FieldNotEditableError` arrive. No `RollUpKindsWouldDropValuesError` — decision **6** closed as *drop and recalculate*. `PluginFieldNotInDataError` if decision **9** lands on the store. `EmptySegmentsError` already ships |
 | `plans/02` §"common case is a shorthand" | `update('t1', { start, cost })` stops compiling unless decision **11** keeps a declared-key flat spelling |
 | `plans/02` Document section | a Document is our **save format**, not an interchange format |
 | `plans/02` type rows | `PropsEdit<TProps>` and `EntryEdit<TProps>` are public |
@@ -247,7 +247,7 @@ Group F may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). `p
 2. **The `compute` + `rollUp` registry refusal must land before [#213](../../issues/213)’s own fix.**
 3. **Group B before group C.** The refusal at `entries.update()` is written against the merged patch.
 4. **Group D before [#242](../../issues/242).**
-5. **Decision 9 before group A. Decision 5 before group C.** Neither is a question the implementer may answer in passing.
+5. **Decision 9 before group A.** It is not a question the implementer may answer in passing. **Decision 5 is closed**, and it leaves one code fix ahead of group C: unify the proposed-Field predicate before the `body`/`merged` split is deleted.
 6. **[#270](../../issues/270) before or with group C.**
 7. **Answered 2026-09-09: it does not, and the ruling is that it must.** `editable` is read at `view/capability.ts:120` only. The gate moves into `data/` in group A.
 8. **Decisions 18 and 19 before group A.** 18 sets the default posture of `entries.update()`. 19 replaces the deleted core-key gate.
@@ -255,7 +255,7 @@ Group F may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). `p
 
 ## Parked — do not design against this here
 
-**Let the consumer decide how a value rolls up, in the Rollup callback, groups included.** Group C ships the blanket rule. A per-call Aggregator answer is a later ADR. Decision **6**’s second half asks whether a per-entry flag should replace `rollUpKinds`; that question lives in the ADR, not here.
+**Let the consumer decide how a value rolls up, in the Rollup callback, groups included.** Group C ships the blanket rule. A per-call Aggregator answer is a later ADR. Decision **6** is closed for what a flip *does* — it drops and recalculates. Its surviving half asks whether a per-entry flag should replace `rollUpKinds` at all. That question is parked beside decision **20**, and it lives in the ADR, not here.
 
 ## Gate
 

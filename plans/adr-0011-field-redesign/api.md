@@ -126,9 +126,9 @@ update('phase-1', { start, props: { cost: 999 } })          // refused whole
 add({ id, kind: 'group', props: { cost: 500 } })            // succeeds; cost dropped; one warning
 ```
 
-`toJSON()` omits a rolling-up parent’s rolling-up keys. AutoGroup conversion is a door in **both** directions, and a caller sees `kind` change under them: a dated parent that gains a child starts deriving those dates in that commit, and one that loses its last child converts back. What it converts back **to** is decision **8**.
+`toJSON()` omits a rolling-up parent’s rolling-up keys. AutoGroup conversion is a door in **both** directions, and a caller sees `kind` change under them: a dated parent that gains a child starts deriving those dates in that commit, and one that loses its last child converts back to a **normal Entry with no dates**. What kind it converts back **to** is decision **8**.
 
-**Issue.** A plugin cascade writing a derived cell is exempt from the throw and then overwritten (decision **5**). Answer before group C, which deletes the code the answer depends on.
+**Decision 5, closed.** A plugin cascade writing a derived cell has that write **dropped**, with one warning at `severity: 'warning'`. It is exempt from the *throw* only. Unify the proposed-Field predicate — `rollup.ts:196` reads `body`, `build-commit-change-set.ts:301` binds `body` to the transaction body alone — **before** group C deletes the `body`/`merged` split.
 
 ---
 
@@ -176,12 +176,19 @@ The published `compute` sample writes `duration.value / MS.DAY`. `MS` is public 
 ## `rollUpKinds`
 
 ```ts
-dataset.rollUpKinds = ['group', 'milestone']
+dataset.rollUpKinds = ['group', 'milestone']   // drops authored values on those kinds, recalculates
+dataset.entries.update('p', { props: { cost: 500 } })
+dataset.entries.add({ id: 'c', parentId: 'p' })  // p now rolls up: cost 500 → 40, one ChangeSet row
+dataset.history.undo()                            // c leaves, p stops rolling up, cost is 500 again
 ```
+
+**Decision 6, closed.** An Entry that starts rolling up drops its authored values on rolling-up Fields, and the Rollup recalculates them. **No error, at any of the three doors** — promotion, a `kind` write, a `rollUpKinds` flip. The drop is an ordinary ChangeSet row and undo restores it, because undo reverses the cause in the same step. `rollUpKinds` is **not** a destructive setter and history is never cleared. No `RollUpKindsWouldDropValuesError`.
 
 Flipping a kind *out* keeps the last derived answer, now authored.
 
-**Issue.** Flipping a kind *in* either drops authored values and clears undo, or throws `RollUpKindsWouldDropValuesError` (decision **6**). The ADR as drafted destroys. The recommendation is to refuse. The larger question is whether a per-entry flag should replace the kind set.
+**Issue.** The flip's cause is a config assignment, and `ChangeSet` has no row for one. So undoing the flip's step restores the values while the kind still rolls up. Either the undo step reverses the config key too, or the flip's drops stay out of history. One door, recorded under decision 6's ruling.
+
+**Parked, not blocking.** Whether a per-entry flag should replace the kind set. It sits beside decision **20**.
 
 ---
 
@@ -196,6 +203,6 @@ Flipping a kind *out* keeps the last derived answer, now authored.
 
 **Deleted:** `FieldSource`, `Field.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`, `CORE_FIELD_OVERRIDABLE_KEYS`, `reportCorrectedRollUps`.
 
-**New errors:** `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError`, `FieldNotEditableError`. Conditional: `RollUpKindsWouldDropValuesError` (decision **6** refuse), `PluginFieldNotInDataError` (decision **9** store).
+**New errors:** `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError`, `FieldNotEditableError`. Conditional: `PluginFieldNotInDataError` (decision **9** store). **No `RollUpKindsWouldDropValuesError`** — decision **6** closed as *drop and recalculate*.
 
 `UnknownFieldError` stays at the top level of an edit. `fieldValue` stops throwing it only if decision **1** lets undeclared keys into the ChangeSet.

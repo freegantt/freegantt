@@ -6,9 +6,71 @@
 
 | Open in the ADR | Closed here |
 |---|---|
-| 1, 5, 6, 8, 9, 11, 12, 13, 16, 18, 19 | 2, 3, 4, 7, 10, 14, 15, 17 |
+| 1, 8, 9, 11, 12, 13, 16, 18, 19, 20 | 2, 3, 4, **5**, **6**, 7, 10, 14, 15, 17 |
 
-Eight closed. Two of the eight were settled on 2026-09-08 and are kept for the record. Six closed on 2026-09-09: one by the author's ruling, one by the author's ruling on a review finding, and four by a consistency review that found them already answered.
+Ten closed. Two were settled on 2026-09-08 and are kept for the record. Six closed on 2026-09-09: one by the author's ruling, one by the author's ruling on a review finding, and four by a consistency review that found them already answered. **Two more closed on 2026-09-09 by the author** — **5** and **6** — together with one ruling that was never numbered, on a `props` key naming a core key.
+
+---
+
+## 6 — an Entry that starts rolling up drops its authored values
+
+**Closed 2026-09-09. Ruled by the author.** Was: *does a `rollUpKinds` flip refuse or destroy?*
+
+**It drops and recalculates. The library never refuses, at any door.**
+
+**The reason is the author's own story, and the draft had lost sight of it.** A person types `cost: 500` on a row. They then decide that row is a parent, and they give it children. A `cost` on a parent comes from its children, so `500` has no meaning any more and the Rollup replaces it. **Throwing there refuses an ordinary edit over a value the author is plainly finished with.** No product asks a person to empty a cell before they may indent a task under it.
+
+Three doors reach the same state, and all three behave alike: autoGroup promotion, a `kind` write, and a `rollUpKinds` flip. Flipping a kind **out** of the set keeps the last derived answer, now authored (D-S4-6).
+
+**This ruling follows the ADR's own rule rather than bending it.** *Name a Field and the library answers; change the structure and the library keeps what is yours.* `update('p', { props: { cost: 999 } })` on a parent that already rolls up **throws** `DerivedFieldNotWritableError` — the caller named `cost`. `add({ id: 'c', parentId: 'p' })` **drops** `p`'s authored `cost` — the caller named a parent, not a Field. Same split as *`update()` refuses; `add()` drops*, one level out.
+
+**Undo was the draft's stated reason to refuse, and it does not hold.** The draft argued that replaying a step whose `from` is an authored parent value would restore a value the new setting refuses, and it wiped the whole history to escape that. It read the drop as a lone row. The drop is **one row of the transaction that caused it**:
+
+```
+  commit:  child 'a' gains parentId 'p'      ← the cause
+           p.cost   500 → 40                 ← the drop, same ChangeSet
+
+  undo:    child 'a' loses parentId 'p'      ← the cause reverses
+           p.cost    40 → 500                ← so 500 is authored again, and legal
+```
+
+Nothing replays a value the new state refuses, because the new state goes back with it. **History is never cleared, and `RollUpKindsWouldDropValuesError` is not added.** `rollUpKinds` is not a destructive setter.
+
+**One follow-up on one door, and it is not a re-opening.** Promotion and a `kind` write carry their cause in the same transaction. A `rollUpKinds` flip's cause is a **config assignment**, and `ChangeSet` has no row shape for one — `added`, `removed` and `updated` each name a store entity. So undoing that step restores the values while `rollUpKinds` still rolls them up, and the next commit that touches the subtree drops them again. **Two ways out, and the flip needs one:** the undo step reverses the config key beside the values, or the flip's drops stay out of history and the key's own documentation says so. The first matches the ruling's logic — undo reverses the user's action, and the action was *turn rolling-up on*.
+
+**Still parked, and untouched by this ruling:** whether `rollUpKinds` is the right axis at all, or whether a per-entry flag should carry *"do my values derive?"*. Two comparable products put it on the record and neither ships a kind set. That question sits beside decision **20**. It is parked, not blocking.
+
+---
+
+## 5 — a plugin cascade's write to a derived cell is dropped, with a warning
+
+**Closed 2026-09-09. Ruled by the author.**
+
+A plugin cascade that writes a rolling-up Field on a rolling-up parent has that write **dropped**, and the library raises one warning through `raiseError` at `severity: 'warning'` (ADR 0009).
+
+`entries.update()` throws `DerivedFieldNotWritableError` for the same write. A cascade does not, because the guard sits at the public door and the hook reads through a different one. That placement is deliberate — a plugin author learns no rule and checks no predicate. **Exempt from the throw was never the same as the write surviving**, and the honest end of that exemption is a drop the author can see.
+
+**Why not let it stand.** `toJSON` omits a derived value in any case, so a cascade that won the pass would still lose at the next save. Letting it stand publishes a number whose whole lifetime is one transaction.
+
+**Do not widen the proposed-Field test from `body` to `merged`.** That keeps the write for one pass and loses it at the next save — the worst of the three.
+
+**One code defect to fix first, and the order matters.** Two call sites answer *did anyone propose this Field?* from two different edit sets: `rollup.ts:196` reads `body`, and `build-commit-change-set.ts:301` binds `body` to the transaction body alone, so a cascade's edits reach only `merged`. Today the cascade's write commits, enters the ChangeSet, enters undo — and the same pass overwrites it, leaving two rows for one Field in one undo step. **Unify the predicate into one function, and give both callers that function.** Then group C may delete the `body`/`merged` split with D-S2-22's precedence clause.
+
+---
+
+## A `props` key that names a core key — warning, and the core definition wins
+
+**Closed 2026-09-09. Ruled by the author.** It was not a numbered decision. It sat as the fourth bullet of decision **12** (which recommended an **error**) and as a Consequences bullet (which stated a **warning**), marked *contested*.
+
+**The ruling: a warning, the value is ignored, and core's own definition is used.** `props: { start: … }` never throws.
+
+**The reason is where the data comes from.** A consumer feeds this Dataset from an API they do not own. A column added upstream, named `start` or `kind` or `name`, must not break their page. A warning names the key and the app keeps running.
+
+The leak decision 12 worried about — *it stores a value no door can read back* — closes anyway, because the value is not stored.
+
+**What stays open:** decision **12**'s other three bullets — the published closed reserved list, bare consumer keys, and a required plugin prefix. This ruling settles one bullet, not the decision.
+
+**A question this raises for group A, and it is not ruled:** a consumer *declaration* on a core key (`fields: [{ key: 'start', … }]`) is set to throw `DuplicateFieldKeyError` after the override is deleted. The posture above — warn, ignore, core wins, never break the consumer — argues for the same treatment there. A declaration is hand-written code rather than API data, so the case for throwing is stronger. **Ask before group A implements the throw.** It is adjacent to decision **19**.
 
 ---
 
@@ -110,7 +172,7 @@ It refuses an unreadable date, and an Entry that authors one date without the ot
 
 | Where | Change |
 |---|---|
-| ADR frontmatter | *"Sixteen blocking decisions are unmade"* was wrong — the list held fifteen. Now nine, plus 18 and 19. |
+| ADR frontmatter | *"Sixteen blocking decisions are unmade"* was wrong — the list held fifteen. Then nine, plus 18 and 19. **20** joined from 18's cost table, taking it to twelve. The author's 2026-09-09 rulings closed **5** and **6**, so the live count is **ten**. |
 | ADR § Blocking decisions | Preamble rewritten. Mapping table holds open numbers only. Closed numbers point here. |
 | ADR body, Field union | Decision 10's ruling folded in. |
 | ADR body, `schema: 5` | Decision 3's release-gate rule folded in. |
