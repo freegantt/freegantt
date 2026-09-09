@@ -92,7 +92,7 @@ type Field<TValue = unknown> =
 | `start` / `end` | required except on a rolling-up kind | optional on every kind |
 | Schema | 4 | 5 |
 
-**`Partial` at every door, and `TData` never claims a key exists.** `Readonly<TData>` beside an ingest fill of `{}` is a required-key lie the compiler cannot catch. It also costs the widening: probed at HEAD, `Dataset<A>` is assignable to the bare `Dataset` when every `data` door is `Partial`, and is **not** when `EntryInput.data` is `TData` and `TData` carries one required key — `entries.add` fails the bivariant method check. The widening is what deletes `harness/main.ts:89`'s double cast through `unknown`, which that file's own comment calls *evidence, not a shortcut*.
+**`Partial` at every door, and `TData` never claims a key exists.** `Readonly<TData>` beside an ingest fill of `{}` is a required-key lie the compiler cannot catch: `Dataset<{ owner: string }>` would read `entry.data.owner` as `string` on an Entry that holds nothing. That is the whole reason, and it is enough. **An earlier draft of this plan gave a second one and it was wrong** — see *Where the code forces the API's hand* in [`api.md`](api.md) §16.1. `harness/main.ts:89`'s double cast is **not** deleted by this ADR: re-probed against the real `Dataset` class inside the project `tsconfig`, `Dataset<PlannerMeta, PlannerFields>` already widens to the bare `Dataset` at HEAD, with two generics and no `Partial`. The cast bridges two *different* instantiations, because `harness/hierarchy.ts:28` pins the shared global to `Dataset<{ cost: number }, { cost: number }>`. It is a harness declaration choice and it deletes today, independently.
 
 **One key space, two homes.** Field keys stay in a single namespace — that is what lets one name serve `field` on a changeset row, `canWrite(entry, field)`, and `gridColumns: ['name', 'cost']`. Storage is namespaced underneath: core keys on the Entry, everything else in `data`.
 
@@ -152,9 +152,10 @@ The key decides the home, so no declaration carries one.
 
   type EntryEnvelope<TData> = Omit<EntryInput<TData>, 'id' | 'data'>;
 
-  /** The envelope keys an explicit `undefined` removes. `kind` and `name` are absent because a
-   *  stored Entry always holds both. `segments` is absent because un-dating already clears them. */
-  type RemovableEntryKey = 'parentId' | 'start' | 'end';
+  /** An edit may remove exactly what a stored Entry may lack. Derived from `Entry`, never
+   *  hand-listed — `EntryInput`'s optionality answers a different question. */
+  type OptionalKeysOf<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];
+  type RemovableEntryKey = OptionalKeysOf<Entry> & keyof EntryEnvelope<unknown>;
 
   export type EntryEdit<TData> = {
     [K in keyof EntryEnvelope<TData>]?: K extends RemovableEntryKey
@@ -162,11 +163,11 @@ The key decides the home, so no declaration carries one.
       : EntryEnvelope<TData>[K];
   } & { data?: DataEdit<TData> };
   ```
-  `data` is omitted before it is restated, because an intersection cannot narrow a property the interface already declares. **Six type tests, all probed at HEAD.** Compiles: `{ start: undefined }`, `{ parentId: undefined }`, and `{ data: { owner: undefined } }` with `owner` **required** on `TData`. Does not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`. Write all six; the third and fourth are the two this plan got wrong before.
-- **`segments: undefined` is refused, and that is a call, not a copy of the review.** The 2026-09-09 consumer review listed `segments` as removable. Group D's biconditional already gives un-dating one spelling — `{ start: undefined, end: undefined }` clears the Segments in the same write — and `segments: []` throws `EmptySegmentsError`. A third spelling for the same job is what this ADR keeps deleting. Flag it if you disagree; it is one entry in `RemovableEntryKey`.
+  `data` is omitted before it is restated, because an intersection cannot narrow a property the interface already declares. **Seven type tests, all probed at HEAD.** Compiles: `{ start: undefined }`, `{ parentId: undefined }`, and `{ data: { owner: undefined } }` with `owner` **required** on `TData`. Does not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`. The seventh pins the derivation itself — `RemovableEntryKey` equals `'parentId' | 'start' | 'end'` — so a later change to `Entry`'s optionality shows up as a failing test rather than a silent widening of what an edit may erase.
+- **`segments: undefined` is refused, and the derivation is why.** The 2026-09-09 consumer review listed `segments` as removable. It is not: `Entry.segments` is **required** on a stored Entry (*never empty*, #212), so the derived rule excludes it with no special case. Group D's biconditional already gives un-dating one spelling — `{ start: undefined, end: undefined }` clears the Segments in the same write — and `segments: []` throws `EmptySegmentsError`. This started as a hand-made call and the derivation now makes it a consequence.
 - `DataEdit<TData>` is exported from `api/` and gets a `plans/02` type row. An app author writes the name only when they factor a helper, and the type they would otherwise reach for — `Partial<TData>` — is the one that cannot say *remove*.
 - **The public plugin surface carries the generic too**, and it is easy to miss: `DatasetPlugin<TMeta, TFields>`, `DatasetPluginContext<TMeta, TFields>` (`src/api/dataset.ts:45-52`), `DatasetOptions<TMeta, TFields>` (`:54-57`) and `Dataset.fromJSON<TMeta, TFields>` (`:326`). All four are published; all four lose a generic.
-- Delete `harness/main.ts:89`'s `as unknown as` and the comment at `:81-88` explaining it. That comment already names the cause — *"the mismatch is between two harness pages' declared field shapes"* — and the single `Partial` generic gives those two shapes a common type. If the cast does **not** delete, the generic is wrong; do not keep both.
+- **`harness/main.ts:89`'s `as unknown as` is not group A's, and it should not wait for group A.** Probed: the bare-`Dataset` widening already works at HEAD, so the cast is caused by `harness/hierarchy.ts:28` and `data.ts:30` declaring the shared `window.__dataset` global as a *concrete* `Dataset<{ cost: number }, { cost: number }>`. Declaring that global as the bare `Dataset` deletes the cast **today**, with no ADR — every e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields. Group A still renames the generic in that declaration, but it inherits a cast-free file rather than fixing one. See [`api.md`](api.md) §16.1.
 - **`StoredEdit` → `ProposedEdit`, with serena** (CLAUDE.md — serena follows the symbol). `ProposedEdit`/`ProposedEdits`, `toProposedEdit`/`toProposedEdits`, `EditReading.proposed`, about 184 occurrences. It lands in A because A already renames the type's own field, and a half-renamed edit type across two groups is worse than a large rename inside one.
 - `change-set.ts:72-85`'s `fieldsWrittenBy` still skips `'meta'`, and `isOptionalEntryKey` (`fields/field-access.ts:26`) still names it. Both follow the rename.
 - Delete `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey`. A consumer declaration on a core key falls through to the `DuplicateFieldKeyError` already sitting there. **Check before this lands:** whether `Field.editable: false` also refuses `entries.update()` — see the ordering constraints.
