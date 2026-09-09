@@ -19,6 +19,7 @@
 | — | A `props` key that names a core key | **Warning.** The value is ignored and the core definition wins |
 | — | Does `editable: false` refuse `entries.update()`? | **Yes.** It is one rule at two doors, not two rules |
 | — | May a Field or a plugin arrive after construction? | **No, and that is deliberate.** Rebuilding through `fromJSON` is the answer for a late install |
+| — | `ComputedFieldCannotBeWrittenError` at two doors | **One name.** The message names the door, says `compute`, and the resolver checks it first |
 
 ---
 
@@ -160,3 +161,21 @@ The leak decision 12 worried about — *it stores a value no door can read back*
 **Why it matters beyond the one gate.** The ADR refuses a *derived* write at `entries.update()` and claims I14 for it. Leaving the `editable` half split would give the library two answers to *"may this value change"* at two doors — the exact split I14 exists to close. Both halves move together or neither claim holds.
 
 **What it opened.** Decisions **18** and **19**, both open. 18 asks what an *absent* `editable` does. 19 asks what replaces `{ key: 'start', editable: false }`, because `interactions.edit` is view-level and can no longer stand in for a data-level gate.
+
+## `ComputedFieldCannotBeWrittenError` — one name at two doors
+
+**Closed 2026-09-09. Ruled by the author.** It was never a numbered decision.
+
+**One concept: a `compute` Field cannot be written.** Two doors reach it. Registration is the first — `compute` beside `rollUp`, or `compute` beside `editable`. `entries.update()` is the second. **One error name covers both, and the message names the door.** A second error type would be two names for one concept, which is the failure `plans/02` records at #7.
+
+**Do not reuse the name for a derived parent cell.** That is `DerivedFieldNotWritableError`. A rolling-up parent holds a stored value the Rollup owns. A `compute` Field holds no stored value at all. Two concepts, two names.
+
+**The register door is what makes the update() door unambiguous, and that is the argument for one name.** The union is a declaration-site aid, so `FieldRegistry` enforces it at runtime ([`types.md`](types.md)). A registered Field therefore sits on the stored arm or the compute arm, never both. On any one Field exactly one of the two errors is reachable. The first door guarantees the second door's precondition, so a consumer never has to ask which name applies.
+
+**Two rules follow, and both are load-bearing.**
+
+**1. The update() door's message says `compute`. It never says *derived*.** This ADR uses *derived* for a rolled-up value **and** for a `compute` value. Decision 21's per-entry flag makes the overlap reachable: a consumer sets the flag, writes a `compute` Field on that Entry, and reads *this value is derived* as *I just turned derivation off*. Naming the door is not enough when the word is ambiguous. This is the same trap that ruled out `derivesValues` as a name for the flag.
+
+**2. The write resolver checks `compute` before `editable`.** The union's compute arm declares `editable?: never`, and the register door throws for `compute` beside `editable`. So a `compute` Field can never carry `editable: true`. **If decision 18 lands on its first answer** — *`entries.update()` refuses unless a Field declares `editable: true`* — then every `compute` Field is refused twice, once by each rule. Whichever rule the resolver checks second never fires. Check `editable` first and the consumer reads *declare `editable: true`*, which the register door then rejects. That is a closed loop with no way out. **One name is not enough on its own; the wrong rule must not answer first.**
+
+**What this does not decide.** Decision 18 stays open. This ruling fixes the order of the checks, not the answer to what an absent `editable` means.
