@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Vendor Gantt product names never appear in specs, docs, or code (CLAUDE.md, plans/01 §1 preamble).
+// One exception: an ADR may name them (ruled 2026-09-09). A decision record has to be checkable,
+// and "a comparable Gantt does X" is not. `docs/adr/**` is therefore out of scope.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -23,10 +25,15 @@ const BANNED = [
 const SCAN_DIRS = ['src', 'harness', 'plans', 'docs', 'test', 'scripts'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 
+function isAdr(rel) {
+  return rel === 'docs/adr' || rel.startsWith(`docs/adr${path.sep}`);
+}
+
 function walk(dir, files) {
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue;
     const full = path.join(dir, entry);
+    if (isAdr(path.relative(root, full))) continue;
     const st = statSync(full);
     if (st.isDirectory()) walk(full, files);
     else files.push(full);

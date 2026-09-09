@@ -80,6 +80,15 @@ Five groups of work and one of prose. Order is **A → B → C → D**, with F t
 The key decides the home, so no declaration carries one.
 
 - `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest. `Entry.props: Readonly<Partial<TProps>>`. Input and Document keep `props?`.
+- **A must move the nested ingest with the public shape, or A-alone drops every consumer Field write in silence.** `writeDeclaredMetaFields` (`data/fields/field-access.ts:141-155`) is what finds a consumer Field value on an edit today, and it walks the edit's **top level**:
+  ```ts
+  for (const key of Object.keys(edit)) {
+    const field = registry.get(key);
+    if (!field || !storesInMeta(field)) continue;
+    next = writeField(next, overlay, field, edit[key]);
+  }
+  ```
+  Today `update({ cost: 500 })` is flat, so `cost` is found there. After A the only top-level key is `props`, and A **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. The nested read is group **B**'s `toProposedEdit`. **This is the constraint on splitting A from B**, and it bears directly on the per-group schema bump proposed above: bump per group only if A carries the nested ingest too, otherwise the "reviewable" A commit is green and silently lossy.
 - Edit types are in the ADR. Do **not** write `Partial` on either half. **Do not factor the two halves into one shared mapped type either.** That was tried, shipped into these documents as `EditOf`, and found wrong in *both* directions on the next pass: it protected a required key inside `props` that the storage door already allows absent, and it let `update(id, { kind: undefined })` compile. The two halves take **opposite** rules, so there is no shared type to extract. They look factorable, which is why this line exists. `PropsEdit<TProps>` maps every key removable. `EntryEdit` may remove only what a stored Entry may lack — derived from `Entry`. **The derivation is inert until group D.** `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD `RemovableEntryKey` resolves to `'parentId' | 'meta'`, not to `'parentId' | 'start' | 'end'`. The ADR called that a HEAD probe and it was a group-D probe. So `update(id, { start: undefined })` does not compile between A and D. Either pull the optional dates forward into A, or say the un-date verb arrives with D. Seven type tests. `PropsEdit` is exported; `EntryEnvelope` and `RemovableEntryKey` are not.
 - **`segments: undefined` is refused.** `Entry.segments` is required (*never empty*, #212). Un-dating is `{ start: undefined, end: undefined }`.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
@@ -90,8 +99,15 @@ The key decides the home, so no declaration carries one.
 - **One write resolver in `data/`, and every door calls it.** Three rules meet at one question — is this Field derived here, is it editable, does it exist. `entries.update()` refuses a derived write (`DerivedFieldNotWritableError`) and an uneditable one (`FieldNotEditableError`), and `view/capability.ts` calls the resolver instead of restating the rule. **Do not write the test twice.** Seven doors, one function.
 - **`Field.editable: false` refuses `entries.update()`** — ruled 2026-09-09, and it answers the old ordering constraint 7. Verified: `editable` is read at `view/capability.ts:120` and nowhere else in `src/`. What an *absent* `editable` does is decision **18**.
 - **`CoreFieldValues` omits `'props'` alongside `CoreFieldKey`.** `model/field.ts:19` is `Omit<Entry, 'id'>` and `FieldValue` resolves its first arm against it. Change one and not the other, and `fieldValue(id, 'props')` types as the whole bag while the runtime throws. It is public at `api/index.ts:57`.
-- **`mergeEntryEdits` merges `props` per key.** `data/edit-extension.ts:38` shallow-spreads two `EntryEdit`s. With consumer keys inside `props`, two extenders writing different `props` keys lose one — #197 one level down, against that function's own stated promise (#238).
+- **Two merges shallow-spread, not one. Fix both together or plugin composition breaks in production.**
+  - `data/edit-extension.ts:38` — `mergeEntryEdits`, the loose one a plugin author calls. With consumer keys inside `props`, two extenders writing different `props` keys lose one: #197 one level down, against that function's own stated promise (#238).
+  - `data/fields/field-access.ts:49` — `mergeStoredEdits`, which the **commit path** uses to fold body + cascade + hierarchy. `{ ...base, ...extra }` has the identical hole, and here it breaks a contract written directly above it: *"`extra` wins per Field key; the proposed keys of both survive."* That is true today only because a top-level key **is** a Field key. Once `props` is one key holding many, `extra` wins per **namespace**. Both edits carry a *complete* `props` built from the same pre-transaction Entry, so a body write of `props.cost` beside a cascade write of `props.progress` loses `cost` — while `proposedKeys` still names it, so the ChangeSet emits a row carrying a stale value. **A wrong row is worse than a dropped write**, and only this one is reachable without a second plugin installed.
 - **Write `ProposedEdit`'s type; do not only rename it.** `props` is **required** on a `ProposedEdit`, because `toProposedEdit` builds a complete record. `model/entry.ts:108` is a bare `Partial` today, so the guarantee is prose. Note in the same place that a complete record and a patch are now the same shape, so `model/entry.ts:98`'s stated asymmetry no longer holds at `props`.
+- **That sameness is a live trap, and a comment will not hold it.** A plugin reading the hook's own hand-off writes the natural line:
+  ```ts
+  return new Map([[id, { props: { ...request.proposed.get(id)?.props, risk: 'high' } }]]);
+  ```
+  The spread is legal, reads as "keep everything and add one", and turns **every** stored key into a proposed key — so every `props` key gets a ChangeSet row, derived cells included. That is decision **5** reached by accident, by a plugin author who never read it. The patch already merges, so the spread is never needed; nothing in the types says so. **Two candidate fixes, and this needs one:** brand `ProposedEdit` so it is not assignable to the hook's return type, or seed an extender's proposed keys by diffing against the pre-state instead of by key presence. Decide it with the `ProposedEdit` type, not after.
 - Two ingest warnings, one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'props'`: unknown top-level key; a key inside `props` that names a core key. Decision **12** may promote the second from warning to error.
 - Delete `FieldSource` and all three arms, `Field.source`, `SerializedField.source`, `source-strategy.ts`, `normalize-source.ts`, `metaRecord` / `metaKey` / `metaSlot`, `DuplicateFieldSourceError`, `InvalidFieldSourceError`.
 - Delete the `meta` core Field with **no successor**.
@@ -150,8 +166,14 @@ One structural question at every door: *is this a rolling-up kind, and is this a
 - Two refusals stay: one date without the other, and `segments: []` (`EmptySegmentsError`).
 - `start` and `end` join `isOptionalEntryKey`. Serialization and `entry-reader.ts` each gain a `length === 0` arm.
 - `FieldContext.durationOf` returns `Duration | undefined`. It is **plugin-author surface**, so it is a published change, and it reaches further than the signature. An audit found this list after a review named two call sites and got one of them wrong — do not re-derive it:
-  - `core-fields.ts:118` — the shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm, so the `duration` **column answers `undefined` on a dateless row**. That is the consumer-visible half, and **the cell is blank with no code written for it**: `formatValue` is `formatDuration`, which already answers `''` for `undefined` (`core-fields.ts:44-45`). Assert the blank cell. Do not invent an em dash or a placeholder.
-  - `field-access.ts:92` — the canonical implementation.
+  - `core-fields.ts:118` — the shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm, so the `duration` **column answers `undefined` on a dateless row**. That is the consumer-visible half. The cell is blank — `formatValue` is `formatDuration`, which answers `''` for `undefined` (`core-fields.ts:44-45`). Assert the blank cell. Do not invent an em dash or a placeholder.
+  - **`field-access.ts:92` — the canonical implementation, and it is the code that makes the blank cell true. An earlier line here said the blank needed "no code written for it". That was wrong, and the failure it hides is silent rather than loud:**
+    ```ts
+    durationOf(entry: Entry): Duration {
+      return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };   // no guard
+    }
+    ```
+    `diffMs(a, b)` is `a - b` (`time/instant.ts:41-43`), so an absent date yields **`NaN`, not a throw**. `formatDuration` returns `''` only for `undefined`/`null`; `{ value: NaN }` is neither, so the cell renders **`"NaN d"`**, and `weightedMeanByDuration` weights by `NaN` and poisons the parent's aggregate. Guard here first — `if (entry.start === undefined || entry.end === undefined) return undefined;` — and the blank cell and the skipped child both follow.
   - `aggregators.ts:14` (`durationMs`, behind `weightedMeanByDuration` at `:51`) — skips a dateless child rather than weighting it at zero.
   - `inline-editing.ts:113` is a **provider, not a caller**: `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`. It changes as an implementation. **This is the one the review got wrong.**
   - `etc/freegantt.api.md` — the API report gates on I11, so the signature lands there or CI fails.
