@@ -109,3 +109,48 @@ const field: Field = {
 ```
 
 What is the difference between `entry` and `ctx` in that code?
+
+---
+
+## API-Q9 — why does an `EditExtender` author build a Map by hand?
+
+Raised 2026-09-09. Against [`api.md` §10](api.md#10-the-extension-hook--plugin-author-surface), D3.
+
+```ts
+// The shape is unchanged: one write shape, the same object update() takes.
+const extender: EditExtender = (request) => {
+  const moved = request.proposed.get(entryId('t1'));
+  if (!moved) return new Map();
+  return new Map([[entryId('phase-1'), { start: moved.start, data: { risk: 'high' } }]]);
+};
+
+ctx.edits.wrap((next) => (request) => mergeEntryEdits(next(request), extender(request)));
+```
+
+Why does the consumer need to return a Map and do weird stuff like this? Can we give them some help here?
+
+---
+
+## API-Q10 — would a `plugin` bag beside `data` fix anything?
+
+Raised 2026-09-09. Against [`api.md` §11](api.md#11-registering-from-a-plugin--plugin-author-surface) and
+[D1](api.md#d1--where-does-a-plugins-own-field-value-live).
+
+I proposed having `.plugin` beside `.data` on the entry. It was rejected.
+
+- Would that fix anything?
+- Why do we prefer another store?
+- Does requiring calling `data.phase` vs `plugin.progress` help here?
+- Does the consumer care about `data` vs `plugin`? Wouldn't they be selecting what plugin they load or write, so they would make sure their data shape fits that?
+
+---
+
+## API-Q11 — do the typing questions resolve §16.2?
+
+Raised 2026-09-09. Against [`api.md` §16.2](api.md#162-fieldvalue-can-never-be-typed-because-the-registry-erases-tvalue).
+
+Do our questions about typing ([API-Q4](#api-q4--can-the-read-door-return-the-type-for-phase)) and
+why we have `fieldValue` ([API-Q2](#api-q2--why-do-we-have-both-entriesget-and-entriesfieldvalue))
+resolve §16.2, "`fieldValue` can never be typed, because the registry erases `TValue`"?
+
+If not, I will need to defer this to better understand it.
