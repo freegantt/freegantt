@@ -6,6 +6,8 @@ The ADR carries the reasoning. This file carries the shape, the order of work, t
 
 Two open working files sit beside this one. [`review-2026-09-08-api-surface.md`](review-2026-09-08-api-surface.md) checks every proposed API against the code at `33aceec`. [`draft-fixes-2026-09-08.md`](draft-fixes-2026-09-08.md) drafts a fix for each major finding, reviewed once more for a smaller surface. Delete both once each finding is settled here or in an issue.
 
+A consistency review of this plan against the ADR is in [`reviews/2026-09-08-consistency.md`](reviews/2026-09-08-consistency.md). Delete that file once each finding is settled here or in an issue.
+
 ## The shape
 
 ### Today
