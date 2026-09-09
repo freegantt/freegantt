@@ -176,6 +176,14 @@ gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clam
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
 
+**Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
+
+**The reason is the Rollup, and it reaches undo.** A Field arriving mid-life makes every rolling-up parent owe a new aggregate at once. That is a whole-dataset Rollup pass, outside any user action, writing stored values that enter undo — and a declaration is a **config assignment**, which `ChangeSet` has no row shape for. Undo would then restore values the still-declared Field re-derives on the next commit. This is the same open problem a `rollUpKinds` flip has (ADR 0011, decision 6), and a live `fields` would make it two problems instead of one.
+
+**A late install rebuilds the `Dataset`:** `Dataset.fromJSON(dataset.toJSON(), { fields, fieldTypes, aggregators, plugins })`. **State the price whenever this path is offered** — a new `Dataset` identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. It does not suit an *add a column the consumer never declared* feature, and that gap is a known hole rather than a solved case.
+
+**A Gantt plugin is not affected.** `gantt.installPlugin()` (D-S5-36, below) stays live. A view plugin declares no Field and rolls nothing up: `ctx.view.registerGridColumn` names a Field the `Dataset` already declares, and an undeclared key throws `UnknownFieldError` exactly as `gantt.gridColumns` does. **A live column, over a fixed Field set.**
+
 **A config value is a value, not a mutable object (#187).** Assignment compares against what the property already holds, by identity. So a mutation of the object you already handed over, followed by an assignment of that same object, changes nothing and paints nothing. Assign a copy to ask for the repaint:
 
 ```ts
