@@ -4,7 +4,7 @@
 
 The ADR carries the reasoning. This file carries the shape, the order of work, the issues, and what is still undecided.
 
-The working review is [`reviews/2026-09-09.md`](reviews/2026-09-09.md). It merges the 8 September API-surface review, the 8 September draft fixes, the 8 September consistency review, and the 9 September consumer-call review. Delete it once each finding is settled here or in an issue.
+The working review is [`reviews/2026-09-09.md`](reviews/2026-09-09.md). It merges the 8 September API-surface review, the 8 September draft fixes, the 8 September consistency review, the 9 September consumer-call review, and a second 9 September review of the merged result. Delete it once each finding is settled here or in an issue — **seven decisions (D1–D7) are still unread**, and they live nowhere else in summary form.
 
 ## The shape
 
@@ -146,17 +146,24 @@ Five groups of work and one of prose. The order is **A → B → C → D**, with
 The key decides the home, so no declaration carries one.
 
 - `Entry.meta` → `Entry.data`, non-optional, filled `{}` at ingest. `Entry.data: Readonly<Partial<TData>>`, `EntryInput.data?: Partial<TData>`, `EntryDocument.data?: Partial<TData>`.
-- **One mapped type serves both edit shapes.** Write the type, not the sentence — and do **not** write `Partial` on the envelope. `Partial<Omit<EntryInput<TData>, 'id' | 'data'>>` refuses group D's un-date verb `update(id, { start: undefined, end: undefined })` under `exactOptionalPropertyTypes` (`TS2379`, probed), for the identical reason `Partial<TData>` refuses a removal inside `data`. `Partial` on one half and the mapped type on the other publishes a remove verb that works on `cost` and fails on `start`.
+- **The two edit shapes take opposite rules, and neither is `Partial`.** Do **not** write `Partial` on either half: `Partial<Omit<EntryInput<TData>, 'id' | 'data'>>` refuses group D's un-date verb `update(id, { start: undefined, end: undefined })` under `exactOptionalPropertyTypes` (`TS2379`, probed), for the identical reason `Partial<TData>` refuses a removal inside `data`. But the two halves do not then get **one** mapped type, and an earlier draft of this plan said they did. Inside `data`, every key is removable, because `data` is `Partial<TData>` at every storage door — a key `TData` marks required is still a key the stored record may not hold, so protecting it refuses a write into a state `add({ id, name })` reaches on its own. On the envelope, only three keys are removable, because **optional at ingest is not removable by an edit**: `kind` is optional on `EntryInput` only because ingest defaults it to `'span'`, and a stored `Entry.kind` is always there.
   ```ts
-  /** An edit of `T`: every key optional, an already-optional key removable by an explicit
-   *  `undefined`. Not exported — `DataEdit` and `EntryEdit` are the names a consumer reads. */
-  type EditOf<T> = { [K in keyof T]?: {} extends Pick<T, K> ? T[K] | undefined : T[K] };
+  export type DataEdit<TData> = { [K in keyof TData]?: TData[K] | undefined };
 
-  export type DataEdit<TData> = EditOf<TData>;
-  export type EntryEdit<TData> =
-    EditOf<Omit<EntryInput<TData>, 'id' | 'data'>> & { data?: DataEdit<TData> };
+  type EntryEnvelope<TData> = Omit<EntryInput<TData>, 'id' | 'data'>;
+
+  /** The envelope keys an explicit `undefined` removes. `kind` and `name` are absent because a
+   *  stored Entry always holds both. `segments` is absent because un-dating already clears them. */
+  type RemovableEntryKey = 'parentId' | 'start' | 'end';
+
+  export type EntryEdit<TData> = {
+    [K in keyof EntryEnvelope<TData>]?: K extends RemovableEntryKey
+      ? EntryEnvelope<TData>[K] | undefined
+      : EntryEnvelope<TData>[K];
+  } & { data?: DataEdit<TData> };
   ```
-  `data` is omitted before it is restated, because an intersection cannot narrow a property the interface already declares. Probed: `{ start: undefined }` compiles, `{ name: undefined }` does not — `name` is required, so an Entry cannot lose it. Pin all three in a type test.
+  `data` is omitted before it is restated, because an intersection cannot narrow a property the interface already declares. **Six type tests, all probed at HEAD.** Compiles: `{ start: undefined }`, `{ parentId: undefined }`, and `{ data: { owner: undefined } }` with `owner` **required** on `TData`. Does not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`. Write all six; the third and fourth are the two this plan got wrong before.
+- **`segments: undefined` is refused, and that is a call, not a copy of the review.** The 2026-09-09 consumer review listed `segments` as removable. Group D's biconditional already gives un-dating one spelling — `{ start: undefined, end: undefined }` clears the Segments in the same write — and `segments: []` throws `EmptySegmentsError`. A third spelling for the same job is what this ADR keeps deleting. Flag it if you disagree; it is one entry in `RemovableEntryKey`.
 - `DataEdit<TData>` is exported from `api/` and gets a `plans/02` type row. An app author writes the name only when they factor a helper, and the type they would otherwise reach for — `Partial<TData>` — is the one that cannot say *remove*.
 - **The public plugin surface carries the generic too**, and it is easy to miss: `DatasetPlugin<TMeta, TFields>`, `DatasetPluginContext<TMeta, TFields>` (`src/api/dataset.ts:45-52`), `DatasetOptions<TMeta, TFields>` (`:54-57`) and `Dataset.fromJSON<TMeta, TFields>` (`:326`). All four are published; all four lose a generic.
 - Delete `harness/main.ts:89`'s `as unknown as` and the comment at `:81-88` explaining it. That comment already names the cause — *"the mismatch is between two harness pages' declared field shapes"* — and the single `Partial` generic gives those two shapes a common type. If the cast does **not** delete, the generic is wrong; do not keep both.
@@ -172,7 +179,7 @@ The key decides the home, so no declaration carries one.
 - `view/capability.ts:132`'s `hasSomewhereToWrite` becomes `!('compute' in field)`.
 - One generic. `harness/planner.ts:31` currently writes `Dataset<PlannerMeta, { owner?; progress?; phase? }>`, whose two halves disagree about `critical` with nothing noticing.
 - The two fixture record types are named after the slot rather than after the values: `PlannerMeta` (`fixtures/planner-dataset.ts:17`) and `DemoMeta` (`fixtures/demo-dataset.ts:162`) become `PlannerEntryData` and `DemoEntryData`. The page keeps its own domain word — a harness page names what it demonstrates. The rule this breaks is that the slot is not the concept, and the slot is what changes here.
-- The registry's `authored` comment (`field-registry.ts:126-135`) states plugin values "sit in `Entry.meta`". One word changes; the guarantee does not.
+- The registry's `authored` comment (`field-registry.ts:144-148`) states plugin values "sit in `Entry.meta`". One word changes; the guarantee does not — unless B1 lands on C, which deletes the sentence instead.
 
 ### B. The merging patch
 
@@ -235,7 +242,7 @@ One structural question — *is this a rolling-up kind, and is this a rolling-up
   - Two refusals stay: one date without the other, and `segments: []` on its own (`EmptySegmentsError`). The empty case is `add({})`, which names no segments rather than naming none.
   - `start` and `end` join `isOptionalEntryKey` (`fields/field-access.ts:26`). `serialization/index.ts` and `entry-reader.ts` each branch on `segments.length === 1` today; each gains a `length === 0` arm.
 - `FieldContext.durationOf` returns `Duration | undefined` (`src/model/field.ts:189`). It is **plugin-author surface**, so it is a published change, not an internal one, and it reaches further than the signature:
-  - `core-fields.ts:118` — the shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm. So the `duration` **column answers `undefined` on a dateless row**. That is the consumer-visible half of this change; it needs a row in the change table and an answer for what the cell shows.
+  - `core-fields.ts:118` — the shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm. So the `duration` **column answers `undefined` on a dateless row**. That is the consumer-visible half of this change, and **the cell is blank, with no code written for it**: the Field's `formatValue` is `formatDuration`, which already answers `''` for `undefined` (`core-fields.ts:44-45`). Assert the blank cell; do not invent an em dash or a placeholder. (This was Q2 on the 2026-09-09 review, and the code had already answered it.)
   - `field-access.ts:92` — the canonical implementation.
   - `aggregators.ts:14` (`durationMs`, behind `weightedMeanByDuration` at `:51`) — skips a dateless child rather than weighting it at zero.
   - `inline-editing.ts:113` is a **provider**, not a caller: `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`. It changes as an implementation.
@@ -274,7 +281,7 @@ Each of these says something the ADR makes false.
 | `plans/01:330` | "Source decides stored or computed" |
 | `plans/02` §2.6 | the same rule again, in the paragraph on what a Source decides for a parent's aggregate. Cite the paragraph, not a copied title — `:454` reads *"Source decides what happens to a parent's aggregate"*, which is not the `plans/01:330` sentence |
 | `plans/02:738` | "anything of yours goes in `meta` and survives byte for byte" — the rule survives, the word does not |
-| `plans/02:749` | `DuplicateFieldSourceError` and `InvalidFieldSourceError` rows leave; `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError` and `EmptySegmentsError` arrive (plus `RollUpKindsWouldDropValuesError` if Open 6 lands that way) |
+| `plans/02:749` | `DuplicateFieldSourceError` and `InvalidFieldSourceError` rows leave; `DerivedFieldNotWritableError` and `ComputedFieldCannotBeWrittenError` arrive (plus `RollUpKindsWouldDropValuesError` if Open 6 lands that way, and `PluginFieldNotInDataError` if B1 lands on C). **`EmptySegmentsError` is not on that list** — it already ships (`src/model/errors.ts:275`) and already has its row (`plans/02:121`, `:749`). An earlier draft of this plan had it arriving |
 | `plans/02` §"common case is a shorthand" | `update('t1', { start, cost })` is the shipped example and it stops compiling. Either the principle drops for Field writes, or the ADR re-opens the flat edit. It cannot stay as written — see *The write, and what the namespace costs* in the ADR |
 | `plans/02` Document section | a Document is our **save format**, not an interchange format. The ADR decides it; `plans/02` is where a reader looks for it |
 | `plans/02` type rows | `DataEdit<TData>` and `EntryEdit<TData>` are public and need rows |
@@ -357,9 +364,72 @@ The same rule applies to every question below: **show the call site before you c
 - `PluginStores` (`plugin-store.ts:42`), `reserve<T>()` (`:62`), `read<T>()` (`:74`), and `PluginStore` / `PluginStoreView` already public from `api/dataset-plugin.ts:29`. C adds no store and no Document key.
 - D-S5-24 opens with the reason: *"ADR 0002 named the problem: per-plugin per-entry data must not live in `Entry.meta`, or a host and a plugin collide in one field."* Option A re-opens that collision under a new name, one level up.
 - C closes **B3** at no extra cost: a consumer's `progress` in `data` and the plugin's in `plugin:s7` cannot be confused.
-- **C's real cost, and it is not free:** with two homes for Field values, `fieldValue(id, key)` has to resolve *which* home. `FieldRegistry.#declaringPlugin` (`field-registry.ts:99`) already records the owner, so the routing exists — but the **read path for both callers** has to be written, not just the write path. C is also the largest change of the three, and it has no work group in this plan.
+- **C's real cost, and it is not free:** with two homes for Field values, `fieldValue(id, key)` has to resolve *which* home. `FieldRegistry.#declaringPlugin` (`field-registry.ts:117`) already records the owner, so the routing exists — but the **read path for both callers** has to be written, not just the write path. C is also the largest change of the three, and it has no work group in this plan.
 
 A is the industry's shared-metadata-bag pattern (last writer wins at a key); C is the slice-per-owner pattern. The ADR's consequences now say plainly that they describe HEAD rather than a ruling — do not read them as a decision already taken.
+
+#### The call sites B1 asked for
+
+Written 2026-09-09. This is what the section demanded before anyone chooses. Shared setup, with a legacy undeclared `progress` in the consumer's own data and a plugin that declares the same key:
+
+```ts
+interface TaskData { owner?: string; cost?: number }
+const dataset = new Dataset<TaskData>({
+  timeZone: 'UTC',
+  entries: [
+    { id: 'p1', kind: 'group', name: 'Site' },
+    { id: 't1', parentId: 'p1', name: 'Survey', start: '2026-01-05', end: '2026-01-09',
+      data: { owner: 'Jo', cost: 400, progress: 40 } },   // `progress` is undeclared legacy data
+  ],
+  fields: [{ key: 'cost', rollUp: 'sum' }],
+  plugins: [scheduling()],   // registers { key: 'progress', rollUp: 'weightedMeanByDuration' }
+});
+```
+
+**A — share `entry.data`.**
+
+```ts
+// app author
+dataset.entries.get('t1')?.data.owner       // 'Jo', typed
+dataset.entries.get('t1')?.data.progress    // type error — not in TaskData. Runtime: 40, then the plugin's
+dataset.entries.fieldValue('t1', 'progress')            // 40, unknown
+dataset.entries.update('t1', { data: { progress: 60 } }) // type error, writes fine at runtime
+gantt.gridColumns = ['name', 'progress']                 // a cell edit writes entry.data
+// plugin author
+ctx.fields.register({ key: 'progress', type: 'percent', rollUp: 'weightedMeanByDuration' });
+const extra: EditExtender = (request) => new Map([[phaseId, { data: { progress: 0.5 } }]]);
+```
+
+One home, so the grid edit needs no routing and the cascade writes the same `EntryEdit` shape as any other write. `Dataset<TaskData>` is a lie from the moment the plugin installs, and the consumer's `progress: 40` and the plugin's Field are one key — that is **B3**, unclosed.
+
+**C — the plugin's own store.**
+
+```ts
+// app author
+dataset.entries.get('t1')?.data.owner        // 'Jo', typed — never sees the plugin's progress
+dataset.entries.get('t1')?.data.progress     // 40 — the consumer's own leftover, still undeclared
+dataset.entries.fieldValue('t1', 'progress') // the plugin store, unknown
+dataset.entries.update('t1', { data: { progress: 60 } })   // ← the whole problem: see below
+gantt.gridColumns = ['name', 'progress']     // the cell edit must route by declaring plugin
+const json = dataset.toJSON();               // progress rides in PluginDocument, not entry.data
+// plugin author
+ctx.fields.register({ key: 'progress', … });
+const store = ctx.store.reserve<{ progress?: number }>();
+const extra: EditExtender = (request) => /* writes the store, not { data: { progress } } */;
+```
+
+**The cost this plan understated, and it is not only `fieldValue` routing.** *Every* door that names a Field key has to route: `entries.update`, the cell editor, the cascade, and undo. Those doors write `Entry` today; under C they write two stores. The consequence is a call that already type-checks and silently does the wrong thing — `update('t1', { data: { progress: 60 } })` writes the consumer's bag while the grid reads the plugin's store, and no error says which write landed. That is worse than A's lie generic, because A's is a compile-time complaint and this one is silent.
+
+**So the refusal is part of the pick, not a follow-up.** If C is chosen, `update()`'s `data` patch must refuse a key a plugin declared:
+
+```
+PluginFieldNotInDataError: 'progress' is declared by 'freegantt/scheduling'.
+Read and write it with fieldValue or the grid, not through `data`.
+```
+
+C also needs `toJSON` taught that a leaf plugin value already lives in `PluginDocument`, so it is not written twice.
+
+**The honest summary of the trade.** A is cheaper to ship and keeps the cascade sample one shape; its price is a generic the ADR has to label a known lie — *`TData` is the consumer's keys; a plugin's keys are extra and untyped.* C is the honest generic and closes B3; its price is a work group this plan does not have — route `fieldValue`, route `update`/cell-edit/cascade/undo, add the refusal, teach `toJSON`. **Neither is free, and the review's recommendation of C is a recommendation, not the answer.** Budget C, or take A and write the lie down where a consumer reads it.
 
 ### B2 — What does a `compute` Field show on a rolling-up parent?
 
