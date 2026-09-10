@@ -14,6 +14,8 @@ Throwaway code lives on three branches. This file is the verdict. Open a branch 
 
 Parent re-ran the three suites on 2026-09-10 after the agents landed: **78 passed** (20 + 25 + 33).
 
+**Status — the evidence is not accepted.** The author runs one combined spike before any decision moves. A second review on 2026-09-10 re-ran the three suites and opened every file this report cites. Every HEAD quote held, and the correction to the plan's branch table is right. **The winner's price list is larger than this page says.** Two published config keys lose their job under it, and neither is named. See [Review, 2026-09-10](#review-2026-09-10) before you rule.
+
 ---
 
 ## Verdict in one page
@@ -36,6 +38,8 @@ That is unbundled (b), not the README's (b). The README bundled a second change:
 | **24** undo of a `rollUpKinds` flip | **Dies.** The predicate does not read `rollUpKinds`. A leftover setter that still filters who derives is (a) in disguise. |
 
 The README table that keeps 24 alive under (b) is wrong. 24 survives only while `rollUpKinds` feeds the predicate.
+
+**Two published config keys die with those branches, and this page first did not count them.** `rollUpKinds` and `hierarchy.autoGroup` both lose their job under structure-only. Both are live setters today. One of them is a Document key, and dropping it changes what an old file means. Read [Review, 2026-09-10](#review-2026-09-10) with this table. The branches are not the whole price.
 
 ---
 
@@ -86,6 +90,17 @@ Capability at `capability.ts:119` moves from kind × config to "has children". T
 
 Delete `rollUpKinds` as a derivation input, or give the setter a different job in a later ADR. Keeping it as a filter on who derives is (a).
 
+**"Delete the input" is not the whole sentence. Two published keys stop meaning anything.**
+
+- **`rollUpKinds: 'none'` is how a consumer says "my parents keep what I authored".** `plans/01` §2.5 — *"`'none'` or `[]` keeps authored parent values"*. `plans/02` — *"Document `rollUpKinds: []` keeps stored parents and does not maintain them"*. Structure-only removes that sentence from the API, and ships no replacement. `structure-only.test.ts:32-41` asserts the loss and reads it as a win.
+- **`hierarchy.autoGroup` has no job left.** A parent derives whether or not anything wrote `'group'`. The spike's store promotes no kind at all (`structure-only.test.ts:9-17` keeps `kind: 'span'` after a child arrives). The key is public, live, and defaults to `true` (`api/dataset.ts:86-88`).
+
+**The old Document is the sharp end.** A file that carries `rollUpKinds: []` today means *keep these parents as I saved them*. Read it under structure-only and every parent with children starts deriving. Closed decision 6 then **drops** the authored values, and `toJSON` omits them, so the next save is permanent. A report is raised at the ingest door, and a consumer can do nothing with it, because the winner ships no opt-out.
+
+**The (c) overlay is the only replacement, and this page calls it optional.** If the core boolean opt-out is what a `rollUpKinds: 'none'` consumer migrates to, then decision 21 is part of 26's cost, not a later overlay. **Weigh that before ruling 26.**
+
+**An empty group is `plans/01` §2.5's own story.** *"An empty group is legal and renders as one (that is how 'add a phase, then fill it' works)."* At HEAD `capability.ts:119` locks that phase's cost cell. Under structure-only the cell is writable, and the first child drops what a person typed. The flip is arguably the fix that the two-predicate disagreement asks for. **Show that call site before you rule**, because §2.5 wrote its rule around it.
+
 Do not invent a column-to-bar seam to rescue calculated kind. Decision 20 part 3's premise fails at HEAD: bars are keyed by `kind`, not by a column.
 
 ---
@@ -104,7 +119,9 @@ Order of the probe: one flag or two, then layer, then boolean vs tri-state.
 | Replacement tri-state | `add({ parentId })` then a flag write | Lost. Decision 6's `add({ parentId })` is false |
 | **Core boolean opt-out** | `update('p', { followChildren: false })` | **Best of (c).** Overlay on an axis, not the head |
 
-**Pin and derive-off are two flags.** `pin('p')` means the scheduler must not move p. It does not mean "stop summing cost". The comparable product bundles "manually scheduled" with summary-off. That bundle is a scheduling product. FreeGantt's Rollup is core `data/`. Do not copy the bundle.
+**Pin and derive-off are two flags.** `pin('p')` means the scheduler must not move p. It does not mean "stop summing cost". A comparable product bundles "manually scheduled" with summary-off. That bundle is a scheduling product. FreeGantt's Rollup is core `data/`. Do not copy the bundle.
+
+**That sentence names no product, so a reader cannot check it.** [`evidence.md`](../../shared/evidence.md) opens by ruling the opposite for this folder: name the product, link the source, and *"do not anonymize these back to a comparable Gantt"*. Its own escape-hatch section breaks that rule, and this report inherited the anonymous form. **Name the product in `evidence.md`, or drop the sentence from this verdict.** The bundle claim is load-bearing for "pin is not derive-off".
 
 **Core owns derive-off.** Rollup is a `data/` commit step. A Gantt with no plugin still rolls up. The flag must be a Field (`entryAfterEdit` allow-list). Pin stays in the scheduling plugin (ADR 0002).
 
@@ -150,6 +167,34 @@ That disagreement is why 8.2 cannot reach "a normal Entry with no dates" without
 
 ---
 
+## Review, 2026-09-10
+
+A second reader re-ran the suites and opened every file this report cites. **No HEAD quote was wrong. The correction to the plan's branch table is right. The winner's price list was short.**
+
+### What the re-run proved
+
+- The three branches sit on origin at the commits in the table.
+- The counts reproduce exactly: 20 + 25 + 33 = **78 passed**.
+- **The HEAD trap is real, and the quote is exact.** `view/capability.ts:119` is `if (isRollUpKind(entry.kind) && rollsUp(field)) return DERIVED;`, inside `libraryWriteRule`. It asks nothing about children. `rollup.ts:184` skips a childless parent. A childless `'group'` is therefore DERIVED for writes and never written by the pass. The plan quotes `rollup.ts` and cites `capability.ts:119` as *"already true"*, and never says the two disagree.
+- Every other quote checks out: `rollup.ts:69` and `:75` (the kind filter), `rollup.ts:196` (`editProposesField(body.get(parentId), field)` — `body`, not `merged`, exactly as [`refuted.md`](../../shared/refuted.md) item 8 says), `view/renderer-registry.ts:35` (`bar:${kind}`), `fields/field-access.ts:163` (`entryAfterEdit` walks `CORE_FIELDS` as an allow-list), `dataset-state.ts:289-293` (`setRollUpKinds` swaps two references), `hierarchy.autoGroup` defaults to `true`, and [`rulings.md`](../../shared/rulings.md) did refuse `derivesValues`.
+- **24 does die under (b).** `plans/01` §2.5 does say `parentId` and `kind` are orthogonal. Both corrections hold.
+
+### What changed
+
+1. **§(b) — the winner retires two published config keys.** `rollUpKinds` and `hierarchy.autoGroup`. The old-Document path is the sharp end. See the lesson in that section.
+2. **§(b) — the empty-group call site is now on the page.** §2.5 wrote *"add a phase, then fill it"* around exactly the row this predicate changes.
+3. **§(c) — the bundle claim names no product**, against `evidence.md`'s own opening rule.
+
+### What the combined spike must still answer
+
+- **Read an old Document under structure-only.** This ADR writes schema **7**. `rollUpKinds` sits in a fixed key-order contract (`plans/02`), and schema 1's `derivedSpanKinds` already migrates onto it. No spike touched the reader.
+- **What replaces `rollUpKinds: 'none'`?** If the answer is (c)'s core boolean opt-out, decision 21 belongs inside 26's cost.
+- **What happens to `hierarchy.autoGroup`?** Deleted, or given a job. A live config key that changes nothing is worse than either.
+- **Does an empty group's cost cell open?** Type in it, add a child, and watch the value go. Decide whether that is the fix or the price.
+- **Unify `capability.ts:119` with `rollup.ts:184` on `main` first.** Every option in this wave leans on that disagreement, and [`refuted.md`](../../shared/refuted.md) item 8 already orders the fix ahead of this ADR.
+
+---
+
 ## How to re-run
 
 Root `vitest.workspace.ts` does not include `plans/`. Each spike owns a tiny workspace file. Use the local binary, from a worktree that has `node_modules` (do not symlink it):
@@ -161,3 +206,5 @@ Root `vitest.workspace.ts` does not include `plans/`. Each spike owns a tiny wor
 Names: `kind-times-config`, `structure-derives`, `per-entry-flag`.
 
 Parent re-ran on 2026-09-10 after the agents landed: **78 passed** (20 + 25 + 33).
+
+Re-run on 2026-09-10 by the review: **78 passed** (20 + 25 + 33). The three worktrees under `/tmp/FreeGantt-spikes/` still hold their own `node_modules`, so each suite runs there with no install.
