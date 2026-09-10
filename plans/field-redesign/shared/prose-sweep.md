@@ -40,7 +40,7 @@
 | `src/model/field.ts:125-127` | *"one home for 'may this value change,' asked by every gesture that writes it (I14). Default `false`."* Same rewrite as `plans/01:283` — this file is code, so 0015's build edits it, not the sweep |
 | `CONTEXT.md:64` | Field entry — `dataset.entries.fieldValue` → `dataset.entries.read` ([0014](../0014-plugin-author-surface/README.md) decision 13) |
 | `CONTEXT.md:80` | Field registry — `fieldValue` in the legal-set sentence, same rename |
-| `CONTEXT.md:225` | Grid column — `fieldValue` on the renderer context **stays** (payload, not the door) |
+| `CONTEXT.md:225` | Grid column — ~~`fieldValue` on the renderer context **stays**~~. **Overruled 2026-09-10 (13a):** the pair is `text` and `value`. `fieldValue` leaves the surface |
 | `CONTEXT.md:523` | Writability — `canWrite` is the grid threshold; `Field.editable` is the enum |
 | `plans/02` Document section | a Document is our **save format**, not an interchange format |
 | `plans/02` type rows | `PropsEdit<TProps>` and `EntryEdit<TProps>` are public |
@@ -112,4 +112,13 @@ grep -rn '\bmeta\b\|FieldSource\|source: {' CONTEXT.md CLAUDE.md \
 ```
 
 Per file at HEAD: `plans/02` 15, `plans/01` 12, `CONTEXT.md` 4, `CLAUDE.md` 2, `plans/00` 0.
+
+**That grep is too narrow, and it cost two files. Fixed 2026-09-10.** `plans/00` scored 0 and read as clean while `plans/00:51` still declared *"`Entry.kind` (span, group, milestone, consumer-defined) is authored data"* — the one rule [0013](../0013-what-decides-derivation/README.md) retired. `plans/03` was outside the file list and kept `rollUpKinds`, `autoGroup` and the `entry`/`meta` source sentence. **A gate that names only one ADR's words proves only that ADR.** Every ADR's retired words go in one grep, and `plans/03`/`plans/04` join the list:
+
+```
+grep -rn '\bmeta\b\|FieldSource\|source: {\|EntryKind\|rollUpKinds\|autoGroup\|Entry\.kind\|fieldValue\|durationOf' \
+  CONTEXT.md CLAUDE.md plans/0*.md | grep -v 'import\.meta'
+```
+
+`plans/03` is a record of what each slice shipped, so it takes the [0011](../0011-consumer-values-in-props/README.md)–0015 banner and an inline marker, the way `plans/s2-data-core/README.md` and `plans/s4-hierarchy-and-rows/README.md` do. It is not rewritten. The gate reads a marked line as swept.
 

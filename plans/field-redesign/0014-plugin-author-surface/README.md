@@ -6,7 +6,7 @@ Where a plugin's own Field values live, whether a Field key carries a namespace 
 
 ## Where it stands
 
-**No decision is open.** Six are closed — 7, 9, 12, **13**, 14, and **16**. 13 closed on 2026-09-10: the by-key door is `read`, and duration is a compute Field.
+**No decision is open.** Six numbered decisions are closed — 7, 9, 12, **13**, 14, and **16**. Q12b closed 2026-09-10 (grill).
 
 **Nothing blocks the storage rename on this ADR, and it blocks nothing there.** That is the point of splitting it out. It was the heaviest gate on the old [ADR 0011](../0011-consumer-values-in-props/README.md), and it was never a real one.
 
@@ -32,7 +32,7 @@ Answered together because the answers would cancel if taken apart. The closed ru
 
 # Open decisions
 
-**None.** 13 closed on 2026-09-10 and is below with 16.
+**None.** Q12b closed 2026-09-10 (grill) and is below with 9 and 12.
 
 ---
 
@@ -55,7 +55,21 @@ ctx.read(entry, 'duration')
 
 **Duration is not a fourth door.** `model/field.ts:19` already declares `duration: Duration` on `CoreFieldValues`, so both by-key doors type it. `durationOf` was the compute arm published as a convenience beside the Field it implements. It also answered in **two units**: `field-access.ts:92` in milliseconds, `inline-editing.ts:113` in whole days ([#274](https://github.com/Pawel-IT/FreeGantt/issues/274)). One compute arm, one unit — millisecond. The arm computes from `start` / `end` through `time/` (I10) and returns `undefined` when either date is absent ([0012](../0012-optional-dates/README.md) guards that calculation). It must **not** call `ctx.read(entry, 'duration')`. Aggregators read `ctx.read(entry, 'duration')`.
 
-**`CellRendererContext.fieldValue` stays.** It is the payload a renderer receives — a noun for the value, not the door.
+**`fieldValue` leaves the surface too — 13a, ruled 2026-09-10.** The first ruling kept it as the renderer payload. The author overruled that the same day: a word that names no door is a word with one orphaned meaning, and `({ value, fieldValue })` never says which one is the string. The pair becomes `text` and `value`.
+
+```ts
+gridColumns: [
+  { field: 'cost', cellRenderer: ({ text, value }) => ({
+      tag: 'span',
+      class: { 'over-budget': (value as number) > 10_000 },
+      text,                                    // the string the library painted
+    }) },
+]
+```
+
+`formatValue(value, ctx)` already takes the Field value and returns the text (`core-fields.ts`), so the context now speaks its producer's vocabulary: **value in, text out.** `value` is what `entries.read` answers, on one word. The flip of `value` from string to Field value cannot pass silently — `text: unknown` does not satisfy `ElementDescription.text`, so every stale renderer is a compile error.
+
+Both context types carry the pair and both change: `ColumnCellRendererContext` (`model/field.ts:56-64`) and the Gantt-wide `CellRendererContext` (`layout/renderer.ts:45-56`). `#fieldValueForCell` (`view/gantt-shell.ts:1551`) becomes `#cellValueFor`.
 
 **[#274](https://github.com/Pawel-IT/FreeGantt/issues/274) closes with the door.** One Field cannot supply two units. The inline editor's whole-day approximation dies with `durationOf`.
 
@@ -119,6 +133,20 @@ That is the price of prevention. Detection at construction (registry + the regis
 
 **Decision 16, closed the same day, names what happens when two plugins write one Field.**
 
+## Q12b — app code writes the prefixed key
+
+**Closed 2026-09-10 (grill).** Was: *how does app code write a plugin Field?* Options were (a) prefix at every `add` / `update` door, plugin exports a const; (b) a bare name until the app declares that key; (c) not through `add` / `update`.
+
+**The ruling is (a).** `add()` and `update()` name the prefixed key. The plugin **exports that string as a const**. No bare alias. No plugin-only write API. Per-key merge stays: writing one key does not replace the bag.
+
+```ts
+export const SCHEDULING_PROGRESS = 'scheduling:progress'
+dataset.entries.update('t1', { [SCHEDULING_PROGRESS]: 60 })
+dataset.entries.add({ id: 't2', name: 'Cutover', [SCHEDULING_PROGRESS]: 0 })
+```
+
+**What lost.** A bare `progress` until the app declares it — two names for one Field, and a collision with a consumer `progress`. A second write door beside `add` / `update` — two callers, two surfaces already split app from plugin; the app author already has the write.
+
 ## 7 — what an S7 plugin does with a `progress` value it did not write
 
 **Closed 2026-09-09 as not independent.** Its entire body was *"Downstream of 9."*
@@ -145,6 +173,8 @@ Its own recommendation was *"measure before deciding"*, which is work, not a rul
 - `weightedMeanByDuration` (`aggregators.ts:14`) reads `ctx.read(entry, 'duration')`. Skip a child whose duration is `undefined`.
 - `inline-editing.ts:108-117`'s `fieldContextFor` stops supplying `durationOf`. Its `read` already forwards to `entries.read`. The whole-day approximation goes with the method. That is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274).
 - `etc/freegantt.api.md` drops `durationOf` and `fieldValue`. I11 gates the report.
-- `CellRendererContext.fieldValue` is **not** renamed. It is the payload, not the door.
+- Rename the renderer payload with **serena**: `fieldValue` → `value`, and the old `value` → `text`, on both `ColumnCellRendererContext` and `CellRendererContext`. Do the `value` → `text` rename **first**, or the two names collide mid-rename.
+- After the rename, `grep -rn '\bfieldValue\b' src/ harness/ e2e/ etc/` returns **0**. That is 13's gate.
+- App `add` / `update` of a plugin Field uses the prefixed key. The plugin exports that string as a const (Q12b). No bare alias.
 
 

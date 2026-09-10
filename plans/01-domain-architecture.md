@@ -2,6 +2,8 @@
 
 Companion to `00-overview.md` (decisions D1–D12 are cited by number). This document defines the layers, the domain model, the contracts between modules, and the invariants that CI enforces.
 
+> **§2.5, §2.6 and I14 are ahead of `src/`.** ADRs 0011–0015 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules here. So `Entry.props`, optional dates, derivation by children and the `editable` enum are the decided design, and `src/` still ships `meta`, `Entry.kind` and `editable?: boolean` until each ADR builds. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
+
 ---
 
 ## 1. Layer map

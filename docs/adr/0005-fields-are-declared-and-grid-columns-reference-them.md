@@ -1,4 +1,4 @@
-> **Superseded by [ADR 0011](0011-consumer-values-live-in-props.md).** Do not rewrite this body. The live Field rule is ADRs 0011–0015.
+> **Superseded by [ADR 0011](0011-consumer-values-live-in-props.md) if accepted.** ADRs 0011–0015 are `proposed`, and no line of them is in `src/`, so this body is still what the code does. Do not rewrite it. When 0011 is accepted, drop the *if accepted* and this ADR's Field rules are history.
 
 # Fields are declared, and grid columns reference them
 

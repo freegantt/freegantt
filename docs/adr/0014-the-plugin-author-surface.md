@@ -1,6 +1,6 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: plugin Field values share `props`; plugin keys carry a required prefix (9 and 12, 2026-09-10). Two plugins' extras merge per key; a contested Field is dropped and warned (16, 2026-09-10). The by-key door is `read`; duration is a compute Field (13, 2026-09-10). Two earlier numbers closed as downstream or out of scope — 7 and 14.
+decided: plugin Field values share `props`; plugin keys carry a required prefix (9 and 12, 2026-09-10). App `add` / `update` name that prefixed key; the plugin exports the string as a const (Q12b, grill 2026-09-10). Two plugins' extras merge per key; a contested Field is dropped and warned (16, 2026-09-10). The by-key door is `read`; duration is a compute Field; a cell renderer reads `text` and `value` (13 and 13a, 2026-09-10). Two earlier numbers closed as downstream or out of scope — 7 and 14.
 open: none. The working material is in `plans/field-redesign/0014-plugin-author-surface/`.
 ---
 
@@ -10,6 +10,7 @@ open: none. The working material is in `plans/field-redesign/0014-plugin-author-
 
 - **Decision 16 is closed.** [0011](0011-consumer-values-live-in-props.md) decision 22 branded `ProposedEdit`. The runtime owns composition, merging, and branding. Non-overlapping keys combine. A contested Field is dropped and warned — the same posture as [0013](0013-what-decides-that-a-row-derives-its-values.md) decision 5.
 - **Decision 13 is closed.** The by-key door is `read` on both surfaces. `FieldContext.durationOf` is deleted. Duration is a compute Field. The rename does not wait on [0012](0012-dates-are-optional-on-every-kind.md).
+- **Q12b is closed.** App `add` / `update` name the prefixed key. The plugin exports that string as a const.
 
 The working material is [`plans/field-redesign/0014-plugin-author-surface/`](../../plans/field-redesign/0014-plugin-author-surface/README.md).
 
@@ -21,15 +22,22 @@ A plugin's Field values already sit in `Entry.meta` beside the consumer's — `f
 
 ADR 0005 deferred a separate consumer store on the grounds that *"a consumer declaring their own key in their own `meta` has nobody to collide with"*. **With plugins installed, they do.** The registry already refuses a duplicate *declaration*. It does not refuse a *value* the consumer wrote before the plugin existed.
 
-## Open decisions
+## Closed here — 9, 12, Q12b, 13, and 16
 
-**None.** **9 and 12 closed together on 2026-09-10.** **16 closed on 2026-09-10.** **13 closed on 2026-09-10.**
+Plugin Field values share `props`. Plugin keys carry a required prefix (`scheduling:progress`). Core and consumer keys stay bare. The write door is `EntryEdit<TProps & PluginEntryProps>` (flat at `add()` and `update()`, decision 11 plus grill 2026-09-10).
 
-## Closed here — 9, 12, 13, and 16
+**Q12b, closed 2026-09-10 (grill).** App `add` / `update` name the prefixed key. The plugin **exports that string as a const**. No bare alias. No plugin-only write API.
 
-Plugin Field values share `props`. Plugin keys carry a required prefix (`scheduling:progress`). Core and consumer keys stay bare. The write door is `PropsEdit<TProps & PluginEntryProps>` (flat at `update()`, decision 11). **A for one storage home, not for the typed dot.** This ADR writes **schema 8**.
+```ts
+export const SCHEDULING_PROGRESS = 'scheduling:progress'
+dataset.entries.update('t1', { [SCHEDULING_PROGRESS]: 60 })
+```
+
+This ADR writes **schema 8**.
 
 **13.** `dataset.entries.read(id, key)` and `ctx.read(entry, key)` are one job under one name. `entry.props.k` is storage. `fieldValue` is renamed to `read`. `durationOf` is deleted. Duration is the shipped compute Field; you read it through `read`. One unit — millisecond. [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) closes with the door.
+
+**13a, ruled 2026-09-10: `fieldValue` leaves the surface entirely.** A cell renderer's two readings become `text` (the string the library painted) and `value` (the Field value before formatting). The first ruling kept `fieldValue` as the payload name. It reads wrong beside a `read` door: `({ value, fieldValue })` never says which one is the string, and the word then names a door nobody can call. `formatValue(value, ctx)` already takes the Field value and returns the text, so the renderer context now speaks its producer's own vocabulary — value in, text out. The flip of `value` from string to Field value is a compile error, never a silent one: `text: unknown` does not satisfy `ElementDescription.text`.
 
 **16.** The runtime owns composition, merging, and branding. The author returns extras or nothing. Non-overlapping keys on one Entry combine. The same Field on the same Entry is a collision: neither plugin's value is applied, one warning, same posture as [0013](0013-what-decides-that-a-row-derives-its-values.md) decision 5. Per Entry, not per Field globally.
 

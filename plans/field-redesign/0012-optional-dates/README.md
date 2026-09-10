@@ -2,7 +2,7 @@
 
 **The decision:** [`docs/adr/0012-…`](../../../docs/adr/0012-dates-are-optional-on-every-kind.md)
 
-**An Entry has dates if and only if it holds at least one Segment**, and `start`/`end` are always the envelope. One biconditional keeps the blast radius to one rule.
+**An Entry spans if and only if both `start` and `end` are present.** It holds a Segment, and draws a bar, iff it spans. One date without the other is legal (decision 4, grill 2026-09-10).
 
 ## Where it stands
 
@@ -22,18 +22,19 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 
 **This ADR lands before [#242](https://github.com/Pawel-IT/FreeGantt/issues/242)'s own fix.** Optional dates change what `InvalidInstantError` guards.
 
-## Required follow-up — a date path, and last-bar-remove
+## Required follow-up — the date path, and last-bar-remove
 
-**A dateless row cannot be dated through the default UI.** It draws no bar, so no gesture reaches it, and the default `gridColumns` is `['name']`. That is not a hole this ADR lives with. Storage may land; a user-visible Gantt without a way to give dates is incomplete. Ship a date path with the first user-facing cut — put `start` in the default columns, or add a timeline “set dates” gesture — or the storage model has no user path. Dating from the timeline is its own gesture, with its own capability and veto surface. It may be a later slice. It is not optional.
+**The date path is the grid.** Default `gridColumns` is `['name', 'start', 'end']`. The date editor opens on a blank cell (today `no-date-value`) and writes one Field. `update({ start })` on a blank row is legal. A timeline “set dates” gesture is not this cut.
 
-**Last-segment-remove un-dates. It does not delete the row.** ADR 0010 said *an Entry never survives as an empty record* and bound grid-row Delete to `removeSegments`. This ADR makes zero Segments a legal dateless row. Zero Segments cannot mean “deleted” and “unscheduled” at once. **This ADR revises that consequence of ADR 0010** (ADR 0006: the old ADR is not edited; the new rule lives here):
+**Last-segment-remove un-dates both dates. It does not delete the row.** ADR 0010 said *an Entry never survives as an empty record* and bound grid-row Delete to `removeSegments`. This ADR makes zero Segments a legal row that does not span. Zero Segments cannot mean “deleted” and “unscheduled” at once. **This ADR revises that consequence of ADR 0010** (ADR 0006: the old ADR is not edited; the new rule lives here):
 
-- `removeSegments` of the last Segment is un-date: the Entry stays, with no dates and no Segments.
+- `removeSegments` of the last Segment clears both dates: the Entry stays, with no Segments.
+- Clearing one grid cell leaves the other date and drops the Segment.
 - `entries.remove(id)` deletes the row and the subtree.
 - Grid-row Delete on the name cell is `remove(id)`, not `removeSegments`.
-- Keyboard Delete on a bar un-dates when it was the last bar.
+- Keyboard Delete on a bar un-dates both dates when it was the last bar.
 
-`update(id, { segments: [] })` still throws `EmptySegmentsError`. Absent is dateless. Empty is illegal.
+`update(id, { segments: [] })` still throws `EmptySegmentsError`. Absent is not a span. Empty is illegal.
 
 ---
 
@@ -41,17 +42,19 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 
 ## The build
 
-**An Entry has dates if and only if it holds at least one Segment**, and `start`/`end` are always the envelope.
+**An Entry spans iff both dates are present.** A Segment and a bar exist iff it spans.
 
-- `add({ start, end })` mints one Segment. `add({ segments })` with no dates derives the envelope. `add({})` stores no dates and no Segments.
-- `update(id, { start: undefined, end: undefined })` is the un-date verb; it clears the Segments.
-- Two refusals stay: one date without the other, and `segments: []` (`EmptySegmentsError`).
+- `add({ start, end })` mints one Segment. `add({ segments })` with no dates derives the envelope. `add({})` stores no dates and no Segments. `add({ start })` and `add({ end })` store that one date, no Segment, no bar.
+- `update(id, { start })` on a blank row is legal. `update(id, { start: undefined, end: undefined })` is the un-date verb; it clears both dates and the Segments.
+- One refusal stays: `segments: []` (`EmptySegmentsError`). **Do not refuse one date without the other.**
+- Default `gridColumns` is `['name', 'start', 'end']`. Open the date editor on a blank cell. Write one Field.
+- Core does not paint a diamond. `start === end` is a bar of no width.
+- A parent whose every child is start-only has a start, no end, no bar. [0013](../0013-what-decides-derivation/README.md) owns the Rollup pass.
+- **Last-segment-remove un-dates both dates** — it does not delete the Entry. Clearing one cell leaves the other date.
 - `start` and `end` join `isOptionalEntryKey`. Serialization and `entry-reader.ts` each gain a `length === 0` arm.
 - Delete the `referenceDate` fill (`entry-reader.ts:168-172`). Written down under D-S2-10 **and** D-S2-22. Not under D-S5-46, which survives.
 - Reaches bar geometry, the Segment invariant (#212), sort comparators, and `range: 'fitDataset'`.
-- A dateless Entry sorts **last**, both directions. Do not inherit HEAD `direction * order` — that puts a hole first on `desc`. A dateless row is inert to a **date** gesture (no bar to drag). `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
-- **A parent whose every child is dateless has no dates.** [0013](../0013-what-decides-derivation/README.md) owns the Rollup pass; this biconditional is what that pass must restore (Improvement D).
-- **Last-segment-remove un-dates** — it does not delete the Entry. `entries.remove(id)` deletes the row. See [Required follow-up](#required-follow-up--a-date-path-and-last-bar-remove).
+- A row with neither date sorts **last**, both directions. Do not inherit HEAD `direction * order` — that puts a hole first on `desc`. A row that does not span is inert to a **date** gesture (no bar to drag). `fitDataset` includes a one-date instant. An S7 link to an endpoint that does not span raises a diagnostic and draws nothing.
 - This ADR writes schema **5** — [the counter](../shared/rulings.md#3--the-schema-restarts-release-gate).
 
 **The duration compute Field returns `Duration | undefined`.** Guard the calculation at `field-access.ts:92`. [0014](../0014-plugin-author-surface/README.md) decision 13 deletes `FieldContext.durationOf` — do not treat that wrapper as this ADR's public API. If this ADR lands first, keep `durationOf` as a thin wrapper around the guarded helper until 0014 removes it. **This list is an audit's, not a re-derivation — do not rebuild it.**
@@ -72,9 +75,9 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 
 ## 4 — what `InvalidInstantError` refuses
 
-**Settled 2026-09-08.**
+**Settled 2026-09-08. Overruled 2026-09-10 (grill).**
 
-It refuses an unreadable date, and an Entry that authors one date without the other. It stops refusing an Entry that authors neither, because dates become optional on every kind (this ADR).
+It refuses an unreadable date. It no longer refuses an Entry that authors one date without the other, and it no longer refuses an Entry that authors neither. A one-date row is stored, shows in the grid, and draws no bar until the second date arrives.
 
 ## 15 — `Duration` and the magic constant
 

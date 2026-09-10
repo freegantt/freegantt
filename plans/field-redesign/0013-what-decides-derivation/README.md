@@ -106,17 +106,18 @@ One structural question at every door: *does this Entry have children, and is th
 
 | Door | Answer | State |
 |---|---|---|
-| cell editor, bar drag | refused when the row has children | **the change** — today it asks kind (`view/capability.ts:119`) |
+| cell editor | refused when the row has children | **the change** — today it asks kind (`view/capability.ts:119`) |
+| parent **bar** drag | translates descendant dates; does not write the parent | **grill 2026-09-10** — reuse `beforeEntryMove` |
 | `entries.update()` | refused | **the change** — wire `update()` to the derived arm |
 | `entries.add()`, `new Dataset({ entries })`, `fromJSON` | value **dropped**, report raised | **the change** |
 | the extension hook | write **dropped**, warning raised | decision 5, closed — exempt from the throw only |
 | a child arrives | dates change owner mid-commit | **the change** — `autoGroup` is deleted; `parentId` is the door |
-| a last child leaves | un-date; draws a bar | already 0012's dates; look follows |
+| a last child leaves | un-date; name stays; no bar | already 0012's dates; look follows |
 | `toJSON` | derived keys **omitted**; `kind` **omitted** | **the change** |
 
 - Conversion is structure: a child arrives, a last child leaves. No kind write. Dates on demotion are a **normal Entry with no dates**, datable later.
 - Delete the `kind` core Field, `EntryKind` as an Entry classification, `rollUpKinds`, `hierarchy.autoGroup`. Ignore `kind` on an old Document.
-- Core does not ship a diamond. `--fg-diamond-size` and the milestone producer leave with the Field, or wait on the scheduling plugin.
+- Core does not ship a diamond. A zero-length span is a bar of no width (0012). `--fg-diamond-size` and a milestone producer do not ship in core.
 - Do not publish a calculated `kind` Field.
 - The report goes through `raiseError` at `severity: 'warning'`, **always**. Not `isDevMode()`-gated (D-S5-41).
 - One report per operation, not per value.

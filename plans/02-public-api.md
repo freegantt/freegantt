@@ -4,6 +4,8 @@ The API is a product surface, designed once and defended. Everything here is wha
 
 **Public entry points:** `Dataset`, `Gantt`, the event vocabulary, the plugin contract, the JSON schema, and the model types. Nothing else.
 
+> **The Field surface here is ahead of `src/`.** ADRs 0011–0015 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules into this file. So `props`, `entries.read`, optional dates, derivation by children, the `editable` enum and `schema: 9` are the decided design, and `src/` still ships `meta`, `entries.fieldValue`, `Entry.kind` and `schema: 4` until each ADR builds. Read the ADR before you cite this file as *what the code does*. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
+
 ---
 
 ## 1. Principles
@@ -340,11 +342,12 @@ S5.5 Parts (D-S5-13/14, both mounted inside S5.3's `.fg-popup`): `.fg-tooltip`, 
 
 S5.8 Parts (D-S5-19, D-S5-47): `.fg-cell-editor`, `.fg-cell-editor-control`, `.fg-cell-editor-discard`, `.fg-cell-notice` (`inlineEditing()`) — mounted through the row layer (`ctx.view.rowLayer`) directly, not inside `.fg-popup` (the cell editor has no flip/clamp; it always sits at the cell's own rect). #158 moved this mount out of the Overlay: the row layer travels with the rows on both axes, so the editor stays on its cell through a scroll with no scroll listener. State attribute `data-state="invalid"` on `.fg-cell-editor` marks a failed `parseValue`, a `beforeChange` veto, or the default `dateInput`'s non-midnight refusal (issue #137 F11/F12). In that state the editor also carries `data-reason` (shipped values: `unreadable-value`, `refused-write`) and shows `.fg-cell-editor-discard`, so Escape is not its only exit (D-S5-47). A cell that offers an editor which cannot open at all mounts a `.fg-cell-notice` instead: words over the cell, no control, `pointer-events: none`, and its own `data-reason` (shipped values: `derived-value`, `no-parse-value`, `no-date-value`, `time-of-day`, `unsaved-value`, `segmented-entry`). The two carry two classes so a stylesheet for one never reaches the other (#231 F1). Each reason key is machine-readable and is also the `code` of the Error report the editor raises, so one refusal has one spelling (#234, D-S5-40); the words the user reads sit beside it on the wrapper's own `title`.
 
-A cell renderer reads its cell two ways. `value` is the string the library painted, through the
-Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
+A cell renderer reads its cell two ways. `text` is the string the library painted, through the
+Field's own `formatValue`. `value` is the same Field value before formatting — what
 `dataset.entries.read(id, column.field)` answers, for a core, `props`, plugin, or `compute` Field
-alike. `fieldValue` on this context is the payload, not the door. A renderer that paints text reads `value`; one that branches on magnitude reads
-`fieldValue`, and never parses the library's own output back with a regex. Reaching into
+alike. That is `formatValue`'s own vocabulary read back: **value in, text out** (ADR 0014 decision
+13a). A renderer that paints words reads `text`; one that branches on magnitude reads
+`value`, and never parses the library's own output back with a regex. Reaching into
 `entry.props` is not the alternative: a `compute` Field has no stored home.
 
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only. `class` is `Readonly<Record<string, boolean>>` everywhere on `ElementDescription`, including its `children` (S5.4, D-S5-10) — this sample used a bare string until issue #137 F15 caught that it did not typecheck against its own referenced type.
@@ -736,7 +739,7 @@ export interface DatasetDocument {
 }
 ```
 
-This build writes `schema: 9` — optional dates (5), `props` and no `source` on `SerializedField` (6), omit a rolling-up parent's derived keys and drop `rollUpKinds`/`kind` (7), plugin-key prefix (8), `editable` enum (9). `schema: 1` through `8` still read (`derivedSpanKinds` lands then drops with `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each dated Entry's whole `[start, end)`; an older consumer bag becomes `props`; a plugin-declared key gains its prefix). `progress` is not a core entry key (ADR 0008); a scheduling plugin stores it as `scheduling:progress`. Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. A Document is this library's save format, not an interchange format.
+**The redesign writes `schema: 9`, one number per ADR, and the build at HEAD still writes `4`** (`data/serialization/read.ts`) — ADRs 0011–0015 are `proposed`. The nine: optional dates (5), `props` and no `source` on `SerializedField` (6), omit a rolling-up parent's derived keys and drop `rollUpKinds`/`kind` (7), plugin-key prefix (8), `editable` enum (9). **The count restarts at `1` on release, and a released reader refuses a file it did not write** — 5 through 9 are pre-release numbers, and pricing them at zero is what lets each ADR spend its own. `schema: 1` through `8` still read (`derivedSpanKinds` lands then drops with `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each dated Entry's whole `[start, end)`; an older consumer bag becomes `props`; a plugin-declared key gains its prefix). `progress` is not a core entry key (ADR 0008); a scheduling plugin stores it as `scheduling:progress`. Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. A Document is this library's save format, not an interchange format.
 
 **`plugins` is the plugin half of the Document (S5.10, D-S5-24), and it holds rows, never behaviour.** Each key is a plugin id, and its value is that plugin's own rows. The key arrived at `schema: 3`, and `toJSON` omits it when no plugin holds a row. A Dataset carries the rows of a plugin it never installed, unchanged, so an application that reads a Document without the plugin still writes those rows back — they ride as passenger data. `schema: 1` and `2` have no such key, so a `plugins` key on a Document labelled `schema: 1` is dropped, not read.
 

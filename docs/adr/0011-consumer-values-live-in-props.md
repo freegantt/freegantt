@@ -1,6 +1,6 @@
 ---
 status: proposed — a draft, not a decision. Supersedes ADR 0005's `meta` rulings if accepted.
-decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; an edit carries the Entry's own shape and `props` merges; an undeclared key is carried at ingest and never named at `update()` (decision 1, 2026-09-10); `update()` is flat only (decision 11, 2026-09-10); brand the whole `ProposedEdit` (decision 22, 2026-09-10).
+decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; `add()` and `update()` are flat (decision 11, grill 2026-09-10 extends add); constructor `entries` take declared keys at the top, nested `props` stays for passengers (Q15, grill 2026-09-10); an undeclared key is carried at `fromJSON` and never named at `add()` or `update()` (decision 1, grill 2026-09-10); brand the whole `ProposedEdit` (decision 22, 2026-09-10).
 open: none. Closed decisions are in `plans/field-redesign/0011-consumer-values-in-props/`.
 ---
 
@@ -56,9 +56,11 @@ The Rollup writes a derived value into the consumer's own bag. That is the same 
 
 **An undeclared key is never written by the library, ever.** State this wherever `props` is documented. Without it, decision 9's *prefix the plugin* mitigation looks complete, and it is not — a plugin is not the only second writer in the bag.
 
-### An update is flat, a record nests, and `props` merges
+### An update is flat, `add()` is flat, a Document nests, and `props` merges
 
-`update(id, { start: '2026-01-06', owner: 'Sam' })` writes one date and one consumer value. Every other key in `props` survives. Nesting is not what makes today's write destructive; **replacing** is. **Decision 11, closed 2026-09-10:** that call is flat. `props:` is refused at `update()`. `add()` and the Document still nest.
+`update(id, { start: '2026-01-06', owner: 'Sam' })` writes one date and one consumer value. Every other key in `props` survives. Nesting is not what makes today's write destructive; **replacing** is. **Decision 11, closed 2026-09-10, extended 2026-09-10 (grill):** `add()` takes the same flat shape. `props:` is refused at `add()` and at `update()`. The Document still nests.
+
+**Q15, closed 2026-09-10 (grill).** Constructor `entries` take declared Field keys at the top, the same as `add()`. Nested `props` stays legal on a constructor record for passenger keys and for a bag you already hold. Unknown top-level keys **warn and are ignored** — ingest, not a throw. `fromJSON` stays nested. A declared key named both at the top and inside `props` throws.
 
 `toProposedEdit` merges the patch onto the Entry's own record, so a `ProposedEdit` always carries a **complete** `props`. The merge sits on the read side, not the apply side. An explicit `undefined` inside a patch clears that one key.
 

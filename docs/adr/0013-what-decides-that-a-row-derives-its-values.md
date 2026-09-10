@@ -21,7 +21,7 @@ if (kinds.has(entry.kind)) parents.add(entry.id);
 if (!childIds || childIds.length === 0) continue;
 ```
 
-`entry.kind` is stored per row. `kinds` is the `rollUpKinds` config set. Having children is structure. **Decision 26, closed 2026-09-10, keeps only the third.** An Entry derives when it has children. `kind` leaves the record. `rollUpKinds` is deleted. `hierarchy.autoGroup` is deleted. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns. Do not publish a calculated `kind` Field — that restates `childrenOf`.
+`entry.kind` is stored per row. `kinds` is the `rollUpKinds` config set. Having children is structure. **Decision 26, closed 2026-09-10, keeps only the third.** An Entry derives when it has children. `kind` leaves the record. `rollUpKinds` is deleted. `hierarchy.autoGroup` is deleted. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns. Do not publish a calculated `kind` Field — that restates `childrenOf`. **Grill 2026-09-10:** a zero-length span is still a bar of no width (0012). Core does not paint a diamond for it.
 
 ## Decision
 
@@ -37,7 +37,7 @@ The two rulings hold each other up. The refusal means nothing but the Rollup can
 
 ### An Entry derives when it has children, and `kind` leaves the record
 
-**Decision 26, closed 2026-09-10.** The predicate is structure. A parent with children draws the parent look. A childless row draws a bar. An empty phase looks like a bar until a child arrives. No `'kind'` on `Entry`, none in the Document, no `update({ kind })`. Core does not ship a diamond. `rollUpKinds` and `hierarchy.autoGroup` are deleted. No opt-out in this ADR.
+**Decision 26, closed 2026-09-10.** The predicate is structure. A parent with children draws the parent look. A childless row is a normal Entry. Name is required. No `'kind'` on `Entry`, none in the Document, no `update({ kind })`. Core does not ship a diamond. `rollUpKinds` and `hierarchy.autoGroup` are deleted. No opt-out in this ADR. Do not write **phase** or **grouped entry** — `{ source: 'group', groupBy }` is a row source.
 
 Do not replace `kind` with a calculated Field. A plugin calls `childrenOf`. A plugin that needs another look stores ids itself (ADR 0002).
 
@@ -60,15 +60,16 @@ stateDiagram-v2
   end note
   note left of Normal
     Demotion leaves no dates — nothing to calculate from.
-    The row draws a bar. There is no kind to write.
+    The row keeps its name. No bar until it spans again.
+    There is no kind to write.
   end note
 ```
 
 **Promotion is a door, and nobody aimed at it.** An Entry authored with dates becomes a parent the moment it gains a child. Its dates were authored, they are derived from that commit on, and no call named a derived Field.
 
-**Demotion does not happen today.** `hierarchy.test.ts:116` pins the current rule by name: *"removing every child demotes nothing."* **This ADR overrules that**, and the prose sweep rewrites `plans/01` §2.5's promote-only / flickering-identity clause. Look follows children. An empty phase is a bar until it has a child.
+**Demotion does not happen today.** `hierarchy.test.ts:116` pins the current rule by name: *"removing every child demotes nothing."* **This ADR overrules that**, and the prose sweep rewrites `plans/01` §2.5's promote-only / flickering-identity clause. Look follows children. A parent that loses its last child is a normal Entry: name, no dates, no bar.
 
-On demotion the Entry becomes a **normal Entry with no dates**. There are no children to calculate from, and it can be dated later. There is no kind to write.
+On demotion the Entry becomes a **normal Entry with no dates**. There are no children to calculate from, and it can be dated later through the grid. There is no kind to write.
 
 **An Entry that starts rolling up drops its authored values, and the Rollup recalculates them.** Decision 6, closed 2026-09-09. The library never refuses this. The drop is an ordinary ChangeSet row in the same transaction as its cause — a `parentId` write — so undo reverses both. **History is never cleared.** Decision 24 closed with 26: `rollUpKinds` is gone, so there is no config flip.
 
@@ -84,6 +85,14 @@ On demotion the Entry becomes a **normal Entry with no dates**. There are no chi
 The seven call sites are `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Build the derived answers from those seven** — reading *four doors* skips `add()`, `fromJSON()` and the constructor, which drop rather than throw.
 
 `toJSON` is not a write. It asks the derived half only, so it is a caller of that half and not a fifth `canWrite`. **Do not claim I14 for the omission, and do not claim I14 for the derived refusal until [ADR 0015](0015-what-the-write-door-refuses.md) has wired the editable arm.** This ADR closes the derived half only.
+
+### Parent bar drag translates descendants, and does not write the parent
+
+**Grill 2026-09-10.** Parent **cells** stay refused (`DerivedFieldNotWritableError`). Do not distribute a typed parent value down to children.
+
+Dragging a parent bar is a different job. It translates every descendant date that exists, in one transaction, one undo. A child with only start: that start moves. A child with only end: that end moves. Spanning children move as a span. Children with neither date are skipped. Writes land on the descendants. The parent envelope rolls up. The parent’s `start` / `end` are not written.
+
+Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end`. A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
 
 This ADR writes schema **7**.
 

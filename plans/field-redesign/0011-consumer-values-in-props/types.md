@@ -18,7 +18,7 @@ flowchart TB
 
 **This file is 0011's types.** [0013](../0013-what-decides-derivation/README.md) decision 26 then **deletes `kind`**, so `{ kind: undefined }` leaves the refused set with that ADR. The seven type tests land here with `kind` still present.
 
-**Decision 11, closed 2026-09-10.** `update()` is flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: `add()`, the Document, and a complete `ProposedEdit` nest.
+**Decision 11, closed 2026-09-10. Grill 2026-09-10 extends it to `add()`.** `update()` and `add()` are flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: the Document, a complete `ProposedEdit`, and constructor `entries` (passengers only — Q15). Constructor records also accept declared keys at the top.
 
 **Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](../shared/refuted.md).
 

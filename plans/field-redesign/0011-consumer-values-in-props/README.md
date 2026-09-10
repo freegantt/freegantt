@@ -17,7 +17,7 @@ The shared files — [`refuted.md`](../shared/refuted.md), [`evidence.md`](../sh
 
 ## Where it stands
 
-**No decision is open.** Seven are closed — **1**, 2, 10, **11**, 17, **22**, and the `props`-names-a-core-key ruling. 11 and 22 closed on 2026-09-10.
+**No decision is open.** Seven numbered decisions are closed — **1**, 2, 10, **11**, **Q15**, 17, **22**, and the `props`-names-a-core-key ruling. Q15 closed 2026-09-10 (grill).
 
 **It lands second**, after [0012](../0012-optional-dates/README.md). [0012](../0012-optional-dates/README.md) is decision-free and touches four of the same files, so it goes first and this ADR rebases onto it. `EntryEdit`'s removable keys follow `Entry`, so 0012 first also makes `{ start: undefined }` compile here.
 
@@ -35,7 +35,7 @@ The shared files — [`refuted.md`](../shared/refuted.md), [`evidence.md`](../sh
 
 # Open decisions
 
-**None.** 11 and 22 closed on 2026-09-10 and are below with 1.
+**None.** Q15 closed 2026-09-10 (grill) and is below with 1 and 11.
 
 ---
 
@@ -45,9 +45,9 @@ The shared files — [`refuted.md`](../shared/refuted.md), [`evidence.md`](../sh
 
 **Closed 2026-09-10. Ruled by the author.** Was: *may an undeclared key travel in a `props` patch?* Settled *yes* on 2026-09-08, re-opened 2026-09-09 by a survey, and ruled on the recommendation.
 
-**The ruling. Records carry, patches name.** `add()`, `new Dataset({ entries })` and `fromJSON()` **carry** an undeclared `props` key — store it, round-trip it, never touch it. `update()` **names** a key, so naming an undeclared one throws `UnknownFieldError`.
+**The ruling. Records carry, patches name.** `fromJSON()` **carries** an undeclared `props` key — store it, round-trip it, never touch it. `add()` and `update()` **name** a key, so naming an undeclared one throws `UnknownFieldError`. **Grill 2026-09-10:** `add()` is a patch door, not an ingest door. Constructor `entries` is Q15, closed below.
 
-**No flag, no keyword, no second declaration shape.** An undeclared key is kept because keeping it costs nothing, not because a consumer asked for it. `{ key: 'x', carry: true }` was weighed and refused: a consumer should not annotate data to stop the library discarding it.
+**No flag, no keyword, no second declaration shape.** An undeclared key is kept in the Document because keeping it costs nothing, not because a consumer asked for it. `{ key: 'x', carry: true }` was weighed and refused: a consumer should not annotate data to stop the library discarding it.
 
 **Why carrying is free, and it is the whole reason this answer is cheap.** An undeclared value never changes. So nothing diffs it, and it needs no `equals`; it never earns a ChangeSet row, so it needs no row order; undo never holds it; and `fieldValue` keeps its `UnknownFieldError` guard with one code path. The three edits the merging patch needed — seeding `proposedKeys` from inside `props`, draining undeclared keys in `diffEdit`, and answering `entry.props[key]` from `fieldValue` — **are not needed at all.**
 
@@ -62,7 +62,7 @@ The shared files — [`refuted.md`](../shared/refuted.md), [`evidence.md`](../sh
 
 **Spiked** — `spike/0011-undeclared-props-patch`, 34 passed, five toy stores scored on rules-to-learn and on the call a person reads. The *"nobody ships per-key merge over an undeclared space inside a transactional store"* claim is carried from [`evidence.md`](../shared/evidence.md) as a **survey**, not as a probe result.
 
-**The error message carries the migration, so it ships with the ruling.** `errors.ts:331` currently says *"put the value in `meta`"*, pointing at the bag this ADR deletes. Replace it: *"'phase' is not a declared Field, so update() cannot name it. Declare it: `{ key: 'phase' }` — or write it at ingest, where undeclared keys are kept."*
+**The error message carries the migration, so it ships with the ruling.** `errors.ts:331` currently says *"put the value in `meta`"*, pointing at the bag this ADR deletes. Replace it: *"'extra' is not a declared Field, so add() / update() cannot name it. Declare it: `{ key: 'extra' }` — or put it in the Document's `props`, where undeclared keys are kept."*
 
 **One known hole, unchanged and accepted.** The type says yes where the runtime says no — `PropsEdit` maps `keyof TProps`, and `TProps` membership is not Field declaration:
 
@@ -98,15 +98,33 @@ One `EntityAdded` row carries the whole Entry as stored. Per-Field rows would un
 dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
 ```
 
-Declared consumer keys sit next to core keys. Nested `props:` is refused at `update()`. `props` stays on `add()`, on the Document, and on a complete `ProposedEdit`. There is no `FieldNamedAtTopAndInPropsError`: one place to name a key, so the double-name throw never exists.
+Declared consumer keys sit next to core keys. Nested `props:` is refused at `update()` and at `add()` (grill 2026-09-10). `props` stays on the Document and on a complete `ProposedEdit`. Constructor `entries` is Q15, closed below. There is no `FieldNamedAtTopAndInPropsError`: one place to name a key on a patch, so the double-name throw never exists on `add()` / `update()`. Constructor ingest that names a declared key both at the top and inside `props` throws — that is Q15.
 
 **What lost, and why the ADR's own rejection is overruled.** Nest-only (`update('t1', { start, props: { cost } })`) names a container the app author should not meet. Shorthand *plus* nest keeps two spellings and invents the double-name throw for [0015](../0015-write-door/README.md) to type. This ADR's considered options had rejected *"flat consumer keys on the edit alone, with `props` everywhere else"* because the object a consumer writes most often would disagree with the object the library holds. **Decision 1 already splits those doors:** ingest carries an undeclared key, `update()` throws for it. A shape split is smaller than that split, and it is the call the locked spec already shows. The author ruled the call site.
 
-**What it costs.** A consumer who builds one object and passes it to `add` and to `update` writes two shapes. Nothing measures how often that happens. The call an app author writes every day is `update(id, { cost })`. `update(id, { props: { cost } })` throws, and the message says to name `cost` at the top.
+**What it costs.** A consumer who builds one object and passes it to `fromJSON` and to `update` writes two shapes: the Document nests, the JS write is flat. The call an app author writes every day is `update(id, { cost })` and `add({ id, name, cost })`. `update(id, { props: { cost } })` throws, and the message says to name `cost` at the top.
 
 **The top level stays closed.** `update('t1', { strat: 1 })` still throws `UnknownFieldError` — decision 1. This is not FullCalendar's open top level. A key that is on `TProps` but is not declared still compiles and throws — that is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267), unchanged.
 
 **Spiked** — combined spike `update-flat/`, Improvement A. Ruled as the write door, not as an optional follow-up. The types are in [`types.md`](types.md).
+
+## Q15 — constructor `entries` take declared keys at the top
+
+**Closed 2026-09-10 (grill).** Was: *is `new Dataset({ entries })` the same shape as `add()`?*
+
+**The ruling.** Constructor `entries` accept declared Field keys at the top, the same as `add()`. Nested `props` stays legal on a constructor record for passenger keys and for a bag you already hold (a server payload). Unknown top-level keys **warn and are ignored** — ingest, not a throw, so one extra column from an API does not crash the page. `fromJSON` stays nested. A declared key named both at the top and inside `props` throws.
+
+```ts
+new Dataset({
+  entries: [
+    { id: 't1', name: 'Survey', start: '...', end: '...', owner: 'Ali' },
+    { id: 't2', name: 'Legacy', props: { extra: 1, owner: 'Jo' } },
+  ],
+  fields: [{ key: 'owner' }],
+})
+```
+
+`add()` still refuses `props:` and throws on an undeclared top-level key. Two jobs: a named write is strict; construction ingest is loose at the top and still has a bag.
 
 ## 17 — the namespace is `props`
 
@@ -164,8 +182,8 @@ The leak decision 12 worried about — *it stores a value no door can read back*
 The key decides the home, so no declaration carries one.
 
 - `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest. `Entry.props: Readonly<Partial<TProps>>`. Input and Document keep `props?`.
-- **Ingest must walk inside `props`, or `add({ props: { cost } })` drops every consumer Field write in silence.** `writeDeclaredMetaFields` (`data/fields/field-access.ts:141-155`) finds a consumer Field value on an edit today, and it walks the edit's **top level**. That still works for `update({ cost })` after decision 11. It does **not** work for a record: `add({ props: { cost } })` and the Document have one top-level key, `props`, and this ADR **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. Walk inside `props` on `EntryInput` and the Document. `update()` stays a top-level walk of declared keys.
-- Write the edit types from [`types.md`](types.md). `EntryEdit` is the envelope plus declared-key shorthand at the top level — **no `props` key**. `PropsEdit` is exported for `add`, the Document, and `ProposedEdit`. Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests. `update(id, { props: { cost } })` is a type error, or a runtime throw whose message says to name `cost` at the top.
+- **Ingest must walk inside `props` on a nested record, or a Document round-trip drops every consumer Field write in silence.** `writeDeclaredMetaFields` (`data/fields/field-access.ts:141-155`) finds a consumer Field value on an edit today, and it walks the edit's **top level**. That still works for `add({ cost })` and `update({ cost })` after decision 11. It does **not** work for the Document, or for a constructor record that still passes a bag: both have one top-level key, `props`, and this ADR **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. Walk declared keys at the **top** of constructor `entries` (Q15) **and** inside `props` on that record and on the Document. `add()` and `update()` stay a top-level walk of declared keys. A declared key named both at the top and inside `props` on a constructor record throws. Unknown top-level keys on a constructor record warn and are ignored.
+- Write the edit types from [`types.md`](types.md). `EntryEdit` is the envelope plus declared-key shorthand at the top level — **no `props` key**. `add()` takes that same type. `PropsEdit` is exported for the Document, a complete `ProposedEdit`, and constructor `entries` that still pass a bag. Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests. `update(id, { props: { cost } })` is a type error, or a runtime throw whose message says to name `cost` at the top. `add({ props: { cost } })` is refused the same way.
 - **`StoredEdit` → `ProposedEdit`, with serena.** About 184 occurrences. `ProposedEdits`, `toProposedEdit`/`toProposedEdits` and `EditReading.proposed` follow. Lands in A because A already renames the type's own field. Write `ProposedEdit`'s **type** too — `props` is required on it — and **brand the whole `ProposedEdit`** (decision 22, closed 2026-09-10). `PropsEdit` carries no `__brand`.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
 - `build-commit-change-set.ts:100`'s `fieldsWrittenBy` still skips `'meta'`, and `field-access.ts:26`'s `isOptionalEntryKey` still names it. Both follow the rename.
@@ -201,7 +219,7 @@ Written in the new names: `toProposedEdit`, `ProposedEdit`.
 - ~~**b.** `diffEdit` keeps the registry walk for row order, then drains undeclared keys in the proposed set.~~
 - ~~**c.** `entries.fieldValue` and `ctx.read` answer `entry.props[key]` for an undeclared key.~~
 
-**`"Skip a–c"` is not `"do not look inside"`, and this is the trap in the group.** On an `EntryEdit` the first `Object.keys(edit)` loop names declared keys at the **top**. On a record — `add()`, the constructor, `fromJSON()` — the walk goes **inside** `props` for **declared** keys, or a declared `cost` on ingest emits no row. Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an `EntryEdit` either way.
+**`"Skip a–c"` is not `"do not look inside"`, and this is the trap in the group.** On an `EntryEdit` — `add()` and `update()` — the first `Object.keys(edit)` loop names declared keys at the **top**. On a nested record — constructor `entries` that still pass a bag, `fromJSON()` — the walk goes **inside** `props` for **declared** keys, or a declared `cost` on ingest emits no row. Constructor records also name declared keys at the top (Q15). Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an `EntryEdit` either way.
 
 **Two build steps ship with decision 1 rather than after it.** The `errors.ts:331` message rewrite, and per-key `props` merging in `entryAfterEdit`, `mergeEntryEdits` and `mergeStoredEdits` — a shallow spread deletes a carried key.
 

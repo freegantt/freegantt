@@ -6,7 +6,7 @@ How strict is `entries.update()`? What does an *absent* `editable` mean there, w
 
 ## Where it stands
 
-**No decision is open.** Four are closed — the `editable: false` ruling, **18**, **19**, and **23**. 18 closed on 2026-09-10: `editable` is `'never' | 'api' | 'anywhere'`, default `'api'`.
+**No decision is open.** Four numbered rulings are closed — the `editable: false` ruling, **18** (default `'anywhere'`, grill 2026-09-10), **19**, and **23**. Q16 closed 2026-09-10 (grill), from AG Grid.
 
 **Nothing blocks on this ADR.** It changes the default posture of a public door, which is why it deserves its own decision rather than a bullet inside a storage rename.
 
@@ -36,23 +36,22 @@ How strict is `entries.update()`? What does an *absent* `editable` mean there, w
 
 # Open decisions
 
-**None.** 18 closed on 2026-09-10 and is below with 19 and 23.
+**None.** Q16 closed 2026-09-10 (grill) and is below with 18.
 
 ---
 
 # Closed decisions
 
-## 18 — `editable` is `'never' | 'api' | 'anywhere'`; default `'api'`
+## 18 — `editable` is `'never' | 'api' | 'anywhere'`; default `'anywhere'`
 
-**Closed 2026-09-10. Ruled by the author.** Was held: a boolean that means three things, one of them absence, is not wanted. The enum is the shape that is not that boolean.
+**Closed 2026-09-10. Default overruled 2026-09-10 (grill).** Was held: a boolean that means three things, one of them absence, is not wanted. The enum is the shape that is not that boolean.
 
-**The ruling.** One key, three named states. `true` aliases `'anywhere'`. `false` aliases `'never'`. Absent means `'api'`.
+**The ruling.** One key, three named states. `true` aliases `'anywhere'`. `false` aliases `'never'`. Absent means `'anywhere'`. `'api'` is an opt-out: grid dead, `update()` allowed. Do not special-case “has `column`”.
 
 ```ts
 fields: [
-  { key: 'cost', editable: 'anywhere' },   // cell, handle, and update()
-  { key: 'owner' },                        // update() only — default 'api'
-  { key: 'parentId' },                     // update() only — no column
+  { key: 'cost' },                         // cell, handle, and update() — default 'anywhere'
+  { key: 'owner', editable: 'api' },       // update() only
   { key: 'start', editable: 'never' },     // lock — or editable: false
 ]
 ```
@@ -63,15 +62,35 @@ After ingest the stored Field holds the enum. Boolean aliases are input-only, th
 
 Create, ingest, and History replay still write a locked Field (decision 19). Un-date is a change, so `'never'` on `start` throws `FieldNotEditableError`.
 
-**Default `'api'` is split's behaviour, named.** `parentId` and `segments` keep working. A cost column stays read-only until `'anywhere'`. A script can `update({ cost })` without opting the Field into the grid. Bars still drag because core `name` / `start` / `end` declare `'anywhere'` (today `editable: true`).
+**Default `'anywhere'` is the grill 2026-09-10 ruling.** A cost column is editable until you lock it. A script can still `update({ cost })`. Set `'api'` when the grid must stay dead. Bars still drag because core `name` / `start` / `end` declare `'anywhere'` (today `editable: true`). `parentId` / `segments` have no column.
+
+**After setup (grill 2026-09-10).** No new Field keys. Hide/show columns stay live. Only `editable` may change on a Field. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Fields are the schema. The call site is Q16, closed below.
 
 **I14.** Gestures ask `canWrite` — the grid threshold. `update()` asks the same key against the API threshold. The locked sentence *"one answer gates every writer, default false"* is rewritten in the [prose sweep](../shared/prose-sweep.md). Enforcement at the data door is a new `entries.update()` assertion in `e2e/write-refusal.spec.ts`.
 
-**This ADR writes schema 9** — `SerializedField.editable` becomes the enum ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)). Omit when the value is the default `'api'`. `false` at the write door normalizes to `'never'` before encode, so `{ key: 'start', editable: false }` round-trips as `"editable": "never"`. Spend the next unused number at merge if 0014 has not yet spent 8.
+**This ADR writes schema 9** — `SerializedField.editable` becomes the enum ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)). Omit when the value is the default `'anywhere'`. `false` at the write door normalizes to `'never'` before encode, so `{ key: 'start', editable: false }` round-trips as `"editable": "never"`. Spend the next unused number at merge if 0014 has not yet spent 8.
 
 **What lost.** Copying the view rule (default refuse at `update()`). Split as a three-way boolean. A second word (`acceptsUpdate`). Two keys (`locked` plus `editable`). A door argument on `canWrite`.
 
 **The four locked sentences** (`plans/02:477`, `plans/01:283`, `plans/01:926`, `src/model/field.ts:125-127`) all change. They currently pick copy. This ruling edits them on purpose.
+
+## Q16 — live `editable` is the same object as construction
+
+**Closed 2026-09-10 (grill), from AG Grid.** Was: *(a) `dataset.setFieldEditable('start', 'never')`; (b) `dataset.fields.configure({ key, editable })`; (c) a second `dataset.editable` map.*
+
+**AG Grid has no `setColumnEditable`.** [`editable`](https://www.ag-grid.com/javascript-data-grid/cell-editing/) lives on the column definition (boolean or a per-row callback). After init you change that property on the same object and [assign the list again](https://www.ag-grid.com/javascript-data-grid/column-updating-definitions/) (`setGridOption('columnDefs', defs)`). Evidence: [`shared/evidence.md`](../shared/evidence.md). Per-row is their callback ≡ our `interactions.edit`. They can add columns; we do not.
+
+**The ruling.** Re-apply the Field declaration. Same object as construction. Extra keys throw (decision 23). The call does not add Field keys.
+
+```ts
+dataset.fields.override({ key: 'start', editable: false })
+```
+
+Not `setFieldEditable`. Not a second `dataset.editable` map. `dataset.fields.override({ key: 'start', editable: false })` reads "override the start Field" — the same merge construction already does, live, for the one key that may change.
+
+**Implementation.** `FieldRegistry.all` is one array identity for the registry's whole life (`field-registry.ts:137-139`; [`rulings.md`](../shared/rulings.md)). Readers cache by identity. Override **copies** the Field and **replaces** that identity. Do not mutate the Field in place (#187: config is a value). Throw on `rollUp`, `column`, or a key that is not already declared.
+
+**What lost.** A one-key setter that hides the declaration object. A second map that restates `editable` beside the Field that already holds it.
 
 ---
 
@@ -113,13 +132,14 @@ A `props` *value* naming a core key stays a warning ([0011](../0011-consumer-val
 
 ## The build — the editable arm and the enum
 
-- Widen `Field.editable` to `'never' | 'api' | 'anywhere' | boolean`. After ingest the stored Field holds the enum. `true` → `'anywhere'`, `false` → `'never'`, absent → `'api'`.
-- Core `name` / `start` / `end` declare `'anywhere'` (today `editable: true`). `parentId` and `segments` stay default `'api'`.
+- Widen `Field.editable` to `'never' | 'api' | 'anywhere' | boolean`. After ingest the stored Field holds the enum. `true` → `'anywhere'`, `false` → `'never'`, absent → `'anywhere'`.
+- Core `name` / `start` / `end` declare `'anywhere'` (today `editable: true`). `parentId` and `segments` have no column.
 - Fill the resolver's editable arm. Grid / `canWrite`: writable iff `'anywhere'`. `entries.update()`: refuse `'never'` with `FieldNotEditableError`. Do not add a door argument to `canWrite`.
 - Check `compute` before `editable` ([the ruling](../shared/rulings.md#computedfieldcannotbewrittenerror--one-name-at-two-doors)).
-- Encode the enum on `SerializedField`. Omit `'api'`. Write schema **9**. `{ key: 'start', editable: false }` round-trips as `"editable": "never"`.
-- `e2e/write-refusal.spec.ts` gains an `entries.update()` assertion for `'never'` and for default `'api'` on `parentId`.
+- Encode the enum on `SerializedField`. Omit `'anywhere'` (the default). Write schema **9**. `{ key: 'start', editable: false }` round-trips as `"editable": "never"`. Spend the next unused number at merge if 0014 has not yet spent 8.
+- `e2e/write-refusal.spec.ts` gains an `entries.update()` assertion for `'never'` and for `'api'` on a consumer Field.
 - `view/capability.ts:120` currently reads `field.editable === true`. Point it at the moved resolver. Do not restate the enum there.
+- Live `editable` after construction: `dataset.fields.override({ key, editable })` (Q16). Copy the Field; replace `FieldRegistry.all`'s identity (#187). Extra keys throw (decision 23). Do not accept new Field keys. Do not mutate a Field in place.
 
 
 

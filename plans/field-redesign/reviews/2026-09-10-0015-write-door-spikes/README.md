@@ -1,6 +1,6 @@
 # ADR 0015 spikes — what the write door refuses
 
-**Ruled in part since this page was written.** **19** and **23** closed on 2026-09-10. **18 is held** — the author refused a three-way boolean. Read [0015](../../0015-write-door/README.md). This page is the evidence, never the answer.
+**Ruled since this page was written.** **19**, **23** and **18** all closed on 2026-09-10. 18 closed on the enum: `editable` is `'never' | 'api' | 'anywhere'`, default `'api'`. The hold this page records — the author refused a three-way boolean — is what the enum answers. Read [0015's closed decisions](../../0015-write-door/README.md#closed-decisions). This page is the evidence, never the answer.
 
 **Next ADR that still has decisions to make.** [0015](../../0015-write-door/README.md) has three open numbers: **19, 23, 18**. Answer 19 first, then 23. 18 is the posture of an absent `editable`. This review probes the options before the build.
 

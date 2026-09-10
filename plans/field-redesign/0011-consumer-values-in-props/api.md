@@ -20,16 +20,18 @@
 interface ConsumerEntryProps {
   owner?: string;
   progress?: number;
-  phase?: number;
+  cost?: number;
 }
 
 const dataset = new Dataset<ConsumerEntryProps>({
   timeZone: 'UTC',
   entries: [
-    { id: 'phase-1', name: 'Mobilise' },   // no dates; has a child → derives (0013)
-    { id: 't1', parentId: 'phase-1', name: 'Survey',
+    { id: 'p1', name: 'Mobilise' },   // no dates; has a child → derives (0013)
+    { id: 't1', parentId: 'p1', name: 'Survey',
       start: '2026-01-05', end: '2026-01-09',
-      props: { owner: 'Jo', progress: 40, phase: 2 } },
+      owner: 'Jo', progress: 40, cost: 500 },
+    // Q15: nested props still legal here for passengers / a bag you already hold
+    { id: 't2', name: 'Legacy', props: { extra: 1, owner: 'Pat' } },
   ],
   fields: [
     { key: 'owner', column: { header: 'Own', align: 'center' } },
@@ -103,16 +105,17 @@ A `compute` Field's answer stays `unknown` ([#267](https://github.com/Pawel-IT/F
 ```ts
 update(id, { start, owner: 'Sam' })          // declared keys at the top; other props keys kept
 update(id, { owner: undefined })             // that key leaves the record
-add({ id, name, props: { owner: 'Ali' } })   // a record, not a patch — props stays here
+add({ id, name, owner: 'Ali' })              // flat, same as update — grill 2026-09-10
 update(id, { strat: '…' })                   // UnknownFieldError — top level is closed
+add({ id, name, extra: 1 })                  // UnknownFieldError — extra is not a Field
 update(id, { props: { owner: 'Sam' } })      // refused — name owner at the top
 ```
 
-`EntryEdit<TProps>` is the envelope plus declared-key shorthand. `PropsEdit<TProps>` is the nested bag on `add` and the Document, not on `update()`. An edit may remove only what a stored Entry may lack — `parentId`, `start`, `end`.
+`EntryEdit<TProps>` is the envelope plus declared-key shorthand. `add()` takes the same flat shape. Constructor `entries` also take declared keys at the top ([Q15](README.md#q15--constructor-entries-take-declared-keys-at-the-top)); nested `props` stays legal there for passengers. `PropsEdit<TProps>` is the nested bag on the Document and on constructor ingest, not on `add()` or `update()`. An edit may remove only what a stored Entry may lack — `parentId`, `start`, `end`.
 
 **`{ start: undefined }` must compile in this ADR's type tests.** The un-date verb is 0012's, and 0012 has landed, so `EntryEdit` follows `Entry` here. Do not skip those tests.
 
-**An undeclared key is carried at ingest and never named at `update()`.** `add()`, `new Dataset({ entries })` and `fromJSON()` store it and round-trip it untouched. A declaration is a *handling* contract, not a storage permission — [decision 1](README.md#1--an-undeclared-key-is-carried-and-update-never-names-it).
+**An undeclared key is carried at `fromJSON` and never named at `add()` or `update()`.** Constructor ingest warns on an unknown top-level key and still carries undeclared keys inside `props`. A declaration is a *handling* contract, not a storage permission — [decision 1](README.md#1--an-undeclared-key-is-carried-and-update-never-names-it).
 
 ## Plugin
 

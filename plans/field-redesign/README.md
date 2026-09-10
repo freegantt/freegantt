@@ -22,7 +22,23 @@ flowchart LR
 | [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | **none** | nothing on the rename |
 | [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | **none** | nothing on the rename |
 
-**Fifteen open decisions became none.** The [prose sweep](shared/prose-sweep.md) landed 2026-09-10. The locked-spec gate returned 0. ADRs stay `proposed` until each build.
+**Fifteen numbered decisions became none.** A 2026-09-10 grill then overruled three closed rules (0012 #4, 0011 #1 for `add()`, 0015 #18 default) and closed Q12b, Q15, and Q16. The [prose sweep](shared/prose-sweep.md) landed 2026-09-10. ADRs stay `proposed` until each build.
+
+## Grill 2026-09-10
+
+Settled in session. Each ruling lives in the ADR named. Do not re-derive them.
+
+| Ruling | Owner |
+|---|---|
+| One date without the other is legal. A row **spans** iff both dates exist; a Segment and a bar exist iff it spans. Default `gridColumns` is `['name', 'start', 'end']`. The date editor writes one Field and must open on a blank cell. No diamond in core. | [0012](0012-optional-dates/README.md) |
+| `add()` and `update()` are flat. Constructor `entries` also take declared keys at the top; nested `props` stays for passengers; unknown top-level keys warn; a key named both at the top and inside `props` throws. Storage and the Document nest in `props`. `add()` / `update()` throw `UnknownFieldError` for an undeclared key. `fromJSON` still carries passengers inside `props`. | [0011](0011-consumer-values-in-props/README.md) |
+| An Entry with children is a **parent**. Name is required. Lose the last child → name, no dates, no bar. Parent **cells** stay refused. Parent **bar** drag translates every descendant date that exists. Reuse `beforeEntryMove`. | [0013](0013-what-decides-derivation/README.md) |
+| Plugin keys stay prefixed. App `add` / `update` use the prefixed key. The plugin exports that string as a const. No bare alias. | [0014](0014-plugin-author-surface/README.md) |
+| Default `editable` is `'anywhere'`. After setup, only `editable` may change. No new Field keys. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Live call: `dataset.fields.override({ key: 'start', editable: false })`. | [0015](0015-write-door/README.md) |
+
+**Grill call-sites are closed.** Q12b, Q15, and Q16 are in the ADRs above.
+
+Avoid **phase** and **grouped entry** in this folder. An Entry with children is a parent. `{ source: 'group', groupBy }` is a row source, not a parent.
 
 ## Shared
 
@@ -33,6 +49,7 @@ flowchart LR
 | [`shared/rulings.md`](shared/rulings.md) | You hit the schema counter, the registration lock, or `ComputedFieldCannotBeWrittenError` |
 | [`shared/prose-sweep.md`](shared/prose-sweep.md) | The F table is the changelog of the 2026-09-10 sweep. The spike gate runs at every ADR acceptance |
 | [`reviews/`](reviews/) | You want a spike's verdict, or you are about to run a new wave ([`SPIKE-PLAYBOOK.md`](reviews/SPIKE-PLAYBOOK.md)) |
+| [`CLOSE-OUT.md`](CLOSE-OUT.md) | **Every decision is closed and none is built.** The build order, the gates, and the locked-spec edits still owed |
 
 ## The split rules
 
@@ -78,4 +95,4 @@ One fix needs no decision: **`mergeColumn` spreads `sizingPairOf(…)` alone**, 
 
 ## Nothing here is implemented
 
-Every ADR in this folder is `proposed`, and no line of it is in `src/`.
+Every ADR in this folder is `proposed`, and no line of it is in `src/`. The build order and what each build owes are in [`CLOSE-OUT.md`](CLOSE-OUT.md).
