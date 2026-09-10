@@ -1,6 +1,6 @@
 # The call sites after ADR 0011
 
-**Governing:** [ADR 0011](../../../docs/adr/0011-consumer-values-live-in-props.md). The types behind these calls are in [`types.md`](types.md); the open questions are in [0011 open decisions](README.md#open-decisions).
+**Governing:** [ADR 0011](../../../docs/adr/0011-consumer-values-live-in-props.md). The types behind these calls are in [`types.md`](types.md); the closed write-door rulings (1, 11, 22) are in [0011 closed decisions](README.md#closed-decisions).
 
 **Nothing here is implemented.** This file shows the call sites after all five ADRs, so a reader sees one picture. **Implement only the 0011 rows.** A ⚠️ names the ADR that still owns that line.
 
@@ -16,7 +16,7 @@
 
 `start` / `end` are already optional. The un-date verb is [0012](../0012-optional-dates/README.md)'s. `EntryEdit` follows `Entry`, so `{ start: undefined }` compiles here.
 
-A rolling-up parent's derived keys still reach the Document. [0013](../0013-what-decides-derivation/README.md) omits them and writes schema **7**. `CORE_FIELD_OVERRIDABLE_KEYS` stays until [0015](../0015-write-door/README.md) decision 19.
+A rolling-up parent's derived keys still reach the Document. [0013](../0013-what-decides-derivation/README.md) omits them and writes schema **7**. `CORE_FIELD_OVERRIDABLE_KEYS` stays — [0015](../0015-write-door/README.md) decision 19, closed 2026-09-10.
 
 ## The whole shape, in one block
 
@@ -44,7 +44,7 @@ const dataset = new Dataset<ConsumerEntryProps>({
 
 dataset.entries.get('t1')?.props.owner
 dataset.entries.fieldValue('t1', 'owner')
-dataset.entries.update('t1', { start: '2026-01-06', props: { owner: 'Sam' } })  // merges
+dataset.entries.update('t1', { start: '2026-01-06', owner: 'Sam' })  // merges; no props: wrapper
 ```
 
 ## Dataset
@@ -57,7 +57,7 @@ dataset.toJSON()
 
 One generic types `entry.props` and the `props` patch. The published plugin types lose their second parameter too: `DatasetOptions`, `DatasetPlugin`, `DatasetPluginContext`, `Dataset.fromJSON`.
 
-⚠️ **A plugin's keys are not in `TProps`** — decision 9. If plugin values share `entry.props`, the write door needs `PropsEdit<TProps & PluginEntryProps>` or the cell editor cannot write a plugin Field. If they live in the plugin store, `update({ props: { progress } })` must be refused, or that call writes the consumer bag while the grid reads the store.
+⚠️ **A plugin's keys are not in `TProps`.** Decisions 9 and 12, closed 2026-09-10: plugin values share `props` under a required prefix. The write door is `PropsEdit<TProps & PluginEntryProps>` (and, at `update()`, the same keys flat: `update('t1', { 'scheduling:progress': 60 })`).
 
 ## Entry
 
@@ -77,7 +77,7 @@ add({ id, name, start })                          // InvalidInstantError
 update(id, { segments: [] })                      // EmptySegmentsError
 ```
 
-**A known hole:** a dateless row cannot be dated through the default UI. It draws no bar, and the default `gridColumns` is `['name']`. Dating from the timeline is a later gesture.
+**A required follow-up, not a hole this ADR lives with:** a dateless row cannot be dated through the default UI. It draws no bar, and the default `gridColumns` is `['name']`. [0012](../0012-optional-dates/README.md) records the date path. Dating from the timeline is a later gesture.
 
 ## Field declaration
 
@@ -91,7 +91,7 @@ The key is the address. `{ key: 'owner' }` is `entry.props.owner`. `{ key: 'star
 
 ```ts
 { key: 'ref', compute: (e) => 1, rollUp: 'sum' }    // ComputedFieldCannotBeWrittenError
-{ key: 'start', editable: false }                   // ⚠️ throw or warn — decision 23
+{ key: 'start', editable: false }                   // lock — decision 19, closed. Extra keys throw — decision 23.
 { key: 'props' }                                    // type-checks; throws at runtime
 ```
 
@@ -99,10 +99,10 @@ The key is the address. `{ key: 'owner' }` is `entry.props.owner`. `{ key: 'star
 
 `editable: false` refuses **both** doors — ruled 2026-09-09, and that throw is [0015](../0015-write-door/README.md)'s. Do not wire `FieldNotEditableError` at `entries.update()` in this ADR. One resolver in `data/` answers for the cell editor and the drags after 0015 lands.
 
-⚠️ What an **absent** `editable` does at `entries.update()` is decision 18, which has **no recommendation**. Copying the view rule closes the write door by default; splitting absent from `false` keeps today's writes working.
-⚠️ Whether a consumer *declaration* on a core key throws at all is decision 23. A `props` **value** naming a core key is settled — a warning, and core wins.
-⚠️ `interactions.edit` stays the per-entry affordance override. It is view-level, so it can no longer replace the deleted `{ key: 'start', editable: false }` — decision 19.
-⚠️ Decision 12 may require a plugin prefix on plugin Field keys. That changes `gridColumns` and every by-key call for those Fields.
+⚠️ What an **absent** `editable` does at `entries.update()` is decision 18, which is **held**. The author does not want a boolean that means three things. See [0015](../0015-write-door/README.md).
+✅ A consumer *declaration* `{ key: 'start', editable: false }` is the lock — decision 23, closed with 19. Extra keys on a core name throw. A `props` **value** naming a core key is a warning, and core wins.
+✅ `{ key: 'start', editable: false }` stays, and it serializes — decision 19, closed 2026-09-10.
+✅ Decision 12 requires a plugin prefix on plugin Field keys. That changes `gridColumns` and every by-key call for those Fields.
 
 ## Read
 
@@ -122,24 +122,25 @@ A `compute` Field's answer stays `unknown` ([#267](https://github.com/Pawel-IT/F
 ## Write
 
 ```ts
-update(id, { start, props: { owner: 'Sam' } })   // props merges; other props keys kept
-update(id, { props: { owner: undefined } })      // that key leaves the record
-add({ id, name, props: { owner: 'Ali' } })       // a record, not a patch
-update(id, { strat: '…' })                       // UnknownFieldError — top level is the schema
+update(id, { start, owner: 'Sam' })          // declared keys at the top; other props keys kept
+update(id, { owner: undefined })              // that key leaves the record
+add({ id, name, props: { owner: 'Ali' } })   // a record, not a patch — props stays here
+update(id, { strat: '…' })                   // UnknownFieldError — top level is closed
+update(id, { props: { owner: 'Sam' } })      // refused — name owner at the top (decision 11)
 ```
 
-`PropsEdit<TProps>` is the patch: every key optional, every key removable. `EntryEdit` may remove only what a stored Entry may lack — `parentId`, `start`, `end` **after [ADR 0012](../0012-optional-dates/README.md)**, which has already landed.
+`EntryEdit<TProps>` is the envelope plus declared-key shorthand. `PropsEdit<TProps>` is the nested bag on `add` and the Document, not on `update()`. An edit may remove only what a stored Entry may lack — `parentId`, `start`, `end` **after [ADR 0012](../0012-optional-dates/README.md)**, which has already landed.
 
 ⚠️ `start` and `end` are already optional when this ADR builds. The un-date verb is [0012](../0012-optional-dates/README.md)'s. `{ start: undefined }` **must compile** in this ADR's type tests.
-⚠️ `plans/02` ships `update(id, { start, cost })`. Nested `props:` drops that shorthand — decision 11. A flat spelling for *declared* keys only is still on the table.
-✅ `update({ props: { phase: 3 } })` on an undeclared key **throws `UnknownFieldError`** — decision 1, ruled 2026-09-10. Ingest **carries** it: `add()`, `new Dataset({ entries })` and `fromJSON()` store an undeclared key and round-trip it untouched. A declaration is a *handling* contract, not a storage permission. Two things ship with the rule — the `errors.ts:331` message rewrite, and per-key `props` merging, because a shallow spread deletes a carried key.
+✅ `plans/02` ships `update(id, { start, cost })`. That is the write — decision 11, closed 2026-09-10.
+✅ `update({ phase: 3 })` on an undeclared key **throws `UnknownFieldError`** — decision 1, ruled 2026-09-10. Ingest **carries** it: `add()`, `new Dataset({ entries })` and `fromJSON()` store an undeclared key and round-trip it untouched. A declaration is a *handling* contract, not a storage permission. Two things ship with the rule — the `errors.ts:331` message rewrite, and per-key `props` merging, because a shallow spread deletes a carried key.
 
 ## Derived values — ⚠️ [0013](../0013-what-decides-derivation/README.md), do not implement here
 
 ```ts
-update('phase-1', { props: { cost: 999 } })         // DerivedFieldNotWritableError — after 0013
-update('phase-1', { start, props: { cost: 999 } })  // refused whole — after 0013
-add({ id, kind: 'group', props: { cost: 500 } })    // succeeds; cost dropped; one warning — after 0013
+update('phase-1', { cost: 999 })                    // DerivedFieldNotWritableError — after 0013
+update('phase-1', { start, cost: 999 })              // refused whole — after 0013
+add({ id, kind: 'group', props: { cost: 500 } })     // succeeds; cost dropped; one warning — after 0013
 ```
 
 `toJSON()` still writes a rolling-up parent's rolling-up keys **in this ADR**. [0013](../0013-what-decides-derivation/README.md) omits them. Keep `reportCorrectedRollUps` until then.
@@ -153,7 +154,7 @@ add({ id, kind: 'group', props: { cost: 500 } })    // succeeds; cost dropped; o
 ```ts
 ctx.fields.register({ key: 'progress', type: 'percent', rollUp: '…' })
 const extender: EditExtender = (request) =>
-  new Map([[phaseId, { start: moved.start, props: { risk: 'high' } }]])
+  new Map([[phaseId, { start: moved.start, risk: 'high' }]])
 ```
 
 Registration still closes when `setup()` returns. Plugin declarations stay out of the Document.
@@ -162,8 +163,8 @@ Registration still closes when `setup()` returns. Plugin declarations stay out o
 
 The published `compute` sample writes `duration.value / MS.DAY`, never the raw constant — decision 15, closed.
 
-⚠️ A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes **every** key — decision 22. The trap is stated in [`types.md`](types.md); the two candidate fixes are weighed in [0011 open decisions](README.md#open-decisions). Close 22 before [0014](../0014-plugin-author-surface/README.md) decision 16 changes the extender's return.
-⚠️ The extender returns `new Map()`, brands ids, and the author writes the composition — decision 16.
+✅ A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes **every** key. **Decision 22 brands the whole `ProposedEdit`.** The refused spread is in [`types.md`](types.md).
+✅ [0014](../0014-plugin-author-surface/README.md) decision **16** closed: the runtime owns composition, merging, and branding. The author returns extras or nothing. Non-overlapping keys combine. A contested Field is dropped and warned.
 
 ## Document — schema 6
 
@@ -182,13 +183,13 @@ The published `compute` sample writes `duration.value / MS.DAY`, never the raw c
 
 `meta` becomes `props`. Dates are already optional (schema **5**, [0012](../0012-optional-dates/README.md)). Derived keys still write — [0013](../0013-what-decides-derivation/README.md) omits them at schema **7**. Unknown keys inside `props` round-trip. Unknown top-level keys stay unknown.
 
-⚠️ The Document key *is* the namespace name. Decide [0014](../0014-plugin-author-surface/README.md) decision 12's marker before schema 6 is the last number this ADR writes. A later prefix is schema **8**, not a rewrite of 6.
+⚠️ The Document key *is* the namespace name. Decision 12's plugin prefix is schema **8**, not a rewrite of 6. This ADR still writes **6**.
 
 ## `rollUpKinds` — ⚠️ [0013](../0013-what-decides-derivation/README.md), do not implement here
 
 ```ts
 dataset.rollUpKinds = ['group', 'milestone']     // drops authored values on those kinds, recalculates
-dataset.entries.update('p', { props: { cost: 500 } })
+dataset.entries.update('p', { cost: 500 })
 dataset.entries.add({ id: 'c', parentId: 'p' })  // p now rolls up: cost 500 → 40, one ChangeSet row
 dataset.history.undo()                           // c leaves, p stops rolling up, cost is 500 again
 ```
@@ -206,8 +207,8 @@ dataset.history.undo()                           // c leaves, p stops rolling up
 | `StoredEdit` / `toStoredEdit` | `ProposedEdit` / `toProposedEdit` |
 | `DataEdit` (never shipped) | `PropsEdit` |
 
-**Deleted:** `FieldSource`, `Field.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`. **Not deleted here:** `CORE_FIELD_OVERRIDABLE_KEYS` ( [0015](../0015-write-door/README.md) decision 19 ), `reportCorrectedRollUps` ( [0013](../0013-what-decides-derivation/README.md) ).
+**Deleted:** `FieldSource`, `Field.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`. **Not deleted here:** `CORE_FIELD_OVERRIDABLE_KEYS` ( [0015](../0015-write-door/README.md) decision 19, **kept** ), `reportCorrectedRollUps` ( [0013](../0013-what-decides-derivation/README.md) ).
 
-**New errors in this ADR:** `ComputedFieldCannotBeWrittenError` at registration. **Later:** `DerivedFieldNotWritableError` (0013), `FieldNotEditableError` (0015). Conditional: `PluginFieldNotInDataError` (decision 9's store). **No `RollUpKindsWouldDropValuesError`** — decision 6 closed as *drop and recalculate*.
+**New errors in this ADR:** `ComputedFieldCannotBeWrittenError` at registration. **Later:** `DerivedFieldNotWritableError` (0013), `FieldNotEditableError` (0015). **No `PluginFieldNotInDataError`** — decisions 9 and 12 share `props`. **No `RollUpKindsWouldDropValuesError`** — decision 6 closed as *drop and recalculate*. **No `FieldNamedAtTopAndInPropsError`** — decision 11, flat `update()` only.
 
 `UnknownFieldError` stays at the top level of an edit, **and inside `props` too** — decision 1 ruled that `update()` never names an undeclared key, so `fieldValue` keeps its guard and one code path. A consumer reads a carried key off `entry.props` directly.

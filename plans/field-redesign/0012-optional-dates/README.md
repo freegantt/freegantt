@@ -22,9 +22,18 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 
 **This ADR lands before [#242](https://github.com/Pawel-IT/FreeGantt/issues/242)'s own fix.** Optional dates change what `InvalidInstantError` guards.
 
-## Known hole
+## Required follow-up — a date path, and last-bar-remove
 
-**A dateless row cannot be dated through the UI.** It draws no bar, so no gesture reaches it, and the default `gridColumns` is `['name']`, so no cell editor reaches `start`. The motivating story needs a code call or a `gridColumns` change. Dating from the timeline is its own gesture, with its own capability and veto surface, and it does not belong in a storage redesign. Recorded as a hole, the way [#235](https://github.com/Pawel-IT/FreeGantt/issues/235) is.
+**A dateless row cannot be dated through the default UI.** It draws no bar, so no gesture reaches it, and the default `gridColumns` is `['name']`. That is not a hole this ADR lives with. Storage may land; a user-visible Gantt without a way to give dates is incomplete. Ship a date path with the first user-facing cut — put `start` in the default columns, or add a timeline “set dates” gesture — or the storage model has no user path. Dating from the timeline is its own gesture, with its own capability and veto surface. It may be a later slice. It is not optional.
+
+**Last-segment-remove un-dates. It does not delete the row.** ADR 0010 said *an Entry never survives as an empty record* and bound grid-row Delete to `removeSegments`. This ADR makes zero Segments a legal dateless row. Zero Segments cannot mean “deleted” and “unscheduled” at once. **This ADR revises that consequence of ADR 0010** (ADR 0006: the old ADR is not edited; the new rule lives here):
+
+- `removeSegments` of the last Segment is un-date: the Entry stays, with no dates and no Segments.
+- `entries.remove(id)` deletes the row and the subtree.
+- Grid-row Delete on the name cell is `remove(id)`, not `removeSegments`.
+- Keyboard Delete on a bar un-dates when it was the last bar.
+
+`update(id, { segments: [] })` still throws `EmptySegmentsError`. Absent is dateless. Empty is illegal.
 
 ---
 
@@ -40,7 +49,8 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 - `start` and `end` join `isOptionalEntryKey`. Serialization and `entry-reader.ts` each gain a `length === 0` arm.
 - Delete the `referenceDate` fill (`entry-reader.ts:168-172`). Written down under D-S2-10 **and** D-S2-22. Not under D-S5-46, which survives.
 - Reaches bar geometry, the Segment invariant (#212), sort comparators, and `range: 'fitDataset'`.
-- A dateless Entry sorts **last**. A dateless row is inert to a gesture. `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
+- A dateless Entry sorts **last**. A dateless row is inert to a **date** gesture (no bar to drag). `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
+- **Last-segment-remove un-dates** — it does not delete the Entry. `entries.remove(id)` deletes the row. See [Required follow-up](#required-follow-up--a-date-path-and-last-bar-remove).
 - This ADR writes schema **5**.
 
 **`FieldContext.durationOf` returns `Duration | undefined`.** It is **plugin-author surface**, so it is a published change, and it reaches further than the signature. **This list is an audit's, not a re-derivation — do not rebuild it.**

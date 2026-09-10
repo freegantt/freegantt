@@ -6,21 +6,21 @@ One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, n
 
 ```mermaid
 flowchart LR
-  D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>2 open</i>"]
-  D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>1 open</i>"]
+  D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>0 open</i>"]
+  D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>0 open</i>"]
   P --> R
-  P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>4 open</i>"]
-  P -.->|"not blocking<br/>the rename"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>3 open</i>"]
+  P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>1 open</i>"]
+  P -.->|"not blocking<br/>the rename"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>1 open</i>"]
   R -.->|"shrinks 18's<br/>cost table"| W
 ```
 
 | ADR | The one question it answers | Open | Blocks |
 |---|---|---|---|
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
-| [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | 11, 22 | 0013 |
-| [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | 26 (branches 8, 20, 21, 24) | — |
-| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 9, 12, 13, 16 | **nothing on the rename.** 16 waits on 22. 13 waits on 0012 |
-| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18, 19, 23 | **nothing on the rename.** Prefers 0013 first (shrinks 18) |
+| [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | **none** | 0013 |
+| [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | **none** | — |
+| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 13 | **nothing on the rename.** 16 closed 2026-09-10. 13 waits on 0012. Writes schema **8** |
+| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18 (held) | **nothing on the rename.** Prefers 0013 first (shrinks 18) |
 
 **Fifteen open decisions became three on the ADR that does the simplifying.** Decision 25 dissolved — each ADR bumps its own schema number: 0012 writes **5**, 0011 writes **6**, 0013 writes **7**.
 
@@ -40,7 +40,7 @@ flowchart LR
 3. **A recommendation is not a ruling.**
 4. **State a fact once.** A fact belongs to the ADR whose question it answers — the survey to [`shared/evidence.md`](shared/evidence.md), a refused approach to [`shared/refuted.md`](shared/refuted.md). Elsewhere, link to it.
 5. **The prose sweep runs once, at the end**, not per ADR. See [`shared/prose-sweep.md`](shared/prose-sweep.md).
-6. **One schema counter, not five.** The ADRs spend numbers in landing order: [0012](0012-optional-dates/README.md) writes **5**, [0011](0011-consumer-values-in-props/README.md) writes **6**, [0013](0013-what-decides-derivation/README.md) writes **7**. [0014](0014-plugin-author-surface/README.md) writes **8** only if decision 12 prefixes plugin keys. See [`shared/rulings.md`](shared/rulings.md).
+6. **One schema counter, not five.** The ADRs spend numbers in landing order: [0012](0012-optional-dates/README.md) writes **5**, [0011](0011-consumer-values-in-props/README.md) writes **6**, [0013](0013-what-decides-derivation/README.md) writes **7**. [0014](0014-plugin-author-surface/README.md) writes **8** — decision 12 closed on a plugin prefix. See [`shared/rulings.md`](shared/rulings.md).
 
 ## Where the decisions could walk over each other, and why they do not
 
@@ -51,10 +51,10 @@ Checked pairwise against the code on 2026-09-09.
 | 0012 × 0011 | `model/entry.ts`, `field-access.ts`, `entry-reader.ts`, `serialization/read.ts` | **No.** Different functions in the same files. 0012 first, 0011 rebases |
 | 0012 × 0013 | dates on a demoted Entry | **One-way gate.** `start: Instant` is required today, so 0012 lands first |
 | 0011 × 0013 | `props` carry-by-reference; `toJSON` | **One-way.** 0011 states the flat rule, 0013 adds the rolling-up exception |
-| 0011 × 0014 | the `Entry.props` type | **No.** 0011 ships HEAD's posture; 0014 widens additively or migrates later |
+| 0011 × 0014 | the `Entry.props` type | **No.** 0011 ships HEAD's posture; 0014 widens additively (`TProps & PluginEntryProps`, plugin keys prefixed — 9 and 12, closed 2026-09-10) |
 | 0011 × 0015 | `field-registry.ts` | **No.** `#mergeCoreFieldOverride` merges `editable` and never reads `source` |
 | 0011 × 0014 × 0013 | `data/edit-extension.ts` | **No.** Different symbols. A merge conflict, not a contradiction |
-| 0013 × 0015 | decision 18's `kind` row vs decision 20 | **One-way.** 0013 first shrinks 18's table by one row |
+| 0013 × 0015 | decision 18's `kind` row | **One-way.** 0013 deleted `kind`, so 18 is a two-row table |
 | **0011 × 0013 × 0015** | **the write resolver** | **The one real collision — resolved below** |
 
 ### The write resolver: one function, three owners

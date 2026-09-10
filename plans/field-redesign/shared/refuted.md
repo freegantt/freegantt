@@ -84,7 +84,7 @@ It keeps a plugin cascade's write to a derived cell for one pass and loses it at
 return { 'phase-1': { start: moved.start, props: { risk: 'high' } } };   // ✗
 ```
 
-JavaScript walks integer-like string keys first and in ascending numeric order, so `{ '10': …, '2': … }` iterates as `2` then `10`. Entry ids are consumer strings and numeric ids are ordinary, so a `Record` silently reorders the cascade — and the merge is last-wins per Field key, which makes order load-bearing. `__proto__` as an Entry id is the second hazard on the same container. **Keep the `Map`, or take an array of `[id, edit]` pairs.** The three ergonomic complaints in decision 16 stand under either container.
+JavaScript walks integer-like string keys first and in ascending numeric order, so `{ '10': …, '2': … }` iterates as `2` then `10`. Entry ids are consumer strings and numeric ids are ordinary, so a `Record` silently reorders the cascade — and the merge is last-wins per Field key, which makes order load-bearing. `__proto__` as an Entry id is the second hazard on the same container. **Keep the `Map`, or take an array of `[id, edit]` pairs.** [0014](../0014-plugin-author-surface/README.md) decision 16 closed on that container: the runtime owns composition and merge under either shape.
 
 ## 10. Optional dates need no code in `durationOf`
 

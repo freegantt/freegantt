@@ -9,12 +9,14 @@ Nothing here is implemented.
 ```mermaid
 flowchart TB
   E["<b>EntryEdit&lt;TProps&gt;</b><br/>what update() takes"] --> ENV["<b>the envelope</b><br/>the Entry's own keys"]
-  E --> P["<b>props</b><br/>PropsEdit&lt;TProps&gt;"]
+  E --> S["<b>declared keys</b><br/>cost, owner, … at the top"]
   ENV --> R{"may a stored<br/>Entry lack it?"}
   R -->|"yes — parentId, start, end"| RM["removable by an<br/>explicit undefined"]
   R -->|"no — kind, name, segments"| NR["not removable<br/>kind: undefined is refused"]
-  P --> ALL["<b>every</b> key removable,<br/>without exception"]
+  S --> ALL["<b>every</b> declared key removable,<br/>without exception"]
 ```
+
+**Decision 11, closed 2026-09-10.** `update()` is flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: `add()`, the Document, and a complete `ProposedEdit` nest.
 
 **Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](../shared/refuted.md).
 
@@ -48,20 +50,22 @@ export type EntryEdit<TProps> = {
   [K in keyof EntryEnvelope<TProps>]?: K extends RemovableEntryKey
     ? EntryEnvelope<TProps>[K] | undefined
     : EntryEnvelope<TProps>[K];
-} & { props?: PropsEdit<TProps> };
+} & { [K in keyof TProps]?: TProps[K] | undefined };
 ```
 
-**`Partial<Omit<EntryInput, 'id' | 'props'>>` cannot be the envelope.** `start` and `end` are optional after [ADR 0012](../0012-optional-dates/README.md), which lands first, so `update(id, { start: undefined, end: undefined })` is the un-date verb, and `Partial` refuses that call (`TS2379`) for the identical reason it refuses a removal inside `props`. Mapping *every* envelope key removable is wrong in the other direction: **optional at ingest does not mean removable by an edit.** `kind` is optional on `EntryInput` only because ingest defaults it to `'span'`.
+**Decision 11, closed 2026-09-10.** Declared consumer keys sit on the envelope, not under `props`. `update(id, { start, cost })` is the write. `update(id, { props: { cost } })` is not an `EntryEdit`. `PropsEdit<TProps>` stays exported for `add`, the Document, and `ProposedEdit`.
+
+**`Partial<Omit<EntryInput, 'id' | 'props'>>` cannot be the envelope.** `start` and `end` are optional after [ADR 0012](../0012-optional-dates/README.md), which lands first, so `update(id, { start: undefined, end: undefined })` is the un-date verb, and `Partial` refuses that call (`TS2379`) for the identical reason it refuses a removal inside `props`. Mapping *every* envelope key removable is wrong in the other direction: **optional at ingest does not mean removable by an edit.** `kind` is optional on `EntryInput` only because ingest defaults it to `'span'`. [0013](../0013-what-decides-derivation/README.md) decision 26 then **deletes the Field**. These tests land in 0011 with `kind` still present; 0013 removes `{ kind: undefined }` from the refused set because the key is gone.
 
 **Deriving `RemovableEntryKey` is the point, not a trick.** The derivation states the rule a hand-written union only *encodes*, and it is self-maintaining: the moment `Entry.end` stops being optional, or a new optional key joins `Entry`, the edit type follows. This ADR already got the hand-written list wrong once.
 
 **This ADR lands after [ADR 0012](../0012-optional-dates/README.md).** At HEAD `start` and `end` are required, so `RemovableEntryKey` resolves to `'parentId' | 'meta'`. After 0012 it resolves to `'parentId' | 'start' | 'end'`. The un-date verb is 0012's; `EntryEdit` follows `Entry`, so `{ start: undefined }` **must compile** in this ADR's type tests. Do not skip them. The old A-then-D warning — *inert until D, three groups in between* — is stale.
 
-**`props` is omitted before it is restated**, because an intersection cannot narrow a property the interface already declares. `id` leaves with it: an edit names its Entry at the call, never inside the patch.
+**`id` leaves the edit:** an edit names its Entry at the call, never inside the patch.
 
-**`segments: undefined` is refused.** `Entry.segments` is required (*never empty*, #212). Un-dating is `{ start: undefined, end: undefined }`.
+**`segments: undefined` is refused as a write of an empty list.** Un-dating is `{ start: undefined, end: undefined }`, which [0012](../0012-optional-dates/README.md) already lands. After 0012 an Entry may lack Segments; the missing key is dateless, not `segments: []`.
 
-**Seven type tests, and each half is one.** These compile: `{ start: undefined }`, `{ parentId: undefined }`, `{ props: { owner: undefined } }` — the last with `owner` **required** on `TProps`. These do not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`.
+**Seven type tests, and each half is one.** These compile: `{ start: undefined }`, `{ parentId: undefined }`, `{ owner: undefined }` — the last with `owner` **required** on `TProps`. These do not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`, `{ props: { owner: 'Sam' } }`.
 
 **`PropsEdit` is exported. `EntryEnvelope` and `RemovableEntryKey` are not.**
 
@@ -79,7 +83,16 @@ return new Map([[id, { props: { ...request.proposed.get(id)?.props, risk: 'high'
 
 The spread is legal, reads as *keep everything and add one*, and turns **every** stored key into a proposed key — so every `props` key gets a ChangeSet row, derived cells included. That is decision 5's territory reached by accident, by a plugin author who never read it. **The patch already merges, so the spread is never needed, and nothing in the types says so.**
 
-**Two candidate fixes, and this needs one: brand `ProposedEdit`, or seed an extender's proposed keys by diffing.** That is **decision 22**, and it is weighed in [0011 open decisions](README.md#open-decisions). **Decide it with the `ProposedEdit` type, not after** — this is `plans/02`'s *one write shape, one knob* breaking at the one seam it was written for. [0014](../0014-plugin-author-surface/README.md) decision 16 changes the extender's return on the same seam — close 22 first.
+**Decision 22, closed 2026-09-10. Brand the whole `ProposedEdit`.** It is not assignable to `EntryEdit`. The spread above is a type error. `PropsEdit` carries no `__brand`. A plugin author who wants one key off `proposed` writes one unwrap. Diffing proposed keys against the pre-state lost: a write of the same value would stop being a proposal. [0014](../0014-plugin-author-surface/README.md) decision 16 closed against this type.
+
+```ts
+export type ProposedEdit<TProps> = {
+  readonly __brand: 'ProposedEdit';
+  readonly props: Readonly<Partial<TProps>>;
+  readonly proposedKeys: ReadonlySet<string>;
+  // …envelope keys, complete
+};
+```
 
 ## The Field union
 

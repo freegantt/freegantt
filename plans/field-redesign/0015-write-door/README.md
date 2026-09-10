@@ -6,15 +6,13 @@ How strict is `entries.update()`? What does an *absent* `editable` mean there, w
 
 ## Where it stands
 
-**Three decisions are open — 18, 19 and 23**, and they are chained: **answer 19 first, then 23.** One ruling is closed — `editable: false` refuses `entries.update()`.
+**One decision is open — 18**, and it is held. Two closed on 2026-09-10 — **19** and **23**. One ruling was already closed — `editable: false` refuses `entries.update()`. Answer 19 first was the chain; 19 kept the override, so 23 closed with it.
 
 **Nothing blocks on this ADR.** It changes the default posture of a public door, which is why it deserves its own decision rather than a bullet inside a storage rename.
 
 ## Why it does not gate the storage rename
 
-The override machinery lives entirely in `field-registry.ts:101-225`, and `#mergeCoreFieldOverride` merges **`editable` only** — it never reads `source`. So [0011](../0011-consumer-values-in-props/README.md) deletes `FieldSource` cleanly around it, and the override stays standing until this ADR rules on it.
-
-Under the address rule `{ key: 'start', editable: false }` still addresses the core `start` Field. Keeping it is coherent; deleting it is this ADR's call.
+The override machinery lives entirely in `field-registry.ts:101-225`, and `#mergeCoreFieldOverride` merges **`editable` only** — it never reads `source`. So [0011](../0011-consumer-values-in-props/README.md) deletes `FieldSource` cleanly around it. Decision 19, closed 2026-09-10, **keeps** `{ key: 'start', editable: false }` and serializes it.
 
 ## This ADR owns the resolver's `editable` arm, and only that arm
 
@@ -28,15 +26,17 @@ Under the address rule `{ key: 'start', editable: false }` still addresses the c
 
 **`harness/data.ts:39-40` states the opposite, and it is live today:** *"The lock rides in the Document too. `editable` serializes on the Field, so an exported Document carries it and an import puts it back."* The call it describes is `{ key: 'end', editable: false }` at `:45`.
 
-**This is an API gap, not a harness defect.** `CLAUDE.md`'s rule applies: record it against the slice, close it in `src/`, and **do not tidy the harness**. This ADR closes it one of two ways — core serializes a core override, or the comment and the harness claim change when this ADR lands. **Either way it is a consequence of keeping the override, so it lands with decision 19.**
+**This ADR closes it by serializing the override.** Decision 19, closed 2026-09-10, keeps `{ key: 'start', editable: false }` and writes it into the Document. Do not tidy the harness comment; close the library.
 
-## Decision 18's cost table may shrink before this lands
+## Decision 18's cost table is two rows
 
-18 lists three structural calls that would start throwing — `update(id, { parentId })`, `update(id, { segments })`, `update(id, { kind })`. **[0013](../0013-what-decides-derivation/README.md)'s head decision can delete the third row**: if `kind` becomes calculated, `update(id, { kind: 'milestone' })` stops existing. Land 0013 first and 18 is argued against a two-row table, not a three-row one. Not a block — an ordering preference.
+18 lists structural calls that would start throwing. **[0013](../0013-what-decides-derivation/README.md) deleted `kind`**, so `update(id, { kind })` does not exist. Argue 18 against `parentId` and `segments` only.
 
 ---
 
 # Open decisions
+
+**One — 18, held.** 19 and 23 closed on 2026-09-10 and are below.
 
 ## 18. Does an *absent* `editable` also refuse `entries.update()`?
 
@@ -52,11 +52,12 @@ Under the address rule `{ key: 'start', editable: false }` still addresses the c
 |---|---|---|
 | `update(id, { parentId })` — reparenting | `parentId` | no `editable`. Live at `harness/main.ts:181` and `hierarchy.ts:254` |
 | `update(id, { segments: [...] })` — Segment writes | `segments` | no `editable`. #212, ADR 0010 |
-| `update(id, { kind: 'milestone' })` | `kind` | no `editable` |
+
+**`kind` is gone.** [0013](../0013-what-decides-derivation/README.md) decision 26 deleted the Field. The third row is not on this table.
 
 Keeping the view rule means declaring `editable: true` on `parentId` — a Field with **no column at all**. That is answering a grid question about something no grid shows, and it is the tell that `editable` is being asked to do two jobs.
 
-**Decision 21 would add a fourth row, and the cleanest one.** A per-entry derive-off flag is written only through the API, and no grid will ever show it. If 21 lands on a core flag, this table gets a fourth entry that has nothing to do with a grid.
+**Decision 21 closed with 26: no flag.** There is no fourth row.
 
 **Split absent from `false`.** Absent means *no opinion, the API may write*; `false` means *refused everywhere*. Today's writes keep working and the ruling still lands. The price is that `boolean | undefined` then carries three meanings at one door and two at another — the split the ruling just closed, moved from between the doors to inside the type.
 
@@ -93,43 +94,17 @@ fields: [{ key: 'cost', editable: 'anywhere' }]     // today's `true`
 
 **No recommendation.** Four shapes now, and the choice is a posture, not a deduction.
 
----
+### Author briefing, 2026-09-10 — held
 
-## 19. What replaces `{ key: 'start', editable: false }` at the data door?
+The author asked for this wording on the decision, and held a ruling. A boolean that means three things, one of them absence, is not wanted.
 
-**Raised 2026-09-09 by the `editable` ruling. Gates this ADR.** [0011](../0011-consumer-values-in-props/README.md) leaves `CORE_FIELD_OVERRIDABLE_KEYS` standing, so no capability is lost until this decision deletes it.
+**Background.** `editable` was named for the grid: may this cell or this bar handle change? An invariant then said **every** write uses that same answer, default **false**. Copied to `update()`, that means you cannot change `cost` from code unless you also opt the Field into the grid. Re-parenting and segment writes have no cell at all, so "not editable" there is the wrong question.
 
-Before the ruling, `editable` gated the grid only, so `interactions: { edit: … }` replaced the deleted capability exactly — one view-level gate for another. After the ruling `editable` is a **data-level** gate, and `interactions.edit` is a Gantt-level, view-level policy that `data/` may not import (`plans/01` §1). So the deletion removes something with nothing standing in for it: there is no way to say *`start` is not writable through the API* on this Dataset.
+**The shape that was scored, and is not ruled.** Split. Absent `editable` means the **API may write**. `editable: false` refuses everywhere (already ruled). `editable: true` opens the cell and the handle. I14 would then cover gestures and what the user sees, not `dataset.entries.update()`.
 
-The deletion's own reason is unchanged and still good. A consumer key that a later release promotes to a core key relocates storage in silence, and the override is the window that lets it happen.
+**Consequence of that shape, if it ever rules.** Bars still drag, because `start` and `end` default to editable. A cost column stays read-only until you set `editable: true`. A script can still `update({ cost })`. A user never sees a handle they cannot use. An app author is not blocked by a grid flag.
 
-**Three shapes, each with a real cost.**
-
-- **Keep the override for `editable` alone**, as `illegalCoreOverrideKey` already restricts it. Cheapest, and it keeps the silent window the deletion exists to close — narrower than the general case, because only a declaration carrying `editable` slips through.
-- **A Dataset-level `readOnlyFields`**, naming keys the API refuses. A second way to say what `editable` says, which breaks *one name per concept*.
-- **Accept the loss.** Core keys stay writable through `entries.update()`, and a consumer who wants them locked vetoes in `beforeChange` — already the cancelable door every mutation passes.
-
-**Recommendation: the third, and check it first.** If `beforeChange` genuinely covers the case, 19 closes at no cost and the deletion proceeds as written. **Probe it before designing anything.**
-
----
-
-## 23. Does a consumer *declaration* on a core key throw?
-
-**Raised 2026-09-09 by the `props`-value ruling. Gates this ADR.** Deleting `CORE_FIELD_OVERRIDABLE_KEYS` lets the declaration fall through to `DuplicateFieldKeyError`, so this decision only arises once 19 deletes the override.
-
-The **value** case is closed: `props: { start: … }` is a **warning**, the value is ignored, and the core definition wins. See [0011's `props`-value ruling](../0011-consumer-values-in-props/README.md#a-props-key-that-names-a-core-key--warning-and-the-core-definition-wins). What is open is the **declaration** — `fields: [{ key: 'start', editable: false }]`.
-
-**The two sides are short, and they pull opposite ways.**
-
-- **Throw.** A declaration is hand-written code, not data from an API the consumer does not own. The warning ruling's whole reason — *a column added upstream must not break their page* — does not reach a `fields` array the consumer typed themselves. A throw at construction is the earliest, clearest signal available.
-- **Warn.** The ruling's posture is *warn, ignore, core wins, never break the consumer*, and one key at two doors with two answers is the split I14 exists to close. A consumer who generates their `fields` array from the same upstream schema that fed the entries is back in the data case.
-
-**It is adjacent to decision 19**, which asks what replaces the deleted `{ key: 'start', editable: false }` at the data door. If 19 lands on *accept the loss*, this declaration has nothing left to express and a throw costs nothing. If 19 keeps the override for `editable`, this decision is already answered by it.
-
-**Answer 19 first, then this.** No recommendation — the author asked to be asked.
-
----
-
+**Why it is held.** That split makes `editable?: boolean` carry three meanings at one door (absent, false, true) and two at another. The author does not want that. A three-state spelling (`'api' | 'never' | 'anywhere'`) names the three states and then makes `canWrite` take a door. **No ruling until a shape that is not a three-way boolean is on the table.**
 
 ---
 
@@ -143,7 +118,28 @@ The **value** case is closed: `props: { start: … }` is a **warning**, the valu
 
 **The ruling.** `editable: false` refuses the change at both doors. [0011](../0011-consumer-values-in-props/README.md) already moved the function into `data/`. This ADR fills the editable arm and wires `entries.update()` to it, and `view/capability.ts` keeps calling the same function rather than restating it. New error: `FieldNotEditableError`, declared and thrown here.
 
-**Why it matters beyond the one gate.** [0013](../0013-what-decides-derivation/README.md) refuses a *derived* write at `entries.update()`. Leaving the `editable` half split would give the library two answers to *"may this value change"* at two doors — the exact split I14 exists to close. **Claim I14 when this ADR lands.** Do not claim it after 0013 alone.
+**Why it matters beyond the one gate.** [0013](../0013-what-decides-derivation/README.md) refuses a *derived* write at `entries.update()`. Leaving the `editable` half split would give the library two answers to *"may this value change"* at two doors — the exact split I14 exists to close. **Claim I14 when this ADR lands, and only for the half this ADR owns.** Decision 18 is held, so do not claim I14 at `entries.update()` for an *absent* `editable`.
 
-**What it opened.** Decisions **18** and **19**, both open. 18 asks what an *absent* `editable` does. 19 asks what replaces `{ key: 'start', editable: false }`, because `interactions.edit` is view-level and can no longer stand in for a data-level gate.
+**What it opened.** Decision **18**, held. Decisions **19** and **23** closed on 2026-09-10.
+
+## 19 — keep `{ key: 'start', editable: false }`, and serialize it
+
+**Closed 2026-09-10. Ruled by the author.** Was: *what replaces `{ key: 'start', editable: false }` at the data door?*
+
+**The ruling. Keep the override for `editable` alone.** `{ key: 'start', editable: false }` constructs. Create, ingest, and History replay still write. `update()` and the grid refuse **change**. Un-date is a change, so it throws `FieldNotEditableError`.
+
+**Serialize the override.** `FieldRegistry.authored` currently drops core keys, so the lock does not round-trip. This ruling closes that gap: a core `editable: false` rides in the Document. Do not tidy the harness comment; close the library. `fromJSON` is ingest, so without encoding, the lock only survived if the caller passed `fields` again.
+
+**`beforeChange` does not replace this.** `fieldRowsOf` filters `updated`, so it never sees `add`. The event cannot lock a create.
+
+**What lost.** A Dataset-level `readOnlyFields` (second name for `editable`). Accepting the loss (no way to lock `start` on the Dataset).
+
+## 23 — three declaration shapes
+
+**Closed 2026-09-10. Ruled by the author.** Decision 19 kept the override, so this is already answered by it.
+
+**Three shapes.** `{ key: 'start', editable: false }` constructs (the lock). `{ key: 'start' }` is a no-op. `{ key: 'start', column }` throws `IllegalCoreFieldOverrideError`. Extra keys on a core name throw. The lock is the one override we keep.
+
+A `props` *value* naming a core key stays a warning ([0011](../0011-consumer-values-in-props/README.md)). This ruling is the *declaration* half.
+
 

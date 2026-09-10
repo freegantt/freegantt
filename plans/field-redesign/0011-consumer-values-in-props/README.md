@@ -18,7 +18,7 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 ## Where it stands
 
-**Two decisions are open — 11 and 22.** Both ask the same kind of question: *what does a consumer's write look like?* Five are closed — **1**, 2, 10, 17, and the `props`-names-a-core-key ruling.
+**No decision is open.** Seven are closed — **1**, 2, 10, **11**, 17, **22**, and the `props`-names-a-core-key ruling. 11 and 22 closed on 2026-09-10.
 
 **It lands second**, after [0012](../0012-optional-dates/README.md). [0012](../0012-optional-dates/README.md) is decision-free and touches four of the same files, so it goes first and this ADR rebases onto it. `EntryEdit`'s removable keys follow `Entry`, so 0012 first also makes `{ start: undefined }` compile here.
 
@@ -30,63 +30,15 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 ## What this ADR does *not* decide
 
-- **Where a plugin's values live.** They sit in `Entry.meta` today (`field-registry.ts:148`), and `Entry.meta?: TMeta` is consumer-typed already. This ADR ships `props: Readonly<Partial<TProps>>` — HEAD's exact posture under a new name. [0014](../0014-plugin-author-surface/README.md) then widens the type additively or migrates the values.
-- **Whether the core-key override survives.** `#mergeCoreFieldOverride` merges `editable` and **never touches `source`** (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. The override is [0015](../0015-write-door/README.md)'s.
+- **Where a plugin's values live.** They sit in `Entry.meta` today (`field-registry.ts:148`), and `Entry.meta?: TMeta` is consumer-typed already. This ADR ships `props: Readonly<Partial<TProps>>` — HEAD's exact posture under a new name. [0014](../0014-plugin-author-surface/README.md) decisions **9 and 12** (closed 2026-09-10) then widen additively: `TProps & PluginEntryProps`, plugin keys prefixed.
+- **Whether the core-key override survives.** `#mergeCoreFieldOverride` merges `editable` and **never touches `source`** (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. The override is [0015](../0015-write-door/README.md)'s. **Decision 19, closed 2026-09-10, keeps it.**
 - **What a rolling-up parent's `props` does.** This ADR rules `props` is carried by reference. [0013](../0013-what-decides-derivation/README.md) adds the one exception.
 
 ---
 
 # Open decisions
 
-**Two, and they are one family.** 11 asks what a consumer may name at the write door; 22 is the type that carries the answer. Decision **1** closed on 2026-09-10 and is below.
-
-## 11. Does *common case is a shorthand* survive for Field writes?
-
-`plans/02:467` ships `dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 })`. This ADR ships `update('t1', { start, props: { cost } })`. One sentence names two Fields; the other names one Field and a container. **This edits a locked spec either way**, so it needs an explicit ruling.
-
-**The citation was `:459` until 2026-09-10, and the real line is stronger than the old one claimed.** `plans/02:467` is not a passing mention. It is a worked example, with `cost` meta-sourced, sitting under the heading *"Editing crosses core and consumer fields freely — one call, one transaction, one undo step"*, and the next line reads `dataset.entries.fieldValue('t1', 'cost')`. **Shorthand keeps that example compiling. Nest retires it.** Weigh that against the rule count below.
-
-**Nobody nests at the write door**, and **FullCalendar ran the flat experiment to its end and it went wrong twice**. Both surveys are in [`evidence.md`](../shared/evidence.md).
-
-**Read the FullCalendar lesson precisely, because it is narrower than _flat is bad_.** What broke it is an **open** top level, not flatness. **This ADR already closes that door:** `update('t1', { strat: … })` throws `UnknownFieldError`.
-
-**The collision with 1 is gone, because 1 is closed.** It ruled that `update()` throws for an undeclared key, so the typo guard *inside* `props` stays and every flat spelling below keeps a closed top level. The collision would have returned only on 1's other branch — undeclared keys writable, inner guard dropped, outer guard kept — and that branch is refused. **Nothing here waits on 1 any more.**
-
-**The third option: a flat shorthand for _declared_ keys only, with `props: {}` as the long form.** `update('t1', { start, cost })` is legal exactly when `cost` is declared; anything the registry does not know still throws. That keeps `plans/02`'s *common case is a shorthand*, and it is **not** FullCalendar's mistake, because the top level stays closed. **This is the option to weigh against the nesting, not the open flat form.**
-
-**Its price, and half of what the first pass charged is not real.** FullCalendar shipped a write whose *meaning* depends on what the library knows about the key. The declared-key flat spelling keeps that shape and moves it one stage later: `update(id, { cost })` compiles always, and throws or writes depending on registry state at the moment of the call.
-
-**The first pass charged this twice, on a false claim about the code.** It read *"`fields` is live-reconfigurable like every config key"*. **It is not.** `dataset.fields` is a read-only getter (`src/api/dataset.ts:240`), and the only two doors that add a Field — `DatasetOptions.fields` and `ctx.fields.register` — both close inside the constructor. See [the registration lock](../shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction).
-
-### The third option has a fourth form, and the reason it was set aside does not hold
-
-**Raised 2026-09-10.** The combined spike built **flat-only** `update()` as improvement A — shorthand with no `props:` long form at the write door, `props` kept on `add` and on the Document. It won the read. The spike then set it aside as *optional, do not fold in*, on this reason: it *"splits the write door from the record door that decision 1 spent its whole table keeping together."*
-
-**Open decision 1 and that reason is not there.** Decision 1's table weighs per-key merge against whole-bag replace over an **undeclared** key space. It says nothing about whether the two doors share an object shape. Worse, **decision 1 — now closed — already splits them**: `add()` / `new Dataset({ entries })` / `fromJSON()` **carry** an undeclared key, and `update()` **throws** for it. That is one key with two answers at the two doors, ruled on purpose on 2026-09-10, and named *records carry and patches name*. A shape split is a smaller split than the one already ruled.
-
-**What A buys, stated plainly.** One spelling at `update()`. No `FieldNamedAtTopAndInPropsError` — the double-name throw disappears, because there is only one place to name a key. That refusal is otherwise a brand-new write-door rule this ADR hands [0015](../0015-write-door/README.md) to name, type and message. **A is a fourth option on this decision, not a follow-up**, and it should be scored beside nest and shorthand rather than after them.
-
-**Its price is real and unchanged:** `EntryEdit` and `EntryInput` stop carrying the same `props` key, so a consumer who builds one object and passes it to both doors writes two shapes. Nothing in the code stops that today, and nothing measures how often anyone does it.
-
-**So the temporal half of the price is gone, and the cross-instance half survives.** `update(id, { cost })` means one thing on a given Dataset for that Dataset's whole life. It is still legal on one Dataset and a throw on another. **That surviving half does not separate the two options**, because `update(id, { props: { cost } })` throws on the same second Dataset under 1's recommendation. **Weigh the shorthand against the nesting on what is left: a top level that holds core keys and consumer keys side by side.**
-
----
-
-## 22. Does `ProposedEdit` carry a brand, or does an extender diff its proposed keys?
-
-**Raised 2026-09-09. Gates ADR 0011**, which writes the `ProposedEdit` type.
-
-**The trap, in one line.** After the rename a complete `props` and a `props` patch are the same shape, so a plugin that spreads `request.proposed.get(id)?.props` into a returned edit proposes **every** stored key by accident. The full statement, with the code, is in [`types.md`](types.md).
-
-**Two candidate fixes, and one has to land with the type.**
-
-- **Brand `ProposedEdit`**, so it is not assignable to the hook's return type. The compiler refuses the spread at the seam where it happens. The price is a brand on a published plugin-author type, and a plugin author who legitimately wants one key off `proposed` writes one unwrap.
-- **Seed an extender's proposed keys by diffing against the pre-state**, instead of by key presence. The spread stays legal and stays harmless, because a key whose value did not change proposes nothing. The price is that a write of the same value stops being a proposal, which is a behaviour change at the hook, not only a type change.
-
-**Do not close this after ADR 0011.** `plans/02`'s *one write shape, one knob* breaks at exactly this seam. A doc comment is not a third option: the spread reads as *keep everything and add one*, so a plugin author who never suspects a problem never looks for the comment that describes it.
-
----
-
+**None.** 11 and 22 closed on 2026-09-10 and are below with 1.
 
 ---
 
@@ -139,6 +91,26 @@ One `EntityAdded` row carries the whole Entry as stored. Per-Field rows would un
 
 **`compute` runs on every row, a rolling-up parent included.** The union closes storage, not reading. A `compute` Field reading `entry.props.cost` on a group sees what the Rollup put in the store — a stored read through a door the union never closed. Blanking it would put `{ key: 'ref', compute: (e) => rowNumber(e.id) }` at an empty cell on every group row, which a consumer reads as a bug. The real limit is that a `compute` Field cannot ask *am I a parent?* — that is [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
 
+## 11 — `update()` is flat only
+
+**Closed 2026-09-10. Ruled by the author.** Was: *does common case is a shorthand survive for Field writes?*
+
+**The ruling. `update()` names every Field on one object, with no `props:` wrapper.** The call `plans/02:467` already teaches is the write:
+
+```ts
+dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
+```
+
+Declared consumer keys sit next to core keys. Nested `props:` is refused at `update()`. `props` stays on `add()`, on the Document, and on a complete `ProposedEdit`. There is no `FieldNamedAtTopAndInPropsError`: one place to name a key, so the double-name throw never exists.
+
+**What lost, and why the ADR's own rejection is overruled.** Nest-only (`update('t1', { start, props: { cost } })`) names a container the app author should not meet. Shorthand *plus* nest keeps two spellings and invents the double-name throw for [0015](../0015-write-door/README.md) to type. This ADR's considered options had rejected *"flat consumer keys on the edit alone, with `props` everywhere else"* because the object a consumer writes most often would disagree with the object the library holds. **Decision 1 already splits those doors:** ingest carries an undeclared key, `update()` throws for it. A shape split is smaller than that split, and it is the call the locked spec already shows. The author ruled the call site.
+
+**What it costs.** A consumer who builds one object and passes it to `add` and to `update` writes two shapes. Nothing measures how often that happens. The call an app author writes every day is `update(id, { cost })`. `update(id, { props: { cost } })` throws, and the message says to name `cost` at the top.
+
+**The top level stays closed.** `update('t1', { strat: 1 })` still throws `UnknownFieldError` — decision 1. This is not FullCalendar's open top level. A key that is on `TProps` but is not declared still compiles and throws — that is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267), unchanged.
+
+**Spiked** — combined spike `update-flat/`, Improvement A. Ruled as the write door, not as an optional follow-up. The types are in [`types.md`](types.md).
+
 ## 17 — the namespace is `props`
 
 **Closed 2026-09-09. Ruled by the author.** Was: *should the namespace be called `props` rather than `data`?*
@@ -155,7 +127,23 @@ One `EntityAdded` row carries the whole Entry as stored. Per-Field rows would un
 
 **Renames that follow:** `DataEdit` → `PropsEdit`, `TData` → `TProps`, `ConsumerEntryData` → `ConsumerEntryProps`, `PluginEntryData` → `PluginEntryProps`, `PlannerMeta` → `PlannerEntryProps`, `DemoMeta` → `DemoEntryProps`. The ADR file itself is renamed, which ADR 0006 permits while its status is `proposed`.
 
-**Left open by this ruling:** decision 12, whether a Field key carries an ownership marker. The ADR said 17 depended on 12. It ran the other way — the word is settled and the marker is not.
+**Decision 12 closed on 2026-09-10 in [0014](../0014-plugin-author-surface/README.md):** plugin keys carry a prefix. The word `props` did not wait on that marker.
+
+## 22 — brand the whole `ProposedEdit`
+
+**Closed 2026-09-10. Ruled by the author.** Was: *does `ProposedEdit` carry a brand, or does an extender diff its proposed keys?*
+
+**The ruling. Brand the whole `ProposedEdit`.** It is not assignable to `EntryEdit`. `{ ...proposed }` as a returned edit is a type error. `PropsEdit` stays an app-author type with no `__brand`.
+
+**The trap this closes.** After the rename a complete `props` and a `props` patch are the same shape. A plugin that spreads `request.proposed.get(id)?.props` into a returned edit proposes every stored key by accident, derived cells included. The patch already merges, so the spread is never needed. A doc comment does not hold it: the spread reads as *keep everything and add one*.
+
+**Why not the inner bag.** Branding `PropsEdit` would put `__brand` on the type an app author writes. Whole-edit brand refuses the spread at the seam and leaves `PropsEdit` clean. The combined spike `brand-whole/` proved the whole-edit refusal; an inner-bag probe assigned through a cast and did not re-prove it.
+
+**Why not diff.** Seeding proposed keys by diff against the pre-state would make a write of the same value stop being a proposal. That is a behaviour change at the hook. A brand is a type change only.
+
+**[0014](../0014-plugin-author-surface/README.md) decision 16** closed against this type on 2026-09-10.
+
+The type, and the refused spread, are in [`types.md`](types.md).
 
 ## A `props` key that names a core key — warning, and the core definition wins
 
@@ -190,11 +178,11 @@ The key decides the home, so no declaration carries one.
   }
   ```
   Today `update({ cost: 500 })` is flat, so `cost` is found there. After A the only top-level key is `props`, and A **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. The nested read is the merging patch's `toProposedEdit`. **This is the constraint on splitting A from B.**
-- Write the edit types from [`types.md`](types.md). Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests.
-- **`StoredEdit` → `ProposedEdit`, with serena.** About 184 occurrences. `ProposedEdits`, `toProposedEdit`/`toProposedEdits` and `EditReading.proposed` follow. Lands in A because A already renames the type's own field. Write `ProposedEdit`'s **type** too — `props` is required on it — and decide the branding trap in [`types.md`](types.md) at the same time.
+- Write the edit types from [`types.md`](types.md). `EntryEdit` is the envelope plus declared-key shorthand at the top level — **no `props` key**. `PropsEdit` is exported for `add`, the Document, and `ProposedEdit`. Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests. `update(id, { props: { cost } })` is a type error, or a runtime throw whose message says to name `cost` at the top.
+- **`StoredEdit` → `ProposedEdit`, with serena.** About 184 occurrences. `ProposedEdits`, `toProposedEdit`/`toProposedEdits` and `EditReading.proposed` follow. Lands in A because A already renames the type's own field. Write `ProposedEdit`'s **type** too — `props` is required on it — and **brand the whole `ProposedEdit`** (decision 22, closed 2026-09-10). `PropsEdit` carries no `__brand`.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
 - `build-commit-change-set.ts:100`'s `fieldsWrittenBy` still skips `'meta'`, and `field-access.ts:26`'s `isOptionalEntryKey` still names it. Both follow the rename.
-- **Leave `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` standing.** The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. Deleting the override removes a data-level capability that `interactions.edit` cannot replace — that is [0015](../0015-write-door/README.md)'s decision 19, and what a consumer declaration on a core key then does is its decision 23.
+- **Leave `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` standing.** The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. [0015](../0015-write-door/README.md) decision **19** (closed 2026-09-10) **keeps** the override for `editable` and serializes it. Decision **23** is the three declaration shapes, also closed.
 - **One write resolver in `data/`, and this ADR changes no policy in it.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the *editable* and *derived* arms in one function and already imports `rollsUp` from `data/`; `entry-store.ts:358` already throws `UnknownFieldError` for *exists*. **The resolver is a move, not a build.** Move that function into `data/`, point `view/capability.ts` at it, and stop that file restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only.** [0013](../0013-what-decides-derivation/README.md) then fills the derived arm and wires `update()` to it; [0015](../0015-write-door/README.md) fills the editable arm. **Do not wire `entries.update()` to a policy this ADR did not rule.** The seven call sites and the throw-versus-drop table live in those two ADRs. Do not write their tests here.
 - **Two merges shallow-spread, not one. Fix both together or plugin composition breaks in production.**
   - `data/edit-extension.ts:38` — `mergeEntryEdits`, the loose one a plugin author calls. With consumer keys inside `props`, two extenders writing different `props` keys lose one: #197 one level down, against that function's own stated promise (#238).
@@ -208,7 +196,7 @@ The key decides the home, so no declaration carries one.
 - `view/capability.ts`'s `hasSomewhereToWrite` becomes `!('compute' in field)`.
 - One generic. `harness/planner.ts:31` currently writes two that disagree about `critical`.
 - Rename fixture types: `PlannerMeta` → `PlannerEntryProps`, `DemoMeta` → `DemoEntryProps`.
-- The registry's `authored` comment states plugin values sit in `Entry.meta`. One word changes unless decision 9 lands on the plugin store, which deletes the sentence.
+- The registry's `authored` comment states plugin values sit in `Entry.meta`. One word changes to `props`. [0014](../0014-plugin-author-surface/README.md) decisions **9 and 12** (closed 2026-09-10) keep those values in `props` under a plugin prefix. The sentence stays; the word and the key change.
 - **Not ADR 0011's:** the `harness/main.ts:89` double cast. Declare `window.__dataset` as the bare `Dataset` first, independently — see [`refuted.md`](../shared/refuted.md).
 
 ## The build — the merging patch
@@ -229,6 +217,10 @@ Written in the new names: `toProposedEdit`, `ProposedEdit`.
 **`"Skip a–c"` is not `"do not look inside"`.** The first `Object.keys(edit)` loop must treat `props` as the namespace rather than as a Field, and it must still walk **inside** `props` for **declared** keys — without that inner walk a declared `cost` patch emits no row. Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an edit either way.
 
 **Two things now ship with the ruling rather than after it.** The `errors.ts:331` message rewrite, and per-key `props` merging in `entryAfterEdit`, `mergeEntryEdits` and `mergeStoredEdits` — a shallow spread deletes passenger data, which decision 1 guarantees is kept. `UnknownFieldError` stays on the top level of an edit either way.
+
+**Decision 11 closed on 2026-09-10, and it is the write door.** `update()` is flat: `update('t1', { start, cost })`. Nested `props:` at `update()` throws. `add()` and the Document still nest. There is no `FieldNamedAtTopAndInPropsError`. The first `Object.keys(edit)` loop names declared keys at the top level of an `EntryEdit`; ingest still walks inside `props` on the record. `EntryEdit` does not carry a `props` key. `PropsEdit` stays on `EntryInput`, the Document, and `ProposedEdit`.
+
+**Decision 22 closed on 2026-09-10 with the type.** Brand the whole `ProposedEdit`. Do not put `__brand` on `PropsEdit`. The refused spread is a type test in [`types.md`](types.md), not a comment.
 
 ## Done first — 2026-09-09
 

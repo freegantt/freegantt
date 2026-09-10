@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: a derived value lives in the store and never reaches the Document; a kind conversion promotes and demotes; an Entry that starts rolling up drops its authored values and the Rollup recalculates them.
-open: one decision — 26, what the inputs to the derivation predicate are. Branches 8, 20, 21 and 24 hang off it. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
+decided: a derived value lives in the store and never reaches the Document; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them.
+open: none. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
@@ -21,7 +21,7 @@ if (kinds.has(entry.kind)) parents.add(entry.id);
 if (!childIds || childIds.length === 0) continue;
 ```
 
-`entry.kind` is stored per row. `kinds` is the `rollUpKinds` config set. Having children is structure. **Which of those three decides derivation, and which of them are stored, is decision 26** — and decisions 8, 20, 21 and 24 are its branches, not its peers.
+`entry.kind` is stored per row. `kinds` is the `rollUpKinds` config set. Having children is structure. **Decision 26, closed 2026-09-10, keeps only the third.** An Entry derives when it has children. `kind` leaves the record. `rollUpKinds` is deleted. `hierarchy.autoGroup` is deleted. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns. Do not publish a calculated `kind` Field — that restates `childrenOf`.
 
 ## Decision
 
@@ -35,6 +35,16 @@ The two rulings hold each other up. The refusal means nothing but the Rollup can
 
 **On a rolling-up parent, an Aggregator's `undefined` means _no value_.** It is documented as *no opinion — keep the stored value*. Once nothing but the Rollup can write that cell, "keep" means "keep the previous derived answer", which is stale by construction. Elsewhere the current reading stands.
 
+### An Entry derives when it has children, and `kind` leaves the record
+
+**Decision 26, closed 2026-09-10.** The predicate is structure. A parent with children draws the parent look. A childless row draws a bar. An empty phase looks like a bar until a child arrives. No `'kind'` on `Entry`, none in the Document, no `update({ kind })`. Core does not ship a diamond. `rollUpKinds` and `hierarchy.autoGroup` are deleted. No opt-out in this ADR.
+
+Do not replace `kind` with a calculated Field. A plugin calls `childrenOf`. A plugin that needs another look stores ids itself (ADR 0002).
+
+Branches **8**, **20**, **21**, and **24** close with this: no kind to write on demotion; kind is not authored; no derive-off flag; no `rollUpKinds` flip.
+
+A Document carrying `rollUpKinds: []` starts deriving. Decision 6 drops the authored values. The next save is permanent. Accepted. This ADR writes schema **7**.
+
 ### Promotion runs both ways, and stays automatic
 
 ```mermaid
@@ -44,26 +54,25 @@ stateDiagram-v2
   Normal --> RollingUp: gains a child
   RollingUp --> Normal: loses its last child
   note right of RollingUp
-    Three doors reach here: autoGroup promotion,
-    a kind write, and a rollUpKinds flip.
+    The door is a child arriving.
     Dates and rolling-up Fields derive from the children.
     Authored values on those Fields are dropped — decision 6.
   end note
   note left of Normal
     Demotion leaves no dates — nothing to calculate from.
-    The target kind is decision 8.
+    The row draws a bar. There is no kind to write.
   end note
 ```
 
-**Promotion is a door, and nobody aimed at it.** An Entry authored with dates becomes a rolling-up kind the moment it gains a child under autoGroup — `fixtures/hierarchy-dataset.ts` authors exactly that shape. Its dates were authored, they are derived from that commit on, and no call named a derived Field.
+**Promotion is a door, and nobody aimed at it.** An Entry authored with dates becomes a parent the moment it gains a child. Its dates were authored, they are derived from that commit on, and no call named a derived Field.
 
-**Demotion does not happen today.** `hierarchy.test.ts:116` pins the current rule by name: *"removing every child demotes nothing."* An Entry that gains a child and loses it again then stays a rolling-up kind for life, and under the omission rule it holds no dates and draws no bar, with no call responsible. `plans/01` §2.5 chose promote-only on purpose — *demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent*. **This ADR overrules that clause**, and the prose sweep rewrites the sentence. No comparable product ships promotion without demotion (see [`evidence.md`](../../plans/field-redesign/shared/evidence.md)).
+**Demotion does not happen today.** `hierarchy.test.ts:116` pins the current rule by name: *"removing every child demotes nothing."* **This ADR overrules that**, and the prose sweep rewrites `plans/01` §2.5's promote-only / flickering-identity clause. Look follows children. An empty phase is a bar until it has a child.
 
-On demotion the Entry becomes a **normal Entry with no dates**. There are no children to calculate from, and it can be dated later. What **kind** it returns to is decision 8. Whether `'group'` survives as an authored kind at all is decision 20.
+On demotion the Entry becomes a **normal Entry with no dates**. There are no children to calculate from, and it can be dated later. There is no kind to write.
 
-**An Entry that starts rolling up drops its authored values, and the Rollup recalculates them.** Decision 6, closed 2026-09-09. The library never refuses this, at any of the three doors. The drop is an ordinary ChangeSet row in the same transaction as its cause, so undo reverses both and the authored value is legal again. **History is never cleared, and `rollUpKinds` is not a destructive setter.** One follow-up stays open on one door: a `rollUpKinds` flip's cause is a config assignment, and `ChangeSet` has no row for one. That is **decision 24**.
+**An Entry that starts rolling up drops its authored values, and the Rollup recalculates them.** Decision 6, closed 2026-09-09. The library never refuses this. The drop is an ordinary ChangeSet row in the same transaction as its cause — a `parentId` write — so undo reverses both. **History is never cleared.** Decision 24 closed with 26: `rollUpKinds` is gone, so there is no config flip.
 
-**An authored value on a derived cell is dropped, and the library says so.** `{ id: 'p', kind: 'group', props: { cost: 500 } }` gets no `cost` on `p`. Keeping it needs a second storage slot beside the derived value — the old bag again under a worse name. Echoing it back on `toJSON` is worse: the moment a child changes, the echoed number is a wrong answer wearing an authored value's clothes. The `EntityAdded` row carries the Entry **as stored** — after the drop, and after ingest fills `props: {}` and the Segments.
+**An authored value on a derived cell is dropped, and the library says so.** `{ id: 'p', props: { cost: 500 } }` with a child gets no `cost` on `p`. The `EntityAdded` row carries the Entry **as stored** — after the drop, and after ingest fills `props: {}` and the Segments.
 
 
 ### The derived arm of the write resolver is this ADR's
@@ -85,17 +94,20 @@ This ADR writes schema **7**.
 | **Record what the Rollup wrote, and omit that set** | **Rejected.** It needs a cumulative set that no `ChangeSet` carries and that five reachable seams invalidate |
 | **Persist derived values and report a correction on import** | **Rejected.** It keeps a value whose meaning depends on declarations that may not travel with it. Not writing the value stops the disagreement existing |
 | **Let a rolling-up parent cell be edited, and distribute down to the children** | **Rejected as a default.** A distribution rule is a per-Field policy with no defensible default — split evenly, by duration, by current share? Refusal is honest until a consumer names the policy |
-| **Let a per-entry flag turn derivation off, so the write sticks** | **This is answer (c) of decision 26**, and it is no longer a deferred row. A stored flag emits an ordinary Field row, so undo reverses flag and values in one step. Where the flag lives is branch 21 |
+| **Let a per-entry flag turn derivation off, so the write sticks** | **Rejected for this ADR.** Answer (c) of decision 26. Decision 21 closed with 26: no flag. A later ADR may add one. |
+| **Keep `kind` as an authored look key, structure-only for derivation** | **Rejected.** The combined spike's (b). The author ruled look follows children too, and the Field goes. |
+| **A calculated `kind` Field** | **Rejected.** Restates `childrenOf`. Two names for one fact (#7). |
 
 ## Consequences
 
 - **One report per operation, not per value.** A hand-written Document with 500 groups over three rolling-up Fields would otherwise raise 1,500 warnings. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'`, **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it (D-S5-41).
 - **`props` is carried by reference, except on a rolling-up parent.** [ADR 0011](0011-consumer-values-live-in-props.md) states the flat rule; this is the one exception. D-S2-12 says the namespace is never walked field by field — say so where D-S2-12 is written, rather than leaving two rules to disagree in silence.
-- **`toJSON` output is no longer byte-identical to the input for a rolling-up parent.** `toJSON → fromJSON → toJSON` is still stable, because the structural test is a pure function of kind, hierarchy and declarations.
-- **A Document is our save format. It is not an interchange format, and that is now a decision.** A third-party reader sees a group with no span and no rolled-up values, and would need the same Aggregator *implementations*, referenced by name only.
-- **`plans/01` §2.5's promote-only / flickering-identity clause is overruled.** The prose sweep rewrites the sentence.
+- **`toJSON` output is no longer byte-identical to the input for a rolling-up parent.** `toJSON → fromJSON → toJSON` is still stable, because the structural test is a pure function of hierarchy and declarations.
+- **A Document is our save format. It is not an interchange format, and that is now a decision.** A third-party reader sees a parent with no span and no rolled-up values, and would need the same Aggregator *implementations*, referenced by name only.
+- **`plans/01` §2.5's authored-kind rule, the promote-only clause, and the shipped `'milestone'` are overruled.** The prose sweep rewrites those sentences. `kind` leaves `Entry`. Core does not ship a diamond.
 - **`reportCorrectedRollUps` is deleted** — with no reproducible derived value in the Document there is nothing to correct. **Delete it in this ADR, not in 0011.** 0011 still writes derived keys; deleting the report there leaves `fromJSON` silent.
-- **A plugin loses a *derived* value, because its declaration does not travel.** An S7 group's rolled-up `progress` is omitted, and a Document read without the plugin cannot re-derive it (D-S5-33). The leaf values still round-trip. Judged acceptable.
+- **A plugin loses a *derived* value, because its declaration does not travel.** An S7 parent's rolled-up `progress` is omitted, and a Document read without the plugin cannot re-derive it (D-S5-33). The leaf values still round-trip. Judged acceptable.
+- **D-S5-22's four seams lose `entry.kind` as their join.** They ask structure, or a plugin store. [0015](0015-what-the-write-door-refuses.md) decision 18 loses its `kind` row.
 
 ## Ordering constraints
 

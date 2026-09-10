@@ -10,7 +10,7 @@
 
 **Numbers do not move.** A decision keeps the number it was given in the single-ADR folder, whichever ADR now owns it. The split re-homed the rulings; it did not renumber them. This is the one exemption to the old folder's rule 2, and it is recorded here so nobody re-derives the numbering.
 
-**One schema counter, not five.** The ADRs bump it in landing order — 0012 writes **5**, 0011 writes **6**, 0013 writes **7**. 0014 writes **8** only if decision 12 prefixes plugin keys. Decision 3 prices a pre-release number at zero.
+**One schema counter, not five.** The ADRs bump it in landing order — 0012 writes **5**, 0011 writes **6**, 0013 writes **7**. 0014 writes **8** — decision 12 closed on a plugin prefix. Decision 3 prices a pre-release number at zero.
 
 ---
 
@@ -25,7 +25,7 @@
 | [0012](../0012-optional-dates/README.md) | optional `start` / `end` | **5** |
 | [0011](../0011-consumer-values-in-props/README.md) | `meta` → `props`, `source` leaves `SerializedField` | **6** |
 | [0013](../0013-what-decides-derivation/README.md) | omit a rolling-up parent's derived keys | **7** |
-| [0014](../0014-plugin-author-surface/README.md) | plugin-key prefix, if decision 12 lands that way | **8** |
+| [0014](../0014-plugin-author-surface/README.md) | plugin-key prefix (decision 12, closed 2026-09-10) | **8** |
 
 One rule joins the release gate — **a released reader refuses a file it did not write.** That retires the pre-release-`3`-against-released-`3` hazard permanently. Nothing reads schema 3 today. Spending a public number, or shipping a `preRelease` flag, would solve a problem that ends the day the library goes public. Two Document shapes must not share one number.
 

@@ -50,13 +50,17 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 ## Consequences
 
 - **`Entry.segments` stops being *never empty*.** The biconditional replaces it: an Entry holds at least one Segment, or it holds no dates at all. `update(id, { segments: [] })` still throws `EmptySegmentsError` ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212)).
+- **Last-segment-remove un-dates.** ADR 0010's *"An Entry never survives as an empty record"* is revised here, not in that file. `removeSegments` of the last Segment keeps the Entry. `entries.remove(id)` deletes it.
+- **A date path is owed before a user sees this.** Default `gridColumns: ['name']` plus no bar cannot date a row. Not a live-with hole.
 - **The `referenceDate` fill is deleted.** It is written down under D-S2-10 **and** D-S2-22. Name both halves separately or a reader retires the wrong sentence.
 - **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. A milestone is one instant, and that is an authored shape.
 - **The Document gains optional `start` and `end`**, and writes schema **5**. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 
-### Known hole
+### Required follow-up
 
-**A dateless row cannot be dated through the UI.** It draws no bar, so no gesture reaches it, and the default `gridColumns` is `['name']`, so no cell editor reaches `start`. Dating from the timeline is its own gesture, with its own capability and veto surface, and it does not belong in a storage redesign. Recorded as a hole, the way [#235](https://github.com/Pawel-IT/FreeGantt/issues/235) is.
+**A dateless row cannot be dated through the default UI.** It draws no bar, so no gesture reaches it, and the default `gridColumns` is `['name']`. Storage may land; a user-visible Gantt without a date path is incomplete. Put `start` in the default columns, or add a timeline “set dates” gesture. Dating from the timeline is its own gesture, with its own capability and veto surface.
+
+**Last-segment-remove un-dates.** ADR 0010 said an Entry never survives empty and bound grid-row Delete to `removeSegments`. This ADR makes zero Segments a legal dateless row. The new rule: `removeSegments` of the last Segment keeps the Entry; `entries.remove(id)` deletes the row; grid-row Delete on the name cell is `remove(id)`. ADR 0006: the old ADR is not edited. The revision lives here.
 
 ## Issues this ADR depends on
 

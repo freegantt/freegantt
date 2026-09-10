@@ -22,12 +22,18 @@ The sweep may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). 
 | `CONTEXT.md:127` | names `DataEdit` and its `data` key from [ADR 0011](../0011-consumer-values-in-props/README.md) — both renamed (`PropsEdit`, `props`) |
 | `plans/01:273-281` | the `FieldSource` type and its default |
 | `plans/01:330` | "Source decides stored or computed" |
-| `plans/01` §2.5 | the promote-only / flickering-identity clause, overruled by the both-ways conversion |
+| `plans/01` §2.5 | the promote-only / flickering-identity clause, **and** the authored-kind rule, **and** shipped `'span' | 'group' | 'milestone'` — [0013](../0013-what-decides-derivation/README.md) decision 26: `kind` leaves `Entry`; look and derivation follow children; no diamond in core |
+| `plans/02` `barRenderer` / `data-kind` / `rollUpKinds` / `hierarchy.autoGroup` | keyed on `Entry.kind` — the join is gone |
+| `CLAUDE.md` / `AGENTS.md` | "`kind` present" on stored Entry; default kind `'span'` |
+| `CONTEXT.md` Item producer, KindDefaults, `data-kind` | D-S5-22 join was `entry.kind`. Re-home. `data-kind` is no longer an Entry classification |
 | `plans/02` §2.6 | the same source rule; `:454` reads *"Source decides what happens to a parent's aggregate"* |
 | `plans/02:738` | "anything of yours goes in `meta` and survives byte for byte" — the rule survives, the word does not |
 | `plans/02:749` | `DuplicateFieldSourceError` / `InvalidFieldSourceError` leave; `DerivedFieldNotWritableError` / `ComputedFieldCannotBeWrittenError` / `FieldNotEditableError` arrive. No `RollUpKindsWouldDropValuesError` — decision 6 closed as *drop and recalculate*. `PluginFieldNotInDataError` only if decision 9 lands on the store. `EmptySegmentsError` already ships |
-| `plans/02` §"common case is a shorthand" | `update('t1', { start, cost })` stops compiling unless decision 11 keeps a declared-key flat spelling |
-| `plans/02:467` | the worked example `dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 })`, with `cost` meta-sourced — the same sentence, as a compiling call. [0011](../0011-consumer-values-in-props/README.md) decision 11 |
+| `plans/02` §"common case is a shorthand" | **Keep** `update('t1', { start, cost })` — [0011](../0011-consumer-values-in-props/README.md) decision 11, closed 2026-09-10. Nested `props:` at `update()` is refused |
+| `plans/02:467` | the worked example `dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 })` **stays a compiling call**. Decision 11 |
+| `CONTEXT.md` Segment, ADR 0010 | *"Every Entry stores at least one Segment"* / *"An Entry never survives as an empty record"* — [0012](../0012-optional-dates/README.md) revises last-segment-remove to un-date. ADR 0006: do not edit ADR 0010; the sweep writes the new sentence here |
+| `plans/02` default `gridColumns` | a date path is owed before a user sees optional dates — [0012](../0012-optional-dates/README.md) required follow-up |
+| `gridColumns` / plugin keys | plugin Field keys are prefixed (`scheduling:progress`) — [0014](../0014-plugin-author-surface/README.md) decisions 9 and 12 |
 | `plans/02:477` | *"one answer gates every writer (I14), so a consumer states it once"* and *"Default is `false`."* **Only if [0015](../0015-write-door/README.md) decision 18 lands on *split absent from `false`*** — split gives one Field two answers at two doors, which this sentence refuses |
 | `plans/01:283` | `editable?: boolean` and its comment — *"the Field half of one write answer … (I14); default false"*. Same condition as `plans/02:477`. The type widens too if 18 takes three states |
 | `plans/01:926` | the **I14 row itself** — *"every write asks one `canWrite` (#256)"*. Same condition. **Also owed either way:** its enforcement is `e2e/write-refusal.spec.ts`, which drives the cell editor and the bar handles and never calls `entries.update()` |
