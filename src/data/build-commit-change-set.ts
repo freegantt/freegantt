@@ -25,7 +25,7 @@ import { buildEffectiveEntries } from './entry-tree.js';
 import {
   mergeStoredEdits,
   mergeStoredEditsByEntry,
-  overlayStoredEdit,
+  entryAfterEdit,
   proposedKeysOf,
   statesProposedKeys,
 } from './fields/field-access.js';
@@ -57,8 +57,8 @@ export interface CommitChangeSetInput {
   readonly entries: CommitChangeSetEntryStore;
   readonly pluginStores: CommitChangeSetPluginStores;
   /** The commit path's own door onto the extension hook (#232) — see
-   *  `TransactionData.readExtenderEdits`. */
-  readExtenderEdits(request: EditRequest): EditsReading;
+   *  `TransactionData.extraEditsReadingFor`. */
+  extraEditsReadingFor(request: EditRequest): EditsReading;
   readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
@@ -242,10 +242,10 @@ export function buildCommitChangeSet(
   const effectiveForExtender = buildEffectiveEntries(byId, added, removed, proposed);
   // The hook is judged against `effectiveForExtender` above, so it must be able to read that same
   // state, not just `byId` (D-S5-45) — `entryAfterEdits` is that map's own `.get`, already built for
-  // reconciliation, so this costs nothing extra at commit. `readExtenderEdits`, not the public
+  // reconciliation, so this costs nothing extra at commit. `extraEditsReadingFor`, not the public
   // `extraEditsFor`, because the guard and the merge below need the hook's authored envelope keys,
   // which the public method's return shape has no room for (#232).
-  const extenderReading = data.readExtenderEdits({
+  const extenderReading = data.extraEditsReadingFor({
     entries: byId,
     proposed,
     entryAfterEdits: (id) => effectiveForExtender.get(id),
@@ -290,7 +290,7 @@ export function buildCommitChangeSet(
       ? addedEntities
       : addedEntities.map((row) => {
           const extra = extraEditsForAdded.get(row.entity.id);
-          return extra === undefined ? row : { ...row, entity: overlayStoredEdit(row.entity, extra) };
+          return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
   const rollupUpdated = rollUpFields(

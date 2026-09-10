@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from './field-registry.js';
 import { createFieldContext, writeField } from './field-access.js';
+import type { Field, FieldType } from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -191,6 +192,45 @@ describe('percent — the shipped Field type', () => {
     const column = registry.get('progress')?.column;
     expect(column?.header).toBe('Done');
     expect(column?.align).toBe('end');
+  });
+
+  // #142's rule and #249's rule meet in `mergeColumn`, and only the sizing *pair* crosses from the
+  // bundle. The shipped `percent` bundle carries no header, so every row here declares its own.
+  describe('a Field column and its type bundle merge key by key, sizing apart', () => {
+    const registryFor = (bundle: FieldType['column'], own: Field['column']) =>
+      new FieldRegistry({
+        fieldTypes: { money: { ...(bundle !== undefined ? { column: bundle } : {}) } },
+        fields: [{ key: 'cost', type: 'money', ...(own !== undefined ? { column: own } : {}) }],
+      });
+
+    it("the Field's own header wins over the bundle's, and the bundle's width still applies", () => {
+      const column = registryFor({ header: 'Bundle', align: 'end', width: 100 }, { header: 'Own' }).get(
+        'cost',
+      )?.column;
+      expect(column).toEqual({ header: 'Own', align: 'end', width: 100 });
+    });
+
+    it("the Field's own header wins when the bundle declares no sizing at all", () => {
+      const column = registryFor({ header: 'Bundle', align: 'end' }, { header: 'Own' }).get('cost')?.column;
+      expect(column).toEqual({ header: 'Own', align: 'end' });
+    });
+
+    it('a Field that names a width replaces the bundle’s sizing whole (#249)', () => {
+      const column = registryFor(
+        { header: 'Bundle', align: 'end', width: 100 },
+        { header: 'Own', width: 50 },
+      ).get('cost')?.column;
+      expect(column).toEqual({ header: 'Own', align: 'end', width: 50 });
+    });
+
+    it('a Field that names a flex takes the bundle’s width with it (#249)', () => {
+      const column = registryFor(
+        { header: 'Bundle', align: 'end', width: 100 },
+        { header: 'Own', flex: 1 },
+      ).get('cost')?.column;
+      expect(column).toEqual({ header: 'Own', align: 'end', flex: 1 });
+      expect(column).not.toHaveProperty('width');
+    });
   });
 
   it('registerType(percent, …) throws, but the fieldTypes option overrides it silently', () => {
