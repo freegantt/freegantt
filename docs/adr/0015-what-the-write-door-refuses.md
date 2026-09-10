@@ -1,6 +1,6 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` and serialize it (19). Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.fields.override({ key, editable })` (Q16, grill 2026-09-10, from AG Grid).
+decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` and serialize it (19). Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
 open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---
 
@@ -22,13 +22,13 @@ Beside it sits `#mergeCoreFieldOverride` (`field-registry.ts:211-225`), which le
 
 **Grill 2026-09-10.** No new Field keys after construction. Hide/show columns stay live. After setup, only `editable` may change on a Field. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Fields are the schema, not a product hole.
 
-**Q16, closed 2026-09-10 (grill), from AG Grid.** AG Grid has no `setColumnEditable`. `editable` lives on the column definition; after init you change that property and assign the list again. Evidence: [`plans/field-redesign/shared/evidence.md`](../../plans/field-redesign/shared/evidence.md). The call here is the same object as construction:
+**Q16, closed 2026-09-10 (grill).** A verb writes one key (`plans/02` §2, #184 / #195), the same family as `gantt.hideGridColumn`. AG Grid's full `columnDefs` re-assign is survey, not the call ([`evidence.md`](../../plans/field-redesign/shared/evidence.md)).
 
 ```ts
-dataset.fields.override({ key: 'start', editable: false })
+dataset.setFieldEditable('start', 'never')
 ```
 
-Not `setFieldEditable`. Not a second `dataset.editable` map. Extra keys throw (decision 23). The call does not add Field keys. Per-row stays `interactions.edit`.
+The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It does not mutate the object `field()` returns. Extra keys are not a door. New Field keys stay refused. Per-row stays `interactions.edit`.
 
 This ADR writes **schema 9**.
 
@@ -46,7 +46,7 @@ This ADR writes **schema 9**.
 
 **23.** `{ key: 'start', editable: false }` constructs. `{ key: 'start' }` is a no-op. `{ key: 'start', column }` throws.
 
-**Q16.** `dataset.fields.override({ key: 'start', editable: false })`. Same object as construction. Copy the Field; replace `FieldRegistry.all`'s identity (#187). Extra keys throw. Does not add keys.
+**Q16.** `dataset.setFieldEditable('start', 'never')`. One Field, one value. Copy the Field; replace `FieldRegistry.all`'s identity (#187). Do not mutate `field()` in place.
 
 [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) deleted `kind`. `update(id, { kind })` does not exist.
 

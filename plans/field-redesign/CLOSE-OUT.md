@@ -10,7 +10,7 @@
 - [ ] **Build 0011** — `meta` → `props`, `source` deleted, `StoredEdit` → `ProposedEdit`, `add()`/`update()` flat, constructor `entries` take declared keys at the top (Q15), schema 6. Gate: `grep -rn '\bmeta\b\|FieldSource\|source: {' src/ harness/` returns 0 (423 today).
 - [ ] **Build 0013** — derivation by children, `kind`/`rollUpKinds`/`autoGroup` deleted, parent bar drag translates descendant dates, schema 7.
 - [ ] **Build 0014** — plugin prefix, app writes the prefixed key and the plugin exports that const (Q12b), `fieldValue` → `read`, `durationOf` deleted, renderer pair becomes `text`/`value` (13a), schema 8. Gate: `grep -rn '\bfieldValue\b' src/ harness/ e2e/ etc/` returns 0.
-- [ ] **Build 0015** — `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.fields.override({ key, editable })` (Q16), schema 9. Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`.
+- [ ] **Build 0015** — `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.setFieldEditable` (Q16), schema 9. Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`.
 - [ ] **Flip each `status: proposed` to `accepted`** as its build merges, and link its verdict report. Retire ADR 0005's *if accepted*.
 - [ ] **Run the spike gate at each acceptance** ([`shared/prose-sweep.md`](shared/prose-sweep.md)): delete that ADR's spike folder and its `spike/*` branches, and prove no spike path reaches `src/`, `harness/` or `e2e/`.
 - [ ] **Drop the ahead-of-`src/` banners** from `plans/01`, `plans/02`, `plans/03` and ADR 0005 when the last build merges. That is the day this file is deleted.
@@ -23,7 +23,7 @@
 - [x] **The sweep's two misses** — `plans/00:51` (principle 9 still declared authored `Entry.kind`) and `plans/03` (S4's `rollUpKinds`, `autoGroup`, `entry`/`meta` source). The gate grep named only 0011's words, so `plans/00` scored 0 and read as clean. The grep is widened in [`shared/prose-sweep.md`](shared/prose-sweep.md).
 - [ ] **`src/model/field.ts:125-127`** — the `editable` comment still says *default `false`* and claims I14. Not the sweep's: 0015's build edits it with the code.
 - [ ] **`plans/01` I14 and `plans/02` §4.2** — reread both when 0015 lands. I14 now reads *one key, two thresholds*, which is weaker than *every write asks one `canWrite`*. If the build cannot honour the new wording, the wording is wrong, not the build.
-- [ ] **Grill 2026-09-10, locked specs** — `plans/02` default `gridColumns` is still `['name']` and still says a date path is owed; default `editable` is still `'api'`; `add()` still described as nesting `props`; `fields` lock still called a hole; live Field change is `dataset.fields.override`, only `editable`. `CONTEXT.md` still needs `_Avoid_`: phase, grouped entry. Entry **spans** is still owed. Stop and ask before those edits.
+- [ ] **Grill 2026-09-10, locked specs** — `plans/02` default `gridColumns` is still `['name']` and still says a date path is owed; default `editable` is still `'api'`; `add()` still described as nesting `props`; `fields` lock still called a hole; live Field change is `dataset.setFieldEditable` (belongs next to `hideGridColumn` in the §2 verb list). `CONTEXT.md` still needs `_Avoid_`: phase, grouped entry. Entry **spans** is still owed. Stop and ask before those edits.
 
 ## Where a reader goes
 

@@ -34,7 +34,7 @@ Settled in session. Each ruling lives in the ADR named. Do not re-derive them.
 | `add()` and `update()` are flat. Constructor `entries` also take declared keys at the top; nested `props` stays for passengers; unknown top-level keys warn; a key named both at the top and inside `props` throws. Storage and the Document nest in `props`. `add()` / `update()` throw `UnknownFieldError` for an undeclared key. `fromJSON` still carries passengers inside `props`. | [0011](0011-consumer-values-in-props/README.md) |
 | An Entry with children is a **parent**. Name is required. Lose the last child → name, no dates, no bar. Parent **cells** stay refused. Parent **bar** drag translates every descendant date that exists. Reuse `beforeEntryMove`. | [0013](0013-what-decides-derivation/README.md) |
 | Plugin keys stay prefixed. App `add` / `update` use the prefixed key. The plugin exports that string as a const. No bare alias. | [0014](0014-plugin-author-surface/README.md) |
-| Default `editable` is `'anywhere'`. After setup, only `editable` may change. No new Field keys. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Live call: `dataset.fields.override({ key: 'start', editable: false })`. | [0015](0015-write-door/README.md) |
+| Default `editable` is `'anywhere'`. After setup, only `editable` may change. No new Field keys. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Live call: `dataset.setFieldEditable('start', 'never')`. | [0015](0015-write-door/README.md) |
 
 **Grill call-sites are closed.** Q12b, Q15, and Q16 are in the ADRs above.
 
