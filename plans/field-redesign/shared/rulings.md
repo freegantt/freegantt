@@ -10,7 +10,7 @@
 
 **Numbers do not move.** A decision keeps the number it was given in the single-ADR folder, whichever ADR now owns it. The split re-homed the rulings; it did not renumber them. This is the one exemption to the old folder's rule 2, and it is recorded here so nobody re-derives the numbering.
 
-**One schema counter, not five.** The ADRs bump it in landing order — 0012 writes **5**, 0011 writes **6**, 0013 writes **7**. 0014 writes **8** — decision 12 closed on a plugin prefix. Decision 3 prices a pre-release number at zero.
+**One schema counter, not five, and [its table is below](#3--the-schema-restarts-release-gate).** That table is the folder's only copy. An ADR states the one number it spends and links here.
 
 ---
 
@@ -26,6 +26,7 @@
 | [0011](../0011-consumer-values-in-props/README.md) | `meta` → `props`, `source` leaves `SerializedField` | **6** |
 | [0013](../0013-what-decides-derivation/README.md) | omit a rolling-up parent's derived keys | **7** |
 | [0014](../0014-plugin-author-surface/README.md) | plugin-key prefix (decision 12, closed 2026-09-10) | **8** |
+| [0015](../0015-write-door/README.md) | `editable` enum on `SerializedField` (decision 18, closed 2026-09-10) | **9** |
 
 One rule joins the release gate — **a released reader refuses a file it did not write.** That retires the pre-release-`3`-against-released-`3` hazard permanently. Nothing reads schema 3 today. Spending a public number, or shipping a `preRelease` flag, would solve a problem that ends the day the library goes public. Two Document shapes must not share one number.
 
@@ -43,9 +44,9 @@ One rule joins the release gate — **a released reader refuses a file it did no
 
 **1. The update() door's message says `compute`. It never says *derived*.** This ADR uses *derived* for a rolled-up value **and** for a `compute` value. Decision 21's per-entry flag makes the overlap reachable: a consumer sets the flag, writes a `compute` Field on that Entry, and reads *this value is derived* as *I just turned derivation off*. Naming the door is not enough when the word is ambiguous. This is the same trap that ruled out `derivesValues` as a name for the flag.
 
-**2. The write resolver checks `compute` before `editable`.** The union's compute arm declares `editable?: never`, and the register door throws for `compute` beside `editable`. So a `compute` Field can never carry `editable: true`. **If decision 18 lands on its first answer** — *`entries.update()` refuses unless a Field declares `editable: true`* — then every `compute` Field is refused twice, once by each rule. Whichever rule the resolver checks second never fires. Check `editable` first and the consumer reads *declare `editable: true`*, which the register door then rejects. That is a closed loop with no way out. **One name is not enough on its own; the wrong rule must not answer first.**
+**2. The write resolver checks `compute` before `editable`.** The union's compute arm declares `editable?: never`, and the register door throws for `compute` beside `editable`. So a `compute` Field can never carry `editable: 'anywhere'`. Check `editable` first and the consumer reads *declare `editable: 'anywhere'`*, which the register door then rejects. That is a closed loop with no way out. **One name is not enough on its own; the wrong rule must not answer first.**
 
-**What this does not decide.** Decision 18 stays open. This ruling fixes the order of the checks, not the answer to what an absent `editable` means.
+Decision 18 closed on the enum. The order still holds: `compute` first, then `'never'` / `'api'` / `'anywhere'`.
 
 [0011](../0011-consumer-values-in-props/README.md) throws this error at **registration**. [0015](../0015-write-door/README.md) throws it at `entries.update()`. One name, two doors, two ADRs.
 
@@ -62,11 +63,11 @@ One rule joins the release gate — **a released reader refuses a file it did no
 - `toJSON` output does not depend on **when** it is called, because `authored` filters a fixed set.
 - The construction Rollup walks **once**, at the end of the constructor, after every plugin has declared.
 
-**The payback is that a Field arriving mid-life reproduces decision 6's open follow-up on a second axis.** Declaring a Field on a Dataset that already holds Entries makes every rolling-up parent owe a new aggregate. That is a whole-dataset Rollup pass, outside any user action, writing stored values that enter undo. Decision 6 already wrote what happens next: *"undoing that step restores the values while `rollUpKinds` still rolls them up, and the next commit that touches the subtree drops them again."* A declaration is a **config assignment**, and `ChangeSet` has no row shape for one — `added`, `removed` and `updated` each name a store entity. **Unlocking `fields` makes that problem two problems.** Keeping the lock leaves it at one.
+**The payback is that a Field arriving mid-life causes a whole-dataset Rollup.** Declaring a Field on a Dataset that already holds Entries makes every rolling-up parent owe a new aggregate. That is a pass outside any user action, writing stored values that enter undo. A declaration is a **config assignment**, and `ChangeSet` has no row shape for one — `added`, `removed` and `updated` each name a store entity. Decision 6 closed the sibling problem (a live `rollUpKinds` flip) as drop-and-recalculate; [0013](../0013-what-decides-derivation/README.md) then **deleted** `rollUpKinds` with 26. **Unlocking `fields` makes that class of problem two problems.** Keeping the lock leaves it at one.
 
 **A late install rebuilds, and the door already ships.** `Dataset.fromJSON(dataset.toJSON(), { fields, fieldTypes, aggregators, plugins })` — `src/api/dataset.ts:328`. **Say its price in the same sentence that offers it:** a new Dataset identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. It does not suit an *add a custom column* feature, where losing undo on a column add would surprise anyone. **That is the hole this ruling accepts**, recorded the way the dateless-row hole is.
 
-**Owed to `plans/02`, and not yet written.** `plans/02` rules that *every config key is live-reconfigurable*. `fields` and `plugins` are exceptions, and today the exception is undocumented — which is exactly how decision 11 came to argue from the opposite claim. Write both keys into `plans/02` as named exceptions, carrying the Rollup-and-undo reason above. **`plans/02` is a locked spec, so this edit needs the author.**
+**Written into `plans/02`.** *Reconfiguration is just assignment* names `fields` and `plugins` as the two exceptions, with the Rollup-and-undo reason above. The sentence there that cites a live `rollUpKinds` flip is stale (26 deleted the key); the [prose sweep](prose-sweep.md) rewrites it. The lock itself stands.
 
 ---
 
@@ -74,7 +75,7 @@ One rule joins the release gate — **a released reader refuses a file it did no
 
 Was: *one schema bump, or one per group?* It recommended **per group**, so that each Document change lands in a commit a reader can check against a running build.
 
-**The split delivers that outcome without a decision.** Each ADR spends its own number in landing order — [0012](../0012-optional-dates/README.md) writes **5**, [0011](../0011-consumer-values-in-props/README.md) writes **6**, [0013](../0013-what-decides-derivation/README.md) writes **7**. Decision 3 already prices a pre-release number at zero.
+**The split delivers that outcome without a decision.** Each ADR spends its own number in landing order — [the table above](#3--the-schema-restarts-release-gate). Decision 3 already prices a pre-release number at zero.
 
 **Its one constraint is now structural rather than remembered.** The old warning was *bump per group only if the storage rename carries the nested ingest too*, or the intermediate commit is green and silently lossy. That constraint lives inside [0011](../0011-consumer-values-in-props/README.md), which carries the public shape and the nested ingest in one ADR, because splitting them was never on the table.
 

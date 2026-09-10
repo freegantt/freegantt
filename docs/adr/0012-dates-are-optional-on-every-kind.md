@@ -40,7 +40,7 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 - `range: 'fitDataset'` over a dataset where nothing is dated shows the range an empty dataset already shows.
 - An S7 link naming a dateless endpoint raises a diagnostic and draws nothing.
 
-`FieldContext.durationOf` becomes `Duration | undefined`, and a dateless row's `duration` cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard `durationOf` first. The full call-site list is in [ADR 0012's work](../../plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
+The duration **compute Field** returns `Duration | undefined` on a dateless row, and the cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard the calculation first. [ADR 0014](0014-the-plugin-author-surface.md) decision 13 deletes `FieldContext.durationOf` — duration is that compute Field, not a fourth door. The full call-site list is in [ADR 0012's work](../../plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
 
 **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. A milestone is one instant, and that is an authored shape.
 
@@ -55,6 +55,7 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 - **The `referenceDate` fill is deleted.** It is written down under D-S2-10 **and** D-S2-22. Name both halves separately or a reader retires the wrong sentence.
 - **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. A milestone is one instant, and that is an authored shape.
 - **The Document gains optional `start` and `end`**, and writes schema **5**. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
+- **A parent whose every child is dateless has no dates.** Do not keep a stale rolled envelope. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) owns the Rollup pass; this biconditional is what that pass must restore. Combined spike Improvement D.
 
 ### Required follow-up
 

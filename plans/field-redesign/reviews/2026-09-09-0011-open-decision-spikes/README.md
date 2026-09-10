@@ -1,5 +1,7 @@
 # ADR 0011 spikes — open write-door decisions
 
+**Ruled since this page was written.** Decisions **1**, **11** and **22** all closed on 2026-09-10. Read [0011's closed decisions](../../0011-consumer-values-in-props/README.md#closed-decisions) for what the author ruled. This page is the evidence, never the answer.
+
 **Next ADR in landing order.** [0011](../../0011-consumer-values-in-props/README.md) still has three open decisions. They are one family: what a consumer's write looks like. This review probes the recommendations before the build.
 
 **Score.** A clean, friendly public API. An option that is smaller inside and larger outside lost.

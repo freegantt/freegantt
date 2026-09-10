@@ -9,9 +9,9 @@ flowchart LR
   D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>0 open</i>"]
   D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>0 open</i>"]
   P --> R
-  P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>1 open</i>"]
-  P -.->|"not blocking<br/>the rename"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>1 open</i>"]
-  R -.->|"shrinks 18's<br/>cost table"| W
+  P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>0 open</i>"]
+  P -.->|"not blocking<br/>the rename"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>0 open</i>"]
+  R -.->|"derived arm first"| W
 ```
 
 | ADR | The one question it answers | Open | Blocks |
@@ -19,10 +19,10 @@ flowchart LR
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
 | [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | **none** | 0013 |
 | [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | **none** | — |
-| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 13 | **nothing on the rename.** 16 closed 2026-09-10. 13 waits on 0012. Writes schema **8** |
-| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18 (held) | **nothing on the rename.** Prefers 0013 first (shrinks 18) |
+| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | **none** | nothing on the rename |
+| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | **none** | nothing on the rename |
 
-**Fifteen open decisions became three on the ADR that does the simplifying.** Decision 25 dissolved — each ADR bumps its own schema number: 0012 writes **5**, 0011 writes **6**, 0013 writes **7**.
+**Fifteen open decisions became none.** The [prose sweep](shared/prose-sweep.md) landed 2026-09-10. The locked-spec gate returned 0. ADRs stay `proposed` until each build.
 
 ## Shared
 
@@ -31,7 +31,8 @@ flowchart LR
 | [`shared/refuted.md`](shared/refuted.md) | You are about to re-derive something. **Check here first** |
 | [`shared/evidence.md`](shared/evidence.md) | You want the product survey the decisions cite |
 | [`shared/rulings.md`](shared/rulings.md) | You hit the schema counter, the registration lock, or `ComputedFieldCannotBeWrittenError` |
-| [`shared/prose-sweep.md`](shared/prose-sweep.md) | The last ADR has landed and the locked specs still state the old rule — **and the spike gate, run at every acceptance** |
+| [`shared/prose-sweep.md`](shared/prose-sweep.md) | The F table is the changelog of the 2026-09-10 sweep. The spike gate runs at every ADR acceptance |
+| [`reviews/`](reviews/) | You want a spike's verdict, or you are about to run a new wave ([`SPIKE-PLAYBOOK.md`](reviews/SPIKE-PLAYBOOK.md)) |
 
 ## The split rules
 
@@ -40,7 +41,7 @@ flowchart LR
 3. **A recommendation is not a ruling.**
 4. **State a fact once.** A fact belongs to the ADR whose question it answers — the survey to [`shared/evidence.md`](shared/evidence.md), a refused approach to [`shared/refuted.md`](shared/refuted.md). Elsewhere, link to it.
 5. **The prose sweep runs once, at the end**, not per ADR. See [`shared/prose-sweep.md`](shared/prose-sweep.md).
-6. **One schema counter, not five.** The ADRs spend numbers in landing order: [0012](0012-optional-dates/README.md) writes **5**, [0011](0011-consumer-values-in-props/README.md) writes **6**, [0013](0013-what-decides-derivation/README.md) writes **7**. [0014](0014-plugin-author-surface/README.md) writes **8** — decision 12 closed on a plugin prefix. See [`shared/rulings.md`](shared/rulings.md).
+6. **One schema counter, not five.** The ADRs spend numbers in landing order. **The table lives in [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate), and only there.** An ADR states the one number it spends, and links.
 
 ## Where the decisions could walk over each other, and why they do not
 
@@ -71,13 +72,10 @@ Three ADRs would otherwise write the same function. The code says they need not.
 
 ## Independent fixes — land these on `main` first
 
-Neither needs any decision.
+One fix needs no decision: **`mergeColumn` spreads `sizingPairOf(…)` alone**, written up in [0011](0011-consumer-values-in-props/README.md).
 
-1. **`mergeColumn` spreads `sizingPairOf(…)` alone.** Written — see [0011](0011-consumer-values-in-props/README.md). **Not on `main` yet.**
-2. ~~**Unify the proposed-Field predicate.**~~ **Withdrawn 2026-09-10 — it was a misread of the code.** `editProposesField` has one call site, and the `body`/`merged` split is deliberate and documented (`rollup.ts:23-26`, D-S2-22). There is nothing to unify. What is actually left is **decision 5's warning**, which does not exist in `src/` — the drop already ships in silence. That is [0013](0013-what-decides-derivation/README.md)'s build, not an independent fix. Full correction in [`shared/refuted.md`](shared/refuted.md) item 8.
-
-**Both commits sit off `main`, and this instruction is unmet.** `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) are on `adr-0011-field-redesign` and on every spike branch. Neither is an ancestor of `main`. They reach `main` through a PR, never a direct push.
+**Two commits sit off `main`, and this instruction is unmet.** `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) are on `adr-0011-field-redesign` and on every spike branch. Neither is an ancestor of `main`. They reach `main` through a PR, never a direct push.
 
 ## Nothing here is implemented
 
-`pnpm verify:full` runs green before each PR merges, and its **last line** is the answer. Review `harness/main.ts` and `harness/planner.ts` on every commit, changed or not.
+Every ADR in this folder is `proposed`, and no line of it is in `src/`.

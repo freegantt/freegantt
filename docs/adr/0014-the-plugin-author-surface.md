@@ -1,15 +1,15 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: plugin Field values share `props`; plugin keys carry a required prefix (9 and 12, 2026-09-10). Two plugins' extras merge per key; a contested Field is dropped and warned (16, 2026-09-10). Two earlier numbers closed as downstream or out of scope — 7 and 14.
-open: 13. The working material is in `plans/field-redesign/0014-plugin-author-surface/`.
+decided: plugin Field values share `props`; plugin keys carry a required prefix (9 and 12, 2026-09-10). Two plugins' extras merge per key; a contested Field is dropped and warned (16, 2026-09-10). The by-key door is `read`; duration is a compute Field (13, 2026-09-10). Two earlier numbers closed as downstream or out of scope — 7 and 14.
+open: none. The working material is in `plans/field-redesign/0014-plugin-author-surface/`.
 ---
 
 # The plugin-author surface
 
-**This ADR blocks nothing on the storage rename**, and the storage rename does not wait on it. One later answer still serializes with work that already shipped:
+**This ADR blocks nothing on the storage rename**, and the storage rename does not wait on it.
 
 - **Decision 16 is closed.** [0011](0011-consumer-values-live-in-props.md) decision 22 branded `ProposedEdit`. The runtime owns composition, merging, and branding. Non-overlapping keys combine. A contested Field is dropped and warned — the same posture as [0013](0013-what-decides-that-a-row-derives-its-values.md) decision 5.
-- **Decision 13 waits on [0012](0012-dates-are-optional-on-every-kind.md).** 0012 changes `durationOf` to `Duration | undefined`. Do not merge or rename that door until the signature has landed.
+- **Decision 13 is closed.** The by-key door is `read` on both surfaces. `FieldContext.durationOf` is deleted. Duration is a compute Field. The rename does not wait on [0012](0012-dates-are-optional-on-every-kind.md).
 
 The working material is [`plans/field-redesign/0014-plugin-author-surface/`](../../plans/field-redesign/0014-plugin-author-surface/README.md).
 
@@ -23,15 +23,13 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 ## Open decisions
 
-One, weighed in the working folder. **9 and 12 closed together on 2026-09-10.** **16 closed on 2026-09-10.** **13 waits on [0012](0012-dates-are-optional-on-every-kind.md).** `durationOf` becomes `Duration | undefined` in 0012 — do not rename or merge that door until the signature has landed.
+**None.** **9 and 12 closed together on 2026-09-10.** **16 closed on 2026-09-10.** **13 closed on 2026-09-10.**
 
-| # | Question |
-|---|---|
-| **13** | `read` and `fieldValue` are one job under two names — and there are four doors, not two |
-
-## Closed here — 9, 12, and 16
+## Closed here — 9, 12, 13, and 16
 
 Plugin Field values share `props`. Plugin keys carry a required prefix (`scheduling:progress`). Core and consumer keys stay bare. The write door is `PropsEdit<TProps & PluginEntryProps>` (flat at `update()`, decision 11). **A for one storage home, not for the typed dot.** This ADR writes **schema 8**.
+
+**13.** `dataset.entries.read(id, key)` and `ctx.read(entry, key)` are one job under one name. `entry.props.k` is storage. `fieldValue` is renamed to `read`. `durationOf` is deleted. Duration is the shipped compute Field; you read it through `read`. One unit — millisecond. [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) closes with the door.
 
 **16.** The runtime owns composition, merging, and branding. The author returns extras or nothing. Non-overlapping keys on one Entry combine. The same Field on the same Entry is a collision: neither plugin's value is applied, one warning, same posture as [0013](0013-what-decides-that-a-row-derives-its-values.md) decision 5. Per Entry, not per Field globally.
 
@@ -54,4 +52,5 @@ Decisions 9 and 12 closed on a required plugin prefix. The Document written by A
 | Issue | What this ADR needs from it |
 |---|---|
 | [#267](https://github.com/Pawel-IT/FreeGantt/issues/267) | A `compute` Field owns no `props` key, so it stays unreachable at paint. A Field-aware renderer read is still owed |
-| [#214](https://github.com/Pawel-IT/FreeGantt/issues/214) | `FieldContext` cannot reach a second Entry, so a `compute` Field cannot depend on the tree. Decision 13's read doors inherit that limit |
+| [#214](https://github.com/Pawel-IT/FreeGantt/issues/214) | `FieldContext` cannot reach a second Entry, so a `compute` Field cannot depend on the tree. Decision 13's `read` doors inherit that limit |
+| [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) | **Closes here.** One duration Field, one unit. `durationOf` is deleted |

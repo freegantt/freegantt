@@ -13,7 +13,7 @@ The API is a product surface, designed once and defended. Everything here is wha
 3. **Every mutating interaction has a cancelable `before*` event.** Consumers can veto a drop, substitute their own editor, validate a link — before commit, not after.
 4. **Honest surface.** Nothing in the published types throws "not implemented" (invariant I11). Declared events fire; declared methods work.
 5. **Predictable naming.** One vocabulary, one bus, greppable pairs (`beforeEntryMove` / `entryMove`). No synonyms, no two names for one concept.
-6. **Typed extensibility.** `meta` generics flow end-to-end: `new Dataset<{ team: string }>` makes `entry.meta.team` typed in renderers, events, and queries. Declared Field writes take a second type parameter: `new Dataset<{ team: string }, { cost: number }>` types `update({ cost })`. TypeScript does not infer that map from the `fields` array once TMeta is written.
+6. **Typed extensibility.** One generic flows end-to-end: `new Dataset<{ team: string; cost: number }>` makes `entry.props.team` typed in renderers, events, and queries, and types `update({ cost })`. Declared keys live on `TProps`. Core keys stay on the Entry.
 
 ---
 
@@ -23,17 +23,15 @@ The API is a product surface, designed once and defended. Everything here is wha
 import { Dataset, Gantt } from 'freegantt';
 
 // ── Data: headless, works in Node ───────────────────────────────
-const dataset = new Dataset<{ team: string }, { cost: number }>({
+const dataset = new Dataset<{ team: string; cost: number }>({
   timeZone: 'America/Chicago',            // optional (#129); omit it to author in the viewer's own zone
   dateOnlyEnd: 'inclusive',               // default; see §2.1
-  rollUpKinds: ['group'],                 // default; `'none'` keeps caller-assigned parent values
   history: { capacity: 100 },             // default; undo/redo stack depth — see "Undo and redo" below
-  hierarchy: { autoGroup: true },         // default; first child promotes parent to kind 'group'; promote only
   entries: [
-    { id: 'p1', name: 'Sitework', kind: 'group' },     // span derives from children (default policy)
+    { id: 'p1', name: 'Sitework' },        // dateless parent; derives when it has children (ADR 0013)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: '2026-09-01', end: '2026-09-11' },
     { id: 't2', parentId: 'p1', name: 'Framing',    start: '2026-09-12', end: '2026-09-30',
-      meta: { team: 'A' } },
+      props: { team: 'A' } },
   ],
   dependencies: [
     { id: 'd1', fromId: 't1', toId: 't2', type: 'FS', lag: { value: 0, unit: 'd' } },
@@ -88,7 +86,7 @@ const gantt = new Gantt({
 });
 ```
 
-`gantt.dataset` reads back the Dataset instance the constructor took (#226). It carries the same `TMeta`/`TFields`, so `gantt.dataset.on('change', …)` and `gantt.dataset.canUndo` type correctly. A helper that needs both objects takes the Gantt alone and reads `dataset` off it — `mountGanttToolbar({ gantt, container })`. This beats taking the pair and trusting the caller to keep them matched. The getter is read-only: a Gantt binds one Dataset at construction and never rebinds it. A consumer who wants a different Dataset builds a second Gantt.
+`gantt.dataset` reads back the Dataset instance the constructor took (#226). It carries the same `TProps`, so `gantt.dataset.on('change', …)` and `gantt.dataset.canUndo` type correctly. A helper that needs both objects takes the Gantt alone and reads `dataset` off it — `mountGanttToolbar({ gantt, container })`. This beats taking the pair and trusting the caller to keep them matched. The getter is read-only: a Gantt binds one Dataset at construction and never rebinds it. A consumer who wants a different Dataset builds a second Gantt.
 
 ### Programmatic mutation — always transactional
 
@@ -118,10 +116,10 @@ dataset.canUndo; dataset.canRedo;
   every mutating call a consumer writes. `dataset.replay(changeSet)` is the one exception: it
   applies undo/redo rows with no validation, by design (D-S2-14, §2), so a duplicate id stays
   representable through that one door.
-  `segments: []` throws `EmptySegmentsError` (`code: 'empty-segments'`): every stored Entry keeps at
-  least one Segment, and an update has no whole-span input to mint a replacement from the way
+  `segments: []` throws `EmptySegmentsError` (`code: 'empty-segments'`): empty is illegal;
+  absent is dateless (ADR 0012). An update has no whole-span input to mint a replacement from the way
   `entries.add({ segments: [] })` does — so it refuses rather than silently dropping the Segment ids
-  already there (#212 fix-plan review, finding S2). A `start`/`end` written in the same edit as
+  already there (#212 fix-plan review, finding S2). Removing the last Segment un-dates the Entry. A `start`/`end` written in the same edit as
   `segments` must agree with that write's own envelope — `envelopeOfSegments` over the Segments named
   — or the edit throws `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`): the caller cannot
   propose one span through `start`/`end` and a different one through `segments` and have the library
@@ -154,7 +152,7 @@ Single mutations outside an explicit transaction are auto-wrapped in one — con
 
 `dataset.plugins` is **read-only**, unlike `gantt.plugins`. A Dataset plugin may declare a Field, and a Field must exist before the first Rollup walks (D-S5-4) — adding one later would mean re-rolling the whole dataset under a Field the Document never had. So a Dataset installs its plugins once, in its constructor, and a consumer who wants a different plugin set builds a Dataset with it (`Dataset.fromJSON` takes the same `plugins` for that reason: a Document stores a plugin's rows, never its behaviour). A Gantt has no such moment — its plugins register paint and gesture seams that are re-resolved on the next frame — so `gantt.plugins = [...]` stays assignable. Uninstalling a Dataset plugin is `dataset.destroy()`, which releases every installed plugin in reverse setup order.
 
-`autoGroup` is data behavior, so it lives on `Dataset` (not `Gantt`): the promotion runs inside the same transaction as the edit that caused it — one changeset, one undo step. It only promotes; turning a group back into an entry is always an explicit edit (`01` §2.5).
+A child arriving is the derivation door (`01` §2.5). An Entry that gains its first child starts deriving in the same transaction. Losing the last child leaves a normal Entry with no dates. There is no `autoGroup` key and no promotion of a stored classification.
 
 ### Undo and redo
 
@@ -178,7 +176,7 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 
 **Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
 
-**The reason is the Rollup, and it reaches undo.** A Field arriving mid-life makes every rolling-up parent owe a new aggregate at once. That is a whole-dataset Rollup pass, outside any user action, writing stored values that enter undo — and a declaration is a **config assignment**, which `ChangeSet` has no row shape for. Undo would then restore values the still-declared Field re-derives on the next commit. This is the same open problem a `rollUpKinds` flip has (ADR 0011, decision 6), and a live `fields` would make it two problems instead of one.
+**The reason is the Rollup, and it reaches undo.** A Field arriving mid-life makes every rolling-up parent owe a new aggregate at once. That is a whole-dataset Rollup pass, outside any user action, writing stored values that enter undo — and a declaration is a **config assignment**, which `ChangeSet` has no row shape for. Undo would then restore values the still-declared Field re-derives on the next commit. `rollUpKinds` is deleted (ADR 0013), so that flip is gone. A live `fields` would still be this problem.
 
 **A late install rebuilds the `Dataset`:** `Dataset.fromJSON(dataset.toJSON(), { fields, fieldTypes, aggregators, plugins })`. **State the price whenever this path is offered** — a new `Dataset` identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. It does not suit an *add a column the consumer never declared* feature, and that gap is a known hole rather than a solved case.
 
@@ -187,7 +185,7 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 **A config value is a value, not a mutable object (#187).** Assignment compares against what the property already holds, by identity. So a mutation of the object you already handed over, followed by an assignment of that same object, changes nothing and paints nothing. Assign a copy to ask for the repaint:
 
 ```ts
-gantt.barRenderer = { ...gantt.barRenderer, milestone: paintMilestone };   // repaints
+gantt.barRenderer = { ...gantt.barRenderer, parent: paintSummary };   // repaints
 gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };                 // re-resolves rows
 ```
 
@@ -197,7 +195,7 @@ One rule covers every config key, object-valued ones included. A per-key exempti
 
 ```ts
 gantt.setCapabilityRule('resize', false);   // this one gesture; every other rule stands
-gantt.clearCapabilityRule('resize');        // the per-kind table answers that gesture again
+gantt.clearCapabilityRule('resize');        // the structure table answers that gesture again
 gantt.hideGridColumn('cost');               // D-S5-34 — the widths and the order stay as the user set them
 gantt.installPlugin(tooltips());            // D-S5-36 — the installed set is not restated
 ```
@@ -219,7 +217,7 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
-`start` and `end` are required on every `EntryInput` except one case: an entry of a `rollUpKinds` kind (`01` §2.5, default `['group']`) may omit both — `{ id: 'p1', name: 'Sitework', kind: 'group' }` above is exactly this — and the store writes a zero-length span at the dataset's reference date until the Rollup gives it a real one (`01` §2.6). `rollUpKinds: 'none'` does not grant that omit: every entry must bring `start` and `end`, because the parent keeps the caller's values. Omitting one field but not the other, on any kind, is `InvalidInstantError`: the field is required and `undefined` names no instant.
+`start` and `end` are optional on every Entry (ADR 0012). An Entry has dates if and only if it holds at least one Segment. `{ id: 'p1', name: 'Sitework' }` above is a dateless parent; the store does not mint a fake span from the dataset's reference date. `{ start: undefined, end: undefined }` un-dates. Omitting one field but not the other is `InvalidInstantError`: one date without the other names no span. Empty `segments: []` is still `EmptySegmentsError` — absent is dateless; empty is illegal.
 
 ---
 
@@ -344,10 +342,10 @@ S5.8 Parts (D-S5-19, D-S5-47): `.fg-cell-editor`, `.fg-cell-editor-control`, `.f
 
 A cell renderer reads its cell two ways. `value` is the string the library painted, through the
 Field's own `formatValue`. `fieldValue` is the same Field value before formatting — what
-`dataset.entries.fieldValue(id, column.field)` answers, for an `entry`-, `meta`- or `compute`-sourced
-Field alike. A renderer that paints text reads `value`; one that branches on magnitude reads
+`dataset.entries.read(id, column.field)` answers, for a core, `props`, plugin, or `compute` Field
+alike. `fieldValue` on this context is the payload, not the door. A renderer that paints text reads `value`; one that branches on magnitude reads
 `fieldValue`, and never parses the library's own output back with a regex. Reaching into
-`entry.meta` is not the alternative: a `compute`-sourced Field has no stored home (ADR 0005).
+`entry.props` is not the alternative: a `compute` Field has no stored home.
 
 Renderers return **plain serializable element descriptions** (tag/class/style/text/children), applied by the engine's reconciler — never live DOM nodes (nodes are recycled by virtualization) and never framework components in core (D5). Text by default; HTML by explicit opt-in only. `class` is `Readonly<Record<string, boolean>>` everywhere on `ElementDescription`, including its `children` (S5.4, D-S5-10) — this sample used a bare string until issue #137 F15 caught that it did not typecheck against its own referenced type.
 
@@ -356,23 +354,23 @@ barRenderer: ({ entry, item }) => ({
   class: { 'my-bar': true, 'my-bar--late': isLate(entry) },
   children: [
     { tag: 'span', class: { 'my-bar__label': true }, text: entry.name },
-    { tag: 'span', class: { 'my-bar__team': true },  text: entry.meta.team },
+    { tag: 'span', class: { 'my-bar__team': true },  text: entry.props.team },
   ],
 })
 ```
 
 ### 4.1 Per-entry looks and actions
 
-Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (`kind`, fields, typed `meta`):
+Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (structure, fields, typed `props`):
 
-**Look.** Every bar element carries `data-kind`, so per-kind styling is level-2 CSS with zero JS (`.fg-bar[data-kind="milestone"] { ... }`). A bar whose painted span was widened to `--fg-bar-min-width` or a milestone's own diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-kind` to style a floored span differently from a floored milestone (`.fg-bar[data-kind="span"][data-span="minimum"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a per-kind map so the common case needs no branching — consumer-defined kinds slot in by name:
+**Look.** Every bar element carries `data-kind`, so look styling is level-2 CSS with zero JS (`.fg-bar[data-kind="parent"] { ... }`). That attribute is the look a producer claimed — parent, leaf, or a plugin look — not a stored Entry classification (ADR 0013). A bar whose painted span was widened to `--fg-bar-min-width` or a diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-kind` to style a floored span differently from a floored diamond (`.fg-bar[data-kind="leaf"][data-span="minimum"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a map keyed on look so the common case needs no branching — a plugin look slots in by the id the plugin stores:
 
 ```ts
 barRenderer: {
-  milestone: ({ entry }) => diamond(entry),
-  group:     ({ entry }) => summaryRail(entry),
-  buffer:    ({ entry }) => hatched(entry),   // consumer-defined kind
-  '*':       ({ entry }) => defaultBar(entry),
+  parent: ({ entry }) => summaryRail(entry),
+  leaf:   ({ entry }) => defaultBar(entry),
+  buffer: ({ entry }) => hatched(entry),   // plugin-owned look
+  '*':    ({ entry }) => defaultBar(entry),
 }
 ```
 
@@ -404,14 +402,14 @@ Selection and belong on any consumer's cheat sheet:
 
 ### 4.2 Fields and grid columns
 
-One sentence separates them: **a field is what a value *is*; a grid column is where a Gantt *shows* it.** Fields live on the `Dataset`, because the rollup writes stored, undoable, serialized values and runs at construction — before any Gantt exists. Grid columns live on the `Gantt`, because which fields this view shows is a view question (`01` §2.6).
+One sentence separates them: **a field is what a value *is*; a grid column is where a Gantt *shows* it.** Fields live on the `Dataset`, because the rollup writes stored, undoable values and runs at construction — before any Gantt exists. A rolling-up parent's derived keys never reach the Document (ADR 0013). Grid columns live on the `Gantt`, because which fields this view shows is a view question (`01` §2.6).
 
 Core fields and consumer fields are the same declaration, so `'start'` and `'cost'` take one code path — one renderer, one editor, one comparison rule, one rollup.
 
 Four levels, each an addition to the one under it. Consumers stop at the shallowest that works:
 
 ```ts
-// 1 — a field with no aggregate. One key. Lives in meta under that key.
+// 1 — a field with no aggregate. One key. Lives in props under that key.
 { key: 'owner' }
 
 // 2 — a shipped aggregator, by name, still no Field type.
@@ -429,7 +427,7 @@ fieldTypes: { risk: { rollUp: 'riskWeighted', formatValue: asRisk } }
 // One-off without a type: { key: 'risk', rollUp: 'riskWeighted' } with the same `aggregators` entry.
 ```
 
-Levels 1–3 are plain data on the Field declaration, so they serialize, they diff in review, and a document can carry them. Level 4 adds a function in `DatasetOptions.aggregators` (and the same map in `fromJSON`'s second argument on reload). `rollUp` on the Field or Field type is always an **Aggregator name** — shipped (`'sum'`) or yours (`'riskWeighted'`). It never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. The Aggregator signature is `01` §2.6 (`children`, `parent`, `ctx.read(fieldKey)`); return `undefined` to leave the parent's stored value alone. Write `source: { from: 'meta', key: 'budget' }` only when the Document key is not the Field key. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
+Levels 1–3 are plain data on the Field declaration, so they serialize, they diff in review, and a document can carry them. Level 4 adds a function in `DatasetOptions.aggregators` (and the same map in `fromJSON`'s second argument on reload). `rollUp` on the Field or Field type is always an **Aggregator name** — shipped (`'sum'`) or yours (`'riskWeighted'`). It never takes a bare function: a name can be refused when it is not registered, and a function cannot travel with a document. The Aggregator signature is `01` §2.6 (`children`, `parent`, `ctx.read(entry, fieldKey)`); return `undefined` to leave the parent's stored value alone — except on a rolling-up parent, where it means no value (ADR 0013). The Field key is the address. `formatValue` is display: money stays a number in the store; the cell shows currency text. Sort reads the stored value (`01` §2.6, S4.9).
 
 A custom Aggregator that only needs the field it is rolling up skips the manual child loop: `ctx.numericValues(children)` reads `ctx.field` off every child, in order, dropping holes and non-numeric values the same way shipped `sum`/`min`/`max` do.
 
@@ -456,27 +454,27 @@ The object form overrides this Gantt's presentation and never the data half — 
 **A value with no stored home** is a computed field — core's own `duration` is one:
 
 ```ts
-{ key: 'duration', source: { from: 'compute', read: (e, ctx) => ctx.durationOf(e) } }
+{ key: 'duration', compute: (e, ctx) => /* Duration | undefined from start/end through time/ */ }
 ```
 
-Source decides what happens to a parent's aggregate: a field sourced from `entry` or `meta` has somewhere to put it, so it is stored, undoable and serialized; a computed field's aggregate is computed on read and never reaches the document. A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field.
+A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and never reaches the document. A rolling-up parent's derived keys are omitted from the Document (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. Aggregators read duration with `ctx.read(entry, 'duration')`. There is no `durationOf`.
 
 **Editing crosses core and consumer fields freely** — one call, one transaction, one undo step:
 
 ```ts
 dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });
-dataset.entries.fieldValue('t1', 'cost');       // 12_000 — meta-sourced
-dataset.entries.fieldValue('t1', 'start');      // entry-sourced
-dataset.entries.fieldValue('t1', 'duration');   // compute-sourced; no Gantt required
-dataset.field('cost');                         // resolved Field | undefined
-dataset.fields.all;                            // every declared Field, core included
+dataset.entries.read('t1', 'cost');       // 12_000 — props
+dataset.entries.read('t1', 'start');      // core key
+dataset.entries.read('t1', 'duration');   // compute; no Gantt required
+dataset.field('cost');                   // resolved Field | undefined
+dataset.fields.all;                      // every declared Field, core included
 ```
 
-An unregistered key is an `UnknownFieldError`, never a silent write. A missing id on `fieldValue` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.meta`. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied, `source` filled). They are not the raw `DatasetOptions.fields` array.
+An unregistered key is an `UnknownFieldError`, never a silent write. Nested `props:` at `update()` is refused. A missing id on `read` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.props` for a Field read. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied). They are not the raw `DatasetOptions.fields` array. `PropsEdit<TProps>` and `EntryEdit<TProps>` are public.
 
-**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256): `{ key: 'cost', editable: true }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too — one answer gates every writer (I14), so a consumer states it once. A Field states which values are writable at all; `interactions.edit` states which of them are writable on *which entry* (§4.1). Default is `false`. Core's own `name`, `start` and `end` default to `true`, matching the resize a bar already allowed before this Field existed; overriding a core field's `editable` alone is legal (`{ key: 'end', editable: false }` closes it without redeclaring `end`'s source or rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name).
+**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256, ADR 0015): `{ key: 'cost', editable: 'anywhere' }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too. The Field states how far a value may change (`'never' | 'api' | 'anywhere'`). Gestures ask `'anywhere'`. `entries.update()` refuses only `'never'`. Default is `'api'`. `true`/`false` are input aliases for `'anywhere'`/`'never'`. `interactions.edit` states which of them are writable on *which entry* (§4.1). Core's own `name`, `start` and `end` declare `'anywhere'`, matching the resize a bar already allowed before this Field existed; `{ key: 'end', editable: false }` still constructs and encodes as `"editable": "never"` without redeclaring `end`'s rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name. Check `compute` before `editable`.
 
-**Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself.
+**Default `gridColumns` is `['name']`.** Naming a Field does not add it to the grid by itself. A dateless row cannot be dated through that default: ship `start` in the default columns, or a timeline date gesture, with the first user-facing cut (ADR 0012). Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`, ADR 0014).
 
 **Hiding one column is one call, not a restated list** (S5.7, D-S5-34, #184):
 
@@ -729,23 +727,22 @@ const p2  = Dataset.fromJSON(doc, { aggregators, fieldTypes, fields });
 
 ```ts
 export interface DatasetDocument {
-  schema: 4;
+  schema: 9;
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  rollUpKinds: readonly EntryKind[];
   fields?: readonly SerializedField[];
   plugins?: PluginDocument;
   entries: readonly EntryDocument[];
 }
 ```
 
-This build writes `schema: 4` (`rollUpKinds`, `fields`, a plugin's own rows at `schema: 3` and above, and an Entry's `segments` at `schema: 4` and above — #212). `schema: 1`, `2` and `3` still read (`derivedSpanKinds` lands on `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each Entry's whole `[start, end)`). `progress` is not an entry key (ADR 0008). Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. Document `rollUpKinds: []` keeps stored parents and does not maintain them.
+This build writes `schema: 9` — optional dates (5), `props` and no `source` on `SerializedField` (6), omit a rolling-up parent's derived keys and drop `rollUpKinds`/`kind` (7), plugin-key prefix (8), `editable` enum (9). `schema: 1` through `8` still read (`derivedSpanKinds` lands then drops with `rollUpKinds`; Fields come from `options.fields` only at `schema: 1`; an older Document with no `segments` key mints one Segment over each dated Entry's whole `[start, end)`; an older consumer bag becomes `props`; a plugin-declared key gains its prefix). `progress` is not a core entry key (ADR 0008); a scheduling plugin stores it as `scheduling:progress`. Omit `aggregators` and a Field that names an Aggregator throws `UnknownAggregatorError`. A Document is this library's save format, not an interchange format.
 
 **`plugins` is the plugin half of the Document (S5.10, D-S5-24), and it holds rows, never behaviour.** Each key is a plugin id, and its value is that plugin's own rows. The key arrived at `schema: 3`, and `toJSON` omits it when no plugin holds a row. A Dataset carries the rows of a plugin it never installed, unchanged, so an application that reads a Document without the plugin still writes those rows back — they ride as passenger data. `schema: 1` and `2` have no such key, so a `plugins` key on a Document labelled `schema: 1` is dropped, not read.
 
-- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `meta` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped (ADR 0008).
-- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `rollUpKinds`, `fields`, `plugins`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
-- `meta` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `meta` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field.
+- The JSON shape is **public API**: documented, versioned by an integer `schema` field, semver-governed. The reader is a `readers: Record<number, Reader>` map — a second schema is a map addition, not a rewrite. `fromJSON` migrates older schemas forward when they exist; it never silently drops fields **of a schema it reads**. Keys the reader does not know are dropped: **anything of yours goes in `props` and survives byte for byte; anything at top level belongs to the schema.** `progress` on an old entry row is an unknown key and is dropped unless a scheduling plugin declared `scheduling:progress` (ADR 0008, ADR 0014).
+- Key order is a contract (`schema`, `timeZone`, `dateOnlyEnd`, `fields`, `plugins`, `entries`). Optional keys are omitted when absent, never written as `null`. Entries follow store insertion order. Instants serialize as `Z`-suffixed ISO-8601; brands exist only in TS types and never leak into JSON. `fromJSON` reads those instants as absolute, so the dataset zone never re-enters the reading.
+- `props` round-trips opaquely — **unless you declare a key as a field** (`01` §2.6), which makes that key addressable for editing, comparison and rollup while everything else in `props` keeps the guarantee. The value is carried by reference into the document and back out, never walked field by field. An undeclared key is carried; `update()` never names one. Plugin-declared keys carry a prefix.
 - **Changesets are the incremental counterpart**: `dataset.on('change')` already carries `{from, to}` per field, which is what discharges `02`'s promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 
 ---
@@ -754,7 +751,7 @@ This build writes `schema: 4` (`rollUpKinds`, `fields`, a plugin's own rows at `
 
 - **Dev-mode invariant warnings**: dependency cycle detected (with member ids), config set on destroyed instance, non-deterministic item identity, renderer returned a live node, and (S1.9) `GanttOptions.scale` supplied alongside any of `preset`/`range`/`zoom` — "FreeGantt: GanttOptions.preset/range/zoom are ignored when 'scale' is also supplied. The shared TimeScaleModel already carries its own intent — set preset/range/zoom on it directly." The shared `scale` always wins; the constructor keys are never merged into it (D-S1.9-9).
 - **Stable test hooks**: `data-testid` on every part so consumers can write E2E tests against the Gantt without brittle selectors. Shipped at S1.10 (D-S1.10-5/§3.5, U6): `[data-testid="fg-row"]` (with `data-row-id`) and `[data-testid="fg-bar"]` (alongside the existing `data-item-id`) — the selectors S1.11's e2e boxes select on.
-- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `entries.fieldValue`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3), for an id the Dataset has no entry for — its message names the call that failed. `SegmentNotFoundError` (`code: 'segment-not-found'`, ADR 0010, #212) is thrown by `entries.removeSegments(ids)` for an id that names no Segment on any Entry — the same before-anything-stages posture `EntryNotFoundError` takes for `entries.remove`. `RevealTargetNotFoundError` (`code: 'reveal-target-not-found'`, ADR 0010, issue #227) is thrown by `reveal(id)` for an id the Dataset reads as neither an Entry nor a Segment; `reveal` alone takes `EntryId | SegmentId`, and once neither reading resolves nothing says which one the caller meant, so this names both rather than reusing `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to match. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`, #212) is thrown by a Segment write that would make two Segments share one `SegmentId` — construction, `entries.add`, or `entries.update`; its message names which. `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`, #212) is thrown by `entries.update` two ways: naming `start`/`end` with no `segments` on an Entry that draws several (`'ambiguous'` — moving the envelope alone says nothing about which Segment moved), or naming both in one edit with disagreeing spans (`'conflicting'` — the #212 fix-plan review, finding S3). An installed `EditExtender`'s cascade owes `entries.update()` the same refusal, on both edges (D-S5-44, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): the commit path throws it for real, and the drag preview, which runs with nothing to catch a throw, drops the offending edit instead and paints no ghost for it that frame. `data/entry-reader.ts`'s `moveEntryTo(entry, start)` is the write a plugin author reaches for instead of the refused envelope-only one. This refusal is judged against `EditRequest.entryAfterEdits(id)` — the Entry as this transaction's own body edits leave it — not against `EditRequest.entries.get(id)`, which stays the pre-transaction snapshot (D-S5-45, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): a cascade that reasons from the stale snapshot can propose a write this same refusal then rejects, over Segments the body already replaced. `EmptySegmentsError` (`code: 'empty-segments'`, #212 fix-plan review, finding S2) is thrown by `entries.update(id, { segments: [] })` — every stored Entry keeps at least one Segment, and an update has no whole-span input to mint a replacement from. `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.fieldValue` given a key that names no field — the Field registry is the legal set. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `DuplicateFieldSourceError` (`code: 'duplicate-field-source'`, S4.1) is thrown when two Fields claim the same `meta` key. `InvalidFieldSourceError` (`code: 'invalid-field-source'`, #196) is thrown when a `Field.source` names no known source — `source: 'meta'` where `{ from: 'meta' }` was meant. TypeScript refuses that shape, so this is for a JS caller; `ctx.fields.register` is public surface, and a library fault must be a `FreeGanttError` even there. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
+- **Errors are typed and actionable**: `FreeGanttError` subclasses with codes, never bare strings; validation failures name the entity and field. `ContainerNotFoundError` (`code: 'container-not-found'`, S1.8) is thrown when a string `container` selector matches nothing. `UnknownPresetError` (`code: 'unknown-preset'`, S1.9) is thrown by `resolvePreset` for a `PresetRef` string outside the shipped set. `EntryNotFoundError` (`code: 'entry-not-found'`) is thrown by `entries.read`, and by `entries.update`/`entries.remove`/a bad `parentId` (S2.3), for an id the Dataset has no entry for — its message names the call that failed. `SegmentNotFoundError` (`code: 'segment-not-found'`, ADR 0010, #212) is thrown by `entries.removeSegments(ids)` for an id that names no Segment on any Entry — the same before-anything-stages posture `EntryNotFoundError` takes for `entries.remove`. `RevealTargetNotFoundError` (`code: 'reveal-target-not-found'`, ADR 0010, issue #227) is thrown by `reveal(id)` for an id the Dataset reads as neither an Entry nor a Segment; `reveal` alone takes `EntryId | SegmentId`, and once neither reading resolves nothing says which one the caller meant, so this names both rather than reusing `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to match. `DuplicateEntryIdError` (`code: 'duplicate-entry-id'`, S2.3) is thrown by `entries.add` given an id already in the store. `DuplicateSegmentIdError` (`code: 'duplicate-segment-id'`, #212) is thrown by a Segment write that would make two Segments share one `SegmentId` — construction, `entries.add`, or `entries.update`; its message names which. `SegmentsOutOfSyncError` (`code: 'segments-out-of-sync'`, #212) is thrown by `entries.update` two ways: naming `start`/`end` with no `segments` on an Entry that draws several (`'ambiguous'` — moving the envelope alone says nothing about which Segment moved), or naming both in one edit with disagreeing spans (`'conflicting'` — the #212 fix-plan review, finding S3). An installed `EditExtender`'s cascade owes `entries.update()` the same refusal, on both edges (D-S5-44, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): the commit path throws it for real, and the drag preview, which runs with nothing to catch a throw, drops the offending edit instead and paints no ghost for it that frame. `data/entry-reader.ts`'s `moveEntryTo(entry, start)` is the write a plugin author reaches for instead of the refused envelope-only one. This refusal is judged against `EditRequest.entryAfterEdits(id)` — the Entry as this transaction's own body edits leave it — not against `EditRequest.entries.get(id)`, which stays the pre-transaction snapshot (D-S5-45, `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`): a cascade that reasons from the stale snapshot can propose a write this same refusal then rejects, over Segments the body already replaced. `EmptySegmentsError` (`code: 'empty-segments'`, #212 fix-plan review, finding S2) is thrown by `entries.update(id, { segments: [] })` — empty is illegal; absent is dateless (ADR 0012). `ParentCycleError` (`code: 'parent-cycle'`, S2.3) is thrown by a `parentId` edit that would make an entry its own ancestor, self-parenting included. `UnknownFieldError` (`code: 'unknown-field'`, S2.3) is thrown by `entries.update` or `entries.read` given a key that names no field — the Field registry is the legal set. `DerivedFieldNotWritableError` (`code: 'derived-field-not-writable'`) is thrown by `entries.update()` on a rolling-up Field of a parent that has children. `ComputedFieldCannotBeWrittenError` (`code: 'computed-field-cannot-be-written'`) is thrown at registration and at `entries.update()` for a `compute` Field — one name, two doors; the message names the door. `FieldNotEditableError` (`code: 'field-not-editable'`) is thrown by `entries.update()` when `editable` is `'never'`. `DuplicateFieldKeyError` (`code: 'duplicate-field-key'`, S4.1) is thrown when two Field declarations share a key. `UnknownAggregatorError` (`code: 'unknown-aggregator'`, S4.1) is thrown when a Field names an Aggregator that is not registered. `UnknownFieldTypeError` (`code: 'unknown-field-type'`, S4.1) is thrown when a Field names a `type` with no matching `fieldTypes` entry. `FieldNotColumnableError` (`code: 'field-not-columnable'`, S4.3) is thrown when `gridColumns` names a Field that declared no `column`. `UnknownGridColumnError` (`code: 'unknown-grid-column'`, S5.7) is thrown by `hideGridColumn`/`showGridColumn` given a field no declared column carries. `DuplicateRowIdError` (`code: 'duplicate-row-id'`, S4.6) is thrown by a `{ source: 'custom' }` resolver that returns the same `id` twice. `UnsupportedSchemaError` (`code: 'unsupported-schema'`, S2.6) is thrown by `Dataset.fromJSON` for a `schema` this build has no reader for — the message names the version it found and the versions it reads.
 - **Docs site with live, editable examples** grows with the slices (the harness pages are its seed) — budgeted as a deliverable, not an afterthought.
 - **Semver honesty**: internal modules are not importable (enforced by the `exports` map), so semver only governs surfaces we actually promise.
 

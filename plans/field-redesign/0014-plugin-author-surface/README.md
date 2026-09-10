@@ -6,25 +6,23 @@ Where a plugin's own Field values live, whether a Field key carries a namespace 
 
 ## Where it stands
 
-**One decision is open — 13.** Five are closed — 7, 9, 12, 14, and **16**. 16 closed on 2026-09-10. 13 still waits on [0012](../0012-optional-dates/README.md).
+**No decision is open.** Six are closed — 7, 9, 12, **13**, 14, and **16**. 13 closed on 2026-09-10: the by-key door is `read`, and duration is a compute Field.
 
 **Nothing blocks the storage rename on this ADR, and it blocks nothing there.** That is the point of splitting it out. It was the heaviest gate on the old [ADR 0011](../0011-consumer-values-in-props/README.md), and it was never a real one.
 
-**One answer still serializes with work that already shipped.** Decision 13 waits on [0012](../0012-optional-dates/README.md) — `durationOf` becomes `Duration | undefined` there. Close 0012 first. Decision 16 closed against the branded `ProposedEdit` (0011 decision 22).
+Decision 16 closed against the branded `ProposedEdit` (0011 decision 22). Decision 13 does **not** wait on [0012](../0012-optional-dates/README.md): `durationOf` is deleted, not widened.
 
 ## Why it does not gate the storage rename
 
-`Entry.meta?: TMeta` is consumer-typed today (`model/entry.ts:39`), and a plugin's Field values already sit in that bag beside the consumer's — `field-registry.ts:148` says so in `authored`'s own comment. So [0011](../0011-consumer-values-in-props/README.md) ships `props: Readonly<Partial<TProps>>`, which is **HEAD's exact posture under a new name**. It inherits the arrangement; it does not choose it.
+[0011](../0011-consumer-values-in-props/README.md) ships HEAD's posture under a new name, and **this ADR widens it additively** to `Readonly<Partial<TProps & PluginEntryProps>>`, with plugin keys prefixed. Additive, so the rename does not wait ([the pairwise check](../README.md#where-the-decisions-could-walk-over-each-other-and-why-they-do-not)).
 
-This ADR then **widens** the type to `Readonly<Partial<TProps & PluginEntryProps>>` — additive, plugin keys prefixed. Decisions 9 and 12 closed that way. The rename does not wait on it.
-
-**The price of deciding late is now a number this ADR spends.** Decisions 9 and 12 closed on a required plugin prefix. The Document written by 0011 holds `props: { progress: 60 }` and this ADR rewrites it to `props: { 'scheduling:progress': 60 }`. That is **schema 8** and a rename of plugin-**declared** keys — not the 184-occurrence `StoredEdit` rename. Decision 3 prices a pre-release schema number at zero, and the library has never shipped.
+**Deciding late costs one number, and this ADR spends it.** The Document 0011 writes holds `props: { progress: 60 }`, and this ADR rewrites it to `props: { 'scheduling:progress': 60 }` — a rename of plugin-**declared** keys, not 0011's 184-occurrence `StoredEdit` rename. It writes **schema 8** ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)), and decision 3 prices a pre-release number at zero.
 
 ## 9 and 12 closed together
 
 Answered together because the answers would cancel if taken apart. The closed ruling is below.
 
-**Settle 13 after 9, and after [0012](../0012-optional-dates/README.md)** — whether the by-key doors merge or only share a name depends on whether a plugin's values need routing, and `durationOf`'s return type lands in 0012. 9 is closed: they share `props` under a prefix, so routing is by key, not by bag.
+**13 closed after 9, as required.** They share `props` under a prefix, so routing is by key, not by bag. The by-key door is `read` on both surfaces.
 
 ## One file, three ADRs, no decision collision on the merge
 
@@ -34,21 +32,38 @@ Answered together because the answers would cancel if taken apart. The closed ru
 
 # Open decisions
 
-**One — 13.** 16 closed on 2026-09-10 and is below.
-
-## 13. `read` and `fieldValue` are one job under two names
-
-`FieldContext.read(entry, key)` and `entries.fieldValue(id, key)` answer the same question on two surfaces. `plans/02` requires one name per concept; two names for one job is the failure #7 records. Every comparable library uses a verb here — `getValue`, `getCellValue`, `getDataValue`, `record.get`. `fieldValue` is a noun, so the call reads as a property access spelled as a call.
-
-**There are four doors, not two.** `entry.props.k` is the stored bag. `entries.fieldValue(id, k)` resolves any Field key. `ctx.read(entry, k)` answers the same question on the plugin surface. `ctx.durationOf(entry)` answers it for one Field, by name. Widen this decision to all four before renaming anything.
-
-**Two corrections, both checked against the code.** `durationOf` does **not** exist because `duration` owns no `Entry` key — `model/field.ts:19` declares `duration: Duration` on `CoreFieldValues` by hand, so both by-key doors are fully typed. What `durationOf` actually is, is the **implementation** of the `duration` core Field, published as a convenience beside the door it implements. One of the four doors is built out of another. Second, it answers in **two different units** depending on which builder made the context, which is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274). **Settle 13 against that issue**, not against the assumption that `durationOf` earns its place.
-
-**Recommendation: align the names across all four.** Decisions 9 and 12 closed: plugin values share `props` under a prefix, so routing is by key, not by bag. **Land [0012](../0012-optional-dates/README.md) first** — `durationOf` becomes `Duration | undefined` there. Renaming a published door is not a decision to take in passing.
+**None.** 13 closed on 2026-09-10 and is below with 16.
 
 ---
 
 # Closed decisions
+
+## 13 — the by-key door is `read`; duration is a compute Field
+
+**Closed 2026-09-10. Ruled by the author.** Was: *`read` and `fieldValue` are one job under two names — and there are four doors, not two.*
+
+**The ruling.** One resolver, one name: `read`. `dataset.entries.read(id, key)` is the app-author door. `ctx.read(entry, key)` is the plugin door. `entry.props.k` is storage, not a resolver. Rename `fieldValue` → `read` with serena. **Delete `FieldContext.durationOf`.** Duration is the shipped compute Field it already was (`core-fields.ts:115-123`). You read it through `read`.
+
+```ts
+entry.props.owner
+dataset.entries.read('t1', 'owner')
+dataset.entries.read('t1', 'duration')   // Duration | undefined after 0012
+ctx.read(entry, 'duration')
+```
+
+**Why `read`, not `getValue`.** The plugin surface already says `ctx.read`. Aligning the app-author door to that name is one rename, not two. `entries.get(id)` stays "get the Entry". `entries.read(id, key)` stays "read a Field". Two verbs, two jobs. The call `dataset.entries.read('t1', 'owner')` reads as English.
+
+**Duration is not a fourth door.** `model/field.ts:19` already declares `duration: Duration` on `CoreFieldValues`, so both by-key doors type it. `durationOf` was the compute arm published as a convenience beside the Field it implements. It also answered in **two units**: `field-access.ts:92` in milliseconds, `inline-editing.ts:113` in whole days ([#274](https://github.com/Pawel-IT/FreeGantt/issues/274)). One compute arm, one unit — millisecond. The arm computes from `start` / `end` through `time/` (I10) and returns `undefined` when either date is absent ([0012](../0012-optional-dates/README.md) guards that calculation). It must **not** call `ctx.read(entry, 'duration')`. Aggregators read `ctx.read(entry, 'duration')`.
+
+**`CellRendererContext.fieldValue` stays.** It is the payload a renderer receives — a noun for the value, not the door.
+
+**[#274](https://github.com/Pawel-IT/FreeGantt/issues/274) closes with the door.** One Field cannot supply two units. The inline editor's whole-day approximation dies with `durationOf`.
+
+**The `src/` rename does not wait on 0012.** This ADR deletes `durationOf`; it does not widen it. If 0012 lands first, keep `durationOf` as a thin wrapper around the guarded helper until this ADR removes it.
+
+**What lost.** `fieldValue` as the app-author name. `durationOf` on `FieldContext`. Binding `FieldContext` to one row (decision 14) stays an issue, not a rename.
+
+---
 
 ## 16 — two plugins write one Field: non-overlapping keys merge; a contested key is dropped and warned
 
@@ -100,8 +115,6 @@ That is the price of prevention. Detection at construction (registry + the regis
 
 **May a consumer hold a key that shadows a core key?** No, at the *declaration*. The reserved list is the guarantee. A `props` *value* naming a core key stays a warning (0011).
 
-**This ADR writes schema 8** — a rename of plugin-declared keys. Decision 3 prices a pre-release number at zero. 0011 still writes **6**.
-
 **Decision 7 is confirmed:** a consumer's `progress` and a plugin's `scheduling:progress` are different keys.
 
 **Decision 16, closed the same day, names what happens when two plugins write one Field.**
@@ -118,5 +131,20 @@ A required plugin prefix on the Field key makes a consumer's `progress` and a pl
 
 Its own recommendation was *"measure before deciding"*, which is work, not a ruling. Nothing in groups A–D gates on it, and the current unbound shape has a recorded reason: the context is built once per `resolveColumns` and reused for every cell, which is why `formatValue` gained a third `entry` parameter instead (#240).
 
-**It is an issue, not a blocking decision.** The question survives, folded into decision 13, which now covers all four read doors. Measure there.
+**It is an issue, not a blocking decision.** Decision 13 closed the names and deleted `durationOf`. Binding the context to one row is still a later measure. The current unbound shape has a recorded reason: the context is built once per `resolveColumns` and reused for every cell (#240).
+
+---
+
+# The work
+
+## The build — `read`, and duration is a compute Field
+
+- Rename `entries.fieldValue` → `entries.read` with **serena**. Same signature, same `FieldValue<TProps, K>` return. `UnknownFieldError` still names the door.
+- Delete `FieldContext.durationOf`. Test stubs that build a context by hand drop that key (`field-access.test.ts`, `field-types.test.ts`, `layout/rows/filter.test.ts`, `layout/rows/sort.test.ts`).
+- The `duration` core Field's compute arm calls the guarded helper in `field-access.ts` (0012's guard, millisecond unit). It does not call `ctx.read(entry, 'duration')`.
+- `weightedMeanByDuration` (`aggregators.ts:14`) reads `ctx.read(entry, 'duration')`. Skip a child whose duration is `undefined`.
+- `inline-editing.ts:108-117`'s `fieldContextFor` stops supplying `durationOf`. Its `read` already forwards to `entries.read`. The whole-day approximation goes with the method. That is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274).
+- `etc/freegantt.api.md` drops `durationOf` and `fieldValue`. I11 gates the report.
+- `CellRendererContext.fieldValue` is **not** renamed. It is the payload, not the door.
+
 

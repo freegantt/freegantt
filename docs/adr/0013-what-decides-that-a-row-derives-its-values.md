@@ -108,12 +108,12 @@ This ADR writes schema **7**.
 - **`reportCorrectedRollUps` is deleted** — with no reproducible derived value in the Document there is nothing to correct. **Delete it in this ADR, not in 0011.** 0011 still writes derived keys; deleting the report there leaves `fromJSON` silent.
 - **A plugin loses a *derived* value, because its declaration does not travel.** An S7 parent's rolled-up `progress` is omitted, and a Document read without the plugin cannot re-derive it (D-S5-33). The leaf values still round-trip. Judged acceptable.
 - **D-S5-22's four seams lose `entry.kind` as their join.** They ask structure, or a plugin store. [0015](0015-what-the-write-door-refuses.md) decision 18 loses its `kind` row.
+- **When every child is dateless, the parent's dates clear.** An Aggregator's `undefined` means no value, not *keep the last envelope*. HEAD keep-stale leaves a parent that lies about dates. Combined spike Improvement D.
 
 ## Ordering constraints
 
 1. **[ADR 0012](0012-dates-are-optional-on-every-kind.md) lands first.** Demotion leaves an Entry with no dates, which `Entry` cannot represent today.
-2. **Unify the proposed-Field predicate before this ADR deletes the `body`/`merged` split.** `rollup.ts:196` reads `body`; `build-commit-change-set.ts:301` binds `body: proposed`, the transaction body alone, so a cascade's edits reach only `merged`. An independent fix — land it on `main`.
-3. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with this ADR.**
+2. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with this ADR.** The `body`/`merged` split stays. Unifying that predicate was a misread — [`refuted.md`](../../plans/field-redesign/shared/refuted.md) item 8. This ADR writes decision 5's warning; it does not unify the two sets.
 
 ## Issues this ADR depends on
 

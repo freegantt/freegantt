@@ -1,5 +1,7 @@
 # Cross-ADR closure review — 0011 to 0015
 
+**Acted on.** Every number this page called ready to rule has since closed. **13** closed on `read` (duration is a compute Field). **18** closed on the `'never' | 'api' | 'anywhere'` enum. Nothing in this folder is open.
+
 **Not a spike. A reading of all five ADRs, all five verdict reports, and the code behind both.** The question asked: which decisions can close on the evidence that now exists, was a better API available, and would a sixth spike help.
 
 **Answer in one line.** Nine of the eleven open numbers are ready to rule. **18 is not, and the reason is that four locked-spec sentences already answer it.** A sixth broad spike would re-derive; one thirty-line probe and a four-item reading pass would not.

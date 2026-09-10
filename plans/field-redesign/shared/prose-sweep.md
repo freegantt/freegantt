@@ -1,16 +1,16 @@
 # The prose sweep — one sweep, all five ADRs
 
+**Landed 2026-09-10.** The locked-spec gate returned 0. The F table stays as the changelog.
+
 **This was group F, and it stays one job.** Splitting it per ADR would run `protect-spec.sh` four times over the same files and leave four half-swept specs between landings. **The sweep runs once, after every open decision in all five ADRs has closed.** Landing 0011–0013 is not enough: 0014 and 0015 still change locked-spec sentences.
 
-**Confirm with the author before this runs.** It edits locked specs — `plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md` — and `protect-spec.sh` asks for permission on every one.
+**Confirm with the author before this runs.** It edits locked specs — `plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md` — and `protect-spec.sh` asks for permission on every one. The author confirmed on 2026-09-10.
 
 **Each row below names the ADR that changed the rule**, so a reader can check the sentence against the decision that retired it.
 
 ---
 
 ## F. Prose that states the old rule
-
-The sweep may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). `protect-spec.sh` asks for permission. **Confirm before this group runs.**
 
 | File | What it says |
 |---|---|
@@ -34,9 +34,14 @@ The sweep may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). 
 | `CONTEXT.md` Segment, ADR 0010 | *"Every Entry stores at least one Segment"* / *"An Entry never survives as an empty record"* — [0012](../0012-optional-dates/README.md) revises last-segment-remove to un-date. ADR 0006: do not edit ADR 0010; the sweep writes the new sentence here |
 | `plans/02` default `gridColumns` | a date path is owed before a user sees optional dates — [0012](../0012-optional-dates/README.md) required follow-up |
 | `gridColumns` / plugin keys | plugin Field keys are prefixed (`scheduling:progress`) — [0014](../0014-plugin-author-surface/README.md) decisions 9 and 12 |
-| `plans/02:477` | *"one answer gates every writer (I14), so a consumer states it once"* and *"Default is `false`."* **Only if [0015](../0015-write-door/README.md) decision 18 lands on *split absent from `false`*** — split gives one Field two answers at two doors, which this sentence refuses |
-| `plans/01:283` | `editable?: boolean` and its comment — *"the Field half of one write answer … (I14); default false"*. Same condition as `plans/02:477`. The type widens too if 18 takes three states |
-| `plans/01:926` | the **I14 row itself** — *"every write asks one `canWrite` (#256)"*. Same condition. **Also owed either way:** its enforcement is `e2e/write-refusal.spec.ts`, which drives the cell editor and the bar handles and never calls `entries.update()` |
+| `plans/02:477` | *"one answer gates every writer (I14), so a consumer states it once"* and *"Default is `false`."* — [0015](../0015-write-door/README.md) decision 18: one key, two thresholds, default `'api'`. Rewrite: the Field states how far a value may change; gestures ask `'anywhere'`; `update()` refuses only `'never'` |
+| `plans/01:283` | `editable?: boolean` and its comment — *"the Field half of one write answer … (I14); default false"*. Widen to `'never' \| 'api' \| 'anywhere'`; default `'api'`; `true`/`false` are input aliases |
+| `plans/01:926` | the **I14 row itself** — *"every write asks one `canWrite` (#256)"*. Gestures ask `canWrite` (grid). `update()` asks the same key against the API threshold. **Also owed:** `e2e/write-refusal.spec.ts` must call `entries.update()` |
+| `src/model/field.ts:125-127` | *"one home for 'may this value change,' asked by every gesture that writes it (I14). Default `false`."* Same rewrite as `plans/01:283` — this file is code, so 0015's build edits it, not the sweep |
+| `CONTEXT.md:64` | Field entry — `dataset.entries.fieldValue` → `dataset.entries.read` ([0014](../0014-plugin-author-surface/README.md) decision 13) |
+| `CONTEXT.md:80` | Field registry — `fieldValue` in the legal-set sentence, same rename |
+| `CONTEXT.md:225` | Grid column — `fieldValue` on the renderer context **stays** (payload, not the door) |
+| `CONTEXT.md:523` | Writability — `canWrite` is the grid threshold; `Field.editable` is the enum |
 | `plans/02` Document section | a Document is our **save format**, not an interchange format |
 | `plans/02` type rows | `PropsEdit<TProps>` and `EntryEdit<TProps>` are public |
 | `plans/s2-data-core/s2.6-serialization.md:76` | consumer rule in the old word |
@@ -107,8 +112,4 @@ grep -rn '\bmeta\b\|FieldSource\|source: {' CONTEXT.md CLAUDE.md \
 ```
 
 Per file at HEAD: `plans/02` 15, `plans/01` 12, `CONTEXT.md` 4, `CLAUDE.md` 2, `plans/00` 0.
-
-`pnpm verify:full`, and its **last line** is the answer. Capture it with a redirect, never a pipe: `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`.
-
-Review `harness/main.ts` and `harness/planner.ts` on every commit here, changed or not.
 

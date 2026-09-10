@@ -58,7 +58,7 @@ An earlier draft claimed `Partial` at every door buys a widening that deletes `h
 
 ## 6. `interactions.edit` as the replacement for the core-key override
 
-Before the `editable` ruling, `editable` gated the grid only, so `interactions: { edit: (entry, field) => … }` replaced the deleted capability exactly. **The ruling broke that replacement.** `editable` is now a data-level gate, and `interactions.edit` is a Gantt-level, view-level policy that `data/` may not import (`plans/01` §1). It gates gestures and cells; it cannot gate `entries.update()`. What does is **decision 19**, still open.
+Before the `editable` ruling, `editable` gated the grid only, so `interactions: { edit: (entry, field) => … }` replaced the deleted capability exactly. **The ruling broke that replacement.** `editable` is now a data-level gate, and `interactions.edit` is a Gantt-level, view-level policy that `data/` may not import (`plans/01` §1). It gates gestures and cells; it cannot gate `entries.update()`. What does is **decision 19**, closed 2026-09-10: keep `{ key: 'start', editable: false }` and serialize it. [0015](../0015-write-door/README.md) fills the editable arm.
 
 ## 7. AG Grid and TanStack as precedent for a key prefix
 

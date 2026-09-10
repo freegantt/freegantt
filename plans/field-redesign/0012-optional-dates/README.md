@@ -14,9 +14,9 @@
 
 ## What it touches, and what it does not
 
-It reaches bar geometry, the Segment invariant ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212)), the sort comparators, `range: 'fitDataset'`, and `FieldContext.durationOf` with its six call sites.
+It reaches bar geometry, the Segment invariant ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212)), the sort comparators, `range: 'fitDataset'`, and the duration calculation (`field-access.ts:92`) with its call sites.
 
-It shares four files with [0011](../0011-consumer-values-in-props/README.md) — `model/entry.ts`, `data/fields/field-access.ts`, `data/entry-reader.ts`, `data/serialization/read.ts` — and **collides with it in none of them**. This ADR guards `durationOf` (`field-access.ts:92`) and deletes the `referenceDate` fill (`entry-reader.ts:168`); 0011 rewrites different functions in the same files. Landing this first means 0011 rebases onto it, which is the cheap direction.
+It shares four files with [0011](../0011-consumer-values-in-props/README.md) — `model/entry.ts`, `data/fields/field-access.ts`, `data/entry-reader.ts`, `data/serialization/read.ts` — and **collides with it in none of them**. This ADR guards the duration calculation (`field-access.ts:92`) and deletes the `referenceDate` fill (`entry-reader.ts:168`); 0011 rewrites different functions in the same files. Landing this first means 0011 rebases onto it, which is the cheap direction.
 
 ## Ordering constraint
 
@@ -49,19 +49,20 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 - `start` and `end` join `isOptionalEntryKey`. Serialization and `entry-reader.ts` each gain a `length === 0` arm.
 - Delete the `referenceDate` fill (`entry-reader.ts:168-172`). Written down under D-S2-10 **and** D-S2-22. Not under D-S5-46, which survives.
 - Reaches bar geometry, the Segment invariant (#212), sort comparators, and `range: 'fitDataset'`.
-- A dateless Entry sorts **last**. A dateless row is inert to a **date** gesture (no bar to drag). `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
+- A dateless Entry sorts **last**, both directions. Do not inherit HEAD `direction * order` — that puts a hole first on `desc`. A dateless row is inert to a **date** gesture (no bar to drag). `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
+- **A parent whose every child is dateless has no dates.** [0013](../0013-what-decides-derivation/README.md) owns the Rollup pass; this biconditional is what that pass must restore (Improvement D).
 - **Last-segment-remove un-dates** — it does not delete the Entry. `entries.remove(id)` deletes the row. See [Required follow-up](#required-follow-up--a-date-path-and-last-bar-remove).
-- This ADR writes schema **5**.
+- This ADR writes schema **5** — [the counter](../shared/rulings.md#3--the-schema-restarts-release-gate).
 
-**`FieldContext.durationOf` returns `Duration | undefined`.** It is **plugin-author surface**, so it is a published change, and it reaches further than the signature. **This list is an audit's, not a re-derivation — do not rebuild it.**
+**The duration compute Field returns `Duration | undefined`.** Guard the calculation at `field-access.ts:92`. [0014](../0014-plugin-author-surface/README.md) decision 13 deletes `FieldContext.durationOf` — do not treat that wrapper as this ADR's public API. If this ADR lands first, keep `durationOf` as a thin wrapper around the guarded helper until 0014 removes it. **This list is an audit's, not a re-derivation — do not rebuild it.**
 
 | Site | What changes |
 |---|---|
 | `field-access.ts:92` | **The canonical implementation, and the guard goes here first.** Unguarded it yields `NaN`, not a throw — see [`refuted.md`](../shared/refuted.md) item 10 |
-| `core-fields.ts:118` | The shipped **`duration` core Field** reads `ctx.durationOf(entry)` in its `compute` arm, so the column answers `undefined` on a dateless row. The cell is **blank** — `formatDuration` answers `''` for `undefined` (`core-fields.ts:44-45`). **Assert the blank cell.** Do not invent an em dash or a placeholder |
-| `aggregators.ts:14` | `durationMs`, behind `weightedMeanByDuration` at `:51` — skips a dateless child rather than weighting it at zero |
-| `inline-editing.ts:113` | **A provider, not a caller.** `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`. It changes as an implementation |
-| `etc/freegantt.api.md` | The API report gates on I11, so the signature lands there or CI fails |
+| `core-fields.ts:118` | The shipped **`duration` core Field** reads the helper in its `compute` arm, so the column answers `undefined` on a dateless row. The cell is **blank** — `formatDuration` answers `''` for `undefined` (`core-fields.ts:44-45`). **Assert the blank cell.** Do not invent an em dash or a placeholder. After 0014 this arm does not go through `ctx.durationOf` |
+| `aggregators.ts:14` | `durationMs`, behind `weightedMeanByDuration` at `:51` — skips a dateless child rather than weighting it at zero. After 0014 this reads `ctx.read(entry, 'duration')` |
+| `inline-editing.ts:113` | **A provider, not a caller.** Dies with `durationOf` in 0014. Until then it changes as an implementation |
+| `etc/freegantt.api.md` | The helper's return type is not a published `durationOf` signature after 0014. If this ADR lands first, I11 still sees the wrapper |
 | four test stubs | `layout/rows/filter.test.ts`, `layout/rows/sort.test.ts`, `data/fields/field-types.test.ts`, `data/fields/field-access.test.ts` build a `FieldContext` by hand |
 
 

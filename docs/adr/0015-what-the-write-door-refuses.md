@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` and serialize it (19). Three declaration shapes (23). Both 2026-09-10.
-open: 18, held. The working material is in `plans/field-redesign/0015-write-door/`.
+decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` and serialize it (19). Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'api'` (18). All 2026-09-10 except the `false` ruling (2026-09-09).
+open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---
 
 # What the write door refuses
@@ -18,31 +18,33 @@ Beside it sits `#mergeCoreFieldOverride` (`field-registry.ts:211-225`), which le
 
 **`editable: false` refuses `entries.update()` too, and that is the same rule.** Ruled 2026-09-09. The error is `FieldNotEditableError`. This ADR declares it and throws it. [ADR 0011](0011-consumer-values-live-in-props.md) does not.
 
-**What an *absent* `editable` does is decision 18, and it is held.** Keep `{ key: 'start', editable: false }` and serialize it — decision 19, closed 2026-09-10. Three declaration shapes — decision 23, closed with 19.
+**Decision 18, closed 2026-09-10.** `editable` is `'never' | 'api' | 'anywhere'`. Default `'api'`. `true` / `false` are input aliases for `'anywhere'` / `'never'`. The grid is writable iff `'anywhere'`. `update()` is writable iff not `'never'`. Keep `{ key: 'start', editable: false }` and serialize it as `"never"` — decision 19. Three declaration shapes — decision 23.
+
+This ADR writes **schema 9**.
 
 ### This ADR owns the resolver's editable arm, and only that arm
 
 [ADR 0011](0011-consumer-values-live-in-props.md) moves the write resolver into `data/` with HEAD's policies unchanged — `view/capability.ts` calls it; `entries.update()` still throws `UnknownFieldError` only, plus 0013's derived arm once that ADR has landed. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) filled the derived arm. **This ADR fills the editable arm and wires `entries.update()` to it.** One function, three owners, one at a time.
 
-**Claim I14 when this ADR lands, not after 0013.** 0013 closes the derived half. This ADR closes the editable half. Between them `update()` refuses a derived write and still accepts `editable: false`. That is HEAD's editable split, plus a derived refusal. Do not claim I14 for a half.
+**Claim I14 when this ADR lands, not after 0013.** 0013 closes the derived half. This ADR closes the editable half. Gestures ask `canWrite` (grid threshold). `update()` asks the same key against the API threshold. `e2e/write-refusal.spec.ts` must call `entries.update()`.
 
 ## Open decisions
 
-| # | Question | Note |
-|---|---|---|
-| **18** | Does an *absent* `editable` also refuse `entries.update()`? | **Held.** The author does not want a boolean that means three things, one of them absence |
+**None.**
 
-## Closed here — 19 and 23
+## Closed here — 18, 19, and 23
 
-**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, and replay still write. `update()` and the grid refuse change. Un-date is a change. The lock serializes. `beforeChange` does not replace this.
+**18.** One key, three named states. Absent is `'api'`, so `parentId` and `segments` keep working. Copying the view rule lost. A three-way boolean lost.
+
+**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, and replay still write. `update()` and the grid refuse change. Un-date is a change. The lock serializes as `"never"`. `beforeChange` does not replace this.
 
 **23.** `{ key: 'start', editable: false }` constructs. `{ key: 'start' }` is a no-op. `{ key: 'start', column }` throws.
 
-**Decision 18's cost table is two rows.** [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) deleted `kind`. `update(id, { kind })` does not exist. Argue 18 against `parentId` and `segments` only.
+[ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) deleted `kind`. `update(id, { kind })` does not exist.
 
 ## Consequences
 
-- **`parentId` and `segments` keep their declarations.** Three mechanisms read them out of the registry: `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, `widenSegmentsToEnvelope` gates on `registry.get('segments')`, and `segmentsEqual` supplies the equality rule ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212), ADR 0010). Undeclaring them is not an available option.
+- **`parentId` and `segments` keep their declarations.** Three mechanisms read them out of the registry: `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, `widenSegmentsToEnvelope` gates on `registry.get('segments')`, and `segmentsEqual` supplies the equality rule ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212), ADR 0010). Undeclaring them is not an available option. Default `'api'` keeps `update()` legal without a column.
 - **A `props` *value* naming a core key is a warning, and the core definition wins** — that half is [ADR 0011](0011-consumer-values-live-in-props.md)'s and is already closed. Decision 23 is the *declaration* half, closed 2026-09-10: the lock is legal; extra keys throw.
 - **`ComputedFieldCannotBeWrittenError` fires at two doors under one name**, and the resolver checks `compute` before `editable`. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 

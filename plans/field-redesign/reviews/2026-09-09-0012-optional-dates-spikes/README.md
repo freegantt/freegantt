@@ -1,5 +1,7 @@
 # ADR 0012 spikes — optional dates
 
+**Settled since this page was written.** [0012](../../0012-optional-dates/README.md) carries no open decision. This page is the evidence, never the answer.
+
 **First ADR in landing order.** [0012](../../0012-optional-dates/README.md) has no open decision. This review probes the closed rule and the published consequences, before the build.
 
 **Score.** A clean, friendly public API. An option that is smaller inside and larger outside lost.

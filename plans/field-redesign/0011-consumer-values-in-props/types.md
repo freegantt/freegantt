@@ -16,6 +16,8 @@ flowchart TB
   S --> ALL["<b>every</b> declared key removable,<br/>without exception"]
 ```
 
+**This file is 0011's types.** [0013](../0013-what-decides-derivation/README.md) decision 26 then **deletes `kind`**, so `{ kind: undefined }` leaves the refused set with that ADR. The seven type tests land here with `kind` still present.
+
 **Decision 11, closed 2026-09-10.** `update()` is flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: `add()`, the Document, and a complete `ProposedEdit` nest.
 
 **Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](../shared/refuted.md).
@@ -104,9 +106,11 @@ type Field<TValue = unknown> =
       rollUp?: never; editable?: never; /* compare, formatValue, column */ };
 ```
 
+**`editable` on the stored arm is [0015](../0015-write-door/README.md)'s.** Decision 18 closed: the stored Field holds `'never' | 'api' | 'anywhere'`; `boolean` is input-only. This ADR's type tests may keep `boolean` until 0015 lands.
+
 **The union is a declaration-site aid, not the enforcement.** `FieldRegistry`, `DatasetOptions.fields` and `FieldLookup` all hold bare `Field`, so excess-property checking fires only where a literal is written. `FieldRegistry` throws `ComputedFieldCannotBeWrittenError` for `compute` beside `rollUp` or `editable`, the same way it already throws `UnknownAggregatorError`.
 
-**`TValue` is a declaration-site aid too, and nothing reads it back.** Those same three holders take bare `Field`, so `fieldValue(id, 'ref')` answers `unknown` for a `compute` Field, whatever its arm returned. The parameter checks the function a consumer writes; it does not type the value a consumer reads. **The erasure at the registry is the cause, and it is not a limit of the read door** — a key `TProps` declares types through `FieldValue<TProps, K>` without the registry taking part. Closing the gap is a Field-aware renderer read, which is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267).
+**`TValue` is a declaration-site aid too, and nothing reads it back.** Those same three holders take bare `Field`, so `read(id, 'ref')` answers `unknown` for a `compute` Field, whatever its arm returned. The parameter checks the function a consumer writes; it does not type the value a consumer reads. **The erasure at the registry is the cause, and it is not a limit of the read door** — a key `TProps` declares types through `FieldValue<TProps, K>` without the registry taking part. Closing the gap is a Field-aware renderer read, which is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267).
 
 ## `CoreFieldKey` and `CoreFieldValues` move together
 
@@ -114,6 +118,6 @@ type Field<TValue = unknown> =
 CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>
 ```
 
-`CoreFieldValues` (`model/field.ts:19`) is `Omit<Entry, 'id'>`, and `FieldValue` resolves its first arm against it. **Both omit `'props'`, or neither does.** Change one and not the other, and `fieldValue(id, 'props')` types as the whole bag while the runtime throws. `CoreFieldValues` is public at `api/index.ts:57`.
+`CoreFieldValues` (`model/field.ts:19`) is `Omit<Entry, 'id'>`, and `FieldValue` resolves its first arm against it. **Both omit `'props'`, or neither does.** Change one and not the other, and `read(id, 'props')` **types as the whole bag** while the runtime throws. `CoreFieldValues` is public at `api/index.ts:57`.
 
 The registry refuses `{ key: 'props' }` at **runtime**. It cannot be a type error without closing `FieldKey` into a union and refusing consumer strings, which flattens the brand.

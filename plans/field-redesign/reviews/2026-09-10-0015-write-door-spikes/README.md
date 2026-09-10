@@ -1,5 +1,7 @@
 # ADR 0015 spikes — what the write door refuses
 
+**Ruled in part since this page was written.** **19** and **23** closed on 2026-09-10. **18 is held** — the author refused a three-way boolean. Read [0015](../../0015-write-door/README.md). This page is the evidence, never the answer.
+
 **Next ADR that still has decisions to make.** [0015](../../0015-write-door/README.md) has three open numbers: **19, 23, 18**. Answer 19 first, then 23. 18 is the posture of an absent `editable`. This review probes the options before the build.
 
 **Score.** A clean, friendly public API. An option that is smaller inside and larger outside lost.

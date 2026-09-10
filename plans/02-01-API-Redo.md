@@ -1,4 +1,4 @@
-This review is a stale.
+This review is a stale. **Superseded by ADR 0011.**
 
   Verdict
 

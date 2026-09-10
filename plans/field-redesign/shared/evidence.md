@@ -69,7 +69,7 @@ The evidence behind ADR 0011 overruling `plans/01` §2.5's promote-only clause.
 | Bryntum | derives `isLeaf` from `children` |
 | DHTMLX Gantt | `auto_types` converts a task to a project when it gains children, **and converts it back when they go** |
 
-Microsoft Project and Bryntum store no parent-ness at all, which is why neither owes a demotion rule. That is decision 8's third answer and decision 20's question.
+Microsoft Project and Bryntum store no parent-ness at all, which is why neither owes a demotion rule. That was decision 8's third answer and decision 20's question. Both closed with 26: look and derivation follow children; there is no kind to write.
 
 ## Escape hatches for a derived cell
 

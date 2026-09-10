@@ -41,7 +41,7 @@ A derived value lives in the store and never reaches the Document. An Entry deri
 | **21** | No flag. The layer question does not arise. |
 | **24** | Dissolves. `rollUpKinds` is deleted, so there is no config flip to undo. Gaining or losing a child is a `parentId` write. Undo reverses that write and the drops together. |
 
-**The migration has no mitigation, and that is accepted.** A Document carrying `rollUpKinds: []` today means *keep these parents as I saved them*. Read under this ruling, every parent with children starts deriving, closed decision 6 **drops** the authored values, and `toJSON` omits them — so the next save is permanent. `fromJSON` raises a report. A consumer cannot act on a report. `kind` on an old Entry is dropped. This ADR writes schema **7**.
+**The migration has no mitigation, and that is accepted.** A Document carrying `rollUpKinds: []` today means *keep these parents as I saved them*. Read under this ruling, every parent with children starts deriving, closed decision 6 **drops** the authored values, and `toJSON` omits them — so the next save is permanent. `fromJSON` raises a report. A consumer cannot act on a report. `kind` on an old Entry is dropped.
 
 **The four registries lose their join.** Item producer, bar renderer, capability, and scheduling policy today look up `entry.kind`. After this ADR they ask structure, or they ask a plugin store. D-S5-22 is rewritten in the prose sweep. Do not keep `registerItemProducer('buffer')` keyed from a Field that no longer exists.
 
@@ -73,7 +73,7 @@ A plugin cascade that writes a rolling-up Field on a rolling-up parent has that 
 
 **Why not let it stand.** `toJSON` omits a derived value in any case, so a cascade that won the pass would still lose at the next save. Letting it stand publishes a number whose whole lifetime is one transaction.
 
-**One code defect to fix first**, and the order matters: unify the proposed-Field predicate before this ADR deletes the `body`/`merged` split. See [`refuted.md`](../shared/refuted.md) item 8.
+**The drop already ships; the warning is the build.** This decision once ordered a predicate unification first. **That order was withdrawn on 2026-09-10 as a misread of the code** — see [`refuted.md`](../shared/refuted.md) item 8 and [the build](#the-build).
 
 ## 6 — an Entry that starts rolling up drops its authored values
 
@@ -121,7 +121,7 @@ One structural question at every door: *does this Entry have children, and is th
 - The report goes through `raiseError` at `severity: 'warning'`, **always**. Not `isDevMode()`-gated (D-S5-41).
 - One report per operation, not per value.
 - Delete `reportCorrectedRollUps` — this ADR, not 0011.
-- On a rolling-up parent, an Aggregator's `undefined` means **no value**.
+- On a rolling-up parent, an Aggregator's `undefined` means **no value**. When every child is dateless, clear the parent's dates. Do not keep HEAD's stale envelope (Improvement D).
 - **Write decision 5's warning. The drop already ships; the warning does not.** A cascade's write to a derived cell reaches `merged` and never `body`, so `rollup.ts:196` does not yield and the pass overwrites it in silence. Raise one warning through `raiseError` at `severity: 'warning'`. **Do not unify a predicate** — that instruction was withdrawn on 2026-09-10 as a misread, and [`refuted.md`](../shared/refuted.md) item 8 carries why. **Do not mistake `reportCorrectedRollUps` for this warning** either; it is a `fromJSON` reconciliation report and never sees a cascade.
-- This ADR writes schema **7**.
+- This ADR writes schema **7** — [the counter](../shared/rulings.md#3--the-schema-restarts-release-gate).
 

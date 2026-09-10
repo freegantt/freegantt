@@ -1,5 +1,7 @@
 # ADR 0013 spikes — what decides that a row derives its values
 
+**Ruled since this page was written, and the author went further.** Decision **26** closed on 2026-09-10: an Entry derives when it has children, `kind` leaves the record, and **no `followChildren` ships**. Read [0013's closed decisions](../../0013-what-decides-derivation/README.md#closed-decisions). This page is the evidence, never the answer.
+
 **Next ADR in landing order.** [0013](../../0013-what-decides-derivation/README.md) has one open decision: **26**, the inputs to the derivation predicate. Branches **8, 20, 21 and 24** hang off it. This review probes the three answers before the build.
 
 **Score.** A clean, friendly public API. An option that is smaller inside and larger outside lost.

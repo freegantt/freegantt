@@ -11,10 +11,9 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 | File | Read it when |
 |---|---|
 | [`types.md`](types.md) | You are about to write the edit types or the Field union |
-| [`api.md`](api.md) | You want the call sites, before and after |
-| [`../shared/evidence.md`](../shared/evidence.md) | You want the product survey these decisions cite |
-| [`../shared/refuted.md`](../shared/refuted.md) | You are about to re-derive something. **Check here first** |
-| [`../shared/rulings.md`](../shared/rulings.md) | You hit the registration lock, the schema counter, or `ComputedFieldCannotBeWrittenError` |
+| [`api.md`](api.md) | You want this ADR's call sites, before and after |
+
+The shared files — [`refuted.md`](../shared/refuted.md), [`evidence.md`](../shared/evidence.md), [`rulings.md`](../shared/rulings.md) — are indexed in [`../README.md`](../README.md#shared).
 
 ## Where it stands
 
@@ -24,9 +23,7 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 ## The write resolver is this ADR's to move, and not its to re-rule
 
-`view/capability.ts:113-121`'s `libraryWriteRule` already holds two of the three arms in one function, and already imports `rollsUp` from `data/` (`field-registry.ts:97` — it already lives there). `entry-store.ts:358` already throws `UnknownFieldError` for the third. **The resolver is a move, not a build.**
-
-**This ADR moves it into `data/` with HEAD's policies unchanged.** `view/capability.ts` calls the moved function and stops restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only** — it does not call the editable or derived arms. No policy changes, so no decision is spent. Then [0013](../0013-what-decides-derivation/README.md) fills the derived arm and wires `entries.update()` to it, and [0015](../0015-write-door/README.md) fills the editable arm. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule. The seven call sites and the throw-versus-drop table belong to 0013 and 0015. Do not claim I14 until 0015 has wired the editable arm.
+**This ADR moves the resolver into `data/` with HEAD's policies unchanged, and spends no decision on it.** The whole story — one function, three owners, one at a time — is in [`../README.md`](../README.md#the-write-resolver-one-function-three-owners). The build step is [below](#the-build--the-address-rule-and-the-storage-rename).
 
 ## What this ADR does *not* decide
 
@@ -115,7 +112,7 @@ Declared consumer keys sit next to core keys. Nested `props:` is refused at `upd
 
 **Closed 2026-09-09. Ruled by the author.** Was: *should the namespace be called `props` rather than `data`?*
 
-`props` it is. `Entry.props`, `EntryInput.props`, `EntryDocument.props`, the `props?:` key on `EntryEdit`, and `"props"` in every saved file.
+`props` it is. `Entry.props`, `EntryInput.props`, `EntryDocument.props`, and `"props"` in every saved file. There is no `props` key on `EntryEdit` — decision 11, closed 2026-09-10: `update()` is flat.
 
 **Why `data` lost.** `data/` is a core layer, so `data` would name a layer and a consumer's bag at once. The mitigation on offer was a prose convention — *write `data/` for the layer and `entry.data` for the bag, never the bare word*. `plans/02` rules that a generic word covering more than one concept is a bug rather than a style nit, and #7 is the cautionary case: "chart" named the public instance and an internal class, and the fix was to **retire the word**, not to write a disambiguation rule and trust context. `data` is the most generic word available.
 
@@ -155,9 +152,7 @@ The type, and the refused spread, are in [`types.md`](types.md).
 
 The leak decision 12 worried about — *it stores a value no door can read back* — closes anyway, because the value is not stored.
 
-**What stays open:** decision 12's other three bullets — the published closed reserved list, bare consumer keys, and a required plugin prefix.
-
-**This ruling covers a `props` _value_ only. The _declaration_ case is open as decision 23**, and it is weighed in [0015 open decisions](../0015-write-door/README.md#open-decisions), not here. `fields: [{ key: 'start', … }]` is set to throw `DuplicateFieldKeyError` after the override is deleted, and whether the posture above should reach it is the question. **ADR 0011 does not implement that throw until 23 closes.**
+**12 and 23 closed 2026-09-10.** Plugin keys carry a required prefix; core and consumer keys stay bare; the reserved list is the declaration guarantee. The *declaration* half is [0015](../0015-write-door/README.md) decision 23: `{ key: 'start', editable: false }` is the lock; extra keys on a core name throw. This ruling stays the *value* half: `props: { start: … }` is a warning, never a throw.
 
 
 ---
@@ -169,21 +164,13 @@ The leak decision 12 worried about — *it stores a value no door can read back*
 The key decides the home, so no declaration carries one.
 
 - `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest. `Entry.props: Readonly<Partial<TProps>>`. Input and Document keep `props?`.
-- **A must move the nested ingest with the public shape, or A alone drops every consumer Field write in silence.** `writeDeclaredMetaFields` (`data/fields/field-access.ts:141-155`) finds a consumer Field value on an edit today, and it walks the edit's **top level**:
-  ```ts
-  for (const key of Object.keys(edit)) {
-    const field = registry.get(key);
-    if (!field || !storesInMeta(field)) continue;
-    next = writeField(next, overlay, field, edit[key]);
-  }
-  ```
-  Today `update({ cost: 500 })` is flat, so `cost` is found there. After A the only top-level key is `props`, and A **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. The nested read is the merging patch's `toProposedEdit`. **This is the constraint on splitting A from B.**
+- **Ingest must walk inside `props`, or `add({ props: { cost } })` drops every consumer Field write in silence.** `writeDeclaredMetaFields` (`data/fields/field-access.ts:141-155`) finds a consumer Field value on an edit today, and it walks the edit's **top level**. That still works for `update({ cost })` after decision 11. It does **not** work for a record: `add({ props: { cost } })` and the Document have one top-level key, `props`, and this ADR **deletes** the `props` core Field — so `registry.get('props')` misses, `continue` fires, and the value is never written. No error, no ChangeSet row. Walk inside `props` on `EntryInput` and the Document. `update()` stays a top-level walk of declared keys.
 - Write the edit types from [`types.md`](types.md). `EntryEdit` is the envelope plus declared-key shorthand at the top level — **no `props` key**. `PropsEdit` is exported for `add`, the Document, and `ProposedEdit`. Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests. `update(id, { props: { cost } })` is a type error, or a runtime throw whose message says to name `cost` at the top.
 - **`StoredEdit` → `ProposedEdit`, with serena.** About 184 occurrences. `ProposedEdits`, `toProposedEdit`/`toProposedEdits` and `EditReading.proposed` follow. Lands in A because A already renames the type's own field. Write `ProposedEdit`'s **type** too — `props` is required on it — and **brand the whole `ProposedEdit`** (decision 22, closed 2026-09-10). `PropsEdit` carries no `__brand`.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
 - `build-commit-change-set.ts:100`'s `fieldsWrittenBy` still skips `'meta'`, and `field-access.ts:26`'s `isOptionalEntryKey` still names it. Both follow the rename.
 - **Leave `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` standing.** The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. [0015](../0015-write-door/README.md) decision **19** (closed 2026-09-10) **keeps** the override for `editable` and serializes it. Decision **23** is the three declaration shapes, also closed.
-- **One write resolver in `data/`, and this ADR changes no policy in it.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the *editable* and *derived* arms in one function and already imports `rollsUp` from `data/`; `entry-store.ts:358` already throws `UnknownFieldError` for *exists*. **The resolver is a move, not a build.** Move that function into `data/`, point `view/capability.ts` at it, and stop that file restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only.** [0013](../0013-what-decides-derivation/README.md) then fills the derived arm and wires `update()` to it; [0015](../0015-write-door/README.md) fills the editable arm. **Do not wire `entries.update()` to a policy this ADR did not rule.** The seven call sites and the throw-versus-drop table live in those two ADRs. Do not write their tests here.
+- **Move `libraryWriteRule` (`view/capability.ts:113-121`) into `data/`, and change no policy in it.** Point `view/capability.ts` at the moved function, and stop that file restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only.** Do not wire it to a policy this ADR did not rule, and do not write 0013's or 0015's tests here. Why the three arms split this way: [`../README.md`](../README.md#the-write-resolver-one-function-three-owners).
 - **Two merges shallow-spread, not one. Fix both together or plugin composition breaks in production.**
   - `data/edit-extension.ts:38` — `mergeEntryEdits`, the loose one a plugin author calls. With consumer keys inside `props`, two extenders writing different `props` keys lose one: #197 one level down, against that function's own stated promise (#238).
   - `data/fields/field-access.ts:49` — `mergeStoredEdits`, which the **commit path** uses to fold body + cascade + hierarchy. `{ ...base, ...extra }` has the identical hole, and here it breaks a contract written directly above it: *"`extra` wins per Field key; the proposed keys of both survive."* That is true today only because a top-level key **is** a Field key. Once `props` is one key holding many, `extra` wins per **namespace**, so a body write of `props.cost` beside a cascade write of `props.progress` loses `cost` — while `proposedKeys` still names it, so the ChangeSet emits a row carrying a stale value. **A wrong row is worse than a dropped write**, and only this one is reachable without a second plugin installed.
@@ -208,19 +195,17 @@ Written in the new names: `toProposedEdit`, `ProposedEdit`.
 - An explicit `undefined` inside a patch clears that one key.
 - `diffEdit` emits one row per Field key, never a path into `props`.
 
-**Decision 1 closed on 2026-09-10, and it deletes three edits from this group.** Ingest carries an undeclared key; `update()` naming one throws. So these are **not built**:
+**[Decision 1](#1--an-undeclared-key-is-carried-and-update-never-names-it) deletes three edits from this group.** They are **not built**:
 
 - ~~**a.** Seed `proposedKeys` from inside `props`, not only from top-level keys.~~
 - ~~**b.** `diffEdit` keeps the registry walk for row order, then drains undeclared keys in the proposed set.~~
 - ~~**c.** `entries.fieldValue` and `ctx.read` answer `entry.props[key]` for an undeclared key.~~
 
-**`"Skip a–c"` is not `"do not look inside"`.** The first `Object.keys(edit)` loop must treat `props` as the namespace rather than as a Field, and it must still walk **inside** `props` for **declared** keys — without that inner walk a declared `cost` patch emits no row. Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an edit either way.
+**`"Skip a–c"` is not `"do not look inside"`, and this is the trap in the group.** On an `EntryEdit` the first `Object.keys(edit)` loop names declared keys at the **top**. On a record — `add()`, the constructor, `fromJSON()` — the walk goes **inside** `props` for **declared** keys, or a declared `cost` on ingest emits no row. Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an `EntryEdit` either way.
 
-**Two things now ship with the ruling rather than after it.** The `errors.ts:331` message rewrite, and per-key `props` merging in `entryAfterEdit`, `mergeEntryEdits` and `mergeStoredEdits` — a shallow spread deletes passenger data, which decision 1 guarantees is kept. `UnknownFieldError` stays on the top level of an edit either way.
+**Two build steps ship with decision 1 rather than after it.** The `errors.ts:331` message rewrite, and per-key `props` merging in `entryAfterEdit`, `mergeEntryEdits` and `mergeStoredEdits` — a shallow spread deletes a carried key.
 
-**Decision 11 closed on 2026-09-10, and it is the write door.** `update()` is flat: `update('t1', { start, cost })`. Nested `props:` at `update()` throws. `add()` and the Document still nest. There is no `FieldNamedAtTopAndInPropsError`. The first `Object.keys(edit)` loop names declared keys at the top level of an `EntryEdit`; ingest still walks inside `props` on the record. `EntryEdit` does not carry a `props` key. `PropsEdit` stays on `EntryInput`, the Document, and `ProposedEdit`.
-
-**Decision 22 closed on 2026-09-10 with the type.** Brand the whole `ProposedEdit`. Do not put `__brand` on `PropsEdit`. The refused spread is a type test in [`types.md`](types.md), not a comment.
+**[Decision 11](#11--update-is-flat-only) is the write door**, and [decision 22](#22--brand-the-whole-proposededit) is the brand. The types for both are in [`types.md`](types.md).
 
 ## Done first — 2026-09-09
 
@@ -237,7 +222,7 @@ Written in the new names: `toProposedEdit`, `ProposedEdit`.
 
 ## The Document
 
-This ADR writes `meta` → `props` and takes `source` off `SerializedField`, and it spends **schema `6`**. [0012](../0012-optional-dates/README.md) already wrote **5**. [0013](../0013-what-decides-derivation/README.md) writes **7**. See [`../shared/rulings.md`](../shared/rulings.md).
+This ADR writes `meta` → `props` and takes `source` off `SerializedField`, and it spends **schema `6`** — [the counter](../shared/rulings.md#3--the-schema-restarts-release-gate).
 
 - Readers 1–4 are deleted. Nothing outside this repo's fixtures was written by them.
 - Unknown key inside `props` is passenger data and is kept. Unknown top-level key stays unknown.

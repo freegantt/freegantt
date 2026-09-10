@@ -1,5 +1,7 @@
 # Combined spike — ADR 0011 to 0015
 
+**Ruled since this page was written, and one recommendation was overruled.** Decision 26 shipped **no** `followChildren`, and `kind` left the record. Every ADR's own *Where it stands* is the live account. This page is the evidence, never the answer.
+
 **One store. Five ADRs. The recommendations in one façade.**
 
 Throwaway code lives on [`spike/0011-0015-combined`](https://github.com/Pawel-IT/FreeGantt/tree/spike/0011-0015-combined). This file is the verdict. Open that branch when you need the tests. Do not close the decisions in the ADR files. A spike reports. The author rules.

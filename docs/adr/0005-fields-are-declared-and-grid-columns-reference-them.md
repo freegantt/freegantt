@@ -1,3 +1,5 @@
+> **Superseded by [ADR 0011](0011-consumer-values-live-in-props.md).** Do not rewrite this body. The live Field rule is ADRs 0011–0015.
+
 # Fields are declared, and grid columns reference them
 
 A consumer field had no home. `Entry` is a closed shape — `name`, `kind`, `parentId`, `start`, `end`, `progress`, `segments`, `meta` — and `meta` is opaque by promise (D-S2-12: *anything of yours goes in `meta` and survives byte for byte*). So a consumer's `cost` could be stored but never aggregated, never compared per field, and never shown by anything except a hand-written callback. `plans/02` §2 recorded the result honestly: two column shapes, one for core (`{ type: 'name' }`) and one for consumer data (`{ id: 'team', value: t => t.meta.team }`). The second shape has no rollup, no equality rule, no editor and no undo granularity, because a callback that reads a value cannot supply any of them. Issue #80 asked how a parent derives each field from its children and could not be answered, because core had no way to name a field that is not one of its own.
