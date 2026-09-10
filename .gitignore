@@ -9,3 +9,6 @@ playwright-report/
 blob-report/
 playwright/.cache/
 .serena/
+
+# Test coverage output (vitest). Generated — never committed.
+coverage/
