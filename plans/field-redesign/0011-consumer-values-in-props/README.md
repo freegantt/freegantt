@@ -80,7 +80,9 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 
 ## 11. Does *common case is a shorthand* survive for Field writes?
 
-`plans/02:459` ships `update('t1', { start, cost })`. This ADR ships `update('t1', { start, props: { cost } })`. One sentence names two Fields; the other names one Field and a container. **This edits a locked spec either way**, so it needs an explicit ruling.
+`plans/02:467` ships `dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 })`. This ADR ships `update('t1', { start, props: { cost } })`. One sentence names two Fields; the other names one Field and a container. **This edits a locked spec either way**, so it needs an explicit ruling.
+
+**The citation was `:459` until 2026-09-10, and the real line is stronger than the old one claimed.** `plans/02:467` is not a passing mention. It is a worked example, with `cost` meta-sourced, sitting under the heading *"Editing crosses core and consumer fields freely — one call, one transaction, one undo step"*, and the next line reads `dataset.entries.fieldValue('t1', 'cost')`. **Shorthand keeps that example compiling. Nest retires it.** Weigh that against the rule count below.
 
 **Nobody nests at the write door**, and **FullCalendar ran the flat experiment to its end and it went wrong twice**. Both surveys are in [`evidence.md`](../shared/evidence.md).
 
@@ -93,6 +95,16 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 **Its price, and half of what the first pass charged is not real.** FullCalendar shipped a write whose *meaning* depends on what the library knows about the key. The declared-key flat spelling keeps that shape and moves it one stage later: `update(id, { cost })` compiles always, and throws or writes depending on registry state at the moment of the call.
 
 **The first pass charged this twice, on a false claim about the code.** It read *"`fields` is live-reconfigurable like every config key"*. **It is not.** `dataset.fields` is a read-only getter (`src/api/dataset.ts:240`), and the only two doors that add a Field — `DatasetOptions.fields` and `ctx.fields.register` — both close inside the constructor. See [the registration lock](../shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction).
+
+### The third option has a fourth form, and the reason it was set aside does not hold
+
+**Raised 2026-09-10.** The combined spike built **flat-only** `update()` as improvement A — shorthand with no `props:` long form at the write door, `props` kept on `add` and on the Document. It won the read. The spike then set it aside as *optional, do not fold in*, on this reason: it *"splits the write door from the record door that decision 1 spent its whole table keeping together."*
+
+**Open decision 1 and that reason is not there.** Decision 1's table weighs per-key merge against whole-bag replace over an **undeclared** key space. It says nothing about whether the two doors share an object shape. Worse, **decision 1's own recommendation already splits them**: `add()` / `new Dataset({ entries })` / `fromJSON()` **carry** an undeclared key, and `update()` **throws** for it. That is one key with two answers at the two doors, ruled on purpose, and named *records carry and patches name*. A shape split is a smaller split than the one already ruled.
+
+**What A buys, stated plainly.** One spelling at `update()`. No `FieldNamedAtTopAndInPropsError` — the double-name throw disappears, because there is only one place to name a key. That refusal is otherwise a brand-new write-door rule this ADR hands [0015](../0015-write-door/README.md) to name, type and message. **A is a fourth option on this decision, not a follow-up**, and it should be scored beside nest and shorthand rather than after them.
+
+**Its price is real and unchanged:** `EntryEdit` and `EntryInput` stop carrying the same `props` key, so a consumer who builds one object and passes it to both doors writes two shapes. Nothing in the code stops that today, and nothing measures how often anyone does it.
 
 **So the temporal half of the price is gone, and the cross-instance half survives.** `update(id, { cost })` means one thing on a given Dataset for that Dataset's whole life. It is still legal on one Dataset and a throw on another. **That surviving half does not separate the two options**, because `update(id, { props: { cost } })` throws on the same second Dataset under 1's recommendation. **Weigh the shorthand against the nesting on what is left: a top level that holds core keys and consumer keys side by side.**
 

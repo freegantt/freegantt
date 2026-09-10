@@ -54,6 +54,14 @@ if (!childIds || childIds.length === 0) continue;
 - **20's rendering half.** `view/renderer-registry.ts:35` allocates one bar slot per kind (`bar:${kind}`), and `EntryKind` is open (`model/entry.ts:7`). Make `kind` calculated and bar-renderer selection loses its authored key. That reaches `view/`, and it is not a derivation question. **[0012](../0012-optional-dates/README.md) shrinks it**: a demoted Entry is dateless, so it draws no bar and the renderer choice goes quiet for exactly the row branch 8 argues about.
 - **21's layer half.** Core `data/` or the plugin — ADR 0002 is the document it answers to.
 
+## Two conditions on closing 26, added 2026-09-10
+
+The combined spike scored **structure-only** the call-site winner, and it deleted `autoGroup` and moved the opt-out onto the Entry. Closing 26 that way also closes branches **8**, **20** and **24**, and folds **21** in. Five numbers, one ruling. **Two things have to be in the ADR text before it closes, and neither is a decision.**
+
+**1. The migration has no mitigation, and the ADR must say so.** A Document carrying `rollUpKinds: []` today means *keep these parents as I saved them*. Read under structure-only, every parent with children starts deriving, closed decision 6 **drops** the authored values, and `toJSON` omits them — so the next save is permanent. `fromJSON` raises a report, and **a consumer cannot act on a report**. The only opt-out is a per-parent write. State that cost in the ADR rather than discovering it after the schema bump. **Nothing has read an old Document under structure-only**, and the reader already carries the schema-1 `derivedSpanKinds` → `rollUpKinds` migration (`serialization/read.ts:90-92`). That is the one remaining path worth a probe.
+
+**2. The opt-out has no name.** `followChildren` is a spike candidate. `CONTEXT.md` holds no term, [`rulings.md`](../shared/rulings.md) already refused `derivesValues`, and *derived* is taken — it also names a `compute` Field. Read the call aloud before the ADR text: `update('p', { followChildren: false })`. What it means is *p keeps the values I authored*. Run the naming skill; do not inherit the spike's word by default.
+
 ## Parked beside it
 
 **Let the consumer decide how a value rolls up, in the Rollup callback.** This ADR ships the blanket rule; a per-call Aggregator answer is a later ADR.
@@ -213,6 +221,6 @@ One structural question at every door: *is this a rolling-up kind, and is this a
 - One report per operation, not per value.
 - Delete `reportCorrectedRollUps` — this ADR, not 0011.
 - On a rolling-up parent, an Aggregator's `undefined` means **no value**.
-- **Unify the proposed-Field predicate before deleting the `body`/`merged` split** — decision 5's one code fix, see [`refuted.md`](../shared/refuted.md) item 8.
+- **Write decision 5's warning. The drop already ships; the warning does not.** A cascade's write to a derived cell reaches `merged` and never `body`, so `rollup.ts:196` does not yield and the pass overwrites it in silence. Raise one warning through `raiseError` at `severity: 'warning'`. **Do not unify a predicate** — that instruction was withdrawn on 2026-09-10 as a misread, and [`refuted.md`](../shared/refuted.md) item 8 carries why. **Do not mistake `reportCorrectedRollUps` for this warning** either; it is a `fromJSON` reconciliation report and never sees a cascade.
 - This ADR writes schema **7**.
 

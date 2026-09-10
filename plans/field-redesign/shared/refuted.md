@@ -11,7 +11,7 @@ Each item here was drafted, probed or published, and then found wrong. Every one
 | 5 | `Partial` at every door deletes `harness/main.ts:89`'s double cast | The widening was never the problem |
 | 6 | `interactions.edit` replaces `{ key: 'start', editable: false }` | It is view-level; the gate is now data-level |
 | 7 | AG Grid's `field: 'medals.gold'` is precedent for a key prefix | It navigates the consumer's own shape, not a library's namespace |
-| 8 | Widen the proposed-Field test from `body` to `merged` | Keeps the write for one pass and loses it at the next save |
+| 8 | Widen the proposed-Field test from `body` to `merged` | Keeps the write for one pass and loses it at the next save. **Its own "unify the predicate" order was a misread — corrected 2026-09-10** |
 | 9 | An object keyed by Entry id for the extender's return | Integer-like keys reorder the cascade |
 | 10 | Optional dates need no code in `durationOf` | Unguarded, it yields `NaN`, not a throw |
 | 11 | Demotion keeps no dates and stays a rolling-up row | It becomes a normal Entry with no dates |
@@ -69,7 +69,13 @@ The first pass on decision 12 cited AG Grid's `field: 'medals.gold'` and TanStac
 
 It keeps a plugin cascade's write to a derived cell for one pass and loses it at the next save — **the worst of the three outcomes**, because `toJSON` omits a derived value in any case. Decision 5 ruled *drop and warn* instead.
 
-**One code defect to fix first, and the order matters.** Two call sites answer *did anyone propose this Field?* from two different edit sets: `rollup.ts:196` reads `body`, and `build-commit-change-set.ts:301` binds `body` to the transaction body alone, so a cascade's edits reach only `merged`. **Unify the predicate into one function, and give both callers that function**, before [ADR 0013](../0013-what-decides-derivation/README.md) deletes the split.
+**Corrected 2026-09-10. The "unify the predicate" instruction this item used to carry was a misread of the code.** It said *two call sites answer "did anyone propose this Field?" from two different edit sets*, and it ordered a unification ahead of [ADR 0013](../0013-what-decides-derivation/README.md). Opened and counted: `editProposesField` has **one** call site in `src/`, `rollup.ts:196`. `build-commit-change-set.ts:301` is the argument binding, not a second reader.
+
+**The `body`/`merged` split is deliberate and documented, not a duplication.** `rollup.ts:23-26` declares both and states each one's job — `body` is *"the transaction body's edits — the Rollup yields to a field proposed here (D-S2-22)"*, and `merged` is *"body plus extension-hook edits — used to read effective child values"*. Two questions, two sets. There is nothing to unify.
+
+**What is actually left of decision 5 is the warning, and it does not exist.** Today the Rollup overwrites a cascade's write to a derived cell in silence: the cascade reaches `merged` and never `body`, so `:196` does not yield, and `rollup.ts` imports `AggregatorFailedError` and raises nothing else. Decision 5 ruled *dropped, and the library raises one warning through `raiseError` at `severity: 'warning'`*. **The drop already ships. The warning is the build.**
+
+**Do not mistake `reportCorrectedRollUps` for it.** That function is a `fromJSON` reconciliation report (`code: 'rollup-corrected'`, `serialization/index.ts:86`): it fires when a Document's stored rolled-up dates disagree with the dates this build computes. It never sees a cascade. [ADR 0013](../0013-what-decides-derivation/README.md) deletes it for an unrelated reason — under the omission rule the Document carries no derived dates, so the disagreement cannot exist.
 
 ## 9. An object keyed by Entry id for the extender's return
 

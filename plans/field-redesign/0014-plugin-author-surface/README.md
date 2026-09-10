@@ -94,6 +94,24 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 **Still open, and this is the ruling wanted:** may a consumer ever hold a key that shadows a core key? If **no**, the reserved list gives the same guarantee as a consumer prefix at no call-site cost. If **yes**, a bare consumer space cannot deliver it, and `props.`-prefixed consumer keys return to the table on HTML's exact reasoning.
 
+### The registration lock weakens this evidence, and the colon has a call site nobody read aloud
+
+**Raised 2026-09-10. Neither half is fatal; both belong inside the pick.**
+
+**First: the precedent's premise does not hold here.** HTML, Kubernetes and OpenAPI all prefix because their extension space is **open** — no registry, no install-time check, so a collision can only be prevented by convention. FreeGantt's space is **closed at construction**; that is [the registration lock](../shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction), ruled 2026-09-09. And `field-registry.ts:117` already holds `#declaringPlugin`, a key → `PluginId` map that `authored` reads today. **So the registry can already name the plugin in a duplicate-declaration error, with no prefix.** The lock was closed after decision 12's evidence was gathered, and nothing has connected them.
+
+**The counter, and it is strong.** Detection is not prevention. With bare keys, a consumer who declared `{ key: 'progress' }` and then installs a scheduling plugin gets a **throw at construction** — an app that worked yesterday is dead at boot because of a plugin install. A prefix makes the collision *impossible* rather than *detectable*. Weigh a boot-time throw the consumer cannot avoid against the call site below.
+
+**Second: score the prefixed call aloud, because `CLAUDE.md` rules call site first.**
+
+```ts
+gantt.gridColumns = ['name', 'scheduling:progress'];
+dataset.entries.update('t1', { 'scheduling:progress': 60 });
+entry.props['scheduling:progress'];
+```
+
+A prefixed key is not an identifier, so every read is a bracket and every column name carries a colon. That is the typed dot decision 9 probed, spent — 9's own first finding already says so. **The three calls above are the price of 12, and no spike has written them on a page next to the bare form.**
+
 ---
 
 ## 13. `read` and `fieldValue` are one job under two names
@@ -133,6 +151,14 @@ extendEdits(request) {
 **Keep the `Map`; an object keyed by Entry id is the wrong container** — [`refuted.md`](../shared/refuted.md) item 9. An array of `[id, edit]` pairs is the other safe shape, and **the three ergonomic complaints stand under either container.**
 
 **The shape is a published plugin-author signature, so it needs a ruling.** Whether a contested write reports, and at what severity, is the other half.
+
+### The severity half collides with closed decision 5, and the two have never been compared
+
+**Raised 2026-09-10.** The combined spike answered the severity half by **throwing** `PluginWriteCollisionError` when two plugins write one Field. [0013](../0013-what-decides-derivation/README.md)'s closed **decision 5** answers the neighbouring question by **dropping and warning**: a plugin cascade that writes a rolling-up Field on a rolling-up parent has that write dropped, and the library raises one warning at `severity: 'warning'`.
+
+**Two refusals of a plugin write, on one surface, at opposite severities.** Decision 5's stated reason was that *a plugin author learns no rule and checks no predicate*, and that the honest end of an exemption is **a drop the author can see**. That reason reaches a contested write word for word. A throw also costs more at runtime: two plugins a consumer installed, both behaving correctly on their own, leave the app dead rather than degraded — and the consumer cannot fix either plugin.
+
+**Pick one posture for *a plugin write the library refuses*, and say it once.** If the answer is throw, decision 5's drop needs the reason restated. If it is drop-and-warn, this one follows decision 5 and the spike's error becomes a warning. **Do not ship a throw here and a warning there without a sentence that tells them apart.**
 
 ---
 

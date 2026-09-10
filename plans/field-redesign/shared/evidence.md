@@ -73,9 +73,11 @@ Microsoft Project and Bryntum store no parent-ness at all, which is why neither 
 
 ## Escape hatches for a derived cell
 
-- **A comparable data grid ships `groupRowEditable`** with a value setter and distribution strategies — the *edit the parent, distribute down* option ADR 0011 rejects as a default. A distribution rule is a per-Field policy with no defensible default.
-- **A comparable Gantt disables its summary fields _except on a manually scheduled parent_.** The nearest FreeGantt shape is the per-entry pin flag, which ADR 0002 made scheduling-plugin data for S7. **That the Rollup opt-out is that same flag is an assumption, not a finding.** The product ties its escape hatch to *scheduling*; our Rollup is core `data/`. Decision 21 owns the question.
-- **Two products put *"do my values derive?"* on the record**, and neither ships anything like `rollUpKinds`. That is decision 6's surviving half, parked beside decision 20.
+**Named 2026-09-10.** All three bullets read *"a comparable X"* until then, against this file's own opening rule. The 0013 spike review caught it, and the bundle claim in the second bullet is load-bearing for *pin is not derive-off*.
+
+- **AG Grid ships `groupRowEditable`** on a column, with `groupRowValueSetter` carrying the distribution — the edited group value is shared among the group's children, recursing through the hierarchy, and `avg` adjusts children so their average equals the edited value. Setting distribution to `false` makes the cell not editable even under `groupRowEditable: true`. That is the *edit the parent, distribute down* option ADR 0011 rejects as a default. A distribution rule is a per-Field policy with no defensible default, and AG Grid's own `precision` caveat shows why: distributing across three children re-aggregates to a different `avg` than the one typed.
+- **Bryntum Gantt disables a summary task's date fields unless the parent carries `manuallyScheduled: true`.** A parent that is not manually scheduled has its dates recalculated from its children; one that is keeps its own. The nearest FreeGantt shape is the per-entry pin flag, which ADR 0002 made scheduling-plugin data for S7. **That the Rollup opt-out is that same flag is an assumption, not a finding.** Bryntum ties its escape hatch to *scheduling*; our Rollup is core `data/`. Decision 21 owns the question.
+- **Bryntum carries the question on the record**, as three separate task fields — `manuallyScheduled`, `rollup`, and `inactive` (an inactive task adds no attributes to its parent). It ships nothing like `rollUpKinds`. That is decision 6's surviving half, parked beside decision 20. **The earlier form of this bullet claimed _two_ products and named neither. Only one is sourced. Do not cite a second until somebody links it.**
 
 ## Where we part from JSON Merge Patch
 
@@ -95,9 +97,9 @@ tldraw is also the source of the module-augmentation route in decision 9: it shi
 
 ## Sources
 
-- AG Grid — [Value Getters](https://www.ag-grid.com/javascript-data-grid/value-getters/), [Transaction Updates](https://www.ag-grid.com/javascript-data-grid/data-update-transactions/), [TypeScript Generics](https://www.ag-grid.com/javascript-data-grid/typescript-generics/)
+- AG Grid — [Value Getters](https://www.ag-grid.com/javascript-data-grid/value-getters/), [Transaction Updates](https://www.ag-grid.com/javascript-data-grid/data-update-transactions/), [TypeScript Generics](https://www.ag-grid.com/javascript-data-grid/typescript-generics/), [Row Grouping — Editing Groups](https://www.ag-grid.com/javascript-data-grid/grouping-edit/), [Aggregation — Configure Columns](https://www.ag-grid.com/javascript-data-grid/aggregation-columns/)
 - TanStack Table — [Column Defs](https://tanstack.com/table/latest/docs/guide/column-defs)
-- Bryntum — [data fields and data source](https://forum.bryntum.com/viewtopic.php?t=23351), [manually scheduled summaries](https://forum.bryntum.com/viewtopic.php?p=81164)
+- Bryntum — [data fields and data source](https://forum.bryntum.com/viewtopic.php?t=23351), [manually scheduled summaries](https://forum.bryntum.com/viewtopic.php?p=81164), [`TaskModel.manuallyScheduled`](https://bryntum.com/products/gantt/docs/api/Gantt/model/TaskModel#field-manuallyScheduled), [`GanttTasksScheduling`](https://bryntum.com/products/gantt/docs/engine/classes/_docs_src_gantt_tasks_scheduling_.gantttasksscheduling.html)
 - DHTMLX Gantt — [Task Types](https://docs.dhtmlx.com/gantt/desktop__task_types.html)
 - Microsoft Project — [summary task rollup](https://support.microsoft.com/en-us/project/rollup-task-field)
 - FullCalendar — [Event Object](https://fullcalendar.io/docs/event-object), [issue #7636, *disallow non-standard event properties as `extendedProps`*](https://github.com/fullcalendar/fullcalendar/issues/7636), [the Vaadin binding's `extendedProps` → `customProperties` rename](https://vaadin.com/directory/component/full-calendar-flow)

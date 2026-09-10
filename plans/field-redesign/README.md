@@ -31,7 +31,7 @@ flowchart LR
 | [`shared/refuted.md`](shared/refuted.md) | You are about to re-derive something. **Check here first** |
 | [`shared/evidence.md`](shared/evidence.md) | You want the product survey the decisions cite |
 | [`shared/rulings.md`](shared/rulings.md) | You hit the schema counter, the registration lock, or `ComputedFieldCannotBeWrittenError` |
-| [`shared/prose-sweep.md`](shared/prose-sweep.md) | The last ADR has landed and the locked specs still state the old rule |
+| [`shared/prose-sweep.md`](shared/prose-sweep.md) | The last ADR has landed and the locked specs still state the old rule — **and the spike gate, run at every acceptance** |
 
 ## The split rules
 
@@ -71,10 +71,12 @@ Three ADRs would otherwise write the same function. The code says they need not.
 
 ## Independent fixes — land these on `main` first
 
-Neither needs any decision, and both are already identified.
+Neither needs any decision.
 
-1. **`mergeColumn` spreads `sizingPairOf(…)` alone.** **Done** — see [0011](0011-consumer-values-in-props/README.md).
-2. **Unify the proposed-Field predicate.** `rollup.ts:196` reads `body`, and `build-commit-change-set.ts:301` binds `body: proposed` — the transaction body alone — so a cascade's edits reach only `merged`. Two call sites answer *did anyone propose this Field?* from two different edit sets. **Unify them into one function before [0013](0013-what-decides-derivation/README.md) deletes the `body`/`merged` split.**
+1. **`mergeColumn` spreads `sizingPairOf(…)` alone.** Written — see [0011](0011-consumer-values-in-props/README.md). **Not on `main` yet.**
+2. ~~**Unify the proposed-Field predicate.**~~ **Withdrawn 2026-09-10 — it was a misread of the code.** `editProposesField` has one call site, and the `body`/`merged` split is deliberate and documented (`rollup.ts:23-26`, D-S2-22). There is nothing to unify. What is actually left is **decision 5's warning**, which does not exist in `src/` — the drop already ships in silence. That is [0013](0013-what-decides-derivation/README.md)'s build, not an independent fix. Full correction in [`shared/refuted.md`](shared/refuted.md) item 8.
+
+**Both commits sit off `main`, and this instruction is unmet.** `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) are on `adr-0011-field-redesign` and on every spike branch. Neither is an ancestor of `main`. They reach `main` through a PR, never a direct push.
 
 ## Nothing here is implemented
 
