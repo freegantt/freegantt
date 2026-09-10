@@ -6,7 +6,7 @@ One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, n
 
 ```mermaid
 flowchart LR
-  S["<b>0016</b><br/>no save format<br/><i>1 open</i>"] --> D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"]
+  S["<b>0016</b><br/>no save format<br/><i>0 open</i>"] --> D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"]
   S -->|"removes two of<br/>0011's four reasons"| P
   D --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>0 open</i>"]
   D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>0 open</i>"]
@@ -18,7 +18,7 @@ flowchart LR
 
 | ADR | The one question it answers | Open | Blocks |
 |---|---|---|---|
-| [**0016** — no save format](../../docs/adr/0016-the-library-holds-no-save-format.md) | Does this library save your data for you? | **one** — does `props` still stand? | 0011 |
+| [**0016** — no save format](../../docs/adr/0016-the-library-holds-no-save-format.md) | Does this library save your data for you? | **none** | 0011 |
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
 | [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | **none** | 0013 |
 | [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | **none** | — |

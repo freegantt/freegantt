@@ -10,7 +10,7 @@
 >
 > **There is no schema counter, and no build spends a number.** This file is revised for that, on 2026-09-10. §1 V13 keeps the superseded ruling, as the record of a question asked twice.
 >
-> **One closed question re-opens** — whether `props` survives once the Document stops being the reason for it. ADR 0016 recommends yes, on the two charges that never mentioned serialization. **BLOCKED — author**, before build 0011 starts. See §1 V21.
+> **One closed question re-opened, and closed again the same day.** `props` stands. ADR 0016 removed two of ADR 0011's four charges against flat consumer keys on the Entry; the two that survive never mentioned serialization, and they carry the decision on their own. **Ruled by the author, 2026-09-10.** See §1 V21.
 
 | Where a builder goes | File |
 |---|---|
@@ -338,7 +338,7 @@ Three facts price this at zero. The library has never shipped. No saved Document
 
 ---
 
-### V21 — ADR 0016 removes one of ADR 0011's reasons for `props` · **build 0011**
+### V21 — ADR 0016 removes two of ADR 0011's four reasons for `props` · **build 0011**
 
 **The claim.** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props.md) rejects *flat consumer properties on the Entry* on four charges. ADR 0005 rejects the same option with *"the one thing a grid does not do: we serialize."*
 
@@ -349,9 +349,9 @@ Three facts price this at zero. The library has never shipped. No saved Document
 - **Three reserved name sets appear at three doors.** Without a namespace, `add()`, `update()` and the constructor each need to know which names are core and which are the consumer's.
 - **`Entry` needs an index signature**, which makes `entry.strat` compile. A typo stops being a compile error.
 
-**Resolution — recommended, not ruled. `props` stands.** The two surviving charges are the stronger pair: they are about the type system and the write doors, which is where a consumer meets the library every day. Serialization was always the weakest of the four, and ADR 0016 removes it rather than answering it.
+**RULED — author, 2026-09-10. `props` stands.** The two surviving charges are the stronger pair: they are about the type system and the write doors, which is where a consumer meets the library every day. Serialization was always the weakest of the four, and ADR 0016 removes it rather than answering it.
 
-**BLOCKED — author.** Build 0011 is the `meta` → `props` rename, so it cannot start until this is ruled. Nothing before it is affected: build 0016 and build 0012 are both independent of the answer.
+**Build 0011 is unblocked.** Its work list does not change — the ruling confirms the target rather than moving it. **Write the two surviving reasons into ADR 0011's rejection row**, so that a later reader does not find four charges and discover two are void.
 
 ---
 
@@ -481,7 +481,7 @@ Plus these behavioural assertions, each a named test:
 
 **Depends on.** Build 0012. `EntryEdit`'s removable keys derive from `Entry`, so `{ start: undefined }` compiles only after 0012 lands. This build rebases onto 0012, which is the cheap direction.
 
-**And it depends on one ruling.** **V21 — BLOCKED — author.** ADR 0016 removed two of ADR 0011's four charges against flat consumer keys. Two survive, and the recommendation is that `props` stands. **Do not start this build before that is ruled**: it is the build that would be wasted.
+**The V21 ruling stands behind it.** ADR 0016 removed two of ADR 0011's four charges against flat consumer keys. The author ruled on 2026-09-10 that `props` stands on the two that survive. This build's work list is unchanged.
 
 **ADR 0016 already took the large half of this build.** ADR 0011 calls the Document rename (`meta` → `props`) its large half and the write path its small one. The Document is gone, so what is left is the small half plus the type renames.
 
@@ -910,7 +910,7 @@ Work top to bottom. Each build ends with the same five closing items.
 - [x] **V13 ruled 2026-09-10**, then superseded the same day by ADR 0016. No build spends a schema number.
 - [x] **V2 ruled 2026-09-10** — drop both #266 citations from ADR 0011 and correct its dependency row.
 - [x] **V8, V9, V18 authorized 2026-09-10** — the locked-spec edits are cleared. §5.7 holds them.
-- [ ] **Rule V21 — BLOCKED — author.** ADR 0016 removed two of ADR 0011's four charges against flat consumer keys. Does `props` still stand? The recommendation is yes. **Build 0011 cannot start until this is answered.** Builds 0016 and 0012 can.
+- [x] **V21 ruled 2026-09-10** — `props` stands, on the two charges that never mentioned serialization. Build 0011 is unblocked, and it owes ADR 0011's rejection row a correction from four charges to two.
 
 ## 5.0.5 Build 0016 — the library holds no save format
 

@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Opened 2026-09-10, in the field redesign.
 decided: the library holds no save format; `toJSON`, `fromJSON`, the Document types, the `schema` integer and `data/serialization/` are deleted; persistence is the consumer's job, through read surfaces that already ship; a plugin publishes its own reader and gets no serialization hook.
-open: one — whether ADR 0011's `props` namespace still stands once the Document stops being the reason for it. The recommendation is yes, on the two reasons that survive.
+open: none. One question opened and closed on 2026-09-10 — `props` stands, on the two reasons that never mentioned serialization.
 ---
 
 # The library holds no save format
@@ -65,9 +65,9 @@ The consumer brought the data in. They own where it goes.
 
 `new Dataset({ entries })` is untouched. Loose input stays loose — `string` ids, `InstantInput` dates. An undeclared key is still carried and still opaque to `update()` ([ADR 0011](0011-consumer-values-live-in-props.md) decision 1). This ADR removes a way **out**, not a way in.
 
-## The one open question
+## The one question this raised, and its answer
 
-**Does [ADR 0011](0011-consumer-values-live-in-props.md)'s `props` namespace still stand?** Its rejection of flat consumer keys on the Entry rests on four charges. Two of them die here:
+**Does [ADR 0011](0011-consumer-values-live-in-props.md)'s `props` namespace still stand? Yes. Ruled by the author, 2026-09-10.** Its rejection of flat consumer keys on the Entry rests on four charges. Two of them die here:
 
 - ~~the Document reader's unknown-key rule inverts~~
 - ~~an older file whose consumer key a later release promotes needs its own migration door~~
@@ -77,9 +77,11 @@ Two survive, and neither mentions serialization:
 - **Three reserved name sets appear at three doors.** Without a namespace, `add()`, `update()` and the constructor each need to know which names are core and which are the consumer's.
 - **`Entry` needs an index signature**, which makes `entry.strat` compile. A typo stops being a compile error.
 
-**Recommendation: `props` stands.** The two surviving charges are the stronger pair — they are about the type system and the write doors, which is where a consumer meets the library every day. ADR 0005's *"we serialize"* was always the weakest of the reasons, and this ADR removes it rather than answering it.
+**`props` stands.** The two surviving charges are the stronger pair — they are about the type system and the write doors, which is where a consumer meets the library every day. ADR 0005's *"we serialize"* was always the weakest of the reasons, and this ADR removes it rather than answering it.
 
-**This is stated and not buried, because it is the one place this ADR touches a closed decision.** The author rules it before build 0011 starts.
+**This is stated and not buried, because it is the one place this ADR touches a closed decision.** The author ruled it the day the ADR opened.
+
+**Build 0011 owes [ADR 0011](0011-consumer-values-live-in-props.md) one correction.** Its *Considered options* row for flat consumer properties lists four charges, and two are void from this ADR onward. A later reader who counts four and finds two dead cannot tell whether the decision survived. The row names the two that carry it.
 
 ## Consequences
 
