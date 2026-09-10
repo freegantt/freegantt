@@ -2,33 +2,19 @@
 
 **Governing:** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props-and-a-derived-value-never-persists.md). Open decisions are in [`open-decisions.md`](open-decisions.md) and nowhere else. Check [`refuted.md`](refuted.md) before you re-derive anything.
 
-**Nothing here is undecided.** Every question this plan raised now carries a number and lives in [`open-decisions.md`](open-decisions.md) — the schema-bump timing is 25, the core-key declaration is 23. Where an older line in this folder disagreed with the ADR, the ADR won — see [`conflict-log.md`](conflict-log.md).
+**Nothing here is undecided.** Every question this plan raised now carries a number and lives in [`open-decisions.md`](open-decisions.md) — the schema-bump timing is 25, the core-key declaration is 23.
 
 ## Order, and what gates it
 
 ```mermaid
 flowchart LR
-  subgraph gates["Decisions to answer first"]
-    direction TB
-    g1["<b>9 + 12</b> — one decision"]
-    g2["<b>18</b> · <b>19</b> · <b>22</b> · <b>23</b> · <b>25</b>"]
-    g3["<b>1</b>"]
-    g4["<b>8</b> · <b>24</b>"]
-  end
-  g1 --> A
-  g2 --> A
-  g3 --> B
-  g4 --> C
   A["<b>A</b><br/>the address rule<br/>and the storage rename"] --> B["<b>B</b><br/>the merging patch"] --> C["<b>C</b><br/>a derived value<br/>never persists"] --> D["<b>D</b><br/>optional dates,<br/>on every kind"]
   F["<b>F</b><br/>prose that states<br/>the old rule"] -.->|"throughout"| A
-  E["the Document<br/>bump — <b>25</b>"] -.->|"no group of its own"| A
-  E -.-> C
-  E -.-> D
 ```
 
-**Group E is dissolved.** Each Document change lands in the group that causes it.
+**Which decision gates which group is one graph, and it is in [`open-decisions.md`](open-decisions.md#what-gates-what).** Do not copy it here — a second copy goes stale the first time a decision closes.
 
-**When the schema bumps is decision 25**, and it is weighed in [`open-decisions.md`](open-decisions.md), not here. Bumping once at the end of D spends one version number; bumping per group buys a reviewable branch and ends higher than `5`. **One constraint binds this plan either way:** bump per group only if A carries the nested ingest too — see A's second bullet — otherwise the "reviewable" A commit is green and silently lossy.
+**Group E is dissolved.** Each Document change lands in the group that causes it, and **when the schema bumps is decision 25**.
 
 `pnpm verify:full` runs green before the PR merges, either way.
 
@@ -53,10 +39,10 @@ The key decides the home, so no declaration carries one.
 - Write the edit types from [`types.md`](types.md). Do **not** write `Partial` on either half, and do **not** factor them into one shared mapped type. Seven type tests.
 - **`StoredEdit` → `ProposedEdit`, with serena.** About 184 occurrences. `ProposedEdits`, `toProposedEdit`/`toProposedEdits` and `EditReading.proposed` follow. Lands in A because A already renames the type's own field. Write `ProposedEdit`'s **type** too — `props` is required on it — and decide the branding trap in [`types.md`](types.md) at the same time.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
-- `change-set.ts`'s `fieldsWrittenBy` still skips `'meta'`. `isOptionalEntryKey` still names it. Both follow the rename.
+- `build-commit-change-set.ts:100`'s `fieldsWrittenBy` still skips `'meta'`, and `field-access.ts:26`'s `isOptionalEntryKey` still names it. Both follow the rename.
 - Delete `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS`, `illegalCoreOverrideKey`. **Answer decision 19 first** — the deletion removes a data-level capability that `interactions.edit` cannot replace. What a consumer declaration on a core key then does — throw `DuplicateFieldKeyError`, or warn the way a `props` **value** does — is **decision 23**. Delete the override; write neither answer until 23 closes.
 - **One write resolver in `data/`, and every door calls it. A builds the resolver and fills two of its three arms.** The three rules are *does this Field exist*, *is it editable*, *is it derived here*. A answers the first two: `entries.update()` refuses an uneditable write (`FieldNotEditableError`) and an undeclared one (`UnknownFieldError`), and `view/capability.ts` calls the resolver instead of restating the rule. **The derived arm is group C's, not A's** — the refusal is written against the merged patch, which group B builds. A leaves the arm unwired and C fills it. See ordering constraint 3.
-- **Four answers, seven call sites**, and the ADR's flowchart groups them by answer. The call list is the seven: `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })`, the extension hook. **Do not build the list from the four boxes** — that skips `add()`, `fromJSON()` and the constructor, which drop rather than throw. **Do not write the test twice.**
+- **Four answers, seven call sites.** The call list is `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Do not build it from the ADR flowchart's four boxes** — that skips `add()`, `fromJSON()` and the constructor, which drop rather than throw. **Do not write the test twice.**
 - **Two merges shallow-spread, not one. Fix both together or plugin composition breaks in production.**
   - `data/edit-extension.ts:38` — `mergeEntryEdits`, the loose one a plugin author calls. With consumer keys inside `props`, two extenders writing different `props` keys lose one: #197 one level down, against that function's own stated promise (#238).
   - `data/fields/field-access.ts:49` — `mergeStoredEdits`, which the **commit path** uses to fold body + cascade + hierarchy. `{ ...base, ...extra }` has the identical hole, and here it breaks a contract written directly above it: *"`extra` wins per Field key; the proposed keys of both survive."* That is true today only because a top-level key **is** a Field key. Once `props` is one key holding many, `extra` wins per **namespace**, so a body write of `props.cost` beside a cascade write of `props.progress` loses `cost` — while `proposedKeys` still names it, so the ChangeSet emits a row carrying a stale value. **A wrong row is worse than a dropped write**, and only this one is reachable without a second plugin installed.
@@ -174,17 +160,14 @@ Group F may edit locked specs (`plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md`). `p
 
 ## Ordering constraints
 
+**The decision gates are not repeated here** — [`open-decisions.md`](open-decisions.md#what-gates-what) holds them, and each decision's own section says which group it blocks. These are the code constraints that no decision covers.
+
 1. **`mergeColumn` first.** Done.
 2. **The `compute` + `rollUp` registry refusal lands before [#213](https://github.com/Pawel-IT/FreeGantt/issues/213)'s own fix.**
 3. **Group B before group C.** The derived refusal at `entries.update()` is written against the merged patch, which is why the resolver's derived arm is C's and not A's.
 4. **Group D before [#242](https://github.com/Pawel-IT/FreeGantt/issues/242).**
-5. **Decisions 9 and 12 are answered together, before group A.** Not questions an implementer may answer in passing.
-6. **Decisions 18 and 19 before group A.** 18 sets the default posture of `entries.update()`. 19 replaces the deleted core-key gate.
-7. **Decisions 22, 23 and 25 before group A.** 22 shapes the `ProposedEdit` type A writes. 23 decides what a core-key declaration does once A deletes the override. 25 decides whether A bumps the schema. **19 before 23** — if 19 keeps the override for `editable`, 23 is already answered.
-8. **Decision 8 before group C.**
-9. **Decision 24 before or with group C**, which implements decision 6's drop at all three doors. 24 is the third door's undo, and decision 21 would close it for free.
-10. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with group C.**
-11. **Unify the proposed-Field predicate before group C deletes the `body`/`merged` split.**
+5. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with group C.**
+6. **Unify the proposed-Field predicate before group C deletes the `body`/`merged` split.**
 
 ## Gate
 
@@ -208,7 +191,7 @@ grep -rn '\bmeta\b\|FieldSource\|source: {' CONTEXT.md CLAUDE.md \
   | grep -v 'import\.meta'
 ```
 
-Per file at HEAD: `plans/02` 15, `plans/01` 13, `CONTEXT.md` 4, `CLAUDE.md` 2, `plans/00` 0.
+Per file at HEAD: `plans/02` 15, `plans/01` 12, `CONTEXT.md` 4, `CLAUDE.md` 2, `plans/00` 0.
 
 `pnpm verify:full`, and its **last line** is the answer. Capture it with a redirect, never a pipe: `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`.
 

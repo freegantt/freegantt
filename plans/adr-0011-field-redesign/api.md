@@ -111,11 +111,11 @@ dataset.entries.fieldValue(id, 'start')  // Instant
 dataset.entries.fieldValue(id, 'ref')    // compute / plugin: unknown
 ```
 
-**Two read doors on the app-author surface, four in all.** `entry.props` is storage; `fieldValue` resolves getters and aggregates. The plugin surface adds `ctx.read(entry, key)` and `ctx.durationOf(entry)`. The two counts name two audiences, so quote the audience with the number. Decision 13 covers all four.
+**Two read doors on the app-author surface, four in all.** `entry.props` is storage; `fieldValue` resolves getters and aggregates. The plugin surface adds `ctx.read(entry, key)` and `ctx.durationOf(entry)`. The two counts name two audiences, so quote the audience with the number.
 
 A `compute` Field's answer stays `unknown` ([#267](https://github.com/Pawel-IT/FreeGantt/issues/267)). `TValue` on `Field` never comes back from the registry, and **the library publishes no type argument here** — see [`refuted.md`](refuted.md) item 2.
 
-⚠️ `fieldValue` and `FieldContext.read` are one job under two names — decision 13.
+⚠️ `fieldValue` and `FieldContext.read` are one job under two names, and decision 13 covers all four doors.
 
 ## Write
 
@@ -158,7 +158,7 @@ Registration still closes when `setup()` returns. Plugin declarations stay out o
 
 `EditRequest.proposed` is a complete `ProposedEdit` (today `StoredEdit`), and `props` is **required** on it. `durationOf(entry)` returns `Duration | undefined`.
 
-The published `compute` sample writes `duration.value / MS.DAY`. `MS` is public (`api/index.ts:365`) and the library uses it itself at `core-fields.ts:46`. **Never publish the raw constant** — decision 15, closed.
+The published `compute` sample writes `duration.value / MS.DAY`, never the raw constant — decision 15, closed.
 
 ⚠️ A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes **every** key — decision 22. The trap is stated in [`types.md`](types.md); the two candidate fixes are weighed in [`open-decisions.md`](open-decisions.md).
 ⚠️ The extender returns `new Map()`, brands ids, and the author writes the composition — decision 16.
@@ -192,9 +192,9 @@ dataset.entries.add({ id: 'c', parentId: 'p' })  // p now rolls up: cost 500 →
 dataset.history.undo()                           // c leaves, p stops rolling up, cost is 500 again
 ```
 
-**Decision 6, closed.** An Entry that starts rolling up drops its authored values on rolling-up Fields, and the Rollup recalculates them. **No error, at any of the three doors** — promotion, a `kind` write, a `rollUpKinds` flip. The drop is an ordinary ChangeSet row and undo restores it. `rollUpKinds` is **not** a destructive setter and history is never cleared. Flipping a kind *out* keeps the last derived answer, now authored.
+**Decision 6, closed.** An Entry that starts rolling up drops its authored values on rolling-up Fields, and the Rollup recalculates them, at all three doors and with no error. The drop is an ordinary ChangeSet row, undo restores it, and flipping a kind *out* keeps the last derived answer, now authored. The reasoning is in [`closed-decisions.md`](closed-decisions.md).
 
-⚠️ The flip's cause is a config assignment, and `ChangeSet` has no row for one. Either the undo step reverses the config key too, or the flip's drops stay out of history — **decision 24**, open.
+⚠️ The flip's cause is a config assignment, and `ChangeSet` has no row for one — **decision 24**, open.
 
 ## Renames and deletions
 

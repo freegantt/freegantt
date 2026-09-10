@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Supersedes ADR 0005's `meta` rulings if accepted.
 decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; a derived value never persists; one write rule answers every door; dates are optional on every kind; a kind conversion promotes and demotes.
-open: fifteen decisions — 1, 8, 9, 11, 12, 13, 16, 18, 19, 20, 21, 22, 23, 24, 25. They live in [`open-decisions.md`](../../plans/adr-0011-field-redesign/open-decisions.md), and nowhere else.
+open: fifteen decisions. They are numbered and weighed in [`open-decisions.md`](../../plans/adr-0011-field-redesign/open-decisions.md), and nowhere else — this file does not list them, so that closing one is one edit.
 ---
 
 # Consumer values live in `props`, and a derived value never persists

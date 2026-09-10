@@ -1,28 +1,10 @@
 # Open decisions — ADR 0011
 
-**This is the only list of what is open.** It merges what the ADR held open, the plan's Blocking B1–B3, the working review's D1–D7, and the questions raised against [`api.md`](api.md) on 2026-09-09. Rulings and their evidence go to [`closed-decisions.md`](closed-decisions.md) once a decision closes. The survey behind the evidence is in [`evidence.md`](evidence.md).
-
-**A recommendation is not a ruling.** A row that says *open* stays open.
-
-**Numbers never move.** A closed decision keeps its number and leaves this list. Do not renumber the survivors to close the gaps — the plan, the conflict log and two reviews cite these numbers.
-
-**A number here is a decision number, never an ADR section.** ADR 0011's sections lost their numbers on 2026-09-09 for this reason. *Decision 6* is the `rollUpKinds` ruling, *decision 8* is the demotion kind, and neither names a part of the ADR.
+**This is the only list of what is open.** It merges what the ADR held open, the plan's Blocking B1–B3, the working review's D1–D7, and the questions raised against [`api.md`](api.md) on 2026-09-09. Rulings and their evidence go to [`closed-decisions.md`](closed-decisions.md) once a decision closes. The survey behind the evidence is in [`evidence.md`](evidence.md). The folder's editing rules are in [`README.md`](README.md) — a number never moves, and a recommendation is never a ruling.
 
 **Fifteen are open: 1, 8, 9, 11, 12, 13, 16, 18, 19, 20, 21, 22, 23, 24, 25.** Ten are closed: 2, 3, 4, 5, 6, 7, 10, 14, 15, 17.
 
-| Here | Was also called |
-|---|---|
-| 1 | plan Open 1 — settled 2026-09-08, re-opened 2026-09-09 |
-| 9 | plan Blocking B1, review D1 |
-| 11 | review D5 |
-| 8, 12, 13, 16 | new on 2026-09-09 |
-| 18, 19 | new on 2026-09-09, from the `editable` ruling |
-| 21 | new on 2026-09-09, from a review of a proposed `Entry.authoredValues` |
-| 20 | new on 2026-09-09, from 18's cost table. Larger than this ADR; **8** is a narrower form of it |
-| 22 | new on 2026-09-09. Sat unnumbered in [`types.md`](types.md) as *"two candidate fixes, and this needs one"* |
-| 23 | new on 2026-09-09. Sat unnumbered in [`closed-decisions.md`](closed-decisions.md) as *"ask before group A implements the throw"* |
-| 24 | new on 2026-09-09. Sat unnumbered inside decision 6's ruling as *"two ways out, and the flip needs one"* |
-| 25 | new on 2026-09-09. Sat unnumbered in [`work-plan.md`](work-plan.md) as *"a live choice"* |
+Three numbers carry an older name that other documents still use: **1** is plan Open 1, **9** is plan Blocking B1 and review D1, and **11** is review D5. Everything from 8 upward was raised on 2026-09-09.
 
 ## What gates what
 
@@ -131,7 +113,7 @@ dataset.entries.get('t1')?.props.progress    // number | undefined — nothing h
 | **B** | **An `Entry.pluginData` sibling** | Honest, but a third Entry key and a fourth Document key. It does **not** stop two plugins colliding unless it is keyed by plugin id — at which point it is C with extra steps |
 | **C** | **The plugin's own store** | `plugin-store.ts` already ships `PluginStores`, `reserve<T>()` and `read<T>()`, and `PluginDocument` already serializes it. *Every* door that names a Field key must route — `entries.update`, the cell editor, the cascade, undo — and `toJSON` must learn that a leaf plugin value already lives in `PluginDocument`. Worse, `update('t1', { props: { progress: 60 } })` would type-check and write the consumer's bag while the grid reads the plugin's store. **If C is picked, `PluginFieldNotInDataError` is part of the pick, not a follow-up** |
 
-**One field report on option A with nothing separating the writers, and it is recent.** FullCalendar's Vaadin binding shipped `extendedProps` as the consumer's bag. The library underneath then started writing into it, and 3.0.1 renamed the consumer's half to `customProperties`. **A shared bag with two writers and no marker gets split eventually**, and the split is a breaking rename for everyone using it. Excalidraw sits in the same position now. Full quotes in [`evidence.md`](evidence.md).
+**One recent field report runs against option A with nothing separating the writers: a shared bag with two writers and no marker gets split eventually**, and the split is a breaking rename for everyone using it. The report, with quotes, is in [`evidence.md`](evidence.md).
 
 **What is true today, so the options are weighed against the code.** A plugin's Field values already sit in `props`, beside the consumer's. `field-registry.ts`'s `authored` excludes plugin-declared Fields from the Document on a stated premise — *"The plugin's values are not affected — those sit in `Entry.meta`, which round-trips whether the Field is declared or not."* One word changes and the guarantee does not. `PluginDocument` (D-S5-24) keeps its current job, the plugin's own non-Field rows. **This is a description of HEAD, not a ruling.**
 
@@ -151,11 +133,9 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 `plans/02:459` ships `update('t1', { start, cost })`. This ADR ships `update('t1', { start, props: { cost } })`. One sentence names two Fields; the other names one Field and a container. **This edits a locked spec either way**, so it needs an explicit ruling.
 
-**Nobody nests at the write door.** Bryntum writes `record.set({ startDate, cost })`. DHTMLX Gantt mutates the task and calls `updateTask(id)`. AG Grid spreads flat. Every one keeps consumer values beside core ones in a single flat write.
+**Nobody nests at the write door**, and **FullCalendar ran the flat experiment to its end and it went wrong twice**. Both surveys are in [`evidence.md`](evidence.md).
 
-**FullCalendar ran this experiment to its end, and it went wrong twice.** Before v4 a consumer's custom field sat bare on the event, and FullCalendar later added an option with the same name — **this ADR's stated hazard, realised in a shipped product**. `extendedProps` fixed reading. The *write* door stayed open, and a non-standard top-level key is still relocated into `extendedProps` during parsing. Issue #7636 (March 2024, no maintainer reply) reports `tilte:` for `title:` accepted in silence, and asks FullCalendar to disallow custom keys at the top level.
-
-**Read the lesson precisely, because it is narrower than _flat is bad_.** What broke FullCalendar is an **open** top level, not flatness. **This ADR already closes that door:** `update('t1', { strat: … })` throws `UnknownFieldError`.
+**Read the FullCalendar lesson precisely, because it is narrower than _flat is bad_.** What broke it is an **open** top level, not flatness. **This ADR already closes that door:** `update('t1', { strat: … })` throws `UnknownFieldError`.
 
 **It does not collide with 1's current recommendation.** 1 now recommends that `update()` throws for an undeclared key, so the typo guard *inside* `props` stays. Nesting and the declared-key shorthand are both still live. The collision returns only if 1 lands the other way — undeclared keys writable, inner guard dropped, outer guard kept — because the ADR cannot say *TProps is enough inside* and *we nest for a closed top level for the same typo reason*. **Settle 1 first only for that branch.**
 
@@ -173,22 +153,13 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 **Raised 2026-09-09 by the author. Gates group A.** The question: should `{ key: 'owner' }` be `{ key: 'props.owner' }`, so the declaration says exactly where the value lives and a collision cannot happen?
 
-**The first pass argued against it on evidence that is now withdrawn.** AG Grid's `field: 'medals.gold'` and TanStack Table's `accessorKey: 'name.last'` are **not** this — see [`refuted.md`](refuted.md).
+**The first pass argued against it on evidence that is now withdrawn**, and its decisive objection dissolves too — both are [`refuted.md`](refuted.md) item 7.
 
-**The real precedent is platforms that own part of a key space, and it is strong.**
+**The real precedent is platforms that own part of a key space, and it is strong.** HTML, Kubernetes, OpenAPI and FullCalendar each split the space, and the table is in [`evidence.md`](evidence.md). Three lessons come out of it, pointing in different directions for our three writers:
 
-| Platform | Core keys | Consumer keys | Third-party keys |
-|---|---|---|---|
-| HTML / DOM | bare (`id`, `class`, `href`) | **prefixed** `data-*` | — |
-| Kubernetes | reserved `kubernetes.io/` | **bare** — *"presumed to be private to the user"* | **prefix required**, reverse-DNS |
-| OpenAPI | bare | — | **prefixed** `x-`, and then `x-{namespace}-` |
-| FullCalendar | bare, about 21 reserved event keys | **namespaced on read**, accepted either way on write | — |
-
-Three lessons, pointing in different directions for our three writers:
-
-- **For the consumer, a prefix buys forward compatibility.** HTML's `data-*` exists so authors avoid clashes with future versions of HTML. That is the hazard this ADR names when it deletes the core-key override. **HTML solved it with a prefix; SQL and CSS solved it with a reserved word list.** Both work.
-- **For a third party, one shared prefix is not enough.** OpenAPI shipped a single `x-` space, vendors collided inside it, and the OpenAPI Initiative added a **namespace registry** so extensions read `x-{namespace}-`. Kubernetes reached the same answer by rule. That is this library's plugin-versus-plugin collision, solved twice in the field.
-- **The first pass's decisive objection dissolves under the right framing.** It argued a prefix welds the public name to the storage mechanism, so a Field moving between `compute` and stored would be renamed in every saved Document. That holds only if the prefix names **storage**. If it names **ownership**, a consumer's `compute` Field and a consumer's stored Field carry the same prefix and nothing renames. `data-foo` does not tell you where the browser keeps it. What survives is smaller: a path needs escaping, and a consumer key holding the separator is ambiguous.
+- **For the consumer, a prefix buys forward compatibility.** HTML's `data-*` exists so authors avoid clashes with future versions of HTML — the hazard this ADR names when it deletes the core-key override. **HTML solved it with a prefix; SQL and CSS solved it with a reserved word list.** Both work.
+- **For a third party, one shared prefix is not enough.** OpenAPI shipped a single `x-` space, vendors collided inside it, and the Initiative added a namespace registry. Kubernetes reached the same answer by rule. That is this library's plugin-versus-plugin collision, solved twice in the field.
+- **A prefix that names _ownership_ costs less than one that names storage.** A consumer's `compute` Field and a consumer's stored Field then carry the same prefix, and nothing renames when a Field moves between them. What survives is smaller: a path needs escaping, and a consumer key holding the separator is ambiguous.
 
 **Recommendation, and it is the Kubernetes shape:**
 
@@ -235,7 +206,7 @@ extendEdits(request) {
 }
 ```
 
-**Keep the `Map`; an object keyed by Entry id is the wrong container.** JavaScript walks integer-like string keys first and in ascending numeric order, so `{ '10': …, '2': … }` iterates as `2` then `10`. Entry ids are consumer strings and numeric ids are ordinary, so a `Record` silently reorders the cascade — and the merge is last-wins per Field key, which makes order load-bearing. `__proto__` as an Entry id is the second hazard on the same container. An array of `[id, edit]` pairs is the other safe shape. **The three ergonomic complaints stand under either container.**
+**Keep the `Map`; an object keyed by Entry id is the wrong container** — [`refuted.md`](refuted.md) item 9. An array of `[id, edit]` pairs is the other safe shape, and **the three ergonomic complaints stand under either container.**
 
 **The shape is a published plugin-author signature, so it needs a ruling.** Whether a contested write reports, and at what severity, is the other half.
 
@@ -347,9 +318,9 @@ The flag turns the Rollup off for one Entry. That Entry's rolled-up values becom
 
 ## 22. Does `ProposedEdit` carry a brand, or does an extender diff its proposed keys?
 
-**Raised 2026-09-09. Gates group A**, which writes the `ProposedEdit` type. The full statement of the trap is in [`types.md`](types.md) — read it there and do not restate it here.
+**Raised 2026-09-09. Gates group A**, which writes the `ProposedEdit` type.
 
-**The trap, in one line.** After the rename a complete `props` and a `props` patch are the same shape, so a plugin that spreads `request.proposed.get(id)?.props` into a returned edit turns **every** stored key into a proposed key, and every one of them gets a ChangeSet row. That is decision 5's territory reached by a plugin author who never read decision 5.
+**The trap, in one line.** After the rename a complete `props` and a `props` patch are the same shape, so a plugin that spreads `request.proposed.get(id)?.props` into a returned edit proposes **every** stored key by accident. The full statement, with the code, is in [`types.md`](types.md).
 
 **Two candidate fixes, and one has to land with the type.**
 

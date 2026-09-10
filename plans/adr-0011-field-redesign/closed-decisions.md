@@ -1,13 +1,11 @@
 # Closed decisions — ADR 0011
 
-**Governing:** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props-and-a-derived-value-never-persists.md). Open decisions live in [`open-decisions.md`](open-decisions.md) and only there. **This file is the only other place an ADR 0011 decision is written down**, and it holds the closed ones.
-
-**A number never moves.** A closed decision keeps its number and leaves the open list. Do not renumber the survivors to close the gaps — the plan, the conflict log and two reviews cite these numbers.
+**Governing:** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props-and-a-derived-value-never-persists.md). Open decisions live in [`open-decisions.md`](open-decisions.md) and only there. **This file is the only other place an ADR 0011 decision is written down**, and it holds the closed ones. The folder's editing rules are in [`README.md`](README.md).
 
 | # | Question | Ruling |
 |---|---|---|
 | **2** | What does `entries.add({ props })` emit? | One `EntityAdded` row, carrying the Entry **as stored** |
-| **3** | Does the schema restart need a release gate? | No renumbering. `5` now, `1` at release. **A released reader refuses a file it did not write** |
+| **3** | Does the schema restart need a release gate? | No renumbering. `5` when this work lands, `1` at release. **A released reader refuses a file it did not write** |
 | **4** | What does `InvalidInstantError` refuse? | An unreadable date, and one date without the other. Not an Entry that authors neither |
 | **5** | A plugin cascade writes a derived cell | **Dropped, with one warning.** Exempt from the *throw* only |
 | **6** | An Entry starts rolling up | **Drop and recalculate, no error, at all three doors.** Undo restores it. History is never cleared |
@@ -33,7 +31,7 @@ One `EntityAdded` row carries the whole Entry as stored. Per-Field rows would un
 
 **Closed 2026-09-09.** Its own text read *"and that stands"*, so only a one-line addition was ever in question.
 
-**No change to the numbering.** `5` now and `1` at release. One rule joins the release gate instead — **a released reader refuses a file it did not write.** That retires the pre-release-`3`-against-released-`3` hazard permanently. Nothing reads schema 3 today. Spending a public number, or shipping a `preRelease` flag, would solve a problem that ends the day the library goes public.
+**No change to the numbering.** HEAD writes `4`, this work ends at `5`, and the count restarts at `1` on release. One rule joins the release gate instead — **a released reader refuses a file it did not write.** That retires the pre-release-`3`-against-released-`3` hazard permanently. Nothing reads schema 3 today. Spending a public number, or shipping a `preRelease` flag, would solve a problem that ends the day the library goes public.
 
 ## 4 — what `InvalidInstantError` refuses
 
@@ -67,9 +65,9 @@ Three doors reach the same state, and all three behave alike: autoGroup promotio
 
 **Undo was the draft's stated reason to refuse, and it does not hold** — see [`refuted.md`](refuted.md) item 12. **History is never cleared, and `RollUpKindsWouldDropValuesError` is not added.**
 
-**One follow-up on one door, and it is open as decision 24.** The flip is a transaction: it emits one ChangeSet, enters undo as one step, and `beforeChange` may veto it. Promotion and a `kind` write carry their cause in that transaction. A `rollUpKinds` flip's cause is a **config assignment**, and `ChangeSet` has no row shape for one, so undo restores the values while `rollUpKinds` still rolls them up. **This ruling does not answer that door.** The two ways out, and what each costs, are in [`open-decisions.md`](open-decisions.md) under 24. It is a follow-up, not a re-opening: the drop-and-recalculate ruling above stands at all three doors either way.
+**One follow-up on one door, and it is open as decision 24.** The flip is a transaction: it emits one ChangeSet, enters undo as one step, and `beforeChange` may veto it. Promotion and a `kind` write carry their cause in that transaction; a flip's cause is a **config assignment**, which `ChangeSet` has no row shape for. **This ruling does not answer that door**, and it is a follow-up rather than a re-opening — the drop-and-recalculate ruling above stands at all three doors either way. The two ways out are weighed in [`open-decisions.md`](open-decisions.md) under 24.
 
-**Still parked, and untouched by this ruling:** whether `rollUpKinds` is the right axis at all, or whether a per-entry flag should carry *"do my values derive?"*. That sits beside decision 20. **The flag's layer is decision 21**, and a stored flag would close decision 24: it emits an ordinary Field row, so undo reverses the flag and the values in one step.
+**Still parked, and untouched by this ruling:** whether `rollUpKinds` is the right axis at all. That sits beside decision 20, and the flag's layer is decision 21.
 
 ## 7 — what an S7 plugin does with a `progress` value it did not write
 
