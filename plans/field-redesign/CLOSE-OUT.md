@@ -17,18 +17,22 @@
 
 ## Locked-spec edits — the author has to be in the room
 
-`.claude/hooks/protect-spec.sh` blocks an edit to `CLAUDE.md`, `CONTEXT.md` and `plans/00`–`04`, on purpose: it turns the easy path into a conversation. **An agent that hits it stops and asks. It does not work around it, and it does not drop the edit.** Every one of these is owed and is tracked here, not in a session that ends.
+**`.claude/hooks/protect-spec.sh` warns on an edit to `plans/**`. It does not block one.** Checked 2026-09-10: the `plans/*` arm (`:45-65`) prints *"DID YOU ASK THE USER FOR PERMISSION TO EDIT THIS?"* to stderr and exits **0**, so the edit lands. Two arms exit 2 and do block — a new runtime dependency, and a loosened `eslint.config.js` or `.dependency-cruiser.cjs` guard. This file said *blocks* until today. It was wrong.
+
+**So the guard is the question, not the exit code.** The warning turns the easy path into a conversation, and an agent that sails past it has edited a locked spec with nobody in the room. **An agent asks the author, waits for the answer, and only then edits.** It does not work around the warning, and it does not drop the edit. Every one of these is owed and is tracked here, not in a session that ends.
 
 - [x] **The 2026-09-10 prose sweep** — author confirmed; landed in `8f6ced0`.
 - [x] **The sweep's two misses** — `plans/00:51` (principle 9 still declared authored `Entry.kind`) and `plans/03` (S4's `rollUpKinds`, `autoGroup`, `entry`/`meta` source). The gate grep named only 0011's words, so `plans/00` scored 0 and read as clean. The grep is widened in [`shared/prose-sweep.md`](shared/prose-sweep.md).
 - [ ] **`src/model/field.ts:125-127`** — the `editable` comment still says *default `false`* and claims I14. Not the sweep's: 0015's build edits it with the code.
 - [ ] **`plans/01` I14 and `plans/02` §4.2** — reread both when 0015 lands. I14 now reads *one key, two thresholds*, which is weaker than *every write asks one `canWrite`*. If the build cannot honour the new wording, the wording is wrong, not the build.
-- [ ] **Grill 2026-09-10, locked specs** — `plans/02` default `gridColumns` is still `['name']` and still says a date path is owed; default `editable` is still `'api'`; `add()` still described as nesting `props`; `fields` lock still called a hole; live Field change is `dataset.setFieldEditable` (belongs next to `hideGridColumn` in the §2 verb list). `CONTEXT.md` still needs `_Avoid_`: phase, grouped entry. Entry **spans** is still owed. Stop and ask before those edits.
+- [x] **Grill 2026-09-10, locked specs — the first five.** Author authorized them on 2026-09-10, and they landed: `plans/02` default `gridColumns` is `['name', 'start', 'end']` and names the grid as the date path; `plans/01:330` and `plans/02:478` say default `editable` is `'anywhere'`; `plans/01:330`'s `parentId`/`segments` sentence is deleted, because it restated the default; `plans/03`'s three S4 acceptance rows carry an inline *retired by* marker. See [`BUILD-SPEC.md`](BUILD-SPEC.md) §1 V8, V9, V18.
+- [ ] **Grill 2026-09-10, locked specs — what is left.** `plans/02` still describes `add()` as nesting `props`; `plans/02` still calls the `fields` lock a hole; `dataset.setFieldEditable` still owes a row in the §2 verb list, next to `hideGridColumn`. `CONTEXT.md` still needs `_Avoid_`: phase, grouped entry, and still owes an Entry **spans** entry. Stop and ask before those edits.
 
 ## Where a reader goes
 
 | Question | File |
 |---|---|
+| **How to build it** — the verified plan, the spec, the issues, the todo list | [`BUILD-SPEC.md`](BUILD-SPEC.md) |
 | What was decided, and why | `docs/adr/0011`–`0015` |
 | The working material behind one decision | `plans/field-redesign/00xx-*/README.md` |
 | The evidence a spike produced | [`reviews/`](reviews/) |

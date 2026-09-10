@@ -195,15 +195,15 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
+- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`. *— retired by ADR 0011: the namespace is `props`, and the `meta` Field is deleted.*
 - [x] `[S4-A2]` An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
 - [x] `[S4-A3]` Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
 - [x] `[S4-A4]` A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [x] `[S4-A6]` Collapse state survives data edits and is independent per Gantt.
 - [x] `[S4-A7]` Filter with keep-ancestors shows a matching deep child under its chain of parents.
-- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
-- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing. *— retired by ADR 0013: `kind` leaves the record, and an Entry derives when it has children.*
+- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing. *— retired by ADR 0013: `autoGroup` is deleted, and a parent that loses its last child demotes.*
 - [x] `[S4-A10]` `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
 - [x] `[S4-A11]` `{ source: 'custom', resolve }` produces the resolver's rows.
 

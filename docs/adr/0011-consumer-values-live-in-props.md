@@ -27,7 +27,7 @@ The bag then costs more than it pays.
 | A `meta` holding an array is replaced by an object, because `metaRecord` answers `{}` for an array | `metaRecord` |
 | Two generics name one set of values and nothing links them | `harness/planner.ts:31` — the two halves disagree about `critical`, and nothing notices |
 | Every read of a `meta` Field allocates, because `metaStrategy.read` spreads the bag for one property lookup | `metaStrategy.read` |
-| `meta` names four things at once: a storage location, a Field key, a `FieldSource.from` value, and a Document key | [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) |
+| `meta` names four things at once: a storage location, a Field key, a `FieldSource.from` value, and a Document key | `entry.meta`, `CORE_FIELDS`' `meta` row, `FieldSource.from: 'meta'`, `EntryDocument.meta` |
 
 ## Decision
 
@@ -138,7 +138,7 @@ sequenceDiagram
 |---|---|
 | **Flat consumer properties on the Entry**, in one key space with `start` | **Rejected.** The previous draft's ruling. One gain — a single storage home — charged at four places: the Document reader's unknown-key rule inverts; three reserved name sets appear at three doors; an older file whose consumer key a later release promotes needs its own migration door; and `Entry` needs an index signature, which makes `entry.strat` compile |
 | **Flat consumer keys on the edit alone**, with `props` everywhere else | **Accepted as decision 11, 2026-09-10.** The first draft rejected this because the object a consumer writes most often would disagree with the object the library holds. Decision 1 already splits those doors: ingest carries, `update()` names. The author ruled the call `plans/02:467` already teaches: `update('t1', { start, cost })`. Nest is refused at `update()`. |
-| **Keep the namespace under its current name, `meta`** | **Rejected.** `meta` names four things ([#266](https://github.com/Pawel-IT/FreeGantt/issues/266)) and three of them go here. It is also the wrong word: *meta* says *about the data*, and the contents are the data |
+| **Keep the namespace under its current name, `meta`** | **Rejected.** `meta` names four things — the Context table above — and three of them go here. It is also the wrong word: *meta* says *about the data*, and the contents are the data |
 | **Keep the namespace in the Document only**, flat at runtime | **Rejected.** The reader and the writer would each move every consumer key across a boundary, and every seam between them would have to know which side it stood on |
 | **Keep `meta` and open `FieldSource`'s entry arm to any key** (the small fix) | **Rejected.** The declaration keeps an address the library should own, so the strategy table, the second generic and the whole-bag write all survive. The bag stops being mandatory and stays available — the worst of both |
 | **Read consumer values through an accessor and never store them** | **Rejected.** Reads alone carry four of the planner's five fields, and a Gantt that edits, undoes and aggregates a consumer value has to hold it |
@@ -200,6 +200,6 @@ The prose sweep that rewrites all of this runs **once, after every open decision
 |---|---|
 | [#213](https://github.com/Pawel-IT/FreeGantt/issues/213) | A `compute` write is dropped in silence. The registry refusal for `compute` + `rollUp` must land **before** #213's own fix, or the Rollup starts throwing instead of writing a phantom row |
 | [#267](https://github.com/Pawel-IT/FreeGantt/issues/267) | A renderer casts `entry.meta`. Typing `props` as a record removes the three casts in `harness/planner.ts`. It does **not** close the issue — a Field-aware renderer read is still owed |
-| [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) | `meta` names four things. Three go, and the survivor is renamed. The `Document`/DOM collision half stays open |
+| [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) | **Nothing. This ADR leaves it untouched**, and the row stays to say so. #266 is the `Document`-against-DOM-`document` collision alone. An earlier draft cited it for *"`meta` names four things"*, which #266 does not say; the Context table carries that claim on its own evidence |
 | [#264](https://github.com/Pawel-IT/FreeGantt/issues/264) | Core ships one Field type and its own Fields bypass the layer. The Field union here settles the shape a type bundle attaches to |
 | [#208](https://github.com/Pawel-IT/FreeGantt/issues/208) | **Closed by this work.** `EntryInput` cannot carry a declared Field value. Deleting `FieldSource` removes the aliasing, so the key *is* the address |

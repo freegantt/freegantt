@@ -28,6 +28,8 @@
 | [0014](../0014-plugin-author-surface/README.md) | plugin-key prefix (decision 12, closed 2026-09-10) | **8** |
 | [0015](../0015-write-door/README.md) | `editable` enum on `SerializedField` (decision 18, closed 2026-09-10) | **9** |
 
+**The library reads one schema, and no old one. Ruled by the author, 2026-09-10.** Each build leaves exactly one reader — the number it writes — and deletes every earlier reader with its fixtures, in the same commit. A Document at any other number raises `UnsupportedSchemaError`. Build 0012 deletes readers 1, 2, 3 and 4; ADR 0011's work list gives that deletion to build 0011, and it moves forward one build, because 0012 lands first. Three facts price this at zero: the library has never shipped, no saved Document exists in the tree, and the count restarts at `1` on release, so 5 through 9 are throwaway numbers. **The `readers` map stays a map.** It is the migration seam (`read.ts:122`, `plans/02` §6), and old-schema *support* is what goes, not the mechanism that adds it back after release. The call sites are in [`BUILD-SPEC.md`](../BUILD-SPEC.md) §1 V13.
+
 One rule joins the release gate — **a released reader refuses a file it did not write.** That retires the pre-release-`3`-against-released-`3` hazard permanently. Nothing reads schema 3 today. Spending a public number, or shipping a `preRelease` flag, would solve a problem that ends the day the library goes public. Two Document shapes must not share one number.
 
 ## `ComputedFieldCannotBeWrittenError` — one name at two doors
