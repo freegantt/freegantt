@@ -8,7 +8,9 @@ Where a plugin's own Field values live, whether a Field key carries a namespace 
 
 **Four decisions are open — 9, 12, 13 and 16.** Two are closed — 7 and 14, and both were already recorded as downstream of 9.
 
-**Nothing blocks on this ADR, and it blocks nothing.** That is the point of splitting it out. It was the heaviest gate on the old [ADR 0011](../0011-consumer-values-in-props/README.md), and it was never a real one.
+**Nothing blocks the storage rename on this ADR, and it blocks nothing there.** That is the point of splitting it out. It was the heaviest gate on the old [ADR 0011](../0011-consumer-values-in-props/README.md), and it was never a real one.
+
+**Two answers still serialize with work that already shipped.** Decision 16 waits on [0011](../0011-consumer-values-in-props/README.md) decision 22 — both edit the extender seam. Decision 13 waits on [0012](../0012-optional-dates/README.md) — `durationOf` becomes `Duration | undefined` there. Close those first.
 
 ## Why it does not gate the storage rename
 
@@ -16,15 +18,15 @@ Where a plugin's own Field values live, whether a Field key carries a namespace 
 
 This ADR then either **widens** the type to `Readonly<Partial<TProps & PluginEntryProps>>` — additive, nothing breaks — or **migrates** the values to the plugin's own store. Neither is blocked by the rename having landed.
 
-**The price of deciding late, stated honestly.** If 12 lands on a required plugin prefix, the Document written by 0011 holds `props: { progress: 60 }` and this ADR rewrites it to `props: { 'scheduling:progress': 60 }`. That is one more schema bump and a rename of plugin-**declared** keys — not the 184-occurrence `StoredEdit` rename. Decision 3 prices a pre-release schema number at zero, and the library has never shipped.
+**The price of deciding late, stated honestly.** If 12 lands on a required plugin prefix, the Document written by 0011 holds `props: { progress: 60 }` and this ADR rewrites it to `props: { 'scheduling:progress': 60 }`. That is **schema 8** and a rename of plugin-**declared** keys — not the 184-occurrence `StoredEdit` rename. Decision 3 prices a pre-release schema number at zero, and the library has never shipped.
 
 ## 9 and 12 are one decision
 
-Answer them together or the answers cancel. 9's case for sharing `props` rests on `entry.props.progress` reading as a typed dot access, and 12's plugin prefix takes the dot away. **Settle 13 after 9** — whether the by-key doors merge or only share a name depends on whether a plugin's values need routing.
+Answer them together or the answers cancel. 9's case for sharing `props` rests on `entry.props.progress` reading as a typed dot access, and 12's plugin prefix takes the dot away. **Settle 13 after 9, and after [0012](../0012-optional-dates/README.md)** — whether the by-key doors merge or only share a name depends on whether a plugin's values need routing, and `durationOf`'s return type lands in 0012.
 
-## One file, three ADRs, no decision collision
+## One file, three ADRs, no decision collision on the merge
 
-`data/edit-extension.ts` is touched by [0011](../0011-consumer-values-in-props/README.md) (the shallow-spread fix at `:35`, and decision 22's brand on the edit type) and by decision 16 here (the extender's signature and who owns composition). **Different symbols.** Expect a merge conflict, not a contradiction.
+`data/edit-extension.ts` is touched by [0011](../0011-consumer-values-in-props/README.md) (the shallow-spread fix at `:35`, and decision 22's brand on the edit type) and by decision 16 here (the extender's signature and who owns composition). The spread fix and the signature are **different symbols** — expect a merge conflict, not a contradiction. **Decision 16 still waits on 22**: both edit the extender seam. Close 22 with 0011, then design 16 against the branded (or diffed) `ProposedEdit`.
 
 ---
 
@@ -88,7 +90,7 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 - **core keys stay bare and become a published, closed reserved list** — the SQL and CSS answer. Adding one in a later release is then a declared breaking change rather than a silent relocation.
 - **consumer keys stay bare**, because both standards that split three ways leave the first-party author unprefixed. The app-author call site keeps `gridColumns: ['name', 'cost']`.
 - **plugin keys carry a required prefix naming the plugin.** This half has the strongest evidence, it closed 7 at no cost, and it removes the main reason to consider a separate plugin store in 9.
-- ~~`props: { start: … }` becomes an error~~ — **overruled 2026-09-09.** It is a warning, the value is ignored, and the core definition wins. See [`closed-decisions.md`](../0011-consumer-values-in-props/README.md).
+- ~~`props: { start: … }` becomes an error~~ — **overruled 2026-09-09.** It is a warning, the value is ignored, and the core definition wins. See [0011's `props`-value ruling](../0011-consumer-values-in-props/README.md#a-props-key-that-names-a-core-key--warning-and-the-core-definition-wins).
 
 **Still open, and this is the ruling wanted:** may a consumer ever hold a key that shadows a core key? If **no**, the reserved list gives the same guarantee as a consumer prefix at no call-site cost. If **yes**, a bare consumer space cannot deliver it, and `props.`-prefixed consumer keys return to the table on HTML's exact reasoning.
 
@@ -102,7 +104,7 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 **Two corrections, both checked against the code.** `durationOf` does **not** exist because `duration` owns no `Entry` key — `model/field.ts:19` declares `duration: Duration` on `CoreFieldValues` by hand, so both by-key doors are fully typed. What `durationOf` actually is, is the **implementation** of the `duration` core Field, published as a convenience beside the door it implements. One of the four doors is built out of another. Second, it answers in **two different units** depending on which builder made the context, which is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274). **Settle 13 against that issue**, not against the assumption that `durationOf` earns its place.
 
-**Recommendation: align the names across all four, and settle 9 first.** Whether the by-key doors merge or only share a name depends on whether a plugin's values need routing. Renaming a published door is not a decision to take in passing.
+**Recommendation: align the names across all four, and settle 9 first.** Whether the by-key doors merge or only share a name depends on whether a plugin's values need routing. **Land [0012](../0012-optional-dates/README.md) first** — `durationOf` becomes `Duration | undefined` there. Renaming a published door is not a decision to take in passing.
 
 ---
 
@@ -110,7 +112,7 @@ ADR 0005 deferred a separate consumer store on the grounds that *"a consumer dec
 
 `edit-extension.ts:35` merges last-wins per Field key and reports nothing. Two installed plugins that both write `start` on one entry produce one value and no signal. The library raises a warning for smaller things — a dropped derived value, an unknown ingest key.
 
-**Held open at the author's request**, together with the three ergonomic complaints beside it.
+**Held open at the author's request**, together with the three ergonomic complaints beside it. **Waits on [0011](../0011-consumer-values-in-props/README.md) decision 22** — both edit the extender seam. Close 22 with the `ProposedEdit` type, then design this return against that type.
 
 **Related, and confirmed as a defect rather than a preference.** The extension hook makes a plugin author do three things no comparable runtime asks for:
 

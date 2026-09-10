@@ -184,7 +184,7 @@ Three doors reach the same state, and all three behave alike: autoGroup promotio
 
 **Undo was the draft's stated reason to refuse, and it does not hold** — see [`refuted.md`](../shared/refuted.md) item 12. **History is never cleared, and `RollUpKindsWouldDropValuesError` is not added.**
 
-**One follow-up on one door, and it is open as decision 24.** The flip is a transaction: it emits one ChangeSet, enters undo as one step, and `beforeChange` may veto it. Promotion and a `kind` write carry their cause in that transaction; a flip's cause is a **config assignment**, which `ChangeSet` has no row shape for. **This ruling does not answer that door**, and it is a follow-up rather than a re-opening — the drop-and-recalculate ruling above stands at all three doors either way. The two ways out are weighed in [`open-decisions.md`](README.md) under 24.
+**One follow-up on one door, and it is open as decision 24.** The flip is a transaction: it emits one ChangeSet, enters undo as one step, and `beforeChange` may veto it. Promotion and a `kind` write carry their cause in that transaction; a flip's cause is a **config assignment**, which `ChangeSet` has no row shape for. **This ruling does not answer that door**, and it is a follow-up rather than a re-opening — the drop-and-recalculate ruling above stands at all three doors either way. The two ways out are weighed in [decision 24](README.md#24-how-does-undo-reverse-a-rollupkinds-flip).
 
 **Still parked, and untouched by this ruling:** whether `rollUpKinds` is the right axis at all. That sits beside decision 20, and the flag's layer is decision 21.
 
@@ -195,14 +195,14 @@ Three doors reach the same state, and all three behave alike: autoGroup promotio
 
 ## The build
 
-One structural question at every door: *is this a rolling-up kind, and is this a rolling-up Field?* I14 is the **write** half. `toJSON` is not a write.
+One structural question at every door: *is this a rolling-up kind, and is this a rolling-up Field?* The derived write rule is this ADR's. I14 also needs the editable arm, which is [0015](../0015-write-door/README.md)'s. `toJSON` is not a write.
 
-**This ADR fills the resolver's derived arm.** [0011](../0011-consumer-values-in-props/README.md) moved the resolver into `data/` with HEAD's policies unchanged; the derived policy lands here, because it is written against the merged patch 0011 produces. [0015](../0015-write-door/README.md) owns the editable arm. `DerivedFieldNotWritableError` is 0011's error to declare and this ADR's to throw.
+**This ADR fills the resolver's derived arm.** [0011](../0011-consumer-values-in-props/README.md) moved the resolver into `data/` with HEAD's policies unchanged — `view/capability.ts` calls it; `entries.update()` still throws `UnknownFieldError` only. `rollsUp` already lives in `data/`. **This ADR fills the derived arm and wires `update()` to it**, because the policy is written against the merged patch 0011 produces. [0015](../0015-write-door/README.md) owns the editable arm. This ADR declares and throws `DerivedFieldNotWritableError`. Do not claim I14 until 0015 has wired the editable arm.
 
 | Door | Answer | State |
 |---|---|---|
 | cell editor, bar drag | refused | already true (`view/capability.ts:119`) |
-| `entries.update()` | refused | **the change** — move `rollsUp` into `data/` |
+| `entries.update()` | refused | **the change** — wire `update()` to the derived arm |
 | `entries.add()`, `new Dataset({ entries })`, `fromJSON` | value **dropped**, report raised | **the change** |
 | the extension hook | write **dropped**, warning raised | decision 5, closed — exempt from the throw only |
 | autoGroup promotion | dates change owner mid-commit | **unowned until now** |
@@ -211,7 +211,8 @@ One structural question at every door: *is this a rolling-up kind, and is this a
 - Promotion is the third door into a rolling-up kind. Conversion **promotes and demotes**, and stays automatic. What kind demotion returns to is **decision 8** — answer before this group. Dates on demotion are settled: a **normal Entry with no dates**, datable later.
 - The report goes through `raiseError` at `severity: 'warning'`, **always**. Not `isDevMode()`-gated (D-S5-41).
 - One report per operation, not per value.
-- Delete `reportCorrectedRollUps`.
+- Delete `reportCorrectedRollUps` — this ADR, not 0011.
 - On a rolling-up parent, an Aggregator's `undefined` means **no value**.
 - **Unify the proposed-Field predicate before deleting the `body`/`merged` split** — decision 5's one code fix, see [`refuted.md`](../shared/refuted.md) item 8.
+- This ADR writes schema **7**.
 

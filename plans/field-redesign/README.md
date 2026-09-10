@@ -9,8 +9,8 @@ flowchart LR
   D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>3 open</i>"]
   D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>1 open</i>"]
   P --> R
-  P -.->|"not blocking"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>4 open</i>"]
-  P -.->|"not blocking"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>3 open</i>"]
+  P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>4 open</i>"]
+  P -.->|"not blocking<br/>the rename"| W["<b>0015</b><br/>what the write<br/>door refuses<br/><i>3 open</i>"]
   R -.->|"shrinks 18's<br/>cost table"| W
 ```
 
@@ -19,10 +19,10 @@ flowchart LR
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
 | [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | 1, 11, 22 | 0013 |
 | [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | 26 (branches 8, 20, 21, 24) | — |
-| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 9, 12, 13, 16 | **nothing** |
-| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18, 19, 23 | **nothing** |
+| [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 9, 12, 13, 16 | **nothing on the rename.** 16 waits on 22. 13 waits on 0012 |
+| [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18, 19, 23 | **nothing on the rename.** Prefers 0013 first (shrinks 18) |
 
-**Fifteen open decisions became three on the ADR that does the simplifying.** Decision 25 dissolved — each ADR bumps its own schema number, which is what 25 recommended.
+**Fifteen open decisions became three on the ADR that does the simplifying.** Decision 25 dissolved — each ADR bumps its own schema number: 0012 writes **5**, 0011 writes **6**, 0013 writes **7**.
 
 ## Shared
 
@@ -40,7 +40,7 @@ flowchart LR
 3. **A recommendation is not a ruling.**
 4. **State a fact once.** A fact belongs to the ADR whose question it answers — the survey to [`shared/evidence.md`](shared/evidence.md), a refused approach to [`shared/refuted.md`](shared/refuted.md). Elsewhere, link to it.
 5. **The prose sweep runs once, at the end**, not per ADR. See [`shared/prose-sweep.md`](shared/prose-sweep.md).
-6. **One schema counter, not five.** The ADRs spend numbers in landing order and each says which one it writes.
+6. **One schema counter, not five.** The ADRs spend numbers in landing order: [0012](0012-optional-dates/README.md) writes **5**, [0011](0011-consumer-values-in-props/README.md) writes **6**, [0013](0013-what-decides-derivation/README.md) writes **7**. [0014](0014-plugin-author-surface/README.md) writes **8** only if decision 12 prefixes plugin keys. See [`shared/rulings.md`](shared/rulings.md).
 
 ## Where the decisions could walk over each other, and why they do not
 
@@ -61,13 +61,13 @@ Checked pairwise against the code on 2026-09-09.
 
 Three ADRs would otherwise write the same function. The code says they need not.
 
-`view/capability.ts:113-121`'s `libraryWriteRule` already holds the **editable** and **derived** arms together, and already imports `rollsUp` from `data/`. `entry-store.ts:358` already throws `UnknownFieldError` for the **exists** arm. **The resolver is a move, not a build.**
+`view/capability.ts:113-121`'s `libraryWriteRule` already holds the **editable** and **derived** arms together, and already imports `rollsUp` from `data/` (`field-registry.ts:97` — it already lives there). `entry-store.ts:358` already throws `UnknownFieldError` for the **exists** arm. **The resolver is a move, not a build.**
 
-- **[0011](0011-consumer-values-in-props/README.md) moves it into `data/` with HEAD's policies unchanged.** Both existing doors call it; `view/capability.ts` stops restating the rule. No policy changes, so no decision is spent.
-- **[0013](0013-what-decides-derivation/README.md) changes the derived arm's policy.**
-- **[0015](0015-write-door/README.md) changes the editable arm's policy.**
+- **[0011](0011-consumer-values-in-props/README.md) moves it into `data/` with HEAD's policies unchanged.** `view/capability.ts` calls the moved function and stops restating the rule. `entries.update()` keeps HEAD's `UnknownFieldError` only — it does **not** call the editable or derived arms. No policy changes, so no decision is spent.
+- **[0013](0013-what-decides-derivation/README.md) fills the derived arm and wires `entries.update()` (and the ingest drop doors) to it.** That is the first time the API door uses the resolver for a policy HEAD does not already apply there.
+- **[0015](0015-write-door/README.md) fills the editable arm and wires `entries.update()` to it.**
 
-**One at a time.** Do not wire `entries.update()` to a policy the landing ADR did not rule.
+**One at a time.** Do not wire `entries.update()` to a policy the landing ADR did not rule. The seven call sites and the throw-versus-drop table belong to 0013 (derived) and 0015 (editable), not to 0011. Do not claim I14 until 0015 has wired the editable arm.
 
 ## Independent fixes — land these on `main` first
 

@@ -41,6 +41,7 @@ It shares four files with [0011](../0011-consumer-values-in-props/README.md) —
 - Delete the `referenceDate` fill (`entry-reader.ts:168-172`). Written down under D-S2-10 **and** D-S2-22. Not under D-S5-46, which survives.
 - Reaches bar geometry, the Segment invariant (#212), sort comparators, and `range: 'fitDataset'`.
 - A dateless Entry sorts **last**. A dateless row is inert to a gesture. `fitDataset` over nothing dated shows the empty-dataset range. An S7 link to a dateless endpoint raises a diagnostic and draws nothing.
+- This ADR writes schema **5**.
 
 **`FieldContext.durationOf` returns `Duration | undefined`.** It is **plugin-author surface**, so it is a published change, and it reaches further than the signature. **This list is an audit's, not a re-derivation — do not rebuild it.**
 

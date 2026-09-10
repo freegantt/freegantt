@@ -1,6 +1,6 @@
 # The prose sweep — one sweep, all five ADRs
 
-**This was group F, and it stays one job.** Splitting it per ADR would run `protect-spec.sh` four times over the same files and leave four half-swept specs between landings. **The sweep runs once, after the last ADR lands.**
+**This was group F, and it stays one job.** Splitting it per ADR would run `protect-spec.sh` four times over the same files and leave four half-swept specs between landings. **The sweep runs once, after every open decision in all five ADRs has closed.** Landing 0011–0013 is not enough: 0014 and 0015 still change locked-spec sentences.
 
 **Confirm with the author before this runs.** It edits locked specs — `plans/00`–`02`, `CLAUDE.md`, `CONTEXT.md` — and `protect-spec.sh` asks for permission on every one.
 

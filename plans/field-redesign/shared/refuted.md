@@ -45,7 +45,7 @@ TypeScript stops inferring later type parameters once an earlier one is written 
 
 ## 4. The `RemovableEntryKey` probe
 
-An earlier draft said *"probed at HEAD"*. `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD the derivation resolves to `'parentId' | 'meta'`. It resolves to `'parentId' | 'start' | 'end'` only once [ADR 0012](../0012-optional-dates/README.md) lands. **The derivation is inert until D**, and `update(id, { start: undefined })` does not compile for the three groups in between.
+An earlier draft said *"probed at HEAD"*. `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD the derivation resolves to `'parentId' | 'meta'`. It resolves to `'parentId' | 'start' | 'end'` only once [ADR 0012](../0012-optional-dates/README.md) lands. **0012 lands first**, so when [ADR 0011](../0011-consumer-values-in-props/README.md) writes `EntryEdit`, `{ start: undefined }` compiles. The old warning — *inert until D, three groups in between* — described the unsplit order and is stale.
 
 ## 5. The harness double cast
 
@@ -113,11 +113,11 @@ An earlier draft argued that replaying a step whose `from` is an authored parent
 
 Nothing replays a value the new state refuses, because the new state goes back with it. **History is never cleared, and `RollUpKindsWouldDropValuesError` is not added.**
 
-One door does not carry its cause in the same transaction, and that follow-up is real: a `rollUpKinds` flip's cause is a **config assignment**. See decision 6 in [`closed-decisions.md`](../0013-what-decides-derivation/README.md).
+One door does not carry its cause in the same transaction, and that follow-up is real: a `rollUpKinds` flip's cause is a **config assignment**. See decision 6 in [0013 closed decisions](../0013-what-decides-derivation/README.md#closed-decisions).
 
 ## 13. The `durationOf` call sites
 
-**Do not re-derive this list.** An audit built it after a review named two call sites and got one of them wrong. It is in [`work-plan.md`](../0012-optional-dates/README.md) [ADR 0012](../0012-optional-dates/README.md). The one the review got wrong: **`inline-editing.ts:113` is a provider, not a caller** — `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`, so it changes as an implementation.
+**Do not re-derive this list.** An audit built it after a review named two call sites and got one of them wrong. It is in [ADR 0012's work](../0012-optional-dates/README.md#the-work). The one the review got wrong: **`inline-editing.ts:113` is a provider, not a caller** — `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`, so it changes as an implementation.
 
 ## Also dropped, with no argument left to make
 

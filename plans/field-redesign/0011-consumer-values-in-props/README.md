@@ -20,13 +20,13 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 **Three decisions are open — 1, 11 and 22.** All three ask the same kind of question: *what does a consumer's write look like?* Four are closed — 2, 10, 17, and the `props`-names-a-core-key ruling.
 
-**It lands second**, after [0012](../0012-optional-dates/README.md). Nothing here needs optional dates, but 0012 is decision-free and touches four of the same files, so it goes first and this ADR rebases onto it.
+**It lands second**, after [0012](../0012-optional-dates/README.md). [0012](../0012-optional-dates/README.md) is decision-free and touches four of the same files, so it goes first and this ADR rebases onto it. `EntryEdit`'s removable keys follow `Entry`, so 0012 first also makes `{ start: undefined }` compile here.
 
 ## The write resolver is this ADR's to move, and not its to re-rule
 
-`view/capability.ts:113-121`'s `libraryWriteRule` already holds two of the three arms in one function, and already imports `rollsUp` from `data/`. `entry-store.ts:358` already throws `UnknownFieldError` for the third. **The resolver is a move, not a build.**
+`view/capability.ts:113-121`'s `libraryWriteRule` already holds two of the three arms in one function, and already imports `rollsUp` from `data/` (`field-registry.ts:97` — it already lives there). `entry-store.ts:358` already throws `UnknownFieldError` for the third. **The resolver is a move, not a build.**
 
-**This ADR moves it into `data/` with HEAD's policies unchanged.** Both existing doors call it, and `view/capability.ts` stops restating the rule. No policy changes, so no decision is spent. Then [0013](../0013-what-decides-derivation/README.md) changes the derived arm's policy and [0015](../0015-write-door/README.md) changes the editable arm's. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule.
+**This ADR moves it into `data/` with HEAD's policies unchanged.** `view/capability.ts` calls the moved function and stops restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only** — it does not call the editable or derived arms. No policy changes, so no decision is spent. Then [0013](../0013-what-decides-derivation/README.md) fills the derived arm and wires `entries.update()` to it, and [0015](../0015-write-door/README.md) fills the editable arm. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule. The seven call sites and the throw-versus-drop table belong to 0013 and 0015. Do not claim I14 until 0015 has wired the editable arm.
 
 ## What this ADR does *not* decide
 
@@ -92,7 +92,7 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 
 **Its price, and half of what the first pass charged is not real.** FullCalendar shipped a write whose *meaning* depends on what the library knows about the key. The declared-key flat spelling keeps that shape and moves it one stage later: `update(id, { cost })` compiles always, and throws or writes depending on registry state at the moment of the call.
 
-**The first pass charged this twice, on a false claim about the code.** It read *"`fields` is live-reconfigurable like every config key"*. **It is not.** `dataset.fields` is a read-only getter (`src/api/dataset.ts:240`), and the only two doors that add a Field — `DatasetOptions.fields` and `ctx.fields.register` — both close inside the constructor. See [the registration lock](../shared/rulings.md) in [`closed-decisions.md`](../shared/rulings.md).
+**The first pass charged this twice, on a false claim about the code.** It read *"`fields` is live-reconfigurable like every config key"*. **It is not.** `dataset.fields` is a read-only getter (`src/api/dataset.ts:240`), and the only two doors that add a Field — `DatasetOptions.fields` and `ctx.fields.register` — both close inside the constructor. See [the registration lock](../shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction).
 
 **So the temporal half of the price is gone, and the cross-instance half survives.** `update(id, { cost })` means one thing on a given Dataset for that Dataset's whole life. It is still legal on one Dataset and a throw on another. **That surviving half does not separate the two options**, because `update(id, { props: { cost } })` throws on the same second Dataset under 1's recommendation. **Weigh the shorthand against the nesting on what is left: a top level that holds core keys and consumer keys side by side.**
 
@@ -160,7 +160,7 @@ The leak decision 12 worried about — *it stores a value no door can read back*
 
 **What stays open:** decision 12's other three bullets — the published closed reserved list, bare consumer keys, and a required plugin prefix.
 
-**This ruling covers a `props` _value_ only. The _declaration_ case is open as decision 23**, and it is weighed in [`open-decisions.md`](../0015-write-door/README.md), not here. `fields: [{ key: 'start', … }]` is set to throw `DuplicateFieldKeyError` after the override is deleted, and whether the posture above should reach it is the question. **ADR 0011 does not implement that throw until 23 closes.**
+**This ruling covers a `props` _value_ only. The _declaration_ case is open as decision 23**, and it is weighed in [0015 open decisions](../0015-write-door/README.md#open-decisions), not here. `fields: [{ key: 'start', … }]` is set to throw `DuplicateFieldKeyError` after the override is deleted, and whether the posture above should reach it is the question. **ADR 0011 does not implement that throw until 23 closes.**
 
 
 ---
@@ -186,8 +186,7 @@ The key decides the home, so no declaration carries one.
 - Public plugin generics lose the second type parameter: `DatasetPlugin`, `DatasetPluginContext`, `DatasetOptions`, `Dataset.fromJSON`.
 - `build-commit-change-set.ts:100`'s `fieldsWrittenBy` still skips `'meta'`, and `field-access.ts:26`'s `isOptionalEntryKey` still names it. Both follow the rename.
 - **Leave `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` standing.** The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. Deleting the override removes a data-level capability that `interactions.edit` cannot replace — that is [0015](../0015-write-door/README.md)'s decision 19, and what a consumer declaration on a core key then does is its decision 23.
-- **One write resolver in `data/`, and every door calls it — but this ADR changes no policy in it.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the *editable* and *derived* arms in one function and already imports `rollsUp` from `data/`; `entry-store.ts:358` already throws `UnknownFieldError` for *exists*. **The resolver is a move, not a build.** Move that function into `data/`, point both existing doors at it, and stop `view/capability.ts` restating the rule. [0013](../0013-what-decides-derivation/README.md) then changes the derived arm's policy and [0015](../0015-write-door/README.md) the editable arm's. **Do not wire `entries.update()` to a policy this ADR did not rule.**
-- **Four answers, seven call sites.** The call list is `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Do not build it from the ADR flowchart's four boxes** — that skips `add()`, `fromJSON()` and the constructor, which drop rather than throw. **Do not write the test twice.**
+- **One write resolver in `data/`, and this ADR changes no policy in it.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the *editable* and *derived* arms in one function and already imports `rollsUp` from `data/`; `entry-store.ts:358` already throws `UnknownFieldError` for *exists*. **The resolver is a move, not a build.** Move that function into `data/`, point `view/capability.ts` at it, and stop that file restating the rule. **`entries.update()` keeps HEAD's `UnknownFieldError` only.** [0013](../0013-what-decides-derivation/README.md) then fills the derived arm and wires `update()` to it; [0015](../0015-write-door/README.md) fills the editable arm. **Do not wire `entries.update()` to a policy this ADR did not rule.** The seven call sites and the throw-versus-drop table live in those two ADRs. Do not write their tests here.
 - **Two merges shallow-spread, not one. Fix both together or plugin composition breaks in production.**
   - `data/edit-extension.ts:38` — `mergeEntryEdits`, the loose one a plugin author calls. With consumer keys inside `props`, two extenders writing different `props` keys lose one: #197 one level down, against that function's own stated promise (#238).
   - `data/fields/field-access.ts:49` — `mergeStoredEdits`, which the **commit path** uses to fold body + cascade + hierarchy. `{ ...base, ...extra }` has the identical hole, and here it breaks a contract written directly above it: *"`extra` wins per Field key; the proposed keys of both survive."* That is true today only because a top-level key **is** a Field key. Once `props` is one key holding many, `extra` wins per **namespace**, so a body write of `props.cost` beside a cascade write of `props.progress` loses `cost` — while `proposedKeys` still names it, so the ChangeSet emits a row carrying a stale value. **A wrong row is worse than a dropped write**, and only this one is reachable without a second plugin installed.
@@ -196,7 +195,7 @@ The key decides the home, so no declaration carries one.
 - Delete the `meta` core Field with **no successor**.
 - `CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>`, and `CoreFieldValues` omits `'props'` with it. The registry refuses `{ key: 'props' }` — the **one** reserved key.
 - `'compute' in field` replaces `computeStrategy.serialize()` in `encodeFieldDocument`. **Follow the mechanism before deleting it:** `writeStoredSource` calls `computeStrategy.serialize()`, which answers `undefined`, and `encodeDeclaredField` drops the row. Delete the table and that test goes with it.
-- **Every new error is a named `FreeGanttError` with a `code:` and a `plans/02` §7 row**, like every other: `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError`, `FieldNotEditableError`.
+- **This ADR declares `ComputedFieldCannotBeWrittenError` and throws it at registration.** [0013](../0013-what-decides-derivation/README.md) declares and throws `DerivedFieldNotWritableError`. [0015](../0015-write-door/README.md) declares and throws `FieldNotEditableError`. Every new error is a named `FreeGanttError` with a `code:` and a `plans/02` §7 row.
 - `view/capability.ts`'s `hasSomewhereToWrite` becomes `!('compute' in field)`.
 - One generic. `harness/planner.ts:31` currently writes two that disagree about `critical`.
 - Rename fixture types: `PlannerMeta` → `PlannerEntryProps`, `DemoMeta` → `DemoEntryProps`.
@@ -235,7 +234,7 @@ If decision 1 lands as the ADR recommends — `update()` throws, ingest still ca
 
 ## The Document
 
-This ADR writes `meta` → `props` and takes `source` off `SerializedField`, and it spends **one** schema number. [0012](../0012-optional-dates/README.md) makes `start`/`end` optional and [0013](../0013-what-decides-derivation/README.md) omits a rolling-up parent's derived keys — each spends its own. See [`../shared/rulings.md`](../shared/rulings.md).
+This ADR writes `meta` → `props` and takes `source` off `SerializedField`, and it spends **schema `6`**. [0012](../0012-optional-dates/README.md) already wrote **5**. [0013](../0013-what-decides-derivation/README.md) writes **7**. See [`../shared/rulings.md`](../shared/rulings.md).
 
 - Readers 1–4 are deleted. Nothing outside this repo's fixtures was written by them.
 - Unknown key inside `props` is passenger data and is kept. Unknown top-level key stays unknown.

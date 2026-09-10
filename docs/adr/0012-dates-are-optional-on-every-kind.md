@@ -40,7 +40,7 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 - `range: 'fitDataset'` over a dataset where nothing is dated shows the range an empty dataset already shows.
 - An S7 link naming a dateless endpoint raises a diagnostic and draws nothing.
 
-`FieldContext.durationOf` becomes `Duration | undefined`, and a dateless row's `duration` cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard `durationOf` first. The full call-site list is in [`work-plan.md`](../../plans/field-redesign/0012-optional-dates/README.md) [ADR 0012](0012-dates-are-optional-on-every-kind.md) — **do not re-derive it**.
+`FieldContext.durationOf` becomes `Duration | undefined`, and a dateless row's `duration` cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard `durationOf` first. The full call-site list is in [ADR 0012's work](../../plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
 
 **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. A milestone is one instant, and that is an authored shape.
 
@@ -52,7 +52,7 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 - **`Entry.segments` stops being *never empty*.** The biconditional replaces it: an Entry holds at least one Segment, or it holds no dates at all. `update(id, { segments: [] })` still throws `EmptySegmentsError` ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212)).
 - **The `referenceDate` fill is deleted.** It is written down under D-S2-10 **and** D-S2-22. Name both halves separately or a reader retires the wrong sentence.
 - **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. A milestone is one instant, and that is an authored shape.
-- **The Document gains optional `start` and `end`**, and spends one schema number. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
+- **The Document gains optional `start` and `end`**, and writes schema **5**. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 
 ### Known hole
 

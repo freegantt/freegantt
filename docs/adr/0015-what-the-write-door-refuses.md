@@ -16,13 +16,15 @@ Beside it sits `#mergeCoreFieldOverride` (`field-registry.ts:211-225`), which le
 
 ## Decision
 
-**`editable: false` refuses `entries.update()` too, and that is the same rule.** Ruled 2026-09-09. The error is `FieldNotEditableError`.
+**`editable: false` refuses `entries.update()` too, and that is the same rule.** Ruled 2026-09-09. The error is `FieldNotEditableError`. This ADR declares it and throws it. [ADR 0011](0011-consumer-values-live-in-props.md) does not.
 
 **What an *absent* `editable` does is decision 18. What replaces the deleted override is decision 19. Whether a consumer declaration on a core key throws is decision 23.** None of the three follows from the ruling, and all three change the default posture of a public door.
 
 ### This ADR owns the resolver's editable arm, and only that arm
 
-[ADR 0011](0011-consumer-values-live-in-props.md) moves the write resolver into `data/` with HEAD's policies unchanged. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) changes the derived arm. **This ADR changes the editable arm.** One function, three owners, one at a time.
+[ADR 0011](0011-consumer-values-live-in-props.md) moves the write resolver into `data/` with HEAD's policies unchanged — `view/capability.ts` calls it; `entries.update()` still throws `UnknownFieldError` only, plus 0013's derived arm once that ADR has landed. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) filled the derived arm. **This ADR fills the editable arm and wires `entries.update()` to it.** One function, three owners, one at a time.
+
+**Claim I14 when this ADR lands, not after 0013.** 0013 closes the derived half. This ADR closes the editable half. Between them `update()` refuses a derived write and still accepts `editable: false`. That is HEAD's editable split, plus a derived refusal. Do not claim I14 for a half.
 
 ## Open decisions
 

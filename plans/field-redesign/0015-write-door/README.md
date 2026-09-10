@@ -18,7 +18,7 @@ Under the address rule `{ key: 'start', editable: false }` still addresses the c
 
 ## This ADR owns the resolver's `editable` arm, and only that arm
 
-[0011](../0011-consumer-values-in-props/README.md) moves the write resolver into `data/` with HEAD's policies unchanged. [0013](../0013-what-decides-derivation/README.md) changes the derived arm. **This ADR changes the editable arm** — and `view/capability.ts:120` is the one place in `src/` that reads `Field.editable` today, so the arm has exactly one existing behaviour to change.
+[0011](../0011-consumer-values-in-props/README.md) moves the write resolver into `data/` with HEAD's policies unchanged — `view/capability.ts` calls it; `entries.update()` keeps `UnknownFieldError` only until later ADRs wire an arm. [0013](../0013-what-decides-derivation/README.md) fills the derived arm. **This ADR fills the editable arm and wires `entries.update()` to it.** `view/capability.ts:120` is the one place in `src/` that reads `Field.editable` today, so the arm has exactly one existing behaviour to change. Claim I14 when this ADR lands, not after 0013.
 
 ## Decision 18's cost table may shrink before this lands
 
@@ -78,7 +78,7 @@ The deletion's own reason is unchanged and still good. A consumer key that a lat
 
 **Raised 2026-09-09 by the `props`-value ruling. Gates this ADR.** Deleting `CORE_FIELD_OVERRIDABLE_KEYS` lets the declaration fall through to `DuplicateFieldKeyError`, so this decision only arises once 19 deletes the override.
 
-The **value** case is closed: `props: { start: … }` is a **warning**, the value is ignored, and the core definition wins. See [`closed-decisions.md`](../0011-consumer-values-in-props/README.md). What is open is the **declaration** — `fields: [{ key: 'start', editable: false }]`.
+The **value** case is closed: `props: { start: … }` is a **warning**, the value is ignored, and the core definition wins. See [0011's `props`-value ruling](../0011-consumer-values-in-props/README.md#a-props-key-that-names-a-core-key--warning-and-the-core-definition-wins). What is open is the **declaration** — `fields: [{ key: 'start', editable: false }]`.
 
 **The two sides are short, and they pull opposite ways.**
 
@@ -102,9 +102,9 @@ The **value** case is closed: `props: { start: … }` is a **warning**, the valu
 
 **The finding.** The two doors differ, and it is verified: `Field.editable` is read at exactly one place in `src/`, `view/capability.ts:120`, and nothing in `data/` consults it. So a Field a consumer declared unwritable is writable through `entries.update()` today.
 
-**The ruling.** `editable: false` refuses the change at both doors. The write rule moves into `data/` with the derived-value rule, and `view/capability.ts` calls it rather than restating it. New error: `FieldNotEditableError`.
+**The ruling.** `editable: false` refuses the change at both doors. [0011](../0011-consumer-values-in-props/README.md) already moved the function into `data/`. This ADR fills the editable arm and wires `entries.update()` to it, and `view/capability.ts` keeps calling the same function rather than restating it. New error: `FieldNotEditableError`, declared and thrown here.
 
-**Why it matters beyond the one gate.** The ADR refuses a *derived* write at `entries.update()` and claims I14 for it. Leaving the `editable` half split would give the library two answers to *"may this value change"* at two doors — the exact split I14 exists to close. Both halves move together or neither claim holds.
+**Why it matters beyond the one gate.** [0013](../0013-what-decides-derivation/README.md) refuses a *derived* write at `entries.update()`. Leaving the `editable` half split would give the library two answers to *"may this value change"* at two doors — the exact split I14 exists to close. **Claim I14 when this ADR lands.** Do not claim it after 0013 alone.
 
 **What it opened.** Decisions **18** and **19**, both open. 18 asks what an *absent* `editable` does. 19 asks what replaces `{ key: 'start', editable: false }`, because `interactions.edit` is view-level and can no longer stand in for a data-level gate.
 

@@ -48,7 +48,7 @@ flowchart LR
 
 **One key space, two homes.** One name serves `field` on a changeset row, `canWrite(entry, field)`, and `gridColumns: ['name', 'cost']`. Storage is namespaced underneath. A consumer key cannot shadow a core key, a core key added in a later release cannot land on a consumer's value, and the Document reader keeps the rule it has today.
 
-`FieldSource` retires with all three arms. `meta` is renamed to `props` on `Entry`, `EntryInput` and `EntryDocument`. The `meta` **core Field** is deleted with no successor, because a whole bag is not a value a grid shows or a Rollup aggregates. The name `props` is decision 17, closed — see [`closed-decisions.md`](../../plans/field-redesign/0011-consumer-values-in-props/README.md).
+`FieldSource` retires with all three arms. `meta` is renamed to `props` on `Entry`, `EntryInput` and `EntryDocument`. The `meta` **core Field** is deleted with no successor, because a whole bag is not a value a grid shows or a Rollup aggregates. The name `props` is decision 17, closed — see [0011 closed decisions](../../plans/field-redesign/0011-consumer-values-in-props/README.md#closed-decisions).
 
 ### The library writes into `props` only at a declared `rollUp` key
 
@@ -69,15 +69,15 @@ The types, and why each one is shaped as it is, live in [`types.md`](../../plans
 
 ### The write resolver moves into `data/`, and its policies do not change here
 
-Three rules meet at one question — does this Field exist, is it editable, is it derived here. **`data/` exports one resolver, and every write door calls it.** Do not re-ask the question in a second place.
+Three rules meet at one question — does this Field exist, is it editable, is it derived here. **`data/` exports one resolver.** Do not re-ask the question in a second place.
 
-**The resolver is a move, not a build.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the editable and derived arms in one function, and already imports `rollsUp` from `data/`. `entry-store.ts:358` already throws `UnknownFieldError` for the third. This ADR moves that function into `data/`, points both existing doors at it, and stops `view/capability.ts` restating the rule. **No policy changes, so no decision is spent here.**
+**The resolver is a move, not a build.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the editable and derived arms in one function, and already imports `rollsUp` from `data/` (`field-registry.ts:97` — it already lives there). `entry-store.ts:358` already throws `UnknownFieldError` for the third.
 
-Then [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) changes the derived arm's policy, and [ADR 0015](0015-what-the-write-door-refuses.md) changes the editable arm's. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule.
+This ADR moves that function into `data/` and stops `view/capability.ts` restating the rule. `view/capability.ts` calls the moved function. **`entries.update()` keeps HEAD's `UnknownFieldError` only.** It does not call the editable or derived arms. **No policy changes, so no decision is spent here.**
 
-**Four answers, seven call sites.** The call list is `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Build it from the seven** — reading *four doors* skips `add()`, `fromJSON()` and the constructor, which is the half that drops rather than throws.
+Then [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) fills the derived arm and wires `entries.update()` (and the ingest drop doors) to it. [ADR 0015](0015-what-the-write-door-refuses.md) fills the editable arm and wires `entries.update()` to it. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule.
 
-**`update()` refuses; `add()` drops. A patch is not a record.** Name a Field and the library answers. Hand it a record and the library keeps what is yours. That is PATCH against PUT, and it is the whole rule. A **mixed** patch — `{ start, props: { cost } }` where `cost` is derived — is refused **whole, before any write**. A partial apply would leave a transaction in a state no `before*` event described.
+The seven call sites and the throw-versus-drop table — `update()` refuses, `add()` / `fromJSON()` / the constructor drop — belong to [0013](0013-what-decides-that-a-row-derives-its-values.md) (derived) and [0015](0015-what-the-write-door-refuses.md) (editable). Do not claim I14 until 0015 has wired the editable arm.
 
 ### Two doors read one value, and each answers a different question
 
@@ -119,15 +119,15 @@ sequenceDiagram
   Diff->>Roll: one row — { field: 'progress', from: 40, to: 60 }
   Roll->>Store: walk ancestors · weightedMeanByDuration · write phase-1
   Store->>Store: one ChangeSet holds child and parent · one undo step
-  Store->>Doc: toJSON omits phase-1's progress, start and end
-  Doc-->>App: fromJSON re-derives them. Nothing to correct, nothing to warn about
+  Store->>Doc: toJSON still writes phase-1's progress, start and end
+  Doc-->>App: fromJSON reads them back. ADR 0013 omits the derived keys
 ```
 
 **Step 1 seeds `proposedKeys` from inside the namespace** — the edit's top-level keys except `props`, plus every key of `edit.props` this write may name. Whether an **undeclared** key may be among them is decision 1.
 
 **Step 5 emits one row per Field key, never a path into `props`.** Today a whole-`meta` write emits two rows for one value — one for `meta` itself, one for the key inside it. The `meta` Field is deleted, so the second row has nothing to come from.
 
-**Step 7 asks one structural question.** Is this Entry a rolling-up kind, and is this a rolling-up Field? Nothing compares values, nothing tracks what a pass produced, and nothing depends on how many children a parent has right now.
+**Step 7 is [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md)'s.** This ADR still writes a rolling-up parent's derived keys to the Document. 0013 omits them. Keep `reportCorrectedRollUps` until that omission lands — deleting it here leaves `fromJSON` silent.
 
 
 ## Considered options
@@ -147,9 +147,9 @@ sequenceDiagram
 
 **Storage and types**
 
-- **The write path is the one that already exists.** `metaStrategy.write` already builds a complete record from the Entry's own values plus the one key it is given, and `diffEdit` already emits one changeset row per declared key through `proposedKeys`. Deleting the strategy table removes a **dispatch**, not a mechanism. **This is the smallest half of the change.** The Document, the derived-value rule and the optional dates are the large ones.
-- **Every new error is a named `FreeGanttError`** with a `code:` and a `plans/02` §7 row, like every other: `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError`, `FieldNotEditableError`.
-- **`props` is the one reserved key, and there is no reserved *set*.** `{ key: 'props' }` throws at **runtime** only. `FieldKey` is `CoreFieldKey | (string & {})`, so the literal type-checks — that is the brand doing its job, and it is written here so nobody later "fixes" `FieldKey` into a closed union and flattens the brand. A consumer key never sits at the top level of an edit, so `proposedKeys` needs no guard of its own.
+- **The write path is the one that already exists.** `metaStrategy.write` already builds a complete record from the Entry's own values plus the one key it is given, and `diffEdit` already emits one changeset row per declared key through `proposedKeys`. Deleting the strategy table removes a **dispatch**, not a mechanism. **This is the smallest half of the change.** This ADR's large half is the Document rename (`meta` → `props`). The derived-value rule is [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md). Optional dates are [ADR 0012](0012-dates-are-optional-on-every-kind.md).
+- **This ADR declares `ComputedFieldCannotBeWrittenError` and throws it at registration** — `compute` beside `rollUp`, or `compute` beside `editable`. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) declares and throws `DerivedFieldNotWritableError`. [ADR 0015](0015-what-the-write-door-refuses.md) declares and throws `FieldNotEditableError`, and throws `ComputedFieldCannotBeWrittenError` at `entries.update()`. Every new error is a named `FreeGanttError` with a `code:` and a `plans/02` §7 row.
+- **`props` is the one reserved key in this ADR, and there is no reserved *set* yet.** `{ key: 'props' }` throws at **runtime** only. `FieldKey` is `CoreFieldKey | (string & {})`, so the literal type-checks — that is the brand doing its job, and it is written here so nobody later "fixes" `FieldKey` into a closed union and flattens the brand. A consumer key never sits at the top level of an edit, so `proposedKeys` needs no guard of its own. A published reserved list of **core** keys is [ADR 0014](0014-the-plugin-author-surface.md) decision 12, and it is not this ADR's.
 - **`CoreFieldValues` omits `'props'` alongside `CoreFieldKey`, or neither does.** `model/field.ts:19` is `Omit<Entry, 'id'>` and `FieldValue` resolves its first arm against it. Change one and not the other, and `fieldValue(id, 'props')` **types as the whole bag** while the runtime throws. It is public at `api/index.ts:57`.
 - **The internal `Entry` describes its own object.** `props` defaults to `Readonly<Record<string, unknown>>`, so `entry.props.phase` compiles inside `layout/` and `view/` and answers `unknown` under `noUncheckedIndexedAccess`. No cast, no index signature, and `entry.strat` still fails to compile. `Entry` stays non-generic in those layers, which is what ADR 0005 ruled.
 - **`Entry.props` is always present; `EntryInput.props` is optional.** Ingest fills `{}`, the same rule `segments` already follows, so no reader carries a "no props" branch.
@@ -165,16 +165,16 @@ sequenceDiagram
 - **An unknown top-level key at ingest raises a warning, and the key is ignored.** `EntryInput` is closed, so the compiler already refuses one in a written literal. Data arriving from a server is the real case. Throwing turns one uninteresting column into a crash, and silence hides a typo'd `strat`. The check is one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'props'` — no second list to keep in step.
 - **A `props` key that names a core key gets the same warning, and the core definition wins.** Ruled 2026-09-09. `entry.props.start` would store without complaint and then be unreachable, because `fieldValue(id, 'start')` answers the Entry's own `start`. The value is ignored and it never throws — a consumer feeds this Dataset from an API they do not own, and a column added upstream must not break their page. **One sentence, one loop: a key inside `props` never names a core key, and a key at the top level is never a consumer's.**
 - **An undeclared key round-trips under both answers to decision 1.** It stores at ingest, survives `toJSON`/`fromJSON`, and is never dropped. The two answers differ at one door only, `update()`.
-- **This ADR spends one schema number**, for `meta` → `props` and `source` leaving `SerializedField`. [ADR 0012](0012-dates-are-optional-on-every-kind.md) and [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) each spend their own. One counter, not five — see [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
+- **This ADR spends schema `6`**, for `meta` → `props` and `source` leaving `SerializedField`. [ADR 0012](0012-dates-are-optional-on-every-kind.md) already wrote **5**. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) writes **7**. One counter, not five — see [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 - **`props` is carried by reference.** [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) adds the one exception, on a rolling-up parent.
 - **Key order:** core keys in their fixed order, `props` last; inside `props`, the consumer's own order.
 
 **Deletions and renames**
 
-- **The deleted surface.** `FieldSource` and all three arms, `SerializedField.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`, `source-strategy.ts`'s strategy table, `normalize-source.ts`, `metaRecord`/`metaKey`/`metaSlot`, `Field.source`, and `reportCorrectedRollUps` — with no reproducible derived value in the Document there is nothing to correct. `TMeta` becomes `TProps` and loses its second generic across 101 references. **One successor is easy to miss:** `encodeFieldDocument` keeps a `compute` Field out of the Document *through* the strategy table, so `'compute' in field` replaces it.
+- **The deleted surface.** `FieldSource` and all three arms, `SerializedField.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`, `source-strategy.ts`'s strategy table, `normalize-source.ts`, `metaRecord`/`metaKey`/`metaSlot`, and `Field.source`. **Do not delete `reportCorrectedRollUps` here** — [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) still needs it until derived keys leave the Document. `TMeta` becomes `TProps` and loses its second generic across 101 references. **One successor is easy to miss:** `encodeFieldDocument` keeps a `compute` Field out of the Document *through* the strategy table, so `'compute' in field` replaces it.
 - **`parentId` and `segments` keep their declarations.** Three mechanisms read them out of the registry: `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, `widenSegmentsToEnvelope` gates on `registry.get('segments')`, and `segmentsEqual` supplies the equality rule that puts an id-only Segment write into the changeset ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212), ADR 0010). Undeclaring them is not an available option.
 - **`StoredEdit` is renamed `ProposedEdit`.** This ADR gives the word *stored* to the Field union — *a **stored** Field may roll up and may be edited* — beside the sense `storedValue` and `storedSourceOf` already carry. The edit type would then hold the word twice for two meanings, and it is the weaker claim: **a `StoredEdit` is never stored.** It is a write nobody has applied. About 184 occurrences. The conversion name gets weaker — *convert the edit to a proposed edit* names no change — and the published call site wins, because a plugin author reads `request.proposed`. **The rename costs one enforcement, and paying it is decision 22:** a complete `props` and a `props` patch become the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes every key by accident. See [`types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md).
-- **`ComputedFieldCannotBeWrittenError` fires at two doors, under one name.** Registration is the first — `compute` beside `rollUp`, and `compute` beside `editable`. Neither is about storage; both are about writing. `entries.update()` is the second. **The message names the door**, and a second error type would be two names for one concept. `compute` beside `column` stays legal: a computed column is an ordinary read-only column. **The message says `compute`, never *derived*** — that word covers a rolled-up value too, and a derived parent cell is `DerivedFieldNotWritableError`. **The write resolver checks `compute` before `editable`**, or decision 18's first answer refuses a `compute` Field twice and the surviving message tells a consumer to declare an `editable` the register door rejects. See [`closed-decisions.md`](../../plans/field-redesign/0011-consumer-values-in-props/README.md).
+- **`ComputedFieldCannotBeWrittenError` fires at two doors, under one name.** This ADR throws it at registration. [ADR 0015](0015-what-the-write-door-refuses.md) throws it at `entries.update()`. **The message names the door**, and a second error type would be two names for one concept. `compute` beside `column` stays legal: a computed column is an ordinary read-only column. **The message says `compute`, never *derived*** — that word covers a rolled-up value too, and a derived parent cell is `DerivedFieldNotWritableError`. **The write resolver checks `compute` before `editable`**, or decision 18's first answer refuses a `compute` Field twice and the surviving message tells a consumer to declare an `editable` the register door rejects. See [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 - **Two names, two levels.** `dataset.toJSON()` and `Dataset.fromJSON()` are the public doors (`src/api/dataset.ts:312,326`). `toDocument` and `fromDocument` are the `data/serialization` functions behind them. This ADR names the public door except where it names a file to change.
 
 **Not deleted here.** `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` **stay**. The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. Whether the override survives at all is [ADR 0015](0015-what-the-write-door-refuses.md)'s decision 19, and what a consumer declaration on a core key then does is its decision 23.
@@ -189,7 +189,7 @@ sequenceDiagram
 - **D-S2-7's `meta` carve-out** goes with the `meta` Field, and so does the *"Whole-`meta` write after a declared Field exists"* rule row.
 - **D-S4-2 is retired, and its title is _"one adapter reads and writes a `FieldSource`"_.** The `& Partial<TFields>` arm on `EntryEdit` is a paragraph inside it, not the decision's name.
 
-The prose sweep that rewrites all of this runs **once, after the last of the five lands** — [`shared/prose-sweep.md`](../../plans/field-redesign/shared/prose-sweep.md).
+The prose sweep that rewrites all of this runs **once, after every open decision in all five ADRs has closed** — [`shared/prose-sweep.md`](../../plans/field-redesign/shared/prose-sweep.md).
 
 ## Issues this ADR depends on
 
