@@ -6,7 +6,7 @@ One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, n
 
 ```mermaid
 flowchart LR
-  D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>3 open</i>"]
+  D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>2 open</i>"]
   D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>1 open</i>"]
   P --> R
   P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>4 open</i>"]
@@ -17,7 +17,7 @@ flowchart LR
 | ADR | The one question it answers | Open | Blocks |
 |---|---|---|---|
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
-| [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | 1, 11, 22 | 0013 |
+| [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | 11, 22 | 0013 |
 | [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | 26 (branches 8, 20, 21, 24) | — |
 | [**0014** — the plugin-author surface](0014-plugin-author-surface/README.md) | Where do a plugin's values live, and how does an extender write? | 9, 12, 13, 16 | **nothing on the rename.** 16 waits on 22. 13 waits on 0012 |
 | [**0015** — what the write door refuses](0015-write-door/README.md) | How strict is `entries.update()`? | 18, 19, 23 | **nothing on the rename.** Prefers 0013 first (shrinks 18) |

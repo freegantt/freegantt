@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Supersedes ADR 0005's `meta` rulings if accepted.
-decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; an edit carries the Entry's own shape and `props` merges.
-open: three decisions — 1, 11 and 22. They are weighed in `plans/field-redesign/0011-consumer-values-in-props/`, and nowhere else.
+decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; an edit carries the Entry's own shape and `props` merges; an undeclared key is carried at ingest and never named at `update()` (decision 1, 2026-09-10).
+open: two decisions — 11 and 22. They are weighed in `plans/field-redesign/0011-consumer-values-in-props/`, and nowhere else.
 ---
 
 # Consumer values live in `props`
@@ -92,7 +92,7 @@ The record door returns storage. The by-key door resolves getters and aggregates
 
 **The by-key door keeps its type.** `FieldValue` maps over the **generic**, never over the registry, so one generic carries `model/dataset.ts:41` across unchanged as `FieldValue<TProps, K>`. Two value classes stay `unknown`, and both own no `TProps` key — a `compute` Field's answer, and a plugin's Field. That residue is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267).
 
-**Declare a Field when the library has a job to do with the value, not to make the value exist.** A `phase` that only a bar renderer reads needs no type bundle, no rollup, no editor and no column, so it needs no Field. Whether it is still *writable* with no declaration is decision 1.
+**Declare a Field when the library has a job to do with the value, not to make the value exist.** A `phase` that only a bar renderer reads needs no type bundle, no rollup, no editor and no column, so it needs no Field. **It is not writable through `update()` without one** — decision 1, ruled 2026-09-10. Carrying the value is free; changing it is what needs the declaration.
 
 **The Field union is exclusive.** A stored Field may roll up and may be edited. A computed Field may do neither. A `compute` Field runs on **every** row, a rolling-up parent included — decision 10, closed. The union closes *storage*, not *reading*. The real limit is that a `compute` Field cannot ask *am I a parent?*, which is [#214](https://github.com/Pawel-IT/FreeGantt/issues/214). The union's declaration, and what it does and does not enforce, are in [`types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md).
 
@@ -123,7 +123,7 @@ sequenceDiagram
   Doc-->>App: fromJSON reads them back. ADR 0013 omits the derived keys
 ```
 
-**Step 1 seeds `proposedKeys` from inside the namespace** — the edit's top-level keys except `props`, plus every key of `edit.props` this write may name. Whether an **undeclared** key may be among them is decision 1.
+**Step 1 seeds `proposedKeys` from inside the namespace** — the edit's top-level keys except `props`, plus every **declared** key of `edit.props`. An undeclared key is never among them: decision 1 ruled that `update()` naming one throws `UnknownFieldError`. **Still walk inside `props`** — skipping undeclared *names* is not skipping the inner walk, and without it a declared `cost` patch emits no row.
 
 **Step 5 emits one row per Field key, never a path into `props`.** Today a whole-`meta` write emits two rows for one value — one for `meta` itself, one for the key inside it. The `meta` Field is deleted, so the second row has nothing to come from.
 
@@ -164,7 +164,7 @@ sequenceDiagram
 - **The Document reader's rules do not change, and that is the point of the namespace.** An unknown key inside `props` is passenger data and is kept. An unknown top-level key stays unknown, so `plans/02:738`'s rule survives with one word renamed. ADR 0008's ruling stands: a legacy `progress` is consumer data inside `props`, with no core key to collide with.
 - **An unknown top-level key at ingest raises a warning, and the key is ignored.** `EntryInput` is closed, so the compiler already refuses one in a written literal. Data arriving from a server is the real case. Throwing turns one uninteresting column into a crash, and silence hides a typo'd `strat`. The check is one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'props'` — no second list to keep in step.
 - **A `props` key that names a core key gets the same warning, and the core definition wins.** Ruled 2026-09-09. `entry.props.start` would store without complaint and then be unreachable, because `fieldValue(id, 'start')` answers the Entry's own `start`. The value is ignored and it never throws — a consumer feeds this Dataset from an API they do not own, and a column added upstream must not break their page. **One sentence, one loop: a key inside `props` never names a core key, and a key at the top level is never a consumer's.**
-- **An undeclared key round-trips under both answers to decision 1.** It stores at ingest, survives `toJSON`/`fromJSON`, and is never dropped. The two answers differ at one door only, `update()`.
+- **An undeclared key is carried, and `update()` never names it.** Decision 1, ruled 2026-09-10. It stores at ingest, survives `toJSON`/`fromJSON`, and is never dropped; `update()` naming one throws `UnknownFieldError`. **A Field declaration is a handling contract, not a storage permission** — declare a key and the library sorts, formats, rolls up, tracks and writes it; leave it undeclared and the library carries the value and handles nothing. No flag marks a carried key: keeping it costs nothing, because a value that never changes needs no `equals`, no ChangeSet row, no row order and no undo entry. **Two consequences follow.** A passenger key cannot be removed through `update()`, so it lives as long as its Entry. And `entryAfterEdit` and both merge functions must merge `props` **per key** — a shallow spread deletes every passenger key the other edit did not restate.
 - **This ADR spends schema `6`**, for `meta` → `props` and `source` leaving `SerializedField`. [ADR 0012](0012-dates-are-optional-on-every-kind.md) already wrote **5**. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) writes **7**. One counter, not five — see [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 - **`props` is carried by reference.** [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) adds the one exception, on a rolling-up parent.
 - **Key order:** core keys in their fixed order, `props` last; inside `props`, the consumer's own order.

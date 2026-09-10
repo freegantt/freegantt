@@ -132,7 +132,7 @@ update(id, { strat: '…' })                       // UnknownFieldError — top 
 
 ⚠️ `start` and `end` are already optional when this ADR builds. The un-date verb is [0012](../0012-optional-dates/README.md)'s. `{ start: undefined }` **must compile** in this ADR's type tests.
 ⚠️ `plans/02` ships `update(id, { start, cost })`. Nested `props:` drops that shorthand — decision 11. A flat spelling for *declared* keys only is still on the table.
-⚠️ Whether `update({ props: { phase: 3 } })` on an undeclared key succeeds is decision 1, and it is **open**. Decision 1 currently *recommends* a throw; a recommendation is not a ruling, so write neither behaviour yet. Round-trip of undeclared keys at ingest stays either way.
+✅ `update({ props: { phase: 3 } })` on an undeclared key **throws `UnknownFieldError`** — decision 1, ruled 2026-09-10. Ingest **carries** it: `add()`, `new Dataset({ entries })` and `fromJSON()` store an undeclared key and round-trip it untouched. A declaration is a *handling* contract, not a storage permission. Two things ship with the rule — the `errors.ts:331` message rewrite, and per-key `props` merging, because a shallow spread deletes a carried key.
 
 ## Derived values — ⚠️ [0013](../0013-what-decides-derivation/README.md), do not implement here
 
@@ -210,4 +210,4 @@ dataset.history.undo()                           // c leaves, p stops rolling up
 
 **New errors in this ADR:** `ComputedFieldCannotBeWrittenError` at registration. **Later:** `DerivedFieldNotWritableError` (0013), `FieldNotEditableError` (0015). Conditional: `PluginFieldNotInDataError` (decision 9's store). **No `RollUpKindsWouldDropValuesError`** — decision 6 closed as *drop and recalculate*.
 
-`UnknownFieldError` stays at the top level of an edit. `fieldValue` stops throwing it only if decision 1 lets undeclared keys into the ChangeSet.
+`UnknownFieldError` stays at the top level of an edit, **and inside `props` too** — decision 1 ruled that `update()` never names an undeclared key, so `fieldValue` keeps its guard and one code path. A consumer reads a carried key off `entry.props` directly.

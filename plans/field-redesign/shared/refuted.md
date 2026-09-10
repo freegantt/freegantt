@@ -17,6 +17,7 @@ Each item here was drafted, probed or published, and then found wrong. Every one
 | 11 | Demotion keeps no dates and stays a rolling-up row | It becomes a normal Entry with no dates |
 | 12 | A `rollUpKinds` flip must clear the undo history | The drop is one row of the transaction that caused it |
 | 13 | `inline-editing.ts:113` calls `durationOf` | It **provides** one. It changes as an implementation |
+| 14 | Snapshot the legal `props` key set at first load | Reopens the registration lock, and an empty Dataset can never write |
 
 ---
 
@@ -124,6 +125,18 @@ One door does not carry its cause in the same transaction, and that follow-up is
 ## 13. The `durationOf` call sites
 
 **Do not re-derive this list.** An audit built it after a review named two call sites and got one of them wrong. It is in [ADR 0012's work](../0012-optional-dates/README.md#the-work). The one the review got wrong: **`inline-editing.ts:113` is a provider, not a caller** — `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`, so it changes as an implementation.
+
+## 14. Snapshotting the legal `props` key set at first load
+
+**Proposed 2026-09-10, while decision 1 was being ruled.** Take the union of `props` keys present at construction as the writable set. Anything new after that is invalid. It reads as the best of both: no declaration to write, and a typo is still caught — FullCalendar's open top level, closed.
+
+**It does not buy what it looks like it buys.** The cost of an undeclared write comes from the **missing declaration**, not from the missing permission. Per-key merge in a transactional store needs per-key identity, equality and ordering, and a key that merely *appeared in the payload* supplies none of them. So the snapshot pays all three edits the merging patch pays — `proposedKeys` seeded from inside `props`, `diffEdit` draining undeclared keys, and a second `fieldValue` path. **It is the merging patch with a gate on it.** What makes decision 1's answer cheap is that a carried key *never changes*; the gate chooses *which* undeclared keys are writable, not *whether* any are.
+
+**And two failures, the second fatal.** An empty Dataset — `new Dataset({ entries: [] })` — has an empty writable set for its whole life, so the ordinary start-empty-and-build-up flow can never write a consumer key. The obvious patch, letting `add()` extend the set, **reopens [the registration lock](rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction)** and the four things that depend on it: `FieldRegistry.all` is one array identity for the registry's life and readers cache by identity with no invalidation branch; `diffEdit`'s row order cannot change mid-life; `toJSON` must not depend on *when* it is called; the construction Rollup walks once.
+
+**It also hands the write surface to the upstream API.** A column added upstream silently opens a write door; one dropped silently closes it. The `props`-value ruling exists *because* upstream schemas drift, and its posture is *warn, ignore, core wins, never break the consumer*.
+
+**What survives from the idea, and it is worth building.** The same `Object.keys(input)` walk that already raises two ingest warnings can raise a third: *"`phase` arrived in `props` on 12 entries and no Field declares it. Declare `{ key: 'phase' }` to make it writable, sortable and formattable."* That is **discovery**, not permission — it points at the one-line fix and changes nothing in the store.
 
 ## Also dropped, with no argument left to make
 

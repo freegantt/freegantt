@@ -18,7 +18,7 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 ## Where it stands
 
-**Three decisions are open — 1, 11 and 22.** All three ask the same kind of question: *what does a consumer's write look like?* Four are closed — 2, 10, 17, and the `props`-names-a-core-key ruling.
+**Two decisions are open — 11 and 22.** Both ask the same kind of question: *what does a consumer's write look like?* Five are closed — **1**, 2, 10, 17, and the `props`-names-a-core-key ruling.
 
 **It lands second**, after [0012](../0012-optional-dates/README.md). [0012](../0012-optional-dates/README.md) is decision-free and touches four of the same files, so it goes first and this ADR rebases onto it. `EntryEdit`'s removable keys follow `Entry`, so 0012 first also makes `{ start: undefined }` compile here.
 
@@ -38,45 +38,7 @@ A consumer's values move from `meta` to **`props`**, and a Field key becomes the
 
 # Open decisions
 
-**Three, and they are one family.** 1 and 11 both ask what a consumer may name at the write door, and 11's text says to settle 1 first on one branch. 22 is the type that carries the answer.
-
-## 1. May an undeclared key travel in a `props` patch?
-
-Settled *yes* on 2026-09-08. **Re-opened 2026-09-09** by a survey of what ships elsewhere. **Blocks the merging patch.**
-
-Three patterns ship, and all three are coherent.
-
-| Pattern | Who | Behaviour |
-|---|---|---|
-| Atomic bag | tldraw `meta`, Excalidraw `customData`, **this library at HEAD** | Undeclared, untyped, **replaced whole**. One identity, one change event, one undo step |
-| Declared fields | Bryntum, AG Grid | Per-key merge, per-key change tracking, **declaration required** |
-| Namespaced bag, per-key setter | FullCalendar `extendedProps` | Undeclared keys kept and never modified. `setExtendedProp` writes **one** key. **No changeset, no diff, no undo** |
-
-**State the claim exactly.** It is not *"nobody does per-key writes on an undeclared key"* — FullCalendar does. It never pays what we would pay, because it has no ChangeSet, no diff and no undo, so an undeclared key needs no equality rule, no row and no order. **What nobody ships is per-key merge over an undeclared space _inside a transactional store_.** Per-key merge there needs per-key identity, equality and ordering, and the declaration is where all three come from. Bryntum shows the other end: an undeclared field gets no accessor, so no tracking and no re-render.
-
-**What it costs us.** An undeclared key has no `equals`, so a `props` value holding an object emits a ChangeSet row on **every** write, changed or not. It has no deterministic row order. And the merging patch(c) has to stop `fieldValue` throwing `UnknownFieldError`, so a row naming an undeclared key can be read back.
-
-**Recommendation — reuse the ADR's own rule, _records carry and patches name_.** `add()`, `new Dataset({ entries })` and `fromJSON()` **carry** an undeclared key, store it and round-trip it. `update()` **names** a key, so naming an undeclared one keeps throwing `UnknownFieldError`. An undeclared value then never changes, so undo never needs it, no `equals` is needed, row order stays deterministic, and `fieldValue` keeps its guard. this ADR's three edits are not needed at all.
-
-**The objection, and the answer.** *A namespace a consumer may fill and never change is incoherent.* They can change it — by declaring it, which is one line, `{ key: 'phase' }`. Declaring is where a consumer says *I intend to change this*, and it gives *why declare a Field?* a one-sentence answer it does not have today. The cost: `harness/planner.ts`'s `phase` gains that line.
-
-**Two further costs, both real, neither fatal.**
-
-*A plugin that writes a Field it has not registered fails.* Registration closes when `setup()` returns (`RegistrationClosedError`). A plugin that computes a key name later, or writes for another plugin that is not installed, has no way to declare it, and its cascade throws. Today that write succeeds. Whether that is a defect or the rule working is part of this decision.
-
-*The type says yes where the runtime says no.* `TProps` membership and Field declaration are two different things, and the type cannot see the registry.
-
-```ts
-interface PlannerProps { owner?: string; phase?: number }   // phase is in TProps…
-fields: [{ key: 'owner' }]                                  // …and declared as no Field
-
-update('t1', { props: { phase: 3 } })   // ✅ type-checks — PropsEdit maps keyof TProps
-                                        // ❌ throws UnknownFieldError — nothing declares it
-```
-
-Closing that gap needs declared-key inference from a `fields` literal, which is #267's machinery and out of scope. It is the same posture `fieldValue` already takes at HEAD. If the recommendation lands, the error message carries the fix: *"'phase' is not a declared Field, so update() cannot name it. Declare it: `{ key: 'phase' }` — or write it at ingest, where undeclared keys are kept."*
-
----
+**Two, and they are one family.** 11 asks what a consumer may name at the write door; 22 is the type that carries the answer. Decision **1** closed on 2026-09-10 and is below.
 
 ## 11. Does *common case is a shorthand* survive for Field writes?
 
@@ -88,7 +50,7 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 
 **Read the FullCalendar lesson precisely, because it is narrower than _flat is bad_.** What broke it is an **open** top level, not flatness. **This ADR already closes that door:** `update('t1', { strat: … })` throws `UnknownFieldError`.
 
-**It does not collide with 1's current recommendation.** 1 now recommends that `update()` throws for an undeclared key, so the typo guard *inside* `props` stays. Nesting and the declared-key shorthand are both still live. The collision returns only if 1 lands the other way — undeclared keys writable, inner guard dropped, outer guard kept — because the ADR cannot say *TProps is enough inside* and *we nest for a closed top level for the same typo reason*. **Settle 1 first only for that branch.**
+**The collision with 1 is gone, because 1 is closed.** It ruled that `update()` throws for an undeclared key, so the typo guard *inside* `props` stays and every flat spelling below keeps a closed top level. The collision would have returned only on 1's other branch — undeclared keys writable, inner guard dropped, outer guard kept — and that branch is refused. **Nothing here waits on 1 any more.**
 
 **The third option: a flat shorthand for _declared_ keys only, with `props: {}` as the long form.** `update('t1', { start, cost })` is legal exactly when `cost` is declared; anything the registry does not know still throws. That keeps `plans/02`'s *common case is a shorthand*, and it is **not** FullCalendar's mistake, because the top level stays closed. **This is the option to weigh against the nesting, not the open flat form.**
 
@@ -100,7 +62,7 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 
 **Raised 2026-09-10.** The combined spike built **flat-only** `update()` as improvement A — shorthand with no `props:` long form at the write door, `props` kept on `add` and on the Document. It won the read. The spike then set it aside as *optional, do not fold in*, on this reason: it *"splits the write door from the record door that decision 1 spent its whole table keeping together."*
 
-**Open decision 1 and that reason is not there.** Decision 1's table weighs per-key merge against whole-bag replace over an **undeclared** key space. It says nothing about whether the two doors share an object shape. Worse, **decision 1's own recommendation already splits them**: `add()` / `new Dataset({ entries })` / `fromJSON()` **carry** an undeclared key, and `update()` **throws** for it. That is one key with two answers at the two doors, ruled on purpose, and named *records carry and patches name*. A shape split is a smaller split than the one already ruled.
+**Open decision 1 and that reason is not there.** Decision 1's table weighs per-key merge against whole-bag replace over an **undeclared** key space. It says nothing about whether the two doors share an object shape. Worse, **decision 1 — now closed — already splits them**: `add()` / `new Dataset({ entries })` / `fromJSON()` **carry** an undeclared key, and `update()` **throws** for it. That is one key with two answers at the two doors, ruled on purpose on 2026-09-10, and named *records carry and patches name*. A shape split is a smaller split than the one already ruled.
 
 **What A buys, stated plainly.** One spelling at `update()`. No `FieldNamedAtTopAndInPropsError` — the double-name throw disappears, because there is only one place to name a key. That refusal is otherwise a brand-new write-door rule this ADR hands [0015](../0015-write-door/README.md) to name, type and message. **A is a fourth option on this decision, not a follow-up**, and it should be scored beside nest and shorthand rather than after them.
 
@@ -129,6 +91,41 @@ Closing that gap needs declared-key inference from a `fields` literal, which is 
 ---
 
 # Closed decisions
+
+## 1 — an undeclared key is carried, and `update()` never names it
+
+**Closed 2026-09-10. Ruled by the author.** Was: *may an undeclared key travel in a `props` patch?* Settled *yes* on 2026-09-08, re-opened 2026-09-09 by a survey, and ruled on the recommendation.
+
+**The ruling. Records carry, patches name.** `add()`, `new Dataset({ entries })` and `fromJSON()` **carry** an undeclared `props` key — store it, round-trip it, never touch it. `update()` **names** a key, so naming an undeclared one throws `UnknownFieldError`.
+
+**No flag, no keyword, no second declaration shape.** An undeclared key is kept because keeping it costs nothing, not because a consumer asked for it. `{ key: 'x', carry: true }` was weighed and refused: a consumer should not annotate data to stop the library discarding it.
+
+**Why carrying is free, and it is the whole reason this answer is cheap.** An undeclared value never changes. So nothing diffs it, and it needs no `equals`; it never earns a ChangeSet row, so it needs no row order; undo never holds it; and `fieldValue` keeps its `UnknownFieldError` guard with one code path. The three edits the merging patch needed — seeding `proposedKeys` from inside `props`, draining undeclared keys in `diffEdit`, and answering `entry.props[key]` from `fieldValue` — **are not needed at all.**
+
+**What a declaration means, stated once.** A Field declaration is a **handling** contract, not a storage permission: declare a key and the library will sort it, format it, roll it up, track it in a ChangeSet and let `update()` write it. Leave it undeclared and the library carries the value and handles nothing. Those are two jobs, and `props` does both.
+
+**Two consequences to publish, because neither is obvious.**
+
+- **A passenger key is immortal for that Entry's life.** A consumer cannot remove one through `update()`, because naming it throws. They replace the whole Entry, or re-ingest. That follows directly from *never changes*.
+- **One guard is load-bearing for data retention, not only for plugin composition.** `entryAfterEdit`, `mergeEntryEdits` (`edit-extension.ts:38`) and `mergeStoredEdits` (`field-access.ts:49`) must merge `props` **per key**. `{ ...base, ...extra }` replaces the whole bag, so a shallow spread silently deletes every passenger key the other edit did not restate. **This ruling makes those two merges non-optional.**
+
+**What lost, and why.** *Atomic bag* (HEAD) — `update({ props: { cost: 7 } })` drops `owner`; reads like a merge, is a replace, and is the bug this ADR exists to close. *Declared-only transport* (Bryntum's and AG Grid's shape) — coherent, and it forces a Field declaration for a renderer-only key such as an avatar URL, and it loses sixteen keys of consumer data when a Document written by a build with twenty declarations is read by a build with four. *FullCalendar's per-key setter* — true English, and it affords that only because it has no ChangeSet, no diff and no undo. *The merging patch* — pays all three edits above, plus rows with no `equals`, plus a `fieldValue` that stops meaning Field. *A key set snapshotted at first load* — reopens [the registration lock](../shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction) the moment `add()` extends it, and leaves an empty Dataset unable to write anything for its whole life.
+
+**Spiked** — `spike/0011-undeclared-props-patch`, 34 passed, five toy stores scored on rules-to-learn and on the call a person reads. The *"nobody ships per-key merge over an undeclared space inside a transactional store"* claim is carried from [`evidence.md`](../shared/evidence.md) as a **survey**, not as a probe result.
+
+**The error message carries the migration, so it ships with the ruling.** `errors.ts:331` currently says *"put the value in `meta`"*, pointing at the bag this ADR deletes. Replace it: *"'phase' is not a declared Field, so update() cannot name it. Declare it: `{ key: 'phase' }` — or write it at ingest, where undeclared keys are kept."*
+
+**One known hole, unchanged and accepted.** The type says yes where the runtime says no — `PropsEdit` maps `keyof TProps`, and `TProps` membership is not Field declaration:
+
+```ts
+interface PlannerProps { owner?: string; phase?: number }   // phase is in TProps…
+fields: [{ key: 'owner' }]                                  // …and declared as no Field
+update('t1', { props: { phase: 3 } })   // ✅ compiles   ❌ throws UnknownFieldError
+```
+
+Closing it needs declared-key inference from a `fields` literal — [#267](https://github.com/Pawel-IT/FreeGantt/issues/267)'s machinery, out of scope. It is the posture `fieldValue` already takes at HEAD, and the error names the fix.
+
+**One residue this ruling does not settle.** A **plugin cascade** naming a Field it never registered. Registration closes when `setup()` returns (`RegistrationClosedError`), so a plugin that computes a key name later has no way to declare it. Today that write succeeds. **Taken as following the same rule by default — the hook writes through the same door, and a plugin declares in `setup()`** — and recorded here so it can be reversed in one line if a plugin author meets it.
 
 ## 2 — `entries.add({ props })` emits one changeset row
 
@@ -223,13 +220,15 @@ Written in the new names: `toProposedEdit`, `ProposedEdit`.
 - An explicit `undefined` inside a patch clears that one key.
 - `diffEdit` emits one row per Field key, never a path into `props`.
 
-**Decision 1 gates the rest of this group.** If an undeclared key may travel in a patch, three edits ship together or the write is silent — no ChangeSet row, no undo, no subscriber:
+**Decision 1 closed on 2026-09-10, and it deletes three edits from this group.** Ingest carries an undeclared key; `update()` naming one throws. So these are **not built**:
 
-- **a.** Seed `proposedKeys` from inside `props`, not only from top-level keys.
-- **b.** `diffEdit` keeps the registry walk for row order, then drains undeclared keys in the proposed set.
-- **c.** `entries.fieldValue` and `ctx.read` answer `entry.props[key]` for an undeclared key — `undefined` if nothing holds it.
+- ~~**a.** Seed `proposedKeys` from inside `props`, not only from top-level keys.~~
+- ~~**b.** `diffEdit` keeps the registry walk for row order, then drains undeclared keys in the proposed set.~~
+- ~~**c.** `entries.fieldValue` and `ctx.read` answer `entry.props[key]` for an undeclared key.~~
 
-If decision 1 lands as the ADR recommends — `update()` throws, ingest still carries — **skip a–c**. `UnknownFieldError` stays on the top level of an edit either way.
+**`"Skip a–c"` is not `"do not look inside"`.** The first `Object.keys(edit)` loop must treat `props` as the namespace rather than as a Field, and it must still walk **inside** `props` for **declared** keys — without that inner walk a declared `cost` patch emits no row. Only the *undeclared* names are skipped in the seed. `UnknownFieldError` stays on the top level of an edit either way.
+
+**Two things now ship with the ruling rather than after it.** The `errors.ts:331` message rewrite, and per-key `props` merging in `entryAfterEdit`, `mergeEntryEdits` and `mergeStoredEdits` — a shallow spread deletes passenger data, which decision 1 guarantees is kept. `UnknownFieldError` stays on the top level of an edit either way.
 
 ## Done first — 2026-09-09
 
