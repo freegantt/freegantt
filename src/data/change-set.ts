@@ -17,7 +17,7 @@ import type {
   UpdatedRow,
 } from '../model/index.js';
 import type { StoredEdit } from './edit-extension.js';
-import { proposedKeysOf, overlayStoredEdit, statesProposedKeys } from './fields/field-access.js';
+import { proposedKeysOf, entryAfterEdit, statesProposedKeys } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -57,7 +57,7 @@ export function diffEdit(
   const current = entries.get(id);
   if (!current) return [];
 
-  const next = overlayStoredEdit(current, edit);
+  const next = entryAfterEdit(current, edit);
   const authored = proposedKeysOf(edit);
   // An edit that states nothing is read by the keys it holds; an edit that states the empty set
   // writes no Field. Reading absence off `authored.size` collapsed the two (#238).

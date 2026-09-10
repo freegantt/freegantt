@@ -8,10 +8,10 @@ import type { DatasetDocument, EntryDocument, PluginDocument } from '../../model
 import { instant, toISO } from '../../time/index.js';
 import { encodeFieldDocument } from './field-document.js';
 
-export { readDocument, readers } from './read.js';
+export { fromDocument, readers } from './read.js';
 export type { DatasetDocumentRead, FromJSONOptions } from './read.js';
 
-/** The readable Dataset surface `toJSON` needs — what a consumer already has (`entries.all`, zone,
+/** The readable Dataset surface `toDocument` needs — what a consumer already has (`entries.all`, zone,
  *  `dateOnlyEnd`, `rollUpKinds`, resolved Fields). `Dataset` and `DatasetState` both match. */
 export interface DatasetDocumentSource {
   readonly timeZone: string;
@@ -60,9 +60,9 @@ function writeEntry(entry: Entry): EntryDocument {
   };
 }
 
-/** `toJSON(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
+/** `toDocument(dataset)` — write the Dataset as a Document. Keys are declared in order; `Object.keys`
  *  over a store entity is never used. Always `schema: 4` (D-S4-16, D-S5-24, #212). */
-export function toJSON(dataset: DatasetDocumentSource): DatasetDocument {
+export function toDocument(dataset: DatasetDocumentSource): DatasetDocument {
   const fields = encodeFieldDocument(dataset.fields.authored);
   const plugins = dataset.pluginStores.toDocument();
   return {

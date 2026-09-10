@@ -780,7 +780,7 @@
               preserveAspectRatio="xMidYMid meet"
             >
               <title id="cls-bound-title">Consumer input to stored entries</title>
-              <desc id="cls-bound-desc">How EntryInput becomes a stored Entry via readEntries and time conversion</desc>
+              <desc id="cls-bound-desc">How EntryInput becomes a stored Entry via toEntries and time conversion</desc>
               <defs>
                 <marker
                   id="a8"
@@ -812,14 +812,14 @@
               <text class="s" x="264" y="74">timeZone, dateOnlyEnd? })</text>
               <text class="xs" x="264" y="94">Resolves dateOnlyEnd to its</text>
               <text class="xs" x="264" y="106">'inclusive' default, then calls</text>
-              <text class="xs" x="264" y="118">readEntries ONCE at construct,</text>
+              <text class="xs" x="264" y="118">toEntries ONCE at construct,</text>
               <text class="xs" x="264" y="130">and again on every add/update.</text>
 
               <path class="edge" d="M360,144 V176" marker-end="url(#a8)" style="color: var(--sub)" />
 
               <rect class="bx api" x="252" y="182" width="216" height="106" />
               <text class="t" x="264" y="200">data/entry-reader.ts</text>
-              <text class="s" x="264" y="216">readEntries(inputs, context)</text>
+              <text class="s" x="264" y="216">toEntries(inputs, context)</text>
               <text class="xs" x="264" y="236">Field mapping ONLY: applies the</text>
               <text class="xs" x="264" y="248">entryId brand, copies optionals</text>
               <text class="xs" x="264" y="260">only when present. Anything here</text>

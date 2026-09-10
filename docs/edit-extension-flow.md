@@ -32,7 +32,7 @@ nobody who writes an edit has to compute a diff by hand.
 point: every `StoredEdit` is a legal `EntryEdit` (an `Instant` is an `InstantInput`), and no
 `EntryEdit` is a legal `StoredEdit`. So a forgotten normalization is a compile error, and no `as` sits
 on the hook boundary. Normalization has **one** door: `DatasetState.extraEditsFor` calls the occupant
-and then `readEdits`, and both the commit path and the drag preview come through it. A plugin author
+and then `toStoredEdits`, and both the commit path and the drag preview come through it. A plugin author
 therefore never resolves a date, never states `proposedKeys`, and never computes an envelope.
 
 **What a plugin author writes for the two cases that are easy to get wrong:**

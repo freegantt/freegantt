@@ -29,7 +29,7 @@ import type {
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, readEdits, readEditsDetailed, readEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, toStoredEdits, toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
@@ -178,7 +178,7 @@ export class DatasetState implements Dataset {
       mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
-      readEntries(options.entries, this.#entryContext),
+      toEntries(options.entries, this.#entryContext),
       this.#entryContext,
       this.fields,
       this.fieldContext,
@@ -214,14 +214,14 @@ export class DatasetState implements Dataset {
    *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
    *  so `api/Dataset` never had to expose the raw occupant to get either job done (#209 Q5, replacing
    *  the public
-   *  `editExtender` getter this file used to mirror). The commit path calls `readExtenderEdits`
+   *  `editExtender` getter this file used to mirror). The commit path calls `extraEditsReadingFor`
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *
    *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
-   *  `EntryEdits`, the same object `entries.update()` takes, and `readEdits` reads it through the
+   *  `EntryEdits`, the same object `entries.update()` takes, and `toStoredEdits` reads it through the
    *  dataset's own zone and end rule. */
   extraEditsFor(request: EditRequest): StoredEdits {
-    return readEdits(
+    return toStoredEdits(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
@@ -236,8 +236,8 @@ export class DatasetState implements Dataset {
    *  behalf — `StoredEdit.proposedKeys` alone conflates the two (#232). Not part of the public
    *  surface: an app author never reads an envelope key list, only the reconciled `StoredEdits`
    *  `extraEditsFor` already gives them. */
-  readExtenderEdits(request: EditRequest): EditsReading {
-    return readEditsDetailed(
+  extraEditsReadingFor(request: EditRequest): EditsReading {
+    return toEditsReading(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),

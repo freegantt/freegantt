@@ -73,7 +73,7 @@ Rejected: leaving `data/` model-only and keeping both jobs in `api/`. It splits 
 
 Rejected: a file-level exemption (`data/serialization/**` may import `time/`, the rest may not). dependency-cruiser expresses it, but the second consumer (input reading, in `entry-store.ts`) arrives in the same slice, so the exemption would be widened before it was a week old.
 
-### D-S2-2 — `Dataset.entries` becomes a store view; `readEntries` moves to `data/`
+### D-S2-2 — `Dataset.entries` becomes a store view; `toEntries` moves to `data/`
 
 Call sites first, per CLAUDE.md. `plans/02` §2 is published as:
 
@@ -104,7 +104,7 @@ export interface Dataset {
 
 `data/`'s `EntryStore` extends the view with `add`/`update`/`remove`. The three read call sites in the tree today become `dataset.entries.all`: `Viewport.bind`'s `ScaleBinding`, `GanttShell.render`'s `LayoutInput`, and `GanttShell.reveal`'s index scan. `LayoutInput.entries` stays `readonly Entry[]` — `layout/` takes a snapshot and has no interest in a store.
 
-`api/entry-input.ts`'s `readEntries` moves to `data/entry-reader.ts` unchanged. It is the store's own reading now: construction and `entries.add()` must read an `EntryInput` the same way, and the one place that happens is inside the store.
+`api/entry-input.ts`'s `toEntries` moves to `data/entry-reader.ts` unchanged. It is the store's own reading now: construction and `entries.add()` must read an `EntryInput` the same way, and the one place that happens is inside the store.
 
 Rejected: `dataset.entryStore.add(…)` beside `dataset.entries: readonly Entry[]`. Two names for one collection — check 4 of the naming test, and the failure #7 records verbatim.
 

@@ -23,11 +23,7 @@ import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
-import {
-  toJSON as writeDocument,
-  readDocument,
-  reportCorrectedRollUps,
-} from '../data/serialization/index.js';
+import { toDocument, fromDocument, reportCorrectedRollUps } from '../data/serialization/index.js';
 import type { DatasetHierarchy, PluginId, RollUpKinds } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
@@ -316,7 +312,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
   toJSON(): DatasetDocument<TMeta> {
     // `DatasetState`, not `this`: the writer reads the plugin stores, which are library internals and
     // have no place on the public façade (D-S5-24).
-    return writeDocument(this.#state) as DatasetDocument<TMeta>;
+    return toDocument(this.#state) as DatasetDocument<TMeta>;
   }
 
   /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup
@@ -332,9 +328,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>,
   ): Dataset<TMeta, TFields> {
     // Trusted, unchecked TMeta cast — see the class-level note above. Narrowed to `entries`, the
-    // one field `readDocument`'s result actually needs it for: every other DatasetOptions member
-    // `readDocument` returns is already TMeta-independent.
-    const read = readDocument(doc, options);
+    // one field `fromDocument`'s result actually needs it for: every other DatasetOptions member
+    // `fromDocument` returns is already TMeta-independent.
+    const read = fromDocument(doc, options);
     const dataset = new Dataset<TMeta, TFields>({
       ...read,
       entries: read.entries as readonly EntryInput<TMeta>[],

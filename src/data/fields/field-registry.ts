@@ -12,7 +12,15 @@
 // is the only half `toJSON` writes. A plugin re-declares its own Fields the next time it is installed,
 // so a Document that carried them would author a Field with no plugin behind it.
 
-import type { Aggregator, Field, FieldKey, FieldSource, FieldType, PluginId } from '../../model/index.js';
+import type {
+  Aggregator,
+  Field,
+  FieldKey,
+  FieldSource,
+  FieldType,
+  GridColumnSizing,
+  PluginId,
+} from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
   DuplicateFieldSourceError,
@@ -44,11 +52,21 @@ function metaSlot(source: FieldSource): string | undefined {
   return source.key ?? undefined;
 }
 
+/** The `width`/`flex` pair of one column declaration, and nothing else it carries. Spreading the
+ *  whole declaration in its place puts every other key back — which is the bug `mergeColumn` had. */
+function sizingPairOf(column: NonNullable<Field['column']>): GridColumnSizing {
+  if (column.width !== undefined) return { width: column.width };
+  if (column.flex !== undefined) return { flex: column.flex };
+  return {};
+}
+
 /** #142/percent-shipped: `field.column` and `bundle.column` merge one level deep, not whole-object.
  *  A shallow `{ ...bundle, ...field }` lets a Field naming only `column: { header }` drop the type's
  *  whole `column` bundle — its alignment included — the moment it wants to keep its own header.
  *  `width`/`flex` still merge as the one pair they are (#249, mirrored from `view/grid-columns.ts`):
- *  a Field that sizes itself at all replaces the type's sizing whole, never key by key. */
+ *  a Field that sizes itself at all replaces the type's sizing whole, never key by key. Take the
+ *  pair off whichever declaration owns the sizing — never that declaration itself, or the loser's
+ *  header and alignment ride in behind it. */
 function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column'] {
   const from = bundle?.column;
   const own = field.column;
@@ -56,8 +74,8 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
   if (own === undefined) return from;
   const { width: _fromWidth, flex: _fromFlex, ...fromRest } = from;
   const { width: _ownWidth, flex: _ownFlex, ...ownRest } = own;
-  const sizing = own.width !== undefined || own.flex !== undefined ? own : from;
-  return { ...fromRest, ...ownRest, ...sizing };
+  const sizesItself = own.width !== undefined || own.flex !== undefined;
+  return { ...fromRest, ...ownRest, ...sizingPairOf(sizesItself ? own : from) };
 }
 
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {

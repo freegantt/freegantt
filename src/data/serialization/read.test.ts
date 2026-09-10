@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { readDocument, toJSON } from './index.js';
+import { fromDocument, toDocument } from './index.js';
 import { UnknownAggregatorError, UnsupportedSchemaError } from '../../model/index.js';
 import type { DatasetDocument, EntryDocument } from '../../model/index.js';
 
@@ -14,9 +14,9 @@ function span(id: string, overrides: Partial<EntryDocument> = {}): EntryDocument
   };
 }
 
-describe('readDocument (S4.4, D-S4-16)', () => {
+describe('fromDocument (S4.4, D-S4-16)', () => {
   it('reads a schema: 1 Document and lands derivedSpanKinds on rollUpKinds', () => {
-    const read = readDocument({
+    const read = fromDocument({
       schema: 1,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
@@ -30,7 +30,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
   });
 
   it('ignores fields on a schema: 1 Document — options.fields only', () => {
-    const read = readDocument(
+    const read = fromDocument(
       {
         schema: 1,
         timeZone: 'UTC',
@@ -46,7 +46,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
 
   it('merges a schema: 2 Document with options: Document wins data keys, options win functions', () => {
     const formatValue = (value: unknown): string => `$${String(value)}`;
-    const read = readDocument(
+    const read = fromDocument(
       {
         schema: 2,
         timeZone: 'UTC',
@@ -89,7 +89,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
     // A Document written before `editable` moved onto the Field carried it on `column`
     // (`GridColumnBase.editable`, since removed). `SerializedField.column`'s type no longer names it,
     // but a legacy row still has the key at runtime — `editableFromLegacyColumn` reads it there.
-    const read = readDocument({
+    const read = fromDocument({
       schema: 2,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
@@ -107,7 +107,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
   });
 
   it('#142: a top-level editable on the row wins over a stale editable left on column', () => {
-    const read = readDocument({
+    const read = fromDocument({
       schema: 2,
       timeZone: 'UTC',
       dateOnlyEnd: 'inclusive',
@@ -126,7 +126,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
   });
 
   it('adds an option-only Field whole', () => {
-    const read = readDocument(
+    const read = fromDocument(
       {
         schema: 2,
         timeZone: 'UTC',
@@ -149,7 +149,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
       fields: [{ key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'riskWeighted' }],
       entries: [span('t1')],
     };
-    expect(() => new DatasetState(readDocument(doc))).toThrow(UnknownAggregatorError);
+    expect(() => new DatasetState(fromDocument(doc))).toThrow(UnknownAggregatorError);
   });
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
@@ -160,9 +160,9 @@ describe('readDocument (S4.4, D-S4-16)', () => {
       rollUpKinds: [],
       entries: [],
     };
-    expect(() => readDocument(doc as unknown as DatasetDocument)).toThrow(UnsupportedSchemaError);
+    expect(() => fromDocument(doc as unknown as DatasetDocument)).toThrow(UnsupportedSchemaError);
     try {
-      readDocument(doc as unknown as DatasetDocument);
+      fromDocument(doc as unknown as DatasetDocument);
     } catch (error) {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
@@ -180,7 +180,7 @@ describe('readDocument (S4.4, D-S4-16)', () => {
       rollUpKinds: [],
       entries: [span('t1')],
     };
-    const read = readDocument(doc as unknown as DatasetDocument);
+    const read = fromDocument(doc as unknown as DatasetDocument);
     const restored = new DatasetState(read);
     expect(restored.entries.get('t1')?.segments).toHaveLength(1);
     expect(restored.entries.get('t1')?.segments[0]?.id).toBeDefined();
@@ -195,8 +195,8 @@ describe('[S2-A2] round-trip with declared Fields', () => {
       fields: [{ key: 'cost', type: 'money' }],
       entries: [span('t1', { meta: { cost: 400 } })],
     });
-    const doc = toJSON(dataset);
-    const round = toJSON(new DatasetState(readDocument(doc)));
+    const doc = toDocument(dataset);
+    const round = toDocument(new DatasetState(fromDocument(doc)));
     expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
   });
 });

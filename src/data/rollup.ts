@@ -13,7 +13,7 @@ import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from '.
 import {
   createRollUpContext,
   editProposesField,
-  overlayStoredEdit,
+  entryAfterEdit,
   readField,
   writeOntoEntry,
 } from './fields/field-access.js';
@@ -141,7 +141,7 @@ function effectiveEntry(
   const current = entries.get(id);
   if (!current) return undefined;
   const edit = merged.get(id);
-  return edit ? overlayStoredEdit(current, edit) : current;
+  return edit ? entryAfterEdit(current, edit) : current;
 }
 
 /**

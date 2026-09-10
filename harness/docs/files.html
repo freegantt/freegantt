@@ -308,7 +308,7 @@
             </tr>
             <tr>
               <td class="mono">data/entry-reader.ts</td>
-              <td class="mono">readEntries(), readEntry(), readEdit()</td>
+              <td class="mono">toEntries(), toEntry(), toStoredEdit()</td>
               <td>
                 Maps <code>EntryInput</code>/<code>EntryEdit</code> through <code>time/</code>'s zone
                 conversion into stored <code>Entry</code>/<code>StoredEdit</code> shapes — the single place
@@ -498,7 +498,7 @@
             </tr>
             <tr>
               <td class="mono">data/serialization/read.ts</td>
-              <td class="mono">readDocument()</td>
+              <td class="mono">fromDocument()</td>
               <td>Version-dispatches, converts stored ISO strings back to <code>Instant</code>, decodes fields.</td>
             </tr>
             <tr>

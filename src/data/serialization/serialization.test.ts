@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from '../dataset-state.js';
-import { toJSON, readDocument, reportCorrectedRollUps } from './index.js';
+import { toDocument, fromDocument, reportCorrectedRollUps } from './index.js';
 import { createErrorRaiser } from '../error-reporting.js';
 import type { ErrorReport } from '../../model/index.js';
 import { entryId, FreeGanttError, UnsupportedSchemaError } from '../../model/index.js';
@@ -19,18 +19,18 @@ function span(id: string, overrides: Partial<EntryInput> = {}): EntryInput {
 }
 
 function fromJSON(doc: DatasetDocument): DatasetState {
-  const state = new DatasetState(readDocument(doc));
+  const state = new DatasetState(fromDocument(doc));
   reportCorrectedRollUps(doc, state, createErrorRaiser(state.bus));
   return state;
 }
 
 function roundTrip(dataset: DatasetState): void {
-  const doc = toJSON(dataset);
-  const round = toJSON(fromJSON(doc));
+  const doc = toDocument(dataset);
+  const round = toDocument(fromJSON(doc));
   expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
 }
 
-describe('[S2-A2] toJSON / fromJSON', () => {
+describe('[S2-A2] toDocument / fromJSON', () => {
   it('round-trips byte-stable from a Dataset write', () => {
     const dataset = new DatasetState({
       timeZone: 'UTC',
@@ -40,10 +40,10 @@ describe('[S2-A2] toJSON / fromJSON', () => {
   });
 
   // #212 fix-plan review, finding B1: the Rollup wrote a rolled-up `start`/`end` straight onto the
-  // group without ever touching its Segment, so `toJSON` published an Entry whose envelope disagreed
+  // group without ever touching its Segment, so `toDocument` published an Entry whose envelope disagreed
   // with its own Segments. Reading that document back with `rollUpKinds: []` (no Rollup to paper over
   // it) then derived `start`/`end` from the stale Segment instead — the authored 2026 span was gone.
-  it('a rolled-up group survives toJSON -> fromJSON with rollUpKinds: [], no lost span', () => {
+  it('a rolled-up group survives toDocument -> fromJSON with rollUpKinds: [], no lost span', () => {
     const dataset = new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -60,8 +60,8 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       { id: rolledUp.segments[0]!.id, start: rolledUp.start, end: rolledUp.end },
     ]);
 
-    const doc = { ...toJSON(dataset), rollUpKinds: [] };
-    const reread = new DatasetState(readDocument(doc));
+    const doc = { ...toDocument(dataset), rollUpKinds: [] };
+    const reread = new DatasetState(fromDocument(doc));
     const p1 = reread.entries.get('p1')!;
     expect(p1.start).toBe(rolledUp.start);
     expect(p1.end).toBe(rolledUp.end);
@@ -69,9 +69,9 @@ describe('[S2-A2] toJSON / fromJSON', () => {
 
   // #212 R2 fix-plan review, finding B1 remainder: B1's own fix only paired a rolled-up envelope onto
   // a group's Segment when it drew exactly one. A group drawing several had no such pairing, so
-  // `toJSON` could still publish a group whose Segments disagreed with its rolled-up `start`/`end` —
+  // `toDocument` could still publish a group whose Segments disagreed with its rolled-up `start`/`end` —
   // this is that second case, closed by `widenSegmentsToEnvelope` (`data/rollup.ts`).
-  it('a rolled-up group drawing several Segments still matches them, and survives toJSON round-tripped', () => {
+  it('a rolled-up group drawing several Segments still matches them, and survives toDocument round-tripped', () => {
     const dataset = new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -120,7 +120,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         { id: 'p1', kind: 'group', name: 'Parent' },
       ],
     });
-    const present = toJSON(withAll).entries.find((row) => row.id === 't1');
+    const present = toDocument(withAll).entries.find((row) => row.id === 't1');
     expect(present?.parentId).toBe('p1');
     expect(present?.kind).toBe('milestone');
     expect(present?.segments).toEqual([
@@ -130,7 +130,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     expect(present?.meta).toEqual({ team: 'A' });
     roundTrip(withAll);
 
-    const bare = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] })).entries[0];
+    const bare = toDocument(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] })).entries[0];
     expect(bare).toEqual({
       id: 't1',
       name: 't1',
@@ -156,11 +156,11 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         }),
       ],
     });
-    const first = toJSON(dataset);
+    const first = toDocument(dataset);
     expect(first.schema).toBe(4);
     const multiRow = first.entries.find((row) => row.id === 'multi');
     expect(multiRow?.segments?.map((segment) => segment.id)).toEqual(['first-half', 'second-half']);
-    const second = toJSON(fromJSON(first));
+    const second = toDocument(fromJSON(first));
     expect(second).toEqual(first);
   });
 
@@ -170,11 +170,11 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       timeZone: 'UTC',
       entries: [span('t1', { meta })],
     });
-    const doc = toJSON(dataset);
+    const doc = toDocument(dataset);
     expect(doc.entries[0]?.meta).toBe(meta);
     const round = fromJSON(doc);
     expect(round.entries.get('t1')?.meta).toBe(meta);
-    expect(JSON.stringify(toJSON(round))).toBe(JSON.stringify(doc));
+    expect(JSON.stringify(toDocument(round))).toBe(JSON.stringify(doc));
   });
 
   it('keeps a non-UTC timeZone and writes Z-suffixed instants', () => {
@@ -182,7 +182,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       timeZone: 'America/Chicago',
       entries: [span('t1')],
     });
-    const doc = toJSON(dataset);
+    const doc = toDocument(dataset);
     expect(doc.timeZone).toBe('America/Chicago');
     expect(doc.entries[0]?.start.endsWith('Z')).toBe(true);
     roundTrip(dataset);
@@ -194,7 +194,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       dateOnlyEnd: 'exclusive',
       entries: [span('t1')],
     });
-    expect(toJSON(dataset).dateOnlyEnd).toBe('exclusive');
+    expect(toDocument(dataset).dateOnlyEnd).toBe('exclusive');
     roundTrip(dataset);
   });
 
@@ -204,7 +204,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       rollUpKinds: ['milestone'],
       entries: [span('t1')],
     });
-    expect(toJSON(dataset).rollUpKinds).toEqual(['milestone']);
+    expect(toDocument(dataset).rollUpKinds).toEqual(['milestone']);
     roundTrip(dataset);
   });
 
@@ -215,7 +215,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     });
     dataset.entries.remove('a');
     dataset.entries.add(span('d'));
-    expect(toJSON(dataset).entries.map((row) => row.id)).toEqual(['b', 'c', 'd']);
+    expect(toDocument(dataset).entries.map((row) => row.id)).toEqual(['b', 'c', 'd']);
     roundTrip(dataset);
   });
 
@@ -236,10 +236,10 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         },
       ],
     };
-    const round = toJSON(fromJSON(raw));
+    const round = toDocument(fromJSON(raw));
     expect('extraTop' in round).toBe(false);
     expect(round.entries[0] && 'extraEntry' in round.entries[0]).toBe(false);
-    expect(JSON.stringify(toJSON(fromJSON(round)))).toBe(JSON.stringify(round));
+    expect(JSON.stringify(toDocument(fromJSON(round)))).toBe(JSON.stringify(round));
   });
 
   it('drops a top-level cost on ingest; a declared Field reads meta.cost', () => {
@@ -260,14 +260,14 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       ],
     };
     const state = new DatasetState({
-      ...readDocument(raw),
+      ...fromDocument(raw),
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
     expect(state.entries.get('t1') && 'cost' in (state.entries.get('t1') as object)).toBe(false);
     expect(state.entries.get('t1')?.meta).toEqual({ cost: 400 });
     expect(state.fields.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
-    expect(toJSON(state).entries[0]?.meta).toEqual({ cost: 400 });
+    expect(toDocument(state).entries[0]?.meta).toEqual({ cost: 400 });
   });
 
   it('corrects a stored group span that disagrees with its children, then stays stable', () => {
@@ -294,11 +294,11 @@ describe('[S2-A2] toJSON / fromJSON', () => {
         },
       ],
     };
-    const first = toJSON(fromJSON(disagreeing));
+    const first = toDocument(fromJSON(disagreeing));
     const parent = first.entries.find((row) => row.id === 'p1');
     expect(parent?.start).toBe('2026-09-01T00:00:00.000Z');
     expect(parent?.end).toBe('2026-09-11T00:00:00.000Z');
-    const second = toJSON(fromJSON(first));
+    const second = toDocument(fromJSON(first));
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
     warn.mockRestore();
   });
@@ -358,13 +358,13 @@ describe('[S2-A2] toJSON / fromJSON', () => {
     };
 
     // No subscriber: the console line fires, exactly as it did before this seam existed.
-    const unwatched = new DatasetState(readDocument(disagreeing));
+    const unwatched = new DatasetState(fromDocument(disagreeing));
     reportCorrectedRollUps(disagreeing, unwatched, createErrorRaiser(unwatched.bus));
     expect(warn).toHaveBeenCalledTimes(1);
 
     // One subscriber: the console stays silent and the consumer gets the whole report.
     warn.mockClear();
-    const watched = new DatasetState(readDocument(disagreeing));
+    const watched = new DatasetState(fromDocument(disagreeing));
     const reports: ErrorReport[] = [];
     watched.on('error', (report) => {
       reports.push(report);
@@ -388,7 +388,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       rollUpKinds: ['group'],
       entries: [{ id: 't1', name: 't1', start: '2026-09-01', end: '2026-09-11T00:00:00.000Z' }],
     };
-    expect(() => readDocument(doc)).toThrow(FreeGanttError);
+    expect(() => fromDocument(doc)).toThrow(FreeGanttError);
   });
 
   it('throws UnsupportedSchemaError for a schema this build does not read', () => {
@@ -399,9 +399,9 @@ describe('[S2-A2] toJSON / fromJSON', () => {
       rollUpKinds: [],
       entries: [],
     };
-    expect(() => readDocument(doc as unknown as DatasetDocument)).toThrow(UnsupportedSchemaError);
+    expect(() => fromDocument(doc as unknown as DatasetDocument)).toThrow(UnsupportedSchemaError);
     try {
-      readDocument(doc as unknown as DatasetDocument);
+      fromDocument(doc as unknown as DatasetDocument);
     } catch (error) {
       expect(error).toBeInstanceOf(UnsupportedSchemaError);
       if (error instanceof UnsupportedSchemaError) {
@@ -415,7 +415,7 @@ describe('[S2-A2] toJSON / fromJSON', () => {
   it('fromJSON starts with an empty history — a document is a state, not a session', () => {
     const dataset = new DatasetState({ timeZone: 'UTC', entries: [span('t1')] });
     dataset.entries.update('t1', { name: 'Renamed' });
-    const restored = fromJSON(toJSON(dataset));
+    const restored = fromJSON(toDocument(dataset));
     expect(restored.canUndo).toBe(false);
     expect(restored.canRedo).toBe(false);
   });
@@ -433,27 +433,27 @@ describe('plugin rows (schema: 3, D-S5-24)', () => {
 
   it('writes the plugins key and round-trips it byte-stably', () => {
     const dataset = withLockedT1();
-    const doc = toJSON(dataset);
+    const doc = toDocument(dataset);
     expect(doc.schema).toBe(4);
     expect(doc.plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
     roundTrip(dataset);
   });
 
   it('omits the plugins key when no plugin holds a row', () => {
-    const doc = toJSON(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
+    const doc = toDocument(new DatasetState({ timeZone: 'UTC', entries: [span('t1')] }));
     expect('plugins' in doc).toBe(false);
   });
 
   it('carries the rows of a plugin this Dataset never installs', () => {
-    const doc = toJSON(withLockedT1());
+    const doc = toDocument(withLockedT1());
     // A second application reads the same Document with no plugin installed at all.
     const passenger = fromJSON(doc);
     expect(passenger.pluginStores.read('demo.lock')).toBeUndefined();
-    expect(JSON.stringify(toJSON(passenger))).toBe(JSON.stringify(doc));
+    expect(JSON.stringify(toDocument(passenger))).toBe(JSON.stringify(doc));
   });
 
   it('hands the rows back to the plugin that reserves the store on the reading side', () => {
-    const doc = toJSON(withLockedT1());
+    const doc = toDocument(withLockedT1());
     const reopened = fromJSON(doc);
     const lock = reopened.pluginStores.reserve<{ locked: true }>('demo.lock');
     expect(lock.get(entryId('t1'))).toEqual({ locked: true });
@@ -468,7 +468,7 @@ describe('plugin rows (schema: 3, D-S5-24)', () => {
       rollUpKinds: ['group'],
       entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
     };
-    const written = toJSON(fromJSON(older));
+    const written = toDocument(fromJSON(older));
     expect(written.schema).toBe(4);
     expect('plugins' in written).toBe(false);
   });
@@ -482,6 +482,6 @@ describe('plugin rows (schema: 3, D-S5-24)', () => {
       plugins: { 'demo.lock': { t1: { locked: true } } },
       entries: [{ id: 't1', name: 't1', start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' }],
     };
-    expect('plugins' in toJSON(fromJSON(mislabelled))).toBe(false);
+    expect('plugins' in toDocument(fromJSON(mislabelled))).toBe(false);
   });
 });

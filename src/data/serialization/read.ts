@@ -54,7 +54,7 @@ type Reader = (doc: DatasetDocument) => SchemaRead;
 /** Reads a stored absolute-ISO date. `fromJSON` is a public validation boundary (`plans/02` §7):
  *  a bad document date must surface as `InvalidInstantError`, the same `FreeGanttError` subclass
  *  mutation input throws through `toInstant()`, not `instant()`'s bare `RangeError`. */
-function readInstant(value: string): Instant {
+function fromDocumentDate(value: string): Instant {
   try {
     return instant(value);
   } catch {
@@ -65,21 +65,21 @@ function readInstant(value: string): Instant {
   }
 }
 
-function readEntryDocument(row: EntryDocument): EntryInput {
+function fromEntryDocument(row: EntryDocument): EntryInput {
   return {
     id: row.id,
     ...(row.parentId !== undefined ? { parentId: row.parentId } : {}),
     ...(row.kind !== undefined ? { kind: row.kind } : {}),
     name: row.name,
-    start: readInstant(row.start),
-    end: readInstant(row.end),
+    start: fromDocumentDate(row.start),
+    end: fromDocumentDate(row.end),
     ...(row.segments !== undefined
       ? {
           segments: row.segments.map((segment) => ({
             // Absent below `schema: 4`, where a Segment had no id to write; ingest mints one (#212).
             ...(segment.id !== undefined ? { id: segment.id } : {}),
-            start: readInstant(segment.start),
-            end: readInstant(segment.end),
+            start: fromDocumentDate(segment.start),
+            end: fromDocumentDate(segment.end),
           })),
         }
       : {}),
@@ -92,41 +92,41 @@ function rollUpKindsFromSchema1(doc: DatasetDocument): readonly EntryKind[] {
   return [...(doc.rollUpKinds ?? legacy.derivedSpanKinds ?? ['group'])];
 }
 
-function readSchema1(doc: DatasetDocument): SchemaRead {
+function fromSchema1(doc: DatasetDocument): SchemaRead {
   return {
     timeZone: doc.timeZone,
     dateOnlyEnd: doc.dateOnlyEnd,
     rollUpKinds: rollUpKindsFromSchema1(doc),
-    entries: doc.entries.map(readEntryDocument),
+    entries: doc.entries.map(fromEntryDocument),
   };
 }
 
-function readSchema2(doc: DatasetDocument): SchemaRead {
+function fromSchema2(doc: DatasetDocument): SchemaRead {
   return {
     timeZone: doc.timeZone,
     dateOnlyEnd: doc.dateOnlyEnd,
     rollUpKinds: [...(doc.rollUpKinds ?? ['group'])],
-    entries: doc.entries.map(readEntryDocument),
+    entries: doc.entries.map(fromEntryDocument),
   };
 }
 
 /** `schema: 3` adds the `plugins` key and changes nothing else, so it reads exactly as `2` does —
- *  `readDocument` picks the `plugins` key up separately, the same way it picks up `fields`. */
-const readSchema3: Reader = readSchema2;
+ *  `fromDocument` picks the `plugins` key up separately, the same way it picks up `fields`. */
+const fromSchema3: Reader = fromSchema2;
 
-/** `schema: 4` adds an id to each written Segment (#212). `readEntryDocument` carries an id when the
+/** `schema: 4` adds an id to each written Segment (#212). `fromEntryDocument` carries an id when the
  *  row has one, so the earlier schemas read through the same function and mint theirs at ingest. */
-const readSchema4: Reader = readSchema2;
+const fromSchema4: Reader = fromSchema2;
 
 /** The migration seam. A second schema is a map addition, not a rewrite (`plans/02` §6). */
 export const readers: Record<number, Reader> = Object.freeze({
-  1: readSchema1,
-  2: readSchema2,
-  3: readSchema3,
-  4: readSchema4,
+  1: fromSchema1,
+  2: fromSchema2,
+  3: fromSchema3,
+  4: fromSchema4,
 });
 
-export function readDocument(doc: DatasetDocument, options?: FromJSONOptions): DatasetDocumentRead {
+export function fromDocument(doc: DatasetDocument, options?: FromJSONOptions): DatasetDocumentRead {
   const reader = readers[doc.schema];
   if (reader === undefined) {
     throw new UnsupportedSchemaError(doc.schema, Object.keys(readers).map(Number));

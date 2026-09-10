@@ -1,7 +1,7 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
 import type { Entry, EntryId, StoredEdits } from '../model/index.js';
-import { overlayStoredEdit } from './fields/field-access.js';
+import { entryAfterEdit } from './fields/field-access.js';
 
 export function buildEffectiveEntries(
   committed: ReadonlyMap<EntryId, Entry>,
@@ -14,7 +14,7 @@ export function buildEffectiveEntries(
   for (const entry of added) map.set(entry.id, entry);
   for (const [id, edit] of proposed) {
     const current = map.get(id);
-    if (current) map.set(id, overlayStoredEdit(current, edit));
+    if (current) map.set(id, entryAfterEdit(current, edit));
   }
   return map;
 }
@@ -33,14 +33,14 @@ export function effectiveEntriesFor(
     const current = committed.get(id);
     if (current === undefined) continue;
     const edit = proposed.get(id);
-    map.set(id, edit === undefined ? current : overlayStoredEdit(current, edit));
+    map.set(id, edit === undefined ? current : entryAfterEdit(current, edit));
   }
   return map;
 }
 
 /** `id` as `proposed` leaves it, without allocating a map to answer it — `EditRequest.entryAfterEdits`
  *  (D-S5-45)'s own implementation for a preview frame, where `effectiveEntriesFor` above (built for a
- *  named few ids at once) would still allocate a one-entry `Map` on every call. `overlayStoredEdit`
+ *  named few ids at once) would still allocate a one-entry `Map` on every call. `entryAfterEdit`
  *  itself allocates only when `id` actually has an edit pending. */
 export function entryAfterEdits(
   committed: ReadonlyMap<EntryId, Entry>,
@@ -50,7 +50,7 @@ export function entryAfterEdits(
   const current = committed.get(id);
   if (current === undefined) return undefined;
   const edit = proposed.get(id);
-  return edit === undefined ? current : overlayStoredEdit(current, edit);
+  return edit === undefined ? current : entryAfterEdit(current, edit);
 }
 
 export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {

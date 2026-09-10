@@ -6,7 +6,7 @@ import {
   createRollUpContext,
   editProposesField,
   mergeStoredEdits,
-  overlayStoredEdit,
+  entryAfterEdit,
   proposedKeysOf,
   readField,
   statesProposedKeys,
@@ -42,7 +42,7 @@ describe('readField / writeField (D-S4-2)', () => {
   it('reads and writes an entry source', () => {
     const entry = span();
     expect(readField(entry, start, fieldCtx)).toBe(0);
-    const edited = overlayStoredEdit(entry, writeField({}, entry, start, 10));
+    const edited = entryAfterEdit(entry, writeField({}, entry, start, 10));
     expect(edited.start).toBe(10);
   });
 
@@ -51,7 +51,7 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(readField(entry, cost, fieldCtx)).toBeUndefined();
     const first = writeField({}, entry, cost, 500);
     expect(first.meta).toEqual({ cost: 500 });
-    const second = writeField(first, overlayStoredEdit(entry, first), cost, 600);
+    const second = writeField(first, entryAfterEdit(entry, first), cost, 600);
     expect(second.meta).toEqual({ cost: 600 });
     const withPassenger = span({ team: 'A' });
     const merged = writeField({}, withPassenger, cost, 500);

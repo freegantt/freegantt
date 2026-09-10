@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { toJSON } from './serialization/index.js';
+import { toDocument } from './serialization/index.js';
 import { entryId } from '../model/index.js';
 import { addMs } from '../time/index.js';
 import type { EditExtender } from './edit-extension.js';
@@ -128,10 +128,10 @@ function assertUndoRestores(seed: readonly EntryInput[], ops: Op[], editExtender
     entries: seed,
     ...(editExtender !== undefined ? { editExtender } : {}),
   });
-  const before = JSON.stringify(toJSON(state));
+  const before = JSON.stringify(toDocument(state));
   for (const op of ops) applyOp(state, op);
   undoAll(state);
-  const after = JSON.stringify(toJSON(state));
+  const after = JSON.stringify(toDocument(state));
   expect(after).toBe(before);
 }
 
@@ -153,7 +153,7 @@ const cascade: EditExtender = ({ proposed }) => {
   return new Map();
 };
 
-describe('[S2-A1] undo-all restores byte-identical toJSON', () => {
+describe('[S2-A1] undo-all restores byte-identical toDocument', () => {
   it('with the identity extender and no deriving kinds', () => {
     fc.assert(
       fc.property(fc.array(opArb, { minLength: 1, maxLength: 50 }), (ops) => {
@@ -191,10 +191,10 @@ describe('[S4-A9] autoGroup undo', () => {
         { id: 'c1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
       ],
     });
-    const before = JSON.stringify(toJSON(state));
+    const before = JSON.stringify(toDocument(state));
     state.entries.update('c1', { parentId: 'p1' });
     expect(state.entries.get('p1')!.kind).toBe('group');
     undoAll(state);
-    expect(JSON.stringify(toJSON(state))).toBe(before);
+    expect(JSON.stringify(toDocument(state))).toBe(before);
   });
 });
