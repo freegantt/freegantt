@@ -2,7 +2,7 @@
 
 Companion to `00-overview.md` (decisions D1–D12 are cited by number). This document defines the layers, the domain model, the contracts between modules, and the invariants that CI enforces.
 
-> **§2.5, §2.6 and I14 are ahead of `src/`.** ADRs 0011–0015 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules here. So `Entry.props`, optional dates, derivation by children and the `editable` enum are the decided design, and `src/` still ships `meta`, `Entry.kind` and `editable?: boolean` until each ADR builds. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
+> **§2.5, §2.6 and I14 are ahead of `src/`.** ADRs 0011–0016 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules here. So `Entry.props`, optional dates, derivation by children, the `editable` enum and no save format are the decided design, and `src/` still ships `meta`, `Entry.kind`, `editable?: boolean` and `data/serialization/` until each ADR builds. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
 
 ---
 
@@ -24,7 +24,7 @@ flowchart TB
     direction TB
     LAY["<b>layout/</b><br/>row resolution · lane packing<br/>bar geometry · link routing · height index"]
     SCH["<b>scheduling/</b><br/>first-party default plugin:<br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
-    DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · serialization · reactivity façade"]
+    DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · reactivity façade"]
     TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
     MODEL["<b>model/</b><br/>entity types · ids · brands<br/>zero runtime, zero deps"]
   end
@@ -59,7 +59,7 @@ flowchart TB
   class API apic
 ```
 
-`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): serialization (Instant⇄ISO) and mutation-time input reading (resolving a Plain string, advancing a date-only `end`) are both zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
+`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): mutation-time input reading (resolving a Plain string, advancing a date-only `end`) is zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
 
 There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic extension hook (D4; exact contract tracked in issue #12), which may add extra field writes to a proposed edit before it commits. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
@@ -72,7 +72,7 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 - `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers and the `FreeGanttError` base, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
-- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts`, `data/history.ts`, and `data/serialization/**` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
+- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts` and `data/history.ts` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
 - **The commit path ends at `change`; `History` subscribes like any other consumer (D-S2-24):** `data/transaction.ts` commits a `ChangeSet` and emits `change`; it imports no history and no view. `History` and `view/dataset-change-subscription.ts` are both ordinary `on('change')` subscribers, not privileged callers on the commit path — the same discipline that makes both removable leaves above.
 - **`render/ --> data/dev-mode.ts` and `extensions/ --> data/dev-mode.ts` (leaf-only widening, S5.4 QC):** neither layer gains a `data/` edge — `data/dev-mode.ts` is the one file dependency-cruiser lets both reach, because it is a zero-dependency, one-line `import.meta.env.DEV` read with no state and no further imports of its own, the same shape that already justifies `model/`'s `FreeGanttError` carve-out. Before this, `render/dom/index.ts` and `extensions/plugin-runtime.ts` each hand-copied the check with a comment citing the boundary; two copies of one line is the smaller problem, so this stays a named single-file exception rather than a general `render --> data` or `extensions --> data` arrow — every other `data/` file is still unreachable from either layer.
 
@@ -84,7 +84,7 @@ src/
                  Dataset (the structural contract api/dataset.ts's class satisfies — S1.7 §3.2,
                  formerly DatasetLike in view/gantt-shell.ts)                                (pure)
   time/          instants, zones, TimeScale, presets  (pure)
-  data/          stores, transactions, undo, changesets, serialization (pure)
+  data/          stores, transactions, undo, changesets (pure)
                  (S2.1: reactivity.ts, event-bus.ts, entry-reader.ts, entry-store.ts,
                  dataset-state.ts — the only file layer that may additionally import time/, D-S2-1)
   scheduling/    propagation engine + policies        (pure)
@@ -317,7 +317,7 @@ Rules:
 - **The key is the address.** `{ key: 'cost' }` is `entry.props.cost`. `{ key: 'start' }` is `entry.start`. `{ key: 'duration', compute }` has no stored home. There is no `source` object.
 - **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end` through `time/`, I10) ship in the registry a consumer adds to. `parentId` and `segments` ship as data-only Fields (no `column`). There is no `kind` Field and no `props` Field. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data under `scheduling:progress` (ADR 0008, ADR 0014). `weightedMeanByDuration` still ships as an Aggregator name. Duration returns `undefined` when a date is absent (ADR 0012). One unit: millisecond.
 - **A Field is columnable only when it declares `column`.** `gridColumns` names columnable Fields in display order. Default `gridColumns` is `['name']`. A dateless row cannot be dated through that default: ship `start` in the default columns, or a timeline date gesture, with the first user-facing cut (ADR 0012). Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`). A Field with no `column` still rolls up and still appears in the changeset; naming it in `gridColumns` throws `FieldNotColumnableError`.
-- **Stored or computed follows the declaration.** A core key or a `props` key has a stored home, so its rolled-up parent value is stored — changeset, undo — exactly as the Span rollup already does for `start`/`end`. A rolling-up parent's derived keys never reach the Document (ADR 0013). A `compute` Field has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and never reaches the document. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
+- **Stored or computed follows the declaration.** A core key or a `props` key has a stored home, so its rolled-up parent value is stored — changeset, undo — exactly as the Span rollup already does for `start`/`end`. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A `compute` Field has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and is never stored. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate the store never holds declares a computed field; there is no flag to set.
 - **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business. The duration arm must not call `ctx.read(entry, 'duration')`.
 - **`props` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. `update()` never names an undeclared key (`UnknownFieldError`). A write to a declared key emits a changeset row keyed on the **field key**, never a whole-bag row. Plugin keys share this bag under a prefix.
 - **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. Nested `props:` at `update()` is refused. A key that is not registered is an `UnknownFieldError` — never a silent write.
@@ -552,7 +552,7 @@ A field whose `from` equals `to` under its per-field comparator (`===` for primi
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
-- **Serialization**: versioned `toJSON()`/`fromJSON()` with a declared schema (`{ schema: 1, ... }`), brands stripped at the boundary. The JSON shape is public API and semver-governed. See `02-public-api.md` §6.
+- **Persistence**: the library holds no save format (ADR 0016). A consumer reads `entries.all`, `fields.all` and `pluginStores.read(id).all`, and saves its own shape. See `02-public-api.md` §6.
 
 ---
 
@@ -789,7 +789,7 @@ name (D-S5-5).
 
 ### 10.2 The Dataset plugin
 
-A Dataset plugin sees only what a Document holds. It stays DOM-free and runs wherever a Dataset
+A Dataset plugin sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset
 runs — it never meets a pane, the overlay, or a gesture.
 
 ```ts
@@ -828,7 +828,7 @@ Dataset instead of reconfiguring one live. Every register* call above is legal o
 runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
 retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
 owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
-"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Document
+"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
 keeps them under the plugin's own id as passenger data (D-S5-24), and `store.read` lets a later
 plugin — the setup order `requires` fixes — read an earlier plugin's rows.
 

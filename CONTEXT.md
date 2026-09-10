@@ -13,8 +13,8 @@ The body of authored data — its Entries, plus whatever scheduling-plugin-owned
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Document**:
-The `toJSON()` / `fromJSON()` shape of a Dataset (`DatasetDocument`): `schema`, `timeZone`, `dateOnlyEnd`, `fields`, and `entries`. A Document is a state, not a session — `fromJSON` constructs a fresh Dataset with an empty History. Function-valued keys (`aggregators`, `equals`, `compare`, `formatValue`) travel with the reading application, not in the Document. Top-level keys belong to the schema; anything of the consumer's goes in `props` and survives byte for byte. Derived layout (`Row`, `Item`, `GeometryFrame`) never appears here. `rollUpKinds` and per-Entry `kind` are gone as of schema 7 (ADR 0013). An undeclared `props` key is carried; `update()` never names one (ADR 0011). Plugin Field keys in `props` carry a prefix (`scheduling:progress`, ADR 0014).
-_Avoid_: file, payload, snapshot — Snapshot is the committed array `entries.all` returns
+The browser's `document`, and nothing else. **The library holds no save format** (ADR 0016): there is no `toJSON`, no `fromJSON`, no Document type and no `schema` integer. A consumer reads `entries.all`, `fields.all` and `pluginStores.read(id).all`, and saves its own shape. Derived layout (`Row`, `Item`, `GeometryFrame`) is recomputed and is saved by nobody.
+_Avoid_: Document as a name for saved data. The word named two things at once — this shape and the DOM's `document` (#266) — and ADR 0016 deleted the half that could move
 
 **Store**:
 The normalized, mutable collection one kind of authored entity lives in inside `data/` — `EntryStore` for Entries, and each plugin's own reserved `PluginStore` for its own entities (ADR 0002). A Store is `data/`'s own, not a consumer-facing word: `dataset.entries` is the published call site (D-S2-2, `plans/s2-data-core`), and "Store" names the class behind it, the way "Signal" names the reactive cell behind `dataset.entries.all`'s cached identity.
@@ -78,7 +78,7 @@ _Avoid_: Column type (the bundle is broader than a column), Kind (retired for En
 
 **Field registry**:
 The one `data/` module that holds every declared Field — core Fields and consumer Fields on the same code path — resolves `type` merge, and is the legal set for `update()` and `entries.read`. The Field key decides the home. `layout/` never imports it: resolved `columns` and `fieldCompares` arrive on `LayoutInput` as plain data (D-S4-13).
-_Avoid_: Field map, schema registry (this is not a separate persistence layer — the Document carries the data half of each Field)
+_Avoid_: Field map, schema registry (this is not a persistence layer — the registry holds declarations, and the Store holds values)
 
 **Aggregator**:
 The function that turns a set of children's values into a parent's value for one Field — `min`, `max`, `sum`, `count`, `'none'`, a duration-weighted mean, or a consumer's own. Always referenced **by name**, never passed inline: a name is data that serializes into a Document and can be refused when it is not registered, and a function is neither. Returning `undefined` means "no opinion, leave the stored value alone". `'none'` always returns `undefined`, so that Field keeps the parent's authored value. A shipped Aggregator skips holes (`undefined`, non-numeric for `sum`/`min`/`max`, zero-duration children for the weighted mean) and never throws; if every child is skipped it returns `undefined`. The Aggregator is the function; the Rollup is the pass that runs it.
@@ -585,10 +585,10 @@ Every `register*` that declares a Field (`ctx.fields.register`) or a Grid column
 (`ctx.view.registerGridColumn`) records the calling plugin's id. **Authored** is the consumer's half
 of that answer, and it is what the consumer's own surfaces report: `gantt.gridColumns` and both halves
 of a `gridColumnsChange` payload carry the columns the consumer wrote, before and after a resize or a
-reorder; `toJSON` writes the Fields the consumer declared. A plugin's declaration is code, and the
-plugin makes it again on its next install, so a Document never carries one. A `PluginStore`'s rows go
-the other way on purpose: they are data the plugin cannot rebuild, so the Document keeps them under
-their owner's id as passenger data (D-S5-24). Data outlives its plugin; a declaration does not.
+reorder; `FieldRegistry.authored` answers the same question for Fields. A plugin's declaration is
+code, and the plugin makes it again on its next install, so a consumer never saves one. A
+`PluginStore`'s rows go the other way on purpose: they are data the plugin cannot rebuild, so the
+Dataset keeps them under their owner's id as passenger data (D-S5-24). Data outlives its plugin; a declaration does not.
 _Avoid_: Owner (a `PluginStore` has an owner, which is who may _write_ it; a declarer is who _made_
 one declaration), provenance as a public word (it names the rule, not an API member)
 
