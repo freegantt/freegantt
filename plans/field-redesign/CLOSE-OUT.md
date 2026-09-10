@@ -14,7 +14,7 @@
 - [ ] **Build 0015** — `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.setFieldEditable` (Q16). Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`.
 - [ ] **Flip each `status: proposed` to `accepted`** as its build merges, and link its verdict report. Retire ADR 0005's *if accepted*.
 - [ ] **Run the spike gate at each acceptance** ([`shared/prose-sweep.md`](shared/prose-sweep.md)): delete that ADR's spike folder and its `spike/*` branches, and prove no spike path reaches `src/`, `harness/` or `e2e/`.
-- [ ] **Land ADR 0016's six locked-spec edits** — `plans/02` §6 whole, `:746`, `:747`, `:155`, `:183`, `:757`, `plans/01:555` and `:62`, and `CONTEXT.md`'s **Document** entry. None is authorized yet. [`BUILD-SPEC.md`](BUILD-SPEC.md) §5.7 holds the list.
+- [x] **ADR 0016's six locked-spec edits landed** in `4e0dc3d`, authorized 2026-09-10. Eleven more sentences went with them: each stated the same deleted rule, and §5.7's list named none of them. **`plans/00` D7 is still owed** — see the row in [`BUILD-SPEC.md`](BUILD-SPEC.md) §5.7.
 - [ ] **Drop the ahead-of-`src/` banners** from `plans/01`, `plans/02`, `plans/03` and ADR 0005 when the last build merges. That is the day this file is deleted.
 
 ## Locked-spec edits — the author has to be in the room

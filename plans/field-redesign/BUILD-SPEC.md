@@ -426,6 +426,63 @@ grep -rn --include='*.ts' 'toJSON\|fromJSON\|toDocument\|fromDocument\|DatasetDo
 
 `etc/freegantt.api.md` shrinks, and I11 gates that it matches.
 
+### Build 0 read against the code — 2026-09-10
+
+**Ten findings. Two of them stop this build from being a deletion.** Every line below was opened, not cited. `B1` and `B2` need the author.
+
+#### B1 — two of the three replacement doors are not public · **blocking**
+
+ADR 0016 deletes `toJSON` on the ground that three read doors already ship. **One of the three does not exist, and a second answers the wrong question.**
+
+| Door the ADR names | What the code says |
+|---|---|
+| `dataset.entries.all` | **True.** Public, and it is the whole entry set |
+| `dataset.fields.all` | **Answers the wrong question.** `api/dataset.ts:240` publishes `{ all }` only. `all` carries plugin-declared Fields. `FieldRegistry.authored` (`field-registry.ts:149`) is the consumer's own half, and D-S5-33 keeps a plugin's Field out of it on purpose. A consumer who saves `all` and feeds it back re-declares a plugin's Field as their own |
+| `dataset.pluginStores.read(id).all` | **Not public.** `api/Dataset` has no `pluginStores` member, and the name appears **zero** times in `etc/freegantt.api.md`. `read` is reachable only as `ctx.store.read` inside a plugin's own `setup` (`api/dataset.ts:171-172`). **`PluginStores.toDocument()` is the only app-facing exit for plugin rows that exists today** |
+
+**So a pure deletion removes capability rather than moving it.** An application that saves plugin rows has no door left, and an application that saves Field declarations gets a list it must not write back.
+
+**The build adds two read doors before it deletes anything**, or the ADR's table is wrong. Both are small and both are additive: publish `dataset.fields.authored`, and publish a plugin-row read on `Dataset`. **Ruling owed.**
+
+#### B2 — `pluginRows` is typed by a type this build deletes · **blocking**
+
+`dataset-state.ts:94` declares `pluginRows?: PluginDocument`, and `plugin-store.ts:51` takes `seed?: PluginDocument`. §2 says delete the `PluginDocument` seed arm of that constructor. §5.0.5 says keep the option's runtime seeding. **Both cannot hold.**
+
+The option is a way **in**, and this ADR removes ways **out**. So keep the option and the seeding, and give the seed its own type. **Ruling owed on the type's name and home.**
+
+#### B3 — the guard files block the folder deletion
+
+`.dependency-cruiser.cjs:155-161` holds `serialization-is-removable`, and `scripts/guard-red-test.mjs:80-82` red-tests it. Both go with the folder. **`.claude/hooks/protect-spec.sh:81-89` exits 2 on a `.dependency-cruiser.cjs` edit.** That is a hard block, not the `plans/` warning. The author authorizes that file, or the build stops there.
+
+#### B4 — `src/api/dataset.test.ts` is not in the Build 0 table
+
+It holds about 20 `toJSON` / `fromJSON` call sites. Some assert behaviour that survives this build — the pre-D-S5-33 plugin case (#192) and plugin passenger rows. **Read each one. Delete what tests the format. Rewrite the survivors against the constructor.** `plugin-store.test.ts` has its own `PluginStores.toDocument` block, and that one goes whole.
+
+#### B5 — `harness/data.ts` ships a feature, not a dump
+
+The spec calls all three harness sites "textarea dumps". `data.ts` is not one: `#export-btn` (`:97`, `:257`) writes the textarea, and `:265` reads it back with `Dataset.fromJSON`, rebuilding the page's Dataset with `COST_FIELDS` and the `locks` plugin. **The page loses a feature**, and its buttons and its textarea go with it. `data.ts:39-40`'s comment about a lock riding in the Document goes too.
+
+#### B6 — a whole slice sub-spec states the old rule
+
+`plans/s2-data-core/s2.6-serialization.md` is S2.6 itself, and `plans/03`, S2's `README`, `s2.7-close-the-gate`, `OPEN-QUESTIONS`, `HANDOFF` and `review/code-review.md` all cite it. Follow **V18**'s precedent: mark it retired inline, keep the tick and the text, and do not delete the record of what S2 shipped. **The author is in the room for these.**
+
+#### B7 — seven comments cite a file that stops existing
+
+`data/index.ts:1`, `api/index.ts:86`, `model/field.ts:72`, `model/errors.ts` (the S2.6 citation), `data/transaction.ts:124`, `api/dataset.test.ts:876`, and `field-registry.ts:144` — the last publishes the call `encodeFieldDocument(dataset.fields.authored)`, which no longer exists.
+
+#### B8 — the docs page keeps two format claims
+
+`harness/docs/page-brief.ts:41` says the page demonstrates *"export/import round-trip the whole dataset as JSON"*, and `:45` lists the two calls. Both go with **B5**. The §6 spec link was already corrected on this branch.
+
+#### B9 — I7's snapshot has four call sites, not one
+
+`history.property.test.ts` calls `toDocument` at `:131`, `:134`, `:194` and `:198`. **I7 does not change.** Only the comparison changes.
+
+#### B10 — what stays, and must be proved to stay
+
+`new Dataset({ entries })`, loose input, `PluginStores` itself, `reserve`, `read`, and the passenger rows a Dataset carries for a plugin it never installed (D-S5-30). This build removes a way out, never a way in.
+
+
 **Do not** delete `PluginStores` itself, its `read` view, or the `pluginRows` constructor option's runtime seeding of stores a plugin later reserves — only the `PluginDocument` shape it seeded **from**. **Do not** touch `new Dataset({ entries })`. This build removes a way out, never a way in.
 
 ---
@@ -916,6 +973,10 @@ Work top to bottom. Each build ends with the same five closing items.
 
 **Slices it touches.** S2 (serialization landed there, at S2.6), S4 (the Field Document codec, S4.4), S5 (plugin rows in the Document, S5.10). **Slice gates to re-run:** S2, S4, S5.
 
+- [ ] **Answer B1 first.** Publish `dataset.fields.authored` and a plugin-row read on `Dataset`, or record that the ADR's door table is wrong. **Nothing is deleted until this is ruled.**
+- [ ] **Answer B2.** Keep the `pluginRows` option and its seeding. Give the seed its own type, off `PluginDocument`.
+- [ ] **Get the author on `.dependency-cruiser.cjs`** — B3. The hook exits 2, so this one blocks for real.
+- [ ] Delete `serialization-is-removable` (`.dependency-cruiser.cjs:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`).
 - [ ] Delete `src/data/serialization/` whole — 6 files, about 1,276 lines with tests.
 - [ ] Delete `src/model/document.ts`.
 - [ ] Delete `Dataset.toJSON` (`api/dataset.ts:312`), `Dataset.fromJSON` (`:326`), and the import at `:26`.
@@ -925,7 +986,11 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Give `src/data/history.property.test.ts` a local snapshot over `entries.all`. **I7 does not change.**
 - [ ] Reword the `DatasetPluginOf` doc comment at `api/dataset-plugin.ts:94`. It cites *"a Field the Document never had"*. The reason for the lock is the Rollup, not the Document.
 - [ ] Replace the three harness `toJSON()` dumps — `main.ts:309`, `data.ts:258`, `hierarchy.ts:277` — with `JSON.stringify(dataset.entries.all, null, 2)`, or delete the panel.
-- [ ] Update `harness/docs/page-brief.ts:45`. It lists `toJSON` / `fromJSON` as a public surface.
+- [ ] Delete the harness export/import feature in `harness/data.ts` — the button, the textarea and the `fromJSON` read at `:265` — B5. It is a feature, not a dump.
+- [ ] Rewrite the format tests in `src/api/dataset.test.ts` — B4. Keep what survives, against the constructor.
+- [ ] Update the seven comments that cite the deleted files — B7.
+- [ ] Mark `plans/s2-data-core/s2.6-serialization.md` retired, V18 style — B6. **Author.**
+- [ ] Update `harness/docs/page-brief.ts:45`. It lists `toJSON` / `fromJSON` as a public surface. `:41` makes the same claim in prose — B8.
 - [ ] Regenerate `etc/freegantt.api.md`. I11 gates it.
 - [ ] Run the gate: the format grep in §2 Build 0 must return 0.
 - [ ] Raise #266 with its owner — build 0016 deletes one of the two things *Document* named.
@@ -1080,14 +1145,15 @@ Do all five, in this order, for the build you just finished.
 
 | Owed edit | Owner | Raise it with |
 |---|---|---|
-| `plans/02` §6 — **the whole JSON-shape section**: the `schema` integer, the key-order contract, the migration promise, the reader map, and the `Dataset.fromJSON` example at `:728` | **author** | Build 0016 |
-| `plans/02:746` and `:747` — the two bullets that make the JSON shape public API and semver-governed | **author** | Build 0016 |
-| `plans/02:155` and `:183` — the late-install door. It constructs a Dataset now; it does not re-read one | **author** | Build 0016 |
-| `plans/02:757` — the error list drops `UnsupportedSchemaError` | **author** | Build 0016 |
-| `plans/01:555` — the serialization bullet goes. `plans/01:62`'s `data/ --> TIME` note loses its Instant⇄ISO clause; **the arrow stays**, because mutation-time input reading is reason enough on its own | **author** | Build 0016 |
-| `CONTEXT.md` — the **Document** glossary entry, and any `_Avoid_` line it needs in its place | **author** | Build 0016 |
+| `plans/02` §6 — **the whole JSON-shape section**: the `schema` integer, the key-order contract, the migration promise, the reader map, and the `Dataset.fromJSON` example. §6 is now *Persistence* — **LANDED `4e0dc3d`** | author | Build 0016 |
+| `plans/02:746` and `:747` — the two bullets that make the JSON shape public API and semver-governed — **LANDED `4e0dc3d`** | author | Build 0016 |
+| `plans/02:155` and `:183` — the late-install door. It constructs a Dataset now; it does not re-read one — **LANDED `4e0dc3d`** | author | Build 0016 |
+| `plans/02:757` — the error list drops `UnsupportedSchemaError` — **LANDED `4e0dc3d`** | author | Build 0016 |
+| `plans/01:555` — the serialization bullet goes. `plans/01:62`'s `data/ --> TIME` note loses its Instant⇄ISO clause; **the arrow stays** — **LANDED `4e0dc3d`** | author | Build 0016 |
+| `CONTEXT.md` — the **Document** glossary entry now names the browser's `document` and nothing else, with an `_Avoid_` line citing #266 — **LANDED `4e0dc3d`** | author | Build 0016 |
 | `plans/02` default `gridColumns` was `['name']` (`:480`). ADR 0012 rules `['name', 'start', 'end']` — **V18. LANDED `5f21f2d`** | author | Build 0012 |
 | `plans/02` said a date path was owed. The grid is the date path — **LANDED `5f21f2d`** | author | Build 0012 |
+| **`plans/00` D7** — the locked decision row still reads *"Versioned `toJSON`/`fromJSON` + well-defined changeset events"*. ADR 0016 deletes the first half and leaves the second. Its headline, *Consumer-owned via changesets*, is what ADR 0016 makes truer. **Found 2026-09-10 during the §5.7 edits. ADR 0016's own consequence list never named it. A D1–D12 row is a higher bar than prose, so it waits for its own ruling** | **author** | Build 0016 |
 | `CONTEXT.md` owes an `entry.props` glossary entry, and owes the deletion of the **Field source** entry | **author** | Build 0011 |
 | `CONTEXT.md` owes `_Avoid_`: **phase**, **grouped entry** | **author** | Build 0013 |
 | `CONTEXT.md` owes an Entry **spans** entry | **author** | Build 0012 |
