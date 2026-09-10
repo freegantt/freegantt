@@ -4,6 +4,14 @@
 
 **This file plans. It does not rule.** Where an ADR already ruled, this file cites the ADR. Where the working notes disagree with `src/`, section 1 says so and gives a resolution. Where the resolution needs the author, section 1 marks it **BLOCKED — author**.
 
+> ## ⚠ ADR 0016 lands first, and this file is not revised for it yet
+>
+> **[ADR 0016 — the library holds no save format](../../docs/adr/0016-the-library-holds-no-save-format.md), opened 2026-09-10**, deletes `toJSON`, `fromJSON`, the Document types and `data/serialization/` entire. It is `proposed`.
+>
+> **Every schema step in this file is dead.** Wherever section 5 says *write schema N* or *delete reader N-1*, do neither. There is no counter and no reader. §1 V13 records the ruling 0016 supersedes.
+>
+> **Three more sections need a revision pass**, and it has not run: build 0011's Document rename is smaller, build 0013 loses the *omit derived keys from the Document* half of its head decision, and build 0015 stops serializing `editable`. Read ADR 0016's *Consequences* before you build any of the five. **ADR 0016 also re-opens one closed question** — whether `props` survives without a Document as its reason. Its recommendation is yes. The author rules it before build 0011 starts.
+
 | Where a builder goes | File |
 |---|---|
 | Why a decision was taken | `docs/adr/0011`–`0015` |
@@ -234,6 +242,8 @@ Delete `plans/field-redesign/combined/spikes` with the **last** build, because a
 **The claim.** ADR 0011's work says *"Readers 1–4 are deleted. Nothing outside this repo's fixtures was written by them."* `shared/rulings.md` says *"The count restarts at `1` on release"* and *"a released reader refuses a file it did not write."*
 
 **What is missing.** 0012 writes 5. 0011 then writes 6 and deletes readers 1–4. **No ADR says whether reader 5 survives build 0011.** The same question repeats at 7, 8 and 9. A builder must guess between *keep every number this repo ever wrote* and *keep only the number this build writes*.
+
+> **Superseded by [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md), the same day.** The author asked why a save format exists at all, and the answer was that it should not. **No build spends a schema number, and no build owns a reader.** Every *"write schema N"* and *"delete reader N-1"* step in section 5 dies with this finding — see the banner at the head of this file. What follows is the record of the first answer.
 
 **RULED — author, 2026-09-10. The library reads one schema, and no old one.** Each build leaves **exactly one reader**: the number that build writes. Every earlier reader is deleted with its fixtures, in the same commit. A Document at any other number raises `UnsupportedSchemaError`, which is what `fromDocument` already does for an unknown number.
 
