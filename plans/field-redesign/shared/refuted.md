@@ -7,7 +7,7 @@ Each item here was drafted, probed or published, and then found wrong. Every one
 | 1 | One shared mapped type over both edit halves | Wrong in **both** directions |
 | 2 | `fieldValue<number>(id, 'ref')` | Cannot compile. Partial inference does not exist |
 | 3 | A plugin type parameter on the `Dataset` constructor | Inference stops after an explicit type argument |
-| 4 | `RemovableEntryKey` resolves to `'parentId' \| 'start' \| 'end'` at HEAD | It resolves to `'parentId' \| 'meta'`. The probe ran against group D |
+| 4 | `RemovableEntryKey` resolves to `'parentId' \| 'start' \| 'end'` at HEAD | It resolves to `'parentId' \| 'meta'`. The probe ran against [ADR 0012](../0012-optional-dates/README.md) |
 | 5 | `Partial` at every door deletes `harness/main.ts:89`'s double cast | The widening was never the problem |
 | 6 | `interactions.edit` replaces `{ key: 'start', editable: false }` | It is view-level; the gate is now data-level |
 | 7 | AG Grid's `field: 'medals.gold'` is precedent for a key prefix | It navigates the consumer's own shape, not a library's namespace |
@@ -27,7 +27,7 @@ A type called `EditOf` was drafted to serve `PropsEdit` and `EntryEdit` at once,
 - it protected a key `TProps` marks required, which the storage door already lets a stored record lack, and
 - it let `update(id, { kind: undefined })` compile.
 
-**The halves take opposite rules, so there is nothing to extract.** They look factorable, and the mistake was made twice. See [`types.md`](types.md).
+**The halves take opposite rules, so there is nothing to extract.** They look factorable, and the mistake was made twice. See [`types.md`](../0011-consumer-values-in-props/types.md).
 
 ## 2. `fieldValue<number>(id, 'ref')`
 
@@ -45,7 +45,7 @@ TypeScript stops inferring later type parameters once an earlier one is written 
 
 ## 4. The `RemovableEntryKey` probe
 
-An earlier draft said *"probed at HEAD"*. `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD the derivation resolves to `'parentId' | 'meta'`. It resolves to `'parentId' | 'start' | 'end'` only once group D lands. **The derivation is inert until D**, and `update(id, { start: undefined })` does not compile for the three groups in between.
+An earlier draft said *"probed at HEAD"*. `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD the derivation resolves to `'parentId' | 'meta'`. It resolves to `'parentId' | 'start' | 'end'` only once [ADR 0012](../0012-optional-dates/README.md) lands. **The derivation is inert until D**, and `update(id, { start: undefined })` does not compile for the three groups in between.
 
 ## 5. The harness double cast
 
@@ -69,7 +69,7 @@ The first pass on decision 12 cited AG Grid's `field: 'medals.gold'` and TanStac
 
 It keeps a plugin cascade's write to a derived cell for one pass and loses it at the next save — **the worst of the three outcomes**, because `toJSON` omits a derived value in any case. Decision 5 ruled *drop and warn* instead.
 
-**One code defect to fix first, and the order matters.** Two call sites answer *did anyone propose this Field?* from two different edit sets: `rollup.ts:196` reads `body`, and `build-commit-change-set.ts:301` binds `body` to the transaction body alone, so a cascade's edits reach only `merged`. **Unify the predicate into one function, and give both callers that function**, before group C deletes the split.
+**One code defect to fix first, and the order matters.** Two call sites answer *did anyone propose this Field?* from two different edit sets: `rollup.ts:196` reads `body`, and `build-commit-change-set.ts:301` binds `body` to the transaction body alone, so a cascade's edits reach only `merged`. **Unify the predicate into one function, and give both callers that function**, before [ADR 0013](../0013-what-decides-derivation/README.md) deletes the split.
 
 ## 9. An object keyed by Entry id for the extender's return
 
@@ -113,11 +113,11 @@ An earlier draft argued that replaying a step whose `from` is an authored parent
 
 Nothing replays a value the new state refuses, because the new state goes back with it. **History is never cleared, and `RollUpKindsWouldDropValuesError` is not added.**
 
-One door does not carry its cause in the same transaction, and that follow-up is real: a `rollUpKinds` flip's cause is a **config assignment**. See decision 6 in [`closed-decisions.md`](closed-decisions.md).
+One door does not carry its cause in the same transaction, and that follow-up is real: a `rollUpKinds` flip's cause is a **config assignment**. See decision 6 in [`closed-decisions.md`](../0013-what-decides-derivation/README.md).
 
 ## 13. The `durationOf` call sites
 
-**Do not re-derive this list.** An audit built it after a review named two call sites and got one of them wrong. It is in [`work-plan.md`](work-plan.md) group D. The one the review got wrong: **`inline-editing.ts:113` is a provider, not a caller** — `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`, so it changes as an implementation.
+**Do not re-derive this list.** An audit built it after a review named two call sites and got one of them wrong. It is in [`work-plan.md`](../0012-optional-dates/README.md) [ADR 0012](../0012-optional-dates/README.md). The one the review got wrong: **`inline-editing.ts:113` is a provider, not a caller** — `fieldContextFor` builds a `FieldContext` and supplies its own `durationOf`, so it changes as an implementation.
 
 ## Also dropped, with no argument left to make
 

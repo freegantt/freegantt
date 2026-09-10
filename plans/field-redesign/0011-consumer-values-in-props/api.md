@@ -1,6 +1,6 @@
 # The call sites after ADR 0011
 
-**Governing:** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props-and-a-derived-value-never-persists.md). The types behind these calls are in [`types.md`](types.md); the open questions are in [`open-decisions.md`](open-decisions.md).
+**Governing:** [ADR 0011](../../../docs/adr/0011-consumer-values-live-in-props.md). The types behind these calls are in [`types.md`](types.md); the open questions are in [`open-decisions.md`](README.md).
 
 **Nothing here is implemented.** A ⚠️ marks a call an open decision can still change.
 
@@ -113,7 +113,7 @@ dataset.entries.fieldValue(id, 'ref')    // compute / plugin: unknown
 
 **Two read doors on the app-author surface, four in all.** `entry.props` is storage; `fieldValue` resolves getters and aggregates. The plugin surface adds `ctx.read(entry, key)` and `ctx.durationOf(entry)`. The two counts name two audiences, so quote the audience with the number.
 
-A `compute` Field's answer stays `unknown` ([#267](https://github.com/Pawel-IT/FreeGantt/issues/267)). `TValue` on `Field` never comes back from the registry, and **the library publishes no type argument here** — see [`refuted.md`](refuted.md) item 2.
+A `compute` Field's answer stays `unknown` ([#267](https://github.com/Pawel-IT/FreeGantt/issues/267)). `TValue` on `Field` never comes back from the registry, and **the library publishes no type argument here** — see [`refuted.md`](../shared/refuted.md) item 2.
 
 ⚠️ `fieldValue` and `FieldContext.read` are one job under two names, and decision 13 covers all four doors.
 
@@ -126,9 +126,9 @@ add({ id, name, props: { owner: 'Ali' } })       // a record, not a patch
 update(id, { strat: '…' })                       // UnknownFieldError — top level is the schema
 ```
 
-`PropsEdit<TProps>` is the patch: every key optional, every key removable. `EntryEdit` may remove only what a stored Entry may lack — `parentId`, `start`, `end` **after group D**.
+`PropsEdit<TProps>` is the patch: every key optional, every key removable. `EntryEdit` may remove only what a stored Entry may lack — `parentId`, `start`, `end` **after [ADR 0012](../0012-optional-dates/README.md)**.
 
-⚠️ `start` and `end` are required on `Entry` at HEAD, so the un-date verb does not compile between group A and group D.
+⚠️ `start` and `end` are required on `Entry` at HEAD, so the un-date verb does not compile between this ADR and [ADR 0012](../0012-optional-dates/README.md).
 ⚠️ `plans/02` ships `update(id, { start, cost })`. Nested `props:` drops that shorthand — decision 11. A flat spelling for *declared* keys only is still on the table.
 ⚠️ Whether `update({ props: { phase: 3 } })` on an undeclared key succeeds is decision 1, and it is **open**. Decision 1 currently *recommends* a throw; a recommendation is not a ruling, so write neither behaviour yet. Round-trip of undeclared keys at ingest stays either way.
 
@@ -160,7 +160,7 @@ Registration still closes when `setup()` returns. Plugin declarations stay out o
 
 The published `compute` sample writes `duration.value / MS.DAY`, never the raw constant — decision 15, closed.
 
-⚠️ A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes **every** key — decision 22. The trap is stated in [`types.md`](types.md); the two candidate fixes are weighed in [`open-decisions.md`](open-decisions.md).
+⚠️ A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes **every** key — decision 22. The trap is stated in [`types.md`](types.md); the two candidate fixes are weighed in [`open-decisions.md`](README.md).
 ⚠️ The extender returns `new Map()`, brands ids, and the author writes the composition — decision 16.
 
 ## Document — schema 5
@@ -192,7 +192,7 @@ dataset.entries.add({ id: 'c', parentId: 'p' })  // p now rolls up: cost 500 →
 dataset.history.undo()                           // c leaves, p stops rolling up, cost is 500 again
 ```
 
-**Decision 6, closed.** An Entry that starts rolling up drops its authored values on rolling-up Fields, and the Rollup recalculates them, at all three doors and with no error. The drop is an ordinary ChangeSet row, undo restores it, and flipping a kind *out* keeps the last derived answer, now authored. The reasoning is in [`closed-decisions.md`](closed-decisions.md).
+**Decision 6, closed.** An Entry that starts rolling up drops its authored values on rolling-up Fields, and the Rollup recalculates them, at all three doors and with no error. The drop is an ordinary ChangeSet row, undo restores it, and flipping a kind *out* keeps the last derived answer, now authored. The reasoning is in [`closed-decisions.md`](../0013-what-decides-derivation/README.md).
 
 ⚠️ The flip's cause is a config assignment, and `ChangeSet` has no row for one — **decision 24**, open.
 

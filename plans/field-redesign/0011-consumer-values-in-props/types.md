@@ -1,6 +1,6 @@
 # Types after ADR 0011
 
-**Governing:** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props-and-a-derived-value-never-persists.md). Read this file before you write the edit types or the Field union. Approaches already tried and refused are in [`refuted.md`](refuted.md).
+**Governing:** [ADR 0011](../../../docs/adr/0011-consumer-values-live-in-props.md). Read this file before you write the edit types or the Field union. Approaches already tried and refused are in [`refuted.md`](../shared/refuted.md).
 
 Nothing here is implemented.
 
@@ -16,7 +16,7 @@ flowchart TB
   P --> ALL["<b>every</b> key removable,<br/>without exception"]
 ```
 
-**Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](refuted.md).
+**Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](../shared/refuted.md).
 
 ## `PropsEdit` — every key is removable
 
@@ -55,7 +55,7 @@ export type EntryEdit<TProps> = {
 
 **Deriving `RemovableEntryKey` is the point, not a trick.** The derivation states the rule a hand-written union only *encodes*, and it is self-maintaining: the moment `Entry.end` stops being optional, or a new optional key joins `Entry`, the edit type follows. This ADR already got the hand-written list wrong once.
 
-**The derivation is inert until group D.** `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD `RemovableEntryKey` resolves to `'parentId' | 'meta'`, not to `'parentId' | 'start' | 'end'`. `EntryEdit` lands in group A and the optional dates land in group D, so `update(id, { start: undefined })` **does not compile for the three groups in between.** Either pull the optional dates forward into A, or say the un-date verb arrives with D. Do not describe it as available after A.
+**The derivation is inert until [ADR 0012](../0012-optional-dates/README.md).** `model/entry.ts:31,33` ship `start` and `end` as **required**, so at HEAD `RemovableEntryKey` resolves to `'parentId' | 'meta'`, not to `'parentId' | 'start' | 'end'`. `EntryEdit` lands in this ADR and the optional dates land in [ADR 0012](../0012-optional-dates/README.md), so `update(id, { start: undefined })` **does not compile for the three groups in between.** Either pull the optional dates forward into A, or say the un-date verb arrives with D. Do not describe it as available after A.
 
 **`props` is omitted before it is restated**, because an intersection cannot narrow a property the interface already declares. `id` leaves with it: an edit names its Entry at the call, never inside the patch.
 
@@ -79,7 +79,7 @@ return new Map([[id, { props: { ...request.proposed.get(id)?.props, risk: 'high'
 
 The spread is legal, reads as *keep everything and add one*, and turns **every** stored key into a proposed key — so every `props` key gets a ChangeSet row, derived cells included. That is decision 5's territory reached by accident, by a plugin author who never read it. **The patch already merges, so the spread is never needed, and nothing in the types says so.**
 
-**Two candidate fixes, and this needs one: brand `ProposedEdit`, or seed an extender's proposed keys by diffing.** That is **decision 22**, and it is weighed in [`open-decisions.md`](open-decisions.md). **Decide it with the `ProposedEdit` type, not after** — this is `plans/02`'s *one write shape, one knob* breaking at the one seam it was written for.
+**Two candidate fixes, and this needs one: brand `ProposedEdit`, or seed an extender's proposed keys by diffing.** That is **decision 22**, and it is weighed in [`open-decisions.md`](README.md). **Decide it with the `ProposedEdit` type, not after** — this is `plans/02`'s *one write shape, one knob* breaking at the one seam it was written for.
 
 ## The Field union
 

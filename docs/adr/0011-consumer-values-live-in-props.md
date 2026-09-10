@@ -1,0 +1,202 @@
+---
+status: proposed — a draft, not a decision. Supersedes ADR 0005's `meta` rulings if accepted.
+decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; an edit carries the Entry's own shape and `props` merges.
+open: three decisions — 1, 11 and 22. They are weighed in `plans/field-redesign/0011-consumer-values-in-props/`, and nowhere else.
+---
+
+# Consumer values live in `props`
+
+**This is the ADR that simplifies the API.** It grew to 25 decisions and split into five on 2026-09-09, by question rather than by file. The other four are [0012 — optional dates](0012-dates-are-optional-on-every-kind.md), [0013 — what decides derivation](0013-what-decides-that-a-row-derives-its-values.md), [0014 — the plugin-author surface](0014-the-plugin-author-surface.md) and [0015 — what the write door refuses](0015-what-the-write-door-refuses.md). The map is [`plans/field-redesign/README.md`](../../plans/field-redesign/README.md).
+
+| File | Read it when |
+|---|---|
+| [`plans/field-redesign/0011-consumer-values-in-props/`](../../plans/field-redesign/0011-consumer-values-in-props/README.md) | You want the open decisions, the closed ones, or the work |
+| [`…/types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md) | You are about to write the edit types or the Field union |
+| [`…/api.md`](../../plans/field-redesign/0011-consumer-values-in-props/api.md) | You want the call sites, before and after |
+| [`…/shared/refuted.md`](../../plans/field-redesign/shared/refuted.md) | You are about to re-derive something. Check here first |
+
+## Context
+
+ADR 0005 gives a consumer Field a declaration and no home. `FieldSource`'s stored arm is `{ from: 'entry'; field: CoreFieldKey }`, and `CoreFieldKey` is `keyof Omit<Entry, 'id'>`. So `source: { from: 'entry', field: 'cost' }` is a type error, and every consumer value lands in `meta`. ADR 0005 promises that `'start'` and `'cost'` take one code path. The promise holds for the declaration and fails for the storage. The half a consumer cannot reach is the half that works.
+
+The bag then costs more than it pays.
+
+| What goes wrong | Where |
+|---|---|
+| `update('t1', { cost: 7 })` merges and keeps `owner`. `update('t1', { meta: { cost: 7 } })` replaces and drops it. Both compile, and the destructive one reads better in English | the write door |
+| A `meta` holding an array is replaced by an object, because `metaRecord` answers `{}` for an array | `metaRecord` |
+| Two generics name one set of values and nothing links them | `harness/planner.ts:31` — the two halves disagree about `critical`, and nothing notices |
+| Every read of a `meta` Field allocates, because `metaStrategy.read` spreads the bag for one property lookup | `metaStrategy.read` |
+| `meta` names four things at once: a storage location, a Field key, a `FieldSource.from` value, and a Document key | [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) |
+
+## Decision
+
+**A number in the field redesign is always a decision number.** These sections carry no numbers, so *decision 1* is the undeclared-key question and never the first section. Cite a section by its title.
+
+### A Field key is the whole address
+
+`{ key: 'cost' }` reads and writes `entry.props.cost`. `{ key: 'start' }` reads and writes `entry.start`. Nothing declares a `source`. The key decides the home, and which home that is stays the library's business. **Declaring a key does not create it. Declaring says what the library may do with it.**
+
+```mermaid
+flowchart LR
+  K["<b>a Field key</b><br/>one namespace<br/><i>gridColumns · changeset row · canWrite</i>"] --> Q1{"a core key?"}
+  Q1 -->|yes| CORE["<b>on the Entry</b><br/>entry.start · entry.kind · entry.name"]
+  Q1 -->|no| Q2{"declares<br/>compute?"}
+  Q2 -->|no| PROPS["<b>in props</b><br/>entry.props.cost"]
+  Q2 -->|yes| NONE["<b>nowhere</b><br/>computed on every read"]
+```
+
+**One key space, two homes.** One name serves `field` on a changeset row, `canWrite(entry, field)`, and `gridColumns: ['name', 'cost']`. Storage is namespaced underneath. A consumer key cannot shadow a core key, a core key added in a later release cannot land on a consumer's value, and the Document reader keeps the rule it has today.
+
+`FieldSource` retires with all three arms. `meta` is renamed to `props` on `Entry`, `EntryInput` and `EntryDocument`. The `meta` **core Field** is deleted with no successor, because a whole bag is not a value a grid shows or a Rollup aggregates. The name `props` is decision 17, closed — see [`closed-decisions.md`](../../plans/field-redesign/0011-consumer-values-in-props/README.md).
+
+### The library writes into `props` only at a declared `rollUp` key
+
+The Rollup writes a derived value into the consumer's own bag. That is the same shape as a library writing into a consumer's namespace, and the field reports on that shape are bad (see [`evidence.md`](../../plans/field-redesign/shared/evidence.md), the Vaadin rename). It is safe here for one reason: the consumer asked for it, in the declaration.
+
+**An undeclared key is never written by the library, ever.** State this wherever `props` is documented. Without it, decision 9's *prefix the plugin* mitigation looks complete, and it is not — a plugin is not the only second writer in the bag.
+
+### An edit carries the Entry's own shape, and `props` merges
+
+`update(id, { start: '2026-01-06', props: { owner: 'Sam' } })` writes one date and one consumer value. Every other key in `props` survives. Nesting is not what makes today's write destructive; **replacing** is.
+
+`toProposedEdit` merges the patch onto the Entry's own record, so a `ProposedEdit` always carries a **complete** `props`. The merge sits on the read side, not the apply side. An explicit `undefined` inside a patch clears that one key.
+
+**The patch merges one level deep, and never recurses.** `update(id, { props: { address: { city: 'Ely' } } })` replaces the whole `address` object. The reason is the ChangeSet, not convenience: a row is `{ field, from, to }`, and `field` is a Field key. `props.address.city` is a name no Field key carries, so no row describes it, no undo replays it and no subscriber observes it. **A patch may only name what the model can name.** A consumer who wants a nested value tracked declares it as its own Field key.
+
+The types, and why each one is shaped as it is, live in [`types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md).
+
+
+### The write resolver moves into `data/`, and its policies do not change here
+
+Three rules meet at one question — does this Field exist, is it editable, is it derived here. **`data/` exports one resolver, and every write door calls it.** Do not re-ask the question in a second place.
+
+**The resolver is a move, not a build.** `view/capability.ts:113-121`'s `libraryWriteRule` already holds the editable and derived arms in one function, and already imports `rollsUp` from `data/`. `entry-store.ts:358` already throws `UnknownFieldError` for the third. This ADR moves that function into `data/`, points both existing doors at it, and stops `view/capability.ts` restating the rule. **No policy changes, so no decision is spent here.**
+
+Then [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) changes the derived arm's policy, and [ADR 0015](0015-what-the-write-door-refuses.md) changes the editable arm's. **One function, three owners, one at a time.** Do not wire `entries.update()` to a policy this ADR did not rule.
+
+**Four answers, seven call sites.** The call list is `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Build it from the seven** — reading *four doors* skips `add()`, `fromJSON()` and the constructor, which is the half that drops rather than throws.
+
+**`update()` refuses; `add()` drops. A patch is not a record.** Name a Field and the library answers. Hand it a record and the library keeps what is yours. That is PATCH against PUT, and it is the whole rule. A **mixed** patch — `{ start, props: { cost } }` where `cost` is derived — is refused **whole, before any write**. A partial apply would leave a transaction in a state no `before*` event described.
+
+### Two doors read one value, and each answers a different question
+
+```ts
+dataset.entries.get('t1')?.props.owner       // the stored bag, typed by TProps
+dataset.entries.fieldValue('t1', 'owner')    // any Field key: core, compute, plugin
+```
+
+The record door returns storage. The by-key door resolves getters and aggregates. Every comparable library publishes the same pair.
+
+**Two on the app-author surface, four in all.** The plugin surface adds `ctx.read(entry, key)` and `ctx.durationOf(entry)`. Decision 13 covers all four, and the two counts describe two audiences rather than disagreeing.
+
+**The by-key door keeps its type.** `FieldValue` maps over the **generic**, never over the registry, so one generic carries `model/dataset.ts:41` across unchanged as `FieldValue<TProps, K>`. Two value classes stay `unknown`, and both own no `TProps` key — a `compute` Field's answer, and a plugin's Field. That residue is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267).
+
+**Declare a Field when the library has a job to do with the value, not to make the value exist.** A `phase` that only a bar renderer reads needs no type bundle, no rollup, no editor and no column, so it needs no Field. Whether it is still *writable* with no declaration is decision 1.
+
+**The Field union is exclusive.** A stored Field may roll up and may be edited. A computed Field may do neither. A `compute` Field runs on **every** row, a rolling-up parent included — decision 10, closed. The union closes *storage*, not *reading*. The real limit is that a `compute` Field cannot ask *am I a parent?*, which is [#214](https://github.com/Pawel-IT/FreeGantt/issues/214). The union's declaration, and what it does and does not enforce, are in [`types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md).
+
+**A `compute` arm takes the row and the context, and each carries what the other cannot.** `entry.props.x` reaches a stored consumer value and nothing else — not a core key, not `duration`, and not another Field's `compute` arm. `ctx.read(entry, key)` reaches all three. **Read a _value_ through `entry.props`, and read a _Field_ through `ctx.read`.** The name is `compute`, not `get`: `get` already names three unrelated jobs here, and `compute` keeps the vocabulary `source: { from: 'compute' }` already teaches.
+
+## The flow, once
+
+`dataset.entries.update('t1', { props: { progress: 60 } })`, on a child of a rolling-up phase.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as app author
+  participant Read as toProposedEdit
+  participant Hook as extension hook
+  participant Diff as diffEdit
+  participant Roll as the Rollup
+  participant Store as the store
+  participant Doc as toJSON / fromJSON
+  App->>Read: update('t1', { props: { progress: 60 } })
+  Read->>Read: normalize dates · merge the patch onto the Entry's record<br/>seed proposedKeys from inside props
+  Read->>Hook: one complete ProposedEdit
+  Hook-->>Diff: a cascade's extra EntryEdits, read through the same door
+  Diff->>Roll: one row — { field: 'progress', from: 40, to: 60 }
+  Roll->>Store: walk ancestors · weightedMeanByDuration · write phase-1
+  Store->>Store: one ChangeSet holds child and parent · one undo step
+  Store->>Doc: toJSON omits phase-1's progress, start and end
+  Doc-->>App: fromJSON re-derives them. Nothing to correct, nothing to warn about
+```
+
+**Step 1 seeds `proposedKeys` from inside the namespace** — the edit's top-level keys except `props`, plus every key of `edit.props` this write may name. Whether an **undeclared** key may be among them is decision 1.
+
+**Step 5 emits one row per Field key, never a path into `props`.** Today a whole-`meta` write emits two rows for one value — one for `meta` itself, one for the key inside it. The `meta` Field is deleted, so the second row has nothing to come from.
+
+**Step 7 asks one structural question.** Is this Entry a rolling-up kind, and is this a rolling-up Field? Nothing compares values, nothing tracks what a pass produced, and nothing depends on how many children a parent has right now.
+
+
+## Considered options
+
+| Option | Verdict |
+| **Flat consumer properties on the Entry**, in one key space with `start` | **Rejected.** The previous draft's ruling. One gain — a single storage home — charged at four places: the Document reader's unknown-key rule inverts; three reserved name sets appear at three doors; an older file whose consumer key a later release promotes needs its own migration door; and `Entry` needs an index signature, which makes `entry.strat` compile |
+| **Flat consumer keys on the edit alone**, with `props` everywhere else | **Rejected**, and it was this draft's first answer. It saves one unwrap at the differ and costs a shape: the object a consumer writes most often would disagree with the object the library holds. A **narrower variant is live as decision 11** — flat for *declared* keys only — and is not covered by this rejection |
+| **Keep the namespace under its current name, `meta`** | **Rejected.** `meta` names four things ([#266](https://github.com/Pawel-IT/FreeGantt/issues/266)) and three of them go here. It is also the wrong word: *meta* says *about the data*, and the contents are the data |
+| **Keep the namespace in the Document only**, flat at runtime | **Rejected.** The reader and the writer would each move every consumer key across a boundary, and every seam between them would have to know which side it stood on |
+| **Keep `meta` and open `FieldSource`'s entry arm to any key** (the small fix) | **Rejected.** The declaration keeps an address the library should own, so the strategy table, the second generic and the whole-bag write all survive. The bag stops being mandatory and stays available — the worst of both |
+| **Read consumer values through an accessor and never store them** | **Rejected.** Reads alone carry four of the planner's five fields, and a Gantt that edits, undoes and aggregates a consumer value has to hold it |
+| **A nested accessor path** (`accessor: ['finance', 'approved']`) | **Deferred.** It costs a compiled reader, an immutable path writer, path equality, undo through a path and a Document rule. It is an additive optional key whenever a real consumer needs one |
+| **Publish an ownership ladder now** (managed, custom setter, controlled writes) | **Rejected for this ADR.** It is an escape hatch from a storage model being replaced. Revisit when a consumer asks |
+| **`internal: true` for `parentId` and `segments`** | **Rejected.** An absent `column` already means *not a column*, and `gridColumns` naming such a Field already throws `FieldNotColumnableError`. A second key for one job breaks *one config tree per job* |
+
+## Consequences
+
+**Storage and types**
+
+- **The write path is the one that already exists.** `metaStrategy.write` already builds a complete record from the Entry's own values plus the one key it is given, and `diffEdit` already emits one changeset row per declared key through `proposedKeys`. Deleting the strategy table removes a **dispatch**, not a mechanism. **This is the smallest half of the change.** The Document, the derived-value rule and the optional dates are the large ones.
+- **Every new error is a named `FreeGanttError`** with a `code:` and a `plans/02` §7 row, like every other: `DerivedFieldNotWritableError`, `ComputedFieldCannotBeWrittenError`, `FieldNotEditableError`.
+- **`props` is the one reserved key, and there is no reserved *set*.** `{ key: 'props' }` throws at **runtime** only. `FieldKey` is `CoreFieldKey | (string & {})`, so the literal type-checks — that is the brand doing its job, and it is written here so nobody later "fixes" `FieldKey` into a closed union and flattens the brand. A consumer key never sits at the top level of an edit, so `proposedKeys` needs no guard of its own.
+- **`CoreFieldValues` omits `'props'` alongside `CoreFieldKey`, or neither does.** `model/field.ts:19` is `Omit<Entry, 'id'>` and `FieldValue` resolves its first arm against it. Change one and not the other, and `fieldValue(id, 'props')` **types as the whole bag** while the runtime throws. It is public at `api/index.ts:57`.
+- **The internal `Entry` describes its own object.** `props` defaults to `Readonly<Record<string, unknown>>`, so `entry.props.phase` compiles inside `layout/` and `view/` and answers `unknown` under `noUncheckedIndexedAccess`. No cast, no index signature, and `entry.strat` still fails to compile. `Entry` stays non-generic in those layers, which is what ADR 0005 ruled.
+- **`Entry.props` is always present; `EntryInput.props` is optional.** Ingest fills `{}`, the same rule `segments` already follows, so no reader carries a "no props" branch.
+- **`TProps` says which keys may exist, never which keys must.** `props` is `Partial<TProps>` at every door. `Readonly<TProps>` beside an ingest fill of `{}` is a lie the compiler cannot see, and a required key cannot survive a door that accepts `add({ id })`.
+- **`props` is copied at ingest, and immutable afterwards.** Deleting `metaRecord` would otherwise leave the store holding the consumer's own object, and a consumer mutating their input array would mutate the store outside a transaction, outside the ChangeSet and outside undo. Ingest takes a shallow copy, and a read becomes one property lookup — which is what the deletion was for.
+- **One generic, written by hand, and it types two things.** `Dataset<ConsumerEntryProps>` types `entry.props` and the `props` patch. The `harness/planner.ts:31` disagreement becomes unrepresentable. Inferring the shape from the `entries` array stays possible later and is no longer load-bearing.
+- **A removal is an ordinary write.** The stored record loses the key rather than holding `undefined`, because a record holding `undefined` and a record missing the key serialize to one file. The row is `{ field: 'owner', from: 'Jo', to: undefined }`, so undo restores the key by replaying `from`. The removed key **sits in `proposedKeys`**: an extender reading `EditRequest.proposed` has to see a proposal rather than an absent key.
+- **The library does not read `null` as a removal.** A patch that arrives as JSON — from a server, from a form — cannot say *remove*. A consumer who accepts wire patches translates `null` to `undefined` at their own edge, or calls `update` twice. Reading `null` as a removal would buy wire compatibility by forbidding a stored `null` forever. The reasoning against RFC 7396 is in [`evidence.md`](../../plans/field-redesign/shared/evidence.md).
+
+**Ingest and the Document**
+
+- **The Document reader's rules do not change, and that is the point of the namespace.** An unknown key inside `props` is passenger data and is kept. An unknown top-level key stays unknown, so `plans/02:738`'s rule survives with one word renamed. ADR 0008's ruling stands: a legacy `progress` is consumer data inside `props`, with no core key to collide with.
+- **An unknown top-level key at ingest raises a warning, and the key is ignored.** `EntryInput` is closed, so the compiler already refuses one in a written literal. Data arriving from a server is the real case. Throwing turns one uninteresting column into a crash, and silence hides a typo'd `strat`. The check is one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'props'` — no second list to keep in step.
+- **A `props` key that names a core key gets the same warning, and the core definition wins.** Ruled 2026-09-09. `entry.props.start` would store without complaint and then be unreachable, because `fieldValue(id, 'start')` answers the Entry's own `start`. The value is ignored and it never throws — a consumer feeds this Dataset from an API they do not own, and a column added upstream must not break their page. **One sentence, one loop: a key inside `props` never names a core key, and a key at the top level is never a consumer's.**
+- **An undeclared key round-trips under both answers to decision 1.** It stores at ingest, survives `toJSON`/`fromJSON`, and is never dropped. The two answers differ at one door only, `update()`.
+- **This ADR spends one schema number**, for `meta` → `props` and `source` leaving `SerializedField`. [ADR 0012](0012-dates-are-optional-on-every-kind.md) and [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) each spend their own. One counter, not five — see [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
+- **`props` is carried by reference.** [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) adds the one exception, on a rolling-up parent.
+- **Key order:** core keys in their fixed order, `props` last; inside `props`, the consumer's own order.
+
+**Deletions and renames**
+
+- **The deleted surface.** `FieldSource` and all three arms, `SerializedField.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`, `source-strategy.ts`'s strategy table, `normalize-source.ts`, `metaRecord`/`metaKey`/`metaSlot`, `Field.source`, and `reportCorrectedRollUps` — with no reproducible derived value in the Document there is nothing to correct. `TMeta` becomes `TProps` and loses its second generic across 101 references. **One successor is easy to miss:** `encodeFieldDocument` keeps a `compute` Field out of the Document *through* the strategy table, so `'compute' in field` replaces it.
+- **`parentId` and `segments` keep their declarations.** Three mechanisms read them out of the registry: `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, `widenSegmentsToEnvelope` gates on `registry.get('segments')`, and `segmentsEqual` supplies the equality rule that puts an id-only Segment write into the changeset ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212), ADR 0010). Undeclaring them is not an available option.
+- **`StoredEdit` is renamed `ProposedEdit`.** This ADR gives the word *stored* to the Field union — *a **stored** Field may roll up and may be edited* — beside the sense `storedValue` and `storedSourceOf` already carry. The edit type would then hold the word twice for two meanings, and it is the weaker claim: **a `StoredEdit` is never stored.** It is a write nobody has applied. About 184 occurrences. The conversion name gets weaker — *convert the edit to a proposed edit* names no change — and the published call site wins, because a plugin author reads `request.proposed`. **The rename costs one enforcement, and paying it is decision 22:** a complete `props` and a `props` patch become the same shape, so a plugin that spreads `proposed.props` into a returned edit proposes every key by accident. See [`types.md`](../../plans/field-redesign/0011-consumer-values-in-props/types.md).
+- **`ComputedFieldCannotBeWrittenError` fires at two doors, under one name.** Registration is the first — `compute` beside `rollUp`, and `compute` beside `editable`. Neither is about storage; both are about writing. `entries.update()` is the second. **The message names the door**, and a second error type would be two names for one concept. `compute` beside `column` stays legal: a computed column is an ordinary read-only column. **The message says `compute`, never *derived*** — that word covers a rolled-up value too, and a derived parent cell is `DerivedFieldNotWritableError`. **The write resolver checks `compute` before `editable`**, or decision 18's first answer refuses a `compute` Field twice and the surviving message tells a consumer to declare an `editable` the register door rejects. See [`closed-decisions.md`](../../plans/field-redesign/0011-consumer-values-in-props/README.md).
+- **Two names, two levels.** `dataset.toJSON()` and `Dataset.fromJSON()` are the public doors (`src/api/dataset.ts:312,326`). `toDocument` and `fromDocument` are the `data/serialization` functions behind them. This ADR names the public door except where it names a file to change.
+
+**Not deleted here.** `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` **stay**. The merge reads `editable` and never reads `source` (`field-registry.ts:211-225`), so `FieldSource` deletes cleanly around it. Whether the override survives at all is [ADR 0015](0015-what-the-write-door-refuses.md)'s decision 19, and what a consumer declaration on a core key then does is its decision 23.
+
+**On splitting, and what it does not license.** The library has never shipped, so **each of the five ADRs lands as one change**. Staging a rename behind the current interface is discipline for a library with users, and it is still refused. Splitting the *decisions* is not staging the *code*.
+
+**Superseded elsewhere**
+
+- ADR 0005's `meta` rulings, if this is accepted.
+- `plans/01:273-281` (the `FieldSource` type and its default), `plans/01:330` and `plans/02:454` (*"Source decides stored or computed"*), and `plans/02` §7's two `FieldSource` errors.
+- **D-S4-35 is retired** — *"Omitted `source` is `meta` under the Field key"*. The key is the whole address, so there is no `source` to omit.
+- **D-S2-7's `meta` carve-out** goes with the `meta` Field, and so does the *"Whole-`meta` write after a declared Field exists"* rule row.
+- **D-S4-2 is retired, and its title is _"one adapter reads and writes a `FieldSource`"_.** The `& Partial<TFields>` arm on `EntryEdit` is a paragraph inside it, not the decision's name.
+
+The prose sweep that rewrites all of this runs **once, after the last of the five lands** — [`shared/prose-sweep.md`](../../plans/field-redesign/shared/prose-sweep.md).
+
+## Issues this ADR depends on
+
+| Issue | What this ADR needs from it |
+|---|---|
+| [#213](https://github.com/Pawel-IT/FreeGantt/issues/213) | A `compute` write is dropped in silence. The registry refusal for `compute` + `rollUp` must land **before** #213's own fix, or the Rollup starts throwing instead of writing a phantom row |
+| [#267](https://github.com/Pawel-IT/FreeGantt/issues/267) | A renderer casts `entry.meta`. Typing `props` as a record removes the three casts in `harness/planner.ts`. It does **not** close the issue — a Field-aware renderer read is still owed |
+| [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) | `meta` names four things. Three go, and the survivor is renamed. The `Document`/DOM collision half stays open |
+| [#264](https://github.com/Pawel-IT/FreeGantt/issues/264) | Core ships one Field type and its own Fields bypass the layer. The Field union here settles the shape a type bundle attaches to |
+| [#208](https://github.com/Pawel-IT/FreeGantt/issues/208) | **Closed by this work.** `EntryInput` cannot carry a declared Field value. Deleting `FieldSource` removes the aliasing, so the key *is* the address |
