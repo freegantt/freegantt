@@ -1,23 +1,23 @@
-# BUILD-SPEC — the field redesign, ADRs 0012 → 0011 → 0013 → 0014 → 0015
+# BUILD-SPEC — the field redesign, ADRs 0016 → 0012 → 0011 → 0013 → 0014 → 0015
 
 **Read this before you write code for the field redesign.** Every decision is closed. No line is built. This file holds the verification of the claims, the five builds in landing order, the target state, the issues, and the checklist.
 
 **This file plans. It does not rule.** Where an ADR already ruled, this file cites the ADR. Where the working notes disagree with `src/`, section 1 says so and gives a resolution. Where the resolution needs the author, section 1 marks it **BLOCKED — author**.
 
-> ## ⚠ ADR 0016 lands first, and this file is not revised for it yet
+> ## ADR 0016 lands first, and it makes every build after it smaller
 >
-> **[ADR 0016 — the library holds no save format](../../docs/adr/0016-the-library-holds-no-save-format.md), opened 2026-09-10**, deletes `toJSON`, `fromJSON`, the Document types and `data/serialization/` entire. It is `proposed`.
+> **[ADR 0016 — the library holds no save format](../../docs/adr/0016-the-library-holds-no-save-format.md), opened 2026-09-10.** It deletes `toJSON`, `fromJSON`, the Document types and `data/serialization/` entire. It is `proposed`, like the other five.
 >
-> **Every schema step in this file is dead.** Wherever section 5 says *write schema N* or *delete reader N-1*, do neither. There is no counter and no reader. §1 V13 records the ruling 0016 supersedes.
+> **There is no schema counter, and no build spends a number.** This file is revised for that, on 2026-09-10. §1 V13 keeps the superseded ruling, as the record of a question asked twice.
 >
-> **Three more sections need a revision pass**, and it has not run: build 0011's Document rename is smaller, build 0013 loses the *omit derived keys from the Document* half of its head decision, and build 0015 stops serializing `editable`. Read ADR 0016's *Consequences* before you build any of the five. **ADR 0016 also re-opens one closed question** — whether `props` survives without a Document as its reason. Its recommendation is yes. The author rules it before build 0011 starts.
+> **One closed question re-opens** — whether `props` survives once the Document stops being the reason for it. ADR 0016 recommends yes, on the two charges that never mentioned serialization. **BLOCKED — author**, before build 0011 starts. See §1 V21.
 
 | Where a builder goes | File |
 |---|---|
 | Why a decision was taken | `docs/adr/0011`–`0015` |
 | The working material behind one decision | `plans/field-redesign/00xx-*/README.md` |
 | Already refused — do not re-derive | [`shared/refuted.md`](shared/refuted.md) |
-| The schema counter | [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate) |
+| ~~The schema counter~~ — dissolved by ADR 0016 | [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate) |
 | The spike gate and the prose-sweep changelog | [`shared/prose-sweep.md`](shared/prose-sweep.md) |
 | What is still owed at close-out | [`CLOSE-OUT.md`](CLOSE-OUT.md) |
 
@@ -338,6 +338,23 @@ Three facts price this at zero. The library has never shipped. No saved Document
 
 ---
 
+### V21 — ADR 0016 removes one of ADR 0011's reasons for `props` · **build 0011**
+
+**The claim.** [ADR 0011](../../docs/adr/0011-consumer-values-live-in-props.md) rejects *flat consumer properties on the Entry* on four charges. ADR 0005 rejects the same option with *"the one thing a grid does not do: we serialize."*
+
+**What ADR 0016 changes.** Two of ADR 0011's four charges are Document charges, and both die with the Document: *the Document reader's unknown-key rule inverts*, and *an older file whose consumer key a later release promotes needs its own migration door*. ADR 0005's whole stated reason dies with them.
+
+**What survives, and it never mentions serialization.**
+
+- **Three reserved name sets appear at three doors.** Without a namespace, `add()`, `update()` and the constructor each need to know which names are core and which are the consumer's.
+- **`Entry` needs an index signature**, which makes `entry.strat` compile. A typo stops being a compile error.
+
+**Resolution — recommended, not ruled. `props` stands.** The two surviving charges are the stronger pair: they are about the type system and the write doors, which is where a consumer meets the library every day. Serialization was always the weakest of the four, and ADR 0016 removes it rather than answering it.
+
+**BLOCKED — author.** Build 0011 is the `meta` → `props` rename, so it cannot start until this is ruled. Nothing before it is affected: build 0016 and build 0012 are both independent of the answer.
+
+---
+
 ## 1.3 Two commits still sit off `main`
 
 `README.md` records an unmet instruction, and it is still unmet. `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) are on `adr-0011-field-redesign` and on every spike branch. Neither is an ancestor of `main`. They reach `main` through a PR. Open that PR before build 0012 starts, or build 0012 carries two unrelated commits into its own review.
@@ -353,14 +370,17 @@ Two observations. Both keep planning around the decision as it stands.
 
 # 2 — Plan of action
 
-**Landing order is fixed: 0012 → 0011 → 0013 → 0014 → 0015.** Each build spends one schema number, 5 → 9. Each build lands as **one change** — ADR 0011 rules that staging a rename behind the current interface is discipline for a library with users, and this library has never shipped.
+**Landing order is fixed: 0016 → 0012 → 0011 → 0013 → 0014 → 0015.** **No build spends a schema number** — ADR 0016 deletes the format that carried them. Each build lands as **one change**: ADR 0011 rules that staging a rename behind the current interface is discipline for a library with users, and this library has never shipped.
+
+**0016 lands first because it shrinks the five after it.** Every one of them owed a Document change, a reader and a fixture set. Land 0016 last and each of the five pays that cost, and then the last build deletes the lot.
 
 ```mermaid
 flowchart LR
-  B1["<b>Build 0012</b><br/>optional dates<br/>schema 5"] --> B2["<b>Build 0011</b><br/>meta → props<br/>schema 6"]
-  B2 --> B3["<b>Build 0013</b><br/>derivation by children<br/>schema 7"]
-  B3 --> B4["<b>Build 0014</b><br/>read, plugin prefix<br/>schema 8"]
-  B4 --> B5["<b>Build 0015</b><br/>editable enum<br/>schema 9"]
+  B0["<b>Build 0016</b><br/>no save format<br/><i>deletes serialization</i>"] --> B1["<b>Build 0012</b><br/>optional dates"]
+  B1 --> B2["<b>Build 0011</b><br/>meta → props"]
+  B2 --> B3["<b>Build 0013</b><br/>derivation by children"]
+  B3 --> B4["<b>Build 0014</b><br/>read, plugin prefix"]
+  B4 --> B5["<b>Build 0015</b><br/>editable enum"]
   B3 -.->|"derived arm first"| B5
 ```
 
@@ -374,11 +394,47 @@ Report the verdict line. A run with no verdict line is unproven.
 
 ---
 
-## Build 1 — ADR 0012, optional dates · schema 5
+## Build 0 — ADR 0016, the library holds no save format
+
+**The one question it answers.** Does this library save your data for you?
+
+**Depends on.** Nothing. It lands first because the five builds after it each owed a Document change.
+
+**Layers it changes.**
+
+| Layer | What changes |
+|---|---|
+| `data/` | `src/data/serialization/` is **deleted whole** — 6 files, about 1,276 lines including tests. `PluginStores.toDocument` goes (`plugin-store.ts:220`), and with it the `PluginDocument` seed arm of its constructor (`:51-56`) |
+| `model/` | `src/model/document.ts` deleted. `UnsupportedSchemaError` deleted from `errors.ts` and from the `model/index.ts` and `api/index.ts` re-exports |
+| `api/` | `Dataset.toJSON` (`dataset.ts:312`) and `Dataset.fromJSON` (`:326`) deleted, with the `fromDocument`/`toDocument`/`reportCorrectedRollUps` import at `:26`. The `DatasetPluginOf` doc comment at `dataset-plugin.ts:94` stops citing the Document |
+| `harness/` | Three `toJSON()` textarea dumps — `main.ts:309`, `data.ts:258`, `hierarchy.ts:277` — and the surface row in `docs/page-brief.ts:45`. A debug dump becomes `JSON.stringify(dataset.entries.all)` if the page still wants one |
+
+**Nothing a plugin calls changes.** Checked 2026-09-10: no file under `src/extensions/`, `harness/plugins/` or `api/dataset-plugin.ts` names `toDocument`, `fromDocument`, `toJSON`, `fromJSON` or `schema`. The plugin context keeps all six members. Plugin rows keep their public reader, `pluginStores.read(id).all` (`plugin-store.ts:74`).
+
+**One test needs a new snapshot, and its invariant does not change.** `src/data/history.property.test.ts:4` imports `toDocument` and uses it to compare two dataset states. Give it a test-local snapshot over `entries.all`. **I7 stands** — undo still reverts user and engine effects atomically. Only the comparison changes.
+
+**`reportCorrectedRollUps` deletes here**, not in build 0013. It reports a Document whose stored rollups disagreed with a recalculation. With no Document read, it has no caller. **That also retires the 0011-against-0013 ordering constraint** those two ADRs carry over it.
+
+**The gate that proves it done.**
+
+```bash
+pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
+
+# Expect 0. The format and its vocabulary are gone from src/ and harness/.
+grep -rn --include='*.ts' 'toJSON\|fromJSON\|toDocument\|fromDocument\|DatasetDocument\|EntryDocument\|SerializedField\|PluginDocument\|UnsupportedSchemaError' src/ harness/ | wc -l
+```
+
+`etc/freegantt.api.md` shrinks, and I11 gates that it matches.
+
+**Do not** delete `PluginStores` itself, its `read` view, or the `pluginRows` constructor option's runtime seeding of stores a plugin later reserves — only the `PluginDocument` shape it seeded **from**. **Do not** touch `new Dataset({ entries })`. This build removes a way out, never a way in.
+
+---
+
+## Build 1 — ADR 0012, optional dates
 
 **The one question it answers.** May an Entry hold no dates?
 
-**Depends on.** Nothing. It lands first because `model/entry.ts:31,33` makes `start` and `end` required, and ADR 0013 needs a dateless Entry to be representable.
+**Depends on.** Build 0016 only, and loosely: `data/serialization/` is deleted by then, so this build has no reader arm to add. It lands second because `model/entry.ts:31,33` makes `start` and `end` required, and ADR 0013 needs a dateless Entry to be representable.
 
 **Layers it changes.**
 
@@ -391,7 +447,7 @@ Report the verdict line. A run with no verdict line is unproven.
 | `extensions/` | The date editor opens on a blank cell. `no-date-value` stops refusing (`src/extensions/features/inline-editing.ts:764`) |
 | `time/` | Nothing. Inclusive-end formatting shows a stored end as a plain instant when there is no start |
 
-**Schema.** Writes **5**. `EntryDocument.start` and `EntryDocument.end` become independently optional.
+**Schema.** None. Build 0016 deleted the Document, so `EntryDocument` no longer exists to make optional.
 
 **The gate that proves it done.**
 
@@ -419,11 +475,15 @@ Plus these behavioural assertions, each a named test:
 
 ---
 
-## Build 2 — ADR 0011, a consumer value has a home · schema 6
+## Build 2 — ADR 0011, a consumer value has a home
 
 **The one question it answers.** Where does `entry.props.cost` live, and what does a write to it look like?
 
 **Depends on.** Build 0012. `EntryEdit`'s removable keys derive from `Entry`, so `{ start: undefined }` compiles only after 0012 lands. This build rebases onto 0012, which is the cheap direction.
+
+**And it depends on one ruling.** **V21 — BLOCKED — author.** ADR 0016 removed two of ADR 0011's four charges against flat consumer keys. Two survive, and the recommendation is that `props` stands. **Do not start this build before that is ruled**: it is the build that would be wasted.
+
+**ADR 0016 already took the large half of this build.** ADR 0011 calls the Document rename (`meta` → `props`) its large half and the write path its small one. The Document is gone, so what is left is the small half plus the type renames.
 
 **Layers it changes.**
 
@@ -434,7 +494,7 @@ Plus these behavioural assertions, each a named test:
 | `view/` | `capability.ts` calls the moved resolver and stops restating the rule. `hasSomewhereToWrite` becomes `!('compute' in field)` |
 | `harness/` | One generic. `PlannerMeta` → `PlannerEntryProps`, `DemoMeta` → `DemoEntryProps` (`fixtures/demo-dataset.ts:42`) |
 
-**Schema.** Writes **6**. `meta` becomes `props` in the Document. `source` leaves `SerializedField`.
+**Schema.** None. `SerializedField` went with build 0016, so `source` has no encoding to leave.
 
 **The gate that proves it done.**
 
@@ -448,10 +508,10 @@ Plus the **seven type tests** from `types.md`. These compile: `{ start: undefine
 
 **Traps.**
 
-- **The largest trap in the whole redesign.** *Skip decision 1's edits a–c* is **not** *do not look inside `props`*. On an `EntryEdit` the walk is the top level. On a nested record — a constructor entry that passes a bag, and `fromJSON` — the walk goes **inside** `props` for **declared** keys. Miss this and a Document round-trip drops every consumer Field write in silence, with no error and no ChangeSet row.
+- **The largest trap in the whole redesign, and build 0016 shrank it.** *Skip decision 1's edits a–c* is **not** *do not look inside `props`*. On an `EntryEdit` the walk is the top level. On a nested record — a constructor entry that passes a bag — the walk goes **inside** `props` for **declared** keys. `fromJSON` was the second nested door and it is gone, so **the constructor is now the only one**. Miss it and a consumer who seeds a Dataset with a nested bag loses every declared Field value in silence, with no error and no ChangeSet row.
 - **Fix both shallow spreads together.** `data/edit-extension.ts:38` and `data/fields/field-access.ts:49`. The second is reachable with no plugin installed: a body write of `props.cost` beside a cascade write of `props.progress` loses `cost` while `proposedKeys` still names it, so the ChangeSet emits a row carrying a stale value. **A wrong row is worse than a dropped write.**
-- Delete the strategy table **after** you follow `writeStoredSource` → `computeStrategy.serialize()` → `encodeDeclaredField`. `'compute' in field` replaces it in `encodeFieldDocument`.
-- Do **not** delete `reportCorrectedRollUps`. Build 0013 owns that.
+- Delete the strategy table. **Build 0016 already took its serialization arm** — `computeStrategy.serialize()`, `encodeDeclaredField` and `encodeFieldDocument` all went with `data/serialization/`. What is left to unpick is `writeStoredSource` and the read/write arms.
+- `reportCorrectedRollUps` **is already gone**, deleted by build 0016 with the reader that called it. The 0011-against-0013 ordering constraint over it is retired.
 - Do **not** wire `entries.update()` to the editable or derived arm. It keeps HEAD's `UnknownFieldError` only.
 - Do **not** claim I14.
 - Leave `#mergeCoreFieldOverride`, `#consumerOverriddenCoreKeys`, `CORE_FIELD_OVERRIDABLE_KEYS` and `illegalCoreOverrideKey` standing.
@@ -460,7 +520,7 @@ Plus the **seven type tests** from `types.md`. These compile: `{ start: undefine
 
 ---
 
-## Build 3 — ADR 0013, what decides derivation · schema 7
+## Build 3 — ADR 0013, what decides derivation
 
 **The one question it answers.** What makes a row derive its values?
 
@@ -471,12 +531,12 @@ Plus the **seven type tests** from `types.md`. These compile: `{ start: undefine
 | Layer | What changes |
 |---|---|
 | `model/` | `kind` leaves `Entry`. `EntryKind` stops being an Entry classification. `DerivedFieldNotWritableError` is declared |
-| `data/` | `rollup.ts` asks structure only. `rollUpKinds` and `hierarchy.autoGroup` are deleted. `toJSON` omits a rolling-up parent's derived keys. `reportCorrectedRollUps` is deleted. The resolver's derived arm fills, and `entries.update()` wires to it. Decision 5's warning is written |
+| `data/` | `rollup.ts` asks structure only. `rollUpKinds` and `hierarchy.autoGroup` are deleted. The resolver's derived arm fills, and `entries.update()` wires to it. Decision 5's warning is written |
 | `layout/` | The item producer asks structure, not `entry.kind`. No milestone producer |
 | `view/` | `capability.ts:119` asks children, not `isRollUpKind(entry.kind)`. `--fg-diamond-size` goes |
 | `interaction/` | Parent bar drag translates descendant dates through `beforeEntryMove` / `entryMove` |
 
-**Schema.** Writes **7**. A rolling-up parent's derived keys and `kind` leave the Document.
+**Schema.** None — and this ADR's head decision loses a half. *"A derived value never reaches the Document"* has no Document to reach. **The half that carries the weight stands:** nothing but the Rollup writes a rolling-up parent's cell. ADR 0013 said the two rulings hold each other up. Only the refusal is left, and it needs no partner — a stale derived value in a file was the thing the omission prevented, and there is no file.
 
 **The gate that proves it done.**
 
@@ -489,9 +549,7 @@ Read that grep by hand — `kind` is a common English word, and `Row.kind` survi
 
 - `entries.update()` on a rolling-up parent's rolling-up Field throws `DerivedFieldNotWritableError`.
 - A **mixed** patch — `{ start, cost }` where `cost` is derived — is refused **whole, before any write**.
-- `add()`, `fromJSON()` and `new Dataset({ entries })` **drop** a derived value and raise **one** report per operation.
-- `toJSON()` on a rolling-up parent writes no `start`, no `end`, no `cost` and no `kind`.
-- `toJSON → fromJSON → toJSON` is stable.
+- `add()` and `new Dataset({ entries })` **drop** a derived value and raise **one** report per operation.
 - Losing the last child leaves a normal Entry: name kept, no dates, no bar.
 - Gaining a child drops the parent's authored values in the **same** ChangeSet as the `parentId` write, and one undo reverses both.
 - A parent bar drag writes the descendants and never the parent. One veto refuses the whole gesture.
@@ -500,10 +558,9 @@ Read that grep by hand — `kind` is a common English word, and `Row.kind` survi
 
 **Traps.**
 
-- Build the derived answers from **seven** call sites, not four: `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })`, and the extension hook. Reading four skips the three that **drop** rather than throw.
-- `toJSON` is not a write. It asks the derived half only. It is not a fifth `canWrite`.
+- Build the derived answers from **six** call sites, not four: `entries.update()`, the cell editor, a bar drag, `entries.add()`, `new Dataset({ entries })`, and the extension hook. ADR 0013 names seven; `Dataset.fromJSON()` went with build 0016. Reading four still skips the two that **drop** rather than throw.
 - **Do not unify the `body` / `merged` predicate.** That instruction was withdrawn as a misread (`refuted.md` item 8). The split is deliberate and documented at `rollup.ts:23-26`.
-- **Do not mistake `reportCorrectedRollUps` for decision 5's warning.** One is a `fromJSON` reconciliation report and never sees a cascade. See **V16**.
+- **`reportCorrectedRollUps` is not this build's to delete any more.** Build 0016 deleted it with the reader that called it. ADR 0013 assigns the deletion here; that instruction is spent. Decision 5's warning is a **different** thing, and it is still owed. See **V16**.
 - Do **not** publish a calculated `kind` Field. It restates `childrenOf`.
 - Do **not** claim I14. Build 0015 claims it.
 - An Aggregator's `undefined` on a rolling-up parent means **no value**, not *keep the last envelope*.
@@ -511,7 +568,7 @@ Read that grep by hand — `kind` is a common English word, and `Row.kind` survi
 
 ---
 
-## Build 4 — ADR 0014, the plugin-author surface · schema 8
+## Build 4 — ADR 0014, the plugin-author surface
 
 **The one question it answers.** Where do a plugin's values live, and what are the read doors called?
 
@@ -527,7 +584,7 @@ Read that grep by hand — `kind` is a common English word, and `Row.kind` survi
 | `view/` | `#fieldValueForCell` becomes `#cellValueFor` |
 | `extensions/` | `fieldContextFor` stops supplying `durationOf`. The whole-day approximation dies with it |
 
-**Schema.** Writes **8**. Plugin-declared keys carry a required prefix in the Document — `props: { 'scheduling:progress': 60 }`.
+**Schema.** None, and the prefix keeps its reason. A plugin key stays prefixed because **two writers still share one bag at runtime** — that was never a serialization argument. ADR 0014's *"the price of deciding late"* section priced a Document rewrite at schema 8. There is no Document, so the price is zero.
 
 **The gate that proves it done.**
 
@@ -552,7 +609,7 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 
 ---
 
-## Build 5 — ADR 0015, what the write door refuses · schema 9
+## Build 5 — ADR 0015, what the write door refuses
 
 **The one question it answers.** How strict is `entries.update()`?
 
@@ -563,11 +620,13 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 | Layer | What changes |
 |---|---|
 | `model/` | `Field.editable` widens to `'never' \| 'api' \| 'anywhere' \| boolean`. `FieldNotEditableError` is declared. The `:125-127` comment is rewritten |
-| `data/` | The resolver's editable arm fills. `entries.update()` wires to it. The core override serializes. `dataset.setFieldEditable(key, editable)` ships |
+| `data/` | The resolver's editable arm fills. `entries.update()` wires to it. `dataset.setFieldEditable(key, editable)` ships |
 | `view/` | `capability.ts:120` points at the moved resolver and does not restate the enum |
 | `e2e/` | `write-refusal.spec.ts` gains an `entries.update()` assertion |
 
-**Schema.** Writes **9**. `SerializedField.editable` carries the enum. Omit it when the value is the default `'anywhere'`. A core `{ key: 'start', editable: false }` round-trips as `"editable": "never"`.
+**Schema.** None. **Decision 19 loses its serialization half.** *"The lock serializes as `"never"`"* has nowhere to serialize to. **The lock itself stands**, and it is the part that matters: `{ key: 'start', editable: false }` still constructs, `update()` and the grid still refuse the change, and create, ingest and History replay still write.
+
+**One API gap closes here anyway, and it was never about the format.** `FieldRegistry.authored` drops a consumer's `editable` override on a core Field, so `{ key: 'end', editable: false }` merges at construction and is then invisible to anything that reads the registry back. Fix the registry. The old test for it asserted a round trip; assert the registry read instead.
 
 **The gate that proves it done.**
 
@@ -582,7 +641,7 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 - An absent `editable` opens the cell and allows `update()`.
 - Un-dating a `'never'` `start` throws.
 - Create, ingest and History replay still write a locked Field.
-- `{ key: 'end', editable: false }` round-trips through `toJSON` / `fromJSON` as `"editable": "never"`. `harness/data.ts:39-40` states this today and it is false today.
+- `{ key: 'end', editable: false }` survives `FieldRegistry.authored` and `dataset.fields.all` reads it back. `harness/data.ts:39-40` claims this today and it is false today.
 - `dataset.setFieldEditable('start', 'never')` replaces `FieldRegistry.all`'s array identity, and a subscriber notices.
 - `setFieldEditable` on an unknown key throws. A new Field key stays refused.
 - `entries.update()` on a `compute` Field throws `ComputedFieldCannotBeWrittenError`, and the message names the door. That closes #213 — **V14**.
@@ -673,9 +732,9 @@ dataset.entries.add({ id, name, owner: 'Ali' })   // flat, same shape
 
 **Errors.** `ComputedFieldCannotBeWrittenError` is declared here and thrown at **registration** — `compute` beside `rollUp`, or `compute` beside `editable`. `UnknownFieldError` keeps its one door at `entries.update()`, with a rewritten message.
 
-**Deleted, with no successor.** `FieldSource` and all three arms · `Field.source` · `SerializedField.source` · the `meta` core Field · `DuplicateFieldSourceError` · `InvalidFieldSourceError` · `source-strategy.ts` · `normalize-source.ts` · `metaRecord` · `metaKey` · `metaSlot`.
+**Deleted, with no successor.** `FieldSource` and all three arms · `Field.source` · the `meta` core Field · `DuplicateFieldSourceError` · `InvalidFieldSourceError` · `source-strategy.ts` · `normalize-source.ts` · `metaRecord` · `metaKey` · `metaSlot`. (`SerializedField` and `SerializedField.source` went with build 0016.)
 
-**Kept on purpose.** `reportCorrectedRollUps` (build 0013 deletes it) · `#mergeCoreFieldOverride` and its three companions (build 0015 rules on them) · `parentId` and `segments` declarations, because three mechanisms read them out of the registry.
+**Kept on purpose.** `#mergeCoreFieldOverride` and its three companions (build 0015 rules on them) · `parentId` and `segments` declarations, because three mechanisms read them out of the registry. (`reportCorrectedRollUps` is already gone — build 0016.)
 
 **Ingest.** Two warnings, one `Object.keys(input)` walk per Entry against `CORE_FIELDS` plus `'props'`: an unknown top-level key, and a key inside `props` that names a core key. Both warn. Neither throws. Core's own definition wins.
 
@@ -685,7 +744,7 @@ dataset.entries.add({ id, name, owner: 'Ali' })   // flat, same shape
 
 **The rule, once.** An Entry derives when it has children. That is the whole predicate.
 
-**Types.** `kind` leaves `Entry`. There is no `'kind'` in the Document and no `update({ kind })`. `EntryKind` stops being an Entry classification.
+**Types.** `kind` leaves `Entry`, and there is no `update({ kind })`. `EntryKind` stops being an Entry classification.
 
 **Call sites.** The door table is in [`0013-what-decides-derivation/README.md#the-build`](0013-what-decides-derivation/README.md#the-build). Do not copy it.
 
@@ -693,13 +752,13 @@ dataset.entries.add({ id, name, owner: 'Ali' })   // flat, same shape
 
 **Errors.** `DerivedFieldNotWritableError` is declared here and thrown at `entries.update()`. `RollUpKindsWouldDropValuesError` **never exists** — decision 6 closed as drop-and-recalculate, and `refuted.md` item 12 carries why.
 
-**Deleted.** `Entry.kind` · the `kind` core Field · `rollUpKinds` · `hierarchy.autoGroup` · `reportCorrectedRollUps` · `--fg-diamond-size` and the milestone producer.
+**Deleted.** `Entry.kind` · the `kind` core Field · `rollUpKinds` · `hierarchy.autoGroup` · `--fg-diamond-size` and the milestone producer. (`reportCorrectedRollUps` went with build 0016.)
 
 **Reports.** One report per operation, not per value. It names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'`, **always**.
 
 **Parent bar drag.** It translates every descendant date that exists, in one transaction and one undo. It reuses `beforeEntryMove` / `entryMove`. `event.entry` is the parent. `event.entries` is each descendant that will move. One veto refuses the whole gesture. There is no new pair and no `isGroup` flag.
 
-**The Document is our save format.** It is not an interchange format, and that is now a decision.
+**There is no Document.** ADR 0013 ruled it a save format and not an interchange format. [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md) then ruled the library holds neither.
 
 ## 3.4 ADR 0014 — the plugin-author surface
 
@@ -762,7 +821,7 @@ dataset.setFieldEditable('start', 'never')
 
 **Errors.** `FieldNotEditableError` is declared here and thrown at `entries.update()` for `'never'`. `ComputedFieldCannotBeWrittenError` is thrown here at `entries.update()` — one name, two doors, and the message names the door.
 
-**The API gap this build closes.** `FieldRegistry.authored` filters core keys, so a consumer's `{ key: 'end', editable: false }` merges at construction and never serializes. `harness/data.ts:39-40` states the opposite today. **Close the library. Do not tidy the harness comment.**
+**The API gap this build closes.** `FieldRegistry.authored` filters core keys, so a consumer's `{ key: 'end', editable: false }` merges at construction and is then unreadable through `dataset.fields.all`. `harness/data.ts:39-40` states the opposite today. **Close the library. Do not tidy the harness comment.** The gap was found through serialization and it is not a serialization gap: a registry that cannot read back what a consumer declared is wrong on its own.
 
 **I14 is claimed here.** Gestures ask `canWrite` at the grid threshold. `update()` asks the same key at the API threshold. `e2e/write-refusal.spec.ts` must call `entries.update()`.
 
@@ -806,7 +865,7 @@ Every number below was checked with `gh issue view <n> --repo Pawel-IT/FreeGantt
 |---|---|---|---|
 | [#270](https://github.com/Pawel-IT/FreeGantt/issues/270) | A declining Aggregator leaves a stale rolled-up value on the parent, with no changeset row | OPEN | **Land it inside build 0013** — see **V15**. ADR 0013 says *before or with* and does not choose |
 | [#242](https://github.com/Pawel-IT/FreeGantt/issues/242) | `InvalidInstantError` stays message-shaped, because two fault families share one class | OPEN | Build 0012 lands **before** #242's own fix, because optional dates change what the error guards. The class split stays owed |
-| [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) | A pre-D-S5-33 `schema: 3` document holding a plugin's Field still throws when read with that plugin | CLOSED | Nothing. ADR 0014 records that its **hazard** survives one level down, as a values-have-no-provenance hole. That hole is not filed |
+| [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) | A pre-D-S5-33 `schema: 3` document holding a plugin's Field still throws when read with that plugin | CLOSED | Nothing to re-open. **Build 0016 makes it unreachable** — its subject is a document read, and there is no reader. ADR 0014 records that its **hazard** survives one level down, at live install, as a values-have-no-provenance hole. That hole is not filed |
 
 ## 4.4 Issues the redesign touches and leaves open — 4
 
@@ -815,7 +874,7 @@ Every number below was checked with `gh issue view <n> --repo Pawel-IT/FreeGantt
 | [#267](https://github.com/Pawel-IT/FreeGantt/issues/267) | A renderer reads a declared Field by casting `entry.meta`, because no renderer context exposes one | OPEN | Build 0011 removes the three casts in `harness/planner.ts` by typing `props` as a record. Build 0014 gives the renderer `value`. **A Field-aware renderer read is still owed**, and so is declared-key inference from a `fields` literal |
 | [#214](https://github.com/Pawel-IT/FreeGantt/issues/214) | `FieldContext` cannot reach a second Entry, so a `compute` Field cannot express a value that depends on the tree | OPEN | Nothing here. Decision 13's `read` doors inherit the limit. A `compute` Field still cannot ask *am I a parent?* |
 | [#264](https://github.com/Pawel-IT/FreeGantt/issues/264) | Core ships no standard Field types, and core's own Fields bypass the type layer | OPEN | The Field union settles the shape a type bundle attaches to. The type layer itself is untouched |
-| [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) | Document names two things — the serialized Dataset and the DOM `document` | OPEN | **Nothing. See V2.** ADR 0011 cites this number for the *"`meta` names four things"* observation, and that is a mis-citation. The redesign closes no part of it |
+| [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) | Document names two things — the serialized Dataset and the DOM `document` | OPEN | **See V2** for the mis-citation, now corrected in ADR 0011. **Build 0016 deletes one of the two things the word named**, which removes the collision rather than resolving it. Whether that closes the issue is the issue owner's call, not this file's — raise it at build 0016 |
 
 ## 4.5 Issues cited as evidence only — closed already, no work owed
 
@@ -848,13 +907,33 @@ Work top to bottom. Each build ends with the same five closing items.
 
 - [ ] Read `CLAUDE.md`, `CONTEXT.md`, and the ADR that governs the build.
 - [ ] Open `shared/refuted.md`. Fourteen approaches are already refused there.
-- [x] **V13 ruled 2026-09-10** — one reader per build, no old-schema support. Build 0012 deletes readers 1–4.
+- [x] **V13 ruled 2026-09-10**, then superseded the same day by ADR 0016. No build spends a schema number.
 - [x] **V2 ruled 2026-09-10** — drop both #266 citations from ADR 0011 and correct its dependency row.
 - [x] **V8, V9, V18 authorized 2026-09-10** — the locked-spec edits are cleared. §5.7 holds them.
+- [ ] **Rule V21 — BLOCKED — author.** ADR 0016 removed two of ADR 0011's four charges against flat consumer keys. Does `props` still stand? The recommendation is yes. **Build 0011 cannot start until this is answered.** Builds 0016 and 0012 can.
+
+## 5.0.5 Build 0016 — the library holds no save format
+
+**Slices it touches.** S2 (serialization landed there, at S2.6), S4 (the Field Document codec, S4.4), S5 (plugin rows in the Document, S5.10). **Slice gates to re-run:** S2, S4, S5.
+
+- [ ] Delete `src/data/serialization/` whole — 6 files, about 1,276 lines with tests.
+- [ ] Delete `src/model/document.ts`.
+- [ ] Delete `Dataset.toJSON` (`api/dataset.ts:312`), `Dataset.fromJSON` (`:326`), and the import at `:26`.
+- [ ] Delete `UnsupportedSchemaError` from `model/errors.ts`, `model/index.ts:106` and `api/index.ts:232`.
+- [ ] Delete `PluginStores.toDocument` (`data/plugin-store.ts:220`) and the `PluginDocument` seed arm of its constructor (`:51-56`). **Keep `PluginStores`, `reserve` and `read`.**
+- [ ] Delete `reportCorrectedRollUps` and its tests. Its only caller was the reader.
+- [ ] Give `src/data/history.property.test.ts` a local snapshot over `entries.all`. **I7 does not change.**
+- [ ] Reword the `DatasetPluginOf` doc comment at `api/dataset-plugin.ts:94`. It cites *"a Field the Document never had"*. The reason for the lock is the Rollup, not the Document.
+- [ ] Replace the three harness `toJSON()` dumps — `main.ts:309`, `data.ts:258`, `hierarchy.ts:277` — with `JSON.stringify(dataset.entries.all, null, 2)`, or delete the panel.
+- [ ] Update `harness/docs/page-brief.ts:45`. It lists `toJSON` / `fromJSON` as a public surface.
+- [ ] Regenerate `etc/freegantt.api.md`. I11 gates it.
+- [ ] Run the gate: the format grep in §2 Build 0 must return 0.
+- [ ] Raise #266 with its owner — build 0016 deletes one of the two things *Document* named.
+- [ ] Close the build — see 5.6. **ADR 0016 has no spike branch**, so its gate check 2 passes trivially.
 - [ ] Open the PR that lands `624350d` and `9c3f704` on `main` — section 1.3.
 - [ ] Land the independent harness change: declare `window.__dataset` as the bare `Dataset` in `harness/hierarchy.ts:28` and `harness/data.ts:30`, so `harness/main.ts:89`'s double cast goes. **V5**, **V20**.
 
-## 5.1 Build 0012 — optional dates · schema 5
+## 5.1 Build 0012 — optional dates
 
 **Slices it touches.** S2 (serialization, the Segment invariant), S3 (a bar with no grip), S4 (sort comparators, the Rollup's dateless parent), S5 (the date editor). **Slice gates to re-run:** S2, S3, S4, S5.
 
@@ -863,7 +942,7 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Keep `durationOf` as a thin wrapper around the guarded helper. Build 0014 deletes it.
 - [ ] Delete the `referenceDate` fill at `src/data/entry-reader.ts:170`.
 - [ ] Add `start` and `end` to `isOptionalEntryKey` (`field-access.ts:26`).
-- [ ] Give serialization and `entry-reader.ts` each a `length === 0` arm for Segments.
+- [ ] Give `entry-reader.ts` a `length === 0` arm for Segments.
 - [ ] Mint a Segment when the second date arrives. Drop it when one date of the pair is cleared.
 - [ ] Change `DEFAULT_GRID_COLUMNS` to `['name', 'start', 'end']` (`src/view/grid-columns.ts:11`).
 - [ ] Open the date editor on a blank cell. Stop refusing with `no-date-value`.
@@ -871,16 +950,13 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Include a one-date instant in `range: 'fitDataset'`.
 - [ ] Make `removeSegments` of the last Segment keep the Entry and clear both dates.
 - [ ] Bind grid-row Delete on the name cell to `remove(id)`, not `removeSegments`.
-- [ ] Write schema **5**. Make `start` and `end` independently optional on `EntryDocument`.
-- [ ] Delete readers 1, 2, 3 and 4 — **V13**. That is `fromSchema1` … `fromSchema4`, their `readers` map entries, the `doc.schema >= 2` and `>= 3` branches at `read.ts:135,137`, and every fixture below 5. Leave `readers` a map with one entry: the seam stays.
-- [ ] Prove the refusal: a Document at schema 4 raises `UnsupportedSchemaError`, and the message names 5.
 - [ ] Assert the **blank** duration cell. Do not invent a placeholder.
 - [ ] Correct the duration call-site list with **V6** before editing tests.
 - [ ] Close the build — see 5.6.
 
-## 5.2 Build 0011 — `meta` → `props` · schema 6
+## 5.2 Build 0011 — `meta` → `props`
 
-**Slices it touches.** S2 (the store, the ChangeSet, serialization), S4 (the Field registry, the Rollup's write path), S5 (plugins, the edit extension, the capability resolver). **Slice gates to re-run:** S2, S4, S5.
+**Slices it touches.** S2 (the store, the ChangeSet), S4 (the Field registry, the Rollup's write path), S5 (plugins, the edit extension, the capability resolver). **Slice gates to re-run:** S2, S4, S5.
 
 - [ ] Rename `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest, with **serena**.
 - [ ] Rename `StoredEdit` → `ProposedEdit` and the whole family with **serena** — 267 occurrences (**V3**).
@@ -893,9 +969,8 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Make `diffEdit` emit one row per Field key, never a path into `props`.
 - [ ] Move `libraryWriteRule` into `data/` with no policy change. Point `view/capability.ts` at it.
 - [ ] Change `hasSomewhereToWrite` to `!('compute' in field)`.
-- [ ] Delete `FieldSource`, `Field.source`, `SerializedField.source`, `source-strategy.ts`, `normalize-source.ts`, `metaRecord`, `metaKey`, `metaSlot`, `DuplicateFieldSourceError`, `InvalidFieldSourceError`.
+- [ ] Delete `FieldSource`, `Field.source`, `source-strategy.ts`, `normalize-source.ts`, `metaRecord`, `metaKey`, `metaSlot`, `DuplicateFieldSourceError`, `InvalidFieldSourceError`.
 - [ ] Delete the `meta` core Field with no successor.
-- [ ] Replace `computeStrategy.serialize()` in `encodeFieldDocument` with `'compute' in field`.
 - [ ] Set `CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>` **and** omit `'props'` from `CoreFieldValues`.
 - [ ] Refuse `{ key: 'props' }` at runtime. It is the one reserved key.
 - [ ] Declare `ComputedFieldCannotBeWrittenError` and throw it at **registration** only.
@@ -903,18 +978,17 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Rewrite the `errors.ts:331` message with the new migration text.
 - [ ] Give `harness/planner.ts:31` one generic. Rename `PlannerMeta` and `DemoMeta`.
 - [ ] Update the `FieldSource` row in `harness/docs/files.html:130-132`.
-- [ ] Write schema **6**, and delete reader 5 with its fixtures — **V13**. One reader survives.
 - [ ] Drop both `#266` citations from ADR 0011 — **V2**. The Context table already proves the claim.
 - [ ] **Do not** delete `reportCorrectedRollUps`. **Do not** wire `entries.update()` to a new arm. **Do not** claim I14.
 - [ ] Run the corrected gate from **V1**. It must return 0.
 - [ ] Mark `plans/03:198` `[S4-A1]` *— retired by ADR 0011* — **V18**, authorized 2026-09-10. Its subject is the `meta` Field, which this build deletes. `protect-spec.sh` blocks the edit, so the author opens the file.
 - [ ] Close the build — see 5.6.
 
-## 5.3 Build 0013 — derivation by children · schema 7
+## 5.3 Build 0013 — derivation by children
 
-**Slices it touches.** S2 (serialization, ChangeSet, undo), S3 (parent bar drag), S4 (the Rollup, the item producer, `autoGroup`, the tree), S5 (the capability resolver, the extension hook). **Slice gates to re-run:** S2, S3, S4, S5.
+**Slices it touches.** S2 (the ChangeSet, undo), S3 (parent bar drag), S4 (the Rollup, the item producer, `autoGroup`, the tree), S5 (the capability resolver, the extension hook). **Slice gates to re-run:** S2, S3, S4, S5.
 
-- [ ] Delete `kind` from `Entry`, from the Document, and from the core Field set.
+- [ ] Delete `kind` from `Entry` and from the core Field set.
 - [ ] Delete `rollUpKinds` and `hierarchy.autoGroup`.
 - [ ] Make `rollup.ts` ask structure only. Delete the three `kinds.has` reads.
 - [ ] Wire `view/capability.ts:119` to children.
@@ -923,23 +997,21 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Declare `DerivedFieldNotWritableError`. Fill the resolver's derived arm.
 - [ ] Wire `entries.update()` to the derived arm. Build the answers from **seven** call sites.
 - [ ] Refuse a mixed patch **whole, before any write**.
-- [ ] Make `add()`, `fromJSON()` and the constructor **drop** a derived value and raise one report.
+- [ ] Make `add()` and the constructor **drop** a derived value and raise one report.
 - [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write.
 - [ ] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
 - [ ] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is overruled.
-- [ ] Omit a rolling-up parent's derived keys and `kind` from `toJSON`.
 - [ ] Delete `reportCorrectedRollUps` and its tests.
 - [ ] Write decision 5's warning. **Do not unify the `body` / `merged` predicate** (`refuted.md` item 8).
 - [ ] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
 - [ ] Raise one report per operation, at `severity: 'warning'`, always — **V16**.
 - [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`.
 - [ ] Land #270's fix here — **V15**.
-- [ ] Write schema **7**, and delete reader 6 with its fixtures — **V13**.
 - [ ] **Do not** claim I14. **Do not** publish a calculated `kind` Field.
 - [ ] Mark `plans/03:206` `[S4-A8]` and `[S4-A9]` *— retired by ADR 0013* — **V18**, authorized 2026-09-10. Keep the tick and the text. `protect-spec.sh` blocks the edit, so the author opens the file; the step is not done until both rows carry the marker.
 - [ ] Close the build — see 5.6.
 
-## 5.4 Build 0014 — the plugin-author surface · schema 8
+## 5.4 Build 0014 — the plugin-author surface
 
 **Slices it touches.** S4 (the Field registry and the grid column renderer), S5 (plugins, the plugin runtime, inline editing), S7 (the scheduling plugin's key prefix — not yet built, so this is a contract for it). **Slice gates to re-run:** S4, S5.
 
@@ -958,13 +1030,12 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Drop a contested Field on one Entry, apply neither value, and warn naming both plugins.
 - [ ] Keep the `Map` container (`refuted.md` item 9).
 - [ ] Drop `durationOf` and `fieldValue` from `etc/freegantt.api.md`. I11 gates it.
-- [ ] Write schema **8**, and delete reader 7 with its fixtures — **V13**. Rewrite plugin-declared keys in the Document under their prefix.
 - [ ] Run both gates. Each must return 0.
 - [ ] Close the build — see 5.6. Link `reviews/2026-09-10-0011-to-0015-combined/` as the verdict report — **V11**.
 
-## 5.5 Build 0015 — the write door · schema 9
+## 5.5 Build 0015 — the write door
 
-**Slices it touches.** S4 (the Field registry, serialization of a Field), S5 (inline editing, the capability resolver, `write-refusal`), S3 (drag-resize arming). **Slice gates to re-run:** S3, S4, S5. **I14 is claimed here, so re-run every slice gate that names it.**
+**Slices it touches.** S4 (the Field registry), S5 (inline editing, the capability resolver, `write-refusal`), S3 (drag-resize arming). **Slice gates to re-run:** S3, S4, S5. **I14 is claimed here, so re-run every slice gate that names it.**
 
 - [ ] Widen `Field.editable` to `'never' | 'api' | 'anywhere' | boolean`. Normalize at ingest.
 - [ ] Make absent mean `'anywhere'`. Alias `true` and `false`.
@@ -976,8 +1047,7 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Throw `ComputedFieldCannotBeWrittenError` at `entries.update()`. That closes #213 — **V14**.
 - [ ] Do **not** add a door argument to `canWrite`.
 - [ ] Point `view/capability.ts:120` at the moved resolver. Do not restate the enum there.
-- [ ] Serialize the core override. `FieldRegistry.authored` must stop dropping a core `editable`.
-- [ ] Encode the enum on `SerializedField`. Omit `'anywhere'`. Write schema **9**, and delete reader 8 with its fixtures — **V13**. One reader ships.
+- [ ] Make `FieldRegistry.authored` stop dropping a core `editable` override, so `dataset.fields.all` reads it back.
 - [ ] Ship `dataset.setFieldEditable(key, editable)`. Copy the Field. Replace `FieldRegistry.all`'s identity.
 - [ ] Refuse a new Field key at `setFieldEditable`. Do not mutate what `field()` returns.
 - [ ] Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts` for `'never'` and for `'api'`.
@@ -991,11 +1061,11 @@ Do all five, in this order, for the build you just finished.
 
 - [ ] Run `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`. Report the verdict line, never `EXIT: $?`.
 - [ ] Review `harness/main.ts` for an API gap, changed or not. `CLAUDE.md` requires it on every commit.
-- [ ] Flip the ADR's `status: proposed` to `accepted`, and **link its verdict report in the same commit** — **V12**.
+- [ ] Flip the ADR's `status: proposed` to `accepted`, and **link its verdict report in the same commit** — **V12**. **ADR 0016 has no verdict report**: it was ruled from the code, not from a spike. Link its finding in §1 V13 instead.
 - [ ] Run the spike gate for this ADR ([`shared/prose-sweep.md`](shared/prose-sweep.md)), with **V10**'s corrected check 2:
   - `grep -rn 'field-redesign' src/ harness/ e2e/ vitest.workspace.ts | wc -l` → 0.
-  - `git branch -r --list "origin/spike/<ADR>-*" | wc -l` → 0. Delete this ADR's branches from `origin`.
-  - The ADR names a report under `plans/field-redesign/reviews/`.
+  - `git branch -r --list "origin/spike/<ADR>-*" | wc -l` → 0. Delete this ADR's branches from `origin`. **ADR 0016 has none**, so this passes trivially.
+  - The ADR names a report under `plans/field-redesign/reviews/`. **ADR 0016 is exempt**, per the line above.
 - [ ] Close this build's issues on GitHub, and apply the labels with the `label-issues` skill.
 
 ## 5.7 Locked-spec edits — the author has to be in the room
@@ -1004,19 +1074,27 @@ Do all five, in this order, for the build you just finished.
 
 **So the discipline is yours, not the hook's.** An agent that reads *blocked* and sails through the warning has edited a locked spec with nobody in the room. **Ask the author, get the answer, and only then edit.** Every item here is owed and is tracked here, not in a session that ends.
 
-**Five of these are authorized.** The author cleared them on 2026-09-10, so no build has to ask again. The hook still blocks the edit, so the author is the one who types it. *Authorized* means the wording is agreed; it does not mean the edit landed.
+**Six landed on 2026-09-10**, in commit `5f21f2d`, after the author cleared them. They stay in the table as **LANDED** rows so that a builder who reads the ADR and then the spec knows which way the disagreement was resolved.
+
+**ADR 0016 adds six more, and none is authorized yet.** They are the largest block left, because `plans/02` §6 is a whole section about a format that stops existing.
 
 | Owed edit | Owner | Raise it with |
 |---|---|---|
-| `plans/02` default `gridColumns` is still `['name']` (`:480`). ADR 0012 rules `['name', 'start', 'end']` — **authorized 2026-09-10** | **author** | Build 0012 |
-| `plans/02` still says a date path is owed. Build 0012 lands it — **authorized 2026-09-10** | **author** | Build 0012 |
+| `plans/02` §6 — **the whole JSON-shape section**: the `schema` integer, the key-order contract, the migration promise, the reader map, and the `Dataset.fromJSON` example at `:728` | **author** | Build 0016 |
+| `plans/02:746` and `:747` — the two bullets that make the JSON shape public API and semver-governed | **author** | Build 0016 |
+| `plans/02:155` and `:183` — the late-install door. It constructs a Dataset now; it does not re-read one | **author** | Build 0016 |
+| `plans/02:757` — the error list drops `UnsupportedSchemaError` | **author** | Build 0016 |
+| `plans/01:555` — the serialization bullet goes. `plans/01:62`'s `data/ --> TIME` note loses its Instant⇄ISO clause; **the arrow stays**, because mutation-time input reading is reason enough on its own | **author** | Build 0016 |
+| `CONTEXT.md` — the **Document** glossary entry, and any `_Avoid_` line it needs in its place | **author** | Build 0016 |
+| `plans/02` default `gridColumns` was `['name']` (`:480`). ADR 0012 rules `['name', 'start', 'end']` — **V18. LANDED `5f21f2d`** | author | Build 0012 |
+| `plans/02` said a date path was owed. The grid is the date path — **LANDED `5f21f2d`** | author | Build 0012 |
 | `CONTEXT.md` owes an `entry.props` glossary entry, and owes the deletion of the **Field source** entry | **author** | Build 0011 |
 | `CONTEXT.md` owes `_Avoid_`: **phase**, **grouped entry** | **author** | Build 0013 |
 | `CONTEXT.md` owes an Entry **spans** entry | **author** | Build 0012 |
-| `plans/03:198` `[S4-A1]` owes *— retired by ADR 0011* — **V18**, **authorized 2026-09-10** | **author** | Build 0011 |
-| `plans/03:206` `[S4-A8]` and `[S4-A9]` owe *— retired by ADR 0013* — **V18**, **authorized 2026-09-10** | **author** | Build 0013 |
-| `plans/01:330` and `plans/02:478` say default `editable` is `'api'`. It becomes `'anywhere'` — **V8**, **authorized 2026-09-10** | **author** | Build 0015 |
-| `plans/01:330`'s `parentId` / `segments` sentence is **deleted**, not restated — **V9**, **authorized 2026-09-10** | **author** | Build 0015 |
+| `plans/03:198` `[S4-A1]` marked *— retired by ADR 0011* — **V18. LANDED `5f21f2d`** | author | Build 0011 |
+| `plans/03:206` `[S4-A8]` and `[S4-A9]` marked *— retired by ADR 0013* — **V18. LANDED `5f21f2d`** | author | Build 0013 |
+| `plans/01:330` and `plans/02:478` said default `editable` was `'api'`. Now `'anywhere'` — **V8. LANDED `5f21f2d`** | author | Build 0015 |
+| `plans/01:330`'s `parentId` / `segments` sentence deleted, not restated — **V9. LANDED `5f21f2d`** | author | Build 0015 |
 | `plans/02` owes `dataset.setFieldEditable` in the §2 verb list, beside `hideGridColumn` | **author** | Build 0015 |
 | `plans/02` still calls the `fields` lock a hole. It is a ruling — see [`shared/rulings.md`](shared/rulings.md#the-registration-lock--fields-and-plugins-are-fixed-at-construction) | **author** | Build 0015 |
 | `plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands. If the build cannot honour the wording, the wording is wrong, not the build | **author** | Build 0015 |

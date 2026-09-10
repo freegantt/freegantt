@@ -1,18 +1,20 @@
-# Close-out — ADRs 0011 to 0015
+# Close-out — ADRs 0011 to 0016
 
-**Every numbered decision and every grill call-site is closed. None is built.** All five ADRs are `proposed`, `src/` still ships `meta`, `Entry.kind`, `entries.fieldValue` and `schema: 4`, and the locked specs already state most of the new rules. The [2026-09-10 grill](README.md#grill-2026-09-10) overruled 0012 #4, 0011 #1 for `add()`, and 0015 #18's default, and closed Q12b, Q15, and Q16. This file is what is left, in order.
+**Every numbered decision and every grill call-site is closed. None is built.** All **six** ADRs are `proposed`, `src/` still ships `meta`, `Entry.kind`, `entries.fieldValue` and `schema: 4`, and the locked specs already state most of the new rules. The [2026-09-10 grill](README.md#grill-2026-09-10) overruled 0012 #4, 0011 #1 for `add()`, and 0015 #18's default, and closed Q12b, Q15, and Q16. This file is what is left, in order.
 
-**Landing order is fixed:** 0012 → 0011 → 0013 → 0014 → 0015. Each spends one schema number ([the counter](shared/rulings.md#3--the-schema-restarts-release-gate)). Each ADR's own *The work* section is its build list.
+**Landing order is fixed:** **0016** → 0012 → 0011 → 0013 → 0014 → 0015. **No build spends a schema number** — [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md) deletes the save format that carried them, and [the counter](shared/rulings.md#3--the-schema-restarts-release-gate) dissolves with it. Each ADR's own *The work* section is its build list, and [`BUILD-SPEC.md`](BUILD-SPEC.md) is the verified plan across all six.
 
 ## TODO
 
-- [ ] **Build 0012** — optional dates, schema 5. One date without the other is legal. Default `gridColumns` `['name', 'start', 'end']`. Date editor opens on a blank cell. Delete the `referenceDate` fill. Guard the duration calculation.
-- [ ] **Build 0011** — `meta` → `props`, `source` deleted, `StoredEdit` → `ProposedEdit`, `add()`/`update()` flat, constructor `entries` take declared keys at the top (Q15), schema 6. Gate: `grep -rn '\bmeta\b\|FieldSource\|source: {' src/ harness/` returns 0 (423 today).
-- [ ] **Build 0013** — derivation by children, `kind`/`rollUpKinds`/`autoGroup` deleted, parent bar drag translates descendant dates, schema 7.
-- [ ] **Build 0014** — plugin prefix, app writes the prefixed key and the plugin exports that const (Q12b), `fieldValue` → `read`, `durationOf` deleted, renderer pair becomes `text`/`value` (13a), schema 8. Gate: `grep -rn '\bfieldValue\b' src/ harness/ e2e/ etc/` returns 0.
-- [ ] **Build 0015** — `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.setFieldEditable` (Q16), schema 9. Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`.
+- [ ] **Build 0016** — the library holds no save format. Delete `data/serialization/`, `model/document.ts`, `toJSON`, `fromJSON`, `UnsupportedSchemaError`, `PluginStores.toDocument` and `reportCorrectedRollUps`. Persistence is the consumer's, through `entries.all`, `fields.all` and `pluginStores.read(id).all`. Gate: the format grep in `BUILD-SPEC.md` §2 Build 0 returns 0.
+- [ ] **Build 0012** — optional dates. One date without the other is legal. Default `gridColumns` `['name', 'start', 'end']`. Date editor opens on a blank cell. Delete the `referenceDate` fill. Guard the duration calculation.
+- [ ] **Build 0011** — `meta` → `props`, `source` deleted, `StoredEdit` → `ProposedEdit`, `add()`/`update()` flat, constructor `entries` take declared keys at the top (Q15). **Blocked on V21** — ADR 0016 removed two of this ADR's four reasons for `props`. Gate: `grep -rn --include='*.ts' '\bmeta\b\|FieldSource\|source: {' src/ harness/` returns 0 (356 today, and the unscoped form can never reach 0 — `BUILD-SPEC.md` §1 V1).
+- [ ] **Build 0013** — derivation by children, `kind`/`rollUpKinds`/`autoGroup` deleted, parent bar drag translates descendant dates.
+- [ ] **Build 0014** — plugin prefix, app writes the prefixed key and the plugin exports that const (Q12b), `fieldValue` → `read`, `durationOf` deleted, renderer pair becomes `text`/`value` (13a). Gate: `grep -rn '\bfieldValue\b' src/ harness/ e2e/ etc/` returns 0.
+- [ ] **Build 0015** — `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.setFieldEditable` (Q16). Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`.
 - [ ] **Flip each `status: proposed` to `accepted`** as its build merges, and link its verdict report. Retire ADR 0005's *if accepted*.
 - [ ] **Run the spike gate at each acceptance** ([`shared/prose-sweep.md`](shared/prose-sweep.md)): delete that ADR's spike folder and its `spike/*` branches, and prove no spike path reaches `src/`, `harness/` or `e2e/`.
+- [ ] **Land ADR 0016's six locked-spec edits** — `plans/02` §6 whole, `:746`, `:747`, `:155`, `:183`, `:757`, `plans/01:555` and `:62`, and `CONTEXT.md`'s **Document** entry. None is authorized yet. [`BUILD-SPEC.md`](BUILD-SPEC.md) §5.7 holds the list.
 - [ ] **Drop the ahead-of-`src/` banners** from `plans/01`, `plans/02`, `plans/03` and ADR 0005 when the last build merges. That is the day this file is deleted.
 
 ## Locked-spec edits — the author has to be in the room
@@ -33,8 +35,8 @@
 | Question | File |
 |---|---|
 | **How to build it** — the verified plan, the spec, the issues, the todo list | [`BUILD-SPEC.md`](BUILD-SPEC.md) |
-| What was decided, and why | `docs/adr/0011`–`0015` |
+| What was decided, and why | `docs/adr/0011`–`0016` |
 | The working material behind one decision | `plans/field-redesign/00xx-*/README.md` |
 | The evidence a spike produced | [`reviews/`](reviews/) |
 | Already refused — do not re-derive it | [`shared/refuted.md`](shared/refuted.md) |
-| The schema counter | [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate) |
+| ~~The schema counter~~ — dissolved by ADR 0016 | [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate) |

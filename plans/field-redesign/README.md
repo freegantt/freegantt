@@ -1,12 +1,14 @@
-# The field redesign — five ADRs
+# The field redesign — six ADRs
 
-One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, not by file**. This folder is the working material for all of them.
+One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, not by file**. On 2026-09-10 a sixth opened, [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md), and it lands first. This folder is the working material for all of them.
 
-## The five, in landing order
+## The six, in landing order
 
 ```mermaid
 flowchart LR
-  D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"] --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>0 open</i>"]
+  S["<b>0016</b><br/>no save format<br/><i>1 open</i>"] --> D["<b>0012</b><br/>optional dates<br/><i>0 open</i>"]
+  S -->|"removes two of<br/>0011's four reasons"| P
+  D --> P["<b>0011</b><br/>a consumer value<br/>has a home<br/><i>0 open</i>"]
   D --> R["<b>0013</b><br/>what decides<br/>derivation<br/><i>0 open</i>"]
   P --> R
   P -.->|"not blocking<br/>the rename"| G["<b>0014</b><br/>the plugin-author<br/>surface<br/><i>0 open</i>"]
@@ -16,6 +18,7 @@ flowchart LR
 
 | ADR | The one question it answers | Open | Blocks |
 |---|---|---|---|
+| [**0016** — no save format](../../docs/adr/0016-the-library-holds-no-save-format.md) | Does this library save your data for you? | **one** — does `props` still stand? | 0011 |
 | [**0012** — optional dates](0012-optional-dates/README.md) | May an Entry hold no dates? | **none** | 0013 |
 | [**0011** — a consumer value has a home](0011-consumer-values-in-props/README.md) | Where does `entry.props.cost` live, and what does a write to it look like? | **none** | 0013 |
 | [**0013** — what decides derivation](0013-what-decides-derivation/README.md) | What makes a row derive its values? | **none** | — |
@@ -31,7 +34,7 @@ Settled in session. Each ruling lives in the ADR named. Do not re-derive them.
 | Ruling | Owner |
 |---|---|
 | One date without the other is legal. A row **spans** iff both dates exist; a Segment and a bar exist iff it spans. Default `gridColumns` is `['name', 'start', 'end']`. The date editor writes one Field and must open on a blank cell. No diamond in core. | [0012](0012-optional-dates/README.md) |
-| `add()` and `update()` are flat. Constructor `entries` also take declared keys at the top; nested `props` stays for passengers; unknown top-level keys warn; a key named both at the top and inside `props` throws. Storage and the Document nest in `props`. `add()` / `update()` throw `UnknownFieldError` for an undeclared key. `fromJSON` still carries passengers inside `props`. | [0011](0011-consumer-values-in-props/README.md) |
+| `add()` and `update()` are flat. Constructor `entries` also take declared keys at the top; nested `props` stays for passengers; unknown top-level keys warn; a key named both at the top and inside `props` throws. Storage nests in `props`. `add()` / `update()` throw `UnknownFieldError` for an undeclared key. The constructor still carries passengers inside `props`. | [0011](0011-consumer-values-in-props/README.md) |
 | An Entry with children is a **parent**. Name is required. Lose the last child → name, no dates, no bar. Parent **cells** stay refused. Parent **bar** drag translates every descendant date that exists. Reuse `beforeEntryMove`. | [0013](0013-what-decides-derivation/README.md) |
 | Plugin keys stay prefixed. App `add` / `update` use the prefixed key. The plugin exports that string as a const. No bare alias. | [0014](0014-plugin-author-surface/README.md) |
 | Default `editable` is `'anywhere'`. After setup, only `editable` may change. No new Field keys. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Live call: `dataset.setFieldEditable('start', 'never')`. | [0015](0015-write-door/README.md) |
@@ -46,7 +49,7 @@ Avoid **phase** and **grouped entry** in this folder. An Entry with children is 
 |---|---|
 | [`shared/refuted.md`](shared/refuted.md) | You are about to re-derive something. **Check here first** |
 | [`shared/evidence.md`](shared/evidence.md) | You want the product survey the decisions cite |
-| [`shared/rulings.md`](shared/rulings.md) | You hit the schema counter, the registration lock, or `ComputedFieldCannotBeWrittenError` |
+| [`shared/rulings.md`](shared/rulings.md) | You hit the registration lock or `ComputedFieldCannotBeWrittenError`. The schema counter there is superseded by ADR 0016 |
 | [`shared/prose-sweep.md`](shared/prose-sweep.md) | The F table is the changelog of the 2026-09-10 sweep. The spike gate runs at every ADR acceptance |
 | [`reviews/`](reviews/) | You want a spike's verdict, or you are about to run a new wave ([`SPIKE-PLAYBOOK.md`](reviews/SPIKE-PLAYBOOK.md)) |
 | [`CLOSE-OUT.md`](CLOSE-OUT.md) | **Every decision is closed and none is built.** The build order, the gates, and the locked-spec edits still owed |
@@ -58,7 +61,7 @@ Avoid **phase** and **grouped entry** in this folder. An Entry with children is 
 3. **A recommendation is not a ruling.**
 4. **State a fact once.** A fact belongs to the ADR whose question it answers — the survey to [`shared/evidence.md`](shared/evidence.md), a refused approach to [`shared/refuted.md`](shared/refuted.md). Elsewhere, link to it.
 5. **The prose sweep runs once, at the end**, not per ADR. See [`shared/prose-sweep.md`](shared/prose-sweep.md).
-6. **One schema counter, not five.** The ADRs spend numbers in landing order. **The table lives in [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate), and only there.** An ADR states the one number it spends, and links.
+6. ~~**One schema counter, not five.**~~ **Retired 2026-09-10 by [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md).** The library holds no save format, so no ADR spends a number. The counter table in [`shared/rulings.md`](shared/rulings.md#3--the-schema-restarts-release-gate) dissolves with it, and stays there marked as superseded.
 
 ## Where the decisions could walk over each other, and why they do not
 
@@ -66,9 +69,9 @@ Checked pairwise against the code on 2026-09-09.
 
 | Pair | Shared ground | Collision? |
 |---|---|---|
-| 0012 × 0011 | `model/entry.ts`, `field-access.ts`, `entry-reader.ts`, `serialization/read.ts` | **No.** Different functions in the same files. 0012 first, 0011 rebases |
+| 0012 × 0011 | `model/entry.ts`, `field-access.ts`, `entry-reader.ts` | **No.** Different functions in the same files. 0012 first, 0011 rebases. `serialization/read.ts` was the fourth shared file, and build 0016 deletes it |
 | 0012 × 0013 | dates on a demoted Entry | **One-way gate.** `start: Instant` is required today, so 0012 lands first |
-| 0011 × 0013 | `props` carry-by-reference; `toJSON` | **One-way.** 0011 states the flat rule, 0013 adds the rolling-up exception |
+| 0011 × 0013 | `props` carry-by-reference | **One-way.** 0011 states the flat rule, 0013 adds the rolling-up exception. The `toJSON` half of this pair goes with build 0016 |
 | 0011 × 0014 | the `Entry.props` type | **No.** 0011 ships HEAD's posture; 0014 widens additively (`TProps & PluginEntryProps`, plugin keys prefixed — 9 and 12, closed 2026-09-10) |
 | 0011 × 0015 | `field-registry.ts` | **No.** `#mergeCoreFieldOverride` merges `editable` and never reads `source` |
 | 0011 × 0014 × 0013 | `data/edit-extension.ts` | **No.** Different symbols. A merge conflict, not a contradiction |
