@@ -28,26 +28,26 @@
 
 ## Work
 
-- [ ] Delete `kind` from `Entry` (`src/model/entry.ts:29`) and from the core Field set.
-- [ ] Delete `rollUpKinds` and `hierarchy.autoGroup`.
-- [ ] Make `src/data/rollup.ts` ask structure only. Delete the three `kinds.has` reads.
-- [ ] Wire `src/view/capability.ts:119` to children, not to `isRollUpKind(entry.kind)`.
-- [ ] Re-home the four registries that keyed on `entry.kind` onto structure or a plugin store.
-- [ ] Delete the core diamond — `--fg-diamond-size` and the milestone producer.
-- [ ] Make the item producer ask structure, not `entry.kind`.
-- [ ] Declare `DerivedFieldNotWritableError`. Fill the resolver's **derived** arm.
-- [ ] Wire `entries.update()` to the derived arm. Build the answers from **six** call sites — see *Six doors* below.
-- [ ] Refuse a mixed patch **whole, before any write**. `{ start, cost }` with a derived `cost` writes nothing.
-- [ ] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report.
-- [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both.
-- [ ] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
-- [ ] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is **overruled**.
-- [ ] Write decision 5's warning.
-- [ ] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
-- [ ] **Mint a Segment for a parent whose envelope the Rollup derived.** `widenSegmentsToEnvelope` (`src/data/rollup.ts`) widens an existing Segment set and returns early on an empty one, so it never mints from nothing. Build 1 retired the ingest-time fill, so a parent that spans only through its children now spans, draws a bar, and holds no Segment — and no click can select that bar. [ADR 0012](../../../docs/adr/0012-dates-are-optional-on-every-kind.md) assigns the repair here: *"ADR 0013 owns the Rollup pass; the biconditional pass must restore."* See [`../BUILD-LOG.md`](../BUILD-LOG.md) J3 and J9.
-- [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`.
-- [ ] Land [#270](https://github.com/Pawel-IT/FreeGantt/issues/270)'s fix **inside this build**. See *Issues* below.
-- [ ] Close the build — see [`README.md#close-every-build`](README.md).
+- [x] Delete `kind` from `Entry` (`src/model/entry.ts:29`) and from the core Field set.
+- [x] Delete `rollUpKinds` and `hierarchy.autoGroup`.
+- [x] Make `src/data/rollup.ts` ask structure only. Delete the three `kinds.has` reads.
+- [x] Wire `src/view/capability.ts:119` to children, not to `isRollUpKind(entry.kind)`.
+- [x] Re-home the four registries that keyed on `entry.kind` onto structure or a plugin store.
+- [x] Delete the core diamond — `--fg-diamond-size` and the milestone producer.
+- [x] Make the item producer ask structure, not `entry.kind`.
+- [x] Declare `DerivedFieldNotWritableError`. Fill the resolver's **derived** arm.
+- [ ] Wire `entries.update()` to the derived arm. Build the answers from **six** call sites — see *Six doors* below. **PARTIAL: `entries.update()` itself throws (done); the other five doors (cell editor, bar drag, `add()`, constructor, extension hook) are not individually verified — see BUILD-LOG J17 handoff.**
+- [x] Refuse a mixed patch **whole, before any write**. `{ start, cost }` with a derived `cost` writes nothing. (in `EntryStore.update()`; not yet covered by a test)
+- [ ] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report. **PARTIAL: construction raises the aggregate warning; `add()` alone is not specially handled — see handoff.**
+- [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both. **Believed achieved as a side effect of the rollup fix below, but NOT test-verified.**
+- [ ] Demote on the last child leaving: keep the name, clear the dates, draw no bar. **Not touched this session; believed already correct from ADR 0012/Build 1, not re-verified against the rollup changes.**
+- [x] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is **overruled**.
+- [ ] Write decision 5's warning. **PARTIAL: construction path only, see above.**
+- [x] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
+- [x] **Mint a Segment for a parent whose envelope the Rollup derived.** `widenSegmentsToEnvelope` (`src/data/rollup.ts`) widens an existing Segment set and returns early on an empty one, so it never mints from nothing. Build 1 retired the ingest-time fill, so a parent that spans only through its children now spans, draws a bar, and holds no Segment — and no click can select that bar. [ADR 0012](../../../docs/adr/0012-dates-are-optional-on-every-kind.md) assigns the repair here: *"ADR 0013 owns the Rollup pass; the biconditional pass must restore."* See [`../BUILD-LOG.md`](../BUILD-LOG.md) J3 and J9.
+- [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`. **NOT STARTED.**
+- [x] Land [#270](https://github.com/Pawel-IT/FreeGantt/issues/270)'s fix **inside this build**. See *Issues* below. (same code change as the Aggregator-`undefined` fix above — not test-verified)
+- [ ] Close the build — see [`README.md#close-every-build`](README.md). **NOT STARTED — verify:full has not been run this session.**
 
 **Slices it touches.** S2 (the ChangeSet, undo), S3 (parent bar drag), S4 (the Rollup, the item producer, `autoGroup`, the tree), S5 (the capability resolver, the extension hook). **Re-run the S2, S3, S4 and S5 slice gates.**
 

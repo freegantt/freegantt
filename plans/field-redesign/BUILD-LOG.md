@@ -251,6 +251,132 @@ judgment call, and worth a reviewer's second look, is putting the trial inside `
 `resolveLook` rather than inventing a fifth public seam (a "look resolver" registration) that no
 locked spec names.
 
+### J17 — Session stopped at ~475k context, mid-build; handoff for a fresh agent
+
+**Raised:** 2026-09-11, Build 3 (ADR 0013). **Status:** open — this is the receiving note for
+whoever continues this build. Everything below is also in the commit message of `6c0e347` ("WIP,
+does not compile") on `field-redesign-build`.
+
+**Verification status: `verify:full` has NOT been run this session.** A `tsc --noEmit` run midway
+through (before the handoff commit) showed ~270 errors, almost all in `*.test.ts` and `fixtures/*.ts`
+files that still author `kind: 'x'` on entries or import `EntryKind`/`RollUpKinds`/`DatasetHierarchy`
+(now deleted). Only one error was in real `src/` code (a `Pick<FrameBar, 'kind'>` type literal the
+`FrameBar.kind`→`.look` rename correctly left alone, since it's a string literal, not a property
+access) — fixed in the handoff commit. **Do not assume anything past that `tsc` run compiles**; the
+harness (`main.ts`, `planner.ts`, `plugins.ts`) still calls `bufferKind()`/`riskKind()` with no
+arguments, and both now require an `ownedIds` argument (see below).
+
+**Done (implemented, not yet test-verified beyond a `tsc` skim):**
+- `Entry`/`EntryInput` drop `kind`; `EntryKind` deleted from `model/entry.ts`. Core `kind` Field
+  deleted from `data/fields/core-fields.ts`.
+- `RollUpKinds`/`DatasetHierarchy`/`isRollUpKind` deleted end to end: `model/dataset.ts`,
+  `data/dataset-state.ts`, `api/dataset.ts`, `model/index.ts`, `api/index.ts`.
+- `data/hierarchy.ts` deleted outright (autoGroup/promoteNewParents — there is no `kind` to promote
+  to any more). `data/build-commit-change-set.ts` and `data/transaction.ts` drop the whole
+  hierarchy-promotion pipeline stage; the doc comment now says "four-stage commit pipeline".
+- `data/rollup.ts`: `parentsToRecompute` asks `byParent` (structure) instead of a `kinds` Set.
+  **The important behavioural change**: when an Aggregator returns `undefined` for a Field that
+  *does* have children (a "declining" Aggregator, #270), the loop now writes `undefined` onto the
+  parent (a real changeset row, `from` → `undefined`) instead of `continue`-ing and leaving the
+  stale value — this single change is decision 6 (promotion drops authored values), the "dateless
+  children clear the parent's dates" consequence, *and* #270, all at once. Read that loop
+  (`rollUpFields`, the `if (value === undefined)` branch) before touching it again.
+- `widenSegmentsToEnvelope` (J3/J9, the item your build file was specifically extended for): now
+  takes `mintSegmentId: () => SegmentId` and mints a fresh Segment over the derived envelope when
+  `parent.segments.length === 0` but the parent now spans — instead of only widening an existing
+  set. **This is NOT yet proven against the actual gate assertion** ("a parent whose dates come only
+  from its children holds a Segment, and a click on its bar selects it" — and the
+  `.fg-bar-summary` exclusion in `e2e/data.spec.ts` needs deleting per your build file). No e2e run
+  happened this session.
+- `data/write-rule.ts`: `libraryWriteRule(hasChildren: boolean, field: Field)` — no more
+  `isRollUpKind` callback parameter, since the caller now has a plain boolean already.
+- `model/errors.ts`: new `DerivedFieldNotWritableError`. Exported from `model/index.ts` and
+  `api/index.ts`. `model/error-report.ts`: new `'derived-values-dropped'` `BuiltInErrorCode` for
+  decision 5's aggregate warning (NOT `'derived-field-not-writable'` — that thrown error's own code
+  is not in `BuiltInErrorCode`, matching how `UnknownFieldError`'s `'unknown-field'` isn't either).
+- `data/entry-store.ts`: `update()` now throws `DerivedFieldNotWritableError` when any field in the
+  patch is `rollsUp` on an Entry that `childrenOf(key).length > 0` — checked over *every* key in the
+  patch before any write happens, so `{ start, cost }` with a derived `cost` throws before `start`
+  ever reaches `stageUpdate`. **This is the one door I'm confident is right**; the gate's own named
+  assertion for it has no test yet.
+- `data/error-reporting.ts`: new `buildDerivedValuesDroppedReport(dropped)` — one aggregate warning,
+  wired into `transaction.ts#applyConstructionRollUp` only. **I made a scope call (logged nowhere
+  else but here — treat this as its own J):** decision 5's warning fires for `new Dataset({ entries
+  })` construction, where the ADR's own "500 parents, 1500 warnings" example lives. I did *not* wire
+  it into the ordinary commit path (`build-commit-change-set.ts`) for `add()`/`update()`-triggered
+  promotion, reading decision 6 ("the library never refuses this... ordinary ChangeSet row") as
+  implying that path stays silent. **This directly contradicts the build file's own gate wording**
+  ("`add()` and `new Dataset({ entries })` drop a derived value, and raise one report per
+  operation") — a future pass should re-read decision 5's exact text and decide whether `add()`
+  needs its own aggregate warning too, or whether my reading holds. I did not have time to resolve
+  this before the context limit.
+- **The four registries / "look" redesign (layout/view), the largest single piece of new design this
+  build did:** `layout/items/produce-items.ts` is rewritten with a new public `EntryLook` type
+  (`'parent' | 'leaf' | (string & {})`), `Item.look` (was `Item.kind`), and two new functions,
+  `resolveItems`/`resolveLook`, that try every *non-structural* registered look first (a custom
+  producer answers by returning `[]` when it doesn't own the Entry) and fall back to structure.
+  `view/capability.ts` gained `CapabilityInputs.hasChildren` and `.lookOf` (replacing
+  `isRollUpKind`), and `GanttShell` wires `lookOf` to the same `resolveLook` against
+  `this.#registrations.itemProducers`, so a plugin's `registerLookDefaults('buffer', …)` and
+  `registerItemProducer('buffer', …)` key off the *same* answer. **This is a genuine design
+  invention, not something written verbatim anywhere in the ADR or plans** — see J16 above for the
+  full reasoning and why it was unavoidable (the `[review P2]` "two kind-defining plugins, zero
+  collision" test in `api/gantt.test.ts` requires real per-look dispatch, not just a
+  parent/leaf binary). **A reviewer should treat J16 and this paragraph as the one thing in this
+  build most worth a second pair of eyes** before it ships, because it settles part of D-S5-22's
+  rewrite with no author sign-off yet.
+- `harness/plugins/buffer-kind.ts` and `risk-kind.ts` rewritten to match: each now takes
+  `ownedIds: Iterable<string>` at construction and keeps its own `Set<EntryId>`, checked directly by
+  its item producer and its command's `when` — no more `entry.kind === 'buffer'` (impossible now).
+  **`harness/main.ts`, `harness/planner.ts`, `harness/plugins.ts` still call `bufferKind()`/
+  `riskKind()` with no arguments — this will not compile. Fixing the call sites (passing the actual
+  ids the demo wants classified as buffer/risk) is the very next step.**
+- Diamond deletion (`--fg-diamond-size`, `.fg-bar-diamond`, `KIND_SPAN_FLOOR_MULTIPLIER`,
+  `DEFAULT_DIAMOND_SIZE_PX`, the milestone item producer) is done across `layout/frame.ts`,
+  `view/frame-settings.ts`, `view/styles.ts`, `render/dom/index.ts`.
+- Two renames done with `serena rename_symbol`, both diffed afterward per J10's mandate:
+  - `FrameBar.kind` → `.look` (2 reported changes, but the diff showed it correctly propagated
+    through `render/dom/index.ts` too — cross-file references worked here). **One manual fixup was
+    still needed**: `frame.ts`'s own `look: item.kind` line was left wrong by the rename, because
+    `item` is type `Item` (a *different* interface, hand-edited separately in the same session, not
+    renamed) — `Item.kind`/`Item.look` and `FrameBar.kind`/`FrameBar.look` are two distinct symbols
+    that happen to share a name; the rename tool correctly touched only one of them, and I had to
+    catch the resulting mismatch by reading the diff, not by trusting "success".
+  - `RendererByKind` → `RendererByLook`: **this one under-propagated** — `rename_symbol` reported
+    "2 changes applied" and only touched the declaration in `layout/renderer.ts` plus (oddly) left a
+    self-referential `RendererByLook as RendererByKind` alias in `layout/index.ts`'s re-export
+    statement; seven other files (`api/gantt.ts`, `api/index.ts`, `view/gantt-shell.ts`,
+    `view/frame-settings.ts`, `view/renderer-registry.ts`, and two harness files) still had the old
+    name after the "successful" rename. Caught by grepping for the old name after the fact, not by
+    the tool's own report. **Finished by hand** with `mcp__serena__replace_in_files` in regex mode,
+    dry-run first (`\bRendererByKind\b` → `RendererByLook`, scoped to `{src,harness}/**/*.ts`), then
+    applied with `expected_count` as a guard. **Lesson for the next build's own renames**: a type
+    re-exported through a barrel file (`layout/index.ts`) is exactly where `rename_symbol` seems to
+    under-propagate — after any such rename, `grep -rn '\bOldName\b'` across `src/` and `harness/`
+    before trusting it, the same discipline J10 already asks for, but specifically call out
+    re-exported/barrel names as a second failure mode beyond the reformat-race one J10 named.
+
+**Not started at all:**
+- Parent bar drag translating descendants (`beforeEntryMove`/`entryMove`, one veto refuses the whole
+  gesture, parent's own `start`/`end` never written). Nothing touched in `interaction/`,
+  `view/gesture-pipeline.ts`, or `view/core-commands.ts` for this.
+- Any test file fix, except `src/data/hierarchy.test.ts` (rewritten wholesale) and
+  `src/view/plugin-ports.test.ts`/`plugin-registrations.test.ts` (two call-site renames each, done
+  only to satisfy the pre-commit lint hook, not a real pass over those files' content).
+- Any fixture fix (`fixtures/demo-dataset.ts`, `fixtures/hierarchy-dataset.ts`,
+  `fixtures/planner-dataset.ts`, `fixtures/empty-group-dataset.ts` all `tsc`-fail, per the list
+  above).
+- e2e work: the `.fg-bar-summary` exclusion in `e2e/data.spec.ts`, `e2e/selection.spec.ts:17`/`:101`
+  — none of this was opened this session.
+- Close-out: no `verify:full` run, no `harness/main.ts` API-gap review, no ADR 0013 status flip, no
+  spike-gate grep, no `plans/**` prose sweep beyond what was already ahead-of-`src` in `plans/01`.
+
+**Next agent's first move should be:** fix the three harness call sites for `bufferKind()`/
+`riskKind()`, then run `pnpm exec tsc --noEmit` again and work the error list top to bottom — it is
+almost entirely mechanical (`kind: 'x'` in a test fixture → drop it or move it to `props`;
+`EntryKind`/`RollUpKinds`/`DatasetHierarchy` imports → delete). Do not re-derive the design questions
+above; they are settled (J16/J17) unless a reviewer reverses them.
+
 ## Notes owed elsewhere
 
 ### N1 — #266 is raised, not closed — **DONE (comment posted)**
