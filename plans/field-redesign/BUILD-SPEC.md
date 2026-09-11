@@ -121,7 +121,7 @@ grep -rn --include='*.ts' '\bmeta\b\|FieldSource\|source: {' src/ harness/ | gre
 
 **What the code says.** Word-boundary counts over `src/ harness/ e2e/ etc/`: `StoredEdit` 106, `StoredEdits` 91, `toStoredEdit` 40, `toStoredEdits` 8. The whole family is 267 occurrences.
 
-**Resolution.** The number is not load-bearing. Serena does the rename and follows the symbol. Treat 267 as the size. Do not hand-count before starting.
+**Resolution.** The number is not load-bearing. A word-boundary replace plus `pnpm typecheck` reaches every reference. Treat 267 as the size. Do not hand-count before starting.
 
 ---
 
@@ -131,7 +131,7 @@ grep -rn --include='*.ts' '\bmeta\b\|FieldSource\|source: {' src/ harness/ | gre
 
 **What the code says.** `TMeta` is 169 occurrences and `TFields` is 141, over `src/ harness/ e2e/ etc/`.
 
-**Resolution.** Same as V3. Use serena. The count is a size estimate only.
+**Resolution.** Same as V3. Rename with a word-boundary replace, then `pnpm typecheck`. The count is a size estimate only.
 
 ---
 
@@ -732,7 +732,7 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 **Traps.**
 
 - **Rename `value` → `text` first, then `fieldValue` → `value`.** Do the two renames in that order or the names collide mid-rename.
-- Use **serena** for both renames and for `fieldValue` → `read`. Never a text replace.
+- Do all three renames with a word-boundary replace, then `pnpm typecheck`. Never a blind text replace.
 - The `duration` compute arm must **not** call `ctx.read(entry, 'duration')`. That is a cycle.
 - One unit, millisecond. The inline editor's whole-day approximation goes.
 - Fix the stub list with **V6** before you edit tests.
@@ -1099,9 +1099,9 @@ Work top to bottom. Each build ends with the same five closing items.
 
 **Slices it touches.** S2 (the store, the ChangeSet), S4 (the Field registry, the Rollup's write path), S5 (plugins, the edit extension, the capability resolver). **Slice gates to re-run:** S2, S4, S5.
 
-- [ ] Rename `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest, with **serena**.
-- [ ] Rename `StoredEdit` → `ProposedEdit` and the whole family with **serena** — 267 occurrences (**V3**).
-- [ ] Rename `TMeta` → `TProps` and drop `TFields` with **serena** — 169 and 141 occurrences (**V4**).
+- [ ] Rename `Entry.meta` → `Entry.props`, non-optional, filled `{}` at ingest.
+- [ ] Rename `StoredEdit` → `ProposedEdit` and the whole family — 267 occurrences (**V3**).
+- [ ] Rename `TMeta` → `TProps` and drop `TFields` — 169 and 141 occurrences (**V4**).
 - [ ] Write `PropsEdit`, `EntryEdit` and the branded `ProposedEdit` from `types.md`. Do not factor them.
 - [ ] Write the seven type tests from `types.md`. Do not skip `{ start: undefined }`.
 - [ ] Make `writeDeclaredMetaFields` walk the top level **and** inside `props` on a nested record.
@@ -1156,8 +1156,8 @@ Work top to bottom. Each build ends with the same five closing items.
 
 **Slices it touches.** S4 (the Field registry and the grid column renderer), S5 (plugins, the plugin runtime, inline editing), S7 (the scheduling plugin's key prefix — not yet built, so this is a contract for it). **Slice gates to re-run:** S4, S5.
 
-- [ ] Rename `entries.fieldValue` → `entries.read` with **serena**. Keep the signature and the return type.
-- [ ] Rename the renderer payload `value` → `text` **first**, then `fieldValue` → `value`, with **serena**. Both context types.
+- [ ] Rename `entries.fieldValue` → `entries.read`. Keep the signature and the return type.
+- [ ] Rename the renderer payload `value` → `text` **first**, then `fieldValue` → `value`. Both context types.
 - [ ] Rename `#fieldValueForCell` → `#cellValueFor`.
 - [ ] Delete `FieldContext.durationOf`.
 - [ ] Point the `duration` core Field's `compute` arm at the guarded helper. It must not call `ctx.read(entry, 'duration')`.

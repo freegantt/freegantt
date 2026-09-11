@@ -64,7 +64,7 @@ guard-loosening arm were never relaxed — both still exit 2.
 
 **The restore is owed.** It is tracked in [`CLOSE-OUT.md`](CLOSE-OUT.md).
 
-### Q5 — Does `model/`'s types-only carve-out admit a small runtime helper?
+### Q5 — Does `model/`'s types-only carve-out admit a small runtime helper? — **ANSWERED: yes, one function, and fix the docs that disagree**
 
 **Raised:** 2026-09-11, by the coordinator, from the 2026-09-11 branch review. **Status:** open,
 deferred by the author on 2026-09-11 — **do not decide this in a build.** Come back to it.
@@ -1690,7 +1690,7 @@ bracket spans the whole dataset, Playwright scrolls it under the sticky header, 
 never lands. That reason survives ADR 0013 untouched. Removing the skip by symmetry with
 `data.spec.ts` would trade a stable subject for a flaky one and test nothing new.
 
-### Q9 — a parent bar drag writes a descendant that holds only one date, and `ProposedSpan` cannot describe it
+### Q9 — a parent bar drag writes a descendant that holds only one date, and `ProposedSpan` cannot describe it — **ANSWERED: strict for the grabbed bar, looser for descendants**
 
 **Raised 2026-09-11, Build 3e. Task 2 is stopped here. Not started in `src/`.**
 
@@ -1759,7 +1759,7 @@ landed nothing rather than pick one. Everything else it needs was scoped and is 
 4. **One transaction, one undo.** `commitEntryEdits(draft)` already gives that for free once
    the draft holds the descendants, so nothing new is owed here.
 
-### Q10 — Should a custom look be claimed, or kept as a trial? J16's dispatch has three costs that its own reasoning did not price
+### Q10 — Should a custom look be claimed, or kept as a trial? — **ANSWERED: claimed for shape, merged for style**
 
 **Raised:** 2026-09-11, Build 3 (ADR 0013). **Status:** open — needs the author. Nobody guesses.
 **Reopens:** J16, which is standing and load-bearing for the item-producer and capability seams.
@@ -1823,3 +1823,86 @@ nothing today and forecloses nothing, but S3–S6 ship plugins against this surf
 raises the price of changing it later. A third option exists and is not recommended here, only
 recorded so it is not re-derived: keep the trial and fix consequence 2 alone, by having
 `resolveLook` ask a cheaper question than "build the Items and count them."
+
+---
+
+## Author rulings, 2026-09-11 — Q5, Q9, Q10, and serena
+
+Recorded by the coordinator from the author's own words, the same day. Each ruling below is the
+author's; the reasoning attached to it is the author's unless marked as the coordinator's.
+
+### Q5 — ANSWERED: one function, and fix the docs that disagree
+
+"yes do one function and fix conflicting docs." The span invariant — an Entry spans only when it
+holds **both** dates — is currently restated as arithmetic in about ten places plus six load-bearing
+casts, and this build added two more. It gets one home, and every restatement calls it. Prose that
+contradicts the new single definition is corrected in the same pass, not left for a sweep.
+
+### Q9 — ANSWERED: strict for the grabbed bar, a looser shape for descendants
+
+The author confirmed the behaviour first: **"a child with only a start date gets moved."** A user
+expects a start-only child to travel with its parent. The author added the fact that settles the API
+shape: **"If it's rendered it will have start and end date"** — a start-only child appears in the
+grid only and draws no bar.
+
+**The ruling on shape:** the coordinator's recommendation, approved. `ProposedSpan` keeps both dates
+required for the entry the user actually grabbed. The *descendant* list gets its own looser type
+where `end` may be absent. An ordinary single-bar drag handler is untouched, and only code that
+inspects descendants meets an optional date. The cost is one new public type instead of weakening an
+existing one for every caller.
+
+This is what unblocks the parent bar drag, and it is the last item ADR 0013 needs before it can move
+from `proposed` to `accepted`.
+
+### Q10 — ANSWERED: claimed for shape, merged for style
+
+The author accepted the claim seam, and ruled on collisions:
+
+> "we will have cases where 2 plugins touch the same thing, I just don't see any way to guard for
+> that well. It will be up to the consumer to make sure they don't install conflicting plugins."
+
+So the library does not arbitrate. It reports.
+
+The author then asked whether styles should merge, and whether a known pattern covers it. **The
+ruling: split the seam by its nature**, because one mechanism is doing two jobs that behave in
+opposite ways.
+
+| Seam | Nature | Resolution |
+|---|---|---|
+| Shape — which producer draws the geometry | exclusive | one winner: first claim wins, dev-mode warning on a double claim |
+| Style — classes | additive | union them; two classes on one element is a normal, inspectable state |
+| Style — custom properties and inline style | conflicting | last write wins, dev-mode warning naming both plugins when two set one key |
+
+**The pattern, described rather than cited** (the author's standing preference): plugin hooks divide
+by arity. A *bail* hook asks each occupant in turn and stops at the first real answer. A *parallel*
+hook runs every occupant and combines the results. Today's trial dispatch is a bail hook doing both
+jobs, which is why the design felt stuck. Shape wants bail. Style wants parallel. For classes, the
+combining rule already exists and needs no invention — it is the CSS cascade.
+
+**The honest limit, stated so nobody rediscovers it as a defect:** merging *moves* the collision
+problem, it does not delete it. Two plugins that both set `--fg-bar-fill` still collide. The win is
+that the additive majority stops colliding at all, and the remainder becomes detectable in one place
+instead of being silent. The warning is not the library guarding the consumer; it is the library
+telling the consumer what they did.
+
+**Not to be built:** per-property merge strategies. Union, last-wins, warn. Nothing cleverer.
+
+### serena is removed from this project — every rename is now a text replace
+
+The author removed serena (`27e8fef`) and rewrote `CLAUDE.md`'s rename rule themselves. The rule is
+now a word-boundary replace (`\bOldName\b`), then `pnpm typecheck` to name what was missed, and
+**read each hit before changing it**.
+
+**Two consequences worth recording, because they run opposite to intuition.**
+
+1. **The risk of over-reach rises, not falls.** J10's corruption — `fakeDataset(` becoming
+   `fakepropsset(` — came from a tool that at least understood symbols. A text replace understands
+   nothing. The word-boundary anchor is what stands in for that understanding, so an unanchored
+   substring replace is now the single most dangerous edit available in this repo.
+2. **N6's problem stops growing.** serena read TypeScript only, so no rename ever reached
+   `harness/docs/*.html`, and the tool reported success regardless. That is why eight retired names
+   are stale across five pages. A text replace reaches HTML. The existing backlog still needs the
+   scheduled sweep, but it will no longer be refilled by every public rename.
+
+`pnpm typecheck` does not read comments, string literals, test titles or HTML. The author's
+"read each hit" step is what covers those, and it is not optional.
