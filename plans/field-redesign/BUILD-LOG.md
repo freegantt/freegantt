@@ -1304,3 +1304,52 @@ and per-file `vitest run` were used to verify each commit.
 same pattern. **Read Q6 before touching `entry-store.ts`, `data/rollup.ts`, or `data/write-set.ts`
 for any reason** — two real conflicts and one unexplained regression are open there, none yet the
 author's call.
+
+### J27 — Q6's guard moved to the consumer door: "outermost transaction" is the signal, and it also fixed the quadratic regression
+
+**Raised:** 2026-09-11, Q6 fix agent. **Status:** closed — both `Q6`-named tests pass unmodified, and
+the third (S1, quadratic) turns out to be the same bug, not a separate one.
+
+**The separation, and why this signal and not another.** `EntryStore.update()`'s derived-field
+refusal now fires only when `#opensOwnTransaction()` is true — reading `TransactionData.
+openTransactions === 1` from inside `#mutate`'s callback, i.e. *after* `runTransaction`'s own
+increment, so `=== 1` means no other frame is still on the stack. A call that joins a transaction
+already open (`#removeSegmentsFrom`'s internal `this.update(id, { start: undefined, end:
+undefined })`, or a consumer's own `state.transaction(() => { entries.update('p1', …); … })` body)
+reads `>= 2` and the guard is skipped — that write lands in the transaction body, and `rollup.ts`'s
+own `editProposesField(body.get(id), field)` yield (decision 5) decides whether it survives the
+commit, which is a decision this store does not own. A standalone `dataset.entries.update('p1',
+{ cost: 500 })` with no enclosing transaction still opens its own (`=== 1`) and still throws
+`DerivedFieldNotWritableError` — this is the ordinary cell-editor-shaped call the derived arm names.
+Considered and rejected: a boolean parameter on `update()` (the dispatch's own named trap — it would
+sit on the public signature); a second "internal" update method (`removeSegmentsFrom` could call it,
+but the same-transaction-proposal test calls the *public* `entries.update()` directly, so a second
+method could not have caught that case at all, only the first one). `TransactionData.
+openTransactions`'s doc comment (`data/transaction.ts`) now names `EntryStore` as its second reader —
+previously "only `runTransaction` reads or writes this"; still only `runTransaction` writes it.
+
+**The quadratic regression (S1) was this same bug, not a separate one — Build 3b's "unrelated to
+kind/rollup" was an unverified guess that turned out wrong.** The guard's `this.childrenOf(key)` call
+(now skipped for a nested call) resolves through `#childrenOfWriteSet`, which calls `this.get(id)`
+for every id already in the transaction's `writeSet.edits` map so far — each such `get()` calls
+`entryAfterEdit` when that id has a pending edit. `removeSegments`'s own multi-id delete stages one
+`update()` per Entry inside one already-open transaction (its own `#mutate`), so before this fix
+*every* Entry's `#removeSegmentsFrom` call paid a full scan of every edit staged ahead of it just to
+ask "does this parent have children" — a question `#removeSegmentsFrom` never needed answered, since
+it is not the consumer door. That is the exact O(n²) shape the test measured. A throwaway probe
+(`overlayCallsForMultiSegmentDelete`, copied out of the test file, run standalone, deleted after)
+measured 400 `entryAfterEdit` calls at n=100 and 1600 at n=400 after this fix — exactly 4x for a 4x
+input, against the test's own `small * 4 + 50` threshold (1650) — where BUILD-LOG's Q6 recorded 81400
+at n=400 against a 21450 threshold before it. **Not a performance rewrite** — removing the
+guard's now-needless `childrenOf` call for a nested caller was the whole fix, already required by the
+placement move above; no other code in `entry-store.ts`/`rollup.ts`/`write-set.ts` changed.
+
+**Verified:** `pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **52/52 pass** (was
+49/52). Both `Q6`-named tests pass **unmodified** (confirmed by re-reading them after the fix, not
+just by the count) and the S1 test passes with the fix producing linear scaling, not a raised
+threshold. Full-suite `vitest run` before/after (`git stash`/`git stash pop`, diffed the `FAIL` line
+lists): 33 failing → 30 failing, 15 failing files → 14, and the diff is exactly these 3 tests — no
+new failures, no other test's pass/fail state changed. `pnpm exec tsc --noEmit` — 65 errors, same
+count before and after (all pre-existing `*.test.ts` errors, J25/J26's inherited count; out of this
+agent's scope per dispatch). `pnpm exec eslint src/data/entry-store.ts src/data/transaction.ts` — 0
+errors.
