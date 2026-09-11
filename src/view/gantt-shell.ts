@@ -24,6 +24,8 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
+  LookClaimant,
+  ReportDoubleClaim,
   BarLabels,
   BarRenderer,
   CellRenderer,
@@ -567,7 +569,7 @@ export class GanttShell {
     );
     this.#registrations = new PluginRegistrations(
       this.#pluginRegistrationPorts(),
-      options.itemProducerRegistry ?? createItemProducerRegistry(),
+      options.itemProducerRegistry ?? createItemProducerRegistry({}, this.#reportDoubleClaim()),
     );
     this.#bindColumns();
 
@@ -1441,6 +1443,35 @@ export class GanttShell {
       invalidateItems: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
+    };
+  }
+
+  /** Where a `DoubleLookClaim` is reported (Q10). Two plugins claimed one Entry. The first claim
+   *  paints and the second draws nothing. This names both, so the consumer sees which two plugins
+   *  overlap. The library never arbitrates — the consumer chose the plugins.
+   *
+   *  One report per pair of looks, not one per hover. `resolveLook` runs on every hover change, and
+   *  the same two plugins collide on every Entry they both own. The first collision is the news.
+   *
+   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`.
+   *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
+   *  line from every consumer's build, and the warning would never fire for anybody. The
+   *  `console.warn` fallback runs only when nothing is subscribed to `error`. */
+  #reportDoubleClaim(): ReportDoubleClaim {
+    const reported = new Set<string>();
+    return ({ entryId, painted, ignored }) => {
+      const pair = `${painted.look}|${ignored.look}`;
+      if (reported.has(pair)) return;
+      reported.add(pair);
+      const by = (claimant: LookClaimant): string =>
+        claimant.pluginId === undefined ? `'${claimant.look}'` : `'${claimant.look}' (${claimant.pluginId})`;
+      const message =
+        `Two look claims both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
+        `The first registered claim paints; ${by(ignored)} draws nothing on the entries they share.`;
+      this.#raiseError(
+        { code: 'look-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
     };
   }
 

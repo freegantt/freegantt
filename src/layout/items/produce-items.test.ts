@@ -28,6 +28,7 @@ describe('wholeEntryItem (review P3)', () => {
   it('is what a registered producer returns: `(entry) => [wholeEntryItem(entry, look)]`', () => {
     const t1 = spanEntry('t1');
     const registry = createItemProducerRegistry();
+    registry.registerClaim('buffer', () => true);
     registry.register('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
     expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren)).toEqual([
       wholeEntryItem(t1, 'buffer'),
@@ -158,22 +159,19 @@ describe('produceItemsForRow', () => {
   it('[S5.9, D-S5-22] a registered producer draws its own look; the shipped two are unchanged', () => {
     const own = createItemProducerRegistry();
     const t1 = spanEntry('t1');
-    // A custom-look producer decides ownership itself and declines every Entry it does not own
-    // (J16, BUILD-LOG.md) — `t1.id` alone, so `t2` below still falls through to the shipped `'leaf'`.
-    own.register('buffer', (entry) =>
-      entry.id !== t1.id
-        ? []
-        : [
-            {
-              id: itemId(entry.id, 0),
-              entryId: entry.id,
-              look: 'buffer',
-              label: `buffer:${entry.name}`,
-              start: entry.start!,
-              end: entry.end!,
-            },
-          ],
-    );
+    // A plugin claims the entries it owns (Q10) — `t1.id` alone, so `t2` below still falls through
+    // to the shipped `'leaf'`. The producer then draws whatever the claim won.
+    own.registerClaim('buffer', (entry) => entry.id === t1.id);
+    own.register('buffer', (entry) => [
+      {
+        id: itemId(entry.id, 0),
+        entryId: entry.id,
+        look: 'buffer',
+        label: `buffer:${entry.name}`,
+        start: entry.start!,
+        end: entry.end!,
+      },
+    ]);
     const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own, noChildren);
     expect(items).toHaveLength(1);
     expect(items[0]?.label).toBe('buffer:t1');
@@ -202,6 +200,7 @@ describe('produceItemsForRow', () => {
   it('disposing the first of two registrations on one look leaves the second producing', () => {
     const own = createItemProducerRegistry();
     const t1 = spanEntry('t1');
+    own.registerClaim('buffer', () => true);
     const disposeFirst = own.register('buffer', (entry) => [
       {
         id: itemId(entry.id, 0),

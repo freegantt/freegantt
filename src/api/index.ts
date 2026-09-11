@@ -344,6 +344,9 @@ export type {
 // author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
 // are exported rather than left to structural inference.
 export type { Item, ItemProducer } from '../layout/index.js';
+// Q10: `ctx.layout.registerLookClaim(look, claim)`'s own vocabulary, exported for the same reason —
+// a plugin author who names the predicate's type needs to be able to name it (J30).
+export type { LookClaim } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';

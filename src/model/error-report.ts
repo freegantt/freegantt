@@ -48,6 +48,9 @@ export type BuiltInErrorCode =
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
+  // Q10: two plugins claimed one Entry's look. The first claim paints, the second is ignored, and
+  // this names both. Dev mode only — a production build never asks the second question.
+  | 'look-claimed-twice'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.
