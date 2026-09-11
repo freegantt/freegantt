@@ -1906,3 +1906,109 @@ now a word-boundary replace (`\bOldName\b`), then `pnpm typecheck` to name what 
 
 `pnpm typecheck` does not read comments, string literals, test titles or HTML. The author's
 "read each hit" step is what covers those, and it is not optional.
+
+---
+
+## Build 3f — Q5 landed, Q10 built and parked
+
+### J32 — Q5's one home is `spansTime(entry)`, and five of the six casts are gone
+
+The author widened `model/`'s types-only carve-out for one predicate. It lives in `model/entry.ts`,
+beside the type it asks about, and the eslint rule's allowlist grows by one named entry.
+
+```ts
+export function spansTime<T extends { start?: Instant | undefined; end?: Instant | undefined }>(
+  dated: T,
+): dated is T & TimeSpan;
+```
+
+**Why generic, not `(entry: Entry)`.** Three kinds of record carry the two dates and ask the same
+question: a stored `Entry`, a `ProposedEdit` mid-gesture, and the date pair ingest reads before it
+builds either. One function serves all three, and it narrows, so a caller reads both dates as
+`Instant` afterwards with no cast.
+
+**The name.** Read the call site aloud: `if (!spansTime(entry)) continue;` — "if the entry does not
+span time, continue." That is CONTEXT.md's own sentence, which is the point.
+
+**Ten restatements routed** — `produce-items.ts`, `gesture-draft.ts` (two), `gesture-pipeline.ts`
+(two), `gantt-shell.ts`, `rollup.ts`, `entry-reader.ts` (three, including the inverted-span guard),
+`field-access.ts`, `inline-editing.ts`.
+
+**The six casts, one by one.** Two changed behaviour, both only on a path a shipped Gantt cannot
+reach. Neither is a stop condition in substance, and both are stated here so nobody has to rediscover
+them.
+
+| Cast | What happened |
+|---|---|
+| `tooltips.ts` ×3 (one site) | Gone. `defaultContent` now takes `Entry & TimeSpan`, and `openFor` asks the question. A tooltip belongs to a bar, and a bar exists only for a spanning Entry, so the guard never fires. Consumer tooltip content is unaffected — it names its own fields and needs no date. |
+| `entry-reader.ts` `moveEntryTo` | Gone. A non-spanning Entry holds no Segment to translate, so the edit is `{ segments: [] }` either way. The old cast made a `NaN` delta that the empty list swallowed. Pinned by a new test. |
+| `gesture-pipeline.ts` `#stepPx` | Gone. **Behaviour change on an unreachable path:** a non-spanning anchor now sizes its keyboard step at `0` px instead of `NaN` px. A gesture only exists for an Entry with a grip to grab. |
+| `produce-items.ts` `wholeEntryItem` ×2 | **Kept.** See N10. |
+
+**Docs corrected in the same pass:** `plans/01` §1 (the carve-out), `docs/01` (the guard matrix row),
+`docs/02` §3.7 (the allowlist), `CONTEXT.md` (both places the invariant is stated).
+
+`CLAUDE.md` also states the carve-out as "id/brand helpers and the `FreeGanttError` base". It is the
+author's own file, so this build did not edit it. One line is owed there.
+
+### J33 — the double-claim warning is not behind `isDevMode()`
+
+The author asked for a dev-mode warning. This build raises it unconditionally instead, through
+`raiseError` with a `console.warn` fallback, and the reason is D-S5-41's own finding on
+`'scale-options-ignored'`: `import.meta.env.DEV` resolves when the **library** is built, so a
+dev-mode gate deletes the line from every consumer's build and the warning never fires for anybody.
+The cost of asking is one predicate call per registered claim per hover change, and it allocates
+nothing. `GanttShell#reportDoubleClaim` holds a one-report-per-colliding-pair rule so a hover loop
+cannot spam the console.
+
+`layout/` still knows nothing about error reporting: the registry takes an optional reporter, and a
+registry built without one resolves a double claim silently to the first claim.
+
+### Q11 — `spansTime` is not on the public surface, and `harness/` restates it in two files
+
+`harness/data.ts:230` and `harness/planner.ts:339-343` both write the span invariant out as
+arithmetic. By CLAUDE.md's harness rule that is an API gap: consumer code re-deriving what the
+library already computes. The fix is one line — export `spansTime` from `api/index.ts` — and that is
+a public surface change, so this build reported it rather than taking it.
+
+**The question:** does `spansTime` join the public surface? A consumer holding an `Entry` asks this
+question for the same reason every layer of core does, and the alternative is that every consumer
+writes the arithmetic again. `harness/` is left alone until the author rules, per the stop rule.
+
+### N10 — `wholeEntryItem`'s parameter should be a spanning Entry, and that is a public change
+
+`wholeEntryItem(entry: Entry, look)` reads `entry.start`/`entry.end` through the one cast Q5 left
+standing. The type fix is not a runtime check: it is a narrower parameter, because the Entry this
+function takes always spans. `produceItemsForRow` runs `spansTime` before any producer sees an Entry.
+
+That needs a public name for "an Entry that spans" — `Entry & TimeSpan` inline, or a named
+`SpanningEntry` in `model/` — and it narrows a published signature, so `etc/freegantt.api.md`
+changes. Owed, not taken.
+
+### N11 — Q10 is built and parked on branch `q10-look-claim`, not on this branch
+
+The claim seam is complete, tested and green on every check except one: it adds three lines to the
+public surface, so `pnpm api-report` fails until `etc/freegantt.api.md` is regenerated, and that is a
+stop condition the author reviews line by line. The branch carries the work rather than this one, so
+`field-redesign-build` stays green.
+
+The surface delta, exactly:
+
+- `PluginContext.layout.registerLookClaim(look: EntryLook, claim: LookClaim): Disposer`
+- `export type LookClaim = (entry: Entry) => boolean`
+- `'look-claimed-twice'` joins `BuiltInErrorCode`
+
+**Built:** the claim seam, first-claim-wins, the collision report naming both plugins, the
+one-report-per-pair rule, the three harness plugins moved onto it, and two tests that did not exist
+(two plugins claiming the same entry; the dedupe). `resolveLook` no longer builds and discards any
+candidate's Items, and `produce-items.ts:142`'s comment no longer claims the opposite of what the
+code did.
+
+**Not built: the style half of the ruling**, and this is the finding rather than a gap in the work.
+"Classes union, custom properties last-wins plus a warning" has no code site today. One
+`ElementDescription` reaches one element, from one resolved renderer, and `RendererRegistry` already
+**refuses** a second plugin on the same `bar:<look>` slot (`RendererAlreadyRegisteredError`, review
+P2). Two plugins' styles never meet, so there is nothing to merge and nothing to warn about. Making
+them meet means letting several renderers apply to one bar, which changes D-S5-11 (config wins over a
+plugin), D-S5-12 (the per-look slot) and review P2's refusal. That is a design change to a locked
+decision, so this build reported it instead of inventing a parallel renderer pipeline.
