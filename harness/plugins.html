@@ -56,12 +56,41 @@
       #log div {
         padding: 1px 0;
       }
-      /* .fg-bar-diamond's own shape stays (structural, from entry.kind — D-S4-24); the demo
-         renderer only sets --fg-bar-fill, which its `::before` already reads, and widens the
-         diamond a little so the recolor reads clearly against the default fill. */
+      /* ADR 0013: core ships no diamond, so this page draws the one it asks `milestoneKind()` to
+         produce. The bar box stays the hit target; the rotated square is the ink, and it reads
+         `--fg-bar-fill-painted` so the demo renderer's own `--fg-bar-fill` recolor reaches it.
+         14px rather than the 13px `harness-chrome.css` uses: a little wider reads the recolor
+         clearly against the default fill. */
+      .demo-milestone {
+        background: transparent;
+        overflow: visible;
+        color: transparent;
+      }
       .demo-milestone::before {
+        content: '';
+        box-sizing: border-box;
+        position: absolute;
+        top: 50%;
+        left: 50%;
         width: 14px;
         height: 14px;
+        background: var(--fg-bar-fill-painted);
+        transform: translate(-50%, -50%) rotate(45deg);
+      }
+      .demo-milestone .fg-bar-label {
+        color: var(--fg-bar-label-color);
+      }
+      /* A diamond's box is its hit target, not its ink, so the glyph takes the state paint. */
+      .demo-milestone[data-state~='hovered'],
+      .demo-milestone[data-state~='selected'] {
+        outline: none;
+        box-shadow: none;
+      }
+      .demo-milestone[data-state~='hovered']::before {
+        box-shadow: 0 0 0 1px var(--fg-hover-ring);
+      }
+      .demo-milestone[data-state~='selected']::before {
+        box-shadow: 0 0 0 2px var(--fg-selection-color);
       }
       .demo-over-budget {
         background: #ffe0e0;

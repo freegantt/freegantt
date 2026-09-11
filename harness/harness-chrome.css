@@ -743,8 +743,47 @@ nav.harness-site-nav a[aria-current='page'] {
 
 /* Paint for the custom renderers the S5 demo installs. Harness-owned because the renderers are
    harness-owned: they exist to prove `barRenderer`/`cellRenderer`/`headerRenderer` reach the DOM. */
+/* The diamond glyph itself. ADR 0013 retired core's `.fg-bar-diamond`, so the page that wants the
+   look draws it. The bar box stays the hit target; the rotated square is the ink, and it reads
+   `--fg-bar-fill-painted` so the page's own `--fg-bar-fill` recolor still reaches the paint. */
 .demo-milestone {
-  --fg-diamond-size: 13px;
+  --demo-diamond-size: 13px;
+  background: transparent;
+  overflow: visible;
+  color: transparent;
+}
+
+.demo-milestone::before {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--demo-diamond-size);
+  height: var(--demo-diamond-size);
+  background: var(--fg-bar-fill-painted);
+  border: var(--demo-diamond-stroke, none);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.demo-milestone .fg-bar-label {
+  color: var(--fg-bar-label-color);
+}
+
+/* A diamond's box is its hit target, not its ink. The shared outline would ring the box, so the
+   glyph takes the state paint instead. */
+.demo-milestone[data-state~='hovered'],
+.demo-milestone[data-state~='selected'] {
+  outline: none;
+  box-shadow: none;
+}
+
+.demo-milestone[data-state~='hovered']::before {
+  box-shadow: 0 0 0 1px var(--fg-hover-ring);
+}
+
+.demo-milestone[data-state~='selected']::before {
+  box-shadow: 0 0 0 2px var(--fg-selection-color);
 }
 
 .demo-over-budget {

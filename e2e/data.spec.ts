@@ -19,12 +19,27 @@ function entryIdFromItemId(itemId: string): string {
   return colon === -1 ? itemId : itemId.slice(0, colon);
 }
 
+/** The first bar on the page, summary bar included: ADR 0013's Rollup mints a Segment for a parent
+ *  whose envelope it derived, so a click on a roll-up parent's own bar selects it like any other. */
 async function selectFirstBar(
   page: import('@playwright/test').Page,
 ): Promise<{ entryId: string; name: string }> {
-  // A `fg-bar-summary` (a roll-up parent's own bar) draws no Segment of its own (ADR 0012, ADR
-  // 0013 restores it) — selection.spec.ts's own bar-picking helpers skip it for the same reason.
-  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
+  return selectBar(page, page.locator('#gantt .fg-bar').first());
+}
+
+/** The first bar whose Entry owns its own dates. A `fg-bar-summary` derives its span from its
+ *  children, and ADR 0013 refuses an `update()` that writes a derived Field — so a date-writing
+ *  button has nothing to write on one. */
+async function selectFirstBarWithOwnDates(
+  page: import('@playwright/test').Page,
+): Promise<{ entryId: string; name: string }> {
+  return selectBar(page, page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first());
+}
+
+async function selectBar(
+  page: import('@playwright/test').Page,
+  bar: import('@playwright/test').Locator,
+): Promise<{ entryId: string; name: string }> {
   await expect(bar).toBeVisible();
   await bar.click();
   await expect(page.locator('#rename-btn')).toBeEnabled();
@@ -55,7 +70,7 @@ test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) 
   await page.goto('/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const { entryId } = await selectFirstBar(page);
+  const { entryId } = await selectFirstBarWithOwnDates(page);
 
   await page.click('#move-fwd-btn');
 

@@ -11,12 +11,20 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  // `fg-bar-diamond`'s own shape is structural, from `entry.kind` (D-S4-24) — the demo
-  // `barRenderer` recolors it via the `--fg-bar-fill` custom property its own `::before` reads
-  // (I13: a renderer's bounded scope is attr/class/style/text/children, never the node's shape).
+  // ADR 0013: core ships no diamond, so the page owns the look end to end. `milestoneKind()` makes
+  // the `'milestone'` key real, the demo `barRenderer` hands the bar the page's own class and fill,
+  // and `plugins.html` draws the glyph on that class's `::before`. The renderer still never shapes
+  // the node (I13: a renderer's bounded scope is attr/class/style/text/children).
   const milestoneBar = page.locator('#gantt .fg-bar.demo-milestone');
-  await expect(milestoneBar).toHaveClass(/fg-bar-diamond/);
   await expect(milestoneBar).toHaveCSS('--fg-bar-fill', '#7b2cbf');
+
+  // The class carries a real glyph, not a name alone: the page's `::before` paints a sized box.
+  const glyphBox = await milestoneBar.evaluate((bar) => {
+    const glyph = getComputedStyle(bar, '::before');
+    return { width: parseFloat(glyph.width), height: parseFloat(glyph.height) };
+  });
+  expect(glyphBox.width).toBeGreaterThan(0);
+  expect(glyphBox.height).toBeGreaterThan(0);
 
   const overBudgetCell = page.locator('#gantt [data-field="cost"] .demo-over-budget');
   await expect(overBudgetCell).toHaveText('$1500');
