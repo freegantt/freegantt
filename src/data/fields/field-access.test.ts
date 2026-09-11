@@ -21,7 +21,6 @@ const span = (props?: Record<string, unknown>): Entry => {
   return {
     id: entryId('t1'),
     name: 't1',
-    kind: 'span',
     start: 0 as Instant,
     end: 1 as Instant,
     segments: [{ id: segmentId('t1-seg'), start: 0 as Instant, end: 1 as Instant }],
@@ -91,7 +90,7 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 
   it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
-    const dateless: Entry = { id: entryId('t2'), name: 't2', kind: 'span', segments: [], props: {} };
+    const dateless: Entry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
     expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 

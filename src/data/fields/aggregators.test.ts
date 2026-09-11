@@ -9,7 +9,6 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
   return {
     id: entryId(id),
     name: id,
-    kind: 'span',
     start: 0 as Instant,
     end: duration as Instant,
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: duration as Instant }],
@@ -30,7 +29,6 @@ function ctx(field: FieldKey): RollUpContext {
 const parent: Entry = {
   id: entryId('p'),
   name: 'p',
-  kind: 'group',
   start: 0 as Instant,
   end: 0 as Instant,
   segments: [{ id: segmentId('p-seg'), start: 0 as Instant, end: 0 as Instant }],
