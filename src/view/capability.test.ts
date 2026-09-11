@@ -15,6 +15,7 @@ function entry(overrides: Partial<Entry> = {}): Entry {
     start,
     end,
     segments: [{ id: segmentId('e1-1'), start, end }],
+    props: {},
     ...overrides,
   };
 }
@@ -153,10 +154,7 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
   // `canWrite` must skip it too. Two spellings of that test disagreed, and this cell claimed its
   // value came from the rows below it while nothing rolled it up.
   it("treats rollUp: 'none' as not rolling up, the same way the Rollup pass does", () => {
-    const caps = capabilities(
-      { isRollUpKind: isGroup },
-      { key: 'cost', source: { from: 'meta', key: 'cost' }, rollUp: 'none', editable: true },
-    );
+    const caps = capabilities({ isRollUpKind: isGroup }, { key: 'cost', rollUp: 'none', editable: true });
     expect(caps.canWrite(entry({ kind: 'group' }), 'cost')).toEqual({ ok: true });
   });
 

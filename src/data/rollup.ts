@@ -15,7 +15,7 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
-import type { StoredEdits } from './edit-extension.js';
+import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
 import {
@@ -29,9 +29,9 @@ import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** The transaction body's edits — the Rollup yields to a field proposed here (D-S2-22). */
-  readonly body: StoredEdits;
+  readonly body: ProposedEdits;
   /** Body plus extension-hook edits — used to read effective child values. */
-  readonly merged: StoredEdits;
+  readonly merged: ProposedEdits;
 }
 
 /** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
@@ -45,7 +45,7 @@ function collectTouchedIds(
   entries: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
 ): ReadonlySet<EntryId> {
   const touched = new Set<EntryId>();
   for (const entry of added) touched.add(entry.id);
@@ -144,7 +144,7 @@ function widenSegmentsToEnvelope(
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
-  merged: StoredEdits,
+  merged: ProposedEdits,
   computed: ReadonlyMap<EntryId, Entry>,
 ): Entry | undefined {
   const rolled = computed.get(id);
@@ -173,7 +173,7 @@ export function rollUpFields(
 
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
-  const emptyEdits: StoredEdits = new Map();
+  const emptyEdits: ProposedEdits = new Map();
   const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
   // Effective tree includes extender and autoGroup overlays so a parent promoted on this commit

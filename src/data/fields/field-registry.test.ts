@@ -3,9 +3,10 @@ import { FieldRegistry } from './field-registry.js';
 import { createFieldContext, writeField } from './field-access.js';
 import type { Field, FieldType } from '../../model/index.js';
 import {
+  ComputedFieldCannotBeWrittenError,
   DuplicateFieldKeyError,
-  DuplicateFieldSourceError,
   IllegalCoreFieldOverrideError,
+  ReservedFieldKeyError,
   segmentId,
   UnknownAggregatorError,
   UnknownFieldTypeError,
@@ -37,14 +38,19 @@ describe('FieldRegistry type merge (D-S4-3)', () => {
   });
 });
 
-describe('D-S4-35 omitted source', () => {
-  it('{ key: cost, type: money } and meta.cost on the input reads 500', () => {
+// ADR 0011: a Field key is the whole address. The per-Field storage-strategy table retires —
+// a non-core key always lives in `entry.props`, under its own name, with no second address to
+// collide on and nothing to read back.
+describe('ADR 0011 — a Field key is the whole address', () => {
+  it('{ key: "props" } throws ReservedFieldKeyError — props is the one reserved key', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'props' }] })).toThrow(ReservedFieldKeyError);
+  });
+
+  it('{ key: cost, type: money } reads entry.props.cost, unmediated', () => {
     const registry = new FieldRegistry({
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
-    const field = registry.get('cost')!;
-    expect(field.source).toEqual({ from: 'meta', key: 'cost' });
     const entry = {
       id: 't1' as never,
       name: 't1',
@@ -52,39 +58,13 @@ describe('D-S4-35 omitted source', () => {
       start: 0 as never,
       end: 1 as never,
       segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
-      meta: { cost: 500 },
+      props: { cost: 500 },
     };
     expect(ctx(registry).read(entry, 'cost')).toBe(500);
   });
 
-  it('{ from: meta, key: budget } maps a different Document key', () => {
-    const registry = new FieldRegistry({
-      fields: [{ key: 'cost', source: { from: 'meta', key: 'budget' } }],
-    });
-    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'budget' });
-    const entry = {
-      id: 't1' as never,
-      name: 't1',
-      kind: 'span' as const,
-      start: 0 as never,
-      end: 1 as never,
-      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
-      meta: { budget: 1, cost: 2 },
-    };
-    expect(ctx(registry).read(entry, 'cost')).toBe(1);
-  });
-
   it('{ key: start } with no other key is a no-op override and does not throw', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'start' }] })).not.toThrow();
-  });
-
-  it('two Fields that share one meta slot throw DuplicateFieldSourceError', () => {
-    expect(
-      () =>
-        new FieldRegistry({
-          fields: [{ key: 'cost' }, { key: 'budget', source: { from: 'meta', key: 'cost' } }],
-        }),
-    ).toThrow(DuplicateFieldSourceError);
   });
 
   it('an unknown Field type throws UnknownFieldTypeError', () => {
@@ -105,6 +85,24 @@ describe('D-S4-35 omitted source', () => {
     );
   });
 
+  it('a compute Field naming rollUp throws ComputedFieldCannotBeWrittenError at registration', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [{ key: 'ref', compute: () => 'x', rollUp: 'sum' } as unknown as Field],
+        }),
+    ).toThrow(ComputedFieldCannotBeWrittenError);
+  });
+
+  it('a compute Field naming editable throws ComputedFieldCannotBeWrittenError at registration', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [{ key: 'ref', compute: () => 'x', editable: true } as unknown as Field],
+        }),
+    ).toThrow(ComputedFieldCannotBeWrittenError);
+  });
+
   it('bound FieldContext.read looks up by key after writeField', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     const context = ctx(registry);
@@ -115,17 +113,18 @@ describe('D-S4-35 omitted source', () => {
       start: 0 as never,
       end: 1 as never,
       segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
+      props: {},
     };
     const cost = registry.get('cost')!;
-    const written = writeField({}, entry, cost, 500);
-    expect(written.meta).toEqual({ cost: 500 });
-    const next = { ...entry, meta: written.meta };
+    const written = writeField(
+      { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() },
+      entry,
+      cost,
+      500,
+    );
+    expect(written.props).toEqual({ cost: 500 });
+    const next = { ...entry, props: written.props };
     expect(context.read(next, 'cost')).toBe(500);
-  });
-
-  it('reads an omitted-source Field back with its source resolved', () => {
-    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
-    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
   });
 });
 
@@ -142,9 +141,9 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
   });
 
   it('a core-key declaration carrying a key other than editable throws IllegalCoreFieldOverrideError', () => {
-    expect(
-      () => new FieldRegistry({ fields: [{ key: 'start', source: { from: 'meta', key: 's' } }] }),
-    ).toThrow(IllegalCoreFieldOverrideError);
+    expect(() => new FieldRegistry({ fields: [{ key: 'start', rollUp: 'none' }] })).toThrow(
+      IllegalCoreFieldOverrideError,
+    );
   });
 
   it('the illegal-override error names the offending key', () => {

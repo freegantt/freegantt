@@ -74,8 +74,8 @@ window.__gantt = gantt;
 function createDataset(
   autoGroupOn: boolean,
   entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
-): Dataset<{ cost: number }, { cost: number }> {
-  return new Dataset<{ cost: number }, { cost: number }>({
+): Dataset<{ cost: number }> {
+  return new Dataset<{ cost: number }>({
     entries: structuredClone([...entries]),
     timeZone: 'UTC',
     hierarchy: { autoGroup: autoGroupOn },
@@ -83,7 +83,7 @@ function createDataset(
   });
 }
 
-function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
+function mountGantt(next: Dataset<{ cost: number }>): Gantt {
   return new Gantt({
     container: '#gantt',
     dataset: next,

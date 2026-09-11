@@ -8,7 +8,7 @@ import type {
   DatasetEventMap,
   DateOnlyEndRule,
   EditRequest,
-  StoredEdits,
+  ProposedEdits,
   EntryInput,
   EntryKind,
   EntryStore as EntryStoreContract,
@@ -31,32 +31,29 @@ export type { DatasetHierarchy };
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
 // was never a method (#250 A2). Populated once, in the constructor, so a Dataset instance always
-// has its state by the time `extraEditsFor` can see it. Keyed on `object`, not `Dataset<TMeta,
-// TFields>`: a `WeakMap` key type does not vary with a generic parameter, and every value this map
-// ever holds a key for is a `Dataset` regardless.
+// has its state by the time `extraEditsFor` can see it. Keyed on `object`, not `Dataset<TProps>`: a
+// `WeakMap` key type does not vary with a generic parameter, and every value this map ever holds a
+// key for is a `Dataset` regardless.
 const datasetState = new WeakMap<object, DatasetState>();
 
 // The Dataset-bound aliases behind `api/dataset-plugin.ts`'s generic shapes (the `*Of` pairing
 // `api/plugin.ts` and `api/command.ts` already use). A plugin author writing against the concrete
 // `Dataset` names these two; code parameterizing over its own Dataset type names the `*Of` forms.
-// `TMeta`/`TFields` default here for the same reason `Dataset`'s own do: a plugin that does not care
-// about the consumer's meta shape writes `DatasetPlugin` and nothing more.
-export type DatasetPlugin<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = DatasetPluginOf<Dataset<TMeta, TFields>>;
-export type DatasetPluginContext<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = DatasetPluginContextOf<Dataset<TMeta, TFields>>;
+// `TProps` defaults here for the same reason `Dataset`'s own does: a plugin that does not care about
+// the consumer's `props` shape writes `DatasetPlugin` and nothing more.
+export type DatasetPlugin<TProps = unknown> = DatasetPluginOf<Dataset<TProps>>;
+export type DatasetPluginContext<TProps = unknown> = DatasetPluginContextOf<Dataset<TProps>>;
 
-export interface DatasetOptions<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> {
+export interface DatasetOptions<TProps = unknown> {
   /** What the consumer writes. Ids are plain strings and dates are any `InstantInput` — an ISO string,
-   * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here. */
-  entries: readonly EntryInput<TMeta>[];
+   * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here.
+   *
+   * A declared Field key sits flat, at the top level, the same shape `add()`/`update()` take (ADR
+   * 0011, Q15); a nested `props` stays legal for passenger keys and for a bag already held. Typed as
+   * plain `EntryInput<TProps>` — see `model/dataset.ts`'s `EntryStore.add` for why the `&
+   * Partial<TProps>` intersection Q15 suggests is not soundly expressible here; ingest still reads a
+   * flat declared key off any object at runtime regardless of this static type. */
+  entries: readonly EntryInput<TProps>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
    * It is also the zone a Plain (zoneless) date in `entries` resolves through.
@@ -93,7 +90,7 @@ export interface DatasetOptions<
    *  plugin's `requires`, so `[scheduling(), entryDependencies()]` and the reverse install the same
    *  way (D-S5-31). Every plugin sets up during this constructor, so a Field one declares is in the
    *  registry before the first Rollup walks — which is why `Dataset.plugins` is read-only. */
-  plugins?: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
+  plugins?: readonly DatasetPluginOf<Dataset<TProps>>[];
 }
 
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
@@ -101,24 +98,24 @@ export interface DatasetOptions<
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
 // it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
 //
-// TMeta is the documented generic (`plans/02` §1.6). TFields is the declared-key map
-// (`Dataset<{ team: string }, { cost: number }>`). TypeScript does not infer a later type
-// parameter once an earlier one is written, so Field keys cannot come from the `fields` array
-// at `new Dataset<{ team: string }>(...)` (#123).
-// TMeta/TFields trust boundary (plans/02): the internal store (`DatasetState`, `data/`'s
-// `EntryStore`) is permanently monomorphic — it holds `Entry<unknown>` throughout, by design,
-// because `data/` has no static dependency on any one consumer's meta shape. `TMeta`/`TFields`
-// exist only at this façade; every cast below is where a caller's declared type meets that erased
-// internal shape, and none of them are checked at runtime. A wrong `TMeta` mis-types every entry
-// `dataset.entries` reads back, with no error anywhere — this is the documented loose-input/typed-
-// output trade-off (`plans/02`), not a gap to close with a runtime validator.
-export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+// TProps is the documented generic (`plans/02` §1.6, ADR 0011) — it types both `entry.props` and the
+// declared-key map `entries.fieldValue` resolves against; TypeScript does not infer a later type
+// parameter once an earlier one is written, so a plugin generic cannot join it without breaking
+// inference on this one (#123).
+// TProps trust boundary (plans/02): the internal store (`DatasetState`, `data/`'s `EntryStore`) is
+// permanently monomorphic — it holds `Entry<unknown>` throughout, by design, because `data/` has no
+// static dependency on any one consumer's `props` shape. `TProps` exists only at this façade; every
+// cast below is where a caller's declared type meets that erased internal shape, and none of them are
+// checked at runtime. A wrong `TProps` mis-types every entry `dataset.entries` reads back, with no
+// error anywhere — this is the documented loose-input/typed-output trade-off (`plans/02`), not a gap
+// to close with a runtime validator.
+export class Dataset<TProps = unknown> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
-  readonly #plugins: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
+  readonly #plugins: readonly DatasetPluginOf<Dataset<TProps>>[];
 
-  constructor(options: DatasetOptions<TMeta, TFields>) {
+  constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
     this.#state = new DatasetState({
       ...options,
@@ -138,7 +135,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     return installDatasetPlugins(this.#plugins, createErrorRaiser(state.bus), (pluginId: PluginId) => {
       const disposables = new DisposableStore();
       const gate = new RegistrationGate(pluginId);
-      const context: DatasetPluginContextOf<Dataset<TMeta, TFields>> = {
+      const context: DatasetPluginContextOf<Dataset<TProps>> = {
         dataset: this,
         events: {
           on: (name, handler) => state.on(name, handler),
@@ -176,7 +173,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
 
   /** The plugins this Dataset installed, in the order the caller wrote them. Read-only — see
    *  `DatasetOptions.plugins` for why a Dataset cannot take a new set after construction. */
-  get plugins(): readonly DatasetPluginOf<Dataset<TMeta, TFields>>[] {
+  get plugins(): readonly DatasetPluginOf<Dataset<TProps>>[] {
     return this.#plugins;
   }
 
@@ -186,9 +183,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     this.#state.destroy();
   }
 
-  // Trusted, unchecked TMeta/TFields cast — see the class-level note above.
-  get entries(): EntryStoreContract<TMeta, TFields> {
-    return this.#state.entries as EntryStoreContract<TMeta, TFields>;
+  // Trusted, unchecked TProps cast — see the class-level note above.
+  get entries(): EntryStoreContract<TProps> {
+    return this.#state.entries as EntryStoreContract<TProps>;
   }
 
   get timeZone(): string {
@@ -224,16 +221,14 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     this.#state.setHierarchy(value);
   }
 
-  /** The resolved Field for this key, or `undefined` when the key is not declared.
-   *  Resolution merges the named Field type and fills `source` (an omitted source becomes
-   *  `{ from: 'meta', key }` — D-S4-35). This is the declaration, not an Entry value;
-   *  `entries.fieldValue` reads the value. */
+  /** The resolved Field for this key, or `undefined` when the key is not declared. This is the
+   *  declaration, not an Entry value; `entries.fieldValue` reads the value. */
   field(key: FieldKey): Field | undefined {
     return this.#state.fields.get(key);
   }
 
-  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1).
-   *  Each item is post type-merge, with `source` filled. */
+  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1), each after its
+   *  named `type` bundle merges in. */
   get fields(): { readonly all: readonly Field[] } {
     return { all: this.#state.fields.all };
   }
@@ -327,10 +322,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
  *  same occupant again, for real, inside the transaction. `api/gantt.ts` is the one caller — an app
  *  author never proposes an `EditRequest`, so a method here would have no honest caller outside it.
  *  Exported from `api/` only, never from `api/index.ts`. */
-export function extraEditsFor<TMeta, TFields extends Record<string, unknown>>(
-  dataset: Dataset<TMeta, TFields>,
-  request: EditRequest,
-): StoredEdits {
+export function extraEditsFor<TProps>(dataset: Dataset<TProps>, request: EditRequest): ProposedEdits {
   const state = datasetState.get(dataset);
   if (!state) {
     throw new Error('extraEditsFor: dataset was not constructed through the Dataset constructor');

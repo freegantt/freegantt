@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId, segmentId } from '../model/index.js';
 import type { Entry, EntryId, Instant } from '../model/index.js';
-import type { StoredEdit } from './edit-extension.js';
+import type { ProposedEdit } from './edit-extension.js';
 import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
@@ -10,17 +10,16 @@ function span(start: number, end: number): { start: Instant; end: Instant } {
   return { start: start as Instant, end: end as Instant };
 }
 
-function entry(id: string, meta?: unknown): Entry {
-  const item: Entry = {
+function entry(id: string, props?: Record<string, unknown>): Entry {
+  return {
     id: entryId(id),
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
     kind: 'span',
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
+    props: props ?? {},
   };
-  if (meta !== undefined) item.meta = meta;
-  return item;
 }
 
 const registry = new FieldRegistry({
@@ -40,10 +39,10 @@ describe('FieldRegistry.valuesEqual', () => {
     expect(registry.valuesEqual('start', 0, 1)).toBe(false);
   });
 
-  it('compares meta by reference only, never deep', () => {
+  it('falls back to reference equality for a key with no declared equals, never deep', () => {
     const shared = { note: 'x' };
-    expect(registry.valuesEqual('meta', shared, shared)).toBe(true);
-    expect(registry.valuesEqual('meta', { note: 'x' }, { note: 'x' })).toBe(false);
+    expect(registry.valuesEqual('undeclared', shared, shared)).toBe(true);
+    expect(registry.valuesEqual('undeclared', { note: 'x' }, { note: 'x' })).toBe(false);
   });
 
   it('compares segments element-wise on start/end', () => {
@@ -67,10 +66,26 @@ describe('diffEdit', () => {
     return new Map(list.map((item) => [item.id, item]));
   }
 
+  function edit(patch: Record<string, unknown>): ProposedEdit {
+    const { props, proposedKeys, ...envelope } = patch as {
+      props?: Record<string, unknown>;
+      proposedKeys?: Set<string>;
+    } & Record<string, unknown>;
+    return withProposedKeys(
+      { __brand: 'ProposedEdit', props: props ?? {}, proposedKeys: new Set(), ...envelope },
+      proposedKeys ?? new Set(Object.keys(envelope)),
+    );
+  }
+
   it('produces a FieldUpdated row per changed field', () => {
     const t1 = entry('t1');
-    const edit: StoredEdit = { name: 'Framing', kind: 'milestone' };
-    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
+    const rows = diffEdit(
+      entries(t1),
+      t1.id,
+      edit({ name: 'Framing', kind: 'milestone' }),
+      registry,
+      fieldCtx,
+    );
     expect(rows).toEqual([
       { store: 'entries', id: t1.id, field: 'name', from: 't1', to: 'Framing' },
       { store: 'entries', id: t1.id, field: 'kind', from: 'span', to: 'milestone' },
@@ -79,31 +94,37 @@ describe('diffEdit', () => {
 
   it('drops a field set back to its current value', () => {
     const t1 = entry('t1');
-    const rows = diffEdit(entries(t1), t1.id, { name: 't1' }, registry, fieldCtx);
+    const rows = diffEdit(entries(t1), t1.id, edit({ name: 't1' }), registry, fieldCtx);
     expect(rows).toEqual([]);
   });
 
   it('returns no rows for an id absent from entries', () => {
     const t1 = entry('t1');
-    const rows = diffEdit(entries(t1), entryId('missing'), { name: 'x' }, registry, fieldCtx);
+    const rows = diffEdit(entries(t1), entryId('missing'), edit({ name: 'x' }), registry, fieldCtx);
     expect(rows).toEqual([]);
   });
 
-  it('{ cost: 500 } emits one cost row, not a meta row', () => {
+  it('{ cost: 500 } emits one cost row, keyed cost, never a whole-props row (ADR 0011)', () => {
     const t1 = entry('t1', { cost: 400 });
     const cost = registry.get('cost')!;
-    const edit = withProposedKeys(writeField({}, t1, cost, 500), ['cost']);
-    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
+    const stored = withProposedKeys(
+      writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, t1, cost, 500),
+      ['cost'],
+    );
+    const rows = diffEdit(entries(t1), t1.id, stored, registry, fieldCtx);
     expect(rows).toEqual([{ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 }]);
   });
 
-  it('a whole-meta write emits the meta row first, then declared rows', () => {
+  it('two declared props keys each emit their own row, and props itself is not a Field (ADR 0011)', () => {
     const t1 = entry('t1', { cost: 400, team: 'A' });
-    const nextMeta = { cost: 500, team: 'A' };
-    const edit = withProposedKeys({ meta: nextMeta }, ['meta']);
-    const rows = diffEdit(entries(t1), t1.id, edit, registry, fieldCtx);
-    expect(rows[0]).toEqual({ store: 'entries', id: t1.id, field: 'meta', from: t1.meta, to: nextMeta });
-    expect(rows).toContainEqual({ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 });
+    const rows = diffEdit(
+      entries(t1),
+      t1.id,
+      edit({ props: { cost: 500, team: 'A' }, proposedKeys: new Set(['cost']) }),
+      registry,
+      fieldCtx,
+    );
+    expect(rows).toEqual([{ store: 'entries', id: t1.id, field: 'cost', from: 400, to: 500 }]);
   });
 });
 

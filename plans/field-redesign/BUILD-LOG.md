@@ -248,3 +248,173 @@ entry is a defer nobody receives.
 `#document-json` / `documentJson` and `#export-btn` / `exportBtn` survive in the harness. "Document"
 is retired and nothing is exported any more. This is naming residue, not an API gap, so Build 0 did
 not stop for it. The end-of-redesign review pass picks it up.
+
+### J10 — `rename_symbol` on `Entry.meta`/`EntryInput.meta` silently corrupted five unrelated tokens elsewhere in the tree
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** found and fixed within this build; flagged for
+every later build's own rename step.
+
+The very first two operations of this build were `mcp__serena__rename_symbol` calls renaming
+`Entry.meta` → `props` and `EntryInput.meta` → `props`, each reported as a clean, project-wide LSP
+rename. A `pnpm verify:full` run much later in the build turned up four unrelated word corruptions
+the rename introduced with no error and no diagnostic:
+
+- `harness/planner.ts`: a doc comment's `its phase's hue` became `its pprops's hue`.
+- `src/data/entry-reader.test.ts`: a test title's `keeps an authored segment id` became
+  `keeps an aupropsed segment id`.
+- `src/data/fields/field-access.test.ts`: a test title's `writeOntoEntry writes cost onto parent`
+  became `wripropstoEntry writes cost onto parent`.
+- `src/view/gantt-shell.test.ts`: a real functional break — the call `dataset: fakeDataset([alpha])`
+  became `dataset: fakepropsset([alpha])` (a nonexistent identifier), and a nearby `name: 'a'` became
+  `props: 'a'`.
+
+In every case a run of 4 letters at some other location in the file was replaced by the 5-letter word
+`props`, with no relation to the word "meta" at that spot. The working theory: this project's
+PostToolUse hook reformats a file after every edit, and `rename_symbol`, having captured reference
+*offsets* before that reformat ran (from an earlier tool call in the same batch, or a stale index),
+applied its text edit at a byte offset that had since shifted — overwriting whatever token happened
+to sit there instead of the real `meta` reference.
+
+**The call:** found all four by diffing the whole working tree against `HEAD` and scanning every
+changed line for an isolated `props`-containing token that didn't correspond to a real rename target
+(`TMeta→TProps`, `StoredEdit→ProposedEdit`, `PlannerMeta→PlannerEntryProps`, `DemoMeta→DemoEntryProps`,
+`meta→props` property accesses), then hand-verifying each one against `git show HEAD:<file>`. All four
+are fixed in this build (see the commits touching `harness/planner.ts`, `src/data/entry-reader.test.ts`,
+`src/data/fields/field-access.test.ts`, `src/view/gantt-shell.test.ts`).
+
+**What a later build should do differently:** after any `rename_symbol` call that reports success,
+diff the whole working tree against `HEAD` (or the branch tip before the rename) and scan for isolated
+occurrences of the new name that don't correspond to a real, intended reference — not just spot-check
+the files the tool says it touched. A rename that "succeeds" can still corrupt an unrelated file.
+
+### J11 — `EntryStore.add()` / `DatasetOptions.entries` keep plain `EntryInput<TProps>`, not the `& Partial<TProps>` intersection Q15's wording suggests
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** standing; a **Q** for the author folded in here
+because the two are the same decision.
+
+Q15 (closed 2026-09-10, grill) says a constructor `entries` record and `add()`'s input take declared
+Field keys flat, at the top, the same shape `update()` takes. The first attempt at this typed both
+`EntryStore.add()`'s parameter and `DatasetOptions.entries`'s element type as
+`EntryInput<TProps> & Partial<TProps>`. That compiles fine in isolation, but it is **uninhabitable by
+any named `EntryInput<TProps>[]` value** once `TProps` defaults to an open record: TypeScript refuses
+to assign a declared interface type (lacking an index signature) to a target that structurally
+requires one, regardless of whether every individual property would satisfy it. In practice this
+meant every fixture in the repository that pre-types its own entries array (e.g.
+`export const plannerEntryInputs: readonly EntryInput<PlannerEntryProps>[] = [...]`) failed to satisfy
+the widened parameter type the moment it was passed to `entries:` or `.add()` — dozens of type errors
+across `fixtures/`, `harness/`, and the test suite, none of them a real bug in the fixture.
+
+**The call:** reverted both signatures to plain `EntryInput<TProps>`. The **runtime** behaviour Q15
+asks for still works exactly as specified — `propsFromInput` (`src/data/entry-reader.ts`) reads a flat
+declared key off any object at ingest, regardless of what TypeScript's static type says the caller was
+allowed to pass, because JavaScript objects carry extra own-enumerable keys that a narrower static type
+never sees. What is lost is only the static type-check and editor autocomplete for a flat declared key
+written directly at `add()`/construction — the same call still type-checks fine at `update()`, since
+`EntryEdit`'s flat mapped-type construction doesn't have this problem (it never intersects a *named*
+interface with an open record; every part of `EntryEdit` is itself a mapped type).
+
+**The question for the author:** is the runtime-only fulfillment of Q15 acceptable, or does the author
+want a different type-level mechanism explored (e.g. a dedicated exported type for a constructor
+record, built without going through `EntryInput` directly, so it can carry an index signature of its
+own without breaking `EntryEnvelope`'s derivation from `EntryInput`)? Left as a real gap for a future
+pass, documented here rather than hidden behind a `Partial` that only worked in the ADR's own example.
+
+### J12 — `Field.compute` is genuinely absent from the stored arm, not `compute?: never`
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** standing, load-bearing — read before touching
+the `Field` union again.
+
+types.md's own abbreviated `Field` union sample writes `compute?: never` on the stored arm. Doing that
+literally breaks the one thing that discriminant exists for: TypeScript's `'compute' in field`
+narrowing only excludes a union member that **never declares the key at all** — a member that declares
+the key as optional-and-`never` still counts as "having" it, so `'compute' in field` stops narrowing
+the union at all once both arms declare the key. `hasSomewhereToWrite` (`view/capability.ts`) and the
+registry's own `'compute' in merged` check both depend on this narrowing working, so `compute` is
+omitted outright from the stored arm's members instead. The **other** cross-arm keys
+(`rollUp`/`editable`/`equals`/`compare`/`parseValue`/`inputType`) are still explicitly declared `never`
+on the arm that doesn't otherwise have them, purely for property-access ergonomics (`field.rollUp`
+without narrowing first) — that trick is safe for all of *those* because nothing uses them as an `in`
+discriminant.
+
+### J13 — `writeField`'s stored-arm-only `FieldType` is written directly, not derived from `Field` via `Omit`
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** standing, load-bearing.
+
+`FieldType` used to be `Omit<Field<TValue>, 'key' | 'source' | 'type'>`. `Field` is now a union, and
+`Omit` does not distribute over a union — it collapses to the constituents' *common* keys, which would
+have silently dropped `equals`/`parseValue`/`inputType` from every Field-type bundle (`percent`
+(`field-types.ts`) needs `parseValue` and `inputType`). `FieldType` is now a plain interface, written
+out by hand with every member the two arms carry between them. See `refuted.md`-style note: **do not
+"simplify" this back to `Omit<Field, ...>`** — it was tried, and it silently breaks `percent`.
+
+### J14 — `libraryWriteRule` moved into a new file, `src/data/write-rule.ts`, not into `field-registry.ts`
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** informational.
+
+The ADR's own text cites `field-registry.ts:97` as already holding `rollsUp`, which reads as a hint to
+land the moved resolver there too. Landed it in its own file instead (`src/data/write-rule.ts`),
+because the doc comment on the file names its real job precisely: three questions, three owners, three
+builds (this one, ADR 0013, ADR 0015) each filling exactly one arm. A single new file the "Who owns the
+write resolver" table in `build/README.md` can point at directly seemed clearer than folding a
+three-owner seam into a file whose existing job (`FieldRegistry`, `rollsUp`, `mergeField`) is unrelated
+to write-refusal policy. `view/capability.ts` re-exports the two public type names (`WriteVerdict`,
+`WriteRefusalReason`) unchanged, so nothing on the app-author surface moved.
+
+### J15 — Two real production bugs found only by the full test suite, not by `tsc`/`eslint`
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** fixed in this build; read before touching
+`build-commit-change-set.ts` again.
+
+Both bugs are instances of the exact "two-shallow-spread" trap the ADR names for `mergeProposedEdits`
+and `entryAfterEdit` — but in two spots the build file's own "Do not" list didn't name, because they
+didn't exist as spreads-over-a-nested-bag until `ProposedEdit` gained required `__brand`/`props`/
+`proposedKeys` keys:
+
+1. **`fieldsWrittenBy`** (`build-commit-change-set.ts`) used to fall back to a raw `Object.keys(edit)`
+   walk for edits that didn't state `proposedKeys`. Every `ProposedEdit` states `proposedKeys` now
+   (it's required), so that fallback became live on *every* edit and started reporting `__brand` as a
+   proposed Field name — tripping the I4 dev-mode guard on every commit that went through a body edit
+   and an extender cascade together. Fixed by deleting the fallback: the function is now just
+   `proposedKeysOf(edit)`.
+2. **`mergeBodyAndExtenderEdits`** (same file) did `combined = { ...combined, ...reconciledEnvelope }`
+   after reconciling a shared envelope write. `reconciledEnvelope.props` is always `{}` (that
+   reconciliation only ever touches `start`/`end`/`segments`) and its `proposedKeys` only ever named
+   the reconciled envelope keys — so the blind spread silently wiped `combined`'s real `props` back to
+   `{}` and its `proposedKeys` down to just the envelope triad, dropping every other Field the body or
+   the extender had proposed. The visible symptom was a transaction that neither threw nor fired a
+   `change` event — `foldChangeSet` saw zero rows and returned `undefined`. Fixed by keeping
+   `combined`'s own `props` and unioning both sides' `proposedKeys` explicitly instead of spreading.
+
+Neither bug showed up in `tsc`/`eslint` — both are runtime data loss, not type errors. Only running the
+full `vitest` suite surfaced them. A later build that touches this file's merge logic should re-read
+both fixes before changing either.
+
+### N5 — `test/guards/retired-words.test.ts`'s "host" guard and `src/extensions/keymap.ts`'s OS Meta key make the ADR's own `\bmeta\b` grep gate unable to reach a literal zero
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** resolved for "host"; documented, not resolved,
+for the `meta` grep gate.
+
+The build's own scoped grep gate (`grep -rn --include='*.ts' '\bmeta\b|FieldSource|source: \{' src/
+harness/`) returns 6, not 0, after every real `meta`→`props` rename in this build is done. All 6 are
+`src/extensions/keymap.ts` and its test: the keyboard **Meta key** (Cmd/Windows), an entirely different,
+correct, standard concept (`KeyboardEvent.metaKey`) that has nothing to do with `Entry.meta`/
+`FieldSource`. Renaming it would be wrong — it is not part of the vocabulary this ADR retires. The
+gate's own comment already carves out 22 HTML false positives (`<meta charset>`, `class="meta"`); it
+did not anticipate this `.ts` one. Recorded here rather than silently declared "close enough" — a
+future gate author may want to narrow the pattern (e.g. `\bmeta\b(?!Key| key='|\.has\(')`) or add
+`src/extensions/keymap.ts` to an explicit exclusion, the same way the HTML case is carved out in prose.
+Separately, fixing this build's own leftover `host`→`hosts` comment in `harness/plugins.ts` (caught by
+the *other* guard, `test/guards/retired-words.test.ts`) was a normal wording fix, already done.
+
+### N6 — `harness/docs/{files,classes,diagram}.html` still name `FieldSource` beyond the one named row
+
+**Raised:** 2026-09-11, Build 2 (ADR 0011). **Status:** left alone, out of this build's named scope.
+
+This build's work list names exactly one row to fix — the `FieldSource` row at
+`harness/docs/files.html:130-132` — and calls it harness documentation, not a gate; that row is fixed.
+`files.html` still has two more stale rows (`data/fields/field-access.ts`'s description calling it
+"the one switch over `FieldSource`", and a `data/fields/source-strategy.ts` row describing a file this
+build deleted outright), and `harness/docs/classes.html` and `harness/docs/diagram.html` both still
+list `FieldSource` in `model/`'s exports and in the module-boundary diagram. None of these were named
+in this build's work list, so none are touched here — flagged for whichever build or review pass
+does the "ahead-of-`src/` banners" sweep `build/README.md` schedules for the last build.

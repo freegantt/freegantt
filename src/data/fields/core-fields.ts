@@ -1,5 +1,5 @@
-// data/ — core Fields are ordinary declarations (D-S4-4). They always set `source` explicitly so
-// omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
+// data/ — core Fields are ordinary declarations (D-S4-4). A core key reads and writes the Entry
+// directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
 import type { Duration, Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
@@ -63,7 +63,6 @@ function compareDuration(a: Duration | undefined, b: Duration | undefined): numb
 export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
     key: 'name',
-    source: { from: 'entry', field: 'name' },
     equals: byReference,
     formatValue: stringifyPrimitive,
     // #142: a stored, ordinary value with nothing else that ever rewrites it — nothing refuses an
@@ -75,7 +74,6 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'start',
-    source: { from: 'entry', field: 'start' },
     rollUp: 'min',
     equals: byReference,
     formatValue: formatStart,
@@ -86,7 +84,6 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'end',
-    source: { from: 'entry', field: 'end' },
     rollUp: 'max',
     equals: byReference,
     formatValue: formatEnd,
@@ -96,32 +93,21 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'kind',
-    source: { from: 'entry', field: 'kind' },
     equals: byReference,
     formatValue: stringifyPrimitive,
     column: { header: 'Kind', width: 100 },
   },
   {
     key: 'parentId',
-    source: { from: 'entry', field: 'parentId' },
     equals: byReference,
   },
   {
     key: 'segments',
-    source: { from: 'entry', field: 'segments' },
     equals: segmentsEqual,
   },
   {
-    key: 'meta',
-    source: { from: 'entry', field: 'meta' },
-    equals: byReference,
-  },
-  {
     key: 'duration',
-    source: {
-      from: 'compute',
-      read: (entry, ctx) => ctx.durationOf(entry),
-    },
+    compute: (entry, ctx) => ctx.durationOf(entry),
     compare: compareDuration,
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end', width: 100 },

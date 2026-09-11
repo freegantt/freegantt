@@ -33,10 +33,13 @@ const dataset = new Dataset({
       column: { header: 'Cost', align: 'end' },
     },
   },
-  fields: [{ key: 'cost', type: 'money' }],
+  // `consumed`/`accepted` back the two kind plugins' own commands below — a GanttPlugin installs
+  // after the Dataset's own registration closes, so it cannot declare a Field of its own; this
+  // Dataset must (ADR 0011: an undeclared key is refused at `entries.update()`).
+  fields: [{ key: 'cost', type: 'money' }, { key: 'consumed' }, { key: 'accepted' }],
   entries: sampleEntries.map((entry) => {
     if (entry.id === MILESTONE_ENTRY_ID) return { ...entry, kind: 'milestone' as const };
-    if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, meta: { cost: 1500 } };
+    if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, props: { cost: 1500 } };
     if (entry.id === BUFFER_ENTRY_ID) return { ...entry, kind: 'buffer' };
     if (entry.id === RISK_ENTRY_ID) return { ...entry, kind: 'risk' };
     return entry;
@@ -89,8 +92,8 @@ popupBtn.addEventListener('click', () => {
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` are `GanttOptions.*` — the consumer's own,
 // level 3 of the ladder (D-S5-11) — so setting them here needs no plugin at all. The cell renderer
 // below branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and paints
-// `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.meta`:
-// ADR 0005's whole point is that a consumer reads a Field, not a storage key.
+// `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
+// the whole point of a declared Field is that a consumer reads it by name, not by storage key.
 
 // `fg-bar-diamond`'s own shape is structural, from `entry.kind` alone (D-S4-24), outside a
 // renderer's bounded scope (attr/class/style/text/children, I13) — it stays applied underneath

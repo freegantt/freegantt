@@ -11,17 +11,11 @@
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
 // the caller already holds, not data the library owes a reader (ADR 0016).
 
-import type {
-  Aggregator,
-  Field,
-  FieldKey,
-  FieldSource,
-  FieldType,
-  GridColumnSizing,
-} from '../../model/index.js';
+import type { Aggregator, Field, FieldKey, FieldType, GridColumnSizing } from '../../model/index.js';
 import {
+  ComputedFieldCannotBeWrittenError,
+  ReservedFieldKeyError,
   DuplicateFieldKeyError,
-  DuplicateFieldSourceError,
   IllegalCoreFieldOverrideError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
@@ -29,25 +23,18 @@ import {
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import { SHIPPED_FIELD_TYPES } from './field-types.js';
-import { storedSourceOf } from './normalize-source.js';
 
-export interface ResolvedField extends Field {
-  readonly source: FieldSource;
-}
+/** A Field after its `type` bundle merges in — the shape every reader beyond declaration holds
+ *  (ADR 0011: the union above is a declaration-site aid, so this stays a plain `Field`, not a second
+ *  shape narrowed to one arm). */
+export type ResolvedField = Field;
 
-export interface RollingUpField extends ResolvedField {
-  readonly rollUp: Exclude<string, 'none'>;
-}
+export type RollingUpField = ResolvedField & { rollUp: Exclude<string, 'none'> };
 
 export interface FieldRegistryOptions {
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
-}
-
-function metaSlot(source: FieldSource): string | undefined {
-  if (source.from !== 'meta') return undefined;
-  return source.key ?? undefined;
 }
 
 /** The `width`/`flex` pair of one column declaration, and nothing else it carries. Spreading the
@@ -77,9 +64,9 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
 }
 
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
-  const merged: Field = bundle === undefined ? { ...field } : { ...bundle, ...field };
+  const merged = bundle === undefined ? { ...field } : { ...bundle, ...field };
   const column = mergeColumn(field, bundle);
-  return { ...merged, ...(column !== undefined ? { column } : {}), source: storedSourceOf(field) };
+  return { ...merged, ...(column !== undefined ? { column } : {}) };
 }
 
 /** #142: the only keys a consumer declaration may carry when it names a core Field's key. A core
@@ -114,7 +101,6 @@ export class FieldRegistry {
    *  declaration naming the same core key is a clash, same as two ordinary declarations sharing a
    *  key. */
   readonly #consumerOverriddenCoreKeys = new Set<string>();
-  readonly #metaSlots = new Map<string, string>();
   readonly #aggregators: Record<string, Aggregator>;
   readonly #fieldTypes: Record<string, FieldType>;
 
@@ -141,8 +127,9 @@ export class FieldRegistry {
   }
 
   /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
-   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a taken
-   *  `meta` slot each throw the error they already throw at construction. */
+   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a
+   *  `compute` Field naming `rollUp`/`editable` each throw the error they already throw at
+   *  construction. */
   register(field: Field): void {
     this.#add(field, true);
   }
@@ -164,6 +151,9 @@ export class FieldRegistry {
 
   #add(field: Field, fromConsumer: boolean): void {
     const key = String(field.key);
+    // ADR 0011: `props` is the one reserved key — it names the whole bag a `props`-addressed Field
+    // lives inside, so a Field cannot claim that name for itself.
+    if (key === 'props') throw new ReservedFieldKeyError(key);
     if (fromConsumer && isCoreFieldKey(field.key)) {
       this.#mergeCoreFieldOverride(field, key);
       return;
@@ -173,14 +163,14 @@ export class FieldRegistry {
       throw new UnknownFieldTypeError(field.type);
     }
     const merged = mergeField(field, field.type === undefined ? undefined : this.#fieldTypes[field.type]);
+    // ADR 0011: a `compute` Field has no stored home, so `rollUp`/`editable` beside it is refused here,
+    // at registration — before `editable`, or the surviving message tells a consumer to declare an
+    // `editable` this door already rejects.
+    if ('compute' in merged && (merged.rollUp !== undefined || merged.editable !== undefined)) {
+      throw new ComputedFieldCannotBeWrittenError(key, 'fields');
+    }
     if (merged.rollUp !== undefined && this.#aggregators[merged.rollUp] === undefined) {
       throw new UnknownAggregatorError(merged.rollUp);
-    }
-    const slot = metaSlot(merged.source);
-    if (slot !== undefined) {
-      const owner = this.#metaSlots.get(slot);
-      if (owner !== undefined) throw new DuplicateFieldSourceError(slot);
-      this.#metaSlots.set(slot, merged.key);
     }
     this.#byKey.set(key, merged);
     this.#resolved.push(merged);
@@ -198,7 +188,7 @@ export class FieldRegistry {
     }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
-    const merged: ResolvedField = {
+    const merged = {
       ...core,
       ...(field.editable !== undefined ? { editable: field.editable } : {}),
     };

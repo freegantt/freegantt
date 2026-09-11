@@ -1,4 +1,4 @@
-// layout/ — plain-data column types. No registry, no Dataset, no FieldSource (D-S4-13).
+// layout/ — plain-data column types. No registry, no Dataset, no Field value access (D-S4-13).
 
 import type { ColumnAlign, ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
 

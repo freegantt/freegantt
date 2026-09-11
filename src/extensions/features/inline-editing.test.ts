@@ -79,14 +79,14 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     parentId: 'root',
     start: '2026-01-01',
     end: '2026-01-05',
-    meta: { cost: 100, budget: 500, quantity: 3 },
+    props: { cost: 100, budget: 500, quantity: 3 },
   },
   {
     id: 'e2',
     name: 'Task Two',
     start: '2026-01-01T14:00:00Z', // not local midnight (issue #137 F11)
     end: '2026-01-02T14:00:00Z',
-    meta: { cost: 200, budget: 700 },
+    props: { cost: 200, budget: 700 },
   },
   {
     // Stores `segments`, so `start`/`end` are the envelope those segments span (#212).
@@ -98,7 +98,7 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
       { start: '2026-01-01', end: '2026-01-04' },
       { start: '2026-01-06', end: '2026-01-10' },
     ],
-    meta: { cost: 300, budget: 900 },
+    props: { cost: 300, budget: 900 },
   },
 ];
 
@@ -336,7 +336,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const el = input(container);
     el.value = '$650';
     enter(el);
-    expect(dataset.entries.get('e1')!.meta?.budget).toBe(650);
+    expect(dataset.entries.get('e1')!.props?.budget).toBe(650);
     gantt.destroy();
     container.remove();
   });
@@ -348,7 +348,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     el.value = 'not a number';
     enter(el);
     expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
-    expect(dataset.entries.get('e1')!.meta?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
     gantt.destroy();
     container.remove();
   });
@@ -1028,7 +1028,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // Exactly one live control — the budget editor, still holding the value it refused.
     expect(container.querySelectorAll('.fg-cell-editor-control')).toHaveLength(1);
     expect(input(container).value).toBe('not a number');
-    expect(dataset.entries.get('e1')!.meta?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
 
     gantt.destroy();
     container.remove();

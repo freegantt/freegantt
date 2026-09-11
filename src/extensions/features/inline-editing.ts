@@ -94,8 +94,8 @@ function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
 }
 
 /** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
- *  Field with no `type` at all reads and writes it too — a plain meta Field like the harness's
- *  `team`. Any other named `type` refuses to open rather than guess a parse. */
+ *  Field with no `type` at all reads and writes it too — a plain `props`-addressed Field like the
+ *  harness's `team`. Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
   return field.parseValue !== undefined || field.type === undefined || field.type === 'text';
 }

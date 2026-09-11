@@ -3,19 +3,20 @@
 // `data/transaction.ts` (construction path) name it (`autogroup-is-removable`); delete this file and
 // autoGroup never runs — the consumer must set Kind themselves (D-S4-18).
 
-import type { DatasetHierarchy, Entry, EntryId, StoredEdit, StoredEdits } from '../model/index.js';
+import type { DatasetHierarchy, Entry, EntryId, ProposedEdit, ProposedEdits } from '../model/index.js';
 import { buildEffectiveEntries, childCountByParent } from './entry-tree.js';
+import { emptyProposedEdit, withProposedKeys } from './fields/field-access.js';
 
-const EMPTY_EDITS: StoredEdits = Object.freeze(new Map());
+const EMPTY_EDITS: ProposedEdits = Object.freeze(new Map());
 
 /** Adds, removes and overlays the commit path has not written yet. Construction omits this. */
 export interface PendingHierarchy {
   readonly added: readonly Entry[];
   readonly removed: readonly Entry[];
-  readonly edits: StoredEdits;
+  readonly edits: ProposedEdits;
 }
 
-function kindIsProposed(edits: StoredEdits, id: EntryId): boolean {
+function kindIsProposed(edits: ProposedEdits, id: EntryId): boolean {
   const edit = edits.get(id);
   return edit !== undefined && 'kind' in edit;
 }
@@ -29,7 +30,7 @@ export function promoteNewParents(
   entries: ReadonlyMap<EntryId, Entry>,
   proposed: PendingHierarchy | undefined,
   hierarchy: DatasetHierarchy,
-): StoredEdits {
+): ProposedEdits {
   if (!hierarchy.autoGroup) return EMPTY_EDITS;
 
   const effective =
@@ -40,7 +41,7 @@ export function promoteNewParents(
   const committedCounts =
     proposed === undefined ? childCountByParent(effective) : childCountByParent(entries);
 
-  const result = new Map<EntryId, StoredEdit>();
+  const result = new Map<EntryId, ProposedEdit>();
   const seen = new Set<EntryId>();
   for (const entry of effective.values()) {
     const parentId = entry.parentId;
@@ -52,7 +53,7 @@ export function promoteNewParents(
     if (proposed !== undefined && (committedCounts.get(parentId) ?? 0) !== 0) continue;
     if (proposed !== undefined && kindIsProposed(proposed.edits, parentId)) continue;
 
-    result.set(parentId, { kind: 'group' });
+    result.set(parentId, withProposedKeys({ ...emptyProposedEdit(), kind: 'group' }, ['kind']));
   }
   return result.size === 0 ? EMPTY_EDITS : result;
 }

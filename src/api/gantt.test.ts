@@ -150,12 +150,12 @@ describe('Gantt.dataset (#226)', () => {
   });
 
   it("keeps the consumer's declared Field types, so a helper needs no cast", () => {
-    // The point of the getter: `gantt.dataset` is the caller's own `Dataset<TMeta, TFields>`, not a
+    // The point of the getter: `gantt.dataset` is the caller's own `Dataset<TProps>`, not a
     // widened one. A widened return would push every consumer helper back to the cast the getter
     // exists to retire. This reads `cost` as a `number` with no annotation of its own.
     const container = document.createElement('div');
-    const dataset = new Dataset<{ cost?: number }, { cost: number }>({
-      entries: [{ id: 'a', name: 'A', start: '2026-01-01', end: '2026-01-03', meta: { cost: 42 } }],
+    const dataset = new Dataset<{ cost?: number }>({
+      entries: [{ id: 'a', name: 'A', start: '2026-01-01', end: '2026-01-03', props: { cost: 42 } }],
       timeZone: 'UTC',
       fields: [{ key: 'cost' }],
     });
@@ -1676,7 +1676,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
     });
     const gantt = new Gantt({
       container,
@@ -1736,7 +1736,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, meta: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
     });
     const seen: { value: string; fieldValue: unknown }[] = [];
     const gantt = new Gantt({
@@ -1763,7 +1763,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         money: { formatValue: (value) => (typeof value === 'number' ? `$${value}` : '') },
       },
       fields: [{ key: 'cost', type: 'money', column: { header: 'Cost' } }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, meta: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
     });
     const gantt = new Gantt({
       container,
@@ -1795,7 +1795,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, meta: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
     });
     const gantt = new Gantt({
       container,
@@ -2428,7 +2428,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2472,7 +2472,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2510,7 +2510,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2566,7 +2566,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -2614,7 +2614,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -2679,7 +2679,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     // `GridColumnInput` is `string | GridColumn`, so both plugins hand `registerGridColumn` the
     // very same value. A disposer that asks "is the column on screen mine?" by comparing that
@@ -2749,7 +2749,7 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -4869,7 +4869,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
     let retract = (): void => {};
     const gantt = new Gantt({
@@ -4928,7 +4928,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, meta: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
     });
 
   const riskColumnPlugin = {

@@ -16,8 +16,8 @@ import type {
   SegmentId,
   UpdatedRow,
 } from '../model/index.js';
-import type { StoredEdit } from './edit-extension.js';
-import { proposedKeysOf, entryAfterEdit, statesProposedKeys } from './fields/field-access.js';
+import type { ProposedEdit } from './edit-extension.js';
+import { proposedKeysOf, entryAfterEdit } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -40,17 +40,18 @@ function pushRow(
  * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per D-S2-7's
  * equality table — a field set back to its original value is not recorded. Shared by both producers of
  * an edit in one transaction: the body's own `proposed` edits, and the extension hook's own
- * `StoredEdits`. `edit` is `StoredEdit` — every field already carries a storage-shaped value. An `id`
- * absent from
- * `entries` yields no rows — nothing to diff against.
+ * `ProposedEdits`. `edit` is a `ProposedEdit` — `proposedKeys` is required (ADR 0011), so it always
+ * states which Fields it writes. An `id` absent from `entries` yields no rows — nothing to diff
+ * against.
  *
- * A declared-key write (`{ cost: 500 }`) emits one row keyed `cost`, never a `meta` row. A whole-`meta`
- * write emits the `meta` row first, then one row per changed declared meta Field (D-S4-2).
+ * One row per Field key, walked off the registry (ADR 0011) — never a path into `props`. A declared
+ * key (`{ cost: 500 }`) emits one row keyed `cost`; there is no whole-bag row to emit alongside it,
+ * because `props` is not itself a Field.
  */
 export function diffEdit(
   entries: ReadonlyMap<EntryId, Entry>,
   id: EntryId,
-  edit: StoredEdit,
+  edit: ProposedEdit,
   registry: FieldRegistry,
   ctx: FieldContext,
 ): readonly FieldUpdated[] {
@@ -59,9 +60,6 @@ export function diffEdit(
 
   const next = entryAfterEdit(current, edit);
   const authored = proposedKeysOf(edit);
-  // An edit that states nothing is read by the keys it holds; an edit that states the empty set
-  // writes no Field. Reading absence off `authored.size` collapsed the two (#238).
-  const states = statesProposedKeys(edit);
   const rows: FieldUpdated[] = [];
   const seen = new Set<string>();
 
@@ -69,28 +67,9 @@ export function diffEdit(
     pushRow(rows, seen, id, field, from, to, registry);
   };
 
-  const wroteMeta = authored.has('meta') || (!states && 'meta' in edit);
-  if (wroteMeta) emit('meta', current.meta, next.meta);
-
-  if (states) {
-    for (const field of registry.all) {
-      if (field.key === 'meta') continue;
-      if (!authored.has(String(field.key)) && !authored.has('meta')) continue;
-      emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
-    }
-    return rows;
-  }
-
-  for (const field of Object.keys(edit) as (keyof StoredEdit)[]) {
-    if (field === 'meta' || field === 'proposedKeys') continue;
-    const declared = registry.get(field);
-    if (declared) {
-      emit(field, ctx.read(current, field), ctx.read(next, field));
-      continue;
-    }
-    // `field` is `keyof StoredEdit` narrowed to "not a declared Field" here — genuinely open, so
-    // this cast is load-bearing, the same as entry-store.ts's `applyFieldRow` cast.
-    emit(field, (current as unknown as Record<string, unknown>)[field], edit[field]);
+  for (const field of registry.all) {
+    if (!authored.has(String(field.key))) continue;
+    emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
   }
   return rows;
 }

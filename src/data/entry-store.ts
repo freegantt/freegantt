@@ -31,7 +31,7 @@ import {
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import type { StoredEdit, StoredEdits } from './edit-extension.js';
+import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { authoredEnvelopeKeysOf, toEditReading, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
@@ -39,7 +39,7 @@ import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
   createFieldContext,
-  mergeStoredEdits,
+  mergeProposedEdits,
   entryAfterEdit,
   writeOntoEntry,
 } from './fields/field-access.js';
@@ -61,7 +61,7 @@ function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry
 interface WriteSet {
   added: Map<EntryId, Entry>;
   removed: Set<EntryId>;
-  edits: Map<EntryId, StoredEdit>;
+  edits: Map<EntryId, ProposedEdit>;
   /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
    *  `reconcileEnvelope` paired or back-derived the rest (#232) — `pendingAuthoredEnvelopeKeys()`
    *  hands this to `buildCommitChangeSet`, which needs it to tell the body's own envelope write from
@@ -343,7 +343,7 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = toEntry(input, this.#context, 'entries.add');
+      const entry = toEntry(input, this.#context, this.#registry, 'entries.add');
       this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
@@ -414,7 +414,7 @@ export class EntryStore implements EntryStoreContract {
    *  no longer has to take the row with it). The Entry, its id, and its descendants all stay untouched
    *  — only `entries.remove(id)` deletes a row. Otherwise the remaining Segments go through `update`,
    *  the normal edit path, which recomputes the envelope around them itself (#212, finding 4:
-   *  `toStoredEdit` is the one owner) — this call names no `start` or `end` of its own, so there is
+   *  `toProposedEdit` is the one owner) — this call names no `start` or `end` of its own, so there is
    *  nothing here that could disagree with them. */
   #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
     const entry = this.get(id)!;
@@ -505,13 +505,13 @@ export class EntryStore implements EntryStoreContract {
 
   /** `authoredEnvelopeKeys` names which of `start`/`end`/`segments` the caller itself wrote into
    *  `edit`, before any envelope reconciliation ran (#232) — `update()` below passes the fact
-   *  `toEditReading` already computed. A caller that stages a raw `StoredEdit` directly (a
+   *  `toEditReading` already computed. A caller that stages a raw `ProposedEdit` directly (a
    *  same-transaction reparent, a test fixture) has done no such reconciliation, so the default —
    *  the triad-intersection of `edit`'s own keys — is exactly that edit's authored keys too. */
   stageUpdate(
     _token: TxToken,
     id: EntryId,
-    edit: StoredEdit,
+    edit: ProposedEdit,
     authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
   ): void {
     const writeSet = this.#openWriteSet();
@@ -523,7 +523,7 @@ export class EntryStore implements EntryStoreContract {
       if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, merged.segments);
       return;
     }
-    writeSet.edits.set(id, mergeStoredEdits(writeSet.edits.get(id), edit));
+    writeSet.edits.set(id, mergeProposedEdits(writeSet.edits.get(id), edit));
     if (authoredEnvelopeKeys.size > 0) {
       const existing = writeSet.authoredEnvelopeKeys.get(id);
       writeSet.authoredEnvelopeKeys.set(
@@ -558,7 +558,7 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
-  pendingEdits(): StoredEdits {
+  pendingEdits(): ProposedEdits {
     return this.#writeSet?.edits ?? new Map();
   }
 

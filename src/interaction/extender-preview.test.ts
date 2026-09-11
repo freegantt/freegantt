@@ -86,9 +86,15 @@ function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShe
     dataset: state,
     wiring: {
       entryGestures: attachEntryGestures,
+      // `edits` is storage-shaped (`ProposedEdits`) and `update()` takes the loose `EntryEdit` — the
+      // same unwrap `api/gantt.ts`'s own `commitEntryEdits` does now that `ProposedEdit` is branded
+      // (ADR 0011, decision 22) and no longer assignable to `EntryEdit`.
       commitEntryEdits: (edits) => {
         state.transaction(() => {
-          for (const [id, edit] of edits) state.entries.update(id, edit);
+          for (const [id, edit] of edits) {
+            const { __brand: _brand, props, proposedKeys: _proposedKeys, ...envelope } = edit;
+            state.entries.update(id, { ...envelope, ...props });
+          }
         });
         return true;
       },

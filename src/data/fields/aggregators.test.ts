@@ -13,7 +13,7 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
     start: 0 as Instant,
     end: duration as Instant,
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: duration as Instant }],
-    meta: values,
+    props: values,
   };
 }
 
@@ -34,6 +34,7 @@ const parent: Entry = {
   start: 0 as Instant,
   end: 0 as Instant,
   segments: [{ id: segmentId('p-seg'), start: 0 as Instant, end: 0 as Instant }],
+  props: {},
 };
 
 describe('shipped Aggregators (D-S4-3)', () => {

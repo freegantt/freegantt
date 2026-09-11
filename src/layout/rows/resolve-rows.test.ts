@@ -22,10 +22,11 @@ function entry(
     end,
     kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: {},
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
   if (opts?.team !== undefined || opts?.cost !== undefined) {
-    row.meta = {
+    row.props = {
       ...(opts.team !== undefined ? { team: opts.team } : {}),
       ...(opts.cost !== undefined ? { cost: opts.cost } : {}),
     };
@@ -34,7 +35,7 @@ function entry(
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: Entry) => (row.meta as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
   return [
     {
       key: 'name',
@@ -69,7 +70,7 @@ const treeEntries = [
   entry('q', { team: 'B', start: 5 }),
 ];
 
-const teamA = (row: Entry) => (row.meta as { team?: string } | undefined)?.team === 'A';
+const teamA = (row: Entry) => (row.props as { team?: string } | undefined)?.team === 'A';
 
 describe('resolveRows (D2, S4.9)', () => {
   it('matchOnly plus collapse does not paint a twisty that hides nothing', () => {
@@ -172,7 +173,7 @@ describe('resolveRows source × policy × sort × collapsed', () => {
       name: 'group sort collapsed',
       rows: {
         source: 'group',
-        groupBy: (row) => String((row.meta as { team?: string }).team),
+        groupBy: (row) => String((row.props as { team?: string }).team),
         sort: { field: 'start' },
       },
       collapsed: [rowId('group:A')],
@@ -182,7 +183,7 @@ describe('resolveRows source × policy × sort × collapsed', () => {
       name: 'group sort expanded',
       rows: {
         source: 'group',
-        groupBy: (row) => String((row.meta as { team?: string }).team),
+        groupBy: (row) => String((row.props as { team?: string }).team),
         sort: { field: 'start' },
       },
       ids: ['group:A', 'p', 'c2', 'c1', 'group:B', 'q'],

@@ -21,7 +21,7 @@ function toInstant(ms: number): Instant {
 function entryFor(id: EntryId): Entry {
   const start = toInstant(0);
   const end = toInstant(1);
-  return { id, kind: 'span', name: id, start, end, segments: [{ id: segmentOf(id), start, end }] };
+  return { id, kind: 'span', name: id, start, end, segments: [{ id: segmentOf(id), start, end }], props: {} };
 }
 
 function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardEvent {

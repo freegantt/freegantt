@@ -19,7 +19,7 @@ import type {
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
 import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
 import { buildRefusalReport, raiseErrorOn } from './error-reporting.js';
-import type { EditRequest, StoredEdits } from './edit-extension.js';
+import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
@@ -43,7 +43,7 @@ export interface TransactionalEntryStore {
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
-  pendingEdits(): StoredEdits;
+  pendingEdits(): ProposedEdits;
   /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
    *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */
   pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
@@ -71,9 +71,9 @@ export interface TransactionData {
    *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
    *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5).
    *
-   *  Reports each Entry's authored envelope keys alongside the reconciled `StoredEdits`, because the
+   *  Reports each Entry's authored envelope keys alongside the reconciled `ProposedEdits`, because the
    *  commit path needs to tell the hook's own `start`/`end`/`segments` write from one
-   *  `reconcileEnvelope` derived on the hook's behalf, and `StoredEdit.proposedKeys` conflates the two
+   *  `reconcileEnvelope` derived on the hook's behalf, and `ProposedEdit.proposedKeys` conflates the two
    *  (#232). `DatasetState.extraEditsReadingFor` is this method's one implementation; the friend function
    *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
    *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */

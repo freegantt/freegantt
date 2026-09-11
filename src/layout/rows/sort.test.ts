@@ -19,9 +19,9 @@ function entry(id: string, opts?: { parentId?: string; start?: number; end?: num
     end,
     kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: opts?.cost !== undefined ? { cost: opts.cost } : {},
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
-  if (opts?.cost !== undefined) row.meta = { cost: opts.cost };
   return row;
 }
 
@@ -30,7 +30,7 @@ function durationOf(row: Entry): Duration {
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: Entry) => (row.meta as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
   return [
     {
       key: 'name',
@@ -121,7 +121,7 @@ describe('applySort (S4.9)', () => {
   });
 
   it('a row with neither date sorts last on asc and on desc, not direction * order (ADR 0012 Gate)', () => {
-    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [] };
+    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [], props: {} };
     const entries = [entry('a', { start: 1 }), dateless, entry('b', { start: 2 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
 
