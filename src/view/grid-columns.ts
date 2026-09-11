@@ -4,6 +4,7 @@ import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput 
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
+import { sizingOfColumn } from '../data/fields/column-sizing.js';
 import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 import { pickDefined } from '../layout/index.js';
@@ -56,14 +57,10 @@ function columnFrom(
   };
   // #139: a Grid column is fixed-width by default. `flex` is the one opt-out — a column that names
   // one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
-  // `width` and `flex` answer one question between them, so they merge as a pair rather than key by
-  // key: a column that sizes itself at all replaces the Field's sizing whole. Otherwise a Gantt
-  // asking for `flex: 1` would silently lose to a `width` the Field happened to declare — `width`
-  // and `flex` are each exclusive on their own object (#249), but two individually-legal objects
-  // still recombine into an illegal pair on a key-by-key merge.
-  const sizedHere = input.width !== undefined || input.flex !== undefined;
-  const flex = sizedHere ? input.flex : defaults.flex;
-  const authoredWidth = sizedHere ? input.width : defaults.width;
+  // `sizingOfColumn` picks the width/flex pair off whichever of `input`/`defaults` sizes itself
+  // (#249): a Gantt asking for `flex: 1` never silently loses to a `width` the Field happened to
+  // declare.
+  const { width: authoredWidth, flex } = sizingOfColumn(input, defaults);
   const candidates = {
     width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
     flex,

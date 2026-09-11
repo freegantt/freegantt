@@ -11,7 +11,7 @@
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
 // the caller already holds, not data the library owes a reader (ADR 0016).
 
-import type { Aggregator, Field, FieldKey, FieldType, GridColumnSizing } from '../../model/index.js';
+import type { Aggregator, Field, FieldKey, FieldType } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
   ReservedFieldKeyError,
@@ -23,6 +23,7 @@ import {
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import { SHIPPED_FIELD_TYPES } from './field-types.js';
+import { sizingOfColumn } from './column-sizing.js';
 
 /** A Field after its `type` bundle merges in — the shape every reader beyond declaration holds
  *  (ADR 0011: the union above is a declaration-site aid, so this stays a plain `Field`, not a second
@@ -37,21 +38,13 @@ export interface FieldRegistryOptions {
   aggregators?: Readonly<Record<string, Aggregator>>;
 }
 
-/** The `width`/`flex` pair of one column declaration, and nothing else it carries. Spreading the
- *  whole declaration in its place puts every other key back — which is the bug `mergeColumn` had. */
-function sizingPairOf(column: NonNullable<Field['column']>): GridColumnSizing {
-  if (column.width !== undefined) return { width: column.width };
-  if (column.flex !== undefined) return { flex: column.flex };
-  return {};
-}
-
 /** #142/percent-shipped: `field.column` and `bundle.column` merge one level deep, not whole-object.
  *  A shallow `{ ...bundle, ...field }` lets a Field naming only `column: { header }` drop the type's
  *  whole `column` bundle — its alignment included — the moment it wants to keep its own header.
- *  `width`/`flex` still merge as the one pair they are (#249, mirrored from `view/grid-columns.ts`):
- *  a Field that sizes itself at all replaces the type's sizing whole, never key by key. Take the
- *  pair off whichever declaration owns the sizing — never that declaration itself, or the loser's
- *  header and alignment ride in behind it. */
+ *  `width`/`flex` still merge as the one pair they are (#249): a Field that sizes itself at all
+ *  replaces the type's sizing whole, never key by key. `sizingOfColumn` picks that pair; take it off
+ *  whichever declaration owns the sizing — never that declaration itself, or the loser's header and
+ *  alignment ride in behind it. */
 function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column'] {
   const from = bundle?.column;
   const own = field.column;
@@ -59,8 +52,7 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
   if (own === undefined) return from;
   const { width: _fromWidth, flex: _fromFlex, ...fromRest } = from;
   const { width: _ownWidth, flex: _ownFlex, ...ownRest } = own;
-  const sizesItself = own.width !== undefined || own.flex !== undefined;
-  return { ...fromRest, ...ownRest, ...sizingPairOf(sizesItself ? own : from) };
+  return { ...fromRest, ...ownRest, ...sizingOfColumn(own, from) };
 }
 
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
