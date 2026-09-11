@@ -40,7 +40,6 @@ const entryEnd = 1 as Instant;
 const entry: Entry = {
   id: entryId('t1'),
   name: 'Alpha',
-  kind: 'span',
   start: entryStart,
   end: entryEnd,
   segments: [{ id: segmentId('t1-1'), start: entryStart, end: entryEnd }],
@@ -148,7 +147,7 @@ describe('resolveFieldCompares (D-S4-13)', () => {
 
   it('the duration cell on a dateless row is blank, not "NaN d" (ADR 0012 Gate)', () => {
     const columns = resolveColumns(['duration'], lookupFrom(CORE_FIELDS), { timeZone: zone, locale });
-    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [], props: {} };
+    const dateless: Entry = { id: entryId('none'), name: 'none', segments: [], props: {} };
     expect(columns[0]?.format(dateless)).toBe('');
   });
 

@@ -330,11 +330,12 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   });
 
   it('a whole-Entry bar names every Segment of its Entry, because it draws no single one', () => {
-    // A milestone producer emits one Item over the whole Entry, so the bar carries no
-    // `data-segment-id`. The node still stands for the Entry, and the Entry is its Segments.
-    const milestone: Entry = { ...twoSegments, kind: 'milestone' };
-    const gantt = paintOneGantt([milestone]);
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
+    // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
+    // and the Entry is its Segments.
+    const child: Entry = { ...entries[1]!, parentId: twoSegments.id };
+    const gantt = paintOneGantt([twoSegments, child]);
+    const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
 
     expect(bar.dataset['segmentId']).toBeUndefined();
     expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a'), segmentId('seg-b')]);
