@@ -152,11 +152,19 @@ describe('rollUpFields (S4.2)', () => {
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
   it('reparenting recomputes both the old and new parent', () => {
-    const state = treeDataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a', props: { cost: 10 } }]);
+    // `a` keeps a second child (`d`) so the reparent below does not also demote it (ADR 0013) —
+    // this test's claim is the recompute on both sides, not the demotion clear hierarchy.test.ts
+    // already covers.
+    const state = treeDataset([
+      { id: 'a' },
+      { id: 'b' },
+      { id: 'c', parentId: 'a', props: { cost: 10 } },
+      { id: 'd', parentId: 'a', props: { cost: 5 } },
+    ]);
 
     state.entries.update('c', { parentId: 'b', cost: 20 });
 
-    expect(costOf(state, 'a')).toBe(10);
+    expect(costOf(state, 'a')).toBe(5);
     expect(costOf(state, 'b')).toBe(20);
   });
 

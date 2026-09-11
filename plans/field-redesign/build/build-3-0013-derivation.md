@@ -40,7 +40,7 @@
 - [x] Refuse a mixed patch **whole, before any write**. `{ start, cost }` with a derived `cost` writes nothing. (in `EntryStore.update()`; not yet covered by a test)
 - [ ] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report. **PARTIAL: construction raises the aggregate warning; `add()` alone is not specially handled — see handoff.**
 - [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both. **Believed achieved as a side effect of the rollup fix below, but NOT test-verified.**
-- [ ] Demote on the last child leaving: keep the name, clear the dates, draw no bar. **Not touched this session; believed already correct from ADR 0012/Build 1, not re-verified against the rollup changes.**
+- [x] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
 - [x] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is **overruled**.
 - [ ] Write decision 5's warning. **PARTIAL: construction path only, see above.**
 - [x] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
