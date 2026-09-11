@@ -37,48 +37,6 @@ counter. Segment-id persistence is the consumer's job now, through `entries.all`
 **The question:** does the author want a comment on the closed issue that says so, or does the ADR
 record it well enough on its own?
 
-### Q2 — Do Build 0's six commit trailers get rewritten?
-
-**Raised:** 2026-09-10. **Status:** open, waiting for the author.
-
-Build 0's agent wrote `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` on all six commits.
-The configured trailer is `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
-
-The branch is pushed now, so a rewrite costs a force-push. It was free when this was raised.
-Every later build carries the correct trailer.
-
----
-
-## Answered
-
-### Q3 — Does the `sonnet[1m]` frontmatter suffix take effect? — **ANSWERED: no**
-
-**Raised and answered:** 2026-09-10, by measurement.
-
-Build 0's agent ran on plain `sonnet` and auto-compacted twice near 166k tokens. Build 1 ran with
-`model: sonnet[1m]` in `.agents/agents/implementer.md` and auto-compacted at **164,666** tokens — the
-same ceiling. **The suffix changed nothing.** A build agent gets roughly 166k of usable context and
-then compacts, whatever the frontmatter says.
-
-The model documentation says Sonnet 5 always runs at 1M and has no `[1m]` suffix to select. The
-transcript disagrees. Which half is wrong — a real 200k window, or a harness that compacts subagents
-at a fixed point regardless — is **not worth chasing**, and the author closed the question.
-
-**What replaces the handoff ladder.** The 200k / 250k / 300k rungs can never fire below a 166k
-ceiling, so they were always inert. Compaction is now simply allowed: an agent that compacts keeps
-working. The real control is scope.
-
-**One subagent per build file.** Author's ruling, 2026-09-10. The unit is the build — one file, one
-ADR — not a checkbox inside it. An agent works its whole build file and stops; it never picks up the
-next one, and a build is never split across two agents. Six builds, so six agents: Build 0 is done,
-Build 1 is running, and **four remain** — 0011, 0013, 0014, 0015.
-
-That bounds context without a ladder, because no agent carries a second build's history. The context
-watcher is retired with the ladder it served.
-
-The `sonnet[1m]` suffix stays in the frontmatter. It is proven inert, not harmful, and removing it
-would only be cosmetic.
-
 ### Q4 — May the builds edit `plans/**` without asking each time? — **ANSWERED: yes**
 
 **Raised and answered:** 2026-09-10, by the author.
@@ -94,6 +52,149 @@ decision still changes only by an explicit human decision. The `package.json` ar
 guard-loosening arm were never relaxed — both still exit 2.
 
 **The restore is owed.** It is tracked in [`CLOSE-OUT.md`](CLOSE-OUT.md).
+
+---
+
+## Judgement calls
+
+### J1 — `reconcileEnvelope`'s `mintSegmentId` is optional; the drag preview passes none
+
+**Raised:** 2026-09-10, Build 1 (ADR 0012). **Status:** standing, open to reversal.
+
+`reconcileEnvelope` mints a Segment when an edit leaves an Entry with both dates for the first time.
+The commit path (`toEditReading`, and `reconcileExtenderEdits` via a new `CommitChangeSetInput.
+mintSegmentId`) always has a real counter to call. `view/gesture-pipeline.ts`'s preview path
+(`reconcileExtenderEditsForPreview`) does not: `view/` has no door to the Dataset's id counter, and
+opening one felt premature — I found no scenario in this build's own reach that needs it. Turning a
+dateless Entry spanning mid-drag needs an `EditExtender` cascade to do it, and no such cascade exists
+before S7's scheduling plugin.
+
+**The call:** `reconcileEnvelope` takes `mintSegmentId` as optional. When it is missing and a Segment
+would need minting, the function leaves the dates set with no Segment for that one preview frame —
+never committed, so never a real inconsistency, only a frame that draws no ghost bar for an edge case
+that cannot occur yet. A reviewer who later wires a cascade through view/ during S7 should re-open
+this rather than assume the gap is permanent.
+
+### J2 — `wholeEntryItem`'s signature is untouched; the span guard sits once in `produceItemsForRow`
+
+**Raised:** 2026-09-10, Build 1 (ADR 0012). **Status:** standing, open to reversal.
+
+An Entry that does not span draws no bar (ADR 0012). `wholeEntryItem` is public (`harness/plugins/
+risk-kind.ts`, `buffer-kind.ts` both call it as `(entry) => [wholeEntryItem(entry)]`) and still takes
+a plain `Entry`, unnarrowed. Rather than widen its signature or touch the two harness plugins — either
+of which reaches into Build 4's plugin-surface redesign — `produceItemsForRow` now skips the producer
+call entirely for a non-spanning Entry, before any producer (shipped or a plugin's own) ever runs.
+`wholeEntryItem` and the two internal producers that still read `entry.start`/`entry.end` carry a
+documented load-bearing cast, trusting that contract rather than the type. Build 4 owns whether the
+public shape should change; this build does not preempt it.
+
+### J3 — `rollup.ts` needs no change; the dateless-parent bar gap stays with Build 3
+
+**Raised:** 2026-09-10, Build 1 (ADR 0012). **Status:** standing, informational.
+
+`Entry.start`/`Entry.end`'s `rollUp: 'min'`/`'max'` Aggregator config already skips a non-spanning
+child through `RollUpContext.numericValues`'s existing `isFiniteNumber` filter, so no `rollup.ts`
+change was needed to keep a rolled-up parent's envelope correct with a dateless child in the mix. A
+parent whose *every* child is dateless still gets no Segment and draws no bar even after Rollup
+writes its `start`/`end` — ADR 0012 assigns that restoration to ADR 0013's Rollup pass explicitly
+("this biconditional is what that pass must restore"), so this build leaves it alone.
+
+### J4 — `previewOffsets`' envelope-only branch gets a defensive guard, not a cast
+
+**Raised:** 2026-09-10, Build 1 (ADR 0012). **Status:** standing, open to reversal.
+
+`layout/gesture-draft.ts`'s `pushOffset` reads `original.start`/`original.end` off a committed Entry
+in its envelope-only branch (the `edit.segments === undefined` arm). Once `Entry.start`/`.end` are
+optional this needs to type-check. A gesture that reaches this function already requires a grip to
+grab, which ADR 0012 says a non-spanning Entry does not have — so in practice `original` should
+always span here. Rather than assert that with a cast, this build added a plain early return
+(`if (original.start === undefined || original.end === undefined) return;`), the same shape the
+function already uses for `edit.start`/`edit.end`. Cheaper to verify, and it fails safe (paints no
+offset) if the capability gate is ever wrong, instead of a runtime crash a cast would risk.
+
+### J5 — `removeSegments` on the last Segment clears both dates instead of removing the Entry
+
+**Raised:** 2026-09-11, Build 1 (ADR 0012). **Status:** standing, open to reversal.
+
+`#212`/ADR 0010 had `removeSegments` delete an Entry once its last Segment was gone, reparenting its
+children up to its own parent. ADR 0012 makes a dateless Entry legal, so that cascade is no longer
+required to keep the store consistent. `entry-store.ts`'s `#removeSegmentsFrom` now calls
+`this.update(id, { start: undefined, end: undefined })` in the empty-remainder case instead of
+`stageRemove` + `#reparentChildrenOf` (the latter deleted outright, along with the `TxToken` parameter
+it existed to carry). The Entry, its id, and its descendants all survive; only `entries.remove(id)`
+deletes a row now. `freegantt.deleteSelection` (`view/core-commands.ts`) was rewritten to match: a
+`'bar'` target still calls `removeSegments`, but a `'row'`/`'cell'`/`'header'`/`'splitter'` target now
+calls `entries.remove(id)` directly, since the old "last Segment gone empties the row" side effect it
+relied on is gone. `entry-store.mutation.test.ts` and `api/gantt.test.ts` were rewritten to match; the
+old reparenting sub-tests were deleted, not adapted, since that behaviour no longer exists.
+
+### J6 — The build's stub-list table is stale for two of its four rows; not applied
+
+**Raised:** 2026-09-11, Build 1 (ADR 0012). **Status:** standing, informational — flag for the author.
+
+`build-1-0012-optional-dates.md`'s stub-list table instructs dropping the `durationOf` key from the
+`FieldContext` test stubs at `src/data/fields/field-types.test.ts:10` and `src/layout/rows/filter.
+test.ts:78`. Per CLAUDE.md's rule that a plan's account of the code is a claim, I tried the edit and
+ran `tsc --noEmit`: it fails with `TS2741: Property 'durationOf' is missing`. `durationOf` is a
+still-required `FieldContext` member (`src/model/field.ts:191`, already correctly guarded per the
+comment "`undefined` iff `entry` does not span (ADR 0012)"), so the table's instruction does not match
+the current, already-correct implementation. Left both files unchanged. The table's third row
+(`field-access.test.ts:75`, "rewrite the test against the guarded helper") was accurate and applied.
+
+### J7 — Auto-`'group'`-kind promotion overrides a just-cleared parent's dates; expected, not a bug
+
+**Raised:** 2026-09-11, Build 1 (ADR 0012). **Status:** informational, no code change.
+
+An Entry with a child is auto-promoted to an effective `kind: 'group'` even when not authored that
+way. `'group'` sits in the default `rollUpKinds`, so the Rollup pass re-derives that parent's
+`start`/`end` from its children on every read, regardless of what a prior `update()` wrote. A test
+asserting a childful parent's dates go `undefined` after `removeSegments` fails for this reason — the
+child's date wins, correctly. `entry-store.mutation.test.ts`'s descendant-survival test was written to
+assert only structure (the Entry and its child both survive) on the childful case, leaving the
+dates-cleared assertion to the separate childless test. Worth recording so a future reader does not
+re-derive this the hard way.
+
+### J8 — `GanttShell.reveal()` needed a dateless-row branch; found and fixed in an earlier session
+
+**Raised:** carried from an earlier session in this build, logged here 2026-09-11 (Build 1, ADR 0012).
+**Status:** DONE — code and tests exist; this entry only records it.
+
+`reveal(id)` for an Entry read `entry.start`/`entry.end` unconditionally and called `#revealSpan`,
+which had no defined behaviour for a dateless Entry once ADR 0012 made that legal — no ADR or existing
+rule covered what "reveal a row with no bar" should do. Fixed with a new `#revealRow` branch: a
+dateless Entry moves the viewport's `y` to the row (scrolling it into vertical view) and leaves `x`
+untouched (`width: 0` at the current `x` reads as already-visible to `Viewport.reveal`, the same
+no-op-on-x idiom `#rovingFocusPorts`' own `revealRow` already uses). See `src/view/gantt-shell.ts`
+around line 1706 (`reveal`) and 1724 (`#revealRow`).
+
+### J9 — A roll-up parent's own Segment stays gone after Rollup restores its dates; two e2e tests updated, `rollup.ts` untouched
+
+**Raised:** 2026-09-11, Build 1 (ADR 0012). **Status:** standing, matches J3, flagged for the author.
+
+Before this build, every Entry carried at least one Segment, so a roll-up parent with no dates of
+its own (e.g. a `'group'` whose span is entirely derived from its children) still held a synthetic
+Segment, minted at ingest. ADR 0012 retires that fill: an Entry with no authored dates now stores
+`segments: []`, correctly. The Rollup pass still writes the parent's derived `start`/`end` (S4.2,
+unchanged), so the parent spans and draws a bar — but `rollup.ts`'s `widenSegmentsToEnvelope` only
+widens an *existing* Segment set (`if (... parent.segments.length === 0) return parent;`, unchanged
+from before this build); it never mints one from nothing. So a roll-up parent now spans, draws a bar,
+and holds no Segment — a state ADR 0012's own rule ("holds a Segment ... iff it spans") does not
+name, because minting a Segment for a Rollup-derived envelope is Rollup's own act, not an ingest-time
+one. J3 already assigned exactly this restoration to ADR 0013's build. This build does not preempt it.
+
+**The visible effect:** a `fg-bar-summary` (a roll-up parent's own bar) can no longer be selected by
+a plain click — `FrameLayoutView.segmentIdsForItem` resolves through `entry.segments`, which is now
+empty for that Entry, so a click on it proposes an empty Selection. `e2e/selection.spec.ts` already
+knew this and skips `.fg-bar-summary` bars in its own bar-picking helpers, from an older commit
+("the group bar's class says what it paints, not what it used to") — this is not new. Two other e2e
+specs did not know it and broke: `e2e/data.spec.ts`'s `selectFirstBar` picked `.fg-bar` unfiltered,
+which happened to land on a roll-up parent's summary bar first; fixed by excluding
+`.fg-bar-summary`, the same filter `selection.spec.ts` already uses. `e2e/hierarchy.spec.ts`'s
+`"Delete on a parent's last Segment removes the parent alone..."` test asserted the pre-ADR-0012
+cascade outright (parent removed, child reparented); rewritten to assert the ADR 0012 outcome instead
+(parent survives, child's `parentId` never changes) — the parent it deletes the last Segment of,
+`task-alpha-1`, has a child of its own, so it is a roll-up parent already, and this same Segment gap
+applies to it after the delete.
 
 ---
 
