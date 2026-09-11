@@ -2102,7 +2102,11 @@ Audited one by one against the files, per J9's superseded note.
 **So the real gap is not in these six.** No e2e test drags a parent bar. That test is owed and this
 build did not write it — see N13.
 
-### N13 — no e2e covers the parent bar drag
+### N13 — no e2e covers the parent bar drag — **CLOSED 2026-09-11, `e2e/parent-bar-drag.spec.ts`**
+
+> **CLOSED 2026-09-11.** Four tests ship in `e2e/parent-bar-drag.spec.ts`. The gate reads
+> `verify:full PASS — all 16 checks green, test:e2e included (70s).`, and e2e goes 116 → 120.
+> Writing them corrected two things this log had wrong — see J35.
 
 **Owed.** The drag is pinned by unit tests at both seams it crosses: `src/view/capability.test.ts`
 (what a parent's move writes, the start-only child, the locked descendant) and
@@ -2110,3 +2114,45 @@ build did not write it — see N13.
 `event.entry` is the parent, the parent's bar previews). A browser test that drags a real
 `.fg-bar-summary` and reads the children's dates back is still owed, and the harness's planner
 dataset already holds a phase with dated children to do it with.
+
+### J35 — the parent-drag e2e corrected two things this log said, and one of them was mine
+
+**Raised:** 2026-09-11, closing N13. **Status:** built, gate green.
+
+`e2e/parent-bar-drag.spec.ts` ships four tests. Writing them turned up two claims that were wrong,
+and both were wrong in the same direction: an assertion I expected to hold, stated from the design
+rather than measured.
+
+**1. "The parent stays unwritten" is true of the gesture, not of the changeset.** I wrote a test
+asserting no changeset row names the parent. It failed: the drag produced
+`[user] entries · phase-a · start`, `· end` and `· segments`. The code is right and my reading was
+wrong. `src/view/gesture-pipeline.test.ts:958` calls `commitEntryEdits` **once, with the child
+alone** — that is the sense in which the parent is unwritten. The Rollup then recalculates the
+parent's own cells inside the same transaction, which is exactly ADR 0013's rule that *nothing but
+the Rollup writes a rolling-up parent's cell*. N13's own wording above ("the parent stays unwritten")
+carried the ambiguity into the log, the way J16's prose once carried a wrong test name.
+
+The ADR's older phrase, *"a derived value never reaches the Document"*, is what makes this easy to
+misread. It has no Document left to reach — ADR 0016 deleted it, and ADR 0013 line 3 already says so.
+
+So the test asserts what is checkable: the parent's row **is** in the changeset, and its new span is
+the minimum `start` and the maximum `end` of what sits under it. Drop the Rollup and the parent keeps
+its pre-drag envelope while its children move, so the assertion has a failing case.
+
+**2. `hierarchy.html` cannot prove a bar moved.** N13 and my first draft both assumed a browser test
+would read the bar's pixels back. On that page it cannot. It runs `range: 'fitDataset'`, and the
+grabbed parent spans the whole dataset — so a drag moves every dated entry, the fitted range moves
+with them, and **every bar lands on the pixel it started on**. Measured with a throwaway probe, since
+deleted: all seven bar boxes identical before and after, to the pixel.
+
+That first cost a flaky test rather than a red one. The pixel assertion passed standalone and failed
+in the full suite, which is the worst way to learn this — it means the earlier pass was a race
+against the refit, not a correct result.
+
+The paint half moved to `planner.html`, whose `range` is a fixed span. The grabbed phase bar moves,
+and the assertion that makes it load-bearing is the other one: **its three sibling phases do not**.
+On a refitting page a drag that did nothing is indistinguishable from one that worked.
+
+**The rule to take from it.** A geometry assertion inherits the page's `range` mode. `'fitDataset'`
+makes bar pixels a claim about the *shape* of the data, never its position, because the scale
+absorbs any translation that moves everything.
