@@ -466,6 +466,30 @@ So §5.0.5's *"keep the option's runtime seeding"* preserves a pipe with nothing
 
 **Ruling owed: does a public way in ship with this build?** If it does, the option becomes public, loses `PluginDocument`, and takes a type named for rows keyed by plugin id.
 
+#### B2a — passenger data is retired · **ruled 2026-09-10**
+
+**The author ruled that a Dataset no longer carries rows for a plugin it does not install.** That closes B1's passenger question and B2 together.
+
+**The reason is that passenger data protected a round trip through a file, and there is no file.** A Document read by an application that had dropped a plugin kept that plugin's rows and wrote them back, so nobody lost data by opening a file without the plugin. Delete the format and the case cannot arise: rows now enter a `PluginStore` one way only, written by an installed plugin.
+
+**What follows, and it is all deletion**
+
+| Goes | Where |
+|---|---|
+| The `pluginRows` option | `dataset-state.ts:93-94`, and the `PluginStores(options.pluginRows, this)` argument at `:188` |
+| The seed arm of the constructor | `plugin-store.ts:51-57` — the whole `for` loop over the seed |
+| `PluginStores.toDocument` | `plugin-store.ts:214-228` |
+| The one producer | `serialization/read.ts:46-47`, `:137`, `:146` — deleted with the folder |
+| **D-S5-24's passenger-data posture, and D-S5-30's *"not a store anyone may read"*** | `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`. **V18 treatment: mark retired inline, keep the text** |
+| The prose that states it | `plans/01:831`, `CONTEXT.md`'s **Declarer** entry, `plans/s4-hierarchy-and-rows/README.md` and `s4.1-field-registry.md`, `docs/adr/0008` |
+| The tests | `plugin-store.test.ts:108` and `:275` (`'demo.absent'`), `serialization.test.ts:425-452`, and the `dataset.test.ts` plugin round-trip block |
+
+**`read(id)` now covers everything a Dataset holds.** `#committed` gains rows from an installed plugin only, so `#reserved` and `#committed` no longer disagree. **`dataset.pluginStore(id)` is the complete way out**, and B1 needs no second door.
+
+**`build-commit-change-set.ts:309`'s `pendingRows` is a different thing and stays.** It carries the rows of a **removed Entry** through a changeset, so undo restores them. That has nothing to do with an uninstalled plugin.
+
+**No way in ships.** An application that saved plugin rows re-installs the plugin and writes them back through the plugin's own API. **This is the smaller library**, and it is the reduction the author chose deliberately.
+
 #### B3 — the guard files block the folder deletion
 
 `.dependency-cruiser.cjs:155-161` holds `serialization-is-removable`, and `scripts/guard-red-test.mjs:80-82` red-tests it. Both go with the folder. **`.claude/hooks/protect-spec.sh:81-89` exits 2 on a `.dependency-cruiser.cjs` edit.** That is a hard block, not the `plans/` warning. The author authorizes that file, or the build stops there.
@@ -998,8 +1022,8 @@ Work top to bottom. Each build ends with the same five closing items.
 **Slices it touches.** S2 (serialization landed there, at S2.6), S4 (the Field Document codec, S4.4), S5 (plugin rows in the Document, S5.10). **Slice gates to re-run:** S2, S4, S5.
 
 - [ ] Ship `dataset.pluginStore(id)` — B1, the author's call on 2026-09-10. **Nothing is deleted until the way out exists.**
-- [ ] **Answer the passenger question** — B1. `read(id)` cannot see the rows of a plugin this Dataset never installed, and `toDocument()` can. Decide the door that covers them.
-- [ ] **Answer B2.** Publish a way in to match, or delete `pluginRows` with its one producer.
+- [ ] Delete `pluginRows`, the seed arm and `toDocument` — B2a. **Passenger data is retired.** No way in ships.
+- [ ] Mark D-S5-24 and D-S5-30 retired in `s5.10-dataset-plugins.md`, V18 style — B2a. **Author.**
 - [ ] Delete `FieldRegistry.authored` and, if nothing else wants it, `#declaringPlugin` — B1a. **No Field door is published.**
 - [ ] **Get the author on `.dependency-cruiser.cjs`** — B3. The hook exits 2, so this one blocks for real.
 - [ ] Delete `serialization-is-removable` (`.dependency-cruiser.cjs:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`).
@@ -1180,6 +1204,7 @@ Do all five, in this order, for the build you just finished.
 | `plans/02` default `gridColumns` was `['name']` (`:480`). ADR 0012 rules `['name', 'start', 'end']` — **V18. LANDED `5f21f2d`** | author | Build 0012 |
 | `plans/02` said a date path was owed. The grid is the date path — **LANDED `5f21f2d`** | author | Build 0012 |
 | **`.dependency-cruiser.cjs`** — delete the `serialization-is-removable` rule (`:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`). **This is the one item the hook really blocks**: `protect-spec.sh:81-89` exits 2 on that file, where a `plans/` edit only warns. **It cannot land early.** The rule guards a folder that still ships, so deleting it before the folder weakens a live guard for no gain. It goes in the same commit as the folder | **author** | Build 0016 |
+| **`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`** — D-S5-24's passenger-data posture and D-S5-30's *"not a store anyone may read"* are retired by the 2026-09-10 passenger ruling. Mark them, keep the text | **author** | Build 0016 |
 | **`plans/00` D7** — the locked decision row still reads *"Versioned `toJSON`/`fromJSON` + well-defined changeset events"*. ADR 0016 deletes the first half and leaves the second. Its headline, *Consumer-owned via changesets*, is what ADR 0016 makes truer. **Found 2026-09-10 during the §5.7 edits. ADR 0016's own consequence list never named it. A D1–D12 row is a higher bar than prose, so it waits for its own ruling** | **author** | Build 0016 |
 | `CONTEXT.md` owes an `entry.props` glossary entry, and owes the deletion of the **Field source** entry | **author** | Build 0011 |
 | `CONTEXT.md` owes `_Avoid_`: **phase**, **grouped entry** | **author** | Build 0013 |
