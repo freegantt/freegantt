@@ -71,7 +71,7 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
@@ -270,9 +270,6 @@ export class Dataset<TProps = unknown> {
     get fields(): {
         readonly all: readonly Field[];
     };
-    get hierarchy(): DatasetHierarchy;
-    set hierarchy(value: DatasetHierarchy);
-    isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
@@ -283,9 +280,6 @@ export class Dataset<TProps = unknown> {
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
     redo(): void;
     replay(changeSet: ChangeSet): void;
-    // (undocumented)
-    get rollUpKinds(): readonly EntryKind[];
-    set rollUpKinds(value: RollUpKinds);
     get time(): ZonedTime;
     // (undocumented)
     get timeZone(): string;
@@ -330,12 +324,6 @@ export interface DatasetFieldRegistrations {
     registerType(name: FieldTypeName, type: FieldType): void;
 }
 
-// @public
-export interface DatasetHierarchy {
-    // (undocumented)
-    readonly autoGroup: boolean;
-}
-
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
@@ -343,12 +331,10 @@ export interface DatasetOptions<TProps = unknown> {
     entries: readonly EntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
-    hierarchy?: DatasetHierarchy;
     history?: {
         capacity?: number;
     };
     plugins?: readonly DatasetPluginOf<Dataset<TProps>>[];
-    rollUpKinds?: RollUpKinds;
     timeZone?: string;
 }
 
@@ -457,6 +443,15 @@ export type DecorationLayer = 'underBars' | 'overBars';
 
 // @public (undocumented)
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
+
+// @public
+export class DerivedFieldNotWritableError extends FreeGanttError {
+    constructor(key: string, entryId: string, operation: string);
+    // (undocumented)
+    readonly entryId: string;
+    // (undocumented)
+    readonly key: string;
+}
 
 // @public
 export function diffMs(a: Instant, b: Instant): number;
@@ -617,8 +612,6 @@ export interface Entry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)
     id: EntryId;
-    kind: EntryKind;
-    // (undocumented)
     name: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;
@@ -678,8 +671,6 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput;
     // (undocumented)
     id: string;
-    kind?: EntryKind;
-    // (undocumented)
     name: string;
     parentId?: string;
     props?: Partial<TProps>;
@@ -688,7 +679,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
 }
 
 // @public
-export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
+export type EntryLook = 'parent' | 'leaf' | (string & {});
 
 // @public (undocumented)
 export type EntryMove = EntryGestureEvent;
@@ -780,6 +771,7 @@ export type Field<TValue = unknown> = {
     type?: FieldTypeName;
     rollUp?: AggregatorName;
     editable?: boolean;
+    distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -798,6 +790,7 @@ export type Field<TValue = unknown> = {
     equals?: never;
     parseValue?: never;
     inputType?: never;
+    distribute?: never;
 };
 
 // @public
@@ -808,6 +801,9 @@ export interface FieldContext {
     // (undocumented)
     readonly timeZone: string;
 }
+
+// @public
+export type FieldDistributor<TValue = unknown> = (value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext) => EntryEdits | undefined;
 
 // @public
 export type FieldKey = CoreFieldKey | (string & {});
@@ -828,6 +824,7 @@ export interface FieldType<TValue = unknown> {
     column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
+    distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
     // (undocumented)
     editable?: boolean;
     // (undocumented)
@@ -893,11 +890,11 @@ export interface FrameBar {
     height: number;
     // (undocumented)
     id: ItemId;
-    // (undocumented)
-    kind: EntryKind;
     label: string;
     // (undocumented)
     lane: number;
+    // (undocumented)
+    look: EntryLook;
     minimumSpan: boolean;
     // (undocumented)
     rowId: RowId;
@@ -970,8 +967,8 @@ export class Gantt<TProps = unknown> {
     set a11yLabel(value: string);
     get barLabels(): BarLabels;
     set barLabels(value: BarLabels);
-    get barRenderer(): BarRenderer | RendererByKind | undefined;
-    set barRenderer(renderer: BarRenderer | RendererByKind | undefined);
+    get barRenderer(): BarRenderer | RendererByLook | undefined;
+    set barRenderer(renderer: BarRenderer | RendererByLook | undefined);
     // (undocumented)
     get canZoomIn(): boolean;
     // (undocumented)
@@ -1133,7 +1130,7 @@ export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttSca
 export interface GanttOptionsBase<TProps = unknown> {
     a11yLabel?: string;
     barLabels?: BarLabels;
-    barRenderer?: BarRenderer | RendererByKind;
+    barRenderer?: BarRenderer | RendererByLook;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
@@ -1356,9 +1353,9 @@ export interface Item {
     // (undocumented)
     id: ItemId;
     // (undocumented)
-    kind: EntryKind;
-    // (undocumented)
     label: string;
+    // (undocumented)
+    look: EntryLook;
     segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
@@ -1549,10 +1546,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         canWrite(entry: Entry, field: FieldKey): WriteVerdict;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
-        registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+        registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
     };
     layout: {
-        registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
+        registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
     };
     raiseError(report: PluginErrorReport): void;
     // (undocumented)
@@ -1738,10 +1735,10 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
 }
 
 // @public
-export type RendererByKind = Readonly<Record<string, BarRenderer>>;
+export type RendererByLook = Readonly<Record<string, BarRenderer>>;
 
 // @public
-export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByKind : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
+export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByLook : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
 
 // @public
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
@@ -1817,9 +1814,6 @@ export interface RollUpContext extends FieldContext {
     numericValues(children: readonly Entry[]): readonly number[];
     values(children: readonly Entry[]): readonly unknown[];
 }
-
-// @public
-export type RollUpKinds = readonly EntryKind[] | 'none';
 
 // @public (undocumented)
 export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
@@ -2176,7 +2170,7 @@ export interface ViewPresetHeader extends TickStep {
 export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
-export function wholeEntryItem(entry: Entry): Item;
+export function wholeEntryItem(entry: Entry, look: EntryLook): Item;
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //
