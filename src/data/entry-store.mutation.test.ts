@@ -8,6 +8,7 @@ import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import * as fieldAccess from './fields/field-access.js';
 import {
+  DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   EmptySegmentsError,
@@ -18,7 +19,7 @@ import {
   entryId,
   segmentId,
 } from '../model/index.js';
-import type { ChangeSet, EntryInput } from '../model/index.js';
+import type { ChangeSet, EntryInput, Field } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
@@ -285,16 +286,23 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
   it("a last-Segment removal never touches the Entry's descendants (ADR 0012: the Entry survives, unlike the old #212 removal)", () => {
     const state = dataset([
       { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-      { id: 'child', parentId: 'ps' },
+      { id: 'child', parentId: 'ps', start: 100, end: 200 },
     ]);
 
     state.entries.removeSegments(['sole']);
 
-    // `ps` gains a child, so it derives (`rollUpKinds`) and the Rollup redraws its span from
-    // `child` right away — the dates this call cleared, not whether `ps` itself survived, so
-    // that half of ADR 0012's contract is `entries.mutation.test.ts`'s childless case above.
     expect(state.entries.has('ps')).toBe(true);
     expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
+
+    // `ps` has a child, so its dates are the Rollup's (ADR 0013), and they still read off `child`
+    // after the Segment goes. This assertion is new (N8, BUILD-LOG): the comment that stood here
+    // claimed the Rollup "redraws its span from `child` right away", and it did not — the internal
+    // clear proposed `{ start: undefined, end: undefined }` in the transaction body, the Rollup
+    // yielded to that proposal (decision 5), and `ps` committed dateless over a dated child. The
+    // clear now runs only where the Entry owns its own dates. Nothing asserted this, which is why
+    // it went unnoticed.
+    expect(state.entries.get('ps')?.start).toBe(100);
+    expect(state.entries.get('ps')?.end).toBe(200);
   });
 
   it('an unknown segment id throws SegmentNotFoundError, and stages nothing', () => {
@@ -769,20 +777,127 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive'));
   });
 
-  it('a parent whose span the same transaction proposed keeps the proposed value', () => {
-    const state = dataset([
-      { id: 'p1', start: '2026-01-01', end: '2026-01-05' },
-      { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
-    ]);
+  it('an Entry written as a leaf keeps the proposed span when the same transaction gives it a child', () => {
+    // Decision 5: the Rollup yields to a field the caller proposed in the same transaction. This
+    // test used to seed `p1` with a child already in place and write `p1`'s span through the
+    // consumer door. The ADR 0013 amendment (2026-09-11) refuses that write from every direction,
+    // so the case moved to the structure that makes it honest: `x` is a **leaf** when the write is
+    // proposed, so the write is legal, and it gains a child in the same transaction. The claim is
+    // unchanged — the proposal wins over the cascade — and the write is one the door still allows.
+    const state = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
 
     state.transaction(() => {
-      state.entries.update('p1', { start: '2026-09-01', end: '2026-09-02' });
-      state.entries.update('c1', { start: '2026-12-01', end: '2026-12-02' });
+      state.entries.update('x', { start: '2026-09-01', end: '2026-09-02' });
+      state.entries.add({ id: 'c1', name: 'c1', parentId: 'x', start: '2026-12-01', end: '2026-12-02' });
     });
 
-    const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-09-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
+    const x = state.entries.get('x')!;
+    expect(x.start).toBe(toInstant('UTC', '2026-09-01'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
+  });
+});
+
+describe('a derived cell is read-only until the Field says what a write means (ADR 0013 amendment)', () => {
+  /** A Dataset with one rolling-up consumer Field. `distribute`, when given, is what a write to a
+   *  rolling-up parent's `cost` cell means. */
+  function costDataset(distribute?: Field<number>['distribute']): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1', start: 0, end: 1 },
+        { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1, props: { cost: 10 } },
+        { id: 'c2', name: 'c2', parentId: 'p1', start: 0, end: 1, props: { cost: 20 } },
+      ],
+      fields: [{ key: 'cost', rollUp: 'sum', editable: true, ...(distribute ? { distribute } : {}) }],
+    });
+  }
+
+  it('a parent cell with no distribute is refused standalone, and refused inside a transaction', () => {
+    // The point of the exercise (Q7): permission follows the thing written, never the call that
+    // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
+    const standalone = costDataset();
+    expect(() => standalone.entries.update('p1', { cost: 500 })).toThrow(DerivedFieldNotWritableError);
+    expect(standalone.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const batched = costDataset();
+    expect(() =>
+      batched.transaction(() => {
+        batched.entries.update('p1', { cost: 500 });
+      }),
+    ).toThrow(DerivedFieldNotWritableError);
+    expect(batched.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const batchedWithCompany = costDataset();
+    expect(() =>
+      batchedWithCompany.transaction(() => {
+        batchedWithCompany.entries.update('c1', { cost: 11 });
+        batchedWithCompany.entries.update('p1', { cost: 500 });
+      }),
+    ).toThrow(DerivedFieldNotWritableError);
+    expect(batchedWithCompany.entries.fieldValue('c1', 'cost')).toBe(10);
+    expect(batchedWithCompany.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a Field that declares distribute writes the children, and the Rollup reads the cell back', () => {
+    const state = costDataset((total, children) => {
+      const share = (total as number) / children.length;
+      return new Map(children.map((child) => [child.id, { cost: share }]));
+    });
+
+    state.entries.update('p1', { cost: 900 });
+
+    expect(state.entries.fieldValue('c1', 'cost')).toBe(450);
+    expect(state.entries.fieldValue('c2', 'cost')).toBe(450);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(900);
+  });
+
+  it('the distributed writes and their rolled-up parent land in one changeset, and one undo step', () => {
+    const state = costDataset(
+      (total, children) =>
+        new Map(children.map((child) => [child.id, { cost: (total as number) / children.length }])),
+    );
+    const seen = changeSets(state);
+
+    state.entries.update('p1', { cost: 900 });
+
+    expect(seen).toHaveLength(1);
+    const rows = fieldRowsOf(seen[0]!).map(
+      (row) => `${row.id}.${row.field}: ${String(row.from)} → ${String(row.to)}`,
+    );
+    expect(rows).toEqual(
+      expect.arrayContaining(['c1.cost: 10 → 450', 'c2.cost: 20 → 450', 'p1.cost: 30 → 900']),
+    );
+  });
+
+  it('a distribute that declines refuses the write, with the same error an absent one gives', () => {
+    const state = costDataset(() => undefined);
+    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const empty = costDataset(() => new Map());
+    expect(() => empty.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(empty.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a distribute that writes back to the parent is refused — that cell is the Rollup’s', () => {
+    const state = costDataset(() => new Map([[entryId('p1'), { cost: 900 }]]));
+    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a mixed patch is refused whole, before any write', () => {
+    const state = costDataset();
+    expect(() => state.entries.update('p1', { name: 'renamed', cost: 500 })).toThrow(
+      DerivedFieldNotWritableError,
+    );
+    expect(state.entries.get('p1')?.name).toBe('p1');
+  });
+
+  it('a leaf writes its own rolling-up cell, with or without a distribute', () => {
+    const state = costDataset();
+    state.entries.update('c1', { cost: 99 });
+    expect(state.entries.fieldValue('c1', 'cost')).toBe(99);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(119);
   });
 });
 

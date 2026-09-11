@@ -27,6 +27,26 @@ export const WRITABLE: FieldWriteVerdict = Object.freeze({ ok: true });
 export const NOT_WRITABLE: FieldWriteVerdict = Object.freeze({ ok: false });
 export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'derived-value' as const });
 
+/** Where a write to one cell lands. `'children'` is a Field that declared `distribute`; `'refused'`
+ *  is one that did not, on a cell the Rollup owns. */
+export type WriteTarget = 'entry' | 'children' | 'refused';
+
+/** Where does a write to this Field, on an Entry with or without children, land? (ADR 0013,
+ *  amendment 2026-09-11.)
+ *
+ *  This reads the **Field declaration** and one structural fact, and nothing about the call that
+ *  asked. A write refused here is refused standalone and refused inside `dataset.transaction()`
+ *  alike: grouping decides when writes land together and what one undo step covers, never what is
+ *  allowed. The signal it replaced was transaction depth, and `dataset.transaction()` is public, so
+ *  a consumer set it in one call (Q7, `plans/field-redesign/BUILD-LOG.md`).
+ *
+ *  Two readers ask, and they must agree (I14): `entries.update()` decides a write with it, and
+ *  `view/capability.ts` decides whether the cell offers an editor at all. */
+export function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTarget {
+  if (!hasChildren || !rollsUp(field)) return 'entry';
+  return field.distribute ? 'children' : 'refused';
+}
+
 /** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
  *
  *  The Rollup pass writes a rolling-up parent's rolling-up Field off its children — a parent is any
@@ -35,8 +55,12 @@ export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'de
  *  words, and they are the words the cell editor has always shown. `rollsUp` is the Rollup pass's own
  *  test, so this refuses exactly the set that pass would overwrite.
  *
+ *  A Field that declares `distribute` says what a write to that cell means, so the cell opens again
+ *  — the write lands on the children (ADR 0013 amendment). `editable` still has the last word:
+ *  a policy for the write does not make the value editable.
+ *
  *  Everything else is the Field's own `editable`, which defaults to `false`. */
 export function libraryWriteRule(hasChildren: boolean, field: Field): FieldWriteVerdict {
-  if (hasChildren && rollsUp(field)) return DERIVED;
+  if (resolveWriteTarget(hasChildren, field) === 'refused') return DERIVED;
   return field.editable === true ? WRITABLE : NOT_WRITABLE;
 }

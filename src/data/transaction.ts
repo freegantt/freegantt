@@ -75,9 +75,11 @@ export interface TransactionData {
    *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
    *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
   extraEditsReadingFor(request: EditRequest): EditsReading;
-  /** 0 = no transaction open. Only `runTransaction` writes this (D-S2-8's nesting rule).
-   *  `EntryStore.#opensOwnTransaction` also reads it (Q6, BUILD-LOG), to tell an `update()` call
-   *  that opens its own transaction from one joining a caller's already-open one. */
+  /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule).
+   *  `EntryStore` read it for a while, to tell a standalone `update()` from one joining a caller's
+   *  open transaction — and that made the derived-write refusal a consumer's to opt out of, because
+   *  `dataset.transaction()` is public (Q7, BUILD-LOG). Nothing outside this file reads it again:
+   *  how deeply a write is nested is not a permission. */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is
    *  `true` throws before running its body (D-S2-9, D-S2-25). Only `runTransaction` reads or writes

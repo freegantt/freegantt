@@ -13,6 +13,7 @@ import type {
   EntryId,
   EntryInput,
   EntryEdit,
+  EntryEdits,
   FieldContext,
   FieldKey,
   FieldValue,
@@ -40,11 +41,13 @@ import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
   createFieldContext,
+  createRollUpContext,
   mergeProposedEdits,
   entryAfterEdit,
   writeOntoEntry,
 } from './fields/field-access.js';
-import { FieldRegistry, rollsUp } from './fields/field-registry.js';
+import { FieldRegistry } from './fields/field-registry.js';
+import { resolveWriteTarget } from './write-rule.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -75,6 +78,12 @@ interface WriteSet {
    *  never a scan of the write set. An id absent from this map was never touched this transaction,
    *  so `#segmentOwnerInWriteSet` falls through to the committed index for it. */
   segmentOwner: Map<SegmentId, EntryId | null>;
+  /** Every id a staged add or update pointed a `parentId` at, in this transaction. A filter, not an
+   *  index: it over-answers (an id whose child was later reparented away stays in it), and a miss is
+   *  the only answer it is trusted for. `#hasChildren` runs on every consumer write, and without this
+   *  it would walk the staged edits each time — the O(n²) shape finding S1 (#212) already killed once
+   *  for Segment ids. Kept current by `stageAdd`/`stageUpdate`, the same way `segmentOwner` is. */
+  stagedParents: Set<EntryId>;
 }
 
 /** Records a Segment ownership change into `writeSet.segmentOwner` (finding S1, #212) — called by
@@ -230,6 +239,33 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
+  /** Does this Entry derive — has it at least one child, as this transaction leaves it (ADR 0013)?
+   *  The consumer door asks this on every write, so it answers without building one overlay Entry per
+   *  staged edit, which is what `childrenOf` above does: it reads the committed index first, and
+   *  reaches the staged edits only when `stagedParents` says some edit named this id as a parent. */
+  #hasChildren(parent: EntryId): boolean {
+    const writeSet = this.#writeSet;
+    for (const committed of this.#byParent().get(parent) ?? []) {
+      if (!writeSet) return true;
+      if (writeSet.removed.has(committed.id)) continue;
+      const staged = writeSet.added.get(committed.id);
+      if (staged) {
+        if (staged.parentId === parent) return true;
+        continue;
+      }
+      const edit = writeSet.edits.get(committed.id);
+      if (edit === undefined || !('parentId' in edit) || edit.parentId === parent) return true;
+    }
+    if (!writeSet || !writeSet.stagedParents.has(parent)) return false;
+    for (const added of writeSet.added.values()) {
+      if (added.parentId === parent) return true;
+    }
+    for (const [id, edit] of writeSet.edits) {
+      if (edit.parentId === parent && !writeSet.removed.has(id)) return true;
+    }
+    return false;
+  }
+
   /** Call: `dataset.entries.entryIdOfSegment(segmentId)`. The Entry that draws `id`, or `undefined`
    *  when no Entry does (ADR 0010, #212, finding 6) — one map lookup against `#entryIdBySegmentId`,
    *  never a walk of `all`. Read through the write set inside an open transaction, the same
@@ -358,33 +394,64 @@ export class EntryStore implements EntryStoreContract {
       for (const field of Object.keys(edit)) {
         if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
       }
-      // ADR 0013's derived-arm refusal is a consumer-door check (`01` §6, line 81): it fires only
-      // for a standalone call that opens its own transaction. A call joining a transaction already
-      // open — the library's own internal bookkeeping (`#removeSegmentsFrom`'s dateless clear), or
-      // a consumer's own multi-write `dataset.transaction()` body — is decision 5's territory
-      // instead: the Rollup yields to whatever a body proposes (`editProposesField`, `rollup.ts`),
-      // so refusing here would fight a decision this store does not own (Q6, BUILD-LOG). Refused
-      // whole, before any write — a mixed patch such as `{ start, cost }` with a derived `cost`
-      // writes nothing.
-      if (this.#opensOwnTransaction() && this.childrenOf(key).length > 0) {
-        for (const field of Object.keys(edit)) {
-          if (rollsUp(this.#registry.get(field)!)) {
-            throw new DerivedFieldNotWritableError(field, key, 'entries.update');
-          }
-        }
-      }
+      const { own, toChildren } = this.#splitDerivedWrites(key, edit);
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
       }
       const current = this.get(key)!;
-      const reading = toEditReading(edit, this.#context, current, this.#registry, 'entries.update');
-      const stored = reading.stored;
-      if (stored.segments !== undefined) {
-        this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
+      if (Object.keys(own).length > 0) {
+        const reading = toEditReading(own, this.#context, current, this.#registry, 'entries.update');
+        const stored = reading.stored;
+        if (stored.segments !== undefined) {
+          this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
+        }
+        this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
       }
-      this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
+      // Each distributed edit lands through the door it would have come in by, so a child that is
+      // itself a rolling-up parent distributes again, or refuses. The walk ends at the leaves.
+      for (const edits of toChildren) {
+        for (const [childId, childEdit] of edits) this.update(childId, childEdit);
+      }
       return this.get(key)!;
     });
+  }
+
+  /** Splits one patch into what lands on `id` itself and what its Fields distribute to the children
+   *  (ADR 0013, amendment 2026-09-11). Every Field resolves, and every `distribute` runs, **before**
+   *  anything stages: a mixed patch such as `{ name, cost }` with a refused `cost` writes neither
+   *  half, because a partial apply would leave a transaction in a state no `before*` event described.
+   *
+   *  The answer reads the Field declaration and one structural fact, through the one resolver
+   *  `view/capability.ts` also reads. It asks nothing about the call — whether it opened this
+   *  transaction or joined one a consumer already had open makes no difference to what is allowed. */
+  #splitDerivedWrites(id: EntryId, edit: EntryEdit): { own: EntryEdit; toChildren: readonly EntryEdits[] } {
+    if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
+    const own: Record<string, unknown> = { ...edit };
+    const toChildren: EntryEdits[] = [];
+    let children: readonly Entry[] | undefined;
+    for (const [field, value] of Object.entries(edit)) {
+      const declared = this.#registry.get(field)!;
+      if (resolveWriteTarget(true, declared) === 'entry') continue;
+      if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, 'entries.update');
+      children ??= this.childrenOf(id);
+      // Called on its own declaration, never detached from it — the same way `equals` and
+      // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
+      const edits = declared.distribute(
+        value,
+        children,
+        this.get(id)!,
+        createRollUpContext(this.#fieldContext, field),
+      );
+      // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
+      // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
+      // nothing to write — is refused with the same error an absent `distribute` gives.
+      if (edits === undefined || edits.size === 0 || edits.has(id)) {
+        throw new DerivedFieldNotWritableError(field, id, 'entries.update');
+      }
+      toChildren.push(edits);
+      delete own[field];
+    }
+    return { own, toChildren };
   }
 
   remove(id: EntryId | string): void {
@@ -436,18 +503,15 @@ export class EntryStore implements EntryStoreContract {
     const entry = this.get(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
+      // Only an Entry that owns its own dates has dates to clear. On one with children the dates are
+      // the Rollup's (ADR 0013), and clearing them did real damage: the clear is a proposal in the
+      // transaction body, so the Rollup yielded to it (decision 5) and a parent with a dated child
+      // committed with no dates at all (N8, BUILD-LOG). The library obeys the rule it publishes.
+      if (this.#hasChildren(id)) return;
       this.update(id, { start: undefined, end: undefined });
       return;
     }
     this.update(id, { segments: remaining });
-  }
-
-  /** True while the coming `#mutate` call is the one opening the transaction, not joining one a
-   *  caller already has open — read after `runTransaction`'s own increment (D-S2-8), so `=== 1`
-   *  means no other frame is still on the stack. `TransactionData.openTransactions` names this
-   *  store as its second reader (`data/transaction.ts`, the first and sole writer). */
-  #opensOwnTransaction(): boolean {
-    return this.#runner?.openTransactions === 1;
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
@@ -509,6 +573,7 @@ export class EntryStore implements EntryStoreContract {
       edits: new Map(),
       authoredEnvelopeKeys: new Map(),
       segmentOwner: new Map(),
+      stagedParents: new Set(),
     };
   }
 
@@ -524,6 +589,7 @@ export class EntryStore implements EntryStoreContract {
     writeSet.added.set(entry.id, entry);
     writeSet.removed.delete(entry.id);
     writeSet.edits.delete(entry.id);
+    if (entry.parentId !== undefined) writeSet.stagedParents.add(entry.parentId);
     recordSegmentOwnership(writeSet, entry.id, replaced?.segments, entry.segments);
   }
 
@@ -540,6 +606,7 @@ export class EntryStore implements EntryStoreContract {
   ): void {
     const writeSet = this.#openWriteSet();
     const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
+    if (edit.parentId !== undefined) writeSet.stagedParents.add(edit.parentId);
     const staged = writeSet.added.get(id);
     if (staged) {
       const merged = entryAfterEdit(staged, edit);
