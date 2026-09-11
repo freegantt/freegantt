@@ -8,7 +8,8 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { ElementDescription, Entry, Instant, TooltipColumn } from '../../model/index.js';
+import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
+import { spansTime } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
 export interface TooltipsOptions {
@@ -21,20 +22,17 @@ export interface TooltipsOptions {
 const DEFAULT_DELAY_MS = 400;
 const DEFAULT_PLACEMENT: PopupPlacement = 'top';
 
+/** A tooltip belongs to a bar, so the Entry it describes always spans (`spansTime`, ADR 0012).
+ *  The parameter type says so, and `openFor` is where the question is asked. Three casts used to
+ *  say it instead, and nothing tested them (Q5). */
 function defaultContent(
-  entry: Entry,
+  entry: Entry & TimeSpan,
   timeZone: string,
   locale: Intl.LocalesArgument | undefined,
   columns: readonly TooltipColumn[],
 ): ElementDescription {
-  // Load-bearing cast (ADR 0012): a tooltip belongs to a bar. A non-spanning Entry draws none
-  // (see `openFor`'s own comment below), so `entry.start`/`.end` are always present here.
-  const start = formatDate(timeZone, entry.start as Instant, locale);
-  const end = formatEndInclusive(
-    timeZone,
-    { start: entry.start as Instant, end: entry.end as Instant },
-    locale,
-  );
+  const start = formatDate(timeZone, entry.start, locale);
+  const end = formatEndInclusive(timeZone, { start: entry.start, end: entry.end }, locale);
   const dates = start === end ? start : `${start} – ${end}`;
   return {
     class: { 'fg-tooltip': true },
@@ -88,14 +86,20 @@ export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
       const openFor = (target: DomTarget): void => {
         const entry = target.entry;
         if (entry === undefined) return;
+        // The default content states the entry's dates, so it needs an Entry that spans
+        // (`spansTime`, ADR 0012). A bar only exists for one, so this never refuses on a shipped
+        // path. Consumer content is unaffected: it names its own fields and needs no date.
         const content =
           ctx.view.resolveTooltipContent(entry.id) ??
-          defaultContent(
-            entry,
-            ctx.dataset.timeZone,
-            ctx.gantt.locale,
-            ctx.view.resolveTooltipColumns(entry),
-          );
+          (spansTime(entry)
+            ? defaultContent(
+                entry,
+                ctx.dataset.timeZone,
+                ctx.gantt.locale,
+                ctx.view.resolveTooltipColumns(entry),
+              )
+            : undefined);
+        if (content === undefined) return;
         openTarget = target;
         popup.open({ anchor: target.element, placement, focus: 'none', content });
       };

@@ -51,6 +51,29 @@ export interface Entry<TProps = Record<string, unknown>> {
 }
 
 /**
+ * The span invariant, and the one place it is written (ADR 0012, Q5 in the field-redesign
+ * BUILD-LOG). An Entry spans time when it holds **both** `start` and `end`. An Entry with one date,
+ * or with no date, appears in the grid and draws no bar.
+ *
+ * Call it as a question about the record: `if (!spansTime(entry)) return;`. It narrows, so the
+ * caller reads `entry.start` and `entry.end` as `Instant` after it, with no cast.
+ *
+ * It is generic over the two dates rather than over `Entry`, because three kinds of record carry
+ * them and ask the same question: a stored `Entry`, a `ProposedEdit` mid-gesture, and the date pair
+ * ingest reads before it builds either.
+ *
+ * This is the one runtime function `model/` holds beyond the id/brand helpers and the error base
+ * (plans/01 §1.1). The author widened that carve-out for it on 2026-09-11: it is a total function
+ * over its argument, with no state and no dependency. Before it, the rule was restated as guard
+ * arithmetic at about ten sites, plus six casts that asserted it without testing it.
+ */
+export function spansTime<T extends { start?: Instant | undefined; end?: Instant | undefined }>(
+  dated: T,
+): dated is T & TimeSpan {
+  return dated.start !== undefined && dated.end !== undefined;
+}
+
+/**
  * What a consumer writes; `Entry` is what the library stores. The two differ only in how loose the input
  * may be: ids are plain strings (the `EntryId` brand is applied on the way in) and dates are any
  * `InstantInput`. An `Entry` is itself a valid `EntryInput`, so a consumer that already holds branded

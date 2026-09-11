@@ -8,7 +8,7 @@
 // below tries every registered non-structural look first, and the first one to claim the Entry — a
 // non-empty `Item[]` — wins; an Entry nothing claims falls back to the structure look).
 
-import { itemId } from '../../model/index.js';
+import { itemId, spansTime } from '../../model/index.js';
 import type { Disposer, Entry, EntryId, EntryLook, ItemId, Instant, SegmentId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
@@ -65,8 +65,13 @@ function entryItem(
  *
  *  Load-bearing cast (ADR 0012, Build 1, J2 in BUILD-LOG.md): a non-spanning Entry has no
  *  `start`/`end` to draw, so `produceItemsForRow` never calls any producer — shipped or a
- *  plugin's own — for one. That contract, not the type, is why `entry.start`/`entry.end` are
- *  read here as if they were always present. */
+ *  plugin's own — for one. `spansTime` is where that rule is written, and `produceItemsForRow`
+ *  is where it runs. The contract, not the type, is why `entry.start`/`entry.end` are read here
+ *  as if they were always present.
+ *
+ *  This is the one cast Q5 left standing. The type fix is a narrower parameter — the Entry this
+ *  takes always spans — and that is a public signature change, so it is owed rather than taken
+ *  (N10 in plans/field-redesign/BUILD-LOG.md). */
 export function wholeEntryItem(entry: Entry, look: EntryLook): Item {
   return entryItem(entry, 0, entry.start as Instant, entry.end as Instant, look);
 }
@@ -164,11 +169,11 @@ export function produceItemsForRow(
   for (const id of row.entryIds) {
     const entry = entryById.get(id);
     if (entry === undefined) continue;
-    // An Entry spans iff both dates are present, and draws nothing until it does (ADR 0012). No
+    // An Entry draws nothing until it spans (`spansTime`, ADR 0012). This is the one gate: no
     // producer — shipped or a plugin's own — ever sees a non-spanning Entry, so `wholeEntryItem`
     // and the two producers above may read `entry.start`/`entry.end` as always present (J2,
     // BUILD-LOG.md).
-    if (entry.start === undefined || entry.end === undefined) continue;
+    if (!spansTime(entry)) continue;
     items.push(...resolveItems(entry, registry, hasChildren(id)));
   }
   return items;

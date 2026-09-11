@@ -15,6 +15,7 @@ import type {
   ProposedEdits,
   RollUpContext,
 } from '../../model/index.js';
+import { spansTime } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
@@ -137,9 +138,9 @@ export function createFieldContext(
       return readField(entry, field, ctx, memo?.()) as CoreFieldValue<K> | undefined;
     },
     durationOf(entry: Entry): Duration | undefined {
-      // An Entry that does not span (ADR 0012) has no duration to state. `diffMs` is plain
-      // subtraction — an absent date yields `NaN`, never a throw — so this guard has to run first.
-      if (entry.start === undefined || entry.end === undefined) return undefined;
+      // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is
+      // plain subtraction — an absent date yields `NaN`, never a throw — so this asks first.
+      if (!spansTime(entry)) return undefined;
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
     },
   };

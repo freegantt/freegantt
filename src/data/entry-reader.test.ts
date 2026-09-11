@@ -594,6 +594,19 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
     expect(edit.segments?.[0]?.start).toBe(utc('2026-01-03T05:00:00Z'));
   });
 
+  // Q5: this call site read `entry.start as Instant` until the span invariant got one home. The
+  // cast produced a `NaN` delta, and the empty Segment list below swallowed it. `spansTime` now
+  // asks the question, and this pins that the answer a caller sees did not move.
+  it('names an empty segment list for a start-only Entry, which holds nothing to translate', () => {
+    const context = createContext();
+    const [startOnly] = toEntries([{ id: 'o1', name: 'Open', start: '2026-01-01' }], context);
+
+    const edit = moveEntryTo(startOnly!, instant(utc('2026-01-03T00:00:00Z')));
+
+    expect(startOnly!.end).toBeUndefined();
+    expect(edit).toEqual({ segments: [] });
+  });
+
   it('lets toProposedEdit derive the envelope, so the stored edit still states start and end', () => {
     const context = createContext();
     const entry = twoSegmentEntry(context);

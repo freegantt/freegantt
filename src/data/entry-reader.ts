@@ -13,6 +13,7 @@ import {
   InvertedSpanError,
   SegmentsOutOfSyncError,
   segmentId,
+  spansTime,
   UnknownFieldError,
 } from '../model/index.js';
 import type {
@@ -107,10 +108,9 @@ function toSegment(
   return segment;
 }
 
-/** An Entry spans if and only if it holds both dates (ADR 0012), and holds a Segment if and only if
- * it spans — so this returns `[]` when `dates` names fewer than two, unless the input named its own
- * `segments` explicitly. An Entry that spans but named none stores its own envelope as its one
- * Segment. */
+/** An Entry holds a Segment if and only if it spans (`spansTime`, ADR 0012) — so this returns `[]`
+ * when `dates` names fewer than two, unless the input named its own `segments` explicitly. An Entry
+ * that spans but named none stores its own envelope as its one Segment. */
 function toSegments(
   input: EntryInput,
   dates: { start?: Instant; end?: Instant },
@@ -118,7 +118,7 @@ function toSegments(
   owner: EditOrigin,
 ): readonly Segment[] {
   if (input.segments === undefined || input.segments.length === 0) {
-    if (dates.start === undefined || dates.end === undefined) return [];
+    if (!spansTime(dates)) return [];
     return [{ id: context.mintSegmentId(), start: dates.start, end: dates.end }];
   }
   return input.segments.map((segment) => toSegment(segment, context, owner));
@@ -143,8 +143,9 @@ function toEntryDates(
   if (input.end !== undefined) {
     dates.end = toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation);
   }
-  if (dates.start !== undefined && dates.end !== undefined && dates.end < dates.start) {
-    throw new InvertedSpanError(owner.entryId, dates as TimeSpan, owner.operation);
+  // Only a pair can invert (`spansTime`, ADR 0012): one date alone has nothing to invert against.
+  if (spansTime(dates) && dates.end < dates.start) {
+    throw new InvertedSpanError(owner.entryId, dates, owner.operation);
   }
   return dates;
 }
@@ -439,10 +440,11 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
  */
 export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
-  // Load-bearing cast (ADR 0012): moving an Entry rigidly only makes sense for one that already
-  // spans — a dateless or one-date Entry has no Segments to translate, so `entry.segments.map`
-  // below is `[]` regardless and this delta is never read.
-  const deltaMs = diffMs(start, entry.start as Instant);
+  // Moving an Entry rigidly only makes sense for one that already spans (`spansTime`, ADR 0012):
+  // a dateless or one-date Entry holds no Segment to translate. This was a cast until Q5 gave the
+  // rule one home; the edit it returns is the same empty Segment list the map below produced.
+  if (!spansTime(entry)) return { segments: [] };
+  const deltaMs = diffMs(start, entry.start);
   return {
     segments: entry.segments.map((segment) => ({
       id: segment.id,
