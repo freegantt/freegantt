@@ -40,7 +40,6 @@ function entry(id: string, start: number, end: number): Entry {
   const endInstant = end as Instant;
   return {
     id: entryId(id),
-    kind: 'span',
     name: id,
     start: startInstant,
     end: endInstant,
@@ -339,7 +338,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
-    const milestone: Entry = { ...entry('m', 50, 50), kind: 'milestone' };
+    const milestone: Entry = entry('m', 50, 50);
     const { deps } = withRoster([milestone], { canGesture: () => false });
     const pipeline = new GesturePipeline(deps);
 
@@ -746,7 +745,6 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const a = entry('a', 100, 200);
       const x: Entry = {
         id: entryId('x'),
-        kind: 'span',
         name: 'x',
         start: 300 as Instant,
         end: 500 as Instant,
