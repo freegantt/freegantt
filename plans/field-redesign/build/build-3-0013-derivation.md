@@ -38,11 +38,11 @@
 - [x] Declare `DerivedFieldNotWritableError`. Fill the resolver's **derived** arm.
 - [ ] Wire `entries.update()` to the derived arm. Build the answers from **six** call sites — see *Six doors* below. **PARTIAL: `entries.update()` itself throws (done); the other five doors (cell editor, bar drag, `add()`, constructor, extension hook) are not individually verified — see BUILD-LOG J17 handoff.**
 - [x] Refuse a mixed patch **whole, before any write**. `{ start, cost }` with a derived `cost` writes nothing. (in `EntryStore.update()`; not yet covered by a test)
-- [ ] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report. **PARTIAL: construction raises the aggregate warning; `add()` alone is not specially handled — see handoff.**
+- [x] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report. Both tested: `rollup.test.ts` "construction drops…" and "a batch of add() calls…".
 - [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both. **Believed achieved as a side effect of the rollup fix below, but NOT test-verified.**
 - [x] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
 - [x] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is **overruled**.
-- [ ] Write decision 5's warning. **PARTIAL: construction path only, see above.**
+- [x] Write decision 5's warning. Wired at `data/build-commit-change-set.ts`: an extension-hook cascade's write to a rolling-up parent cell (reaches `merged`, never `body`) is dropped and raises one `derived-values-dropped` report per commit. Tested in `rollup.test.ts`.
 - [x] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
 - [x] **Mint a Segment for a parent whose envelope the Rollup derived.** `widenSegmentsToEnvelope` (`src/data/rollup.ts`) widens an existing Segment set and returns early on an empty one, so it never mints from nothing. Build 1 retired the ingest-time fill, so a parent that spans only through its children now spans, draws a bar, and holds no Segment — and no click can select that bar. [ADR 0012](../../../docs/adr/0012-dates-are-optional-on-every-kind.md) assigns the repair here: *"ADR 0013 owns the Rollup pass; the biconditional pass must restore."* See [`../BUILD-LOG.md`](../BUILD-LOG.md) J3 and J9.
 - [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`. **NOT STARTED.**
