@@ -784,3 +784,46 @@ build deleted outright), and `harness/docs/classes.html` and `harness/docs/diagr
 list `FieldSource` in `model/`'s exports and in the module-boundary diagram. None of these were named
 in this build's work list, so none are touched here — flagged for whichever build or review pass
 does the "ahead-of-`src/` banners" sweep `build/README.md` schedules for the last build.
+
+### N7 — a plugin passed in the `Gantt` constructor misses the first paint, so every plugin-defined look flashes structural for one frame
+
+**Found by the coordinator**, verifying Build 3a's report. Build 3a left
+`gantt.test.ts`'s *"a custom milestone barRenderer paints a diamond"* failing and did **not** list it
+among the failures it named, so it was never diagnosed. It is not a test bug.
+
+`src/api/gantt.ts` builds `GanttShell`, which paints its first frame **synchronously during
+construction**, and only then assigns the constructor's options:
+
+```ts
+    });                                                               // ← shell built; frame 1 painted
+    if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
+    if (options.selectedSegmentIds !== undefined) this.#shell.selection = options.selectedSegmentIds;
+    if (options.plugins !== undefined) this.#shell.plugins = options.plugins;   // ← line 307
+```
+
+Measured with a throwaway probe (since deleted), on a Gantt constructed with a plugin registering an
+item producer for look `'milestone'`:
+
+| | `data-kind` | custom class applied |
+|---|---|---|
+| Frame 1 (synchronous, post-constructor) | `leaf` | no |
+| Frame 2 (after one `rAF`) | `milestone` | yes |
+
+The bar is the **same DOM node** across both, so I8 (no remount) holds and the end state is correct.
+The defect is frame 1.
+
+**Why ADR 0013 exposed it and nothing caught it before.** The look used to come from stored data
+(`entry.kind`), which the shell held at construction, so frame 1 was already right. ADR 0013 moved
+the look to `resolveLook`, which asks the *item-producer registry* — and that registry is empty until
+plugin `setup()` runs. So the regression is a direct consequence of this ADR, and it is invisible to
+`tsc`: the code compiles and the final frame is correct.
+
+**Why this is `src/`'s to fix, not the test's.** The consumer passed `plugins` in the *same options
+object* as `barRenderer`. One constructor call, one expectation: one correct first paint. Rewriting
+the test to `await` a frame would bend the test to fit the bug — the outcome the Build 3a dispatch
+named as the worst one. `resolveLook` itself is correct; the ordering around it is not.
+
+**Owed:** an issue, and a fix that installs constructor plugins before the shell's first paint (or
+defers that paint until the constructor's options are all applied). `zoomPresets` and `selection` sit
+on the same three lines and deserve the same question. See [[J16]] — this is the `EntryLook`/
+`resolveLook` design, the part already flagged as most worth a reviewer's second look.
