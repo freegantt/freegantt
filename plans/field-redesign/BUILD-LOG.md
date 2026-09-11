@@ -1353,3 +1353,39 @@ new failures, no other test's pass/fail state changed. `pnpm exec tsc --noEmit` 
 count before and after (all pre-existing `*.test.ts` errors, J25/J26's inherited count; out of this
 agent's scope per dispatch). `pnpm exec eslint src/data/entry-store.ts src/data/transaction.ts` — 0
 errors.
+
+### Q7 — the moved guard is bypassable by any consumer who wraps the write in `dataset.transaction()`
+
+**Raised:** 2026-09-11, coordinator, verifying the Q6 fix. **Status:** open, needs the author.
+
+The [[Q6]] fix works and both acceptance tests pass unmodified. But the signal it separates on —
+transaction depth (`TransactionData.openTransactions === 1`) — is **reachable by a consumer**, because
+`dataset.transaction()` is public API. Measured with a throwaway probe (since deleted), on `p1` with
+one child `c1`:
+
+| Call | Result |
+|---|---|
+| `entries.update('p1', {start, end})` standalone | throws `DerivedFieldNotWritableError` — correct |
+| the **same lone write** inside `state.transaction(() => { … })` | **no throw, and the consumer's value sticks on the derived cell** |
+
+So ADR 0013 line 91 — *"Parent **cells** stay refused"* — no longer holds for any consumer who wraps.
+The refusal is now opt-out, and the opt-out is one public call.
+
+**This is not a failed task.** The two internal callers Q6 named are genuinely fixed, the quadratic
+regression is genuinely fixed, and the fix agent recorded the `dataset.transaction()` case in its own
+comment as deliberate. The question is whether that consequence is acceptable.
+
+**Why transaction depth cannot be the whole rule.** Decision 5's protected case does go through the
+**public** `entries.update()` inside a transaction, so "internal method for internal callers" cannot
+separate them — the fix agent tested that and was right to reject it. But decision 5's case is a
+proposal that *accompanies a cause* (the child's own change in the same transaction). A lone write to
+a derived cell has no cause; it is an ordinary refused write that happens to be wrapped.
+
+**Candidate rule, for the author:** refuse unless the same transaction also carries a **cause** — a
+change to a descendant, or a structural change that makes the Rollup run for this Entry. That matches
+decision 5's wording ("the same-transaction proposal wins **over the cascade**" — there must be a
+cascade) and restores line 91 for the bare-write case. It is more work than the current check and it
+is a design decision, so it is not an agent's to make.
+
+**Alternative:** accept the current behaviour and amend ADR 0013 line 91 to say the refusal is a
+consumer-door convenience, not an invariant. Honest, but it weakens a stated guarantee.
