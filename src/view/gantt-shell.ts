@@ -48,6 +48,7 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
+import { descendantsOf } from '../data/entry-tree.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
@@ -747,6 +748,7 @@ export class GanttShell {
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
+      entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
@@ -1137,6 +1139,7 @@ export class GanttShell {
     return resolveCapabilities({
       interactions: this.#interactions,
       hasChildren: (entry) => this.#options.dataset.entries.childrenOf(entry.id).length > 0,
+      descendantsOf: (entry) => descendantsOf(entry.id, (id) => this.#options.dataset.entries.childrenOf(id)),
       fieldFor: (key) => this.#options.dataset.field(key),
       lookOf: (entry) =>
         resolveLook(

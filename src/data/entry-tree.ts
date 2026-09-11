@@ -92,3 +92,24 @@ export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): 
   }
   return result;
 }
+
+/** Every Entry below `id`, deepest included, read one level at a time through `childrenOf` — the
+ *  walk `view/capability.ts` needs to answer what a parent bar's drag writes (ADR 0013). Call:
+ *  `descendantsOf(parent.id, (id) => dataset.entries.childrenOf(id))`.
+ *
+ *  A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
+ *  overflow answers no question. */
+export function descendantsOf(
+  id: EntryId,
+  childrenOf: (parent: EntryId) => readonly Entry[],
+): readonly Entry[] {
+  const found: Entry[] = [];
+  const pending: EntryId[] = [id];
+  while (pending.length > 0) {
+    for (const child of childrenOf(pending.pop()!)) {
+      found.push(child);
+      pending.push(child.id);
+    }
+  }
+  return found;
+}

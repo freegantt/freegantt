@@ -3565,7 +3565,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('a roll-up parent gets neither the grab cursor nor a handle', () => {
+  it('a roll-up parent takes the grab cursor and still gets no handle (ADR 0013)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       // A childless parent holds no dates and draws no bar at all (ADR 0012), so this gives it one
@@ -3586,7 +3586,10 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     document.elementFromPoint = () => groupBar;
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
-    expect(groupBar.hasAttribute('data-movable')).toBe(false);
+    // ADR 0013: the parent's own dates roll up, and dragging its bar translates the dated
+    // descendants below it. So the move is offered, and the resize is not — one edge of a derived
+    // envelope names no descendant to resize.
+    expect(groupBar.hasAttribute('data-movable')).toBe(true);
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(true);
 
