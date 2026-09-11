@@ -442,9 +442,26 @@ ADR 0016 deletes `toJSON` on the ground that three read doors already ship. **Tw
 
 **`PluginStores.toDocument()` is the only app-facing exit for plugin rows that exists today**, and this build deletes it. A consumer whose plugin holds locks, or dependencies, would have no way to read that data out of the library. That removes capability rather than moving it.
 
-**The author added `dataset.pluginStore(id)` on 2026-09-10.** It answers *"give me this plugin's store"*.
+**The author added `dataset.pluginStore(id)` on 2026-09-10, with a no-argument form for every store** — B1b.
 
 **A save door is a second question, and `read` cannot answer it.** `read(id)` resolves against `#reserved` — a plugin that installed and reserved a store. `toDocument()` walks `#committed`, which holds **every** plugin's rows, the rows of a plugin this Dataset never installed included. D-S5-30 calls those passenger data and says outright that they are *"not a store anyone may read"*. **So a door built on `read` silently drops exactly the rows a consumer most needs to keep** — the ones no installed plugin owns and no plugin will rebuild.
+
+#### B1b — `dataset.pluginStore()` takes an id, or nothing · **ruled 2026-09-10**
+
+**The author ruled the shape: a function, not an index.** `dataset.pluginStore('acme/locks')` reads as a sentence. `dataset.pluginStore['acme/locks']` reads as a lookup table, and it invites a caller to hold the map and write to it.
+
+**With no argument it answers every store this Dataset holds.**
+
+```ts
+const locks = dataset.pluginStore<LockRow>('acme/locks');   // one plugin's store, or undefined
+for (const [id, store] of Object.entries(dataset.pluginStore())) save(id, store.all);
+```
+
+Two overloads, one name. The id form keeps `read`'s posture and returns `undefined` for a plugin that reserved no store. The empty form returns a record keyed by plugin id, and **B2a is what makes it complete** — with passenger data retired, every row a Dataset holds belongs to a store some installed plugin reserved.
+
+**The convenience is convenience, and the build should know that.** An application already holds its own plugin ids, because it passed them to the constructor. The empty form saves a caller from restating that list; it does not reach data the id form cannot.
+
+**One wart, recorded and accepted.** A singular name answers with many when called with nothing. The alternative was a second member, `dataset.pluginStores`, and the author chose one name over two.
 
 #### B1a — Field declarations need no door at all · **ruled 2026-09-10**
 
@@ -1021,7 +1038,7 @@ Work top to bottom. Each build ends with the same five closing items.
 
 **Slices it touches.** S2 (serialization landed there, at S2.6), S4 (the Field Document codec, S4.4), S5 (plugin rows in the Document, S5.10). **Slice gates to re-run:** S2, S4, S5.
 
-- [ ] Ship `dataset.pluginStore(id)` — B1, the author's call on 2026-09-10. **Nothing is deleted until the way out exists.**
+- [ ] Ship `dataset.pluginStore(id)` and its no-argument form — B1, B1b. **Nothing is deleted until the way out exists.**
 - [ ] Delete `pluginRows`, the seed arm and `toDocument` — B2a. **Passenger data is retired.** No way in ships.
 - [ ] Mark D-S5-24 and D-S5-30 retired in `s5.10-dataset-plugins.md`, V18 style — B2a. **Author.**
 - [ ] Delete `FieldRegistry.authored` and, if nothing else wants it, `#declaringPlugin` — B1a. **No Field door is published.**
