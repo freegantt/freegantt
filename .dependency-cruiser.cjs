@@ -128,12 +128,13 @@ module.exports = {
       '^src/data/rollup\\.ts$',
       '^src/data/(build-commit-change-set|transaction)\\.ts$',
     ),
-    // D-S4-17: delete src/data/hierarchy.ts and promotion never runs.
-    removable(
-      'autogroup-is-removable',
-      '^src/data/hierarchy\\.ts$',
-      '^src/data/(build-commit-change-set|transaction)\\.ts$',
-    ),
+    // D-S4-17's `autogroup-is-removable` rule is RETIRED here, authorized by the author 2026-09-11.
+    // The rule kept `src/data/hierarchy.ts` deletable by naming its only two legal importers. ADR
+    // 0013 deleted that file outright, so the rule named a path that cannot exist and could never
+    // fire. Nothing is relaxed: the invariant was "this leaf stays removable", and the leaf is now
+    // removed. `scripts/guard-red-test.mjs` is what caught it — its red test reported the guard
+    // broken instead of passing quietly, which is the red test doing its job.
+    // D-S4-17 itself is retired with `autoGroup` (plans/s4-hierarchy-and-rows/s4.5-*.md, ADR 0013).
     // D-S2-23/D-S2-20: view/gantt-shell.ts's one call site, plus this file's own unit test — delete
     // src/view/dataset-change-subscription.ts and its one call site and the Gantt still constructs,
     // lays out, renders and scrolls; it just renders the data as it was at construction and never
