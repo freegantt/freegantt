@@ -45,13 +45,12 @@ describe('toEntries', () => {
     expect(entry?.end).toBe(utc('2026-09-09T00:00:00Z'));
   });
 
-  it('leaves an optional field absent when the input never had it, but defaults kind to span', () => {
+  it('leaves an optional field absent when the input never had it (ADR 0013: no stored kind)', () => {
     const input: EntryInput = { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' };
     const [entry] = toEntries([input], createContext(), registry);
     expect(Object.keys(entry ?? {}).sort()).toEqual(
-      ['end', 'id', 'kind', 'name', 'props', 'segments', 'start'].sort(),
+      ['end', 'id', 'name', 'props', 'segments', 'start'].sort(),
     );
-    expect(entry?.kind).toBe('span');
   });
 
   it('fills one segment over the full span when the input names none', () => {
@@ -61,11 +60,10 @@ describe('toEntries', () => {
     expect(entry?.segments[0]?.id).toBe(segmentId('minted-1'));
   });
 
-  it('carries parentId, kind, segments and props through when present', () => {
+  it('carries parentId, segments and props through when present', () => {
     const input: EntryInput = {
       id: 'child',
       parentId: 'root',
-      kind: 'milestone',
       name: 'Review',
       start: '2026-09-01',
       end: '2026-09-01',
@@ -74,7 +72,6 @@ describe('toEntries', () => {
     };
     const [entry] = toEntries([input], createContext(), registry);
     expect(entry?.parentId).toBe(entryId('root'));
-    expect(entry?.kind).toBe('milestone');
     expect(entry?.segments).toEqual([
       {
         id: segmentId('minted-1'),
