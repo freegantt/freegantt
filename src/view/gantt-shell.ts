@@ -77,6 +77,7 @@ import {
   entryIdOfItem,
   itemId,
   segmentId,
+  spansTime,
 } from '../model/index.js';
 import type {
   Dataset,
@@ -1734,9 +1735,10 @@ export class GanttShell {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
     if (entry !== undefined) {
-      // A non-spanning Entry draws no bar (ADR 0012), so there is no x/width to reveal. Only the
-      // row still shows (#232-adjacent gap surfaced by Build 1, no existing rule covered it).
-      if (entry.start === undefined || entry.end === undefined) return this.#revealRow(entry.id);
+      // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
+      // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
+      // covered it).
+      if (!spansTime(entry)) return this.#revealRow(entry.id);
       return this.#revealSpan(entry.id, entry.start, entry.end);
     }
     const ownerId = entries.entryIdOfSegment(id);

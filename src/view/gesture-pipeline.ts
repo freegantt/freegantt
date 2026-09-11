@@ -11,14 +11,13 @@ import type {
   Entry,
   EntryId,
   ErrorCode,
-  Instant,
   ItemId,
   RaiseError,
   Refusable,
   SegmentId,
   ProposedEdits,
 } from '../model/index.js';
-import { itemId } from '../model/index.js';
+import { itemId, spansTime } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { buildRefusalReport } from '../data/error-reporting.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
@@ -215,11 +214,12 @@ export class GesturePipeline {
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
-    // Load-bearing cast (ADR 0012): a gesture exists only for an Entry with a grip to grab, which
-    // means it already spans — see `layout/gesture-draft.ts`'s own guard, J4 in BUILD-LOG.md.
-    const anchorInstant = (
-      gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start
-    ) as Instant;
+    // A gesture exists only for an Entry with a grip to grab, which means it already spans
+    // (`spansTime`, ADR 0012). This was a cast until Q5 gave the rule one home; it now asks the
+    // question. A non-spanning anchor sizes its step at zero, which moves nothing — the cast sized
+    // it at `NaN`, and nothing on any reachable path produces either (J32 in BUILD-LOG.md).
+    if (!spansTime(anchor)) return 0;
+    const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 
@@ -254,9 +254,7 @@ export class GesturePipeline {
     this.#scheduledCursorX = undefined;
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
-      edit.start !== undefined && edit.end !== undefined
-        ? [{ entry: id, start: edit.start, end: edit.end }]
-        : [],
+      spansTime(edit) ? [{ entry: id, start: edit.start, end: edit.end }] : [],
     );
     const grabbed = spans[0];
     if (!grabbed) return Promise.resolve(false);

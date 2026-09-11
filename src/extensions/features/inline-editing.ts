@@ -34,7 +34,12 @@
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
-import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
+import {
+  EntryNotFoundError,
+  MutationCancelledError,
+  spansTime,
+  UnreadableCellValueError,
+} from '../../model/index.js';
 import type {
   CoreFieldValue,
   Disposer,
@@ -111,8 +116,9 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
     read: <K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined =>
       ctx.dataset.entries.fieldValue(entry.id, key),
     durationOf: (entry: Entry) => {
-      // An Entry that does not span (ADR 0012) has no duration; `diffDays` needs two real dates.
-      if (entry.start === undefined || entry.end === undefined) return undefined;
+      // An Entry that does not span (`spansTime`, ADR 0012) has no duration; `diffDays` needs two
+      // real dates.
+      if (!spansTime(entry)) return undefined;
       return { value: ctx.dataset.time.diffDays(entry.start, entry.end), unit: 'day' };
     },
   };

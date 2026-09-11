@@ -23,8 +23,13 @@ const IDENTITY_CAST_HELPERS = new Set([
 /** Readers of an ItemId (D-S4-25). They parse; they are not identity casts. */
 const ITEM_ID_READERS = new Set(['entryIdOfItem', 'segmentIndexOfItem']);
 
+/** The span invariant's one home (ADR 0012, Q5 in plans/field-redesign/BUILD-LOG.md). The author
+ * widened the carve-out for it on 2026-09-11: one pure predicate over the two dates, with no state
+ * and no dependency. It answers a question about a type this file declares, so it lives beside it. */
+const SPAN_PREDICATE = new Set(['spansTime']);
+
 function isAllowedHelperName(name) {
-  return IDENTITY_CAST_HELPERS.has(name) || ITEM_ID_READERS.has(name);
+  return IDENTITY_CAST_HELPERS.has(name) || ITEM_ID_READERS.has(name) || SPAN_PREDICATE.has(name);
 }
 
 function isInsideAllowedHelper(node) {
@@ -39,9 +44,10 @@ function isInsideAllowedHelper(node) {
   return false;
 }
 
-function isOneLineIdentityCast(node) {
-  // `export function entryId(value: string): EntryId { return value as EntryId; }` — single
-  // return statement, no other statements, whose argument is the parameter cast to a type.
+function isSingleReturnBody(node) {
+  // `export function entryId(value: string): EntryId { return value as EntryId; }` — one return
+  // statement and nothing else. Every helper this file admits states its whole answer in one
+  // expression; a body with steps in it is logic, and logic does not belong in model/.
   if (node.body.type !== 'BlockStatement' || node.body.body.length !== 1) return false;
   const statement = node.body.body[0];
   return statement.type === 'ReturnStatement';
@@ -76,8 +82,9 @@ module.exports = {
       },
       FunctionDeclaration(node) {
         const name = node.id?.name;
-        if (name && IDENTITY_CAST_HELPERS.has(name) && isOneLineIdentityCast(node)) return;
+        if (name && IDENTITY_CAST_HELPERS.has(name) && isSingleReturnBody(node)) return;
         if (name && ITEM_ID_READERS.has(name)) return;
+        if (name && SPAN_PREDICATE.has(name) && isSingleReturnBody(node)) return;
         context.report({ node, messageId: 'valueDeclaration' });
       },
       ClassDeclaration(node) {

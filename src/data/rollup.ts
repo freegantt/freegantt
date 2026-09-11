@@ -6,7 +6,7 @@
 // its authored values.
 
 import type { Entry, EntryId, FieldContext, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
-import { AggregatorFailedError } from '../model/index.js';
+import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
@@ -126,9 +126,9 @@ function widenSegmentsToEnvelope(
 ): Entry {
   const segmentsField = registry.get('segments');
   if (!segmentsField) return parent;
-  // Not spanning — nothing to hold a Segment over (ADR 0012). A dateless parent (every child
-  // dateless too) already stores `segments: []`; there is nothing to widen or mint.
-  if (parent.start === undefined || parent.end === undefined) return parent;
+  // Not spanning — nothing to hold a Segment over (`spansTime`, ADR 0012). A dateless parent
+  // (every child dateless too) already stores `segments: []`; there is nothing to widen or mint.
+  if (!spansTime(parent)) return parent;
 
   const target: TimeSpan = { start: parent.start, end: parent.end };
 

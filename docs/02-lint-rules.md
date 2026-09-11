@@ -181,7 +181,7 @@ allowlist exists for; `data/` and `layout/` have no such seam and never will, on
 
 ### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
 
-**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem` (D-S4-25). Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem` (D-S4-25), plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 
