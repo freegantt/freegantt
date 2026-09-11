@@ -952,3 +952,95 @@ anyway for consistency since it is the same dead field the other twelve are. Lef
 
 **Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 13).
 `pnpm exec vitest run src/view/gantt-shell.test.ts` — 35/35 pass, no snapshot involved.
+
+### J24 — `src/data/entry-store.mutation.test.ts`: compiles clean; 3 of 52 tests fail for a real `src/` reason, left unfixed and reported below (Q2)
+
+**Raised:** 2026-09-11, Build 3b, continuing the tsc-cleanup pass. **Status:** the compile fixes are
+mechanical (test rewrites); the three runtime failures are **not** test bugs — see Q2 immediately
+below, which is the important part of this entry.
+
+Compile-only changes, mechanical, following the same pattern as J21–J23:
+- `dataset()`'s helper dropped its `options: { rollUpKinds?: ... }` parameter — `DatasetState`'s
+  constructor never had a `rollUpKinds` option to forward it to; the one call site that used to pass
+  `{ rollUpKinds: [] }` is the deleted test below.
+- 9 bare `kind: 'group'`/`kind: 'span'` markers deleted from entry literals across `roll-up (§1.5)`
+  and `rollup (§1.5)` — every one was on an Entry whose parent/child status is already stated by
+  `parentId`, so rollup dispatch (now structural) is unaffected.
+- `describe('roll-up kinds (§1.5)')`'s two tests ("a childless roll-up kind...", "a non-deriving
+  kind...") both asserted the same ADR 0012 claim ("no dates, no children, no error") under two
+  `kind` markers that no longer distinguish anything — merged into one:
+  "an Entry with no dates and no children is legal, and stays dateless (ADR 0012)". No coverage
+  lost: both original assertions were already testing the one behaviour with two labels.
+  `rollup (§1.5)`'s "a childless group stays dateless (ADR 0012)" duplicated this exact claim a
+  second time under yet another label — **deleted**, since the merged test above already states it.
+- `"with rollUpKinds: [], nothing rolls up at all"` — **deleted outright**, no replacement. It tested
+  "opt a kind out of rollup," a `rollUpKinds`-keyed feature retired end to end by J17. Rollup is
+  unconditional for any Entry with children now, so there is no "opt out" left to test.
+- "moving a child moves its parent... reverting both fields restores both": its own "undo" step used
+  to loop `state.entries.update('p1', { [row.field]: row.from })` for each rolled-up field — this is
+  now refused by `entries.update()`'s own new guard (`DerivedFieldNotWritableError`, decision 6,
+  J17) whenever the target has children, which `p1` still does at that point. Rewrote the undo step
+  to `state.replay(invertChangeSet(seen[0]!))`, the same door `api/dataset.test.ts`'s "a consumer
+  History..." test already uses for exactly this. The test's own claim (reverting the cascade
+  restores both fields) is unchanged; only the mechanism used to revert changed.
+
+**Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 11).
+`pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **49/52 pass, 3 fail** — see Q2.
+
+### Q2 — Two apparent `src/` conflicts surfaced by running (not just compiling) `entry-store.mutation.test.ts` — needs the author's read before anyone touches `entry-store.ts`/rollup internals
+
+**Raised:** 2026-09-11, Build 3b. **Status:** open. Per CLAUDE.md's stop rule and the dispatch's own
+instruction ("if a test is red because `src/` is genuinely wrong, stop and report it... do not
+change the test"), **the three tests below are left red, unmodified from before this session's
+`kind`-removal edits** (two of them — `removeSegments`/quadratic-scaling — were never touched by
+this session's edits at all; the third — "a parent whose span..." — only had its dead `kind: 'group'`
+marker removed, no other change). None was weakened, deleted, or rewritten to dodge the failure.
+
+**1. `entries.update()`'s new write-refusal (decision 6) blocks its own library's internal callers,
+not just a consumer's direct write.**
+
+`EntryStore.update()` throws `DerivedFieldNotWritableError` whenever the patch touches a `rollsUp`
+field and `childrenOf(key).length > 0` — no exception for who is calling. Two failures come from
+this:
+
+- `#removeSegmentsFrom()` (the internal step behind `entries.removeSegments()`) calls
+  `this.update(id, { start: undefined, end: undefined })` when an Entry's last Segment goes (ADR
+  0012: the Entry survives, dateless). If that Entry has children, this internal, structural
+  bookkeeping call now throws the same error a misbehaving consumer would get — even though nothing
+  here is a consumer trying to override a derived value with an arbitrary one; it is the library
+  clearing a field an upcoming Rollup pass is about to recompute anyway. Test: `"a last-Segment
+  removal never touches the Entry's descendants (ADR 0012...)"`.
+- `"a parent whose span the same transaction proposed keeps the proposed value"` (a
+  **pre-existing, previously-passing** test guarding decision 5 itself — "a group whose span the
+  same transaction proposed keeps the proposed value") does exactly what decision 5 says a consumer
+  is allowed to do: `state.transaction(() => { state.entries.update('p1', {start, end}); … })` while
+  `p1` already has a child. Decision 6's blanket guard refuses this outright, because `p1` has
+  children at the time of the call — even though this is the one case decision 5 explicitly
+  protects (the same-transaction proposal is supposed to win over the cascade, not be refused
+  before the cascade ever runs).
+
+These two readings of decision 6 look mutually exclusive as implemented: either the guard is
+supposed to block every direct write to a rolling-up field regardless of caller (which breaks
+decision 5's own named case and `removeSegments`'s internal bookkeeping), or it is supposed to
+block only a *consumer's* write that is not part of the same transaction's own proposal (which is a
+narrower rule the current code does not implement). I did not choose between these and did not
+touch `entry-store.ts` — this needs the author's (or J17's own author's) read on which decision 6
+was actually meant to say, since reversing it either way is a judgement call bigger than a test fix.
+
+**2. A quadratic-time regression in Segment-id uniqueness checking, unrelated to `kind`/rollup.**
+
+`"S1: checking a transaction's Segment ids for uniqueness scales with entryCount, not entryCount²"`
+counts `entryAfterEdit` calls for a 100-Entry and a 400-Entry multi-Segment delete and asserts the
+4x-larger case costs at most a small multiple more (`large < small * 4 + 50`). It now reads
+**81400** for 400 entries against a threshold of 21450 — consistent with the exact quadratic
+behaviour the test's own comment says the original fix (`WriteSet.segmentOwner`, a #212 finding)
+was written to kill. None of these Entries have a `parentId` (they are flat siblings), so this is
+not the decision-6 guard from finding 1 — something else in this build's changes to
+`data/entry-store.ts`/`data/rollup.ts`/`data/write-set.ts` reintroduced the O(n²) path. **Not
+investigated further** — this needs someone to bisect which of this build's `data/` changes
+touched the `WriteSet.segmentOwner` lookup or `entryAfterEdit`'s call frequency, which is beyond a
+tsc-cleanup pass's scope.
+
+**Why this stayed a Q, not a J:** both are `src/` behaviour, not test authoring, and reversing either
+needs a decision only the author (or whoever re-reads decision 6's own intent) should make — not an
+agent mid-cleanup guessing which of two plausible readings was meant.

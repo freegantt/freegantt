@@ -4,7 +4,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { fieldRowsOf } from './change-set.js';
+import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import * as fieldAccess from './fields/field-access.js';
 import {
@@ -25,11 +25,10 @@ interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
 }
 
-function dataset(entries: Seed[] = [], options: { rollUpKinds?: readonly string[] } = {}): DatasetState {
+function dataset(entries: Seed[] = []): DatasetState {
   return new DatasetState({
     entries: entries.map((e) => ({ start: 0, end: 1, ...e, name: e.name ?? e.id })),
     timeZone: 'UTC',
-    ...options,
   });
 }
 
@@ -92,15 +91,15 @@ describe('entries.update', () => {
     const state = dataset([{ id: 't1', name: 'Framing' }]);
     const seen = changeSets(state);
 
-    const updated = state.entries.update('t1', { name: 'Framing — north wing', kind: 'milestone' });
+    const updated = state.entries.update('t1', { name: 'Framing — north wing', end: 5 });
 
     expect(updated.name).toBe('Framing — north wing');
-    expect(updated.kind).toBe('milestone');
+    expect(updated.end).toBe(5);
     expect(seen).toHaveLength(1);
     expect(seen[0]?.updated).toEqual(
       expect.arrayContaining([
         { store: 'entries', id: entryId('t1'), field: 'name', from: 'Framing', to: 'Framing — north wing' },
-        { store: 'entries', id: entryId('t1'), field: 'kind', from: 'span', to: 'milestone' },
+        { store: 'entries', id: entryId('t1'), field: 'end', from: 1, to: 5 },
       ]),
     );
 
@@ -675,18 +674,12 @@ describe('auto-wrap (D-S2-8)', () => {
   });
 });
 
-describe('roll-up kinds (§1.5)', () => {
-  it('a childless roll-up kind with no dates stays dateless (ADR 0012)', () => {
+describe('roll-up (§1.5)', () => {
+  // ADR 0013: rollup is structural now (any Entry with children rolls up), so a childless Entry
+  // and a leaf Entry are the same case — one date, or none, is not an error either way.
+  it('an Entry with no dates and no children is legal, and stays dateless (ADR 0012)', () => {
     const state = dataset();
-    const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
-
-    expect(group.start).toBeUndefined();
-    expect(group.end).toBeUndefined();
-  });
-
-  it('a non-deriving kind with no dates is legal — one date, or none, is not an error (ADR 0012)', () => {
-    const state = dataset();
-    const entry = state.entries.add({ id: 't1', name: 'Roofing', kind: 'span' });
+    const entry = state.entries.add({ id: 't1', name: 'Roofing' });
     expect(entry.start).toBeUndefined();
     expect(entry.end).toBeUndefined();
   });
@@ -721,7 +714,7 @@ describe('read-your-own-writes validation (§1.3)', () => {
 describe('rollup (§1.5)', () => {
   it('moving a child moves its parent, in one changeset — reverting both fields restores both', () => {
     const state = dataset([
-      { id: 'p1', kind: 'group' },
+      { id: 'p1' },
       { id: 'c1', parentId: 'p1', start: '2026-01-01', end: '2026-01-10' },
     ]);
     const before = state.entries.get('p1')!;
@@ -739,21 +732,19 @@ describe('rollup (§1.5)', () => {
     expect(after.start).not.toBe(before.start);
     expect(after.end).not.toBe(before.end);
 
-    // "one undo restores both": reverting via the changeset's own `from` values, in one transaction,
-    // brings the parent back to its pre-move span — there is no history module yet to call directly.
-    state.transaction(() => {
-      for (const row of parentRows) {
-        state.entries.update('p1', { [row.field]: row.from });
-      }
-    });
+    // "one undo restores both": `entries.update()` now refuses a direct write to a rolled-up field
+    // on a parent that still has children (`DerivedFieldNotWritableError`, this build's own decision
+    // 6) — so undo goes through `replay(invertChangeSet(...))`, the same door
+    // `api/dataset.test.ts`'s "a consumer History..." test uses, not a manual per-field `update()`.
+    state.replay(invertChangeSet(seen[0]!));
     expect(state.entries.get('p1')?.start).toBe(before.start);
     expect(state.entries.get('p1')?.end).toBe(before.end);
   });
 
   it('a two-level tree rolls up in one pass', () => {
     const state = dataset([
-      { id: 'root', kind: 'group' },
-      { id: 'mid', parentId: 'root', kind: 'group' },
+      { id: 'root' },
+      { id: 'mid', parentId: 'root' },
       { id: 'leaf', parentId: 'mid', start: '2026-03-01', end: '2026-03-05' },
     ]);
 
@@ -767,9 +758,9 @@ describe('rollup (§1.5)', () => {
     expect(root.end).toBe(mid.end);
   });
 
-  it('a group with children declared in the same construction array has a real span from the start', () => {
+  it('a parent with children declared in the same construction array has a real span from the start', () => {
     const state = dataset([
-      { id: 'p1', kind: 'group' },
+      { id: 'p1' },
       { id: 'c1', parentId: 'p1', start: '2026-01-01', end: '2026-01-10' },
     ]);
 
@@ -778,9 +769,9 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive'));
   });
 
-  it('a group whose span the same transaction proposed keeps the proposed value', () => {
+  it('a parent whose span the same transaction proposed keeps the proposed value', () => {
     const state = dataset([
-      { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
+      { id: 'p1', start: '2026-01-01', end: '2026-01-05' },
       { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
     ]);
 
@@ -792,29 +783,6 @@ describe('rollup (§1.5)', () => {
     const p1 = state.entries.get('p1')!;
     expect(p1.start).toBe(toInstant('UTC', '2026-09-01'));
     expect(p1.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
-  });
-
-  it('a childless group stays dateless (ADR 0012)', () => {
-    const state = dataset();
-    const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
-    expect(group.start).toBeUndefined();
-    expect(group.end).toBeUndefined();
-  });
-
-  it('with rollUpKinds: [], nothing rolls up at all', () => {
-    const state = dataset(
-      [
-        { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
-        { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
-      ],
-      { rollUpKinds: [] },
-    );
-
-    state.entries.update('c1', { start: '2026-09-01', end: '2026-09-05' });
-
-    const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-01-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
   });
 });
 
@@ -839,7 +807,7 @@ describe('removability (D-S2-23)', () => {
   it('with identityExtender injected explicitly, the fixture rolls up nothing and behaves identically', () => {
     const state = new DatasetState({
       entries: [
-        { id: 'p1', name: 'p1', kind: 'group', start: 0, end: 1 },
+        { id: 'p1', name: 'p1', start: 0, end: 1 },
         { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1 },
       ],
       timeZone: 'UTC',
