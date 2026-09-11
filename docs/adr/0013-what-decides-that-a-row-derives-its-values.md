@@ -1,7 +1,7 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
 decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only until the Field declares `distribute` (amendment, 2026-09-11). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
-open: Q9 — a parent bar drag must move a descendant that holds only one date, and `ProposedSpan` (`src/view/event-bus.ts`) requires both. The gesture cannot be described to a handler without widening a public type. See `plans/field-redesign/BUILD-LOG.md` Q9 and N9. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
+open: the parent bar drag is **built** (Build 3g, 2026-09-11). Q9 is answered and the behaviour ships: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. Two things hold the status at `proposed`. The public surface gained `ProposedDates`, and `etc/freegantt.api.md` is the author's to approve — the report was generated, read and reverted uncommitted, so `pnpm verify` fails at `api-report` and at nothing else. And no browser test drags a parent bar yet. See `plans/field-redesign/BUILD-LOG.md` J34, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
