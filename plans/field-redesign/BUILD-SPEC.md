@@ -1,6 +1,12 @@
 # BUILD-SPEC — the field redesign, ADRs 0016 → 0012 → 0011 → 0013 → 0014 → 0015
 
-**Read this before you write code for the field redesign.** Every decision is closed. No line is built.
+> ## The plan of record is [`build/`](build/README.md)
+>
+> **Do not build from this file.** [`build/README.md`](build/README.md) holds the hard rules and the landing order. One file per build holds the checklist, the traps and the gate. A builder reads the one file for the build in hand.
+>
+> **This file is the verification record.** It holds the HEAD snapshot of `src/`, the twenty-one findings against the ADRs' own work lists, and the author's rulings on them. Read it when you need the evidence behind an instruction in `build/`. Every correction it makes is already folded into `build/`.
+
+**Every decision is closed. No line is built.**
 
 **Section 3 is the target.** Dates are optional. There is no `kind` on `Entry`. There is no `meta`. There is no save format. Section 2 is the landing order. Section 5 is the checklist.
 
@@ -353,9 +359,16 @@ Three facts price this at zero. The library has never shipped. No saved Document
 
 ---
 
-## 1.3 Two commits still sit off `main`
+## 1.3 Two commits — landed, and nothing is owed
 
-`README.md` records an unmet instruction, and it is still unmet. `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) are on `adr-0011-field-redesign` and on every spike branch. Neither is an ancestor of `main`. They reach `main` through a PR. Open that PR before build 0012 starts, or build 0012 carries two unrelated commits into its own review.
+**CORRECTED 2026-09-10, against `main` at `d2f1b77`.** This section said `624350d` (the `sizingPairOf` fix) and `9c3f704` (the conversion-naming rename) still sat off `main`, and that a PR was owed before build 0012 started. **Both landed.** They reached `main` in `6747cb0`, *"Land the field-registry column fix and the read→to/from rename on main"* ([#276](https://github.com/Pawel-IT/FreeGantt/issues/276)).
+
+**The PR squashed, so neither SHA is an ancestor of `main`.** `git merge-base --is-ancestor 624350d main` fails, and that is what made this section read as unmet. Check the content, not the SHA:
+
+- `sizingPairOf` is at `src/data/fields/field-registry.ts:57`, and `:78` spreads it.
+- The rename is complete. `toStoredEdit`, `toStoredEdits`, `toEditReading`, `toEntry`, `toEntries`, `toSegment` and `toSegments` are all in `src/`. `readEdit`, `readEdits`, `readEditDetailed`, `readEntry`, `readEntries`, `readSegment` and `readSegments` all return 0.
+
+**No PR is owed. No build owns this.** Build 0012 carries nothing unrelated into its review.
 
 ## 1.4 Notes to the author — no decision is re-opened
 

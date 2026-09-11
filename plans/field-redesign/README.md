@@ -43,6 +43,10 @@ Settled in session. Each ruling lives in the ADR named. Do not re-derive them.
 
 Avoid **phase** and **grouped entry** in this folder. An Entry with children is a parent. `{ source: 'group', groupBy }` is a row source, not a parent.
 
+## Build it
+
+**[`build/README.md`](build/README.md) is the plan of record.** It holds the hard rules and the landing order. One file per build holds the checklist, the traps and the gate. A builder reads the one file for the build in hand, and ticks each box as it finishes.
+
 ## Shared
 
 | File | Read it when |
