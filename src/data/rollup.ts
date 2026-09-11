@@ -56,26 +56,34 @@ function collectTouchedIds(
   return touched;
 }
 
+/**
+ * `priorByParent` reads the tree as it stood before this operation. An id that had children there
+ * and has none in `byParent` (the post-operation tree) just lost its last child — ADR 0013 demotes
+ * it, so it still needs a visit even though `isParent` on the new tree says no.
+ */
 function parentsToRecompute(
   entries: ReadonlyMap<EntryId, Entry>,
   byParent: ReadonlyMap<EntryId, readonly EntryId[]>,
+  priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   touched: ReadonlySet<EntryId> | undefined,
 ): readonly EntryId[] {
   const isParent = (id: EntryId): boolean => (byParent.get(id)?.length ?? 0) > 0;
+  const wasParent = (id: EntryId): boolean => (priorByParent.get(id)?.length ?? 0) > 0;
+  const needsVisit = (id: EntryId): boolean => isParent(id) || wasParent(id);
 
-  const parents = new Set<EntryId>();
+  const candidates = new Set<EntryId>();
   if (touched === undefined) {
     for (const id of entries.keys()) {
-      if (isParent(id)) parents.add(id);
+      if (isParent(id)) candidates.add(id);
     }
   } else {
     for (const id of touched) {
-      for (const ancestor of ancestorsOf(id, entries)) parents.add(ancestor);
-      if (isParent(id)) parents.add(id);
+      for (const ancestor of ancestorsOf(id, entries)) candidates.add(ancestor);
+      if (needsVisit(id)) candidates.add(id);
     }
   }
 
-  const filtered = Array.from(parents).filter(isParent);
+  const filtered = Array.from(candidates).filter(needsVisit);
 
   const depthById = new Map<EntryId, number>();
   for (const id of filtered) depthById.set(id, depthOf(id, entries));
@@ -144,6 +152,38 @@ function widenSegmentsToEnvelope(
   return writeOntoEntry(parent, segmentsField, nextSegments);
 }
 
+/**
+ * A demoted Entry — a parent that just lost its last child — has nothing left to calculate from
+ * (ADR 0013: "demotion leaves no dates"). It keeps its name and drops every rolling-up Field and its
+ * Segments, the same "Aggregator says no value" clear the main loop runs, run here with no Aggregator
+ * to ask because there are no children left to ask one.
+ */
+function clearDerivedValues(
+  parent: Entry,
+  registry: FieldRegistry,
+  ctx: FieldContext,
+  parentId: EntryId,
+  updated: FieldUpdated[],
+): Entry {
+  let effectiveParent = parent;
+
+  for (const field of registry.rollingUpFields()) {
+    const from = readField(effectiveParent, field, ctx);
+    if (from === undefined) continue;
+    updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
+    effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
+  }
+
+  const segmentsField = registry.get('segments');
+  if (segmentsField && effectiveParent.segments.length > 0) {
+    const from = readField(effectiveParent, segmentsField, ctx);
+    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: [] });
+    effectiveParent = writeOntoEntry(effectiveParent, segmentsField, []);
+  }
+
+  return effectiveParent;
+}
+
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
@@ -184,7 +224,8 @@ export function rollUpFields(
   const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
 
   const byParent = childIdsByParent(entries);
-  const parents = parentsToRecompute(entries, byParent, touched);
+  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed);
+  const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
   const computed = new Map<EntryId, Entry>();
   const updated: FieldUpdated[] = [];
 
@@ -193,7 +234,12 @@ export function rollUpFields(
     if (!parent) continue;
 
     const childIds = byParent.get(parentId);
-    if (!childIds || childIds.length === 0) continue;
+    if (!childIds || childIds.length === 0) {
+      // Demoted: `parentsToRecompute` only visits this id with no children left when it had
+      // children before this operation (ADR 0013 — losing the last child demotes).
+      computed.set(parentId, clearDerivedValues(parent, registry, ctx, parentId, updated));
+      continue;
+    }
 
     const children: Entry[] = [];
     for (const childId of childIds) {
