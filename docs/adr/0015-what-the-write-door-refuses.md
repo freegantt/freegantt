@@ -1,6 +1,6 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` and serialize it (19). Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
+decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` (19). The serialize-as-`"never"` half has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md); the lock itself stands. Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
 open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---
 
@@ -18,7 +18,7 @@ Beside it sits `#mergeCoreFieldOverride` (`field-registry.ts:211-225`), which le
 
 **`editable: false` refuses `entries.update()` too, and that is the same rule.** Ruled 2026-09-09. The error is `FieldNotEditableError`. This ADR declares it and throws it. [ADR 0011](0011-consumer-values-live-in-props.md) does not.
 
-**Decision 18, closed 2026-09-10, default overruled 2026-09-10 (grill).** `editable` is `'never' | 'api' | 'anywhere'`. Default `'anywhere'`. `true` / `false` are input aliases for `'anywhere'` / `'never'`. The grid is writable iff `'anywhere'`. `update()` is writable iff not `'never'`. `'api'` remains an opt-out: grid dead, `update()` allowed. Keep `{ key: 'start', editable: false }` and serialize it as `"never"` — decision 19. Three declaration shapes — decision 23.
+**Decision 18, closed 2026-09-10, default overruled 2026-09-10 (grill).** `editable` is `'never' | 'api' | 'anywhere'`. Default `'anywhere'`. `true` / `false` are input aliases for `'anywhere'` / `'never'`. The grid is writable iff `'anywhere'`. `update()` is writable iff not `'never'`. `'api'` remains an opt-out: grid dead, `update()` allowed. Keep `{ key: 'start', editable: false }` — decision 19. **Do not serialize it.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. The lock constructs, `fields.all` already reads the merge, and `update()` / the grid refuse the change. Three declaration shapes — decision 23.
 
 **Grill 2026-09-10.** No new Field keys after construction. Hide/show columns stay live. After setup, only `editable` may change on a Field. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Fields are the schema, not a product hole.
 
@@ -30,7 +30,7 @@ dataset.setFieldEditable('start', 'never')
 
 The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It does not mutate the object `field()` returns. Extra keys are not a door. New Field keys stay refused. Per-row stays `interactions.edit`.
 
-This ADR writes **schema 9**.
+**No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. Do not encode `SerializedField`.
 
 ### This ADR owns the resolver's editable arm, and only that arm
 

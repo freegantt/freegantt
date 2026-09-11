@@ -1,5 +1,7 @@
 # Cross-ADR closure review — 0011 to 0015
 
+> **Historical. Do not treat this page as open work.** Every number this page called ready to rule has since closed. The 2026-09-10 grill closed 18, 13, Q12b, Q15 and Q16. [ADR 0016](../../../../docs/adr/0016-the-library-holds-no-save-format.md) then deleted the save format. Build from [`BUILD-SPEC.md`](../../BUILD-SPEC.md). The five ADRs' own READMEs are the current working material.
+
 **Acted on.** Every number this page called ready to rule has since closed. **13** closed on `read` (duration is a compute Field). **18** closed on the `'never' | 'api' | 'anywhere'` enum. Nothing in this folder is open.
 
 **Not a spike. A reading of all five ADRs, all five verdict reports, and the code behind both.** The question asked: which decisions can close on the evidence that now exists, was a better API available, and would a sixth spike help.
@@ -109,4 +111,4 @@ Four options. Each is now recorded in the ADR that owns it.
 | [`shared/evidence.md`](../../shared/evidence.md) | AG Grid and Bryntum named with sources; the unsourced third claim marked |
 | [`shared/prose-sweep.md`](../../shared/prose-sweep.md) | Four F rows; **the spike gate for finalizing a spiked ADR** |
 
-**Nothing ruled. No decision closed. No `src/` change.** A review reports; the author rules.
+**Closed after this review.** The author ruled. Do not re-open a number from this page.

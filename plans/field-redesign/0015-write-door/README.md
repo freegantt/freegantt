@@ -18,15 +18,13 @@ How strict is `entries.update()`? What does an *absent* `editable` mean there, w
 
 **This ADR fills the editable arm and wires `entries.update()` to it** — the last of the three ([the whole story](../README.md#the-write-resolver-one-function-three-owners)). `view/capability.ts:120` is the one place in `src/` that reads `Field.editable` today, so the arm has exactly one existing behaviour to change. **Claim I14 when this ADR lands, not after 0013.**
 
-## An API gap this ADR owns: a core override never reaches the Document
+## An API gap this ADR does not serialize
 
-**Recorded here 2026-09-10.** It was in the [0015 spike review](../reviews/2026-09-10-0015-write-door-spikes/README.md) as trap 12 and in the combined review's HEAD traps, and in no ADR.
+**Recorded here 2026-09-10.** It was in the [0015 spike review](../reviews/2026-09-10-0015-write-door-spikes/README.md) as trap 12.
 
-`FieldRegistry.authored` filters core Field keys (`field-registry.ts:150-152`), and `encodeDeclaredField` drops them too. A consumer's `{ key: 'end', editable: false }` merges into the core Field at construction and then **never serializes**. `cost.editable` round-trips; `end.editable` does not. `fromJSON` is ingest, so the lock only survives if the caller passes `fields` again.
+`FieldRegistry.authored` filtered core Field keys for the Document. A consumer's `{ key: 'end', editable: false }` merges into the core Field at construction (`#mergeCoreFieldOverride` writes `#resolved`), so **`dataset.fields.all` already reads it back.** `authored` never did. [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deletes `authored` with the Document.
 
-**`harness/data.ts:39-40` states the opposite, and it is live today:** *"The lock rides in the Document too. `editable` serializes on the Field, so an exported Document carries it and an import puts it back."* The call it describes is `{ key: 'end', editable: false }` at `:45`.
-
-**This ADR closes it by serializing the override.** Decision 19, closed 2026-09-10, keeps `{ key: 'start', editable: false }` and writes it into the Document. Do not tidy the harness comment; close the library.
+**`harness/data.ts:39-40` states the lock rides in the Document.** That comment goes with build 0016's B5. Do not encode a Document here. Assert `fields.all`.
 
 ## Decision 18's cost table is two rows
 
@@ -68,7 +66,9 @@ Create, ingest, and History replay still write a locked Field (decision 19). Un-
 
 **I14.** Gestures ask `canWrite` — the grid threshold. `update()` asks the same key against the API threshold. The locked sentence *"one answer gates every writer, default false"* is rewritten in the [prose sweep](../shared/prose-sweep.md). Enforcement at the data door is a new `entries.update()` assertion in `e2e/write-refusal.spec.ts`.
 
-**This ADR writes schema 9** — `SerializedField.editable` becomes the enum ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)). Omit when the value is the default `'anywhere'`. `false` at the write door normalizes to `'never'` before encode, so `{ key: 'start', editable: false }` round-trips as `"editable": "never"`. Spend the next unused number at merge if 0014 has not yet spent 8.
+**The four locked sentences** (`plans/02` §4.2, `plans/01` §2.6, `plans/01` I14, `src/model/field.ts:125-127`) all change. The specs already say `'anywhere'`. This ADR rewrites the `field.ts` comment with the code.
+
+**No schema number.** [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted the Document. Do not encode `SerializedField`. `{ key: 'start', editable: false }` constructs and stores as `'never'`. `dataset.fields.all` already reads the merge.
 
 **What lost.** Copying the view rule (default refuse at `update()`). Split as a three-way boolean. A second word (`acceptsUpdate`). Two keys (`locked` plus `editable`). A door argument on `canWrite`.
 
@@ -111,7 +111,7 @@ gantt.hideGridColumn('cost')
 
 **The ruling. Keep the override for `editable` alone.** `{ key: 'start', editable: false }` constructs. Create, ingest, and History replay still write. `update()` and the grid refuse **change**. Un-date is a change, so it throws `FieldNotEditableError`.
 
-**Serialize the override.** `FieldRegistry.authored` currently drops core keys, so the lock does not round-trip. This ruling closes that gap. Decision 18: a core `editable: false` normalizes to `'never'` and rides in the Document as `"editable": "never"`. Do not tidy the harness comment; close the library. `fromJSON` is ingest, so without encoding, the lock only survived if the caller passed `fields` again.
+**Do not serialize the override.** `FieldRegistry.authored` dropped core keys because it fed the Document. `#mergeCoreFieldOverride` already writes the merge into `#resolved`, so `dataset.fields.all` reads it. [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deletes `authored`. Assert `fields.all`. Do not tidy a harness comment about a Document; build 0016 deletes that feature.
 
 **`beforeChange` does not replace this.** `fieldRowsOf` filters `updated`, so it never sees `add`. The event cannot lock a create.
 
@@ -135,7 +135,7 @@ A `props` *value* naming a core key stays a warning ([0011](../0011-consumer-val
 - Core `name` / `start` / `end` declare `'anywhere'` (today `editable: true`). `parentId` and `segments` have no column.
 - Fill the resolver's editable arm. Grid / `canWrite`: writable iff `'anywhere'`. `entries.update()`: refuse `'never'` with `FieldNotEditableError`. Do not add a door argument to `canWrite`.
 - Check `compute` before `editable` ([the ruling](../shared/rulings.md#computedfieldcannotbewrittenerror--one-name-at-two-doors)).
-- Encode the enum on `SerializedField`. Omit `'anywhere'` (the default). Write schema **9**. `{ key: 'start', editable: false }` round-trips as `"editable": "never"`. Spend the next unused number at merge if 0014 has not yet spent 8.
+- **Do not encode a Document.** [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted `SerializedField`. `{ key: 'start', editable: false }` constructs and stores as `'never'`. Assert `dataset.fields.all` reads it.
 - `e2e/write-refusal.spec.ts` gains an `entries.update()` assertion for `'never'` and for `'api'` on a consumer Field.
 - `view/capability.ts:120` currently reads `field.editable === true`. Point it at the moved resolver. Do not restate the enum there.
 - Live `editable` after construction: `dataset.setFieldEditable(key, editable)` (Q16). Copy that Field; replace `FieldRegistry.all`'s identity (#187). Do not mutate `field()` in place. Do not accept new Field keys. Do not assign `dataset.fields`.

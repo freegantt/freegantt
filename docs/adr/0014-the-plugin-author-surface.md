@@ -33,7 +33,7 @@ export const SCHEDULING_PROGRESS = 'scheduling:progress'
 dataset.entries.update('t1', { [SCHEDULING_PROGRESS]: 60 })
 ```
 
-This ADR writes **schema 8**.
+This ADR writes **no schema number**. [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. The prefix keeps its reason: two writers still share one bag at runtime.
 
 **13.** `dataset.entries.read(id, key)` and `ctx.read(entry, key)` are one job under one name. `entry.props.k` is storage. `fieldValue` is renamed to `read`. `durationOf` is deleted. Duration is the shipped compute Field; you read it through `read`. One unit — millisecond. [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) closes with the door.
 
@@ -43,7 +43,7 @@ This ADR writes **schema 8**.
 
 ## The price of deciding late
 
-Decisions 9 and 12 closed on a required plugin prefix. The Document written by ADR 0011 holds `props: { progress: 60 }` and this ADR rewrites it to `props: { 'scheduling:progress': 60 }`. That is **schema 8** and a rename of plugin-**declared** keys — not ADR 0011's 184-occurrence `StoredEdit` rename. Decision 3 prices a pre-release schema number at zero, and the library has never shipped. **That price is why this ADR is not a gate on the rename.**
+Decisions 9 and 12 closed on a required plugin prefix. HEAD holds plugin values as bare keys in `meta` / `props`. This ADR rewrites them to prefixed keys at runtime — a rename of plugin-**declared** keys, not ADR 0011's `StoredEdit` rename. **[ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document, so there is no schema 8 and no file rewrite.** The prefix still lands because two writers share one bag. **That is why this ADR is not a gate on the rename.**
 
 ## Consequences that hold whichever way it lands
 

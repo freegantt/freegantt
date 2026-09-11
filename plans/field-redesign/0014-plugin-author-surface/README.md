@@ -16,7 +16,7 @@ Decision 16 closed against the branded `ProposedEdit` (0011 decision 22). Decisi
 
 [0011](../0011-consumer-values-in-props/README.md) ships HEAD's posture under a new name, and **this ADR widens it additively** to `Readonly<Partial<TProps & PluginEntryProps>>`, with plugin keys prefixed. Additive, so the rename does not wait ([the pairwise check](../README.md#where-the-decisions-could-walk-over-each-other-and-why-they-do-not)).
 
-**Deciding late costs one number, and this ADR spends it.** The Document 0011 writes holds `props: { progress: 60 }`, and this ADR rewrites it to `props: { 'scheduling:progress': 60 }` — a rename of plugin-**declared** keys, not 0011's 184-occurrence `StoredEdit` rename. It writes **schema 8** ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)), and decision 3 prices a pre-release number at zero.
+**Deciding late costs no file rewrite.** HEAD holds plugin values as bare keys. This ADR prefixes plugin-**declared** keys at runtime — not 0011's 184-occurrence `StoredEdit` rename. [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted the Document, so there is no schema 8. The prefix still lands because two writers share one bag.
 
 ## 9 and 12 closed together
 

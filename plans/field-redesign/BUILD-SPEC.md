@@ -361,10 +361,10 @@ Three facts price this at zero. The library has never shipped. No saved Document
 
 ## 1.4 Notes to the author — no decision is re-opened
 
-Two observations. Both keep planning around the decision as it stands.
+Both items below are closed. Do not stop a build to re-ask them.
 
-1. **V2.** ADR 0011 leans on #266 for *"`meta` names four things"*. The observation is right and the issue number is wrong. The redesign closes no part of #266.
-2. **V13.** The reader-chain question is genuinely unanswered and it costs four migration functions if answered the other way. Ask before build 0011.
+1. **V2.** ADR 0011 leaned on #266 for *"`meta` names four things"*. The observation is right and the issue number is wrong. The citations are dropped — §5.0.
+2. **V13.** Ruled 2026-09-10, then superseded the same day by ADR 0016. No build spends a schema number. Do not ask which readers survive.
 
 ---
 
@@ -409,7 +409,7 @@ Report the verdict line. A run with no verdict line is unproven.
 | `api/` | `Dataset.toJSON` (`dataset.ts:312`) and `Dataset.fromJSON` (`:326`) deleted, with the `fromDocument`/`toDocument`/`reportCorrectedRollUps` import at `:26`. The `DatasetPluginOf` doc comment at `dataset-plugin.ts:94` stops citing the Document |
 | `harness/` | Three `toJSON()` textarea dumps — `main.ts:309`, `data.ts:258`, `hierarchy.ts:277` — and the surface row in `docs/page-brief.ts:45`. A debug dump becomes `JSON.stringify(dataset.entries.all)` if the page still wants one |
 
-**Nothing a plugin calls changes.** Checked 2026-09-10: no file under `src/extensions/`, `harness/plugins/` or `api/dataset-plugin.ts` names `toDocument`, `fromDocument`, `toJSON`, `fromJSON` or `schema`. The plugin context keeps all six members. Plugin rows keep their public reader, `pluginStores.read(id).all` (`plugin-store.ts:74`).
+**Nothing a plugin calls changes.** Checked 2026-09-10: no file under `src/extensions/`, `harness/plugins/` or `api/dataset-plugin.ts` names `toDocument`, `fromDocument`, `toJSON`, `fromJSON` or `schema`. The plugin context keeps all six members, including `ctx.store.read`. The app-author door this build ships is `dataset.pluginStore(id)` — B1b. `pluginStores.read` is not public.
 
 **One test needs a new snapshot, and its invariant does not change.** `src/data/history.property.test.ts:4` imports `toDocument` and uses it to compare two dataset states. Give it a test-local snapshot over `entries.all`. **I7 stands** — undo still reverts user and engine effects atomically. Only the comparison changes.
 
@@ -545,10 +545,9 @@ Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites
 
 #### B10 — what stays, and must be proved to stay
 
-`new Dataset({ entries })`, loose input, `PluginStores` itself, `reserve`, `read`, and the passenger rows a Dataset carries for a plugin it never installed (D-S5-30). This build removes a way out, never a way in.
+`new Dataset({ entries })`, loose input, `PluginStores` itself, `reserve`, and `ctx.store.read` inside a plugin's `setup`. **Passenger data does not stay** — B2a retired it. **`pluginRows` does not stay** — B2a deletes the option, the seed arm, and `toDocument`.
 
-
-**Do not** delete `PluginStores` itself, its `read` view, or the `pluginRows` constructor option's runtime seeding of stores a plugin later reserves — only the `PluginDocument` shape it seeded **from**. **Do not** touch `new Dataset({ entries })`. This build removes a way out, never a way in.
+**Do not** delete `PluginStores` itself, or the `read` view a plugin reaches as `ctx.store.read`. **Do not** touch `new Dataset({ entries })`. The app-author way out is `dataset.pluginStore(id)`, which this build ships (B1b). There is no public way in for plugin rows.
 
 ---
 
@@ -563,7 +562,7 @@ Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites
 | Layer | What changes |
 |---|---|
 | `model/` | `Entry.start` and `Entry.end` become optional, independently. `Entry.segments` stops being *never empty* |
-| `data/` | `entry-reader.ts:170`'s `referenceDate` fill is deleted. Serialization gains a `length === 0` arm. `field-access.ts:92` gains the duration guard. `field-access.ts:26`'s `isOptionalEntryKey` gains `start` and `end` |
+| `data/` | `entry-reader.ts:170`'s `referenceDate` fill is deleted. Ingest gains a `length === 0` arm for Segments (constructor `entries` — there is no Document). `field-access.ts:92` gains the duration guard. `field-access.ts:26`'s `isOptionalEntryKey` gains `start` and `end` |
 | `layout/` | Bar geometry skips a row that does not span. Sort comparators put a dateless row last, both directions |
 | `view/` | Default `gridColumns` becomes `['name', 'start', 'end']` (`view/grid-columns.ts:11`) |
 | `extensions/` | The date editor opens on a blank cell. `no-date-value` stops refusing (`src/extensions/features/inline-editing.ts:764`) |
@@ -748,7 +747,9 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 
 **Schema.** None. **Decision 19 loses its serialization half.** *"The lock serializes as `"never"`"* has nowhere to serialize to. **The lock itself stands**, and it is the part that matters: `{ key: 'start', editable: false }` still constructs, `update()` and the grid still refuse the change, and create, ingest and History replay still write.
 
-**One API gap closes here anyway, and it was never about the format.** `FieldRegistry.authored` drops a consumer's `editable` override on a core Field, so `{ key: 'end', editable: false }` merges at construction and is then invisible to anything that reads the registry back. Fix the registry. The old test for it asserted a round trip; assert the registry read instead.
+**Decision 19 loses its serialization half.** *"The lock serializes as `"never"`"* has nowhere to serialize to. **The lock itself stands**, and it is the part that matters: `{ key: 'start', editable: false }` still constructs, `update()` and the grid still refuse the change, and create, ingest and History replay still write.
+
+**`dataset.fields.all` already reads the merged override.** `#mergeCoreFieldOverride` replaces the core Field in `#resolved` (`field-registry.ts:211-225`). `{ key: 'end', editable: false }` is visible through `all` today. `FieldRegistry.authored` filtered core keys for the Document, and build 0016 deletes `authored`. This build does not encode anything. Assert `fields.all`. The harness comment at `data.ts:39-40` goes with build 0016's B5.
 
 **The gate that proves it done.**
 
@@ -763,7 +764,7 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 - An absent `editable` opens the cell and allows `update()`.
 - Un-dating a `'never'` `start` throws.
 - Create, ingest and History replay still write a locked Field.
-- `{ key: 'end', editable: false }` survives `FieldRegistry.authored` and `dataset.fields.all` reads it back. `harness/data.ts:39-40` claims this today and it is false today.
+- `{ key: 'end', editable: false }` is visible on `dataset.fields.all`. Do not assert `authored` — build 0016 deleted it.
 - `dataset.setFieldEditable('start', 'never')` replaces `FieldRegistry.all`'s array identity, and a subscriber notices.
 - `setFieldEditable` on an unknown key throws. A new Field key stays refused.
 - `entries.update()` on a `compute` Field throws `ComputedFieldCannotBeWrittenError`, and the message names the door. That closes #213 — **V14**.
@@ -774,7 +775,7 @@ pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 - Do **not** add a door argument to `canWrite`. One key, two thresholds.
 - Do **not** mutate the object `field()` returns. It is a resolved snapshot, not a signal.
 - Do **not** declare `'api'` on `parentId` or `segments` — **V9**. Let the absent column keep them out of the grid.
-- The default is `'anywhere'`, not `'api'` — **V8**. Two locked-spec sentences still say `'api'`, and both need the author.
+- The default is `'anywhere'`, not `'api'` — **V8**. The locked specs already say `'anywhere'`. Rewrite `src/model/field.ts:125-127` with the code.
 - Claim I14 **here**, and only for the half this ADR owns plus 0013's.
 
 ---
@@ -943,7 +944,7 @@ dataset.setFieldEditable('start', 'never')
 
 **Errors.** `FieldNotEditableError` is declared here and thrown at `entries.update()` for `'never'`. `ComputedFieldCannotBeWrittenError` is thrown here at `entries.update()` — one name, two doors, and the message names the door.
 
-**The API gap this build closes.** `FieldRegistry.authored` filters core keys, so a consumer's `{ key: 'end', editable: false }` merges at construction and is then unreadable through `dataset.fields.all`. `harness/data.ts:39-40` states the opposite today. **Close the library. Do not tidy the harness comment.** The gap was found through serialization and it is not a serialization gap: a registry that cannot read back what a consumer declared is wrong on its own.
+**`dataset.fields.all` already reads the merged override.** `#mergeCoreFieldOverride` replaces the core Field in `#resolved`. `{ key: 'end', editable: false }` is visible through `all` today. `authored` existed to feed the Document; build 0016 deletes it. This build does not encode a lock. Assert `fields.all`. The harness Document comment goes with build 0016's B5.
 
 **I14 is claimed here.** Gestures ask `canWrite` at the grid threshold. `update()` asks the same key at the API threshold. `e2e/write-refusal.spec.ts` must call `entries.update()`.
 
@@ -1111,7 +1112,7 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Give `harness/planner.ts:31` one generic. Rename `PlannerMeta` and `DemoMeta`.
 - [ ] Update the `FieldSource` row in `harness/docs/files.html:130-132`.
 - [ ] Drop both `#266` citations from ADR 0011 — **V2**. The Context table already proves the claim.
-- [ ] **Do not** delete `reportCorrectedRollUps`. **Do not** wire `entries.update()` to a new arm. **Do not** claim I14.
+- [ ] `reportCorrectedRollUps` is already gone — build 0016 deleted it. **Do not** wire `entries.update()` to a new arm. **Do not** claim I14.
 - [ ] Run the corrected gate from **V1**. It must return 0.
 - [ ] Mark `plans/03:198` `[S4-A1]` *— retired by ADR 0011* — **V18**, authorized 2026-09-10. Its subject is the `meta` Field, which this build deletes. `protect-spec.sh` blocks the edit, so the author opens the file.
 - [ ] Close the build — see 5.6.
@@ -1127,13 +1128,13 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Re-home the four registries that keyed on `entry.kind` onto structure or a plugin store.
 - [ ] Delete the core diamond: `--fg-diamond-size` and the milestone producer.
 - [ ] Declare `DerivedFieldNotWritableError`. Fill the resolver's derived arm.
-- [ ] Wire `entries.update()` to the derived arm. Build the answers from **seven** call sites.
+- [ ] Wire `entries.update()` to the derived arm. Build the answers from **six** call sites — `fromJSON` went with build 0016.
 - [ ] Refuse a mixed patch **whole, before any write**.
 - [ ] Make `add()` and the constructor **drop** a derived value and raise one report.
 - [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write.
 - [ ] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
 - [ ] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is overruled.
-- [ ] Delete `reportCorrectedRollUps` and its tests.
+- [ ] `reportCorrectedRollUps` is already gone — build 0016 deleted it. Decision 5's warning is a **different** thing, and it is still owed.
 - [ ] Write decision 5's warning. **Do not unify the `body` / `merged` predicate** (`refuted.md` item 8).
 - [ ] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
 - [ ] Raise one report per operation, at `severity: 'warning'`, always — **V16**.
@@ -1179,7 +1180,7 @@ Work top to bottom. Each build ends with the same five closing items.
 - [ ] Throw `ComputedFieldCannotBeWrittenError` at `entries.update()`. That closes #213 — **V14**.
 - [ ] Do **not** add a door argument to `canWrite`.
 - [ ] Point `view/capability.ts:120` at the moved resolver. Do not restate the enum there.
-- [ ] Make `FieldRegistry.authored` stop dropping a core `editable` override, so `dataset.fields.all` reads it back.
+- [ ] Assert `dataset.fields.all` reads `{ key: 'end', editable: false }` back. `#mergeCoreFieldOverride` already merges into `#resolved`; `authored` goes with build 0016 and is not this build's to fix. Do not encode a Document.
 - [ ] Ship `dataset.setFieldEditable(key, editable)`. Copy the Field. Replace `FieldRegistry.all`'s identity.
 - [ ] Refuse a new Field key at `setFieldEditable`. Do not mutate what `field()` returns.
 - [ ] Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts` for `'never'` and for `'api'`.
@@ -1223,9 +1224,9 @@ Do all five, in this order, for the build you just finished.
 | **`.dependency-cruiser.cjs`** — **AUTHORIZED 2026-09-10, and it still lands with the folder.** Delete the `serialization-is-removable` rule (`:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`). **This is the one item the hook really blocks**: `protect-spec.sh:81-89` exits 2 on that file, where a `plans/` edit only warns. **It cannot land early.** The rule guards a folder that still ships, so deleting it before the folder weakens a live guard for no gain. It goes in the same commit as the folder | **author** | Build 0016 |
 | `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md:73` — D-S5-24's passenger-data bullet marked retired, the rest of D-S5-24 kept — **LANDED**. **D-S5-30's *"not a store anyone may read"* lives in `plugin-store.ts:73`, not in the spec, so it is the build's comment to rewrite** | author | Build 0016 |
 | `plans/00` **D7** — the row now reads *the library holds no save format*, and records what it said before. Its headline, *persistence is consumer-owned*, never moved — **LANDED** | author | Build 0016 |
-| `CONTEXT.md` owes an `entry.props` glossary entry, and owes the deletion of the **Field source** entry | **author** | Build 0011 |
-| `CONTEXT.md` owes `_Avoid_`: **phase**, **grouped entry** | **author** | Build 0013 |
-| `CONTEXT.md` owes an Entry **spans** entry | **author** | Build 0012 |
+| `CONTEXT.md` — **Props** glossary entry, and **Field source** retired on that `_Avoid_` line — **LANDED** | author | Build 0011 |
+| `CONTEXT.md` `_Avoid_`: **phase**, **grouped entry** on Entry — **LANDED** | author | Build 0013 |
+| `CONTEXT.md` Entry **Spans** entry — **LANDED** | author | Build 0012 |
 | `plans/03:198` `[S4-A1]` marked *— retired by ADR 0011* — **V18. LANDED `5f21f2d`** | author | Build 0011 |
 | `plans/03:206` `[S4-A8]` and `[S4-A9]` marked *— retired by ADR 0013* — **V18. LANDED `5f21f2d`** | author | Build 0013 |
 | `plans/01:330` and `plans/02:478` said default `editable` was `'api'`. Now `'anywhere'` — **V8. LANDED `5f21f2d`** | author | Build 0015 |

@@ -2,7 +2,7 @@
 
 **Governing:** [ADR 0011](../../../docs/adr/0011-consumer-values-live-in-props.md). The types behind these calls are in [`types.md`](types.md); the rulings behind them are in [0011 closed decisions](README.md#closed-decisions).
 
-**Nothing here is implemented, and every line here is 0011's.** A call another ADR owns is not shown. 0011 lands second, so [0012](../0012-optional-dates/README.md)'s optional dates are already true when this ADR builds.
+**Nothing here is implemented, and every line here is 0011's.** A call another ADR owns is not shown. 0011 lands after [0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) and [0012](../0012-optional-dates/README.md), so optional dates are already true when this ADR builds. There is no Document.
 
 ## What this ADR changes
 
@@ -12,7 +12,7 @@
 | `EntryEdit` | `meta?: TMeta`, **replaces** | envelope + declared keys at the top, **merges**; no `props:` key |
 | Field address | `source: FieldSource` | the Field key, or `compute` |
 | Generics | `Dataset<TMeta, TFields>` | `Dataset<TProps>` |
-| Schema | **5** | **6** — `meta` → `props`, `source` leaves `SerializedField` ([the counter](../shared/rulings.md#3--the-schema-restarts-release-gate)) |
+| Schema | none — ADR 0016 deleted the Document | none |
 
 ## The whole shape, in one block
 
@@ -49,11 +49,9 @@ dataset.entries.update('t1', { start: '2026-01-06', owner: 'Sam' })  // merges; 
 
 ```ts
 new Dataset<ConsumerEntryProps>({ timeZone, entries, fields, plugins })
-Dataset.fromJSON<ConsumerEntryProps>(json, { fields, plugins })
-dataset.toJSON()
 ```
 
-One generic types `entry.props` and the `props` patch. The published plugin types lose their second parameter too: `DatasetOptions`, `DatasetPlugin`, `DatasetPluginContext`, `Dataset.fromJSON`.
+One generic types `entry.props` and the `props` patch. The published plugin types lose their second parameter too: `DatasetOptions`, `DatasetPlugin`, `DatasetPluginContext`. There is no `fromJSON` / `toJSON` — [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md).
 
 A plugin's keys are **not** in `TProps`. [0014](../0014-plugin-author-surface/README.md) widens the write door to `PropsEdit<TProps & PluginEntryProps>` later; this ADR ships the one generic.
 
@@ -111,11 +109,11 @@ add({ id, name, extra: 1 })                  // UnknownFieldError — extra is n
 update(id, { props: { owner: 'Sam' } })      // refused — name owner at the top
 ```
 
-`EntryEdit<TProps>` is the envelope plus declared-key shorthand. `add()` takes the same flat shape. Constructor `entries` also take declared keys at the top ([Q15](README.md#q15--constructor-entries-take-declared-keys-at-the-top)); nested `props` stays legal there for passengers. `PropsEdit<TProps>` is the nested bag on the Document and on constructor ingest, not on `add()` or `update()`. An edit may remove only what a stored Entry may lack — `parentId`, `start`, `end`.
+`EntryEdit<TProps>` is the envelope plus declared-key shorthand. `add()` takes the same flat shape. Constructor `entries` also take declared keys at the top ([Q15](README.md#q15--constructor-entries-take-declared-keys-at-the-top)); nested `props` stays legal there for passengers. `PropsEdit<TProps>` is the nested bag on constructor ingest and on a complete `ProposedEdit`, not on `add()` or `update()`. An edit may remove only what a stored Entry may lack — `parentId`, `start`, `end`.
 
 **`{ start: undefined }` must compile in this ADR's type tests.** The un-date verb is 0012's, and 0012 has landed, so `EntryEdit` follows `Entry` here. Do not skip those tests.
 
-**An undeclared key is carried at `fromJSON` and never named at `add()` or `update()`.** Constructor ingest warns on an unknown top-level key and still carries undeclared keys inside `props`. A declaration is a *handling* contract, not a storage permission — [decision 1](README.md#1--an-undeclared-key-is-carried-and-update-never-names-it).
+**An undeclared key is carried at constructor ingest and never named at `add()` or `update()`.** Constructor ingest warns on an unknown top-level key and still carries undeclared keys inside `props`. A declaration is a *handling* contract, not a storage permission — [decision 1](README.md#1--an-undeclared-key-is-carried-and-update-never-names-it).
 
 ## Plugin
 
@@ -125,30 +123,15 @@ const extender: EditExtender = (request) =>
   new Map([[phaseId, { start: moved.start, risk: 'high' }]])
 ```
 
-Registration still closes when `setup()` returns. Plugin declarations stay out of the Document.
+Registration still closes when `setup()` returns. Plugin declarations are code; they are not saved.
 
 `EditRequest.proposed` is a complete `ProposedEdit` (today `StoredEdit`), and `props` is **required** on it. A complete record and a patch are now the same shape, so a plugin that spreads `proposed.props` into a returned edit would propose **every** key. [Decision 22](README.md#22--brand-the-whole-proposededit) brands the whole `ProposedEdit` to refuse that spread; the type test is in [`types.md`](types.md).
 
 The published `compute` sample writes `duration.value / MS.DAY`, never the raw constant.
 
-## Document — schema 6
+## No Document
 
-```jsonc
-{
-  "schema": 6,
-  "entries": [
-    { "id": "phase-1", "kind": "group", "name": "Mobilise" },
-    { "id": "t1", "parentId": "phase-1", "name": "Survey",
-      "start": "2026-01-05", "end": "2026-01-09",
-      "props": { "owner": "Jo", "phase": 2 } }
-  ],
-  "fields": [ /* consumer-authored only; no `source` */ ]
-}
-```
-
-`meta` becomes `props`. Unknown keys inside `props` round-trip. Unknown top-level keys stay unknown. **The Document key *is* the namespace name.**
-
-Schema 6 still carries `kind`, and `toJSON()` still writes a rolling-up parent's derived keys. [0013](../0013-what-decides-derivation/README.md) drops both at schema **7**, so keep `reportCorrectedRollUps` until then. **This ADR implements neither.**
+[ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted the save format. This ADR writes **no schema number**. Constructor ingest carries undeclared keys inside `props`. Unknown top-level keys warn. `reportCorrectedRollUps` is already gone.
 
 ## Renames and deletions
 
@@ -161,6 +144,6 @@ Schema 6 still carries `kind`, and `toJSON()` still writes a rolling-up parent's
 
 **Deleted:** `FieldSource`, `Field.source`, the `meta` core Field, `DuplicateFieldSourceError`, `InvalidFieldSourceError`.
 
-**Not deleted here:** `CORE_FIELD_OVERRIDABLE_KEYS` ([0015](../0015-write-door/README.md) keeps it), `reportCorrectedRollUps` ([0013](../0013-what-decides-derivation/README.md) deletes it).
+**Not deleted here:** `CORE_FIELD_OVERRIDABLE_KEYS` ([0015](../0015-write-door/README.md) keeps it). `reportCorrectedRollUps` went with ADR 0016.
 
 **New error in this ADR:** `ComputedFieldCannotBeWrittenError`, at registration. `DerivedFieldNotWritableError` (0013) and `FieldNotEditableError` (0015) come later. Three errors never exist: **no `PluginFieldNotInDataError`**, **no `RollUpKindsWouldDropValuesError`**, **no `FieldNamedAtTopAndInPropsError`**.

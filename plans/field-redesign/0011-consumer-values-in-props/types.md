@@ -18,7 +18,7 @@ flowchart TB
 
 **This file is 0011's types.** [0013](../0013-what-decides-derivation/README.md) decision 26 then **deletes `kind`**, so `{ kind: undefined }` leaves the refused set with that ADR. The seven type tests land here with `kind` still present.
 
-**Decision 11, closed 2026-09-10. Grill 2026-09-10 extends it to `add()`.** `update()` and `add()` are flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: the Document, a complete `ProposedEdit`, and constructor `entries` (passengers only — Q15). Constructor records also accept declared keys at the top.
+**Decision 11, closed 2026-09-10. Grill 2026-09-10 extends it to `add()`.** `update()` and `add()` are flat. There is no `props` key on `EntryEdit`. `PropsEdit` still exists: a complete `ProposedEdit`, and constructor `entries` (passengers only — Q15). Constructor records also accept declared keys at the top. There is no Document.
 
 **Do not factor the two halves into one shared mapped type.** They take opposite rules, so there is nothing to extract. It was tried twice — see [`refuted.md`](../shared/refuted.md).
 
@@ -55,7 +55,7 @@ export type EntryEdit<TProps> = {
 } & { [K in keyof TProps]?: TProps[K] | undefined };
 ```
 
-**Decision 11, closed 2026-09-10.** Declared consumer keys sit on the envelope, not under `props`. `update(id, { start, cost })` is the write. `update(id, { props: { cost } })` is not an `EntryEdit`. `PropsEdit<TProps>` stays exported for `add`, the Document, and `ProposedEdit`.
+**Decision 11, closed 2026-09-10.** Declared consumer keys sit on the envelope, not under `props`. `update(id, { start, cost })` is the write. `update(id, { props: { cost } })` is not an `EntryEdit`. `PropsEdit<TProps>` stays exported for constructor ingest and `ProposedEdit`. `add()` is flat and refuses nested `props:`.
 
 **`Partial<Omit<EntryInput, 'id' | 'props'>>` cannot be the envelope.** `start` and `end` are optional after [ADR 0012](../0012-optional-dates/README.md), which lands first, so `update(id, { start: undefined, end: undefined })` is the un-date verb, and `Partial` refuses that call (`TS2379`) for the identical reason it refuses a removal inside `props`. Mapping *every* envelope key removable is wrong in the other direction: **optional at ingest does not mean removable by an edit.** `kind` is optional on `EntryInput` only because ingest defaults it to `'span'`. [0013](../0013-what-decides-derivation/README.md) decision 26 then **deletes the Field**. These tests land in 0011 with `kind` still present; 0013 removes `{ kind: undefined }` from the refused set because the key is gone.
 

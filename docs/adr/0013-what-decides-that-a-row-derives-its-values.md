@@ -1,12 +1,12 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: a derived value lives in the store and never reaches the Document; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them.
+decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them. *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
 open: none. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
 
-**Lands third**, after [0012](0012-dates-are-optional-on-every-kind.md) and [0011](0011-consumer-values-live-in-props.md). The working material is [`plans/field-redesign/0013-what-decides-derivation/`](../../plans/field-redesign/0013-what-decides-derivation/README.md).
+**Lands after [0016](0016-the-library-holds-no-save-format.md), [0012](0012-dates-are-optional-on-every-kind.md) and [0011](0011-consumer-values-live-in-props.md).** The working material is [`plans/field-redesign/0013-what-decides-derivation/`](../../plans/field-redesign/0013-what-decides-derivation/README.md). **No schema number** — ADR 0016 deleted the Document.
 
 ## Context
 
@@ -25,9 +25,11 @@ if (!childIds || childIds.length === 0) continue;
 
 ## Decision
 
-### A derived value lives in the store and never reaches the Document
+### Nothing but the Rollup writes a rolling-up parent's cell
 
-The Rollup writes a parent's `start`, `end` and `cost` today, and `toJSON` writes all three out as though a person authored them. `fromJSON` reads them back and the Rollup overwrites them. When the stored answer and the written one disagree, the written one loses in silence: a parent `cost: 999` over a child `cost: 10` imports as `10`, with no warning and no `rollup-corrected` report — **that pass compares `start` and `end` only**. **A value the Rollup would reproduce exactly is not written.** A stale derived value stops being possible rather than being detected.
+HEAD writes a parent's `start`, `end` and `cost` as though a person authored them, and `toJSON` / `fromJSON` round-trip them. When the stored answer and the written one disagree, the written one loses in silence: a parent `cost: 999` over a child `cost: 10` imports as `10`, with no warning — **that pass compares `start` and `end` only**.
+
+**[ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document.** The half that remains is the write rule: nothing but the Rollup writes a rolling-up parent's cell. A stale derived value in a file is no longer possible, because there is no file. The refusal at `entries.update()` still is.
 
 The two rulings hold each other up. The refusal means nothing but the Rollup can put a value in a rolling-up parent's cell, so omitting it loses nothing a person authored. Without the refusal, omission drops user edits.
 
@@ -37,13 +39,13 @@ The two rulings hold each other up. The refusal means nothing but the Rollup can
 
 ### An Entry derives when it has children, and `kind` leaves the record
 
-**Decision 26, closed 2026-09-10.** The predicate is structure. A parent with children draws the parent look. A childless row is a normal Entry. Name is required. No `'kind'` on `Entry`, none in the Document, no `update({ kind })`. Core does not ship a diamond. `rollUpKinds` and `hierarchy.autoGroup` are deleted. No opt-out in this ADR. Do not write **phase** or **grouped entry** — `{ source: 'group', groupBy }` is a row source.
+**Decision 26, closed 2026-09-10.** The predicate is structure. A parent with children draws the parent look. A childless row is a normal Entry: name, no dates, no bar. Name is required. No `'kind'` on `Entry`, no `update({ kind })`. Core does not ship a diamond. `rollUpKinds` and `hierarchy.autoGroup` are deleted. No opt-out in this ADR. Do not write **phase** or **grouped entry** — `{ source: 'group', groupBy }` is a row source.
 
 Do not replace `kind` with a calculated Field. A plugin calls `childrenOf`. A plugin that needs another look stores ids itself (ADR 0002).
 
 Branches **8**, **20**, **21**, and **24** close with this: no kind to write on demotion; kind is not authored; no derive-off flag; no `rollUpKinds` flip.
 
-A Document carrying `rollUpKinds: []` starts deriving. Decision 6 drops the authored values. The next save is permanent. Accepted. This ADR writes schema **7**.
+A Dataset that used `rollUpKinds: []` to keep parents as authored starts deriving. Decision 6 drops the authored values. Accepted. **No schema number** — [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document.
 
 ### Promotion runs both ways, and stays automatic
 
@@ -82,9 +84,9 @@ On demotion the Entry becomes a **normal Entry with no dates**. There are no chi
 
 **`update()` refuses; `add()` drops. A patch is not a record.** Name a Field and the library answers. Hand it a record and the library keeps what is yours. That is PATCH against PUT, and it is the whole rule. A **mixed** patch — `{ start, props: { cost } }` where `cost` is derived — is refused **whole, before any write**. A partial apply would leave a transaction in a state no `before*` event described.
 
-The seven call sites are `entries.update()`, the cell editor, a bar drag, `entries.add()`, `Dataset.fromJSON()`, `new Dataset({ entries })` and the extension hook. **Build the derived answers from those seven** — reading *four doors* skips `add()`, `fromJSON()` and the constructor, which drop rather than throw.
+The six call sites are `entries.update()`, the cell editor, a bar drag, `entries.add()`, `new Dataset({ entries })` and the extension hook. **Build the derived answers from those six.** `Dataset.fromJSON()` went with [ADR 0016](0016-the-library-holds-no-save-format.md). Reading *four doors* still skips `add()` and the constructor, which drop rather than throw.
 
-`toJSON` is not a write. It asks the derived half only, so it is a caller of that half and not a fifth `canWrite`. **Do not claim I14 for the omission, and do not claim I14 for the derived refusal until [ADR 0015](0015-what-the-write-door-refuses.md) has wired the editable arm.** This ADR closes the derived half only.
+**Do not claim I14 for the derived refusal until [ADR 0015](0015-what-the-write-door-refuses.md) has wired the editable arm.** This ADR closes the derived half only.
 
 ### Parent bar drag translates descendants, and does not write the parent
 
@@ -94,7 +96,7 @@ Dragging a parent bar is a different job. It translates every descendant date th
 
 Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end`. A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
 
-This ADR writes schema **7**.
+**No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. `reportCorrectedRollUps` deletes with that ADR, not here. Decision 5's warning is still this ADR's.
 
 ## Considered options
 
@@ -109,23 +111,21 @@ This ADR writes schema **7**.
 
 ## Consequences
 
-- **One report per operation, not per value.** A hand-written Document with 500 groups over three rolling-up Fields would otherwise raise 1,500 warnings. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'`, **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it (D-S5-41).
+- **One report per operation, not per value.** The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'`, **always**.
 - **`props` is carried by reference, except on a rolling-up parent.** [ADR 0011](0011-consumer-values-live-in-props.md) states the flat rule; this is the one exception. D-S2-12 says the namespace is never walked field by field — say so where D-S2-12 is written, rather than leaving two rules to disagree in silence.
-- **`toJSON` output is no longer byte-identical to the input for a rolling-up parent.** `toJSON → fromJSON → toJSON` is still stable, because the structural test is a pure function of hierarchy and declarations.
-- **A Document is our save format. It is not an interchange format, and that is now a decision.** A third-party reader sees a parent with no span and no rolled-up values, and would need the same Aggregator *implementations*, referenced by name only.
+- **There is no Document.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted it. The omission half of this ADR's head decision has nowhere to omit to. The write-refusal half stands.
 - **`plans/01` §2.5's authored-kind rule, the promote-only clause, and the shipped `'milestone'` are overruled.** The prose sweep rewrites those sentences. `kind` leaves `Entry`. Core does not ship a diamond.
-- **`reportCorrectedRollUps` is deleted** — with no reproducible derived value in the Document there is nothing to correct. **Delete it in this ADR, not in 0011.** 0011 still writes derived keys; deleting the report there leaves `fromJSON` silent.
-- **A plugin loses a *derived* value, because its declaration does not travel.** An S7 parent's rolled-up `progress` is omitted, and a Document read without the plugin cannot re-derive it (D-S5-33). The leaf values still round-trip. Judged acceptable.
+- **`reportCorrectedRollUps` is already gone** — ADR 0016 deleted it with the reader. Decision 5's warning is a different thing, and this ADR still writes it.
 - **D-S5-22's four seams lose `entry.kind` as their join.** They ask structure, or a plugin store. [0015](0015-what-the-write-door-refuses.md) decision 18 loses its `kind` row.
 - **When every child is dateless, the parent's dates clear.** An Aggregator's `undefined` means no value, not *keep the last envelope*. HEAD keep-stale leaves a parent that lies about dates. Combined spike Improvement D.
 
 ## Ordering constraints
 
-1. **[ADR 0012](0012-dates-are-optional-on-every-kind.md) lands first.** Demotion leaves an Entry with no dates, which `Entry` cannot represent today.
+1. **[ADR 0016](0016-the-library-holds-no-save-format.md) lands first**, then [ADR 0012](0012-dates-are-optional-on-every-kind.md). Demotion leaves an Entry with no dates, which `Entry` cannot represent today.
 2. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with this ADR.** The `body`/`merged` split stays. Unifying that predicate was a misread — [`refuted.md`](../../plans/field-redesign/shared/refuted.md) item 8. This ADR writes decision 5's warning; it does not unify the two sets.
 
 ## Issues this ADR depends on
 
 | Issue | What this ADR needs from it |
 |---|---|
-| [#270](https://github.com/Pawel-IT/FreeGantt/issues/270) | A declining Aggregator leaves a stale rolled-up value. `rollup.ts:208` skips an Aggregator **that saw children**; a childless parent never reaches one. Once the Document omits derived values, a re-read answers *no value* while the live store still answers `10`. **The re-read is correct** |
+| [#270](https://github.com/Pawel-IT/FreeGantt/issues/270) | A declining Aggregator leaves a stale rolled-up value. `rollup.ts:208` skips an Aggregator **that saw children**; a childless parent never reaches one. Land the fix inside this build — BUILD-SPEC V15 |

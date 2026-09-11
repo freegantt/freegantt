@@ -6,7 +6,7 @@ open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The workin
 
 # Dates are optional on every kind
 
-**This ADR carries no open decision, and it lands first.** [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands.
+**This ADR carries no open decision, and it lands second**, after [ADR 0016](0016-the-library-holds-no-save-format.md). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands. **There is no Document**, so this ADR writes no schema number.
 
 The working material is [`plans/field-redesign/0012-optional-dates/`](../../plans/field-redesign/0012-optional-dates/README.md).
 
@@ -60,7 +60,7 @@ End with no start is allowed. Inclusive-end formatting has no start: show the st
 - **Default `gridColumns` is `['name', 'start', 'end']`.** Hide is live if a product wants fewer columns. The date editor must open on a blank cell (today it refuses with `no-date-value`). It still writes one Field.
 - **The `referenceDate` fill is deleted.** It is written down under D-S2-10 **and** D-S2-22. Name both halves separately or a reader retires the wrong sentence.
 - **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Core does not paint a diamond.
-- **The Document gains optional `start` and `end`**, independently, and writes schema **5**. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
+- **No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. Optional dates live on `Entry` and on constructor ingest only.
 - **A parent whose every child does not span has no bar.** The Rollup skips holes: all children start-only → parent has a start, no end, no bar. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) owns the Rollup pass; this biconditional is what that pass must restore. Combined spike Improvement D.
 
 ### Required follow-up

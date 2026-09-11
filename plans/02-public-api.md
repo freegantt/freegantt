@@ -33,7 +33,7 @@ const dataset = new Dataset<{ team: string; cost: number }>({
     { id: 'p1', name: 'Sitework' },        // dateless parent; derives when it has children (ADR 0013)
     { id: 't1', parentId: 'p1', name: 'Groundwork', start: '2026-09-01', end: '2026-09-11' },
     { id: 't2', parentId: 'p1', name: 'Framing',    start: '2026-09-12', end: '2026-09-30',
-      props: { team: 'A' } },
+      team: 'A' },
   ],
   dependencies: [
     { id: 'd1', fromId: 't1', toId: 't2', type: 'FS', lag: { value: 0, unit: 'd' } },
@@ -475,7 +475,7 @@ dataset.fields.all;                      // every declared Field, core included
 
 An unregistered key is an `UnknownFieldError`, never a silent write. Nested `props:` at `update()` is refused. A missing id on `read` is an `EntryNotFoundError`. The read goes through the same Field registry path as the write: a consumer who declared `{ key: 'cost' }` does not reach into `entry.props` for a Field read. `dataset.field` and `dataset.fields.all` return **resolved** declarations (type merge applied). They are not the raw `DatasetOptions.fields` array. `PropsEdit<TProps>` and `EntryEdit<TProps>` are public.
 
-**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256, ADR 0015): `{ key: 'cost', editable: 'anywhere' }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too. The Field states how far a value may change (`'never' | 'api' | 'anywhere'`). Gestures ask `'anywhere'`. `entries.update()` refuses only `'never'`. Default is `'anywhere'`. `true`/`false` are input aliases for `'anywhere'`/`'never'`. `interactions.edit` states which of them are writable on *which entry* (§4.1). Core's own `name`, `start` and `end` declare `'anywhere'`, matching the resize a bar already allowed before this Field existed; `{ key: 'end', editable: false }` still constructs and encodes as `"editable": "never"` without redeclaring `end`'s rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name. Check `compute` before `editable`.
+**`editable` lives on the Field, never on the column** (S5.8, D-S5-19, #142, #256, ADR 0015): `{ key: 'cost', editable: 'anywhere' }` opens `inlineEditing()`'s cell editor for that field, and for `start`/`end` it opens the bar's own drag-resize handle and its move too. The Field states how far a value may change (`'never' | 'api' | 'anywhere'`). Gestures ask `'anywhere'`. `entries.update()` refuses only `'never'`. Default is `'anywhere'`. `true`/`false` are input aliases for `'anywhere'`/`'never'`. `interactions.edit` states which of them are writable on *which entry* (§4.1). Core's own `name`, `start` and `end` declare `'anywhere'`, matching the resize a bar already allowed before this Field existed; `{ key: 'end', editable: false }` still constructs and stores as `'never'` without redeclaring `end`'s rollup — `IllegalCoreFieldOverrideError` is thrown for any other key on a core field name. Check `compute` before `editable`.
 
 **Default `gridColumns` is `['name', 'start', 'end']`** (ADR 0012). Naming a Field does not add it to the grid by itself. Hide is live, so a product that wants fewer columns hides one. **The date path is the grid**: the date editor opens on a blank cell and writes one Field, so a dateless row is dated there. A timeline *set dates* gesture is not this cut. Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`, ADR 0014).
 
@@ -728,10 +728,10 @@ Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users 
 ```ts
 const rows    = dataset.entries.all;                   // every Entry, as stored
 const fields  = dataset.fields.all;                    // the Field declarations
-const risk    = dataset.pluginStores.read('risk').all; // one plugin's rows
+const risk    = dataset.pluginStore('risk');            // one plugin's store, or undefined
 ```
 
-Every read above already ships. An application maps these into its own shape and saves that shape. It writes the same mapping in the inbound direction to build the `Dataset`, so this is the outbound half of work it does anyway, against a shape it chose.
+`entries.all` and `fields.all` already ship. `pluginStore(id)` ships with ADR 0016. An application maps these into its own shape and saves that shape. It writes the same mapping in the inbound direction to build the `Dataset`, so this is the outbound half of work it does anyway, against a shape it chose.
 
 **A plugin that owns data a consumer must keep publishes its own reader.** It gets no hook into a library format. A consumer saves that data by reading it from the plugin, in the plugin's own vocabulary.
 

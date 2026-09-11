@@ -8,7 +8,7 @@ A derived value lives in the store and never reaches the Document. An Entry deri
 
 **No decision is open.** Six are closed — **5**, **6**, **26**, and branches **8**, **20**, **21**, **24** with it. 26 closed on 2026-09-10.
 
-**It lands third**, after [0012](../0012-optional-dates/README.md) and [0011](../0011-consumer-values-in-props/README.md). 0012 is a hard gate: this ADR demotes an Entry to *"a normal Entry with no dates"*, and `model/entry.ts:31-33` makes `start` and `end` **required** today.
+**It lands third**, after [0016](../../../docs/adr/0016-the-library-holds-no-save-format.md), [0012](../0012-optional-dates/README.md) and [0011](../0011-consumer-values-in-props/README.md). 0012 is a hard gate: this ADR demotes an Entry to *"a normal Entry with no dates"*, and `model/entry.ts:31-33` makes `start` and `end` **required** today. **There is no Document.** ADR 0016 deleted it, so this ADR writes no schema number and `fromJSON` is not a door.
 
 ---
 
@@ -36,12 +36,12 @@ A derived value lives in the store and never reaches the Document. An Entry deri
 
 | Branch | Fate |
 |---|---|
-| **8** | Dissolves. There is no kind to write on demotion. Losing the last child leaves a normal Entry with no dates (already settled). It draws a bar. |
+| **8** | Dissolves. There is no kind to write on demotion. Losing the last child leaves a normal Entry with no dates (already settled). It draws **no bar**. |
 | **20** | Answered: `kind` is not authored, and it is not a calculated Field. It is gone. No diamond in core. |
 | **21** | No flag. The layer question does not arise. |
 | **24** | Dissolves. `rollUpKinds` is deleted, so there is no config flip to undo. Gaining or losing a child is a `parentId` write. Undo reverses that write and the drops together. |
 
-**The migration has no mitigation, and that is accepted.** A Document carrying `rollUpKinds: []` today means *keep these parents as I saved them*. Read under this ruling, every parent with children starts deriving, closed decision 6 **drops** the authored values, and `toJSON` omits them — so the next save is permanent. `fromJSON` raises a report. A consumer cannot act on a report. `kind` on an old Entry is dropped.
+**The migration has no mitigation, and that is accepted.** A Dataset that used `rollUpKinds: []` to keep parents as authored starts deriving under this ruling. Closed decision 6 **drops** the authored values. There is no Document to omit them from — [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md). `kind` on an old Entry is dropped at ingest.
 
 **The four registries lose their join.** Item producer, bar renderer, capability, and scheduling policy today look up `entry.kind`. After this ADR they ask structure, or they ask a plugin store. D-S5-22 is rewritten in the prose sweep. Do not keep `registerItemProducer('buffer')` keyed from a Field that no longer exists.
 
@@ -71,7 +71,7 @@ A plugin cascade that writes a rolling-up Field on a rolling-up parent has that 
 
 `entries.update()` throws `DerivedFieldNotWritableError` for the same write. A cascade does not, because the guard sits at the public door and the hook reads through a different one. **That placement is deliberate** — a plugin author learns no rule and checks no predicate. **Exempt from the throw was never the same as the write surviving**, and the honest end of that exemption is a drop the author can see.
 
-**Why not let it stand.** `toJSON` omits a derived value in any case, so a cascade that won the pass would still lose at the next save. Letting it stand publishes a number whose whole lifetime is one transaction.
+**Why not let it stand.** Nothing but the Rollup writes a rolling-up parent's cell. Letting a cascade stand publishes a number whose whole lifetime is one transaction, then the next Rollup overwrites it.
 
 **The drop already ships; the warning is the build.** This decision once ordered a predicate unification first. **That order was withdrawn on 2026-09-10 as a misread of the code** — see [`refuted.md`](../shared/refuted.md) item 8 and [the build](#the-build).
 
@@ -98,7 +98,7 @@ The door is a child arriving. `add({ id: 'c', parentId: 'p' })` drops `p`'s auth
 
 ## The build
 
-One structural question at every door: *does this Entry have children, and is this a rolling-up Field?* The derived write rule is this ADR's. I14 also needs the editable arm, which is [0015](../0015-write-door/README.md)'s. `toJSON` is not a write.
+One structural question at every door: *does this Entry have children, and is this a rolling-up Field?* The derived write rule is this ADR's. I14 also needs the editable arm, which is [0015](../0015-write-door/README.md)'s. There is no `toJSON`.
 
 **This ADR fills the resolver's derived arm.** [0011](../0011-consumer-values-in-props/README.md) moved the resolver into `data/` with HEAD's policies unchanged — `view/capability.ts` calls it; `entries.update()` still throws `UnknownFieldError` only. `rollsUp` already lives in `data/`. **This ADR fills the derived arm and wires `update()` to it**, because the policy is written against the merged patch 0011 produces. [0015](../0015-write-door/README.md) owns the editable arm. This ADR declares and throws `DerivedFieldNotWritableError`. Do not claim I14 until 0015 has wired the editable arm.
 
@@ -109,20 +109,19 @@ One structural question at every door: *does this Entry have children, and is th
 | cell editor | refused when the row has children | **the change** — today it asks kind (`view/capability.ts:119`) |
 | parent **bar** drag | translates descendant dates; does not write the parent | **grill 2026-09-10** — reuse `beforeEntryMove` |
 | `entries.update()` | refused | **the change** — wire `update()` to the derived arm |
-| `entries.add()`, `new Dataset({ entries })`, `fromJSON` | value **dropped**, report raised | **the change** |
+| `entries.add()`, `new Dataset({ entries })` | value **dropped**, report raised | **the change** — `fromJSON` went with ADR 0016 |
 | the extension hook | write **dropped**, warning raised | decision 5, closed — exempt from the throw only |
 | a child arrives | dates change owner mid-commit | **the change** — `autoGroup` is deleted; `parentId` is the door |
 | a last child leaves | un-date; name stays; no bar | already 0012's dates; look follows |
-| `toJSON` | derived keys **omitted**; `kind` **omitted** | **the change** |
 
 - Conversion is structure: a child arrives, a last child leaves. No kind write. Dates on demotion are a **normal Entry with no dates**, datable later.
-- Delete the `kind` core Field, `EntryKind` as an Entry classification, `rollUpKinds`, `hierarchy.autoGroup`. Ignore `kind` on an old Document.
+- Delete the `kind` core Field, `EntryKind` as an Entry classification, `rollUpKinds`, `hierarchy.autoGroup`. Ignore `kind` on constructor ingest.
 - Core does not ship a diamond. A zero-length span is a bar of no width (0012). `--fg-diamond-size` and a milestone producer do not ship in core.
 - Do not publish a calculated `kind` Field.
 - The report goes through `raiseError` at `severity: 'warning'`, **always**. Not `isDevMode()`-gated (D-S5-41).
 - One report per operation, not per value.
-- Delete `reportCorrectedRollUps` — this ADR, not 0011.
+- `reportCorrectedRollUps` is already gone — ADR 0016 deleted it with the reader. Decision 5's warning is a **different** thing, and it is still owed.
 - On a rolling-up parent, an Aggregator's `undefined` means **no value**. When every child is dateless, clear the parent's dates. Do not keep HEAD's stale envelope (Improvement D).
-- **Write decision 5's warning. The drop already ships; the warning does not.** A cascade's write to a derived cell reaches `merged` and never `body`, so `rollup.ts:196` does not yield and the pass overwrites it in silence. Raise one warning through `raiseError` at `severity: 'warning'`. **Do not unify a predicate** — that instruction was withdrawn on 2026-09-10 as a misread, and [`refuted.md`](../shared/refuted.md) item 8 carries why. **Do not mistake `reportCorrectedRollUps` for this warning** either; it is a `fromJSON` reconciliation report and never sees a cascade.
-- This ADR writes schema **7** — [the counter](../shared/rulings.md#3--the-schema-restarts-release-gate).
+- **Write decision 5's warning. The drop already ships; the warning does not.** A cascade's write to a derived cell reaches `merged` and never `body`, so `rollup.ts:196` does not yield and the pass overwrites it in silence. Raise one warning through `raiseError` at `severity: 'warning'`. **Do not unify a predicate** — that instruction was withdrawn on 2026-09-10 as a misread, and [`refuted.md`](../shared/refuted.md) item 8 carries why. Do not look for `reportCorrectedRollUps`; build 0016 deleted it.
+- **No schema number.** ADR 0016 deleted the Document.
 

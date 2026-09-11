@@ -4,13 +4,13 @@
 
 | Ruling | Who cites it |
 |---|---|
-| **3 — the schema restart's release gate** | all five. Every ADR that changes the Document spends a number |
+| **3 — the schema restart's release gate** | **Superseded by ADR 0016.** No ADR spends a number. The table below is the record of the question asked twice |
 | **The registration lock** | [0011](../0011-consumer-values-in-props/README.md) (decision 11) and [0014](../0014-plugin-author-surface/README.md) (decision 9) |
 | **`ComputedFieldCannotBeWrittenError`** | [0011](../0011-consumer-values-in-props/README.md) at registration, [0015](../0015-write-door/README.md) at `entries.update()` |
 
 **Numbers do not move.** A decision keeps the number it was given in the single-ADR folder, whichever ADR now owns it. The split re-homed the rulings; it did not renumber them. This is the one exemption to the old folder's rule 2, and it is recorded here so nobody re-derives the numbering.
 
-**One schema counter, not five, and [its table is below](#3--the-schema-restarts-release-gate).** That table is the folder's only copy. An ADR states the one number it spends and links here.
+**One schema counter, not five — and ADR 0016 dissolved it.** [The table below](#3--the-schema-restarts-release-gate) is the record. No ADR spends a number.
 
 ---
 
@@ -64,12 +64,11 @@ Decision 18 closed on the enum. The order still holds: `compute` first, then `'n
 
 - `FieldRegistry.all` is **one array identity for the registry's whole life** (`field-registry.ts:137-139`). Readers cache by identity and carry no invalidation branch.
 - `diffEdit` walks the registry for ChangeSet row order, so **row order cannot change mid-life**.
-- `toJSON` output does not depend on **when** it is called, because `authored` filters a fixed set.
 - The construction Rollup walks **once**, at the end of the constructor, after every plugin has declared.
 
 **The payback is that a Field arriving mid-life causes a whole-dataset Rollup.** Declaring a Field on a Dataset that already holds Entries makes every rolling-up parent owe a new aggregate. That is a pass outside any user action, writing stored values that enter undo. A declaration is a **config assignment**, and `ChangeSet` has no row shape for one — `added`, `removed` and `updated` each name a store entity. Decision 6 closed the sibling problem (a live `rollUpKinds` flip) as drop-and-recalculate; [0013](../0013-what-decides-derivation/README.md) then **deleted** `rollUpKinds` with 26. **Unlocking `fields` makes that class of problem two problems.** Keeping the lock leaves it at one.
 
-**A late install rebuilds, and the door already ships.** `Dataset.fromJSON(dataset.toJSON(), { fields, fieldTypes, aggregators, plugins })` — `src/api/dataset.ts:328`. **Say its price in the same sentence that offers it:** a new Dataset identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. **Grill 2026-09-10:** Fields are the schema. No new Field keys after construction. Hide/show columns stay live. Do not ship “add a column” as a feature that clears History. Live `editable` is `dataset.setFieldEditable` — [0015](../0015-write-door/README.md) Q16.
+**A late install rebuilds, and the door already ships.** `new Dataset({ entries: dataset.entries.all, fields, fieldTypes, aggregators, plugins })`. **Say its price in the same sentence that offers it:** a new Dataset identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. **Grill 2026-09-10:** Fields are the schema. No new Field keys after construction. Hide/show columns stay live. Do not ship “add a column” as a feature that clears History. Live `editable` is `dataset.setFieldEditable` — [0015](../0015-write-door/README.md) Q16.
 
 **Written into `plans/02`.** *Reconfiguration is just assignment* names `fields` and `plugins` as the two exceptions, with the Rollup-and-undo reason above. The sentence there that cites a live `rollUpKinds` flip is stale (26 deleted the key); the [prose sweep](prose-sweep.md) rewrites it. The lock itself stands.
 

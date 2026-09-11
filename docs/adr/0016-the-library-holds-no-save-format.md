@@ -54,16 +54,18 @@ The consumer brought the data in. They own where it goes.
 |---|---|
 | Read the current entries out | `dataset.entries.all` — `data/entry-store.ts:155`, already public |
 | Read the Field declarations out | `dataset.fields.all` — `api/dataset.ts:240`, already public |
-| Read a plugin's rows out | `dataset.pluginStores.read(pluginId).all` — `data/plugin-store.ts:74`, already a public view |
+| Read a plugin's rows out | `dataset.pluginStore(id)` — this ADR ships it. `pluginStores.read` is not public; it is `ctx.store.read` inside a plugin's `setup` |
 | Install a plugin on a live Dataset | Construct a new one: `new Dataset({ entries: dataset.entries.all, fields, plugins })` |
 
 **The late-install door costs what it always cost.** `plans/02:183` already prices it: a new `Dataset` identity, every subscriber rebinds, and the undo History is lost. That price does not change. One format goes away.
 
 **A plugin that owns data a consumer must keep publishes its own reader.** It does not get a hook into a library format. The scheduling plugin's dependencies are the case to design against: a consumer saves them by reading them from the plugin, in the plugin's own vocabulary.
 
-### Nothing here re-opens what a Dataset accepts
+### What a Dataset still accepts, and what it drops
 
-`new Dataset({ entries })` is untouched. Loose input stays loose — `string` ids, `InstantInput` dates. An undeclared key is still carried and still opaque to `update()` ([ADR 0011](0011-consumer-values-live-in-props.md) decision 1). This ADR removes a way **out**, not a way in.
+`new Dataset({ entries })` is untouched. Loose input stays loose — `string` ids, `InstantInput` dates. An undeclared key is still carried and still opaque to `update()` ([ADR 0011](0011-consumer-values-live-in-props.md) decision 1).
+
+**Passenger data is retired.** A Dataset no longer carries rows for a plugin it does not install. That posture existed to protect a file round-trip, and there is no file. Rows enter a `PluginStore` one way only: written by an installed plugin. No public way in ships to match `pluginStore(id)` — an application that saved plugin rows re-installs the plugin and writes them back through the plugin's own API.
 
 ## The one question this raised, and its answer
 
