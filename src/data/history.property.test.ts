@@ -151,7 +151,7 @@ const seedSpans: readonly EntryInput[] = [
 ];
 
 const seedGroups: readonly EntryInput[] = [
-  { id: 'p', kind: 'group', name: 'p' },
+  { id: 'p', name: 'p' },
   { id: 'a', parentId: 'p', name: 'a', start: 0, end: 100 },
   { id: 'b', parentId: 'p', name: 'b', start: 100, end: 200 },
 ];
@@ -190,8 +190,8 @@ describe('[S2-A1] undo-all restores every stored Entry byte-identical', () => {
   });
 });
 
-describe('[S4-A9] autoGroup undo', () => {
-  it('undo of a promoting transaction restores kind and the parent span together', () => {
+describe('[S4-A9] promotion undo', () => {
+  it('undo of a promoting transaction restores the parent structure and its own span together', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -201,8 +201,9 @@ describe('[S4-A9] autoGroup undo', () => {
     });
     const before = snapshotOf(state);
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.get('p1')!.kind).toBe('group');
+    expect(state.entries.childrenOf('p1')).toHaveLength(1);
     undoAll(state);
+    expect(state.entries.childrenOf('p1')).toHaveLength(0);
     expect(snapshotOf(state)).toBe(before);
   });
 });
