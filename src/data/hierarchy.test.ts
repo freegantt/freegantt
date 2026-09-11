@@ -124,4 +124,20 @@ describe('structure decides derivation (ADR 0013)', () => {
     expect(state.entries.get('p1')!.end).toBe(end);
     expect(state.entries.get('c1')!.parentId).toBeUndefined();
   });
+
+  it('one undo reverses both the parentId write and the dropped authored value it caused (ADR 0013)', () => {
+    const state = withEntries([
+      { id: 'p1', start: '2026-01-01', end: '2026-01-02', cost: 500 },
+      { id: 'c1', start: '2026-03-01', end: '2026-03-05', cost: 10 },
+    ]);
+
+    state.entries.update('c1', { parentId: 'p1' });
+    expect(state.entries.get('p1')!.props['cost']).toBe(10); // the authored 500 already dropped
+    expect(state.canUndo).toBe(true);
+
+    state.undo();
+    expect(state.entries.get('c1')!.parentId).toBeUndefined();
+    expect(state.entries.get('p1')!.props['cost']).toBe(500); // one undo restores both
+    expect(state.canUndo).toBe(false);
+  });
 });
