@@ -37,7 +37,7 @@ export const identityExtender: EditExtender = () => EMPTY_EDITS;
  *
  * It lives beside the hook, not beside the Field code: a loose edit states the Fields it writes by
  * the keys it holds, so merging two of them needs no Field knowledge at all. Core derives the
- * proposed keys later, once, when it reads the composed result (`toProposedEdits`).
+ * proposed keys later, once, when it reads the composed result (`toEditsReading`).
  */
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;

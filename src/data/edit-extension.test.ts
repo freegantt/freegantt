@@ -128,7 +128,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
   it('core derives every proposed key from the composed edit, so the props-addressed Field is recognized', () => {
     for (const { stored } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
       const keys = [...proposedKeysOf(stored.get(target))].sort();
-      // `segments` rides along because `toProposedEdit` pairs the lone Segment onto an envelope-only write
+      // `segments` rides along because `toEditReading` pairs the lone Segment onto an envelope-only write
       // and states what it added. That fold is #232's subject, not this law's.
       expect(keys).toEqual(['cost', 'end', 'segments', 'start']);
       expect(stored.get(target)?.props).toEqual({ cost: 500 });
@@ -150,7 +150,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
 // base's stated keys, `diffEdit` took its authored branch, and only the last plugin got a row.
 //
 // The fixture writes `name`, `tag` (a consumer prop) and `parentId` — non-date Fields on purpose.
-// Date Fields (`start`/`end`) on one Entry hit the envelope-companion collision in `toProposedEdit`
+// Date Fields (`start`/`end`) on one Entry hit the envelope-companion collision in `toEditReading`
 // (#232), which is a different defect.
 describe('composing three extenders that write one Entry (#238)', () => {
   const target = entryId('t2');

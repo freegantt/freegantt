@@ -56,7 +56,7 @@ interface EditOrigin {
   readonly operation: string;
 }
 
-/** The name a plugin author knows their own write by. `reconcileEnvelope` and `toProposedEdit` serve both
+/** The name a plugin author knows their own write by. `reconcileEnvelope` and `toEditReading` serve both
  *  `entries.update()` and an `EditExtender` cascade (D-S5-44), and a message that named the wrong one
  *  sent the reader to a call they never made (#239). Exported so `build-commit-change-set.ts` can
  *  name the same call when it reconciles a body author's and an extender author's envelope keys
@@ -69,7 +69,7 @@ const ENVELOPE_KEYS = ['start', 'end', 'segments'] as const;
 
 /** Which of `start`/`end`/`segments` a caller's own loose edit named, before `reconcileEnvelope` pairs
  *  or back-derives the rest (#232). This is the fact the I4 guard and the commit's own envelope
- *  reconciliation both need and `toProposedEdit` alone can answer, because after reconciliation the same
+ *  reconciliation both need and `toEditReading` alone can answer, because after reconciliation the same
  *  three keys sit on the `ProposedEdit` whether the caller wrote one of them or none — `reconcileEnvelope`
  *  fills in whichever the caller left out. */
 export function authoredEnvelopeKeysOf(edit: Readonly<Record<string, unknown>>): ReadonlySet<string> {
@@ -269,7 +269,7 @@ export function toEntries(
 
 /** What `reconcileEnvelope` hands back: the reconciled edit, and which keys it wrote onto the edit
  *  itself — `segments` paired on, or `start`/`end` read back off Segments the edit already named.
- *  `toProposedEdit` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
+ *  `toEditReading` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
  *  caller of `reconcileEnvelope` is told what changed, instead of diffing `Object.keys` before and
  *  after to find out. */
 export interface EnvelopeReconciliation {
@@ -293,7 +293,7 @@ export interface EnvelopeReconciliation {
  * `segments` and an envelope the Segments do not produce is refused too (`'conflicting'`) rather
  * than picking a winner (finding S3).
  *
- * `toProposedEdit` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
+ * `toEditReading` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
  * an `EditExtender`'s cascade — the same function, the same refusal, for both callers (D-S5-44). A
  * plugin's cascade cannot be asked to send a clearer edit the way `entries.update()`'s caller can,
  * but it has an author, and this refusal is how that author is told at dev time to write `segments`
@@ -434,7 +434,7 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * plugin-author tool and not an app-author one.
  *
  * `start` is an `Instant`, not the loose `InstantInput` every way *in* takes. This is a builder, not a
- * way in: the way in is the extender's return, which `toProposedEdits` normalizes. Taking a loose date here
+ * way in: the way in is the extender's return, which `toEditsReading` normalizes. Taking a loose date here
  * would need a zone to read it, and asking a plugin author to hand back `ctx.dataset.timeZone` — a
  * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
@@ -527,7 +527,7 @@ export function reconcileExtenderEditsForPreview(
   return reconcileExtenderEditsWith(entries, edits, 'drop');
 }
 
-/** `toEditReading`'s result: the `ProposedEdit` `toProposedEdit` has always returned, plus which of
+/** `toEditReading`'s result: the `ProposedEdit` `.stored` has always carried, plus which of
  *  `start`/`end`/`segments` the *caller* named before `reconcileEnvelope` paired or back-derived the
  *  rest. The commit path needs that second fact to tell a body author's envelope write from an
  *  `EditExtender`'s own, which `proposedKeys` alone cannot: `reconcileEnvelope` folds its own added
@@ -603,21 +603,8 @@ export function toEditReading(
   return { stored: completeProps(entry, withProposedKeys(stored, proposed)), authoredEnvelopeKeys };
 }
 
-/** Reads an `entries.update()` edit into `ProposedEdit` (S2.3 §1.1) — the shape every existing caller
- *  wants. `toEditReading` above is the same read; this discards the extra fact only the commit
- *  path's I4 guard needs (#232). */
-export function toProposedEdit(
-  edit: EntryEdit,
-  context: EntryReadContext,
-  entry: Entry,
-  registry: FieldRegistry,
-  operation: string,
-): ProposedEdit {
-  return toEditReading(edit, context, entry, registry, operation).stored;
-}
-
 /**
- * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toProposedEdit`
+ * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toEditReading`
  * per Entry, so a plugin's cascade takes the exact road `dataset.entries.update(id, edit)` takes: the
  * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
@@ -656,15 +643,4 @@ export function toEditsReading(
     authoredEnvelopeKeys.set(id, reading.authoredEnvelopeKeys);
   }
   return { stored, authoredEnvelopeKeys };
-}
-
-/** Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). See
- *  `toEditsReading` above for the same read plus each Entry's authored envelope keys. */
-export function toProposedEdits(
-  edits: EntryEdits,
-  context: EntryReadContext,
-  entryFor: (id: EntryId) => Entry | undefined,
-  registry: FieldRegistry,
-): ProposedEdits {
-  return toEditsReading(edits, context, entryFor, registry).stored;
 }

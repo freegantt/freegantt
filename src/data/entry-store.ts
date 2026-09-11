@@ -497,7 +497,7 @@ export class EntryStore implements EntryStoreContract {
    *  no longer has to take the row with it). The Entry, its id, and its descendants all stay untouched
    *  — only `entries.remove(id)` deletes a row. Otherwise the remaining Segments go through `update`,
    *  the normal edit path, which recomputes the envelope around them itself (#212, finding 4:
-   *  `toProposedEdit` is the one owner) — this call names no `start` or `end` of its own, so there is
+   *  `toEditReading` is the one owner) — this call names no `start` or `end` of its own, so there is
    *  nothing here that could disagree with them. */
   #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
     const entry = this.get(id)!;
