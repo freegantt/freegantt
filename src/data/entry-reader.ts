@@ -150,17 +150,6 @@ function toEntryDates(
   return dates;
 }
 
-/** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
- * `undefined` a different thing from an absent key, and an `Entry` must not gain keys its input
- * never had. Exported for `entries.add()` (S2.3 §1.1), which reads one input the same way
- * construction reads every entry in `entries: EntryInput[]` — one function, both call sites.
- *
- * `start`/`end` are read from the Segments when the Entry spans, not from `input.start`/`input.end`
- * directly (#212, finding 4): an Entry that names Segments overrunning its own authored span used to
- * keep that stale span forever, because ingest was not one of the places that computed the envelope.
- * `envelopeOfSegments` is the one function every write path — this one included — calls instead. A
- * dateless or one-date Entry has no Segments to derive an envelope from, so it keeps the dates it
- * named, read straight (ADR 0012). */
 /** Every key `EntryInput` itself declares — the envelope this walk never treats as a `props`
  *  candidate, flat or nested. Frozen, not a `Set`: one array literal, read-only for the module's
  *  whole life, so it carries no state a second Gantt instance could share (I2). */
@@ -186,13 +175,13 @@ function propsFromInput(
   id: EntryId,
 ): Readonly<Record<string, unknown>> {
   const props: Record<string, unknown> = {};
-  const nested = input.props as Readonly<Record<string, unknown>> | undefined;
-  for (const key of Object.keys(nested ?? {})) {
+  const nested: Readonly<Record<string, unknown>> = input.props ?? {};
+  for (const key of Object.keys(nested)) {
     if (isCoreFieldKey(key)) {
       warnIngest(`"${id}"'s "props.${key}" names a core field. The core value wins; this is ignored.`);
       continue;
     }
-    props[key] = nested![key];
+    props[key] = nested[key];
   }
   const flat = input as unknown as Readonly<Record<string, unknown>>;
   for (const key of Object.keys(flat)) {
@@ -207,6 +196,17 @@ function propsFromInput(
   return props;
 }
 
+/** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
+ * `undefined` a different thing from an absent key, and an `Entry` must not gain keys its input
+ * never had. Exported for `entries.add()` (S2.3 §1.1), which reads one input the same way
+ * construction reads every entry in `entries: EntryInput[]` — one function, both call sites.
+ *
+ * `start`/`end` are read from the Segments when the Entry spans, not from `input.start`/`input.end`
+ * directly (#212, finding 4): an Entry that names Segments overrunning its own authored span used to
+ * keep that stale span forever, because ingest was not one of the places that computed the envelope.
+ * `envelopeOfSegments` is the one function every write path — this one included — calls instead. A
+ * dateless or one-date Entry has no Segments to derive an envelope from, so it keeps the dates it
+ * named, read straight (ADR 0012). */
 export function toEntry(
   input: EntryInput,
   context: EntryReadContext,
@@ -591,7 +591,7 @@ export function toEditReading(
   stored = reconciled.edit;
   for (const key of reconciled.addedKeys) proposed.add(key);
 
-  stored = writeDeclaredPropsFields(stored, entry, edit, registry);
+  stored = writeDeclaredPropsFields(stored, edit, registry);
   return { stored: completeProps(entry, withProposedKeys(stored, proposed)), authoredEnvelopeKeys };
 }
 

@@ -33,8 +33,8 @@ declare global {
 
 // #142 shipped the core-Field override, and #256 gave it its first call site. This page declares
 // End read-only for the whole Dataset, which is the blunt, document-level lock. It can, because it
-// demonstrates mutation and serialization rather than drag-resize. `main.ts` shows the other half:
-// the same answer narrowed to one row through `interactions.edit`.
+// demonstrates mutation and undo/redo rather than drag-resize. `main.ts` shows the other half: the
+// same answer narrowed to one row through `interactions.edit`.
 //
 // `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
 // ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.

@@ -156,8 +156,7 @@ export class DatasetState implements Dataset {
     this.#disposePlugins = options.installPlugins?.(this);
     // `01` §2.6 / README.md D-S2-22: a parent given children only through the initial array gets
     // real rolled-up values before anyone reads it, not just after the first later transaction
-    // touches one of those children. Any Dataset built from a saved shape gets this for free too,
-    // being construction like any other.
+    // touches one of those children.
     applyConstructionRollUp(this);
     // Subscribes to `change` right here, before the constructor returns and so before any consumer
     // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
