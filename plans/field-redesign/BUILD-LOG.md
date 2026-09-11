@@ -1481,3 +1481,103 @@ after, `FAIL` lists diffed: **identical, 30 failing in 14 files both times**, pa
 `pnpm exec tsc --noEmit` — **65 errors before and after**, every one in a `*.test.ts`, the inherited
 [[J26]] count. `pnpm exec eslint src harness fixtures` — 3 errors before and after, all three in
 inherited `*.test.ts` files.
+
+### J29 — Build 3c handoff: forced stop at ~252k context, all 65 tsc errors cleared, Task 2 (harness `distribute`) not reached
+
+**Raised:** 2026-09-11, Build 3c, dispatched to clear the 65 remaining `tsc` errors (Task 1) and add
+a harness `distribute` for the "Set cost 500" button (Task 2). **Status:** open — Task 1 done, Task 2
+not started, `verify:full` never run this session (no time left; do not trust a stale run, and none
+exists to quote — this is a first-run answer, not a stale one). Forced stop by the coordinator at
+~252k context; everything below is committed, `git status` is clean.
+
+**tsc: 65 → 0.** Command: `pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"`. Every error was in a
+`*.test.ts` file authoring the ADR 0013-retired `kind`/`rollUpKinds`/`isRollUpKind`/`DatasetHierarchy`,
+or `Item.kind` (renamed `Item.look`), or the retired core milestone diamond
+(`DEFAULT_DIAMOND_SIZE_PX`/`diamondSizePx`). Fixed in ~15 commits, largest-file-first as dispatched:
+`frame-layout.test.ts`, `rollup.test.ts`, `rollup.property.test.ts`, `frame-settings.test.ts`,
+`gesture-pipeline.test.ts`, `entry-reader.test.ts`, `change-set.test.ts`, `edit-extension.test.ts`,
+`entry-store.test.ts`/`fields/aggregators.test.ts`/`fields/field-access.test.ts`,
+`entry-store.envelope.property.test.ts`/`history.property.test.ts`,
+`entry-edit-types.test.ts`/`error-code-drift.test.ts`, a 13-file mechanical batch (interaction/,
+layout/rows/, layout/viewport/, layout/lanes/, layout/gesture-draft, inline-editing), `render/dom/
+index.test.ts`, and an 8-file `view/` batch (`dataset-change-subscription`, `styles`,
+`keyboard-navigation`, `gantt-dom`, `grid-columns`, `scroll-attachment`, `segment-selection`,
+`tree-collapse`). Verify: `pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"` → `0`.
+
+**Full `pnpm exec vitest run` after the tsc pass: 1 failing test, 1871 passing (of 1872 total in 116
+files).** Command: `pnpm exec vitest run`. Down from the inherited 30-failing/14-files baseline
+(`J28`) — every other red test fell out of a tsc error's fixture as the dispatch predicted, no `src/`
+change needed beyond the test rewrites below.
+
+**A real `src/` bug, left red, not touched — report this to the author before anyone fixes it:**
+`src/data/hierarchy.test.ts` > `structure decides derivation (ADR 0013)` > `[ADR 0013] losing the
+last child demotes: name stays, dates clear, no bar`. A parent (`p1`) with one child loses that child
+via `entries.remove('c1')`; the test expects `p1.start`/`p1.end` to clear to `undefined` (ADR 0013:
+demotion has nothing of its own to keep). Measured: they keep the pre-removal rolled-up value
+instead. **Confirmed pre-existing**, not caused by this session: checked out this exact file at
+`6e5a8fe` (this session's start commit) against the current `src/`, same failure, same line. Root
+cause, read but not changed: `rollup.ts`'s `parentsToRecompute` filters its candidate set through
+`isParent(id)` — `byParent.get(id)?.length > 0` — computed from the **post-removal** tree, so a
+demoted parent (0 children now) is filtered out before the per-parent loop ever runs, and the loop
+body that would clear `start`/`end` (`widenSegmentsToEnvelope`, gated the same way by
+`childIds.length === 0 → continue` at line 196) never sees it. `collectTouchedIds` does add the old
+parent id to `touched`, so it reaches `parentsToRecompute`, but the `isParent` filter drops it right
+after. This is the same class of bug as [[N8]] (a parent lying about dates) in the opposite
+direction — N8 was a parent wrongly cleared; this is a parent wrongly kept. Needs the author's
+ruling on where the demotion clear belongs (a third branch in the per-parent loop for
+"was a parent, now isn't", or a separate demotion pass) — not a tsc-cleanup agent's call.
+
+**Tests rewritten, not just mechanically stripped of `kind` — one line each on the substitution:**
+- `rollup.test.ts`: deleted 2 tests for retired `rollUpKinds`/`hierarchy.autoGroup` opt-outs (feature
+  gone, 15 → 13 tests, no coverage of a live behaviour lost).
+- `rollup.property.test.ts`: `isRollUpKind(parent.kind)` filter collapsed into the has-children check
+  the loop already ran next — same claim, structural instead of kind-based.
+- `frame-settings.test.ts`: three tests reading a sixth `--fg-diamond-size` pixel property and
+  `diamondSizePx` rewritten to the five properties `frame-settings.ts` actually reads (core ships no
+  diamond, ADR 0013).
+- `edit-extension.test.ts` (`#238`): the third of three composed extenders wrote `kind: 'milestone'`
+  to prove three plugins land three distinct fields in one commit; swapped for a declared consumer
+  field `tag` (needs `fields: [{ key: 'tag' }]` — the extender door checks `registry.has(key)`
+  stricter than `update()`'s "undeclared keys are opaque" rule). Same claim, same field count.
+- `change-set.test.ts`: `diffEdit`'s two-changed-fields test swapped its `kind` half for `parentId`.
+- `history.property.test.ts`: the promotion-undo test's `p1.kind === 'group'` assertion became
+  `childrenOf('p1')` length checks before/after — same claim (promotion derives, undo reverts both
+  structure and span).
+- `entry-edit-types.test.ts`: deleted the `{ kind: undefined }` "does not compile" type test — `kind`
+  is no longer a required stored field, so it now compiles; nothing left to refuse removing. File's
+  "seven type tests" header count corrected in prose only.
+- `error-code-drift.test.ts`: not a weakening — added the amendment's new `'derived-values-dropped'`
+  code to the drift table, exactly as the file's own comment says it must.
+- `render/dom/index.test.ts`: five tests rebuilt around a real structural parent (a second entry with
+  `parentId` set) in place of a stored `kind: 'group'`/`'milestone'` marker, same assertions
+  (whole-span bar, no `data-segment-id`, floored-bar `data-span="minimum"`). One test's "milestone"
+  half dropped outright: core has no milestone display of its own any more (a plugin's job, same as
+  [[J22]]'s earlier diamond-test deletion) and the fixture's zero-width construction already floored
+  it without any kind at all.
+- `gantt-dom.test.ts`: same real-structural-parent substitution, one test.
+- `styles.test.ts`: deleted three tests reading `.fg-bar-diamond` CSS rules — the shipped sheet never
+  writes that selector any more (core diamond retired end to end); 15 → 12 tests in this file.
+
+Every other file in the 65-error list was a pure mechanical `kind`/`isRollUpKind` deletion with no
+assertion change (dead markers, or gesture/row/hit-target `kind` values that were never Entry.kind
+and needed no touch).
+
+**Checks 3–16: never reached.** `pnpm verify:full` was not run this session — Task 1 alone took the
+full budget, and the dispatch says not to start a fresh run this late. `pnpm typecheck` itself
+(check 2) should now pass given `tsc --noEmit` is clean, but that is inferred, not measured — the
+next agent's first `verify:full` run is the first time anyone will see checks 3–16 on this branch.
+Budget for the findings batch the dispatch warned about (`boundaries`, `api-report` especially).
+
+**Task 2 (harness `money` `distribute` on the "Set cost 500" button): not started.** Read
+`harness/data.ts` and found the button (`costBtn`, current file around line 221-229) and the `money`
+Field declaration (`COST_FIELDS`, near the top) before the forced stop, but wrote no `distribute`
+and made no other harness edit. **No API-gap finding either way** — I did not get far enough to know
+if the ADR 0013 amendment's `distribute` shape (`docs/adr/0013-...md`, "Amendment, 2026-09-11") is
+sufficient for this button. That determination is still owed.
+
+**One thing worth a look, not touched, not blocking:** `harness/data.ts`'s `ROLLUP_TREE` fixture
+(near the top, feeding the same page this session was about to edit for Task 2) still authors
+`{ id: 'phase', name: 'Phase', kind: 'group' as const }` — a retired-concept `kind` field, inert
+(silently carried, read by nothing) rather than a compile error, because it is assigned through a
+variable reference rather than a literal, so TS's excess-property check never sees it. Confirmed
+`harness/` is still 0 tsc errors as measured. Flagging since Task 2 touches this exact file next.
