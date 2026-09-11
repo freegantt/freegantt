@@ -2,6 +2,8 @@
 
 Companion to `00-overview.md` (decisions D1–D12 are cited by number). This document defines the layers, the domain model, the contracts between modules, and the invariants that CI enforces.
 
+> **§2.5, §2.6 and I14 are ahead of `src/`.** ADRs 0011–0016 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules here. So `Entry.props`, optional dates, derivation by children, the `editable` enum and no save format are the decided design, and `src/` still ships `meta`, `Entry.kind`, `editable?: boolean` and `data/serialization/` until each ADR builds. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
+
 ---
 
 ## 1. Layer map
@@ -22,7 +24,7 @@ flowchart TB
     direction TB
     LAY["<b>layout/</b><br/>row resolution · lane packing<br/>bar geometry · link routing · height index"]
     SCH["<b>scheduling/</b><br/>first-party default plugin:<br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
-    DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · serialization · reactivity façade"]
+    DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · reactivity façade"]
     TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
     MODEL["<b>model/</b><br/>entity types · ids · brands<br/>zero runtime, zero deps"]
   end
@@ -57,7 +59,7 @@ flowchart TB
   class API apic
 ```
 
-`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): serialization (Instant⇄ISO) and mutation-time input reading (resolving a Plain string, advancing a date-only `end`) are both zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
+`data/ --> TIME` (S2.1, D-S2-1, `plans/s2-data-core`): mutation-time input reading (resolving a Plain string, advancing a date-only `end`) is zone-aware date arithmetic, and I10 confines that to `time/`. `time/` sits below `data/` in the pure stack, and `scheduling/` already has the same arrow — nothing about the layering changes, only the drawing catches up with what `data/` now does.
 
 There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic extension hook (D4; exact contract tracked in issue #12), which may add extra field writes to a proposed edit before it commits. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
@@ -70,7 +72,7 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 - `scheduling/` never imports `render/`, `view/`, or `interaction/` — and vice versa (D4). A scheduling plugin, when installed, meets `data/` only through that hook, never a static import.
 - `model/` is types only: zero runtime exports beyond id/brand helpers and the `FreeGanttError` base, zero dependencies.
 - Only `api/` and the type surface of `model/` are public entry points; everything else is internal and free to change.
-- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts`, `data/history.ts`, and `data/serialization/**` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
+- **Removable leaves (D-S2-23, S2.7):** `span-rollup.ts`, `view/dataset-change-subscription.ts` and `data/history.ts` each have exactly one legitimate importer, enforced the same way as the layer arrows above (dependency-cruiser `*-is-removable` rules, red-tested by `scripts/guard-red-test.mjs`). Each is provably deletable: its one caller goes away with it, and the rest of the system is unaffected (`plans/s2-data-core/README.md` §9's compatibility table names what each deletion degrades to).
 - **The commit path ends at `change`; `History` subscribes like any other consumer (D-S2-24):** `data/transaction.ts` commits a `ChangeSet` and emits `change`; it imports no history and no view. `History` and `view/dataset-change-subscription.ts` are both ordinary `on('change')` subscribers, not privileged callers on the commit path — the same discipline that makes both removable leaves above.
 - **`render/ --> data/dev-mode.ts` and `extensions/ --> data/dev-mode.ts` (leaf-only widening, S5.4 QC):** neither layer gains a `data/` edge — `data/dev-mode.ts` is the one file dependency-cruiser lets both reach, because it is a zero-dependency, one-line `import.meta.env.DEV` read with no state and no further imports of its own, the same shape that already justifies `model/`'s `FreeGanttError` carve-out. Before this, `render/dom/index.ts` and `extensions/plugin-runtime.ts` each hand-copied the check with a comment citing the boundary; two copies of one line is the smaller problem, so this stays a named single-file exception rather than a general `render --> data` or `extensions --> data` arrow — every other `data/` file is still unreachable from either layer.
 
@@ -82,7 +84,7 @@ src/
                  Dataset (the structural contract api/dataset.ts's class satisfies — S1.7 §3.2,
                  formerly DatasetLike in view/gantt-shell.ts)                                (pure)
   time/          instants, zones, TimeScale, presets  (pure)
-  data/          stores, transactions, undo, changesets, serialization (pure)
+  data/          stores, transactions, undo, changesets (pure)
                  (S2.1: reactivity.ts, event-bus.ts, entry-reader.ts, entry-store.ts,
                  dataset-state.ts — the only file layer that may additionally import time/, D-S2-1)
   scheduling/    propagation engine + policies        (pure)
@@ -141,22 +143,17 @@ interface TimeSpan { start: Instant; end: Instant }   // half-open [start, end)
 
 interface Duration { value: number; unit: TimeUnit }  // 'ms'|'m'|'h'|'d'|'w'|'M'|'y'
 
-/** Open classification — see §2.5. 'span' | 'group' | 'milestone' ship; consumers add their own. */
-type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
-
-interface Entry<TMeta = unknown> {
+interface Entry<TProps extends object = Record<string, unknown>> {
   id: EntryId;
   parentId?: EntryId;           // hierarchy; roots have none
-  /** What sort of thing this is. Authored, never derived — see §2.5. Default 'span'. */
-  kind?: EntryKind;
   name: string;
-  /** Always present in the store. For kinds whose span the policy derives (default `group`),
-   *  The Span rollup maintains these; input may omit them and they are initialized (§2.5, §2.6). */
-  start: Instant;
-  end: Instant;                // exclusive — see §5
-  /** Interrupted work — renders as multiple bars on one row. */
+  /** Present iff the Entry holds at least one Segment (ADR 0012). Exclusive end — see §5. */
+  start?: Instant;
+  end?: Instant;
+  /** Interrupted work — renders as multiple bars on one row. Absent when dateless. */
   segments?: readonly TimeSpan[];
-  meta?: TMeta;                // consumer-owned, typed via generic; a declared key is a Field (§2.6)
+  /** Consumer bag; always present. Declared keys are Fields (§2.6). */
+  props: Readonly<Partial<TProps>>;
 }
 ```
 
@@ -181,7 +178,7 @@ interface Item {
   id: ItemId;                  // deterministic — see §2.4
   rowId: RowId;
   entryId: EntryId;
-  kind: EntryKind;              // carried through so backends/renderers never refetch the entry
+  look: 'parent' | 'leaf' | (string & {});  // structure, or a plugin-owned look — stamped as data-kind
   segmentIndex?: number;
   start: Instant; end: Instant;
   lane: number;                // sub-lane within the row
@@ -201,10 +198,9 @@ erDiagram
   ITEM }o--|| ENTRY : "derived from"
 
   ENTRY {
-    string kind "span | group | milestone | consumer-defined"
-    Instant start
-    Instant end_exclusive
-    json meta "consumer-owned"
+    Instant start "optional — dates iff Segments"
+    Instant end_exclusive "optional"
+    json props "consumer-owned"
   }
   ROW {
     string kind "entry | group | custom"
@@ -223,13 +219,13 @@ The layout pipeline is `row resolution → item emission → lane packing → ge
 
 ```ts
 rowSource: { source: 'entries', tree: true }                        // classic Gantt (default)
-rowSource: { source: 'group', groupBy: t => t.meta.team }         // one row per group value
+rowSource: { source: 'group', groupBy: t => t.props.team }         // one row per group value
 rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is itself a per-kind seam, mirroring rendering (§10): the pipeline maps `Entry.kind` to an `ItemProducer` that turns one Entry into its Item(s). Shipped kinds (`span`, `group`, `milestone`) ship a default producer; a consumer-defined kind registers its own via `layout.registerItemProducer` (§10, S5.9, D-S5-22) — unregistered kinds fall back to the `span` producer (§2.5).
+Item emission is a seam, mirroring rendering (§10): the pipeline asks structure first. A parent with children uses the parent producer. A leaf uses the bar producer. A plugin that owns ids registers a producer for those ids via `layout.registerItemProducer` (§10, S5.9, D-S5-22). Unregistered ids fall back to the structure look.
 
 ```ts
 type ItemProducer = (entry: Entry) => readonly Item[];
@@ -239,48 +235,42 @@ type ItemProducer = (entry: Entry) => readonly Item[];
 
 `Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
 
-### 2.5 Entry kinds — one authored field, per-layer meaning
+### 2.5 Entry structure — children decide derivation and the default look
 
-`Entry.kind` answers "what sort of thing is this?" exactly once, in the model. Every other layer maps that answer to layer-local behavior through a registry or seam it already has — never `if (kind === ...)` chains scattered across the codebase:
+An Entry has children, or it does not. That structure answers derivation and the default bar look. Every other layer maps that answer through a registry or seam it already has — never `if (kind === ...)` chains in core (ADR 0013):
 
-| Layer | What `kind` selects | Seam |
+| Layer | What structure or a plugin store selects | Seam |
 |---|---|---|
-| `scheduling/` | schedule semantics, *when a scheduling plugin is installed* — e.g. a `group` spans its children via rollup (default) vs. directly schedulable | `SchedulingPolicy` (§7), plugin-owned |
-| `layout/` | item emission — bar vs. summary bracket vs. milestone diamond; whether items are emitted at all | kind → `ItemProducer` registration in the §2.3 pipeline |
-| `render/` | appearance — per-kind default renderer; `data-kind` on the element for CSS | renderer registry (`02` §4) |
+| `scheduling/` | a parent spans its children via rollup vs. a leaf that is directly schedulable, *when a scheduling plugin is installed* | `SchedulingPolicy` (§7), plugin-owned |
+| `layout/` | item emission — bar vs. summary; whether items are emitted at all | structure → `ItemProducer` in the §2.3 pipeline |
+| `render/` | appearance — default renderer; `data-kind` on the element for CSS (look, not an Entry classification) | renderer registry (`02` §4) |
 | `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
 
 Rules:
 
-- **Kind is authored, never derived.** A `group` is a group because the user said so — not because it currently has children. An empty group is legal and renders as one (that is how "add a phase, then fill it" works). For kinds in `rollUpKinds`, input may omit `start`/`end`: the store initializes a zero-length span (at the dataset's reference date) and the Span rollup owns it from then on — the *stored* model always has both fields, so no layer downstream handles absence. `parentId` (tree position) and `kind` (what it is) are orthogonal; "every parent is a group" is a convention, not a model rule — and `hierarchy: { autoGroup: true }` (`02` §2, the default) maintains that convention automatically: an entry gaining its first child is promoted to `group` in the same transaction. **Promote only, never demote** — demoting on losing the last child would reintroduce exactly the flickering identity this rule exists to prevent; demotion stays an explicit edit.
-- **`rollUpKinds`** (`Dataset` option, default `['group']`) names which kinds get a rolled-up value for **every** rolling-up Field (`start`/`end` and a consumer `cost` alike). A consumer's own kind (say `'phase'`) opts in the same way. `'none'` or `[]` keeps authored parent values. The Rollup that reads it is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
-- **The set is open.** Shipped kinds: `'span'`, `'group'`, `'milestone'`. A consumer-defined kind (say `'buffer'`) gets full behavior by registering at the four seams above — no core edits. Anything not registered at a seam falls back to `'span'` behavior there, so partial registration degrades gracefully instead of erroring.
-- **A painted-span floor is a lookup, not a kind check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every kind floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a milestone's own larger diamond floor (`diamondSizePx * √2`). The lookup, not an `if (kind === 'milestone')`, is what lets milestone's extra floor sit on top without a branch. `FrameBar.minimumSpan` states the fact for every kind this floor touched, milestone included. `render/` stamps it as `data-span="minimum"` — a milestone carries it exactly like any other floored bar (CONTEXT.md, `02` §4).
-- **Group *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing; a `kind: 'group'` entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing group entries is well-defined, because one is authored and the other is derived (principle 1).
+- **Derivation is structure.** An Entry derives when it has children. An empty phase is a bar until a child arrives. Losing the last child leaves a normal Entry with no dates. There is no stored classification, no `rollUpKinds`, and no `hierarchy.autoGroup`. Dates are optional (ADR 0012): a dateless parent is legal; the store does not mint a fake span. The Rollup is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
+- **Look follows children, or a plugin store.** A parent with children draws the parent look. A leaf draws a bar. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns (ADR 0002) and registers at the four seams above. Anything not registered falls back to the structure look.
+- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a diamond floor when that look is in play (`diamondSizePx * √2`). `FrameBar.minimumSpan` states the fact for every bar this floor touched. `render/` stamps it as `data-span="minimum"` (CONTEXT.md, `02` §4).
+- **Parent *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing. A parent Entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing parents is well-defined, because one is structure and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
 
-`Entry` is a closed shape, so a consumer's `cost` has nowhere to be a first-class value: it can be stored in `meta`, but it cannot roll up, cannot be compared per field, and cannot appear in a changeset. A **Field** fixes that. It is a declared, named value on an entry, and core's own fields are declarations of the same kind (ADR 0005). A **Grid column** is where one Gantt shows a field.
+`Entry` is a closed shape, so a consumer's `cost` has nowhere to be a first-class value: it can sit in `props` undeclared, but it cannot roll up, cannot be compared per field, and cannot appear in a changeset. A **Field** fixes that. It is a declared, named value on an entry, and core's own fields are declarations of the same kind (ADR 0005, ADR 0011). A **Grid column** is where one Gantt shows a field.
 
 One sentence separates them, and it is the only one a reader has to hold: **a field is what a value *is*; a grid column is where a Gantt *shows* it.** Fields belong to the `Dataset`, because the rollup writes into stored, serialized, undoable values and runs at construction, before any Gantt exists. Grid columns belong to the `Gantt`, because which values this view shows, and in what order, is a view question.
 
 ```ts
 // model/field.ts — types only
 type FieldKey = string & {};                        // a field's name; also the changeset's `field`
-type CoreFieldKey = keyof Omit<Entry, 'id'>;        // the shipped subset
-
-/** Where the value lives. The choice decides whether a rolled-up parent value is stored. */
-type FieldSource =
-  | { from: 'entry'; field: CoreFieldKey }          // name, start, end — shipped; progress is S7's
-  | { from: 'meta'; key?: string }                  // key defaults to the Field key
-  | { from: 'compute'; read(entry: Entry, ctx: FieldContext): unknown };
+type CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>;  // the shipped subset
 
 interface Field<TValue = unknown> {
   key: FieldKey;
   type?: FieldTypeName;                             // a bundle; the field's own keys win over it
-  source?: FieldSource;                             // default: meta under this Field's key
+  compute?(entry: Entry, ctx: FieldContext): TValue | undefined;  // no stored home when present
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
-  editable?: boolean;                               // #142/#256: the Field half of one write answer — gates the cell editor, both resize handles and the bar move alike (I14); default false
+  /** How far a value may change. Stored as the enum. `true`/`false` are input aliases for `'anywhere'`/`'never'`. Default `'api'`. */
+  editable?: 'never' | 'api' | 'anywhere' | boolean;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
   formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
@@ -303,13 +293,12 @@ type Aggregator<TValue = unknown> = (
   children: readonly Entry[],      // already rolled up; the walk is bottom-up
   parent: Entry,
   ctx: RollUpContext,
-) => TValue | undefined;           // undefined = no opinion, leave the stored value alone
+) => TValue | undefined;           // undefined = no opinion, leave the stored value alone — except on a rolling-up parent, where it means no value (ADR 0013)
 
-/** Compute and store access. No locale. */
+/** Compute and store access. No locale. Duration is a compute Field; aggregators call `read(entry, 'duration')`. */
 interface FieldContext {
   readonly timeZone: string;
   read<T>(entry: Entry, key: FieldKey): T | undefined;
-  durationOf(entry: Entry): Duration;
 }
 
 /** FieldContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`. */
@@ -325,18 +314,20 @@ interface FormatContext extends FieldContext {
 
 Rules:
 
-- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end`) ship in the registry a consumer adds to. `kind` ships with a text column; `parentId`, `segments` and `meta` ship as data-only Fields (no `column`). There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name.
-- **A Field is columnable only when it declares `column`.** `gridColumns` names columnable Fields in display order. Default `gridColumns` is `['name']`. A Field with no `column` still rolls up and still appears in the changeset; naming it in `gridColumns` throws `FieldNotColumnableError`.
-- **Source decides stored or computed.** A field sourced from `entry` or `meta` has a stored home, so its rolled-up parent value is stored — changeset, undo, document — exactly as the Span rollup already does for `start`/`end`. A field sourced from `compute` has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and never reaches the document. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate without document bytes declares a computed field; there is no flag to set.
-- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business.
-- **`meta` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. A write to a declared key emits a changeset row keyed on the **field key**, never a `meta` row.
-- **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. A key that is not registered is an `UnknownFieldError` — never a silent write.
-- **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested groups settle together. `rollUpKinds` says which **kinds** derive (`'none'` or `[]` opts every Kind out); the registry says how each **field** derives. The two are orthogonal and both are needed.
+- **The key is the address.** `{ key: 'cost' }` is `entry.props.cost`. `{ key: 'start' }` is `entry.start`. `{ key: 'duration', compute }` has no stored home. There is no `source` object.
+- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end` through `time/`, I10) ship in the registry a consumer adds to. `parentId` and `segments` ship as data-only Fields (no `column`). There is no `kind` Field and no `props` Field. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data under `scheduling:progress` (ADR 0008, ADR 0014). `weightedMeanByDuration` still ships as an Aggregator name. Duration returns `undefined` when a date is absent (ADR 0012). One unit: millisecond.
+- **A Field is columnable only when it declares `column`.** `gridColumns` names columnable Fields in display order. Default `gridColumns` is `['name', 'start', 'end']` (ADR 0012). The date path is the grid: the date editor opens on a blank cell and writes one Field. Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`). A Field with no `column` still rolls up and still appears in the changeset; naming it in `gridColumns` throws `FieldNotColumnableError`.
+- **Stored or computed follows the declaration.** A core key or a `props` key has a stored home, so its rolled-up parent value is stored — changeset, undo — exactly as the Span rollup already does for `start`/`end`. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A `compute` Field has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and is never stored. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate the store never holds declares a computed field; there is no flag to set.
+- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business. The duration arm must not call `ctx.read(entry, 'duration')`.
+- **`props` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. `update()` never names an undeclared key (`UnknownFieldError`). A write to a declared key emits a changeset row keyed on the **field key**, never a whole-bag row. Plugin keys share this bag under a prefix.
+- **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. Nested `props:` at `update()` is refused. A key that is not registered is an `UnknownFieldError` — never a silent write.
+- **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested parents settle together. Structure says which **entries** derive (has children); the registry says how each **field** derives. The two are orthogonal and both are needed.
 - **Aggregation never lives on a grid column.** A stored value must not depend on whether a column is visible, and the rollup has already run before any Gantt is constructed.
 - **A columnable Field declares its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
 - **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
-- **A Field that omits `source` lives in `meta` under the Field key.** `{ key: 'cost', type: 'money' }` is the common call. Write `{ from: 'meta', key }` only when the Document key differs. `{ from: 'entry' }` and `{ from: 'compute', read }` stay explicit.
+- **`{ key: 'cost', type: 'money' }` is the common call.** The key decides the home. A `compute` Field is the explicit other shape.
 - **A Field type supplies the default `rollUp`, `formatValue`, `compare`, and column defaults.** The registry merges the Field onto its type first; the Field's own keys win. After that merge, absent `rollUp` or `'none'` means the Field does not participate. The type's `rollUp` is an Aggregator name — shipped or a consumer name in `aggregators`. `percent` is the one shipped Field type, and it carries no `rollUp` — a default aggregator would overwrite an authored parent value on every dataset naming it (ADR 0008); there is no global default Aggregator — `sum` is what a consumer puts on `money`, not what an Instant uses. The Span rollup stays `start` as `min` and `end` as `max` on those core Fields (D-S4-3).
+- **Writability is one key, two thresholds (ADR 0015).** Gestures ask `canWrite` — writable iff `'anywhere'`. `entries.update()` refuses only `'never'`. Default is `'anywhere'`. Check `compute` before `editable`. Core `name`/`start`/`end` declare `'anywhere'`. `{ editable: false }` still constructs and stores as `'never'`.
 - **One registry, whole declaration.** A field (and a field type) carries both halves, `column` included. `data/` stores those bytes and does not interpret them — it never formats and never paints. `view/` reads `column` at Grid resolve time. `api/` is the composition root. Do not open a second registry. ADR 0005's "split at `api/`" is who sends what where at read time, not two copies.
 
 ---
@@ -416,7 +407,7 @@ interface GeometryFrame {
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
-    kind: EntryKind;              // backends stamp it as data-kind — per-kind CSS with zero JS
+    look: 'parent' | 'leaf' | (string & {});  // backends stamp it as data-kind — CSS with zero JS; not an Entry classification
     /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
      *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
     segmentId?: SegmentId;
@@ -532,7 +523,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 - **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
-- **The envelope has one function, and now one owner on every write path** (#212, finding 4; closed by the 2026-09-06 fix-plan review, R2, findings B1 and its remainder): an Entry's `start`/`end` are meant to be the envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — and `time/`'s `envelopeOfSegments` is the one function that computes it. Every path that writes `start`/`end` now goes through it or a function built on it. Ingest, a plain `entries.update(id, { segments })`, and a drag/resize gesture call it directly. The Rollup (`data/rollup.ts`, `widenSegmentsToEnvelope`) restores the invariant on a roll-up-kind parent in two steps: every Segment first clamps into the parent's newly rolled-up `[start, end)` (a Segment the new span has moved past collapses to the nearest edge, rather than keeping a stretch the parent no longer covers), and then whichever Segment does not yet reach an edge exactly widens to it — the earliest-starting Segment supplies the new `start`, the latest-ending one the new `end`. One Segment plays both roles when the parent draws only one, which is why a several-Segment parent was the harder case: a rolled-up span can shrink past an interior Segment as easily as it can grow past every one, so widening only the two extremal Segments (with no clamp) is not enough on its own. Rejecting a several-Segment roll-up parent at ingest, or making the rolled-up value computed-on-read for that case only, were both considered and rejected: the first makes `rollUpKinds` and "how many Segments a consumer authors" interact for no reason a consumer could predict, and the second would split `start`/`end`'s `field source` (ADR 0005) between stored and computed depending on Segment count, which is exactly the kind of `if (kind === ...)`-shaped special case the seams below exist to avoid. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does, and now gets it, on one refusal rather than two answers for one input (D-S5-44; a caller-identity split — a computed translate for the extender's cascade, a refusal for `entries.update()` — was tried and rejected): `data/entry-reader.ts`'s `reconcileEnvelope` is the one function that decides a `StoredEdit` against an Entry's Segments, and every caller reaches it. `toStoredEdit` calls it directly for `entries.update()`. An `EditExtender`'s cascade reaches it through `reconcileExtenderEdits`, called once per edit from both `build-commit-change-set.ts` at commit and, as `reconcileExtenderEditsForPreview`, from `view/gesture-pipeline.ts`'s drag preview — the preview's copy runs inside a rAF callback with nothing to catch a throw, so it drops a refused edit instead of throwing (that Entry paints no ghost for the frame) while the commit path still throws for real. A direct `start`/`end` write against a several-Segment Entry with no `segments` of its own is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) from every one of these callers alike, because a `StoredEdit` is one shape with one meaning regardless of who wrote it. `data/entry-reader.ts`'s `moveEntryTo` is the escape a plugin author reaches for instead: it writes every Segment of an Entry translated rigidly to a new `start`, which is what the refused envelope-only write could not say. `envelopeOfSegments` itself lives in `time/`, not in `data/` or `layout/` (both call it): those two layers may not import each other (§1), and `time/` is the one layer both already reach through for zone-aware date arithmetic (I10) — this is a plain numeric min/max over two `Instant`s, not date arithmetic, but the placement still keeps every caller on one function instead of a copy in each layer.
+- **The envelope has one function, and now one owner on every write path** (#212, finding 4; closed by the 2026-09-06 fix-plan review, R2, findings B1 and its remainder): an Entry's `start`/`end` are meant to be the envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — and `time/`'s `envelopeOfSegments` is the one function that computes it. Every path that writes `start`/`end` now goes through it or a function built on it. Ingest, a plain `entries.update(id, { segments })`, and a drag/resize gesture call it directly. The Rollup (`data/rollup.ts`, `widenSegmentsToEnvelope`) restores the invariant on a rolling-up parent in two steps: every Segment first clamps into the parent's newly rolled-up `[start, end)` (a Segment the new span has moved past collapses to the nearest edge, rather than keeping a stretch the parent no longer covers), and then whichever Segment does not yet reach an edge exactly widens to it — the earliest-starting Segment supplies the new `start`, the latest-ending one the new `end`. One Segment plays both roles when the parent draws only one, which is why a several-Segment parent was the harder case: a rolled-up span can shrink past an interior Segment as easily as it can grow past every one, so widening only the two extremal Segments (with no clamp) is not enough on its own. Rejecting a several-Segment roll-up parent at ingest, or making the rolled-up value computed-on-read for that case only, were both considered and rejected: the first makes derivation and "how many Segments a consumer authors" interact for no reason a consumer could predict, and the second would split `start`/`end` between stored and computed depending on Segment count, which is exactly the kind of special case the seams below exist to avoid. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does, and now gets it, on one refusal rather than two answers for one input (D-S5-44; a caller-identity split — a computed translate for the extender's cascade, a refusal for `entries.update()` — was tried and rejected): `data/entry-reader.ts`'s `reconcileEnvelope` is the one function that decides a `ProposedEdit` against an Entry's Segments, and every caller reaches it. `toProposedEdit` calls it directly for `entries.update()`. An `EditExtender`'s cascade reaches it through `reconcileExtenderEdits`, called once per edit from both `build-commit-change-set.ts` at commit and, as `reconcileExtenderEditsForPreview`, from `view/gesture-pipeline.ts`'s drag preview — the preview's copy runs inside a rAF callback with nothing to catch a throw, so it drops a refused edit instead of throwing (that Entry paints no ghost for the frame) while the commit path still throws for real. A direct `start`/`end` write against a several-Segment Entry with no `segments` of its own is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) from every one of these callers alike, because a `ProposedEdit` is one shape with one meaning regardless of who wrote it. `data/entry-reader.ts`'s `moveEntryTo` is the escape a plugin author reaches for instead: it writes every Segment of an Entry translated rigidly to a new `start`, which is what the refused envelope-only write could not say. `envelopeOfSegments` itself lives in `time/`, not in `data/` or `layout/` (both call it): those two layers may not import each other (§1), and `time/` is the one layer both already reach through for zone-aware date arithmetic (I10) — this is a plain numeric min/max over two `Instant`s, not date arithmetic, but the placement still keeps every caller on one function instead of a copy in each layer.
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
 ```ts
@@ -557,11 +548,11 @@ interface ChangeSet {
 }
 ```
 
-A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, element-wise on `segments`, reference-only on `meta`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
+A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, element-wise on `segments`, per-key on `props` / the Field's `equals`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
-- **Serialization**: versioned `toJSON()`/`fromJSON()` with a declared schema (`{ schema: 1, ... }`), brands stripped at the boundary. The JSON shape is public API and semver-governed. See `02-public-api.md` §6.
+- **Persistence**: the library holds no save format (ADR 0016). A consumer reads `entries.all`, `fields.all` and `dataset.pluginStore(id)`, and saves its own shape. See `02-public-api.md` §6.
 
 ---
 
@@ -777,12 +768,12 @@ interface PluginContext {
     ): Disposer;
   };
   layout: {
-    registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;   // S5.9, D-S5-22: the way in from outside — S4 shipped the ItemProducer seam itself (§9) with no external caller
+    registerItemProducer(look: 'parent' | 'leaf' | (string & {}), producer: ItemProducer): Disposer;   // S5.9, D-S5-22: structure or a plugin-owned look — S4 shipped the ItemProducer seam itself (§9) with no external caller
   };
   interaction: {
     registerKeybinding(b: KeyBinding): Disposer;
     registerKeyHandler(chord: string, handler: (e: KeyEventLike) => void): () => void;
-    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+    registerLookDefaults(look: 'parent' | 'leaf' | (string & {}), defaults: KindDefaults): Disposer;
     canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
     announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
@@ -798,7 +789,7 @@ name (D-S5-5).
 
 ### 10.2 The Dataset plugin
 
-A Dataset plugin sees only what a Document holds. It stays DOM-free and runs wherever a Dataset
+A Dataset plugin sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset
 runs — it never meets a pane, the overlay, or a gesture.
 
 ```ts
@@ -837,8 +828,8 @@ Dataset instead of reconfiguring one live. Every register* call above is legal o
 runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
 retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
 owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
-"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Document
-keeps them under the plugin's own id as passenger data (D-S5-24), and `store.read` lets a later
+"a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
+keeps them under the plugin's own id for as long as it lives (D-S5-24), and `store.read` lets a later
 plugin — the setup order `requires` fixes — read an earlier plugin's rows.
 
 `ctx.view.dom` is the whole plugin-to-DOM contract (review N1/A3):
@@ -923,4 +914,4 @@ Rules:
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |
 | I12 | All pixels-from-time via `TimeScale`; all scroll via `ScrollModel` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
-| I14 | Gesture arming and visual affordances come from one capability resolution, and every write asks one `canWrite` (#256) | shared resolver + interaction test + `e2e/write-refusal.spec.ts` |
+| I14 | Gesture arming and visual affordances come from one capability resolution. Gestures ask `canWrite` (grid: `'anywhere'`). `entries.update()` asks the same `editable` against the API threshold (`'never'` only). | shared resolver + interaction test + `e2e/write-refusal.spec.ts` (must call `entries.update()`) |

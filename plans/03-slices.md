@@ -6,6 +6,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Remap (2026-08-28):** Direct manipulation is **S3**. Hierarchy is **S4**. Extensibility is **S5**. Scale is **S6**. The first-party scheduling plugin is **S7**, last. S3–S6 must ship a complete Gantt with the identity extender. Extra field writes during drag come from that hook (`EntryEdits`), never from a `schedule()` import in `interaction/` or `view/`.
 
+> **Live Field, date and derivation rules: ADRs 0011–0015.** S0–S6 are done, and each section below records what that slice **shipped**. Where a shipped line says `kind`, `rollUpKinds`, `autoGroup`, `meta` or a field `source`, the live rule is the ADR: dates are optional (0012), the Field key is the address in `props` (0011), an Entry derives when it has children (0013), and the by-key door is `entries.read` (0014). Those ADRs are `proposed`, so `src/` still matches the lines below. The tracker is [`field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md). Do not rewrite a shipped record to a rule the code does not yet have.
+
 ---
 
 ## S0 — Walking skeleton
@@ -179,11 +181,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Scope**
 
 - Field registry (`01` §2.6, ADR 0005): core fields (`name`, `start`, `end`, `duration`) ship as declarations in the registry a consumer adds to; `fields` / `fieldTypes` / `aggregators` on `Dataset`; a declared `meta` key becomes addressable for editing, comparison and rollup. A field is a Grid column candidate only when it declares `column`, so `gantt.gridColumns` is names in display order plus per-Gantt overrides. `progress` is not a core field (ADR 0008).
-- Per-field rollup (#80): `rollUpFields` is a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document.
+- Per-field rollup (#80): `rollUpFields` is a leaf with one importer `data/transaction.ts` (D-S4-7). Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. `start` is `min`, `end` is `max`, a declared `cost` sums, `name` does not roll up. Same precedence (yields to the body, wins over the resolver), still bottom-up. Scheduling cannot occupy this slot. Source decides stored vs. computed: `entry`/`meta` fields store the parent's aggregate, computed fields never reach the document. **Superseded by ADRs 0011 and 0013:** the Field key is the address, `rollUpKinds` is deleted, an Entry derives when it has children, and a rolling-up parent's derived keys never reach the Document.
 - Frame rows carry `cells` (one library-formatted string per configured grid column) instead of one `label` — the S1 shape that assumed a single-column grid (#81).
 - Tree UI: indent + expand/collapse in the grid's name column; collapse state is view state (per Gantt, `RowId`s, not in dataset data).
-- Kind-driven item emission (`01` §2.5): `group` → summary rail (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups.
-- `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2).
+- Kind-driven item emission (`01` §2.5): `group` → summary rail (span rollup from S2), `milestone` → diamond, consumer-registered kinds via the emitter seam; empty groups render as groups. **Superseded by ADR 0013:** emission asks structure — a parent draws the parent look, a leaf draws a bar — and core ships no diamond. A plugin registers a producer for the ids it owns.
+- `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2). **Superseded by ADR 0013:** nothing promotes a stored classification, because there is none. `autoGroup` is deleted, and losing the last child leaves a normal, dateless Entry.
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
 - Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
@@ -193,15 +195,15 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`.
+- [x] `[S4-A1]` A consumer-declared `meta` field sums up the tree, shows in a grid column beside `start`, edits in the same `update()` call and the same undo step as a core field, and round-trips through `toJSON`/`fromJSON`. *— retired by ADR 0011: the namespace is `props`, and the `meta` Field is deleted.*
 - [x] `[S4-A2]` An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
 - [x] `[S4-A3]` Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
 - [x] `[S4-A4]` A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
 - [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
 - [x] `[S4-A6]` Collapse state survives data edits and is independent per Gantt.
 - [x] `[S4-A7]` Filter with keep-ancestors shows a matching deep child under its chain of parents.
-- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing.
-- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing.
+- [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing. *— retired by ADR 0013: `kind` leaves the record, and an Entry derives when it has children.*
+- [x] `[S4-A9]` With `autoGroup` on: reparenting an entry under a plain entry promotes that parent to `group` in the same undo step; removing all children demotes nothing. *— retired by ADR 0013: `autoGroup` is deleted, and a parent that loses its last child demotes.*
 - [x] `[S4-A10]` `filterPolicy: 'matchOnly'` returns only matching entries — no ancestor rows.
 - [x] `[S4-A11]` `{ source: 'custom', resolve }` produces the resolver's rows.
 

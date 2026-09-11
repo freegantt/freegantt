@@ -47,7 +47,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
       { label: 'Undo and redo', href: `${PUBLIC_API}#undo-and-redo` },
-      { label: '§6 — Serialization contract', href: `${PUBLIC_API}#6-serialization-contract-d7` },
+      { label: '§6 — Persistence', href: `${PUBLIC_API}#6-persistence-adr-0016` },
     ],
   },
   editing: {
