@@ -1000,10 +1000,15 @@ Compile-only changes, mechanical, following the same pattern as J21–J23:
 **Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 11).
 `pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **49/52 pass, 3 fail** — see Q6.
 
-### Q6 — Two apparent `src/` conflicts surfaced by running (not just compiling) `entry-store.mutation.test.ts` — needs the author's read before anyone touches `entry-store.ts`/rollup internals
+### Q6 — Two apparent `src/` conflicts surfaced by running (not just compiling) `entry-store.mutation.test.ts` — **ANSWERED: move the guard to the consumer door**
 
-**Raised:** 2026-09-11, Build 3b. **Status:** open, with a coordinator's reading below that narrows
-what the author has to decide.
+**Raised:** 2026-09-11, Build 3b. **Status: ANSWERED 2026-09-11 — the author ruled: move the guard to
+the consumer door.** Neither decision 5 nor decision 6 is reversed; the refusal sits above the
+library's own internal writes, which is where ADR 0013 lines 81 and 91 put it. The two guard-caused
+tests below must pass **unmodified**. The third finding (quadratic scaling) is a separate bug and is
+not answered by this ruling.
+
+The coordinator's reading that the ruling followed:
 
 > **Coordinator's note, 2026-09-11 — the guard is not decision 6, and ADR 0013 says where it belongs.**
 > Build 3b calls the refusal "decision 6". It is not. ADR 0013 line 74 states decision 6 verbatim:
