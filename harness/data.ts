@@ -16,7 +16,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetEventMap, Disposer } from '../src/api/index.js';
+import type { DatasetEventMap } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -161,15 +161,8 @@ function bindDataset(): void {
 
 // Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
 // plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
-// `watchAllErrors` returns a `Disposer` for exactly this: an import below replaces both `dataset`
-// and `gantt`, so the old subscription is disposed first, alongside `bindDataset`/`bindGantt`'s own
-// rebind — calling `watchAllErrors` twice on the module-scope pair would otherwise leak a stale
-// subscription to entries the import just discarded (T1-4).
-let stopWatchingErrors: Disposer = () => {};
-
 function bindErrors(): void {
-  stopWatchingErrors();
-  stopWatchingErrors = watchAllErrors([dataset, gantt], (report) => {
+  watchAllErrors([dataset, gantt], (report) => {
     const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
     logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
   });
