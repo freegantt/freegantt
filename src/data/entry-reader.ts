@@ -475,20 +475,40 @@ export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
  * cascade that turns a dateless Entry spanning always mints a real id, because this path always
  * reaches the store. The preview path below never carries one; see `reconcileEnvelope`.
  */
-export function reconcileExtenderEdits(
+/** The one loop both `reconcileExtenderEdits` and `reconcileExtenderEditsForPreview` run — they
+ *  differ in exactly two ways, never one: whether a `SegmentsOutOfSyncError` reaches the caller
+ *  (`refuse`), and whether a real `mintSegmentId` is ever in hand (the preview path never carries
+ *  one — see `reconcileExtenderEditsForPreview`'s own docblock). `refuse: 'throw'` never reaches the
+ *  `catch` branch's drop, because `reconcileEnvelope` still throws synchronously and this rethrows it
+ *  unchanged. */
+function reconcileExtenderEditsWith(
   entries: ReadonlyMap<EntryId, Entry>,
   edits: ProposedEdits,
+  refuse: 'throw' | 'drop',
   mintSegmentId?: () => SegmentId,
 ): ProposedEdits {
   let changed = false;
   const reconciled = new Map<EntryId, ProposedEdit>();
   for (const [id, edit] of edits) {
     const entry = entries.get(id);
-    const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION, mintSegmentId).edit : edit;
-    if (next !== edit) changed = true;
-    reconciled.set(id, next);
+    try {
+      const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION, mintSegmentId).edit : edit;
+      if (next !== edit) changed = true;
+      reconciled.set(id, next);
+    } catch (error) {
+      if (refuse === 'throw' || !(error instanceof SegmentsOutOfSyncError)) throw error;
+      changed = true;
+    }
   }
   return changed ? reconciled : edits;
+}
+
+export function reconcileExtenderEdits(
+  entries: ReadonlyMap<EntryId, Entry>,
+  edits: ProposedEdits,
+  mintSegmentId?: () => SegmentId,
+): ProposedEdits {
+  return reconcileExtenderEditsWith(entries, edits, 'throw', mintSegmentId);
 }
 
 /**
@@ -497,26 +517,14 @@ export function reconcileExtenderEdits(
  * screen, so this drops the offending edit instead of reconciling it — that Entry paints no ghost for
  * this frame — and leaves every other edit reconciled as `reconcileExtenderEdits` would. The commit
  * path still calls `reconcileExtenderEdits` and still throws: the refusal is real, and dropping it
- * from a preview is not the same as dropping it from the write itself.
+ * from a preview is not the same as dropping it from the write itself. It also never carries a
+ * `mintSegmentId`: a preview frame never reaches the store, so there is no real counter to mint from.
  */
 export function reconcileExtenderEditsForPreview(
   entries: ReadonlyMap<EntryId, Entry>,
   edits: ProposedEdits,
 ): ProposedEdits {
-  let changed = false;
-  const reconciled = new Map<EntryId, ProposedEdit>();
-  for (const [id, edit] of edits) {
-    const entry = entries.get(id);
-    try {
-      const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION).edit : edit;
-      if (next !== edit) changed = true;
-      reconciled.set(id, next);
-    } catch (error) {
-      if (!(error instanceof SegmentsOutOfSyncError)) throw error;
-      changed = true;
-    }
-  }
-  return changed ? reconciled : edits;
+  return reconcileExtenderEditsWith(entries, edits, 'drop');
 }
 
 /** `toEditReading`'s result: the `ProposedEdit` `toProposedEdit` has always returned, plus which of

@@ -47,13 +47,6 @@ export function proposedKeysOf(edit: ProposedEdit | undefined): ReadonlySet<stri
   return edit?.proposedKeys ?? new Set();
 }
 
-/** Does this edit state which Fields it writes at all? Kept for callers that predate `proposedKeys`
- *  becoming required — every `ProposedEdit` answers `true` now, because there is no longer a way to
- *  build one without seeding the set (`emptyProposedEdit`, `toProposedEdit`). */
-export function statesProposedKeys(edit: ProposedEdit | undefined): boolean {
-  return edit?.proposedKeys !== undefined;
-}
-
 function keysWrittenBy(edit: ProposedEdit | undefined): readonly string[] {
   return [...proposedKeysOf(edit)];
 }
