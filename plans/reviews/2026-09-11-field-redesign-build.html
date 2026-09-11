@@ -24,7 +24,7 @@
           <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800">Gate: verify:full PASS (all 16 checks)</span>
           <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Scopes: naming, API surface, standards/smells, spec, architecture, simplicity</span>
         </div>
-        <p class="text-xs text-slate-500">Verdicts pending Pass 2 (fresh-eyes verification). Each finding stays <em>Unverified</em> until pass 2 answers by id.</p>
+        <p class="text-xs text-slate-500">Pass 2 complete: every id verified by a fresh-eyes sub-agent — see the verdict section at the bottom.</p>
       </header>
 
       <section id="findings" class="space-y-8">
@@ -51,7 +51,7 @@
             </div>
             <div id="F4" class="border-l-4 border-amber-400 pl-4 py-1">
               <span class="font-semibold">F4</span> · <code>src/data/entry-reader.ts</code> (<code>ENVELOPE_INPUT_KEYS</code>)
-              <p>The constant holds every <code>EntryInput</code> key — <code>id</code>, <code>name</code>, <code>kind</code> — none of which are envelope keys. The name fails the search test: a search for "envelope" finds keys that never travel on an envelope. <code>ENTRY_INPUT_KEYS</code> reads true at every call site.</p>
+              <p>The constant holds all eight <code>EntryInput</code> keys; the name is wrong at the search test, but pass 2 corrected the account: of the eight, exactly <code>id</code> and <code>props</code> are <em>not</em> envelope keys — <code>EntryEnvelope = Omit&lt;EntryInput, 'id' | 'props'&gt;</code> (<code>model/entry.ts:81</code>); the other six are precisely the envelope's keys. The rename stands; the contrast "not envelope keys" was false.</p>
               <p class="text-slate-600">Fix: rename to <code>ENTRY_INPUT_KEYS</code>.</p>
             </div>
             <div id="F5" class="border-l-4 border-slate-300 pl-4 py-1">
@@ -100,7 +100,7 @@
               <p class="text-slate-600">Fix: add the named test for the one-date fold.</p>
             </div>
             <div id="F11" class="border-l-4 border-amber-400 pl-4 py-1">
-              <span class="font-semibold">F11</span> · <code>plans/field-redesign/types.md</code> §3.2, <code>src/model/field.ts</code>, BUILD-LOG J12
+              <span class="font-semibold">F11</span> · <code>plans/field-redesign/0011-consumer-values-in-props/types.md</code> §3.2 (line 104), <code>src/model/field.ts</code>, BUILD-LOG J12
               <p>The Field union in the normative type sample declares <code>compute?: never</code> on the stored arm; the code omits <code>compute</code> outright (J12, so <code>'compute' in field</code> discriminates). The rationale is sound, but the normative sample is now wrong unless updated.</p>
               <p class="text-slate-600">Fix: update <code>types.md</code> §3.2 to the J12 shape, or align <code>field.ts</code> to the sample.</p>
             </div>
@@ -132,7 +132,7 @@
             </div>
             <div id="F16" class="border-l-4 border-amber-400 pl-4 py-1">
               <span class="font-semibold">F16</span> · <code>src/data/entry-reader.ts:487-529</code>
-              <p><code>reconcileExtenderEdits</code> / <code>reconcileExtenderEditsForPreview</code> duplicate a 12-line loop, differing only in throw-vs-drop on <code>SegmentsOutOfSync</code>. The two callers can drift — drift of this shape already cost a real bug once.</p>
+              <p><code>reconcileExtenderEdits</code> / <code>reconcileExtenderEditsForPreview</code> duplicate a 12-line loop. Pass-2 correction: they differ in <em>two</em> ways — throw-vs-drop on <code>SegmentsOutOfSync</code>, and <code>mintSegmentId</code> availability (the preview path never carries one; its docblock says so). The dedup fix must accommodate both differences, not just throw-vs-drop. The two callers can drift — drift of this shape already cost a real bug once.</p>
               <p class="text-slate-600">Fix: one loop with a <code>refuse: 'throw' | 'drop'</code> mode.</p>
             </div>
             <div id="F17" class="border-l-4 border-amber-400 pl-4 py-1">
@@ -147,9 +147,8 @@
             </div>
             <div id="F19" class="border-l-4 border-slate-300 pl-4 py-1">
               <span class="font-semibold">F19</span> · <code>harness/planner.ts:101-105</code>
-              <p>The harness restates core's <code>formatEnd</code> no-start branch (ADR 0012's optional <code>start</code>). The stop-rule candidate: a <code>formatEndValue(timeZone, entry, …)</code> helper in core would let the harness drop the branch.</p>
+              <p><code>harness/planner.ts:101-105</code> restates the no-start branch of core's <code>formatEnd</code> (<code>core-fields.ts:41-46</code>), its comment naming the mirrored rule. Pass 2 weighed the stop rule and answered: genuine API-gap candidate — the startless-end display decision is library-owned (stated in <code>core-fields.ts</code>) yet redecided in the harness only because core's formatter hardcodes its format instead of taking the caller's. A format-parameterized core helper removes the branch. Low severity (one line of presentation glue); the duplication and the stop-rule reading are real.</p>
               <p class="text-slate-600">Fix: own the seam in <code>src/</code> so the harness disappears from the count.</p>
-              <p class="text-slate-500">Collector's note: pass-2 agent should weigh whether this is an API gap (stop rule) or acceptable harness formatting code.</p>
             </div>
             <div id="F20" class="border-l-4 border-amber-400 pl-4 py-1">
               <span class="font-semibold">F20</span> · <code>plans/field-redesign/CLOSE-OUT.md</code>
@@ -165,10 +164,36 @@
         <p class="text-sm"><strong>F1</strong> first — the public contract itself is unimportable-by-design for its newest types, and no gate catches it. Then <strong>F8</strong> (accepted-ADR rule broken on-branch, Build 3 owns it) and <strong>F13/F14</strong> together — one carve-out in <code>model/entry.ts</code> removes the same restatement family at both layers.</p>
       </section>
 
-      <section id="pass2" class="space-y-2 text-sm">
+      <section id="pass2" class="space-y-3 text-sm">
         <h2 class="text-xl font-serif font-bold">Pass 2 — verification verdicts</h2>
-        <p class="text-slate-500">Pending: a fresh reviewer-planner sub-agent answers each id from the cited files.</p>
-        <ul id="pass2-answers" class="list-disc pl-6"></ul>
+        <p class="text-sm">
+          <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">19 Confirmed</span>
+          <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold ml-2">1 Mis-described (F4, account corrected; finding kept)</span>
+          <span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold ml-2">0 Wrong · 0 Unproven</span>
+        </p>
+        <p class="text-xs text-slate-500">Fresh-eyes sub-agent, cold start, verified each id against the cited code; context ~105k. One throwaway compile probe (F7's one-binding fix) was run and deleted. All pass-2 line corrections are already folded into the finding bodies above.</p>
+        <ul class="list-disc pl-6 space-y-1">
+          <li><strong>F1</strong> Confirmed — four <code>ae-forgotten-export</code> warnings at exactly <code>freegantt.api.md:629-630, 2181, 2189</code>; zero at the fixed point; aliases traced through <code>view/capability.ts:62,65</code>.</li>
+          <li><strong>F2</strong> Confirmed — <code>wholeEntryItem</code> is in the public api report; only guard is <code>produceItemsForRow</code>'s filter (<code>produce-items.ts:138</code>).</li>
+          <li><strong>F3</strong> Confirmed — comment states the deleted rule; <code>core-commands.ts</code> reads <code>entryIds</code>, and <code>removeSegments</code> alone never deletes a row.</li>
+          <li><strong>F4</strong> <em>Mis-described</em> — rename to <code>ENTRY_INPUT_KEYS</code> stands, but the account was wrong: exactly <code>id</code> and <code>props</code> are not envelope keys (<code>EntryEnvelope = Omit&lt;EntryInput, 'id' | 'props'&gt;</code>, <code>model/entry.ts:81</code>); the other six are the envelope's keys. Body above corrected.</li>
+          <li><strong>F5</strong> Confirmed — all five surfaces located; <code>dataset-state.ts</code> path drifted (it lives under <code>src/data/</code>, comment at :190).</li>
+          <li><strong>F6</strong> Confirmed — lines drifted (~66 lines above <code>toEntry</code>, not ~15); substance verified.</li>
+          <li><strong>F7</strong> Confirmed — cast at :194, <code>??</code> at :199, assertion at :203; throwaway type-probe compiled the one-binding fix clean, then deleted.</li>
+          <li><strong>F8</strong> Confirmed — early return at <code>rollup.ts:131</code>; <code>rollUp: 'min'/'max'</code> core fields at <code>core-fields.ts:76-87</code> reproduce the gap; N3 tracks it (<code>build-3-0013-derivation.md:47</code>).</li>
+          <li><strong>F9</strong> Confirmed — both ADR headers show only a verdict line / spec link; V12's resolution at <code>BUILD-SPEC.md:240</code> makes the report link part of the acceptance commit.</li>
+          <li><strong>F10</strong> Confirmed — fold exists (<code>time-scale-model.ts:227-231</code>); <code>includeInstant</code> reachable only from it; no named test covers a single-date Entry through <code>fitDataset</code>.</li>
+          <li><strong>F11</strong> Confirmed — <code>types.md</code> §3.2 (line 104, under <code>0011-consumer-values-in-props/</code>) still declares <code>compute?: never</code>; J12's omission is deliberate and documented in BUILD-LOG. Body's path corrected.</li>
+          <li><strong>F12</strong> Confirmed — ADRs 0013/0014/0015 all <code>proposed</code>; no <code>setFieldEditable</code>, editable still a boolean defaulting <code>false</code>.</li>
+          <li><strong>F13</strong> Confirmed — all guard and cast sites verified individually; cited line numbers drifted slightly (e.g. <code>extensions/features/inline-editing.ts:115</code>).</li>
+          <li><strong>F14</strong> Confirmed — seed inlined three times at <code>gesture-draft.ts:187-189, 217-219, 247-249</code>; canonical seed at <code>field-access.ts:34-35</code>.</li>
+          <li><strong>F15</strong> Confirmed — docblock concedes the tautology; only callers are its four test rows (<code>field-access.test.ts:133-136</code>).</li>
+          <li><strong>F16</strong> Confirmed with correction folded in — the loops differ in throw-vs-drop <em>and</em> <code>mintSegmentId</code> availability.</li>
+          <li><strong>F17</strong> Confirmed — mirror at <code>field-registry.ts:42-53</code> vs <code>grid-columns.ts:58-62</code>, each with its own #249 rationale.</li>
+          <li><strong>F18</strong> Confirmed — one production call (<code>dataset-state.ts:218</code>) would unwrap after the fix.</li>
+          <li><strong>F19</strong> Confirmed as a genuine (low-severity) API-gap candidate; body above now carries the pass-2 weigh-in.</li>
+          <li><strong>F20</strong> Confirmed — Build 0012 still <code>- [ ]</code>, Build 0011 has no checkbox at all; the header sentence "All six ADRs are <code>proposed</code>… that is HEAD" is also out of date.</li>
+        </ul>
       </section>
     </main>
   </body>
