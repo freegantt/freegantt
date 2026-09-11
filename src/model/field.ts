@@ -2,7 +2,7 @@
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
 import type { Duration } from './time.js';
-import type { Entry } from './entry.js';
+import type { Entry, EntryEdits } from './entry.js';
 import type { ElementDescription } from './render.js';
 
 /** The shipped subset — keys of `Entry` except `id` and `props`. The comparator exhaustiveness check
@@ -138,6 +138,20 @@ export type Field<TValue = unknown> =
        *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
        *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`). */
       editable?: boolean;
+      /** What a write to this Field on a **rolling-up parent** means (ADR 0013 amendment). Absent,
+       *  and that cell is read-only — refused standalone and refused inside `dataset.transaction()`
+       *  alike, because permission follows the thing written, never the call that wrapped it.
+       *
+       *  Written out as a method rather than as `FieldDistributor<TValue>`, for the reason `equals`
+       *  and `compare` are: `TValue` sits in a parameter here, so a property would make
+       *  `Field<number>` stop being assignable to `Field<unknown>`, and the registry holds bare
+       *  `Field`. `FieldDistributor` is the type a consumer writes one against. */
+      distribute?(
+        value: TValue | undefined,
+        children: readonly Entry[],
+        parent: Entry,
+        ctx: RollUpContext,
+      ): EntryEdits | undefined;
       // `compute` is genuinely absent here, not `compute?: never`: `'compute' in field` is the
       // discriminant `hasSomewhereToWrite` and the write resolver both ask, and TypeScript's `in`
       // narrowing only excludes an arm that never declares the key at all — a `never`-typed optional
@@ -194,6 +208,8 @@ export type Field<TValue = unknown> =
       equals?: never;
       parseValue?: never;
       inputType?: never;
+      /** A `compute` Field has no cell to write, so it has no write to distribute. */
+      distribute?: never;
     };
 
 /** A stored-Field bundle applied by name to many Fields (`registerType`) — `key`, `type` and the
@@ -206,6 +222,15 @@ export interface FieldType<TValue = unknown> {
    *  rollUp: 'none' }` opts one Field on a shared type out. */
   rollUp?: AggregatorName;
   editable?: boolean;
+  /** One distribution policy for every Field on this type — which is why `FieldDistributor` reads
+   *  the Field key off `ctx.field` rather than closing over one. A method, not a property, for the
+   *  variance reason `Field.distribute` states. */
+  distribute?(
+    value: TValue | undefined,
+    children: readonly Entry[],
+    parent: Entry,
+    ctx: RollUpContext,
+  ): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -252,6 +277,29 @@ export interface RollUpContext extends FieldContext {
    *  shipped `sum`/`min`/`max` already follow. */
   numericValues(children: readonly Entry[]): readonly number[];
 }
+
+/** What a write to a rolling-up parent's cell **means** (ADR 0013, amendment 2026-09-11). Read the
+ *  Aggregator below backwards: the same three arguments, and the value the Aggregator produced comes
+ *  back as the first one.
+ *
+ *  Declaring this is how a consumer names the distribution policy — split evenly, by duration, by
+ *  current share. With no `distribute`, that cell is read-only and the write is refused from every
+ *  direction, batched or not (`DerivedFieldNotWritableError`): the library ships no guessed default,
+ *  because there is none to defend.
+ *
+ *  It writes the **children**, never the parent: nothing but the Rollup writes a rolling-up parent's
+ *  cell, and the Rollup reads that cell back off what this returns. An edit aimed at the parent is
+ *  refused. Each returned edit lands through the door it would have come in by, so a child that is
+ *  itself a rolling-up parent distributes again, or refuses.
+ *
+ *  `undefined` — or an empty map — **declines**, and the write is refused with the same error an
+ *  absent `distribute` gives. A policy with nothing to write is a policy that says no. */
+export type FieldDistributor<TValue = unknown> = (
+  value: TValue | undefined,
+  children: readonly Entry[],
+  parent: Entry,
+  ctx: RollUpContext,
+) => EntryEdits | undefined;
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
 export type Aggregator<TValue = unknown> = (
