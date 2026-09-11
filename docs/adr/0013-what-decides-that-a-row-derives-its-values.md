@@ -1,7 +1,7 @@
 ---
-status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
+status: accepted — verdict: `verify:full PASS — all 16 checks green, test:e2e included (70s).` (Build 3, 2026-09-11). Split out of ADR 0011 on 2026-09-09.
 decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only until the Field declares `distribute` (amendment, 2026-09-11). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
-open: the parent bar drag is **built** (Build 3g, 2026-09-11). Q9 is answered and the behaviour ships: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. Two things hold the status at `proposed`. The public surface gained `ProposedDates`, and `etc/freegantt.api.md` is the author's to approve — the report was generated, read and reverted uncommitted, so `pnpm verify` fails at `api-report` and at nothing else. And no browser test drags a parent bar yet. See `plans/field-redesign/BUILD-LOG.md` J34, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
+open: nothing. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). See `plans/field-redesign/BUILD-LOG.md` J34, J35, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
