@@ -42,7 +42,7 @@ Answered together because the answers would cancel if taken apart. The closed ru
 
 **Closed 2026-09-10. Ruled by the author.** Was: *`read` and `fieldValue` are one job under two names — and there are four doors, not two.*
 
-**The ruling.** One resolver, one name: `read`. `dataset.entries.read(id, key)` is the app-author door. `ctx.read(entry, key)` is the plugin door. `entry.props.k` is storage, not a resolver. Rename `fieldValue` → `read` with serena. **Delete `FieldContext.durationOf`.** Duration is the shipped compute Field it already was (`core-fields.ts:115-123`). You read it through `read`.
+**The ruling.** One resolver, one name: `read`. `dataset.entries.read(id, key)` is the app-author door. `ctx.read(entry, key)` is the plugin door. `entry.props.k` is storage, not a resolver. Rename `fieldValue` → `read`. **Delete `FieldContext.durationOf`.** Duration is the shipped compute Field it already was (`core-fields.ts:115-123`). You read it through `read`.
 
 ```ts
 entry.props.owner
@@ -167,13 +167,13 @@ Its own recommendation was *"measure before deciding"*, which is work, not a rul
 
 ## The build — `read`, and duration is a compute Field
 
-- Rename `entries.fieldValue` → `entries.read` with **serena**. Same signature, same `FieldValue<TProps, K>` return. `UnknownFieldError` still names the door.
+- Rename `entries.fieldValue` → `entries.read`. Same signature, same `FieldValue<TProps, K>` return. `UnknownFieldError` still names the door.
 - Delete `FieldContext.durationOf`. Two stubs drop that key (`field-types.test.ts`, `layout/rows/filter.test.ts`). Rewrite `field-access.test.ts:75` — it is a test **name**, not a stub. Leave `layout/rows/sort.test.ts` alone: its `durationOf` is a local helper (**V6**).
 - The `duration` core Field's compute arm calls the guarded helper in `field-access.ts` (0012's guard, millisecond unit). It does not call `ctx.read(entry, 'duration')`.
 - `weightedMeanByDuration` (`aggregators.ts:14`) reads `ctx.read(entry, 'duration')`. Skip a child whose duration is `undefined`.
 - `inline-editing.ts:108-117`'s `fieldContextFor` stops supplying `durationOf`. Its `read` already forwards to `entries.read`. The whole-day approximation goes with the method. That is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274).
 - `etc/freegantt.api.md` drops `durationOf` and `fieldValue`. I11 gates the report.
-- Rename the renderer payload with **serena**: `fieldValue` → `value`, and the old `value` → `text`, on both `ColumnCellRendererContext` and `CellRendererContext`. Do the `value` → `text` rename **first**, or the two names collide mid-rename.
+- Rename the renderer payload: `fieldValue` → `value`, and the old `value` → `text`, on both `ColumnCellRendererContext` and `CellRendererContext`. Do the `value` → `text` rename **first**, or the two names collide mid-rename.
 - After the rename, `grep -rn '\bfieldValue\b' src/ harness/ e2e/ etc/` returns **0**. That is 13's gate.
 - App `add` / `update` of a plugin Field uses the prefixed key. The plugin exports that string as a const (Q12b). No bare alias.
 
