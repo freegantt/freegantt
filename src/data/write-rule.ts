@@ -11,7 +11,7 @@
 import type { Field, WriteRefusalReason, WriteVerdict } from '../model/index.js';
 import { rollsUp } from './fields/field-registry.js';
 
-/** `model/write-verdict.ts` hosts the verdict pair under its public names, so a consumer can import
+/** `model/write-verdict.ts` declares the verdict pair under its public names, so a consumer can import
  *  what `view/capability.ts` republishes (F1, `ae-forgotten-export`). This file keeps its own
  *  `Field`-prefixed names as local aliases, because every call site here already reads by them. */
 export type FieldWriteRefusalReason = WriteRefusalReason;
