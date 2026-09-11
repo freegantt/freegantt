@@ -934,3 +934,21 @@ weakened assertion) and one rewrite worth a second look.
 `pnpm exec vitest run src/layout/frame.test.ts` — 46/46 pass after `-u`, which updated exactly the
 pre-existing `FrameBar.kind` → `.look` snapshot rename (already verified as a pure rename in J17) —
 `git diff` on the snapshot shows only `-"kind": "span"` / `+"look": "leaf"`, nothing else changed.
+
+### J23 — `src/view/gantt-shell.test.ts`: pure deletions, no rewrite needed
+
+**Raised:** 2026-09-11, Build 3b, continuing the tsc-cleanup pass. **Status:** mechanical.
+
+`fakeDataset()`'s `context`/return object dropped `rollUpKinds: new Set(['group'])` and
+`isRollUpKind: () => false` — neither is part of `model/dataset.ts`'s narrow `Dataset` interface
+(or `EntryStore`'s own context type) any more; every other member was already correct. 14 bare
+`kind: 'span',`/`kind: 'span' as const,` lines across the file (test fixtures, every one a leaf
+Entry with no `kind`-dependent assertion) deleted with no other change — `tallEntries()`'s own
+`kind: 'span' as const` at line 147/520 raised no `tsc` error (the object literal reaches `Entry[]`
+through an untyped `Array.from` callback, so no excess-property check fires on it), but was removed
+anyway for consistency since it is the same dead field the other twelve are. Left `kind: 'row'`/
+`kind: 'move'` untouched — unrelated discriminants (`Selection.selectableSegmentsOf`'s hit-kind,
+`session()`'s gesture-kind), not `Entry.kind`.
+
+**Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 13).
+`pnpm exec vitest run src/view/gantt-shell.test.ts` — 35/35 pass, no snapshot involved.
