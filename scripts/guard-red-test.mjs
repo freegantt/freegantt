@@ -76,11 +76,6 @@ checkRedTestFile(
   "// Deliberate second importer of the history leaf — only dataset-state.ts may import it.\nimport './history.js';\nexport {};\n",
   'history-is-removable: second importer',
 );
-checkRedTestFile(
-  'src/data/__serialization_red_test__.ts',
-  "// Deliberate second importer of the serialization leaf — only api/dataset.ts may import it.\nimport './serialization/index.js';\nexport {};\n",
-  'serialization-is-removable: second importer',
-);
 
 // D-S5-5 (plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md): extensions/ may import only
 // api/ and model/ — the dogfood gate that proves a built-in feature took no back door.

@@ -17,7 +17,6 @@ import type {
   FieldKey,
   FieldType,
   Instant,
-  PluginDocument,
   RollUpKinds,
   SegmentId,
   Disposer,
@@ -89,9 +88,6 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Plugin rows a Document carried in (D-S5-24). Rows whose plugin this Dataset does not install are
-   *  kept and written back untouched — passenger data, the posture an undeclared `meta` key has. */
-  pluginRows?: PluginDocument;
   /** Installs this Dataset's `DatasetPlugin` list and returns the disposer for the whole set. Called
    *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
    *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
@@ -185,7 +181,7 @@ export class DatasetState implements Dataset {
       this,
     );
     this.#entryStoreReady = true;
-    this.pluginStores = new PluginStores(options.pluginRows, this);
+    this.pluginStores = new PluginStores(this);
     // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
     // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
     // plugin declares is in the registry before the Rollup first walks (D-S5-4). History subscribes
@@ -193,8 +189,8 @@ export class DatasetState implements Dataset {
     this.#disposePlugins = options.installPlugins?.(this);
     // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
     // array gets real rolled-up values before anyone reads it, not just after the first later
-    // transaction touches one of those children. `fromJSON` gets this for free, being construction
-    // like any other.
+    // transaction touches one of those children. Any Dataset built from a saved shape gets this for
+    // free too, being construction like any other.
     applyConstructionRollUp(this);
     // Subscribes to `change` right here, before the constructor returns and so before any consumer
     // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a

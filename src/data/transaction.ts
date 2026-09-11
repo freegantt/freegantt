@@ -120,10 +120,10 @@ function applyConstructionPromote(data: TransactionData): void {
 }
 
 /**
- * Runs the Rollup once against `data`'s freshly built entries, with no proposed edits — what a
- * fresh `Dataset(...)` and `Dataset.fromJSON(...)` share (`01` §2.6, D-S2-22): a `{ kind: 'group' }`
- * given children only through the initial array gets real rolled-up values before anyone reads it,
- * not just after the first later transaction touches one of those children.
+ * Runs the Rollup once against `data`'s freshly built entries, with no proposed edits — every
+ * `new Dataset(...)` gets this (`01` §2.6, D-S2-22): a `{ kind: 'group' }` given children only
+ * through the initial array gets real rolled-up values before anyone reads it, not just after the
+ * first later transaction touches one of those children.
  *
  * Writes any correction straight into the store and returns early if there is none. There is no
  * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),

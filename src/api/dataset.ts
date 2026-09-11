@@ -5,7 +5,6 @@
 import type {
   Aggregator,
   ChangeSet,
-  DatasetDocument,
   DatasetEventMap,
   DateOnlyEndRule,
   EditRequest,
@@ -16,6 +15,7 @@ import type {
   Field,
   FieldKey,
   FieldType,
+  PluginStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
@@ -23,7 +23,6 @@ import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
-import { toDocument, fromDocument, reportCorrectedRollUps } from '../data/serialization/index.js';
 import type { DatasetHierarchy, PluginId, RollUpKinds } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
@@ -110,9 +109,9 @@ export interface DatasetOptions<
 // `EntryStore`) is permanently monomorphic — it holds `Entry<unknown>` throughout, by design,
 // because `data/` has no static dependency on any one consumer's meta shape. `TMeta`/`TFields`
 // exist only at this façade; every cast below is where a caller's declared type meets that erased
-// internal shape, and none of them are checked at runtime. A wrong `fromJSON<TMeta>()` mis-types
-// every entry with no error anywhere — this is the documented loose-input/typed-output trade-off
-// (`plans/02`), not a gap to close with a runtime validator.
+// internal shape, and none of them are checked at runtime. A wrong `TMeta` mis-types every entry
+// `dataset.entries` reads back, with no error anywhere — this is the documented loose-input/typed-
+// output trade-off (`plans/02`), not a gap to close with a runtime validator.
 export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
@@ -148,9 +147,7 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
         fields: {
           register: (field) => {
             gate.assertOpen();
-            // D-S5-33: the registry records `pluginId` as the declarer, and that is what keeps this
-            // Field out of the Document. A plugin declares its own Fields again on every install.
-            state.fields.register(field, pluginId);
+            state.fields.register(field);
           },
           registerType: (name, type) => {
             gate.assertOpen();
@@ -306,38 +303,20 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     this.#state.replay(changeSet);
   }
 
-  /** Whole-document write (D-S2-12). Byte-stable: declared key order, optional keys omitted, entries
-   *  in insertion order, instants as `Z`-suffixed ISO. */
-  // Trusted, unchecked TMeta cast — see the class-level note above.
-  toJSON(): DatasetDocument<TMeta> {
-    // `DatasetState`, not `this`: the writer reads the plugin stores, which are library internals and
-    // have no place on the public façade (D-S5-24).
-    return toDocument(this.#state) as DatasetDocument<TMeta>;
-  }
-
-  /** Whole-document read. Constructs a fresh Dataset through the public constructor, so the Rollup
-   *  runs on read. The Document carries Field data keys; `options` supplies functions (D-S4-15).
-   *  Unknown top-level keys are dropped; `meta` is carried as-is.
+  /** Call: `dataset.pluginStore('acme/locks')` — one plugin's rows, read-only, or `undefined` when
+   *  that plugin never reserved a store. `dataset.pluginStore()` with no argument answers every store
+   *  this Dataset holds, as a record keyed by plugin id: `Object.entries(dataset.pluginStore())`.
    *
-   *  `plugins` is supplied the same way and for the same reason: a Document stores a plugin's rows,
-   *  never its behaviour, so an application that reads a document back re-installs the same plugin
-   *  list it constructed with. Rows of a plugin this list omits are kept and written back untouched
-   *  (D-S5-24). */
-  static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(
-    doc: DatasetDocument<TMeta>,
-    options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>,
-  ): Dataset<TMeta, TFields> {
-    // Trusted, unchecked TMeta cast — see the class-level note above. Narrowed to `entries`, the
-    // one field `fromDocument`'s result actually needs it for: every other DatasetOptions member
-    // `fromDocument` returns is already TMeta-independent.
-    const read = fromDocument(doc, options);
-    const dataset = new Dataset<TMeta, TFields>({
-      ...read,
-      entries: read.entries as readonly EntryInput<TMeta>[],
-      ...(options?.plugins !== undefined ? { plugins: options.plugins } : {}),
-    });
-    reportCorrectedRollUps(doc, dataset, createErrorRaiser(dataset.#state.bus));
-    return dataset;
+   *  A plugin's own data is not on this Dataset until that plugin installs and reserves a store — no
+   *  door takes rows in ahead of that (ADR 0016). An application that must keep a plugin's data saves
+   *  it by reading this, and restores it through the plugin's own API after re-installing the plugin. */
+  pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
+  pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
+  pluginStore<T extends object>(
+    pluginId?: PluginId,
+  ): PluginStoreView<T> | Readonly<Record<PluginId, PluginStoreView<object>>> | undefined {
+    if (pluginId === undefined) return this.#state.pluginStores.readAll();
+    return this.#state.pluginStores.read<T>(pluginId);
   }
 }
 

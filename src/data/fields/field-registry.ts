@@ -7,10 +7,9 @@
 // read-only where `Gantt.plugins` is not. `extensions/install-dataset-plugins.ts` closes each plugin's
 // registration gate the moment its `setup()` returns, so a later call is `RegistrationClosedError`.
 //
-// Every declaration records who made it (D-S5-33): the library, the consumer, or one named plugin.
-// `all` answers what this Dataset resolves against; `authored` answers what the consumer wrote, which
-// is the only half `toJSON` writes. A plugin re-declares its own Fields the next time it is installed,
-// so a Document that carried them would author a Field with no plugin behind it.
+// `all` answers what this Dataset resolves against, core Fields, the consumer's own, and a plugin's,
+// in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
+// the caller already holds, not data the library owes a reader (ADR 0016).
 
 import type {
   Aggregator,
@@ -19,7 +18,6 @@ import type {
   FieldSource,
   FieldType,
   GridColumnSizing,
-  PluginId,
 } from '../../model/index.js';
 import {
   DuplicateFieldKeyError,
@@ -112,9 +110,6 @@ function illegalCoreOverrideKey(field: Field): string | undefined {
 export class FieldRegistry {
   readonly #resolved: ResolvedField[] = [];
   readonly #byKey = new Map<string, ResolvedField>();
-  /** D-S5-33: the plugin that declared each plugin-declared key. A key absent here came from the
-   *  library (a core Field) or from the consumer's own `fields` option. */
-  readonly #declaringPlugin = new Map<string, PluginId>();
   /** #142: every core key a consumer has already overridden (`#mergeCoreFieldOverride`) — a second
    *  declaration naming the same core key is a clash, same as two ordinary declarations sharing a
    *  key. */
@@ -141,28 +136,15 @@ export class FieldRegistry {
     return this.#resolved;
   }
 
-  /** Call: `encodeFieldDocument(dataset.fields.authored)`. The Fields the consumer wrote, in
-   *  declaration order — core Fields and every plugin-declared Field left out (D-S5-33). This is what
-   *  a Document carries: a plugin declares its own Fields again on its next install, so writing them
-   *  here would author a Field the reading application has nothing behind. The plugin's *values* are
-   *  not affected — those sit in `Entry.meta`, which round-trips whether the Field is declared or not. */
-  get authored(): readonly ResolvedField[] {
-    return this.#resolved.filter(
-      (field) => !isCoreFieldKey(field.key) && !this.#declaringPlugin.has(String(field.key)),
-    );
-  }
-
   get aggregators(): Readonly<Record<string, Aggregator>> {
     return this.#aggregators;
   }
 
-  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' }, 'acme/locks')`. Same rules a
-   *  constructor-time declaration obeys — a duplicate key, an unknown Field type, an unknown
-   *  Aggregator and a taken `meta` slot each throw the error they already throw at construction.
-   *  `declaredBy` is the calling plugin's own id, so this Field stays out of `authored` (D-S5-33). */
-  register(field: Field, declaredBy: PluginId): void {
+  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
+   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a taken
+   *  `meta` slot each throw the error they already throw at construction. */
+  register(field: Field): void {
     this.#add(field, true);
-    this.#declaringPlugin.set(String(field.key), declaredBy);
   }
 
   /** Call: `ctx.fields.registerType('money', { rollUp: 'sum' })`. Register a type before the Field

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from './field-registry.js';
 import { storedSourceOf } from './normalize-source.js';
-import { SOURCE_STRATEGY, strategyFor } from './source-strategy.js';
+import { SOURCE_STRATEGY } from './source-strategy.js';
 import { FreeGanttError, InvalidFieldSourceError } from '../../model/index.js';
 import type { Field } from '../../model/index.js';
 
@@ -59,25 +59,9 @@ describe('SOURCE_STRATEGY (A4)', () => {
 
     it('reaches a plugin registering a Field, which is where a JS caller meets it', () => {
       const registry = new FieldRegistry();
-      expect(() =>
-        registry.register({ key: 'risk', source: 'meta' } as unknown as Field, 'acme/risk'),
-      ).toThrow(InvalidFieldSourceError);
+      expect(() => registry.register({ key: 'risk', source: 'meta' } as unknown as Field)).toThrow(
+        InvalidFieldSourceError,
+      );
     });
-  });
-
-  it('serialize matches the variant for a stored source', () => {
-    expect(strategyFor({ from: 'meta', key: 'team' }).serialize({ from: 'meta', key: 'team' })).toEqual({
-      from: 'meta',
-      key: 'team',
-    });
-    expect(strategyFor({ from: 'entry', field: 'name' }).serialize({ from: 'entry', field: 'name' })).toEqual(
-      {
-        from: 'entry',
-        field: 'name',
-      },
-    );
-    expect(
-      strategyFor({ from: 'compute', read: () => 0 }).serialize({ from: 'compute', read: () => 0 }),
-    ).toBeUndefined();
   });
 });

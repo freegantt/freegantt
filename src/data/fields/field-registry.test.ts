@@ -123,7 +123,7 @@ describe('D-S4-35 omitted source', () => {
     expect(context.read(next, 'cost')).toBe(500);
   });
 
-  it('toJSON of an omitted-source Field is the resolved source (read view)', () => {
+  it('reads an omitted-source Field back with its source resolved', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
   });
