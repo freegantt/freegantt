@@ -605,7 +605,7 @@ export interface EntriesRowSource extends RowSourceCommon {
 
 // @public (undocumented)
 export interface Entry<TMeta = unknown> {
-    end: Instant;
+    end?: Instant;
     // (undocumented)
     id: EntryId;
     kind: EntryKind;
@@ -614,12 +614,14 @@ export interface Entry<TMeta = unknown> {
     name: string;
     parentId?: EntryId;
     segments: readonly Segment[];
-    // (undocumented)
-    start: Instant;
+    start?: Instant;
 }
 
 // @public
-export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
+export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id' | 'start' | 'end'>> & {
+    start?: InstantInput | undefined;
+    end?: InstantInput | undefined;
+} & Partial<TFields>;
 
 // @public
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
@@ -779,8 +781,7 @@ export interface Field<TValue = unknown> {
 
 // @public
 export interface FieldContext {
-    // (undocumented)
-    durationOf(entry: Entry): Duration;
+    durationOf(entry: Entry): Duration | undefined;
     // (undocumented)
     read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
     // (undocumented)
@@ -1905,7 +1906,9 @@ export interface Size {
 export type SnapSetting = TickStep | 'tick' | 'none';
 
 // @public
-export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
+export type StoredEdit = Partial<Omit<Entry, 'id' | 'start' | 'end'>> & {
+    start?: Instant | undefined;
+    end?: Instant | undefined;
     readonly proposedKeys?: ReadonlySet<string>;
 };
 
