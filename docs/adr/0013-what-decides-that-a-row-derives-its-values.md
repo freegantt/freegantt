@@ -31,9 +31,7 @@ HEAD writes a parent's `start`, `end` and `cost` as though a person authored the
 
 **[ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document.** The half that remains is the write rule: nothing but the Rollup writes a rolling-up parent's cell. A stale derived value in a file is no longer possible, because there is no file. The refusal at `entries.update()` still is.
 
-The two rulings hold each other up. The refusal means nothing but the Rollup can put a value in a rolling-up parent's cell, so omitting it loses nothing a person authored. Without the refusal, omission drops user edits.
-
-**One report per operation, not per value.** A hand-written Document with 500 groups over three rolling-up Fields would otherwise raise 1,500 warnings. A consumer fixes their whole export at once. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'` (ADR 0009), **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it (D-S5-41).
+**The refusal stands on its own.** Nothing but the Rollup writes a rolling-up parent's cell. A constructor `entries` array of 500 parents over three rolling-up Fields would otherwise raise 1,500 warnings. A consumer fixes the whole ingest at once. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'` (ADR 0009), **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it (D-S5-41).
 
 **On a rolling-up parent, an Aggregator's `undefined` means _no value_.** It is documented as *no opinion — keep the stored value*. Once nothing but the Rollup can write that cell, "keep" means "keep the previous derived answer", which is stale by construction. Elsewhere the current reading stands.
 
@@ -122,7 +120,7 @@ Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.en
 ## Ordering constraints
 
 1. **[ADR 0016](0016-the-library-holds-no-save-format.md) lands first**, then [ADR 0012](0012-dates-are-optional-on-every-kind.md). Demotion leaves an Entry with no dates, which `Entry` cannot represent today.
-2. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) before or with this ADR.** The `body`/`merged` split stays. Unifying that predicate was a misread — [`refuted.md`](../../plans/field-redesign/shared/refuted.md) item 8. This ADR writes decision 5's warning; it does not unify the two sets.
+2. **[#270](https://github.com/Pawel-IT/FreeGantt/issues/270) lands inside this build** — BUILD-SPEC V15. The `body`/`merged` split stays. Unifying that predicate was a misread — [`refuted.md`](../../plans/field-redesign/shared/refuted.md) item 8. This ADR writes decision 5's warning; it does not unify the two sets.
 
 ## Issues this ADR depends on
 

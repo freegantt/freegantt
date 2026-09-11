@@ -105,7 +105,7 @@ gantt.hideGridColumn('cost')
 
 **What it opened.** Decision **18**, closed 2026-09-10 on the enum. Decisions **19** and **23** closed the same day on the override.
 
-## 19 — keep `{ key: 'start', editable: false }`, and serialize it
+## 19 — keep `{ key: 'start', editable: false }`
 
 **Closed 2026-09-10. Ruled by the author.** Was: *what replaces `{ key: 'start', editable: false }` at the data door?*
 

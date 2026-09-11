@@ -66,7 +66,7 @@ It shares three files with [0011](../0011-consumer-values-in-props/README.md) �
 | `aggregators.ts:14` | `durationMs`, behind `weightedMeanByDuration` at `:51` — skips a dateless child rather than weighting it at zero. After 0014 this reads `ctx.read(entry, 'duration')` |
 | `inline-editing.ts:113` | **A provider, not a caller.** Dies with `durationOf` in 0014. Until then it changes as an implementation |
 | `etc/freegantt.api.md` | The helper's return type is not a published `durationOf` signature after 0014. If this ADR lands first, I11 still sees the wrapper |
-| four test stubs | `layout/rows/filter.test.ts`, `layout/rows/sort.test.ts`, `data/fields/field-types.test.ts`, `data/fields/field-access.test.ts` build a `FieldContext` by hand |
+| two `FieldContext` stubs | `layout/rows/filter.test.ts`, `data/fields/field-types.test.ts` drop the `durationOf` key. **V6:** `field-access.test.ts` needs its test rewritten, not a stub edit. `layout/rows/sort.test.ts` holds a local helper named `durationOf`, not a stub key — leave it |
 
 
 ---
