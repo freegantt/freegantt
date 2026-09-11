@@ -256,6 +256,7 @@ export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
   EntryId,
+  EntryLook,
   Segment,
   SegmentId,
   RowId,

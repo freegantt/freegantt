@@ -9,14 +9,16 @@
 // non-empty `Item[]` — wins; an Entry nothing claims falls back to the structure look).
 
 import { itemId } from '../../model/index.js';
-import type { Disposer, Entry, EntryId, ItemId, Instant, SegmentId } from '../../model/index.js';
+import type { Disposer, Entry, EntryId, EntryLook, ItemId, Instant, SegmentId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
 import { createRegistrationTable } from '../registration-table.js';
 
-/** What one Item's look is: structure (a parent or a leaf), or a plugin-owned look — stamped as
- *  `data-kind` on the painted element (`02` §4). Not a stored Entry classification (ADR 0013). */
-export type EntryLook = 'parent' | 'leaf' | (string & {});
+// `EntryLook` is declared in `model/` and re-exported here. It reaches six public signatures
+// (`Item.look`, `wholeEntryItem`, `registerItemProducer`, `registerLookDefaults`), and only `api/`
+// and `model/` types are public (plans/01 §1). Declaring it here left a consumer unable to name a
+// type the API asks them for — `api-extractor` reported it as a forgotten export.
+export type { EntryLook } from '../../model/index.js';
 
 export interface Item {
   id: ItemId;
