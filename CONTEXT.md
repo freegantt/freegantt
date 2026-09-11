@@ -476,6 +476,10 @@ _Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` /
 The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
 _Avoid_: Gesture unqualified (collides with the pointer machine's own word — say "the pointer gesture" or "the EntryGesture" explicitly)
 
+**Parent bar drag**:
+Dragging a parent's bar translates every dated descendant below it, in one transaction and one undo (ADR 0013). A parent's `start`/`end` roll up, so the drag never writes them: the Rollup moves the parent's own envelope from the rows that moved. A child with one date moves that date. A child with neither is skipped. A descendant that derives its own dates is passed over, and the rows below it move instead. One locked descendant refuses the whole gesture, because a half-translated subtree rolls up to an envelope the drag never painted. The event pair is `beforeEntryMove`/`entryMove`, unchanged: `event.entry` is the parent you grabbed, and `event.entries` is each descendant that moves. `ProposedSpan` is the grabbed bar's own reading and keeps both dates; `ProposedDates` is each descendant's, where a date the gesture does not propose stays absent (Q9's ruling). A parent bar offers no resize: one edge of a derived envelope names no descendant to resize.
+_Avoid_: group drag (there is no stored group), cascade (that is the extension hook's word)
+
 **Draft**:
 Prose for a gesture's in-flight edit while a drag previews — not a type of its own (D-S3-2). A Draft **is** `EntryEdits`, the same shape `dataset.entries.update()` takes; nothing new is declared for it. Distinct from Write set (a Transaction's own in-progress record, once a Draft actually commits).
 _Avoid_: Draft as a type name (there is none — see Write set's own _Avoid_ line), staging area, buffer
