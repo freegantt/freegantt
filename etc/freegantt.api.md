@@ -649,7 +649,7 @@ export interface EntryFieldEdit {
 // @public
 export interface EntryGestureEvent extends ProposedSpan {
     // (undocumented)
-    readonly entries: readonly ProposedSpan[];
+    readonly entries: readonly ProposedDates[];
 }
 
 // @public (undocumented)
@@ -1671,6 +1671,16 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
 
 // @public
+export interface ProposedDates {
+    // (undocumented)
+    readonly end?: Instant;
+    // (undocumented)
+    readonly entry: EntryId;
+    // (undocumented)
+    readonly start?: Instant;
+}
+
+// @public
 export type ProposedEdit<TProps = Record<string, unknown>> = {
     readonly __brand: 'ProposedEdit';
     readonly props: Readonly<Partial<TProps>>;
@@ -1684,11 +1694,9 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
 export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
 
 // @public
-export interface ProposedSpan {
+export interface ProposedSpan extends ProposedDates {
     // (undocumented)
     readonly end: Instant;
-    // (undocumented)
-    readonly entry: EntryId;
     // (undocumented)
     readonly start: Instant;
 }
