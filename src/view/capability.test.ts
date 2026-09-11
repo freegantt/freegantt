@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityInputs, Interactions, KindDefaults } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import type { Entry, EntryKind, Field, FieldKey, Instant } from '../model/index.js';
+import type { Entry, Field, FieldKey, Instant } from '../model/index.js';
+import type { EntryLook } from '../layout/index.js';
 import { entryId, segmentId } from '../model/index.js';
 
 function entry(overrides: Partial<Entry> = {}): Entry {
@@ -10,7 +11,6 @@ function entry(overrides: Partial<Entry> = {}): Entry {
   const end = 1 as Instant;
   return {
     id: entryId('e1'),
-    kind: 'span',
     name: 'e1',
     start,
     end,
@@ -20,8 +20,12 @@ function entry(overrides: Partial<Entry> = {}): Entry {
   };
 }
 
-const isGroup = (kind: string): boolean => kind === 'group';
-const isNeverDerived = (): boolean => false;
+// ADR 0013: neither structural fact below is a property of `Entry` any more — `GanttShell` normally
+// derives `hasChildren` from `dataset.entries.childrenOf` and `lookOf` from `resolveLook`
+// (`layout/items/produce-items.ts`). This file has no Dataset to ask, so it marks the one fact each
+// test cares about on the Entry's own `props` and reads the mark straight back.
+const isMarkedParent = (entry: Entry): boolean => entry.props['isParent'] === true;
+const markedLook = (entry: Entry): EntryLook => (entry.props['look'] as EntryLook | undefined) ?? 'leaf';
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
  *  registers — `start`/`end` roll up and are editable, `duration` computes, `kind` is neither. One
@@ -40,7 +44,8 @@ function capabilities(
   ...fieldOverrides: readonly Partial<Field>[]
 ): ReturnType<typeof resolveCapabilities> {
   return resolveCapabilities({
-    isRollUpKind: isNeverDerived,
+    hasChildren: isMarkedParent,
+    lookOf: markedLook,
     fieldFor: fieldsWith(...fieldOverrides),
     ...overrides,
   });
@@ -51,46 +56,38 @@ const lockedEnd: Partial<Field> = { key: 'end', editable: false };
 describe('resolveCapabilities — gestures', () => {
   it('defaults a span entry to move/resize/select all true', () => {
     const caps = capabilities();
-    const e = entry({ kind: 'span' });
+    const e = entry();
     expect(caps.can('move', e)).toBe(true);
     expect(caps.can('resize', e)).toBe(true);
     expect(caps.can('select', e)).toBe(true);
   });
 
-  it('defaults a milestone to move/select true, resize false — it has no edge to drag', () => {
+  it('defaults a roll-up parent to move/resize false, select true', () => {
     const caps = capabilities();
-    const e = entry({ kind: 'milestone' });
-    expect(caps.can('move', e)).toBe(true);
-    expect(caps.can('resize', e)).toBe(false);
-    expect(caps.can('select', e)).toBe(true);
-  });
-
-  it('defaults a rollUpKinds kind to move/resize false, select true', () => {
-    const caps = capabilities({ isRollUpKind: isGroup });
-    const e = entry({ kind: 'group' });
+    const e = entry({ props: { isParent: true } });
     expect(caps.can('move', e)).toBe(false);
     expect(caps.can('resize', e)).toBe(false);
     expect(caps.can('select', e)).toBe(true);
   });
 
-  it('defaults a consumer-defined kind the same as span', () => {
-    const caps = capabilities({ isRollUpKind: isGroup });
-    const e = entry({ kind: 'phase' });
+  it('defaults a childless entry the same as any other — there is no consumer-defined kind to name', () => {
+    const caps = capabilities();
+    const e = entry({ props: { look: 'phase' } });
     expect(caps.can('move', e)).toBe(true);
     expect(caps.can('resize', e)).toBe(true);
     expect(caps.can('select', e)).toBe(true);
   });
 
-  it('a boolean rule overrides every kind uniformly', () => {
+  it('a boolean rule overrides every entry uniformly', () => {
     const caps = capabilities({ interactions: { resize: false } });
-    expect(caps.can('resize', entry({ kind: 'span' }))).toBe(false);
-    expect(caps.can('move', entry({ kind: 'span' }))).toBe(true);
+    expect(caps.can('resize', entry())).toBe(false);
+    expect(caps.can('move', entry())).toBe(true);
   });
 
   it('a predicate rule is evaluated per entry (U4)', () => {
-    const caps = capabilities({ interactions: { resize: (e) => e.kind !== 'group' } });
-    expect(caps.can('resize', entry({ kind: 'group' }))).toBe(false);
-    expect(caps.can('resize', entry({ kind: 'span' }))).toBe(true);
+    const caps = capabilities({ interactions: { resize: (e) => !isMarkedParent(e) } });
+    expect(caps.can('resize', entry({ props: { isParent: true } }))).toBe(false);
+    expect(caps.can('resize', entry())).toBe(true);
   });
 
   it('re-resolves live: a fresh call with new interactions sees the new rule', () => {
@@ -122,10 +119,9 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(e, 'end').ok).toBe(true);
   });
 
-  it('refuses a Field that never declared itself editable, and an undeclared key', () => {
+  it('refuses an undeclared key', () => {
     const caps = capabilities();
     const e = entry();
-    expect(caps.canWrite(e, 'kind').ok).toBe(false);
     expect(caps.canWrite(e, 'parentId').ok).toBe(false);
     expect(caps.canWrite(e, 'nothing-declares-this').ok).toBe(false);
   });
@@ -154,20 +150,20 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
   // `canWrite` must skip it too. Two spellings of that test disagreed, and this cell claimed its
   // value came from the rows below it while nothing rolled it up.
   it("treats rollUp: 'none' as not rolling up, the same way the Rollup pass does", () => {
-    const caps = capabilities({ isRollUpKind: isGroup }, { key: 'cost', rollUp: 'none', editable: true });
-    expect(caps.canWrite(entry({ kind: 'group' }), 'cost')).toEqual({ ok: true });
+    const caps = capabilities({}, { key: 'cost', rollUp: 'none', editable: true });
+    expect(caps.canWrite(entry({ props: { isParent: true } }), 'cost')).toEqual({ ok: true });
   });
 
   it("refuses a roll-up parent's rolling-up Field, and says why", () => {
-    const caps = capabilities({ isRollUpKind: isGroup });
-    const parent = entry({ kind: 'group' });
+    const caps = capabilities();
+    const parent = entry({ props: { isParent: true } });
     expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
     expect(caps.canWrite(parent, 'end')).toEqual({ ok: false, reason: 'derived-value' });
   });
 
   it("leaves a roll-up parent's own non-rolling Fields writable (D-S5-19)", () => {
-    const caps = capabilities({ isRollUpKind: isGroup });
-    expect(caps.canWrite(entry({ kind: 'group' }), 'name').ok).toBe(true);
+    const caps = capabilities();
+    expect(caps.canWrite(entry({ props: { isParent: true } }), 'name').ok).toBe(true);
   });
 
   it('a refusal with no reason is one the UI already shows, so it carries no words', () => {
@@ -187,7 +183,7 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
   it('closes the bar move too, because a move writes both dates', () => {
     const caps = capabilities({}, lockedEnd);
     expect(caps.can('move', entry())).toBe(false);
-    expect(caps.can('move', entry({ kind: 'milestone' }))).toBe(false);
+    expect(caps.can('move', entry({ props: { look: 'milestone' } }))).toBe(false);
   });
 
   it('asked with no edge, resize answers whether either handle may resize', () => {
@@ -211,8 +207,8 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
   });
 
   it('interactions.edit opens a roll-up parent it would otherwise refuse', () => {
-    const caps = capabilities({ interactions: { edit: true }, isRollUpKind: isGroup });
-    const parent = entry({ kind: 'group' });
+    const caps = capabilities({ interactions: { edit: true } });
+    const parent = entry({ props: { isParent: true } });
     expect(caps.canWrite(parent, 'start').ok).toBe(true);
     expect(caps.can('move', parent)).toBe(true);
   });
@@ -221,17 +217,14 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
 describe('interactions.edit answers the cell, not the entry (#256)', () => {
   it('answers undefined for a cell it has no opinion about, and the library rules decide it', () => {
     const caps = capabilities(
-      {
-        isRollUpKind: isGroup,
-        interactions: { edit: (_entry, field) => (field === 'name' ? false : undefined) },
-      },
+      { interactions: { edit: (_entry, field) => (field === 'name' ? false : undefined) } },
       lockedEnd,
     );
     // The rule speaks for `name` and for nothing else, so every other cell keeps the answer it had.
     expect(caps.canWrite(entry(), 'name').ok).toBe(false);
     expect(caps.canWrite(entry(), 'start').ok).toBe(true);
     expect(caps.canWrite(entry(), 'end').ok).toBe(false);
-    expect(caps.canWrite(entry({ kind: 'group' }), 'start')).toEqual({
+    expect(caps.canWrite(entry({ props: { isParent: true } }), 'start')).toEqual({
       ok: false,
       reason: 'derived-value',
     });
@@ -273,14 +266,14 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
   });
 });
 
-describe('registered kind defaults (S5.9, D-S5-22)', () => {
-  const registerFor = (kind: EntryKind, defaults: KindDefaults) => (asked: EntryKind) =>
-    asked === kind ? defaults : undefined;
+describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
+  const registerFor = (look: EntryLook, defaults: KindDefaults) => (asked: EntryLook) =>
+    asked === look ? defaults : undefined;
 
-  it('a registered default answers a kind the library rule would otherwise resolve', () => {
+  it('a registered default answers a look the library rule would otherwise resolve', () => {
     const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { resize: false }) });
-    expect(caps.can('resize', entry({ kind: 'buffer' }))).toBe(false);
-    expect(caps.can('move', entry({ kind: 'buffer' }))).toBe(true);
+    expect(caps.can('resize', entry({ props: { look: 'buffer' } }))).toBe(false);
+    expect(caps.can('move', entry({ props: { look: 'buffer' } }))).toBe(true);
   });
 
   it("the consumer's own interactions still wins over a registered default", () => {
@@ -288,27 +281,24 @@ describe('registered kind defaults (S5.9, D-S5-22)', () => {
       interactions: { resize: true },
       registeredDefaultsFor: registerFor('buffer', { resize: false }),
     });
-    expect(caps.can('resize', entry({ kind: 'buffer' }))).toBe(true);
+    expect(caps.can('resize', entry({ props: { look: 'buffer' } }))).toBe(true);
   });
 
-  it('a registered default still loses to the library rule for an unrelated kind', () => {
-    const caps = capabilities({
-      isRollUpKind: isGroup,
-      registeredDefaultsFor: registerFor('buffer', { resize: false }),
-    });
-    expect(caps.can('resize', entry({ kind: 'group' }))).toBe(false);
+  it('a registered default still loses to the library rule for an unrelated look', () => {
+    const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { resize: false }) });
+    expect(caps.can('resize', entry({ props: { isParent: true } }))).toBe(false);
   });
 
-  it('an unregistered kind falls straight through to the library rule', () => {
+  it('an unregistered look falls straight through to the library rule', () => {
     const caps = capabilities({ registeredDefaultsFor: () => undefined });
-    expect(caps.can('resize', entry({ kind: 'span' }))).toBe(true);
+    expect(caps.can('resize', entry())).toBe(true);
   });
 
-  it('a registered edit default closes every cell of that kind, and the gestures with it', () => {
+  it('a registered edit default closes every cell of that look, and the gestures with it', () => {
     const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { edit: false }) });
-    expect(caps.canWrite(entry({ kind: 'buffer' }), 'start').ok).toBe(false);
-    expect(caps.can('resize', entry({ kind: 'buffer' }), 'start')).toBe(false);
-    expect(caps.canWrite(entry({ kind: 'span' }), 'start').ok).toBe(true);
+    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'start').ok).toBe(false);
+    expect(caps.can('resize', entry({ props: { look: 'buffer' } }), 'start')).toBe(false);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(true);
   });
 
   it('a registered edit default loses to the consumer’s own interactions.edit', () => {
@@ -316,11 +306,11 @@ describe('registered kind defaults (S5.9, D-S5-22)', () => {
       interactions: { edit: true },
       registeredDefaultsFor: registerFor('buffer', { edit: false }),
     });
-    expect(caps.canWrite(entry({ kind: 'buffer' }), 'start').ok).toBe(true);
+    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'start').ok).toBe(true);
   });
 
   it('a registered edit default opens a Field the library would have refused', () => {
     const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { edit: true }) }, lockedEnd);
-    expect(caps.canWrite(entry({ kind: 'buffer' }), 'end').ok).toBe(true);
+    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'end').ok).toBe(true);
   });
 });
