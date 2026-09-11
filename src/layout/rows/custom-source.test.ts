@@ -13,7 +13,6 @@ const entries: readonly Entry[] = [
     name: 'a',
     start: instant(0),
     end: instant(1),
-    kind: 'span',
     segments: [{ id: segmentId('a-1'), start: instant(0), end: instant(1) }],
     props: {},
   },

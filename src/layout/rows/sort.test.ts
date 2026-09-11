@@ -17,7 +17,6 @@ function entry(id: string, opts?: { parentId?: string; start?: number; end?: num
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: opts?.cost !== undefined ? { cost: opts.cost } : {},
   };
@@ -121,7 +120,7 @@ describe('applySort (S4.9)', () => {
   });
 
   it('a row with neither date sorts last on asc and on desc, not direction * order (ADR 0012 Gate)', () => {
-    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [], props: {} };
+    const dateless: Entry = { id: entryId('none'), name: 'none', segments: [], props: {} };
     const entries = [entry('a', { start: 1 }), dateless, entry('b', { start: 2 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
 

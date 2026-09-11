@@ -19,7 +19,6 @@ function entry(
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: {},
   };

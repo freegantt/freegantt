@@ -16,7 +16,6 @@ function entry(id: string, start: string, end: string): Entry {
   const endInstant = instant(end);
   return {
     id: entryId(id),
-    kind: 'span',
     name: id,
     start: startInstant,
     end: endInstant,
