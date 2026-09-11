@@ -39,9 +39,9 @@ gridColumns: [
 
 ## Work
 
-- [ ] Rename the renderer payload `value` → `text` **first**, on both context types, with **serena**.
-- [ ] Then rename `fieldValue` → `value` on both context types, with **serena**.
-- [ ] Rename `entries.fieldValue` → `entries.read` with **serena**. Keep the signature and the return type.
+- [ ] Rename the renderer payload `value` → `text` **first**, on both context types.
+- [ ] Then rename `fieldValue` → `value` on both context types.
+- [ ] Rename `entries.fieldValue` → `entries.read`. Keep the signature and the return type.
 - [ ] Rename `#fieldValueForCell` → `#cellValueFor`.
 - [ ] Delete `FieldContext.durationOf`.
 - [ ] Point the `duration` core Field's `compute` arm at the guarded helper from Build 1.
@@ -63,7 +63,7 @@ gridColumns: [
 ## Do not
 
 - **Do not do the two renames out of order.** `value` → `text` goes first. Reverse the order and the names collide mid-rename.
-- **Do not text-replace.** Use serena. It follows the symbol.
+- **Do not blind text-replace.** Match whole identifiers (`OldName`), then run `pnpm typecheck`. Read each hit: a rename must not reach a same-named string in a comment or a doc. It must reach `harness/` and `e2e/`, HTML included.
 - **Do not let the `duration` compute arm call `ctx.read(entry, 'duration')`.** That is a cycle.
 - **Do not keep two units.** Millisecond is the one unit. The inline editor's whole-day approximation goes.
 - **Do not ship a bare alias for a prefixed key.** App code writes the prefixed key. There is no plugin-only write door.
