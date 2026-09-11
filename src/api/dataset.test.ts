@@ -11,11 +11,10 @@ import {
   EntryNotFoundError,
   MissingPluginError,
   MutationCancelledError,
-  PluginSetupError,
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetDocument, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -181,16 +180,6 @@ describe('Dataset timeZone omission (#129)', () => {
       Intl.DateTimeFormat = original;
     }
   });
-
-  it('toJSON/fromJSON round-trips the resolved zone, not a sentinel', () => {
-    const dataset = new Dataset({ entries: [oneEntry()] });
-    const doc = dataset.toJSON();
-    expect(doc.timeZone).toBe(dataset.timeZone);
-    expect(doc.timeZone).not.toBe('local');
-
-    const restored = Dataset.fromJSON(doc);
-    expect(restored.timeZone).toBe(dataset.timeZone);
-  });
 });
 
 describe('Dataset.time (S5.6, D-S5-16)', () => {
@@ -297,17 +286,7 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(calls).toBe(0);
   });
 
-  it('toJSON / fromJSON round-trips byte-stable on the façade (D-S2-12)', () => {
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [oneEntry({ start: '2026-09-01T00:00:00.000Z', end: '2026-09-11T00:00:00.000Z' })],
-    });
-    const doc = dataset.toJSON();
-    const round = Dataset.fromJSON(doc).toJSON();
-    expect(JSON.stringify(round)).toBe(JSON.stringify(doc));
-  });
-
-  it('[S4-A1] fromJSON(toJSON(d), { aggregators }) still sums after a later child edit', () => {
+  it('[S4-A1] a Dataset rebuilt from entries.all still sums after a later child edit', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
@@ -318,7 +297,12 @@ describe('Dataset transaction/on/off delegation', () => {
       ],
     });
     expect(dataset.entries.fieldValue('root', 'cost')).toBe(100);
-    const restored = Dataset.fromJSON(dataset.toJSON(), { aggregators: {} });
+    const restored = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: dataset.entries.all,
+    });
     expect(restored.entries.fieldValue('root', 'cost')).toBe(100);
     restored.entries.update('leaf', { cost: 250 });
     expect(restored.entries.fieldValue('leaf', 'cost')).toBe(250);
@@ -591,9 +575,6 @@ describe('Dataset generics (#123)', () => {
     const name: string | undefined = dataset.entries.fieldValue('t1', 'name');
     expect(name).toBe('Design');
 
-    const fromJson = Dataset.fromJSON<{ team: string }, { cost: number }>(dataset.toJSON());
-    expect(fromJson.entries.get('t1')?.meta?.team).toBe('A');
-
     // Compile-time only: a string is not a number for `cost`, and `bogus` is not a Field key.
     if (false as boolean) {
       // @ts-expect-error — cost is number
@@ -635,7 +616,7 @@ describe('Dataset plugins (S5.10)', () => {
   it('seeds a store during setup, before any consumer handler or history exists', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
     expect(dataset.canUndo).toBe(false);
-    expect(dataset.toJSON().plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
+    expect(dataset.pluginStore('demo.lock')?.get('t1')).toEqual({ locked: true });
   });
 
   it('refuses an edit to a locked entry through beforeChange (D-S5-24)', () => {
@@ -650,7 +631,7 @@ describe('Dataset plugins (S5.10)', () => {
 
     expect(() => locked.entries.update('t1', { name: 'Renamed' })).toThrow(MutationCancelledError);
     expect(open.entries.update('t1', { name: 'Renamed' }).name).toBe('Renamed');
-    expect(open.toJSON().plugins).toBeUndefined();
+    expect(open.pluginStore('demo.lock')?.all.size).toBe(0);
   });
 
   it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
@@ -805,14 +786,6 @@ describe('Dataset plugins (S5.10)', () => {
     dataset.destroy();
     expect(released).toEqual(['demo.noisy']);
   });
-
-  it('carries plugin rows through a public toJSON/fromJSON round trip', () => {
-    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
-    const reopened = Dataset.fromJSON(dataset.toJSON());
-    // No plugin installed on the reading side, so nothing refuses the write — and the rows survive.
-    expect(reopened.entries.update('t1', { name: 'Renamed' }).name).toBe('Renamed');
-    expect(reopened.toJSON().plugins).toEqual({ 'demo.lock': { t1: { locked: true } } });
-  });
 });
 
 describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
@@ -832,20 +805,17 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
       plugins: [declaresRisk],
     });
 
-  it('writes the consumer’s Fields into the Document and leaves the plugin’s out', () => {
-    const doc = withRisk().toJSON();
-
-    expect(doc.fields?.map((field) => String(field.key))).toEqual(['note']);
-  });
-
   it('keeps the plugin’s values, which live in meta and never needed the declaration', () => {
-    const doc = withRisk().toJSON();
-
-    expect(doc.entries[0]?.meta).toEqual({ risk: 'high' });
+    expect(withRisk().entries.get('t1')?.meta).toEqual({ risk: 'high' });
   });
 
   it('authors no orphan Field when the reading application leaves the plugin out', () => {
-    const reloaded = Dataset.fromJSON(withRisk().toJSON());
+    const dataset = withRisk();
+    const reloaded = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'note' }],
+      entries: dataset.entries.all,
+    });
 
     expect(reloaded.field('risk')).toBeUndefined();
     expect(reloaded.field('note')).toBeDefined();
@@ -854,33 +824,15 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
   });
 
   it('re-declares cleanly when the reading application installs the same plugin again', () => {
-    const reloaded = Dataset.fromJSON(withRisk().toJSON(), { plugins: [declaresRisk] });
+    const dataset = withRisk();
+    const reloaded = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'note' }],
+      entries: dataset.entries.all,
+      plugins: [declaresRisk],
+    });
 
-    // A Document that carried the plugin's own declaration would collide with it here, and the
-    // whole read would throw DuplicateFieldKeyError.
     expect(reloaded.field('risk')).toBeDefined();
     expect(reloaded.entries.fieldValue('t1', 'risk')).toBe('high');
-  });
-
-  /** What a Document written before D-S5-33 holds: the plugin's declaration beside the consumer's.
-   *  A consumer declaring `risk` themselves writes the same bytes, which is why no migration can
-   *  tell the two apart, and why such a Document is unsupported (#192). */
-  const preD533Document = (): DatasetDocument =>
-    new Dataset({
-      timeZone: 'UTC',
-      entries: [oneEntry({ meta: { risk: 'high' } })],
-      fields: [{ key: 'note' }, { key: 'risk', rollUp: 'none' }],
-    }).toJSON();
-
-  // #192: the two readings of such a Document, pinned as the documented answer rather than repaired.
-  // `data/serialization/read.ts` states why no migration exists.
-  it('throws on a pre-D-S5-33 Document read with the plugin that declares the same key (#192)', () => {
-    expect(() => Dataset.fromJSON(preD533Document(), { plugins: [declaresRisk] })).toThrow(PluginSetupError);
-  });
-
-  it('re-authors that row as the consumer’s when the plugin is left out (#192)', () => {
-    const reloaded = Dataset.fromJSON(preD533Document());
-
-    expect(reloaded.toJSON().fields?.map((field) => String(field.key))).toEqual(['note', 'risk']);
   });
 });
