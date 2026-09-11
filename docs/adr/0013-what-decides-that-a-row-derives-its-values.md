@@ -1,6 +1,6 @@
 ---
 status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
-decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them. *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
+decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only until the Field declares `distribute` (amendment, 2026-09-11). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
 open: none. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
@@ -88,7 +88,7 @@ The six call sites are `entries.update()`, the cell editor, a bar drag, `entries
 
 ### Parent bar drag translates descendants, and does not write the parent
 
-**Grill 2026-09-10.** Parent **cells** stay refused (`DerivedFieldNotWritableError`). Do not distribute a typed parent value down to children.
+**Grill 2026-09-10.** Parent **cells** stay refused (`DerivedFieldNotWritableError`). Do not distribute a typed parent value down to children. *— amended 2026-09-11: the refusal is now the **default**, not the only answer. A parent cell stays refused from every direction, batched or not, until the Field declares `distribute`. A Field that declares one distributes to the children, and the parent's own cell stays refused even then. See [the amendment](#amendment-2026-09-11--a-derived-cell-is-read-only-until-the-field-says-what-a-write-there-means).*
 
 Dragging a parent bar is a different job. It translates every descendant date that exists, in one transaction, one undo. A child with only start: that start moves. A child with only end: that end moves. Spanning children move as a span. Children with neither date are skipped. Writes land on the descendants. The parent envelope rolls up. The parent’s `start` / `end` are not written.
 
@@ -96,13 +96,152 @@ Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.en
 
 **No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. `reportCorrectedRollUps` deletes with that ADR, not here. Decision 5's warning is still this ADR's.
 
+## Amendment, 2026-09-11 — a derived cell is read-only until the Field says what a write there means
+
+**Why this amendment exists.** The build wired the derived arm into `entries.update()`, and the refusal
+then also caught two of the library's own writes. The fix separated a consumer's write from the
+library's by asking **how deeply nested the call was** (`TransactionData.openTransactions === 1`).
+`dataset.transaction()` is public, so a consumer reaches that lever in one call: the identical write
+that throws on its own lands silently inside a transaction body (Q7, `plans/field-redesign/BUILD-LOG.md`).
+Permission was being read off the **shape of the call**. It must be read off the **thing being written**.
+
+### The rule
+
+**A Field that rolls up is read-only on a parent, from every direction.** Standalone or batched,
+nested or not, the answer is the same. **Grouping changes when writes land together, never what is
+allowed.** A transaction is a commit boundary and an undo step. It is not a permission.
+
+**Declaring `distribute` on the Field makes that cell writable, and the declaration says what the
+write means.** This is continuity, not a reversal. The *Considered options* table already rejected
+distribution **as a default**, in these words: *"A distribution rule is a per-Field policy with no
+defensible default… Refusal is honest until a consumer names the policy."* `distribute` is the
+consumer naming the policy. With no policy named, the refusal is unchanged.
+
+**Nothing but the Rollup writes a rolling-up parent's cell** — the head decision is untouched.
+`distribute` never writes the parent. It writes the children, and the Rollup reads the parent's cell
+back off them.
+
+### What a consumer writes
+
+```ts
+const dataset = new Dataset({
+  entries,
+  fields: [
+    {
+      key: 'cost',
+      type: 'money',
+      rollUp: 'sum',
+      // A written total means: give every child an equal share.
+      distribute: (total, children) =>
+        new Map(children.map((child) => [child.id, { cost: (total ?? 0) / children.length }])),
+    },
+  ],
+});
+
+dataset.entries.update('phase-1', { cost: 900 }); // three children, 300 each; `phase-1.cost` rolls back up to 900
+```
+
+- **It receives** the proposed value, the parent's **direct** children, the parent, and the Rollup's
+  own `RollUpContext`. The parameter order mirrors `Aggregator(children, parent, ctx)`, because
+  `distribute` is that Aggregator read backwards. `RollUpContext` is the right context and not a new
+  one: a distribution needs the zone, `read`, `values`/`numericValues`, and `ctx.field` — a Field
+  **type** bundle declares one `distribute` for many keys, so the key has to come from the context.
+- **It returns `EntryEdits`** — `ReadonlyMap<EntryId, EntryEdit>`, the same shape an `EditExtender`
+  returns and the same `EntryEdit` `update()` takes. One write shape, one knob.
+- **It declines by returning `undefined`, or an empty map.** A decline is refused exactly as an
+  undeclared `distribute` is refused: `DerivedFieldNotWritableError`, on the same Field key. A
+  consumer catches one error, never two. A policy with nothing to write is a policy that says no —
+  "split a total over zero children" has no answer, and the Field says so by declining.
+- **It is declared inline, like `compute`, not registered by name like an Aggregator.** `rollUp` is a
+  name because a name serializes; `distribute` sits beside `compute`, `equals` and `formatValue`,
+  which are functions on the declaration already.
+- **Its edits go through the same door they would have come in by.** Each returned edit is applied as
+  an ordinary write on that child, so a child that is itself a rolling-up parent distributes again, or
+  refuses. The recursion terminates on the leaves. **An edit aimed back at the Entry being written is
+  refused** (`DerivedFieldNotWritableError`): that cell is the Rollup's, and a `distribute` that
+  returned one would loop.
+- **It answers a patch, never a record.** `update()` refuses or distributes; `add()` and the Dataset
+  constructor still **drop** an authored value on a deriving Entry (decision 6). A record is not a
+  patch, and that half of the ADR does not move.
+- **A mixed patch is still refused whole, before any write.** `{ start, cost }` with a refused `cost`
+  writes neither. Every Field in the patch resolves, and every `distribute` runs, before anything
+  stages.
+
+### Decision 5's fate: (b) refused
+
+Decision 5 — *the Rollup yields to a field the caller proposed in the same transaction* — is a
+**Rollup precedence** rule. It is not a permission to write a derived cell. Under this amendment a
+consumer can no longer put a rolling-up field of a **parent** into a transaction body at all, so for a
+parent that already has children the answer is **(b): refused**, batched or not. Nothing here is a
+silent exception that only works because of nesting.
+
+**The yield still has a real case, and it is structure, not depth.** Derivation is read at the moment
+the write is proposed, against the transaction's own staged state. An Entry that is a **leaf** when
+the write is proposed accepts it, and it may gain a child later in the same transaction — at which
+point decision 5 decides, and the proposal wins over the cascade:
+
+```ts
+dataset.transaction(() => {
+  dataset.entries.update('x', { start, end });        // `x` is a leaf here — allowed
+  dataset.entries.add({ id: 'c', parentId: 'x', … }); // `x` derives from here on
+});                                                    // `x` keeps the proposed span (decision 5)
+```
+
+This is the case decision 5's own wording describes — the proposal wins **over the cascade**, so there
+has to be a cascade. It is honest under one rule: the write was legal when it was made.
+
+### The origin signal is not used
+
+`data/entry-reader.ts` carries `EditOrigin { entryId, operation }`, threaded through every write and
+read only by error messages. It **is** the right signal if the library's own bookkeeping ever needs an
+exemption from a consumer rule, because no consumer can set it. **This amendment needs no exemption,
+so it takes none.** One rule, one path, no library-only door.
+
+The one internal caller that appeared to need an exemption did not. `#removeSegmentsFrom` clears both
+dates when an Entry's last Segment goes (ADR 0012). On an Entry **with children** those dates are the
+Rollup's, so the clear had nothing to clear — and it did real damage: the clear is a proposal in the
+transaction body, so decision 5 made the Rollup yield to it, and a parent with a dated child committed
+with **no dates at all**. Measured 2026-09-11: a parent whose child spans `100…200` committed
+`start: undefined, end: undefined`. **The clear now runs only where the Entry owns its own dates.**
+That is the same rule this amendment states, applied by the library to itself, and the parent keeps the
+rolled-up envelope its children give it.
+
+### One code path
+
+The derived answer resolves in `data/write-rule.ts`, from the Field declaration and one structural
+fact. It reads no transaction state.
+
+```ts
+type WriteTarget = 'entry' | 'children' | 'refused';
+function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTarget;
+```
+
+`entries.update()` reads it, and so does the capability resolver behind a cell's affordance — the cell
+editor opens on a parent cell exactly when a write there would land. One resolution, gestures and
+affordances together (I14). The **editable** arm stays [ADR 0015](0015-what-the-write-door-refuses.md)'s,
+untouched here: `update()` reads the derived arm only.
+
+`#opensOwnTransaction` is deleted, and `TransactionData.openTransactions` returns to one reader,
+`runTransaction`.
+
+### Consequences of the amendment
+
+- **`Field` gains one optional key**, `distribute`, on the stored arm only. A `compute` Field has no
+  cell to write, so the key is `never` there.
+- **`plans/01` §2.6's rollup-precedence bullet needs the prose sweep.** *"The rollup yields to a field
+  the caller proposed in the same transaction"* is still true, and it now needs the sentence above it:
+  a consumer cannot propose a deriving parent's rolling-up field in the first place.
+- **A consumer who wants the old bypass writes the policy.** That is the whole point: the write that
+  used to land silently now lands where the consumer said it should, or does not land.
+
 ## Considered options
 
 | Option | Verdict |
 |---|---|
 | **Record what the Rollup wrote, and omit that set** | **Rejected.** It needs a cumulative set that no `ChangeSet` carries and that five reachable seams invalidate |
 | **Persist derived values and report a correction on import** | **Rejected.** It keeps a value whose meaning depends on declarations that may not travel with it. Not writing the value stops the disagreement existing |
-| **Let a rolling-up parent cell be edited, and distribute down to the children** | **Rejected as a default.** A distribution rule is a per-Field policy with no defensible default — split evenly, by duration, by current share? Refusal is honest until a consumer names the policy |
+| **Let a rolling-up parent cell be edited, and distribute down to the children** | **Rejected as a default.** A distribution rule is a per-Field policy with no defensible default — split evenly, by duration, by current share? Refusal is honest until a consumer names the policy. *— amended 2026-09-11: still rejected as a default, and now **accepted as a declaration**. `Field.distribute` is the consumer naming the policy* |
+| **Read permission off the shape of the call — a nested write is the library's, a standalone write is a consumer's** | **Rejected 2026-09-11** (the amendment). `dataset.transaction()` is public, so the signal is a consumer's to set: the same write throws alone and lands wrapped (Q7). Permission follows the thing written, never the call that wrapped it |
 | **Let a per-entry flag turn derivation off, so the write sticks** | **Rejected for this ADR.** Answer (c) of decision 26. Decision 21 closed with 26: no flag. A later ADR may add one. |
 | **Keep `kind` as an authored look key, structure-only for derivation** | **Rejected.** The combined spike's (b). The author ruled look follows children too, and the Field goes. |
 | **A calculated `kind` Field** | **Rejected.** Restates `childrenOf`. Two names for one fact (#7). |
