@@ -1607,3 +1607,112 @@ one thing that file exists to prevent.
 exports too. They are pre-existing, they are F1's subject in the cherry-pick worksheet, and F1 is
 blocked on Q5 (the `model/` carve-out). `EntryEnvelope` and `RemovableEntryKey` are the other two,
 both pre-existing and deliberate.
+
+### J31 — the diamond core stopped shipping had no new owner, and three harness pages painted nothing
+
+**Made alone, 2026-09-11, commit `dbefdb3`. Build 3e, closing the three e2e failures.**
+
+The coordinator's diagnosis of `e2e/bar-fill-cascade.spec.ts` was that one `RendererByLook`
+result reached the element by half — `class` applied, `style` dropped — and that this was a
+`src/` bug. **It was not.** The expected colour the test built was
+`oklch(0.487488 0.213455 303.586)`, hue 303. The shipped default `--fg-bar-fill` is hue 248.
+A purple expectation proves the renderer's `style` did reach the bar and resolve there. What
+was `rgba(0, 0, 0, 0)` was the **pseudo-element's background**, and that is the half nobody
+owned: the test reads `getComputedStyle(bar, '::before')`, and `::before` was core's
+`.fg-bar-diamond` rule, deleted by this ADR.
+
+So all three failures were one fact, not two kinds. ADR 0013 moved the milestone *look* to the
+consumer and the build moved the item producer (`milestoneKind()`) and the renderer with it.
+The **glyph** did not move. `harness-chrome.css` and `plugins.html` were left setting
+`--fg-diamond-size`, and `planner.ts` setting `--fg-diamond-stroke` — tokens with no reader.
+
+**The judgement.** The glyph belongs to the page, not to a new core class and not to a new
+plugin CSS seam. The ADR says a plugin that needs a look that is not parent-or-bar stores what
+it owns; `PluginContext` has no way to inject a stylesheet, and adding one would be a public
+surface change to solve a problem the ADR already assigned elsewhere. Each of the three pages
+now draws its own rotated `::before` square, reading `--fg-bar-fill-painted` so the page's own
+recolor still reaches the paint. The rule is duplicated across `harness-chrome.css`,
+`plugins.html` and `planner.html`, which is the harness's existing convention — `demo-over-budget`
+and `demo-weekend-band` are already written twice for the same reason.
+
+**A second failure fell out and is not a regression.** Deleting Build 1's `.fg-bar-summary`
+exclusion from `e2e/data.spec.ts`'s `selectFirstBar` — which this build owed — made the "move
++1 day" test grab the phase row. That button calls `entries.update({ start, end })`, and ADR
+0013 refuses a derived date write, so nothing was logged. The move test now picks a bar whose
+Entry owns its own dates. That skip is the ADR's own rule restated at the call site, not the
+gap Build 1 stepped around.
+
+**`e2e/selection.spec.ts:17` and `:101` keep their skips.** Read by hand, as the build file
+asks. Their reason is stated in `unobstructedBar`'s own doc comment and it is geometry: a phase
+bracket spans the whole dataset, Playwright scrolls it under the sticky header, and the click
+never lands. That reason survives ADR 0013 untouched. Removing the skip by symmetry with
+`data.spec.ts` would trade a stable subject for a flaky one and test nothing new.
+
+### Q9 — a parent bar drag writes a descendant that holds only one date, and `ProposedSpan` cannot describe it
+
+**Raised 2026-09-11, Build 3e. Task 2 is stopped here. Not started in `src/`.**
+
+ADR 0013: *"A child with only start: that start moves. A child with only end: that end moves.
+[…] `event.entries` is each descendant that will move, with its proposed `start` / `end`."*
+
+The write side is fine. `ProposedEdit.start` and `.end` are both optional, so
+`layout/gesture-draft.ts` can translate one date and leave the other absent.
+
+The event side is not. `view/event-bus.ts`:
+
+```ts
+export interface ProposedSpan {
+  readonly entry: EntryId;
+  readonly start: Instant;
+  readonly end: Instant;
+}
+export interface EntryGestureEvent extends ProposedSpan { readonly entries: readonly ProposedSpan[]; }
+```
+
+Both dates are required, and `EntryResize` shares the type. A half-dated descendant has no span
+to publish.
+
+**This is not hypothetical, and it is not skippable.** `start` rolls up with `min` and `end`
+with `max` (`data/fields/core-fields.ts`), and `foldNumbers` skips only holes — so a start-only
+child **does** contribute to its parent's derived `start`. Drag the parent bar, leave that child
+where it is, and the parent's own envelope lands somewhere the gesture never described.
+
+**Three answers, each blocked on the author:**
+
+1. **Widen `ProposedSpan`** to `start?: Instant; end?: Instant`. Two lines, and it regenerates
+   `etc/freegantt.api.md`. It also weakens every existing single-bar `beforeEntryMove` handler:
+   `move.start` becomes `Instant | undefined` for the common case, which reads as a usability
+   regression on the app-author surface.
+2. **List only fully-spanning descendants in `event.entries`**, and still write the half-dated
+   ones. No API change, and a silent divergence from the ADR sentence — a handler counting
+   `event.entries` would miscount what the commit writes.
+3. **Rule that a parent drag reaches only descendants that span.** No API change, contradicts
+   the ADR sentence outright, and leaves the envelope problem above unsolved.
+
+1 hits stop condition 1 of this build's dispatch; 2 and 3 hit stop condition 3. So Task 2
+landed nothing rather than pick one. Everything else it needs was scoped and is recorded in N9.
+
+### N9 — what a parent bar drag still needs, once Q9 is answered
+
+**Build 3e, 2026-09-11.** Scoping only, no `src/` change. Four seams, in dependency order.
+
+1. **`src/view/capability.ts`.** `mayWriteTheDatesItSets`'s `'move'` arm asks
+   `canWrite(entry, 'start') && canWrite(entry, 'end')`, and both roll up on a parent, so a
+   parent is never offered a move today. The comment above `gestureIsOffered` — *"A parent is
+   not named here, and needs no name"* — goes stale the moment this lands. A parent's move is
+   offered when at least one descendant may move, which needs `CapabilityInputs` to carry a
+   descendant walk beside `hasChildren`. `CapabilityInputs` is not in `etc/freegantt.api.md`,
+   so that addition is internal.
+2. **`src/layout/gesture-draft.ts`.** `draftForMove` anchors on `entries[0]` and writes every
+   entry it is handed, so a parent cannot be both the anchor and unwritten. It needs a sibling
+   that takes the parent as an explicit anchor and the descendants as the written set.
+   `moveEdit` rebuilds `entry.segments`; a half-dated descendant holds none, so the new path
+   translates `start`/`end` directly for that case.
+3. **`src/view/gesture-pipeline.ts`.** `#commit` reads the grabbed entry off `spans[0]`, which
+   would be the first descendant. The gesture's *subject* (the parent, for `event.entry`) has
+   to travel separately from the entries it *writes*. `#computePreview` has the matching
+   problem: the parent is not in the draft, so its own bar would not follow the pointer. The
+   parent's rolled-up envelope belongs in the preview's `extra` — the ghost slot already
+   carries "what follows from this draft" — not in the draft itself.
+4. **One transaction, one undo.** `commitEntryEdits(draft)` already gives that for free once
+   the draft holds the descendants, so nothing new is owed here.

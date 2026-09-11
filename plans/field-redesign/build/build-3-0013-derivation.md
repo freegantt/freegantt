@@ -45,9 +45,11 @@
 - [x] Write decision 5's warning. Wired at `data/build-commit-change-set.ts`: an extension-hook cascade's write to a rolling-up parent cell (reaches `merged`, never `body`) is dropped and raises one `derived-values-dropped` report per commit. Tested in `rollup.test.ts`.
 - [x] Make an Aggregator's `undefined` clear the parent's value. Do not keep a stale envelope.
 - [x] **Mint a Segment for a parent whose envelope the Rollup derived.** `widenSegmentsToEnvelope` (`src/data/rollup.ts`) widens an existing Segment set and returns early on an empty one, so it never mints from nothing. Build 1 retired the ingest-time fill, so a parent that spans only through its children now spans, draws a bar, and holds no Segment — and no click can select that bar. [ADR 0012](../../../docs/adr/0012-dates-are-optional-on-every-kind.md) assigns the repair here: *"ADR 0013 owns the Rollup pass; the biconditional pass must restore."* See [`../BUILD-LOG.md`](../BUILD-LOG.md) J3 and J9.
-- [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`. **NOT STARTED.**
+- [ ] Make a parent bar drag translate every descendant date through `beforeEntryMove` / `entryMove`. **BLOCKED on [`../BUILD-LOG.md`](../BUILD-LOG.md) Q9** — `ProposedSpan` requires both dates, so `event.entries` cannot describe a descendant that moves only one. The other four seams are scoped in N9.
+- [x] Give the retired core diamond a new owner. `harness-chrome.css`, `plugins.html` and `planner.html` each draw their own glyph; `planner.ts`'s checkpoint names `demo-checkpoint` and its own stroke token. Three e2e specs asserted the pre-ADR world and now assert this one. See [`../BUILD-LOG.md`](../BUILD-LOG.md) J31.
+- [x] Prove the amendment's `Field.distribute` from a real call site. `harness/data.ts`'s `money` type splits a write to a rolling-up parent's `cost` evenly across the children, remainder on the last, so the `sum` Rollup reads the asked-for number back. **No library gap** — `Field.distribute` took the policy as it stands. e2e: *"Set cost 500 on a rolling-up parent splits to its children and rolls back up"*.
 - [x] Land [#270](https://github.com/Pawel-IT/FreeGantt/issues/270)'s fix **inside this build**. See *Issues* below. (same code change as the Aggregator-`undefined` fix above — not test-verified)
-- [ ] Close the build — see [`README.md#close-every-build`](README.md). **NOT STARTED — verify:full has not been run this session.**
+- [ ] Close the build — see [`README.md#close-every-build`](README.md). **`verify:full` PASSES: all 16 checks green, `test:e2e` included. ADR 0013 stays `proposed`, because the parent bar drag above is unbuilt and Q9 is open.**
 
 **Slices it touches.** S2 (the ChangeSet, undo), S3 (parent bar drag), S4 (the Rollup, the item producer, `autoGroup`, the tree), S5 (the capability resolver, the extension hook). **Re-run the S2, S3, S4 and S5 slice gates.**
 
@@ -97,7 +99,7 @@ Each assertion below gets a named test:
 - Gaining a child drops the parent's authored values in the **same** ChangeSet as the `parentId` write, and one undo reverses both.
 - A parent bar drag writes every descendant and never the parent. One veto refuses the whole gesture.
 - A plugin cascade's write to a derived cell is dropped, and raises one warning at `severity: 'warning'`.
-- A parent whose dates come only from its children holds a Segment, and a click on its bar selects it. Then delete the `.fg-bar-summary` exclusion Build 1 added to `selectFirstBar` in `e2e/data.spec.ts` — it exists only to step around this gap, and the test must select a summary bar again. **Read `e2e/selection.spec.ts:17` and `:101` before you touch them.** Those two exclusions predate Build 1 (`19dcd8d`) and were written for a different reason. Decide each on what the code does, not by symmetry.
+- [x] A parent whose dates come only from its children holds a Segment, and a click on its bar selects it. `e2e/data.spec.ts`'s `selectFirstBar` takes any bar again, summary bar included. `e2e/selection.spec.ts:17` and `:101` keep their skips — read by hand; their reason is geometry, not this gap. See [`../BUILD-LOG.md`](../BUILD-LOG.md) J31.
 
 ---
 
