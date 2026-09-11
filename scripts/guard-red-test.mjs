@@ -61,11 +61,11 @@ checkRedTestFile(
   "// Deliberate second importer of the rollup leaf — only build-commit-change-set.ts and transaction.ts may import it.\nimport './rollup.js';\nexport {};\n",
   'rollup-is-removable: second importer',
 );
-checkRedTestFile(
-  'src/data/__hierarchy_red_test__.ts',
-  "// Deliberate second importer of the autoGroup leaf — only build-commit-change-set.ts and transaction.ts may import it.\nimport './hierarchy.js';\nexport {};\n",
-  'autogroup-is-removable: second importer',
-);
+// The `autogroup-is-removable` red test is RETIRED here, authorized by the author 2026-09-11.
+// [ADR 0013] deleted `src/data/hierarchy.ts`, so this fixture imported a module that no longer
+// exists, dependency-cruiser found no rule to break, and this script correctly reported the guard
+// broken. A red test whose subject is gone is not a weaker guard — it is no guard at all, and
+// leaving it would have meant a permanently red gate asserting nothing.
 checkRedTestFile(
   'src/view/__dataset_change_subscription_red_test__.ts',
   "// Deliberate second importer of the dataset-change-subscription leaf — only gantt-shell.ts may import it.\nimport './dataset-change-subscription.js';\nexport {};\n",
