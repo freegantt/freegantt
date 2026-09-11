@@ -785,7 +785,7 @@ list `FieldSource` in `model/`'s exports and in the module-boundary diagram. Non
 in this build's work list, so none are touched here — flagged for whichever build or review pass
 does the "ahead-of-`src/` banners" sweep `build/README.md` schedules for the last build.
 
-### N7 — a plugin passed in the `Gantt` constructor misses the first paint, so every plugin-defined look flashes structural for one frame
+### N7 — a plugin passed in the `Gantt` constructor misses the first paint, so every plugin-defined look flashes structural for one frame — **DONE (fixed in branch; author ruled no issue owed)**
 
 **Found by the coordinator**, verifying Build 3a's report. Build 3a left
 `gantt.test.ts`'s *"a custom milestone barRenderer paints a diamond"* failing and did **not** list it
@@ -823,10 +823,23 @@ object* as `barRenderer`. One constructor call, one expectation: one correct fir
 the test to `await` a frame would bend the test to fit the bug — the outcome the Build 3a dispatch
 named as the worst one. `resolveLook` itself is correct; the ordering around it is not.
 
-**Owed:** an issue, and a fix that installs constructor plugins before the shell's first paint (or
-defers that paint until the constructor's options are all applied). `zoomPresets` and `selection` sit
-on the same three lines and deserve the same question. See [[J16]] — this is the `EntryLook`/
-`resolveLook` design, the part already flagged as most worth a reviewer's second look.
+**DONE — fixed in this branch, and the author ruled no issue is owed (2026-09-11).** The "note owed
+elsewhere" that made this an `N` entry is discharged: the regression never reached `main`, so there
+is nothing for an issue to warn a reader about. This entry is the record.
+
+**The fix** (Build 3b): `GanttShell` gained `plugins`, `zoomPresets`, and `selectedSegmentIds` as
+constructor options, applied through its own live setters before its first `#frames.flush()`.
+`api/gantt.ts` passes all three into `new GanttShell({...})` instead of assigning them afterwards.
+All three moved together. No shell restructure was needed.
+
+**What the fix exposed, and is now documented in `api/gantt.ts`:** a plugin's `setup()` now runs
+*inside* the `GanttShell` constructor, so `#shell` is **not** yet assigned when it runs. `ctx.gantt`
+stays safe because it only needs `this` to exist — but a future seam that reads `#shell`
+synchronously during `setup()` would break here. The comment that used to claim the opposite ordering
+was corrected in the same change.
+
+See [[J16]] — this is the `EntryLook`/`resolveLook` design, the part already flagged as most worth a
+reviewer's second look.
 
 **FIXED**, 2026-09-11, Build 3b. `GanttShellOptions` gained three constructor-only options —
 `plugins`, `zoomPresets`, `selectedSegmentIds` — applied through the shell's own existing live
