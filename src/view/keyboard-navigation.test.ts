@@ -167,7 +167,6 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
       }),
       timeZone: zone,
       datasetRevision: 0,
-      isRollUpKind: () => false,
       fields: { all: CORE_FIELDS },
       field: (fieldKey) => CORE_FIELDS.find((field) => String(field.key) === String(fieldKey)),
       on: () => {},
@@ -179,7 +178,6 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     return {
       id: entryId(id),
       name: id,
-      kind: 'span',
       start: day(0),
       end: day(2),
       ...(opts.parentId !== undefined ? { parentId: entryId(opts.parentId) } : {}),

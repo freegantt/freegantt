@@ -20,7 +20,6 @@ function entry(id: string, segmentIds: readonly string[]): Entry {
   return {
     id: entryId(id),
     name: id,
-    kind: 'span',
     start: instant(0),
     end: instant(segmentIds.length * 100),
     segments: segmentIds.map((sid, i) => ({
