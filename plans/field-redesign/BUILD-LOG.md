@@ -2036,3 +2036,77 @@ P2). Two plugins' styles never meet, so there is nothing to merge and nothing to
 them meet means letting several renderers apply to one bar, which changes D-S5-11 (config wins over a
 plugin), D-S5-12 (the per-look slot) and review P2's refusal. That is a design change to a locked
 decision, so this build reported it instead of inventing a parallel renderer pipeline.
+
+---
+
+## Build 3g — Q9 built: the parent bar drag
+
+### J34 — the parent drag as built: one draft, split into what it writes and what it paints
+
+**2026-09-11, Build 3g.** Q9's ruling is built. `ProposedDates` is the looser descendant type, and
+`ProposedSpan extends ProposedDates` with both dates required. An app author's ordinary handler
+reads `move.start`/`move.end` off the grabbed bar and meets no optional date.
+
+**Four seams, against N9's scoping.** N9 was right on three of four, and wrong on where the parent's
+own preview belongs.
+
+1. **`view/capability.ts`.** `Capabilities` gains `entriesMovedBy(entry)` — which Entries a move of
+   this bar writes. An ordinary bar answers with itself. A parent answers with the dated descendants
+   below it. `can('move', entry)` is now exactly "that list is not empty", so the rule has one home.
+   `CapabilityInputs` gains `descendantsOf`, which is internal (not in `etc/freegantt.api.md`).
+   `can('move')` is on the hover path, so a leaf answers through a boolean sibling
+   (`moveWritesSomething`) and builds no list (I5). A parent's answer walks its subtree once per
+   hover *change*, which `projectAffordances` asks for the hovered bar and the sole selection only.
+2. **`layout/gesture-draft.ts`.** `moveEdit` and `stepMoveEdit` were the same function twice, once
+   per snap arm. They collapse into one `translatedEdit` over a shared `Translation`
+   (`{ ms }` or `{ unit, steps }`), and `draftForResize` reuses the same resolution. An Entry with no
+   Segment translates the one date it holds — `envelopeOfSegments` throws on an empty list, so that
+   branch had to exist rather than fall through.
+3. **`view/gesture-pipeline.ts`.** `GestureProposal` carries `writes`, `paints` and `grabbed`. The
+   grabbed parent travels in the draft, so its bar follows the pointer, and drops out of the map that
+   commits. `#commit` reads the grabbed span off `paints`, never off `writes[0]`.
+4. **One transaction, one undo.** Free, as N9 said: `commitEntryEdits` opens one transaction.
+
+**Where N9 was wrong, checked against the code.** N9 says the parent's rolled-up envelope "belongs in
+the preview's `extra`". It does not. `render/dom/index.ts:738` splits `ItemPreview.extra` into
+`ghost` and `dragging`, and `ghost` means "an installed extension hook's cascade" (`CONTEXT.md`,
+Ghost). The parent bar is the caller's own gesture, so `extra: false`. The split above carries it
+instead, and the extension hook is handed `writes` alone — showing it the parent would offer a plugin
+an edit the commit never makes.
+
+**One rule this build decided, and it is not in ADR 0013.** A parent's move is all-or-nothing: one
+descendant that may not be written refuses the whole gesture, instead of moving the rest. The reason
+is geometry, not policy. The parent's own bar paints its whole envelope translated by the drag delta,
+which is the correct answer only when every dated row below it moves. A partial translate paints one
+envelope and rolls up to another. `min`/`max` over a monotonic calendar step is why the painted
+envelope equals the rolled-up one in the all-or-nothing case.
+
+**Public surface.** `ProposedDates` is a new public type, and `EntryGestureEvent.entries` changes
+element type. That is stop condition 1 of this build's dispatch. The report was generated, read, and
+**reverted uncommitted** — the diff is 12 insertions and 4 deletions, and it is the author's to
+approve. `pnpm verify` therefore fails at `api-report` and at nothing else.
+
+### N12 — the six `.fg-bar-summary` e2e exclusions: all six stay, and none of them is a drag test
+
+Audited one by one against the files, per J9's superseded note.
+
+| Site | Verdict | Reason |
+|---|---|---|
+| `planner.spec.ts:15` | **Keep** | It reads a bar's `backgroundColor` to prove colour is tokens. A summary bar paints `background: transparent` and draws its bracket in `::before` (`styles.ts:327`). The exclusion is about paint, and the drag does not touch it. |
+| `plugins.spec.ts:12` | **Keep** | It hovers a bar to open a tooltip. The subject is the tooltip, not the bar. A summary bracket spans the whole dataset and is ten pixels tall, so it is the worse hover target, not the better one. |
+| `row-hover.spec.ts:49` | **Keep, and it is load-bearing** | It asserts `boxShadow !== 'none'` on the hovered bar. `styles.ts:358` sets `outline: none; box-shadow: none` for a hovered `.fg-bar-summary`. Drop the exclusion and the test fails on a paint rule that is correct. |
+| `selection.spec.ts:17` | **Keep** | Geometry, as Build 3e read it by hand: a bracket scrolls under the sticky header and the click never lands. |
+| `selection.spec.ts:101` | **Keep** | The same helper, for a multi-bar Selection. |
+| `data.spec.ts:36` | **Keep** | `selectFirstBarWithOwnDates` feeds buttons that call `entries.update()` with dates. A parent **cell** is still refused (ADR 0013's amendment). Only the drag changed, and this test drags nothing. |
+
+**So the real gap is not in these six.** No e2e test drags a parent bar. That test is owed and this
+build did not write it — see N13.
+
+### N13 — no e2e covers the parent bar drag
+
+**Owed.** The drag is pinned by unit tests at both seams it crosses: `src/view/capability.test.ts`
+(what a parent's move writes, the start-only child, the locked descendant) and
+`src/view/gesture-pipeline.test.ts` (the descendants commit, the parent stays unwritten,
+`event.entry` is the parent, the parent's bar previews). A browser test that drags a real
+`.fg-bar-summary` and reads the children's dates back is still owed, and the harness's planner
+dataset already holds a phase with dated children to do it with.
