@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { AggregatorFailedError, entryId } from '../model/index.js';
-import type { ChangeSet } from '../model/index.js';
+import type { ChangeSet, EntryEdits, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 function treeDataset(
@@ -166,6 +166,85 @@ describe('rollUpFields (S4.2)', () => {
 
     expect(costOf(state, 'a')).toBe(5);
     expect(costOf(state, 'b')).toBe(20);
+  });
+
+  describe('ADR 0013, decision 5/6: one report when the Rollup drops a value nobody may keep', () => {
+    it('construction drops an authored value on a parent whose only child has none, and raises one report', () => {
+      const reports: ErrorReport[] = [];
+      // `installPlugins` runs before `applyConstructionRollUp` (dataset-state.ts), so it is the one
+      // door onto the Dataset that exists early enough to observe a construction-time report — the
+      // constructor itself has not returned yet when a consumer could otherwise call `state.on(...)`.
+      const state = new DatasetState({
+        entries: [
+          { id: 't1', name: 'p1', props: { cost: 500 } },
+          { id: 't2', name: 'c1', parentId: 't1' },
+        ],
+        timeZone: 'UTC',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        installPlugins: (installing) => {
+          installing.on('error', (report) => {
+            reports.push(report);
+          });
+          return () => {};
+        },
+      });
+
+      expect(costOf(state, 't1')).toBeUndefined();
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('derived-values-dropped');
+      expect(reports[0]?.severity).toBe('warning');
+      expect(reports[0]?.message).toContain('"cost"');
+      expect(reports[0]?.message).toContain('"t1"');
+    });
+
+    it("a batch of add() calls in one transaction drops the new parent's authored value, one report", () => {
+      const reports: ErrorReport[] = [];
+      const state = treeDataset([{ id: 'x' }]);
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      state.transaction(() => {
+        state.entries.add({ id: 'p1', name: 'p1', props: { cost: 500 } });
+        state.entries.add({ id: 'c1', name: 'c1', parentId: 'p1' });
+      });
+
+      expect(costOf(state, 'p1')).toBeUndefined();
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('derived-values-dropped');
+      expect(reports[0]?.severity).toBe('warning');
+      expect(reports[0]?.message).toContain('"cost"');
+      expect(reports[0]?.message).toContain('"p1"');
+    });
+
+    it("a plugin cascade's write to a rolling-up parent cell is dropped, and raises one report", () => {
+      const reports: ErrorReport[] = [];
+      const state = new DatasetState({
+        entries: [
+          { id: 'p1', name: 'p1' },
+          { id: 'c1', name: 'c1', parentId: 'p1', props: { cost: 10 } },
+        ],
+        timeZone: 'UTC',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        // A cascade that reaches for the Rollup's own cell — the write lands in `merged`, never
+        // `body`, so `rollup.ts` overwrites it rather than yielding (D-S2-22 is the body's alone).
+        editExtender: (): EntryEdits => new Map([[entryId('p1'), { cost: 999 }]]),
+      });
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      state.entries.update('c1', { name: 'c1 renamed' });
+
+      expect(costOf(state, 'p1')).toBe(10); // the Rollup's own answer wins, not the cascade's 999
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('derived-values-dropped');
+      expect(reports[0]?.severity).toBe('warning');
+      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('"cost"');
+    });
   });
 
   describe('D-S4-8 / P1 — rollup after child removal', () => {

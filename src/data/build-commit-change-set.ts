@@ -18,6 +18,12 @@ import type {
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
+import type { ErrorBus } from './error-reporting.js';
+import {
+  buildCascadeDroppedReport,
+  buildDerivedValuesDroppedReport,
+  raiseErrorOn,
+} from './error-reporting.js';
 import { reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
@@ -64,6 +70,10 @@ export interface CommitChangeSetInput {
    *  spanning for the first time always mints a real `SegmentId` here, because this path always
    *  reaches the store. `entry-reader.ts`'s `reconcileExtenderEdits` is the one caller. */
   mintSegmentId(): SegmentId;
+  /** ADR 0013, decision 5/6: where this commit's own dropped-derived-value warnings go. Read here,
+   *  not threaded back out through the return value, because a commit that folds to `undefined`
+   *  (net-empty) still owes the warning — the drop already happened in the Rollup pass above it. */
+  readonly bus: ErrorBus;
 }
 
 export function diffEdits(
@@ -293,7 +303,7 @@ export function buildCommitChangeSet(
           return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
-  const rollupUpdated = rollUpFields(
+  const { updated: rollupUpdated, cascadeDropped } = rollUpFields(
     byId,
     {
       added: addedEntitiesForFold.map((row) => row.entity),
@@ -304,6 +314,22 @@ export function buildCommitChangeSet(
     data.fieldContext,
     () => data.mintSegmentId(),
   );
+
+  // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the
+  // Rollup overwrote it anyway. One report for the whole commit, never one per row.
+  if (cascadeDropped.length > 0) {
+    raiseErrorOn(data.bus, buildCascadeDroppedReport(cascadeDropped));
+  }
+
+  // ADR 0013, decision 6: an entity `entries.add()` just created was already a parent by the time
+  // this commit landed (a batch of `add()` calls in one transaction), and one of its rolling-up
+  // Fields had nothing to roll up to. Reparenting an *existing* entity onto a new parent is not this
+  // — that recompute stays silent (decision 6) — so only the ids this commit itself added qualify.
+  const addedIds = new Set(addedEntitiesForFold.map((row) => row.entity.id));
+  const addDropped = rollupUpdated.filter((row) => row.to === undefined && addedIds.has(row.id));
+  if (addDropped.length > 0) {
+    raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(addDropped));
+  }
 
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));

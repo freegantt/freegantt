@@ -198,6 +198,18 @@ function effectiveEntry(
   return edit ? entryAfterEdit(current, edit) : current;
 }
 
+/** What one Rollup pass produced. `cascadeDropped` names the rows where an extension-hook cascade —
+ *  never the transaction body, which already yields (D-S2-22) — proposed a rolling-up Field on a
+ *  parent and the Rollup overwrote it anyway (ADR 0013, decision 5). A caller with no extension hook
+ *  installed never sees a row here: `merged` equals `body` with nothing installed, so no edit can
+ *  reach a parent through `merged` alone. */
+export interface RollUpResult {
+  readonly updated: readonly FieldUpdated[];
+  readonly cascadeDropped: readonly FieldUpdated[];
+}
+
+const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], cascadeDropped: [] });
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
@@ -208,9 +220,9 @@ export function rollUpFields(
   registry: FieldRegistry,
   ctx: FieldContext,
   mintSegmentId: () => SegmentId,
-): readonly FieldUpdated[] {
+): RollUpResult {
   const rollingFields = registry.rollingUpFields();
-  if (rollingFields.length === 0) return [];
+  if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
 
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
@@ -228,6 +240,7 @@ export function rollUpFields(
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
   const computed = new Map<EntryId, Entry>();
   const updated: FieldUpdated[] = [];
+  const cascadeDropped: FieldUpdated[] = [];
 
   for (const parentId of parents) {
     const parent = entries.get(parentId);
@@ -253,6 +266,11 @@ export function rollUpFields(
     for (const field of rollingFields) {
       if (editProposesField(body.get(parentId), field)) continue;
 
+      // A cascade — never the body, which already yielded above — proposed this cell. The Rollup
+      // still owns it (decision 5): the write below runs anyway, and this parent+field pair is
+      // reported once for the whole commit if it turns out to actually overwrite something.
+      const cascadeProposed = editProposesField(merged.get(parentId), field);
+
       const aggregator = registry.aggregator(field.rollUp);
       if (!aggregator) continue;
 
@@ -271,14 +289,18 @@ export function rollUpFields(
         // nothing but the Rollup may write this cell. `from === undefined` is already clear; there
         // is nothing to drop.
         if (from === undefined) continue;
-        updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
+        const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: undefined };
+        updated.push(row);
+        if (cascadeProposed) cascadeDropped.push(row);
         effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
         continue;
       }
 
       if (registry.valuesEqual(String(field.key), from, value)) continue;
 
-      updated.push({ store: 'entries', id: parentId, field: field.key, from, to: value });
+      const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: value };
+      updated.push(row);
+      if (cascadeProposed) cascadeDropped.push(row);
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
@@ -293,5 +315,5 @@ export function rollUpFields(
     computed.set(parentId, effectiveParent);
   }
 
-  return updated;
+  return { updated, cascadeDropped };
 }

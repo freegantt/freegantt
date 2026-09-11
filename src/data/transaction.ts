@@ -129,7 +129,9 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const updated = rollUpFields(byId, undefined, data.fields, data.fieldContext, () => data.mintSegmentId());
+  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldContext, () =>
+    data.mintSegmentId(),
+  );
   writeConstructionUpdates(data, updated);
 
   const dropped = updated.filter((row) => row.to === undefined);
