@@ -39,7 +39,7 @@
 - [ ] Wire `entries.update()` to the derived arm. Build the answers from **six** call sites — see *Six doors* below. **PARTIAL: `entries.update()` itself throws (done); the other five doors (cell editor, bar drag, `add()`, constructor, extension hook) are not individually verified — see BUILD-LOG J17 handoff.**
 - [x] Refuse a mixed patch **whole, before any write**. `{ start, cost }` with a derived `cost` writes nothing. (in `EntryStore.update()`; not yet covered by a test)
 - [x] Make `add()` and `new Dataset({ entries })` **drop** a derived value, and raise one report. Both tested: `rollup.test.ts` "construction drops…" and "a batch of add() calls…".
-- [ ] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both. **Believed achieved as a side effect of the rollup fix below, but NOT test-verified.**
+- [x] Drop a promoting Entry's authored values in the **same** ChangeSet as the `parentId` write. One undo reverses both. Test-verified: `hierarchy.test.ts` "one undo reverses both the parentId write and the dropped authored value it caused" passed unmodified — no `src/` change needed.
 - [x] Demote on the last child leaving: keep the name, clear the dates, draw no bar.
 - [x] Rewrite `src/data/hierarchy.test.ts:116`. *"Removing every child demotes nothing"* is **overruled**.
 - [x] Write decision 5's warning. Wired at `data/build-commit-change-set.ts`: an extension-hook cascade's write to a rolling-up parent cell (reaches `merged`, never `body`) is dropped and raises one `derived-values-dropped` report per commit. Tested in `rollup.test.ts`.
