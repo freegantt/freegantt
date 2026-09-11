@@ -22,7 +22,8 @@ Six ADRs are decided. No line is built. This folder is the work.
 8. **Never work around a gap in `src/`.** Stop. Report the gap. Ask the author if core closes it first. This is `CLAUDE.md`'s stop rule.
 9. **A line number here is a hint, not a fact.** The numbers come from `main` on 2026-09-10. Open the file. Numbers drift.
 10. **Read [`../shared/refuted.md`](../shared/refuted.md) before you propose an alternative.** Fourteen approaches are already refused.
-11. **Log every question and every judgement call in [`../BUILD-LOG.md`](../BUILD-LOG.md).** Write the entry the moment it comes up, not at the end. A call you made alone gets a **J** entry, so a reviewer can find it and reverse it. A question for the author gets a **Q** entry and waits. A session ends; this file does not.
+11. **Work you defer to a later build goes in that build's file, not only in the log.** A `J` entry records your reasoning; it does not hand the work to anyone. Open the receiving build file and add the work item and its gate assertion. A defer nobody receives is a deletion.
+12. **Log every question and every judgement call in [`../BUILD-LOG.md`](../BUILD-LOG.md).** Write the entry the moment it comes up, not at the end. A call you made alone gets a **J** entry, so a reviewer can find it and reverse it. A question for the author gets a **Q** entry and waits. A session ends; this file does not.
 
 ---
 
