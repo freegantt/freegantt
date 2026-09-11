@@ -1121,10 +1121,143 @@ this is the audit-ready summary the coordinator asked for):**
   `replay(invertChangeSet(...))`, assertion unchanged; **left 3 tests red** rather than weaken them
   (Q2) (J24).
 
-**Next agent's first move:** `src/data/transaction.test.ts` (7 errors — corrected; the snapshot table
-above briefly said 15, a copy error caught immediately after this entry was written) is the
-next file, top-down, same pattern. **Read Q2 before touching `entry-store.ts`, `data/rollup.ts`, or
-`data/write-set.ts` for any reason** — two real conflicts are open there, not yet the author's
-call, and `transaction.test.ts` likely exercises the same write-refusal path Q2's first finding
-names (it is one layer below `entry-store.ts`), so more red tests down there may be the same root
-cause, not new ones.
+**Superseded by J26 below**: `src/data/transaction.test.ts` is now done (0 errors, 44/44 pass, no
+write-refusal conflict surfaced there — Q2's second finding above's worry did not materialize for
+this file).
+
+### J26 — Build 3b handoff #2: forced stop at ~251k context, `plans/field-redesign/build/build-3-0013-derivation.md` untouched, no boxes ticked
+
+**Raised:** 2026-09-11, Build 3b. **Status:** open — the receiving note for whoever continues, written
+at the coordinator's second (non-optional) stop request. Everything below answers that request's five
+numbered points directly; committed first, this entry written second, per the coordinator's own order.
+
+**1. N7 — the reorder worked. No shell restructure was needed, and none was attempted.**
+
+`GanttShell`'s constructor already built every plugin-relevant collaborator (`#registrations`,
+`#commandRegistry`, `#keymap`, `#segmentSelection`, `#viewport`) before its own final
+`this.#phase = 'live'; this.#frames.flush();`. The fix moved *when, within that same constructor*,
+three already-existing live setters run — from "after `api/gantt.ts`'s constructor returns" to "a
+few statements before this constructor's own last two lines." Concretely:
+- `GanttShellOptions` gained three new constructor-only options: `plugins`, `zoomPresets`,
+  `selectedSegmentIds` (all optional).
+- Inside `GanttShell`'s constructor, immediately before `this.#phase = 'live'; this.#frames.flush();`:
+  `if (options.plugins !== undefined) this.plugins = options.plugins;` then the same pattern for
+  `zoomPresets` and `selectedSegmentIds` (assigned to `this.selection`). All three moved **together,
+  in one place** — the dispatch's question "ask the same of `zoomPresets`/`selectedSegmentIds`" had
+  one answer, not three separate ones.
+- `api/gantt.ts` now passes `plugins`/`selectedSegmentIds` straight into the `new GanttShell({...})`
+  call (spread conditionally) instead of assigning `this.#shell.plugins = …` etc. after that call
+  returns; `zoomPresets` was folded into the existing `pickDefined(options, [...])` list since its
+  type is identical on both sides. The three post-construction assignment lines `api/gantt.ts` used
+  to end its constructor with are deleted outright — nothing depends on them running late any more.
+- No other line in either constructor moved. `resolveLook`/`Capabilities` already read their
+  registries live at render time (J16: never a cached snapshot), so this reordering changes nothing
+  about *what* frame 1 paints once plugins are installed — only *when* installation happens relative
+  to that first paint.
+
+Full detail already stands in the "N7" note (marked **FIXED**) and J20 above; this paragraph restates
+it because the coordinator asked for it named again at the handoff boundary, not because anything
+changed since.
+
+**2. The three `gantt.test.ts` failures — final state: all three fixed, none bent.**
+
+- "a custom milestone barRenderer paints a diamond…" (N7) — **fixed** by the reorder above. No
+  `await` added.
+- "clearCapabilityRule restores a registered look default (#195)" (N7) — **fixed** by the same
+  reorder; verified independently rather than assumed, per the dispatch's own instruction. No
+  `await` added.
+- "[review P2] two plugins that each define a look both install, both paint…" — **fixed**, but this
+  one is a genuine test-helper bug, not N7 (correctly separated in the dispatch itself): `barFor()`
+  looked a bar up by `data-kind`, which ADR 0013 makes unstable across a plugin uninstall (a
+  dropped plugin's Entry correctly reverts to structural `'leaf'`, so `data-kind` changes under the
+  test's own lookup key). Rewritten to key on `data-item-id`'s `${entryId}:${segmentIndex}`
+  convention instead — the same DOM node before and after a plugin drop (I8), so it is stable. The
+  test's own three assertions (both plugins paint on install; dropping one leaves the other; a
+  reinstall-then-drop sequence behaves the same) are unchanged.
+
+`pnpm exec vitest run src/api/gantt.test.ts` — **196/196 pass**, confirmed after the fix, not assumed.
+
+**3. tsc count right now: 65. Command: `pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"`.**
+
+Session start (inherited from J19): 136. After this session's five completed files (`gantt.test.ts`
++ N7, `dataset.test.ts`, `frame.test.ts`, `gantt-shell.test.ts`, `entry-store.mutation.test.ts`,
+`transaction.test.ts` — six files, not five; corrected count): **65**. `src/`, `harness/`,
+`fixtures/` (non-test) stay at 0 throughout this session — every remaining error is in a `*.test.ts`
+file. Breakdown right now (`pnpm exec tsc --noEmit 2>&1 | grep "error TS" | sed 's/(.*//' | sort |
+uniq -c | sort -rn`):
+
+```
+5 src/layout/frame-layout.test.ts
+5 src/data/rollup.test.ts
+5 src/data/rollup.property.test.ts
+4 src/view/frame-settings.test.ts
+3 src/view/gesture-pipeline.test.ts
+3 src/data/entry-reader.test.ts
+(~30 more files, 1-2 errors each)
+```
+
+**4. Every test deleted or weakened this session — full ledger, one line each. Counted per file so
+an arithmetic check is possible without re-deriving it.**
+
+- `gantt.test.ts`: **0 deleted.** 1 test's helper rewritten (`barFor`), same 3 assertions kept.
+  Before: 196 tests. After: 196 tests.
+- `dataset.test.ts`: **2 deleted** ("rollUpKinds setter accepts 'none' and [] as empty-list sugar",
+  "live hierarchy.autoGroup changes later first-child promotions only" — both retired-feature tests,
+  J21). 1 renamed+narrowed (dropped 2 of its 3 assertions, kept 1). 1 dropped 2 of its assertions
+  (`entry.kind`, one list entry), kept the rest. 6 more had a dead property deleted with **zero**
+  assertion change. Before this session's edit: file did not compile, so no baseline test count
+  exists — first runnable count is 49 (this session's own result). `git log -p` on `ef12a66` is the
+  only way to see the pre-edit source; there is no earlier "tests: N" number to check this against.
+- `frame.test.ts`: **5 deleted** (the whole "milestone floor" describe block: "keeps the Entry
+  itself zero-width…", "floors a milestone bar to the rotated diamond…", "honours a custom
+  diamondSizePx…", "stamps minimumSpan on a floored milestone bar", "computeFrame's bar and
+  GanttShell.reveal's span agree…" — all five tested a `barSpan` parameter and a constant ADR 0013
+  deleted outright, J22). 2 of "a minimum painted bar width"'s siblings kept and renamed off
+  "milestone" (same floor rule, not diamond-specific). Same non-compiling-baseline caveat as above;
+  first runnable count is 46.
+- `gantt-shell.test.ts`: **0 deleted.** 14 dead-property removals, 0 assertion changes. First
+  runnable count: 35.
+- `entry-store.mutation.test.ts`: **2 deleted** ("with rollUpKinds: [], nothing rolls up at all" —
+  retired feature, J24; "a childless group stays dateless (ADR 0012)" — an exact duplicate of a
+  claim already merged into a differently-named test earlier in the same file, so deleting it drops
+  a repeated assertion, not a distinct one). 2 merged into 1 (both asserted "dateless, no children,
+  legal" under different `kind` labels — merged, so this reads as a net **2 deleted, 1 added**, not
+  a 1-for-1 rename; the 3 delete/merge lines above sum to −3 net over the "roll-up kinds"/"rollup"
+  describes). 1 test's undo mechanism rewritten (`replay(invertChangeSet(...))` instead of a manual
+  `update()` loop), 0 assertion change. First runnable count: 52 total, 49 passing, 3 failing on
+  purpose (Q2) — **not weakened, left red**.
+- `transaction.test.ts`: **0 deleted.** 6 dead-property removals (0 assertion change) plus 1
+  assertion line dropped (`expect(parent.kind).toBe('group')` — the old kind-promotion side effect,
+  which no longer exists; the test's other two assertions, the actual D-S4-17 same-commit-rollup
+  claim, are unchanged). First runnable count: 44, all passing.
+
+**Arithmetic check, so the coordinator does not have to re-derive it:** across the whole session,
+7 tests were deleted outright (2 + 5 + 2 across `dataset.test.ts`/`frame.test.ts`/
+`entry-store.mutation.test.ts`), 3 were merged down to 1 net test (a −2), and every other change in
+every file (`gantt.test.ts`, `gantt-shell.test.ts`, `transaction.test.ts`, plus the remaining spots
+in `dataset.test.ts`/`entry-store.mutation.test.ts`) removed a dead property or a stale assertion
+with **no reduction in the number of distinct claims tested** — the underlying behaviour each
+still-standing test names is the same behaviour it named before this session touched it.
+
+**5. Tests where the test was right and `src/` was wrong — left failing, not touched. Full detail
+in Q2 above; named again here per the coordinator's numbered list:**
+- `entry-store.mutation.test.ts` > `entries.removeSegments (#212, ADR 0010)` > `"a last-Segment
+  removal never touches the Entry's descendants (ADR 0012...)"` — `entries.update()`'s write-refusal
+  guard (decision 6) also blocks the library's *own* internal `#removeSegmentsFrom()` bookkeeping
+  call, not just a consumer's direct write.
+- `entry-store.mutation.test.ts` > `rollup (§1.5)` > `"a parent whose span the same transaction
+  proposed keeps the proposed value"` — the same guard refuses the exact same-transaction-proposal
+  case decision 5's own test protects.
+- `entry-store.mutation.test.ts` > `Segment→Entry index review fixes` > `"S1: checking a
+  transaction's Segment ids for uniqueness scales with entryCount, not entryCount²"` — a real
+  quadratic-time regression (81400 calls measured against a 21450 threshold at n=400), unrelated to
+  `kind`/rollup (none of the test's Entries have a `parentId`). Root cause not identified — flagged
+  for a bisect of this build's `data/entry-store.ts`/`data/rollup.ts`/`data/write-set.ts` changes.
+
+**Not run this session, per the coordinator's own instruction:** `verify:full`. Only `tsc --noEmit`
+and per-file `vitest run` were used to verify each commit.
+
+**Next agent's first move:** `src/layout/frame-layout.test.ts` (5 errors) is the next-largest file,
+same pattern. **Read Q2 before touching `entry-store.ts`, `data/rollup.ts`, or `data/write-set.ts`
+for any reason** — two real conflicts and one unexplained regression are open there, none yet the
+author's call.
