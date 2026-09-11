@@ -64,6 +64,43 @@ guard-loosening arm were never relaxed — both still exit 2.
 
 **The restore is owed.** It is tracked in [`CLOSE-OUT.md`](CLOSE-OUT.md).
 
+### Q5 — Does `model/`'s types-only carve-out admit a small runtime helper?
+
+**Raised:** 2026-09-11, by the coordinator, from the 2026-09-11 branch review. **Status:** open,
+deferred by the author on 2026-09-11 — **do not decide this in a build.** Come back to it.
+
+**Two review findings are blocked on this one ruling**, and neither can land without it.
+
+- **F13.** ADR 0012's span invariant — *"an Entry spans iff both dates are present"* — has no home. It
+  is restated as guard arithmetic at about ten sites across `data/`, `layout/` and `view/`, plus six
+  *load-bearing cast* annotations that lean on a contract stated only in comments. Every new
+  non-spanning case risks a missed restatement. The review's fix is one `spansOf(entry)` predicate in
+  `model/entry.ts`.
+- **F14.** The `ProposedEdit` brand seed (`__brand` / `props: {}` / `proposedKeys`) is inlined three
+  times in `src/layout/gesture-draft.ts`, because `emptyProposedEdit()` lives in `data/` and
+  `layout/` may not import it. Every future constructor of the brand must rediscover the seed keys.
+  The review's fix is to move the seed next to the type in `model/`.
+
+**Why it is a ruling and not a build decision.** `plans/01` §1.1 makes `model/` types only: zero
+runtime beyond id/brand helpers and the `FreeGanttError` base. This is **lint-enforced**, not a
+convention — `eslint/rules/model-is-types-only.cjs` holds a fixed allowlist and widens it for exactly
+one file, `errors.ts` (D-S1.7-8). The review-fix agent tried F14, the rule rejected it, and the agent
+correctly removed the file rather than force it.
+
+**The two answers.**
+
+1. **Widen the carve-out** to admit a pure predicate and a pure seed — both are total functions over
+   their argument with no state and no dependency. One `spansOf` and one seed helper then serve
+   `data/`, `layout/` and `view/` alike, and the allowlist grows by two named entries.
+2. **Leave `model/` alone** and accept one named predicate per layer instead of free guard
+   arithmetic. More code, three homes for one rule, and no rule is bent.
+
+Both are defensible. The cost of 1 is that a types-only boundary stops being simply true. The cost of
+2 is that ADR 0012's invariant stays homeless, which is what F13 says is already hurting.
+
+**Nothing is blocked on this today.** F13 and F14 are the only claimants, both are recorded, and the
+branch is green without them.
+
 ---
 
 ## Judgement calls
