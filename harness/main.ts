@@ -16,7 +16,6 @@ import type {
   FieldContext,
   GridColumnInput,
   RowSource,
-  DatasetDocument,
   DatasetEventMap,
   GanttPlugin,
   RendererByKind,
@@ -79,14 +78,10 @@ const gantt = new Gantt({
 gantt.panToToday();
 
 // A test seam only (`hierarchy.ts` writes the same two globals): it hands an e2e test the public
-// `Gantt` and `Dataset`, nothing else. `Window.__dataset` binds to `hierarchy.ts`'s field shape;
-// this page declares its own fields, so the cast stands in for that one shared declaration. Every
-// e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields.
-// The double cast through `unknown` is evidence, not a shortcut: `Dataset<TFields>` gives no common
-// type two differently-fielded instances both satisfy, so no single cast bridges them. #226's
-// `gantt.dataset` getter does not close it, and was not expected to: the mismatch is between two
-// harness pages' declared field shapes, not between a Gantt and the Dataset it holds.
-window.__dataset = dataset as unknown as typeof window.__dataset;
+// `Gantt` and `Dataset`, nothing else. `Window.__dataset` is a bare `Dataset` — every e2e read of it
+// (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so
+// no cast is needed to bridge two harness pages' differently-fielded instances.
+window.__dataset = dataset;
 window.__gantt = gantt;
 
 mountGanttToolbar({
@@ -257,13 +252,12 @@ sortNameBtn.addEventListener('click', () => {
 
 refreshRowSourceUi();
 
-// ---- Mutation extras (S2): add entry, set cost, lock/veto, export/import (data.ts's own demo) ----
+// ---- Mutation extras (S2): add entry, set cost, lock/veto, entries dump ----
 
 const addEntryBtn = document.querySelector<HTMLButtonElement>('#add-entry')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 
 let nextNewId = 1;
@@ -305,31 +299,11 @@ lockCheckbox.addEventListener('change', () => {
   else locks.unlock(id);
 });
 
+// A read-only dump — every stored Entry, as `dataset.entries.all` reports it. The library holds no
+// save format to round-trip through (ADR 0016); an application that persists a Dataset reads this
+// door and its own plugins' stores, and restores by handing the same shape back to `new Dataset()`.
 exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-// Proves the round trip through the public `toJSON()`/`fromJSON()` surface alone (D-S2-6's own
-// shape) without swapping this page's live `Gantt` — this page already wires a dozen other features
-// straight to the one `gantt`/`dataset` pair, so a live rebind-on-import would mean re-attaching
-// every one of those listeners to a fresh instance for one narrow proof. `data.html` already owns
-// that fuller "swap the whole page" demo; this button stays a lighter, honest check: parse, rebuild
-// a `Dataset` from the document, and log what came back — a `fromJSON` that throws (malformed JSON,
-// a field the current `fieldTypes` doesn't declare) surfaces here exactly as it would for a consumer.
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost?: number; team?: string }>;
-    const imported = Dataset.fromJSON<{ cost?: number; team?: string }, { cost: number; team?: string }>(
-      doc,
-      demoFieldOptions,
-    );
-    prependLogLine(
-      log,
-      `[import] parsed ${imported.entries.all.length} entries — see data.html to load them live`,
-    );
-  } catch (error) {
-    prependLogLine(log, `import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  documentJson.value = JSON.stringify(dataset.entries.all, null, 2);
 });
 
 // ---- Direct manipulation extras (S3): mobilization veto, async hold, resize lock ----

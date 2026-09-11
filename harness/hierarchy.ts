@@ -5,7 +5,6 @@
 import './harness-nav.ts';
 import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
 import type {
-  DatasetDocument,
   DatasetEventMap,
   Entry,
   EntryInput,
@@ -25,7 +24,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarch
 
 declare global {
   interface Window {
-    __dataset: Dataset<{ cost: number }, { cost: number }>;
+    __dataset: Dataset;
     __gantt: Gantt;
     /** `main.ts`'s own seam (#256) — declared once, here, beside the two globals it joins. */
     __fixedFinishEntryId: string;
@@ -58,9 +57,6 @@ const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-e
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
-const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
-const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
@@ -69,8 +65,8 @@ let autoGroup = true;
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
 const paneScroll = new ScrollModel();
-let dataset = createDataset(autoGroup);
-let gantt = mountGantt(dataset);
+const dataset = createDataset(autoGroup);
+const gantt = mountGantt(dataset);
 
 window.__dataset = dataset;
 window.__gantt = gantt;
@@ -199,17 +195,6 @@ function bindGantt(): void {
   });
 }
 
-function remountGantt(): void {
-  const collapsed = [...gantt.collapsed];
-  gantt.destroy();
-  gantt = mountGantt(dataset);
-  window.__gantt = gantt;
-  gantt.collapsed = collapsed;
-  applyRowSource();
-  mountTimelineToolbar({ gantt, container: toolbar });
-  bindGantt();
-}
-
 bindDataset();
 bindGantt();
 mountTimelineToolbar({ gantt, container: toolbar });
@@ -271,27 +256,4 @@ undoBtn.addEventListener('click', () => {
 
 redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
-});
-
-exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    dataset.off('change', onChange);
-    gantt.destroy();
-    const imported = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, hierarchyFieldOptions);
-    imported.hierarchy = { autoGroup };
-    dataset = imported;
-    window.__dataset = dataset;
-    bindDataset();
-    remountGantt();
-    refreshHistoryButtons();
-    renderSelection();
-    logLine('[load] imported document');
-  } catch (error) {
-    logLine(`import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
 });

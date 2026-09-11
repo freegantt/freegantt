@@ -13,7 +13,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 
 declare global {
   interface Window {
-    __dataset: import('../src/api/index.js').Dataset<{ cost: number }, { cost: number }>;
+    __dataset: import('../src/api/index.js').Dataset;
     __gantt: import('../src/api/index.js').Gantt;
     __fixedFinishEntryId: string;
   }

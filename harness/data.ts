@@ -10,13 +10,13 @@
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
 // one row on undo, which is the thing the design exists to guarantee.
 
-// S2.6 (plans/s2-data-core/s2.6-serialization.md §3) adds export/import over toJSON/fromJSON.
-// Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
-// rebind (or the finding against destroy() if it does not).
+// The library holds no save format (ADR 0016): this page persists nothing across a reload. An
+// application that must keep this Dataset reads `dataset.entries.all` and its plugins' stores, and
+// restores by handing that same shape to `new Dataset()`.
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetDocument, DatasetEventMap, Disposer } from '../src/api/index.js';
+import type { DatasetEventMap, Disposer } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -27,7 +27,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'mutation
 
 declare global {
   interface Window {
-    __dataset: Dataset<{ cost: number }, { cost: number }>;
+    __dataset: Dataset;
   }
 }
 
@@ -36,8 +36,7 @@ declare global {
 // demonstrates mutation and serialization rather than drag-resize. `main.ts` shows the other half:
 // the same answer narrowed to one row through `interactions.edit`.
 //
-// The lock rides in the Document too. `editable` serializes on the Field, so an exported Document
-// carries it and an import puts it back (`data/serialization/field-document.ts`).
+// `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
 const COST_FIELDS = {
   fieldTypes: { money: { rollUp: 'sum' as const } },
   fields: [
@@ -71,15 +70,15 @@ const ROLLUP_TREE = [
 // flag of its own, and the plugin's `beforeChange` is what refuses the write. `Dataset.plugins` is
 // read-only, so every Dataset this page builds — including the imported one below — installs a
 // fresh one at construction.
-let locks = lockEntries();
+const locks = lockEntries();
 
-let dataset = new Dataset<{ cost: number }, { cost: number }>({
+const dataset = new Dataset<{ cost: number }, { cost: number }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
   plugins: [locks],
 });
-let gantt = new Gantt({ container: '#gantt', dataset });
+const gantt = new Gantt({ container: '#gantt', dataset });
 window.__dataset = dataset;
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
@@ -94,9 +93,6 @@ const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
-const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
-const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
@@ -252,32 +248,6 @@ undoBtn.addEventListener('click', () => {
 
 redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
-});
-
-exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    locks = lockEntries();
-    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, { ...COST_FIELDS, plugins: [locks] });
-    lockCheckbox.checked = false;
-    window.__dataset = dataset;
-    gantt.destroy();
-    gantt = new Gantt({ container: '#gantt', dataset });
-    bindDataset();
-    bindGantt();
-    bindErrors();
-    toolbar.innerHTML = '';
-    mountTimelineToolbar({ gantt, container: toolbar });
-    syncSelectionUi();
-    refreshHistoryButtons();
-    logLine('[load] imported document');
-  } catch (error) {
-    logLine(`import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
 });
 
 refreshHistoryButtons();
