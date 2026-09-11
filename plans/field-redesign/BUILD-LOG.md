@@ -618,7 +618,7 @@ every later build's own rename step.
 
 The very first two operations of this build were `mcp__serena__rename_symbol` calls renaming
 `Entry.meta` → `props` and `EntryInput.meta` → `props`, each reported as a clean, project-wide LSP
-rename. A `pnpm verify:full` run much later in the build turned up four unrelated word corruptions
+rename. A `pnpm verify:full` run much later in the build turned up five unrelated word corruptions, at four sites,
 the rename introduced with no error and no diagnostic:
 
 - `harness/planner.ts`: a doc comment's `its phase's hue` became `its pprops's hue`.
@@ -637,10 +637,10 @@ PostToolUse hook reformats a file after every edit, and `rename_symbol`, having 
 applied its text edit at a byte offset that had since shifted — overwriting whatever token happened
 to sit there instead of the real `meta` reference.
 
-**The call:** found all four by diffing the whole working tree against `HEAD` and scanning every
+**The call:** found all five by diffing the whole working tree against `HEAD` and scanning every
 changed line for an isolated `props`-containing token that didn't correspond to a real rename target
 (`TMeta→TProps`, `StoredEdit→ProposedEdit`, `PlannerMeta→PlannerEntryProps`, `DemoMeta→DemoEntryProps`,
-`meta→props` property accesses), then hand-verifying each one against `git show HEAD:<file>`. All four
+`meta→props` property accesses), then hand-verifying each one against `git show HEAD:<file>`. All five
 are fixed in this build (see the commits touching `harness/planner.ts`, `src/data/entry-reader.test.ts`,
 `src/data/fields/field-access.test.ts`, `src/view/gantt-shell.test.ts`).
 
@@ -648,6 +648,25 @@ are fixed in this build (see the commits touching `harness/planner.ts`, `src/dat
 diff the whole working tree against `HEAD` (or the branch tip before the rename) and scan for isolated
 occurrences of the new name that don't correspond to a real, intended reference — not just spot-check
 the files the tool says it touched. A rename that "succeeds" can still corrupt an unrelated file.
+
+**CORRECTED 2026-09-11 by audit (coordinator).** This entry's body said "four" in three places while
+its heading said five. The heading was right: **five tokens across four sites** — the fourth bullet
+above carries two. The three counts are corrected in place rather than struck, because a wrong number
+is not a superseded decision; it never described anything real. The bullets themselves are unchanged.
+
+**The dropped one is the dangerous class, and the recipe above misses it.** It is
+`src/view/gantt-shell.test.ts:699`, `name: 'a'` -> `props: 'a'`. It is the only one of the five that
+spells correctly, compiles, and passes every test, so no `tsc` run, no test and no spell check sees
+it. "Scan for an isolated `props`-containing token" finds four of five; this one was caught only
+because it sat two lines from the fourth. **The check that finds this class is to read every changed
+line whose *removed* text did not contain the old name.** It is the expensive check, and it is the
+only one that works here.
+
+**Audit verdict, same date:** three independent scans over all 69 commits in
+`main..field-redesign-build` found **no further corrupted token**, and all five are fixed in the
+current tree. The corruption never reached a commit — it lived in the uncommitted tree and was fixed
+before `404f1b0`, whose message reports `verify:full PASS`. A `tsc` gate cannot pass with
+`fakepropsset(` present.
 
 ### J11 — `EntryStore.add()` / `DatasetOptions.entries` keep plain `EntryInput<TProps>`, not the `& Partial<TProps>` intersection Q15's wording suggests
 
@@ -784,6 +803,29 @@ build deleted outright), and `harness/docs/classes.html` and `harness/docs/diagr
 list `FieldSource` in `model/`'s exports and in the module-boundary diagram. None of these were named
 in this build's work list, so none are touched here — flagged for whichever build or review pass
 does the "ahead-of-`src/` banners" sweep `build/README.md` schedules for the last build.
+
+**WIDENED 2026-09-11 by audit (coordinator). `FieldSource` is one of eight retired names, not the
+problem.** A whole-tree census of `harness/docs/**` counted, by file:
+
+| Retired name | Files |
+|---|---|
+| `EntryKind` | 5 (`classes`, `diagram`, `files`, `lifecycle`, `plugins`) |
+| `FieldSource` | 3 (`classes`, `diagram`, `files`) |
+| `Document` / `toJSON` | 3 — retired by [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md) |
+| `hierarchy.ts` | 3 — the file ADR 0013 deleted |
+| `StoredEdit`, `autoGroup`, `promoteNewParents`, `Entry.meta` | 1 each |
+
+Two rows describe files that do not exist: `files.html:468` (`data/fields/normalize-source.ts`) and
+`:476` (`data/fields/source-strategy.ts`). One line is a direct leftover of Build 2's own corrupting
+rename: `files.html:398` reads `Not <code>Entry.meta</code>` and should read `Entry.props`.
+
+**Why this is a class, not a backlog.** This is serena's *second* failure mode, the opposite of J10's:
+serena reads TypeScript only, so **no rename ever reaches HTML** and the tool reports success either
+way. Every public rename this redesign makes will add rows to this table silently. The scheduled sweep
+must grep the retired names by hand; nothing automated will find them.
+
+**Still the right call to leave them.** Fixing eight names piecemeal across five pages, mid-build, is
+how a sweep turns into a hundred small diffs nobody reviews. The sweep stays scheduled.
 
 ### N7 — a plugin passed in the `Gantt` constructor misses the first paint, so every plugin-defined look flashes structural for one frame — **DONE (fixed in branch; author ruled no issue owed)**
 
@@ -1716,3 +1758,68 @@ landed nothing rather than pick one. Everything else it needs was scoped and is 
    carries "what follows from this draft" — not in the draft itself.
 4. **One transaction, one undo.** `commitEntryEdits(draft)` already gives that for free once
    the draft holds the descendants, so nothing new is owed here.
+
+### Q10 — Should a custom look be claimed, or kept as a trial? J16's dispatch has three costs that its own reasoning did not price
+
+**Raised:** 2026-09-11, Build 3 (ADR 0013). **Status:** open — needs the author. Nobody guesses.
+**Reopens:** J16, which is standing and load-bearing for the item-producer and capability seams.
+
+J16 dispatches a custom look by trial: `resolveItems`/`resolveLook` call every registered
+non-structural producer in registration order, and the first non-empty `Item[]` wins
+(`src/layout/items/produce-items.ts:129-150`). A producer answers "not mine" by returning `[]`.
+
+**The question:** does the trial stay, or does a plugin claim its look explicitly — a seam such as
+`registerLookClaim(look, (entry) => boolean)` beside the producer it already registers?
+
+**Three verified consequences.** All three were checked against the code, not inferred from this log.
+
+1. **A collision resolves silently, by registration order.** Two plugins that both claim one Entry
+   produce a look decided by which installed first, with no diagnostic. The nearest test is
+   `src/api/gantt.test.ts:2933`, `[review P2] two plugins that each define a look both install, both
+   paint, and dropping one leaves the other`. It passes because `bufferKind()` and `riskKind()` hold
+   disjoint id sets (`:2940-2943`). It never exercises a collision, and it does not claim to — so
+   nothing in the suite pins what should happen when one occurs.
+
+   **The phrase to retire is in J16 itself.** J16 (BUILD-LOG.md:258) says that test "requires two
+   kind-defining plugins to install side by side with **zero collision**." Read against the test,
+   that means *these two plugins do not interfere*, which is true and is what the test checks. Read
+   cold, it means *collisions are handled*, which is not true and is what nothing checks. This is not
+   a hypothetical misreading: a reviewer read it the second way in 2026-09-11's review, carried the
+   phrase forward as the test's own name, and reported the suite as covering a case it never
+   covered. If the trial stays, that sentence needs rewording whatever else is decided.
+
+2. **The trial allocates on the hover path.** `resolveLook` builds each candidate's `Item[]` and
+   reads `.length` off it, discarding the array. It is reached per hover *change*:
+   `GanttShell.#setHovered` -> `#refreshAffordances` -> `resolveCapabilities` -> `lookOf`
+   (`src/view/capability.ts:188,196`) -> `resolveLook`. CLAUDE.md's hot-path rule is "class toggles
+   and transforms only; zero allocation." Gesture arming is not affected — that is pointerdown-only
+   (`src/interaction/entry-gestures.ts:161-183`) — so the scope is hover, not pointermove.
+
+3. **The doc comment asserts the opposite of the mechanism.** `produce-items.ts:142-144` describes
+   `resolveLook` as resolving a look "without building its Items." Line 147 builds them. This is
+   worth recording beyond the fix: the seam's own maintainers documented it as allocation-free, which
+   is the most likely reason consequence 2 went unnoticed for a build.
+
+**What J16 weighed, and why it declined the alternative.** J16 names this exact alternative and
+turns it down, in its own words: the genuine judgment call was "putting the trial inside `layout/` as
+a shared `resolveLook` rather than inventing a fifth public seam (a 'look resolver' registration)
+that no locked spec names." That reasoning is sound and still holds on its own terms. `plans/01:771`
+locks `registerItemProducer(look, producer)` under `layout:`, and `:776` locks
+`registerLookDefaults(look, defaults)` under `interaction:`. A claim seam is a third registration
+that two ADRs' worth of prose sweep never named, and J16 was right that adding one is a spec change,
+not an implementation detail. J16 also notes correctly that *some* dispatch by trial was unavoidable
+the moment `entry.kind` left, given that the zero-collision test had to keep passing.
+
+**What has changed since — and it is less than it may look.** Consequences 1 and 2 were both
+available at decision time; nobody traced the hover path or wrote a collision test, so neither was
+priced. No new evidence has arrived about them. The honest framing is: nothing changed, we can now
+see the cost. One thing is genuinely new — N7 turned a predicted cost into a realized one. Every
+plugin-defined look flashed structural for one frame, and the fix moved plugin `setup()` inside the
+`GanttShell` constructor, which leaves `#shell` unassigned during setup. That is the trial's ordering
+sensitivity showing up in shipped behaviour rather than in argument.
+
+**What the answer costs either way.** Reversing costs one seam rename today. Keeping the trial costs
+nothing today and forecloses nothing, but S3–S6 ship plugins against this surface, so every slice
+raises the price of changing it later. A third option exists and is not recommended here, only
+recorded so it is not re-derived: keep the trial and fix consequence 2 alone, by having
+`resolveLook` ask a cheaper question than "build the Items and count them."
