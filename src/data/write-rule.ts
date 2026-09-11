@@ -8,18 +8,14 @@
 // `UnknownFieldError` for the existence arm and does not call this function — ADR 0013 wires the
 // derived arm, ADR 0015 wires the editable arm and claims I14.
 
-import type { BuiltInErrorCode, Field } from '../model/index.js';
+import type { Field, WriteRefusalReason, WriteVerdict } from '../model/index.js';
 import { rollsUp } from './fields/field-registry.js';
 
-/** Why a write is refused, when the refusal is worth words. Shared with `model/error-report.ts`'s
- *  `BuiltInErrorCode` and the cell editor's own `REFUSAL_TEXT` — one spelling. */
-export type FieldWriteRefusalReason = Extract<BuiltInErrorCode, 'derived-value'>;
-
-/** May this cell's value change, and if not, is the refusal worth explaining? `view/capability.ts`'s
- *  `WriteVerdict` is this type, named for its own callers — a plugin author reads it off
- *  `ctx.interaction.canWrite`. */
-export type FieldWriteVerdict =
-  { readonly ok: true } | { readonly ok: false; readonly reason?: FieldWriteRefusalReason };
+/** `model/write-verdict.ts` hosts the verdict pair under its public names, so a consumer can import
+ *  what `view/capability.ts` republishes (F1, `ae-forgotten-export`). This file keeps its own
+ *  `Field`-prefixed names as local aliases, because every call site here already reads by them. */
+export type FieldWriteRefusalReason = WriteRefusalReason;
+export type FieldWriteVerdict = WriteVerdict;
 
 // One verdict object per answer, frozen and shared — `canWrite` sits behind hover affordance
 // resolution, and a verdict built per hover would allocate where the hot path must not (I5).
