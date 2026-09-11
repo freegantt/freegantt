@@ -3,8 +3,8 @@ import {
   fitSegmentsToEnvelope,
   moveEntryTo,
   reconcileExtenderEdits,
+  toEditReading,
   toEntries,
-  toProposedEdit,
 } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
@@ -15,7 +15,7 @@ import {
   segmentId,
   SegmentsOutOfSyncError,
 } from '../model/index.js';
-import type { Entry, EntryInput } from '../model/index.js';
+import type { Entry, EntryEdit, EntryInput } from '../model/index.js';
 import { addMs, instant, toInstant } from '../time/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import type { ProposedEdit } from './edit-extension.js';
@@ -33,6 +33,20 @@ function createContext(): EntryReadContext {
     dateOnlyEnd: 'inclusive' as const,
     mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
   };
+}
+
+// F18 (2026-09-11 branch review): production reads `toEditReading(...).stored` directly now — this
+// test-only wrapper is the one place that still names the whole read by its old, single-job name, so
+// every existing assertion below keeps reading `toProposedEdit(edit, ...)` rather than unwrapping at
+// each of its ~25 call sites.
+function toProposedEdit(
+  edit: EntryEdit,
+  context: EntryReadContext,
+  entry: Entry,
+  registry: FieldRegistry,
+  operation: string,
+): ProposedEdit {
+  return toEditReading(edit, context, entry, registry, operation).stored;
 }
 
 describe('toEntries', () => {

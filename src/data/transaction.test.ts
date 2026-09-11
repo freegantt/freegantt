@@ -1016,7 +1016,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
 
 // #209 C3: the extension hook writes what `update()` takes. Everything a plugin author used to have
 // to learn — a storage-shaped `Instant`, the end rule, `proposedKeys` — is core's job now, done in
-// one place (`DatasetState.extraEditsFor` -> `toProposedEdits` -> `toProposedEdit`), the same road every other
+// one place (`DatasetState.extraEditsFor` -> `toEditsReading` -> `toEditReading`), the same road every other
 // write takes.
 describe('the extension hook writes the loose shape (#209)', () => {
   function datasetCascading(edit: Record<string, unknown>, timeZone = 'UTC'): DatasetState {
@@ -1042,7 +1042,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
 
   it('reads a loose date in the dataset’s own zone, so a plugin never calls time/', () => {
     // Both dates, because the cascade moves the whole span — a `start` past the stored `end` is an
-    // inverted span, and `toProposedEdit` refuses one for a plugin exactly as it does for `update()`.
+    // inverted span, and `toEditReading` refuses one for a plugin exactly as it does for `update()`.
     const state = datasetCascading({ start: '2026-02-01', end: '2026-02-03' }, 'America/Denver');
     renameT1(state);
     expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01'));

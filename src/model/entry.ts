@@ -155,7 +155,7 @@ export type EntryEdit<TProps = Record<string, unknown>> = {
  *    `moveEntryTo` builds one of those for them (D-S5-50).
  *
  *  Core builds these on the way in — the extension hook's writes included, at one door
- *  (`DatasetState.extraEditsFor` → `toProposedEdits`) — and `diffEdit` compares one against `entries`.
+ *  (`DatasetState.extraEditsFor` → `toEditsReading`) — and `diffEdit` compares one against `entries`.
  *
  *  **Decision 22 (ADR 0011), closed 2026-09-10: the whole type is branded, and it is *not* assignable
  *  to `EntryEdit`.** Before this ADR the asymmetry ran the other way — every `StoredEdit` was a legal
@@ -170,10 +170,10 @@ export type EntryEdit<TProps = Record<string, unknown>> = {
  *  channel — spread keeps it, and overlay never copies it onto an Entry. */
 export type ProposedEdit<TProps = Record<string, unknown>> = {
   readonly __brand: 'ProposedEdit';
-  /** Always present and complete: `toProposedEdit` merges the patch onto the Entry's own `props`
+  /** Always present and complete: `toEditReading` merges the patch onto the Entry's own `props`
    *  record on the read side. */
   readonly props: Readonly<Partial<TProps>>;
-  /** Never optional here: every `ProposedEdit` is built through `toProposedEdit`, which always seeds
+  /** Never optional here: every `ProposedEdit` is built through `toEditReading`, which always seeds
    *  this set (`withProposedKeys`). */
   readonly proposedKeys: ReadonlySet<string>;
 } & Partial<Omit<Entry, 'id' | 'start' | 'end' | 'props'>> & {
@@ -190,7 +190,7 @@ export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
 /** What a plugin author writes: one `EntryEdit` per Entry, keyed by `EntryId` — exactly the object
  *  `dataset.entries.update(id, edit)` takes, loose dates included (#209). An `EditExtender` returns
  *  one, and `mergeEntryEdits` composes two. Core reads it into `ProposedEdits` at the hook boundary,
- *  through the same `toProposedEdit` every other write goes through, so an extender never normalizes a date
+ *  through the same `toEditReading` every other write goes through, so an extender never normalizes a date
  *  and never states its own proposed keys. */
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 

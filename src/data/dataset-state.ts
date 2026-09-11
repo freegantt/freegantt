@@ -25,7 +25,7 @@ import type {
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, toProposedEdits, toEditsReading, toEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
@@ -180,15 +180,15 @@ export class DatasetState implements Dataset {
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *
    *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
-   *  `EntryEdits`, the same object `entries.update()` takes, and `toProposedEdits` reads it through the
+   *  `EntryEdits`, the same object `entries.update()` takes, and `toEditsReading` reads it through the
    *  dataset's own zone and end rule. */
   extraEditsFor(request: EditRequest): ProposedEdits {
-    return toProposedEdits(
+    return toEditsReading(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,
-    );
+    ).stored;
   }
 
   /** The commit path's own door onto the extension hook (#232) — calls the occupant exactly once,
