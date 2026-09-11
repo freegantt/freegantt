@@ -313,6 +313,10 @@ written directly at `add()`/construction — the same call still type-checks fin
 `EntryEdit`'s flat mapped-type construction doesn't have this problem (it never intersects a *named*
 interface with an open record; every part of `EntryEdit` is itself a mapped type).
 
+**Filed as [#281](https://github.com/Pawel-IT/FreeGantt/issues/281)** on 2026-09-11, at the author's
+instruction, labelled `question` + `smell`. The question below now lives there and is tracked outside
+this build-out.
+
 **The question for the author:** is the runtime-only fulfillment of Q15 acceptable, or does the author
 want a different type-level mechanism explored (e.g. a dedicated exported type for a constructor
 record, built without going through `EntryInput` directly, so it can carry an index signature of its
