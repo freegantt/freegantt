@@ -430,25 +430,41 @@ grep -rn --include='*.ts' 'toJSON\|fromJSON\|toDocument\|fromDocument\|DatasetDo
 
 **Ten findings. Two of them stop this build from being a deletion.** Every line below was opened, not cited. `B1` and `B2` need the author.
 
-#### B1 — two of the three replacement doors are not public · **blocking**
+#### B1 — one replacement door is not public, and it is the only way out for plugin data · **blocking**
 
-ADR 0016 deletes `toJSON` on the ground that three read doors already ship. **One of the three does not exist, and a second answers the wrong question.**
+ADR 0016 deletes `toJSON` on the ground that three read doors already ship. **Two of the three hold. The third does not exist.**
 
 | Door the ADR names | What the code says |
 |---|---|
 | `dataset.entries.all` | **True.** Public, and it is the whole entry set |
-| `dataset.fields.all` | **Answers the wrong question.** `api/dataset.ts:240` publishes `{ all }` only. `all` carries plugin-declared Fields. `FieldRegistry.authored` (`field-registry.ts:149`) is the consumer's own half, and D-S5-33 keeps a plugin's Field out of it on purpose. A consumer who saves `all` and feeds it back re-declares a plugin's Field as their own |
-| `dataset.pluginStores.read(id).all` | **Not public.** `api/Dataset` has no `pluginStores` member, and the name appears **zero** times in `etc/freegantt.api.md`. `read` is reachable only as `ctx.store.read` inside a plugin's own `setup` (`api/dataset.ts:171-172`). **`PluginStores.toDocument()` is the only app-facing exit for plugin rows that exists today** |
+| `dataset.fields.all` | **True, and no second door is owed.** See B1a |
+| `dataset.pluginStores.read(id).all` | **Not public.** `api/Dataset` has no `pluginStores` member, and the name appears **zero** times in `etc/freegantt.api.md`. `read` is reachable only as `ctx.store.read` inside a plugin's own `setup` (`api/dataset.ts:171-172`) |
 
-**So a pure deletion removes capability rather than moving it.** An application that saves plugin rows has no door left, and an application that saves Field declarations gets a list it must not write back.
+**`PluginStores.toDocument()` is the only app-facing exit for plugin rows that exists today**, and this build deletes it. A consumer whose plugin holds locks, or dependencies, would have no way to read that data out of the library. That removes capability rather than moving it.
 
-**The build adds two read doors before it deletes anything**, or the ADR's table is wrong. Both are small and both are additive: publish `dataset.fields.authored`, and publish a plugin-row read on `Dataset`. **Ruling owed.**
+**The author added `dataset.pluginStore(id)` on 2026-09-10.** It answers *"give me this plugin's store"*.
 
-#### B2 — `pluginRows` is typed by a type this build deletes · **blocking**
+**A save door is a second question, and `read` cannot answer it.** `read(id)` resolves against `#reserved` — a plugin that installed and reserved a store. `toDocument()` walks `#committed`, which holds **every** plugin's rows, the rows of a plugin this Dataset never installed included. D-S5-30 calls those passenger data and says outright that they are *"not a store anyone may read"*. **So a door built on `read` silently drops exactly the rows a consumer most needs to keep** — the ones no installed plugin owns and no plugin will rebuild.
 
-`dataset-state.ts:94` declares `pluginRows?: PluginDocument`, and `plugin-store.ts:51` takes `seed?: PluginDocument`. §2 says delete the `PluginDocument` seed arm of that constructor. §5.0.5 says keep the option's runtime seeding. **Both cannot hold.**
+#### B1a — Field declarations need no door at all · **ruled 2026-09-10**
 
-The option is a way **in**, and this ADR removes ways **out**. So keep the option and the seeding, and give the seed its own type. **Ruling owed on the type's name and home.**
+An earlier draft of B1 claimed `dataset.fields.all` answered the wrong question, and that a second door was owed. **The author overruled it, and the code agrees.**
+
+**A declaration is code. Data is not.** `CONTEXT.md`'s **Declarer** entry states the rule already: *"Data outlives its plugin; a declaration does not."* A consumer writes `fields` as a literal in their own source and passes it to every `new Dataset({ entries, fields })`. They never read it back, because they never lost it. The Document needed `authored` only because a Document is a **self-contained file**: `fromJSON(doc)` had to rebuild a Dataset for a reader that might not hold the declaration code. Nothing is self-contained after this build.
+
+**So `FieldRegistry.authored` is dead code, not a door to publish.** Its one production caller is `serialization/index.ts:66` — `encodeFieldDocument(dataset.fields.authored)` — and this build deletes that file. Its own doc comment says as much: *"This is what a Document carries."*
+
+**`#declaringPlugin` (`field-registry.ts:117`) then has no reader.** Line 151, inside `authored`, is the only one. This build decides whether to keep the `declaredBy` parameter for a future error message, or delete the bookkeeping whole. **`view/column-chrome.ts`'s `declaredBy` is a different register, for grid columns. It is untouched.**
+
+#### B2 — `pluginRows` is a private pipe from the reader, and its producer dies here
+
+`dataset-state.ts:94` declares `pluginRows?: PluginDocument`, and `plugin-store.ts:51` takes `seed?: PluginDocument`. **It is not a public option** — it appears zero times in `etc/freegantt.api.md`, and the public `DatasetOptions` has no such key.
+
+It has exactly one producer: `serialization/read.ts:137`, `doc.schema >= 3 ? doc.plugins : undefined`. That is `fromJSON` handing the Document's `plugins` key to the new Dataset. **It is typed `PluginDocument` because it is one step of the reader's pipeline** — and a pipeline step is the kind of name this project keeps off the public surface.
+
+So §5.0.5's *"keep the option's runtime seeding"* preserves a pipe with nothing at the other end. **The seeding earns its keep only if a way in is published to match the way out.** Save plugin rows with no way to load them back, and the round trip is worse than the one this ADR deletes.
+
+**Ruling owed: does a public way in ship with this build?** If it does, the option becomes public, loses `PluginDocument`, and takes a type named for rows keyed by plugin id.
 
 #### B3 — the guard files block the folder deletion
 
@@ -973,8 +989,10 @@ Work top to bottom. Each build ends with the same five closing items.
 
 **Slices it touches.** S2 (serialization landed there, at S2.6), S4 (the Field Document codec, S4.4), S5 (plugin rows in the Document, S5.10). **Slice gates to re-run:** S2, S4, S5.
 
-- [ ] **Answer B1 first.** Publish `dataset.fields.authored` and a plugin-row read on `Dataset`, or record that the ADR's door table is wrong. **Nothing is deleted until this is ruled.**
-- [ ] **Answer B2.** Keep the `pluginRows` option and its seeding. Give the seed its own type, off `PluginDocument`.
+- [ ] Ship `dataset.pluginStore(id)` — B1, the author's call on 2026-09-10. **Nothing is deleted until the way out exists.**
+- [ ] **Answer the passenger question** — B1. `read(id)` cannot see the rows of a plugin this Dataset never installed, and `toDocument()` can. Decide the door that covers them.
+- [ ] **Answer B2.** Publish a way in to match, or delete `pluginRows` with its one producer.
+- [ ] Delete `FieldRegistry.authored` and, if nothing else wants it, `#declaringPlugin` — B1a. **No Field door is published.**
 - [ ] **Get the author on `.dependency-cruiser.cjs`** — B3. The hook exits 2, so this one blocks for real.
 - [ ] Delete `serialization-is-removable` (`.dependency-cruiser.cjs:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`).
 - [ ] Delete `src/data/serialization/` whole — 6 files, about 1,276 lines with tests.
