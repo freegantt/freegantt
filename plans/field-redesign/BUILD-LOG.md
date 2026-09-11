@@ -865,3 +865,30 @@ Entry is the same DOM node before and after a plugin drop (I8), so this is stabl
 assertion in the test. The test's own intent (each plugin's class shows up and goes away with its
 own install/uninstall) is unchanged; only how the test locates the bar element changed. No assertion
 was weakened or deleted.
+
+### J21 — `src/api/dataset.test.ts`: retired `rollUpKinds`/`hierarchy.autoGroup`/`entry.kind` tests deleted, structural ones kept
+
+**Raised:** 2026-09-11, Build 3b, continuing J19's tsc-cleanup pass. **Status:** mechanical, per J17's
+own instruction ("`kind: 'x'` in a test fixture -> drop it or move it to `props`;
+`EntryKind`/`RollUpKinds`/`DatasetHierarchy` imports -> delete").
+
+- "carries optional fields through, and leaves absent ones absent": dropped `kind: 'milestone'` and
+  its two assertions (`entry.kind`, the `'kind'` entry in the expected key list). The test's real
+  claim — an authored extra key (`props`) survives ingest and an absent one never appears as
+  `undefined` — is unchanged and still asserted.
+- "entries.childrenOf returns direct children; rollUpKinds defaults to group" → renamed to
+  "entries.childrenOf returns direct children", `rollUpKinds`/`hierarchy` assertions dropped, the
+  `childrenOf` assertion (its real subject) kept unchanged.
+- "rollUpKinds setter accepts 'none' and [] as empty-list sugar (D-S4-6)" and "live
+  hierarchy.autoGroup changes later first-child promotions only": **deleted outright**, no
+  replacement. Both exercised `data/hierarchy.ts`'s `autoGroup`/`promoteNewParents`, which J17
+  deleted end to end ("there is no `kind` to promote to any more") — the feature these tests covered
+  no longer exists in the design, so there is nothing to restate them against.
+- Six other spots (`{ id: 'root', name: 'Sitework', kind: 'group' }` and near-identical siblings): a
+  bare `kind: 'group'` marking a rollup parent for a `fieldTypes: { rollUp: 'sum' }` test. Rollup is
+  now purely structural (any Entry with children rolls up), so the parent needs no marker at all —
+  deleted the `kind` property only, left every other assertion (the actual rollup behaviour under
+  test) untouched.
+
+**Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 25). `pnpm exec vitest run
+src/api/dataset.test.ts` — 49/49 pass.
