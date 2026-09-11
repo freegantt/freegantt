@@ -192,12 +192,7 @@ export function readField(
  *  envelope; everything else writes into the edit's `props` patch, per key, never replacing it
  *  whole. A `compute` Field has no home — this returns `edit` unchanged, the same silent no-op the
  *  registry's own guard leaves for ADR 0015 to refuse loudly at the write door. */
-export function writeField(
-  edit: ProposedEdit,
-  entry: Entry,
-  field: ResolvedField,
-  value: unknown,
-): ProposedEdit {
+export function writeField(edit: ProposedEdit, field: ResolvedField, value: unknown): ProposedEdit {
   const key = String(field.key);
   if ('compute' in field) return edit;
   if (isCoreFieldKey(field.key)) {
@@ -205,7 +200,6 @@ export function writeField(
     (next as Record<string, unknown>)[key] = value;
     return withProposedKeys(next, new Set([...proposedKeysOf(edit), key]));
   }
-  void entry;
   const nextProps: Record<string, unknown> = { ...edit.props };
   if (value === undefined) delete nextProps[key];
   else nextProps[key] = value;
@@ -215,7 +209,7 @@ export function writeField(
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
 export function writeOntoEntry(entry: Entry, field: ResolvedField, value: unknown): Entry {
-  return entryAfterEdit(entry, writeField(emptyProposedEdit(), entry, field, value));
+  return entryAfterEdit(entry, writeField(emptyProposedEdit(), field, value));
 }
 
 /** Folds declared props-addressed keys from a public `EntryEdit` into a storage-shaped edit. Core
@@ -223,16 +217,14 @@ export function writeOntoEntry(entry: Entry, field: ResolvedField, value: unknow
  *  Field declares. */
 export function writeDeclaredPropsFields(
   stored: ProposedEdit,
-  entry: Entry,
   edit: EntryEdit,
   registry: FieldRegistry,
 ): ProposedEdit {
   let next = stored;
-  const overlay = entryAfterEdit(entry, stored);
   for (const key of Object.keys(edit)) {
     const field = registry.get(key);
     if (!field || !storesInProps(field)) continue;
-    next = writeField(next, overlay, field, (edit as Record<string, unknown>)[key]);
+    next = writeField(next, field, (edit as Record<string, unknown>)[key]);
   }
   return next;
 }

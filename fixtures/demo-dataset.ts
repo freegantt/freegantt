@@ -191,7 +191,7 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     const workstream = workstreamOf(id);
     const team = workstream !== undefined ? WORKSTREAM_TEAM[workstream] : undefined;
     const isLeaf = DEMO_CHILDREN[id] === undefined;
-    const meta: DemoEntryProps = {
+    const props: DemoEntryProps = {
       ...(isLeaf ? { cost: (i + 1) * 250 } : {}),
       ...(team !== undefined ? { team } : {}),
     };
@@ -203,7 +203,7 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
     // hand to cover a Segment that runs past it.
     if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
-    if (Object.keys(meta).length > 0) next.props = meta;
+    if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),
 ];

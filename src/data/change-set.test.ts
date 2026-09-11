@@ -107,7 +107,7 @@ describe('diffEdit', () => {
     const t1 = entry('t1', { cost: 400 });
     const cost = registry.get('cost')!;
     const stored = withProposedKeys(
-      writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, t1, cost, 500),
+      writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, cost, 500),
       ['cost'],
     );
     const rows = diffEdit(entries(t1), t1.id, stored, registry, fieldCtx);

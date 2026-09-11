@@ -40,7 +40,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'generic-
 // S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Budget take their Fields' own defaults and are editable.
 //
-// Duration still shows a refused cell: it is `compute`-sourced and has no stored home to write back
+// Duration still shows a refused cell: it is a `compute` Field and has no stored home to write back
 // to (ADR 0005: the Rollup would overwrite an edit on the next commit).
 const GRID_COLUMNS: readonly GridColumnInput[] = [
   'name',
@@ -477,8 +477,9 @@ weekendToggle.addEventListener('change', () => {
 //
 // Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
 // 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
-// `ctx.target.segmentIds`: a grid-row Delete removes every Segment the row owns, and an Entry with
-// no Segments left is gone too, with no special case.
+// `ctx.target.segmentIds` for a bar and removes only that Segment, keeping the Entry dateless
+// rather than gone (ADR 0012); every other target reads `ctx.target.entryIds` and removes the whole
+// record (`src/view/core-commands.ts` states the dispatch rule).
 //
 // What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
 // a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record, so

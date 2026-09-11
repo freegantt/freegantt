@@ -54,31 +54,30 @@ describe('readField / writeField (D-S4-2)', () => {
   it('reads and writes an entry source', () => {
     const entry = span();
     expect(readField(entry, start, fieldCtx)).toBe(0);
-    const edited = entryAfterEdit(entry, writeField(emptyProposedEdit(), entry, start, 10));
+    const edited = entryAfterEdit(entry, writeField(emptyProposedEdit(), start, 10));
     expect(edited.start).toBe(10);
   });
 
   it('creates props on the first declared write and merges later writes', () => {
     const entry = span();
     expect(readField(entry, cost, fieldCtx)).toBeUndefined();
-    const first = writeField(emptyProposedEdit(), entry, cost, 500);
+    const first = writeField(emptyProposedEdit(), cost, 500);
     expect(first.props).toEqual({ cost: 500 });
-    const second = writeField(first, entryAfterEdit(entry, first), cost, 600);
+    const second = writeField(first, cost, 600);
     expect(second.props).toEqual({ cost: 600 });
-    const withPassenger = span({ team: 'A' });
-    const merged = writeField(emptyProposedEdit(), withPassenger, cost, 500);
+    const merged = writeField(emptyProposedEdit(), cost, 500);
     expect(merged.props).toEqual({ cost: 500 });
   });
 
   it('does not replace props when writing a declared key — the passenger key survives (ADR 0011)', () => {
     const entry = span({ team: 'A', cost: 400 });
-    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), entry, cost, 500));
+    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), cost, 500));
     expect(written.props).toEqual({ team: 'A', cost: 500 });
   });
 
   it('clears the declared key from props, leaving props an object, never undefined (ADR 0011)', () => {
     const entry = span({ cost: 500 });
-    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), entry, cost, undefined));
+    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), cost, undefined));
     expect('cost' in written.props).toBe(false);
     expect(written.props).toEqual({});
     expect('cost' in writeOntoEntry(entry, cost, undefined).props).toBe(false);
@@ -102,7 +101,7 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 
   it('mergeProposedEdits keeps proposed keys through a spread', () => {
-    const authored = withProposedKeys(writeField(emptyProposedEdit(), span(), cost, 3), ['cost']);
+    const authored = withProposedKeys(writeField(emptyProposedEdit(), cost, 3), ['cost']);
     const spread = { ...authored };
     expect(spread.proposedKeys.has('cost')).toBe(true);
     const merged = mergeProposedEdits(edit({ name: 'x' }), authored);
@@ -112,7 +111,7 @@ describe('readField / writeField (D-S4-2)', () => {
   // #197: the two sides may each name different Fields. The merged edit must show every write, or
   // `diffEdit` emits no row for one side and that write is lost.
   it('mergeProposedEdits keeps both sides’ proposed keys', () => {
-    const authored = withProposedKeys(writeField(emptyProposedEdit(), span(), cost, 3), ['cost']);
+    const authored = withProposedKeys(writeField(emptyProposedEdit(), cost, 3), ['cost']);
     const raw = edit({ name: 'Moved' });
 
     const rawFirst = mergeProposedEdits(raw, authored);

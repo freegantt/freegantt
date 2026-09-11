@@ -116,12 +116,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
       props: {},
     };
     const cost = registry.get('cost')!;
-    const written = writeField(
-      { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() },
-      entry,
-      cost,
-      500,
-    );
+    const written = writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, cost, 500);
     expect(written.props).toEqual({ cost: 500 });
     const next = { ...entry, props: written.props };
     expect(context.read(next, 'cost')).toBe(500);
