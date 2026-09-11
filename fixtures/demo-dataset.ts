@@ -176,10 +176,15 @@ const DEMO_ROOT_SPANS: readonly EntryInput<DemoEntryProps>[] = [
   },
 ];
 
+// ADR 0013: `kind` left `Entry`, so "Requirements review" is no longer a stored milestone kind.
+// `main.ts` owns which ids look like a milestone (`milestoneKind()`, `harness/plugins/`), and
+// reads this id rather than re-deriving it from a fixture it does not otherwise touch.
+export const MILESTONE_ENTRY_ID = 'entry-4';
+
 /** Generic-demo entries: two root spans, then a four-level Program tree. */
 export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
   ...DEMO_ROOT_SPANS,
-  { id: 'program', name: 'Program', kind: 'group' },
+  { id: 'program', name: 'Program' },
   ...demoEntryInputs.map((entry, i) => {
     const id = entry.id ?? '';
     const parentId = DEMO_PARENT[id];
@@ -194,7 +199,6 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     if (entry.start !== undefined) next.start = entry.start;
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
-    if (id === 'entry-4') next.kind = 'milestone';
     // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
     // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
     // hand to cover a Segment that runs past it.

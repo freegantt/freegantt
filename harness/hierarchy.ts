@@ -51,7 +51,6 @@ const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-bt
 const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')!;
 const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
-const autoGroupCheckbox = document.querySelector<HTMLInputElement>('#autogroup-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-editor-checkbox')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
@@ -61,24 +60,21 @@ const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
 
-let autoGroup = true;
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
 const paneScroll = new ScrollModel();
-const dataset = createDataset(autoGroup);
+const dataset = createDataset();
 const gantt = mountGantt(dataset);
 
 window.__dataset = dataset;
 window.__gantt = gantt;
 
 function createDataset(
-  autoGroupOn: boolean,
   entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
 ): Dataset<{ cost: number }> {
   return new Dataset<{ cost: number }>({
     entries: structuredClone([...entries]),
     timeZone: 'UTC',
-    hierarchy: { autoGroup: autoGroupOn },
     ...hierarchyFieldOptions,
   });
 }
@@ -226,12 +222,6 @@ expandAllBtn.addEventListener('click', () => {
 
 collapseAllBtn.addEventListener('click', () => {
   gantt.collapseAll();
-});
-
-autoGroupCheckbox.addEventListener('change', () => {
-  dataset.hierarchy = { autoGroup: autoGroupCheckbox.checked };
-  autoGroup = dataset.hierarchy.autoGroup;
-  logLine(`[load] autoGroup ${autoGroup ? 'on' : 'off'}`);
 });
 
 reparentBtn.addEventListener('click', () => {
