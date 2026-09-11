@@ -16,7 +16,6 @@ function entry(id: string, team: string): Entry {
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: { team },
   };

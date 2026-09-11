@@ -72,7 +72,7 @@ interface Meta {
 }
 
 const ENTRIES: readonly EntryInput<Meta>[] = [
-  { id: 'root', name: 'Root', kind: 'group' },
+  { id: 'root', name: 'Root' },
   {
     id: 'e1',
     name: 'Task One',
@@ -1235,7 +1235,7 @@ describe('CellEditing (S5.8, #169)', () => {
       document.body.append(cell);
     }
     document.body.append(layer);
-    const entry = { id: entryId('e1'), name: 'Task One', kind: 'span' } as unknown as Entry;
+    const entry = { id: entryId('e1'), name: 'Task One' } as unknown as Entry;
     const reported: PluginErrorReport[] = [];
     const ports: CellEditorPorts = {
       mountLayer: {
