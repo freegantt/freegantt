@@ -49,7 +49,10 @@ export type BuiltInErrorCode =
   | 'scale-options-ignored'
   | 'rollup-corrected'
   // Q10: two plugins claimed one Entry's look. The first claim paints, the second is ignored, and
-  // this names both. Dev mode only — a production build never asks the second question.
+  // this names both. Raised in every build, not behind `isDevMode()` — that flag resolves when this
+  // repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41). The cost
+  // is avoided by asking, not by building: with no report sink wired, the claim scan stops at the
+  // first yes and never looks for a second.
   | 'look-claimed-twice'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and

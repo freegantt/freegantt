@@ -369,9 +369,11 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  no claim answers yes for falls back to the structure look — parent or leaf.
      *
      *  The first registered claim to answer yes wins, and a second claim on the same Entry is
-     *  ignored. In dev mode that second claim also raises a `'look-claimed-twice'` Error report
-     *  naming both plugins. The library never arbitrates between plugins: the consumer chose which
-     *  ones to install, so core reports and carries on.
+     *  ignored. That second claim also raises a `'look-claimed-twice'` Error report naming both
+     *  plugins, in every build. It is not behind `isDevMode()`: that flag resolves when this repo
+     *  builds `dist/`, so gating it would delete the line from every consumer (D-S5-41). The library
+     *  never arbitrates between plugins: the consumer chose which ones to install, so core reports
+     *  and carries on.
      *
      *  `claim` runs on the hover path, so keep it cheap — a `Set` read is the intended shape. It is
      *  pure: it answers a question and draws nothing. Legal only while `setup` runs (D-S5-4), and

@@ -215,9 +215,33 @@ untouched (`width: 0` at the current `x` reads as already-visible to `Viewport.r
 no-op-on-x idiom `#rovingFocusPorts`' own `revealRow` already uses). See `src/view/gantt-shell.ts`
 around line 1706 (`reveal`) and 1724 (`#revealRow`).
 
-### J9 — A roll-up parent's own Segment stays gone after Rollup restores its dates; two e2e tests updated, `rollup.ts` untouched
+### J9 — A roll-up parent's own Segment stays gone after Rollup restores its dates; two e2e tests updated, `rollup.ts` untouched — **SUPERSEDED: selection fixed, drag is Q9**
 
 **Raised:** 2026-09-11, Build 1 (ADR 0012). **Status:** standing, matches J3, flagged for the author.
+
+> **SUPERSEDED 2026-09-11. The author found this entry stale and drew a wrong conclusion from it.**
+> The body below was true when written. It is not true now, and nobody marked it when it stopped
+> being true.
+>
+> **The selection half is closed.** J9's premise was that `widenSegmentsToEnvelope` only widens an
+> existing Segment set and never mints one. `src/data/rollup.ts:135` now mints a Segment when a
+> Rollup-derived parent holds none. `e2e/data.spec.ts:118` selects a `.fg-bar-summary` and reads its
+> `entryId` back, which is a test that cannot pass under the behaviour this entry describes. So
+> "`rollup.ts` untouched" and "standing" are both out of date.
+>
+> **The drag half was never this entry's subject, and it is what the author actually wants.**
+> `src/view/capability.test.ts:65` still pins `move/resize false, select true` for a roll-up parent.
+> Making a parent bar draggable is Q9. It is the last item ADR 0013 needs before it can be accepted.
+>
+> **The six `.fg-bar-summary` e2e exclusions changed meaning and must be audited when Q9 lands:**
+> `planner.spec.ts:15`, `plugins.spec.ts:12`, `row-hover.spec.ts:49`, `selection.spec.ts:17` and
+> `:101`, `data.spec.ts:36`. They once meant "a summary bar cannot be selected" — a defect. They now
+> mean "a summary bar derives its dates", which is ADR 0013 by design (`data.spec.ts:30` says so).
+> Once a parent bar is draggable, a spec that skips it skips the case it should cover.
+>
+> **The process failure this earns.** An entry whose subject a later build fixes must be marked at
+> that moment, not at the next review. Build 3's own `rollup.ts` change closed this and nobody came
+> back to say so. The author found it by reading the log, which is the one job the log has.
 
 Before this build, every Entry carried at least one Segment, so a roll-up parent with no dates of
 its own (e.g. a `'group'` whose span is entirely derived from its children) still held a synthetic
