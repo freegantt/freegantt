@@ -16,7 +16,7 @@ Six ADRs are decided. No line is built. This folder is the work.
    ```
    Report the verdict line. Never report `EXIT: $?`. A run with no verdict line is unproven.
 4. **Each build lands as one change.** Do not stage a rename behind the old interface. This library has never shipped.
-5. **Rename with a word-boundary replace (`OldName`), then `pnpm typecheck`.** It names every reference you missed. Read each hit before you change it. Never a blind text replace.
+5. **Rename with a word-boundary replace (`\bOldName\b`), then `pnpm typecheck`.** It names every reference you missed. Read each hit before you change it. Never a blind text replace.
 6. **Fill only your build's arm of the write resolver.** See *Who owns the write resolver* below.
 7. **An edit under `plans/**` needs the author.** `.claude/hooks/protect-spec.sh` prints a warning and then exits 0. It does not block you. Ask the author, get the answer, then edit.
 8. **Never work around a gap in `src/`.** Stop. Report the gap. Ask the author if core closes it first. This is `CLAUDE.md`'s stop rule.
