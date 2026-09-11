@@ -20,7 +20,6 @@ function entry(id: string, parentId?: string): Entry {
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
     props: {},
   };
