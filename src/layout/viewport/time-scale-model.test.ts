@@ -39,6 +39,22 @@ describe('TimeScaleModel', () => {
     expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
   });
 
+  it('a one-date Entry still widens fitDataset, start and end folded in independently (ADR 0012 Gate)', () => {
+    const dateless: Entry = {
+      id: entryId('t3'),
+      name: 't3',
+      kind: 'span',
+      start: instant('2026-09-08T00:00:00Z'),
+      segments: [],
+      props: {},
+    };
+    const model = new TimeScaleModel();
+    bindTimeScale(model, { timeZone: 'UTC', entries: [...entries, dateless], paneWidth: 800 }, noop);
+
+    expect(model.scale.range.start).toBe(instant('2026-09-01T00:00:00Z'));
+    expect(model.scale.range.end).toBe(instant('2026-09-08T00:00:00Z'));
+  });
+
   it('spans every bound dataset, so one scale can carry two Gantt instances (D9)', () => {
     const model = new TimeScaleModel();
     bindTimeScale(model, { timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
