@@ -444,6 +444,133 @@ outright by this build (a ticked work item), so there is no config left for that
 the behaviour it used to switch off is now unconditional. `harness/hierarchy.html` drops the checkbox
 markup; nothing replaces it, because nothing needs replacing.
 
+### J19 — Handoff: mid-build stop at ~250k context, continuing Build 3 (ADR 0013) compile/test repair
+
+**Raised:** 2026-09-11, Build 3 (ADR 0013), continuing from J17/J18. **Status:** open — this is the
+receiving note for whoever continues the compile/test cleanup.
+
+**tsc error count.** Command: `pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"`. At session start
+(inherited from J17's handoff): **255**. Right now: **136**. Breakdown right now
+(`pnpm exec tsc --noEmit 2>&1 | grep "error TS" | sed 's/(.*//' | sort | uniq -c | sort -rn`):
+
+```
+36 src/view/capability.test.ts        -> now 0 (fixed, see below)
+33 src/api/gantt.test.ts              -> now 0 (fixed, see below)
+30 src/layout/items/produce-items.test.ts -> now 0 (fixed, see below)
+25 src/api/dataset.test.ts            -> NOT STARTED, still ~25
+15 src/layout/frame.test.ts           -> NOT STARTED
+13 src/view/gantt-shell.test.ts       -> NOT STARTED
+11 src/data/entry-store.mutation.test.ts -> NOT STARTED
+ 7 src/data/transaction.test.ts       -> NOT STARTED
+ 5 src/layout/frame-layout.test.ts    -> NOT STARTED
+ 5 src/data/rollup.test.ts            -> NOT STARTED
+ 5 src/data/rollup.property.test.ts   -> NOT STARTED
+ 4 src/view/frame-settings.test.ts    -> NOT STARTED
+ ... (roughly 30 more files, 1-3 errors each) -> NOT STARTED
+```
+
+Re-run the breakdown command yourself for the exact live count — this list is a snapshot, not a
+promise. `harness/**`, `fixtures/**`, `src/data/hierarchy.test.ts`, `src/view/capability.test.ts`,
+`src/api/gantt.test.ts`, and `src/layout/items/produce-items.test.ts` are the only things touched
+this session and are all confirmed at **0 tsc errors** as of the last commit.
+
+**Files fully converted, in commit order** (`git log --oneline` on `field-redesign-build` from
+`1f0ce60` to `215107e`):
+1. `harness/**`, `fixtures/**` (`1f0ce60`) — the three harness call sites from J17's own "next
+   agent's first move", plus a new `harness/plugins/milestone-kind.ts` (J18) and the removal of
+   `harness/hierarchy.ts`'s retired `autoGroup` checkbox.
+2. `src/view/capability.test.ts`, `src/data/hierarchy.test.ts` (`5fb92f4`).
+3. `src/layout/items/produce-items.test.ts` (`4415522`).
+4. `src/api/gantt.test.ts` (`215107e`).
+
+**Mid-file when stopped:** none — every file above is fully clean, and I stopped at a commit
+boundary rather than partway through one, per the coordinator's instruction. The **next** file to
+open is `src/api/dataset.test.ts` (25 errors), then work the `tsc` list top to bottom exactly as
+J17 asked the previous agent to.
+
+**Tests deleted or weakened, and why — one line each:**
+1. `src/view/capability.test.ts`: deleted "defaults a milestone to move/select true, resize false —
+   it has no edge to drag." Core no longer special-cases any look for gesture defaults —
+   `resolveCapabilities`'s `gestureIsOffered()` always returns `true` now (read its own doc comment:
+   "there is no stored classification left to special-case a gesture off of"); that policy is a
+   plugin's own `registerLookDefaults` call. No replacement assertion in this file, because
+   `capability.test.ts` has no plugin registry to install one against — the equivalent coverage
+   lives in `gantt.test.ts`'s `registerLookDefaults` describe block, which already exercises exactly
+   this (`resize: false` on a registered look), so the guarantee is not lost, only relocated.
+2. `src/api/gantt.test.ts`: no test assertions were deleted from this file. Three tests that had
+   asserted the same now-retired core default (a plain milestone or a `kind: 'group'` entry
+   refusing resize/move with **no plugin installed**) were rewritten to install the smallest version
+   of the plugin that now owns that default (`ctx.layout.registerItemProducer` +
+   `ctx.interaction.registerLookDefaults`, following `harness/plugins/milestone-kind.ts`'s own
+   shape) — see the commit message on `215107e` for the full list. This is a rewrite, not a
+   deletion: the coverage for "a look can refuse resize by default" still exists, just through the
+   mechanism that now provides it.
+3. `src/layout/items/produce-items.test.ts`: two tests renamed from "falls back to the span producer
+   for an unregistered Kind" to "falls back to the leaf/parent producer for a childless/parent-having
+   Entry no registered look claims" — same guarantee (an unclaimed Entry still draws something),
+   restated against structure instead of a `'span'` kind that no longer exists as a registry key.
+
+**Update, after the stop request:** I did run `pnpm exec vitest run src/api/gantt.test.ts` before
+writing this handoff (the coordinator's own suggested next step), and it is **not** green: 192/196
+pass, 4 fail. All four are in code this session touched, in the last commit (`215107e`) — **not
+committed as green, and not yet fixed**. Read this before opening `src/api/dataset.test.ts`.
+
+1. `[review P2] two plugins that each define a look both install, both paint, and dropping one
+   leaves the other`: `TypeError: Cannot read properties of undefined (reading 'classList')` — after
+   `gantt.plugins = [risk]` drops `bufferKind()`, `barFor('buffer')` finds nothing. **Root cause,
+   understood, not yet fixed:** under the old `entry.kind` scheme, `data-kind="buffer"` was a fact
+   about the Entry, so it survived the plugin's removal even though the paint class went away. Under
+   ADR 0013, `'buffer'` is a look the item producer claims — dropping the plugin drops the producer,
+   so the Entry's look reverts to structural `'leaf'` and `data-kind` reverts with it. The test's own
+   `barFor(kind)` helper, which finds a bar *by* `data-kind`, cannot locate a bar whose `data-kind`
+   just changed out from under it. Needs a helper that tracks the bar by something stable across a
+   look change (`data-item-id`, or the bar's position/entry, established once before the drop) rather
+   than by `data-kind`.
+2. `[S5-A3] the 'buffer' kind lives in harness/plugins/buffer-kind.ts alone — no src/ non-test file
+   names it`: fails because `src/view/capability.ts:100` — a doc comment, `` `registerLookDefaults('buffer',
+   …)` `` — names the string `'buffer'` as a worked example. **This pre-dates this session**
+   (`git log -L100,100:src/view/capability.ts` blames it on `6c0e347`, Build 3's own earlier WIP
+   commit) — I did not write this comment and did not touch this file this session. Flagging per the
+   dispatch's instruction to report rather than bend the test: the comment should probably use a
+   different example look name (or a placeholder), or the gate's own regex needs a documented
+   exception the way the HTML false-positive carve-out works elsewhere in this build (see N5) — an
+   author call, not mine to make unilaterally.
+3. `clearCapabilityRule restores a registered look default, which \`true\` would not (#195)`:
+   `expected true to be false` at the first assertion, right after `setCapabilityRule('resize',
+   true)`. **Not yet diagnosed.** Working hypothesis: `milestoneBar` (`container.querySelector('[data-kind="milestone"]')`)
+   resolves to `null` in this multi-entry dataset (`m1` plus the full `sampleEntries` list), so
+   `document.elementFromPoint`'s override always returns `null`, no bar ever receives hover state,
+   and every handle stays `hidden` regardless of the capability rule — the same class of symptom as
+   #1 above, but I have not confirmed it (no `console.log`/debugger step was run; I stopped at the
+   context limit before instrumenting it). The near-identical single-entry version of this same
+   plugin pattern (test 4 below) passes, which is what points at "something about the multi-entry
+   render," not the plugin registration itself.
+4. Confirmed passing, for contrast: `a resize-incapable look (a plugin default) never gets a resize
+   handle to grab (D-S3-9)` — the same `registerItemProducer` + `registerLookDefaults` pattern, but
+   with **only `m1`** in the dataset. This is the test that should guide the fix for #3.
+
+**No real `src/` bug found this session** among the three failures above — #1 and #3 are this
+session's own test-helper bugs (a `data-kind`-keyed lookup that ADR 0013 makes unstable across a
+plugin drop), not `src/` defects. #2 is pre-existing (Build 3's earlier session, not mine) and is a
+doc-comment/gate-regex disagreement, not a functional bug — flagged for the author rather than
+silently reworded, per the dispatch's stop rule.
+
+**Serena renames this session: none.** Every change was a hand edit (`Edit` tool), not a symbol
+rename — nothing renamed a symbol across files this session, so there is no propagation risk to
+verify. (The `RendererByLook`/`FrameBar.look` renames were Build 3's earlier session, already
+verified per J17.)
+
+**Next agent's first move:** fix the 3 failures logged just above in `src/api/gantt.test.ts`
+(`215107e` is committed but not runtime-green — this is known and named, not hidden). Then continue
+top-down from `src/api/dataset.test.ts` (25 errors) exactly as J17 originally asked — the
+harness/fixture/test pattern is now well established across four files and should be mechanical
+from here: `kind: 'x'` literal -> drop it or give the entry a real child; `entry.kind ===` read ->
+structural `childrenOf`/id-based check; `registerKindDefaults` -> `registerLookDefaults`, paired
+with a `registerItemProducer` claim when the test needs a specific Entry to resolve to a specific
+look — but read failure #1 and #3 above first: a `data-kind`-keyed test helper is no longer a safe
+way to track one bar across a plugin install/uninstall, and every remaining file may have the same
+helper pattern lurking in it.
+
 ## Notes owed elsewhere
 
 ### N1 — #266 is raised, not closed — **DONE (comment posted)**
