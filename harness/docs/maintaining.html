@@ -20,10 +20,10 @@
           Instructions for an agent, or a person, who keeps <code>harness/docs/</code> true as
           <code>src/</code> changes. Read this before you edit any page here.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-09 — slice S5</div>
         <div class="meta">
           <span>slice: S5</span>
-          <span>9 pages, one nav module</span>
+          <span>11 pages, one nav module</span>
           <span>no build step, no external requests</span>
         </div>
         <nav aria-label="Sections on this page">
@@ -138,6 +138,19 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
             </td>
           </tr>
           <tr>
+            <td class="mono">data/transaction.ts, data/error-reporting.ts, data/event-bus.ts</td>
+            <td>
+              <a href="./refusals.html">Refusals</a> — the Dataset door, the step table, and the
+              report fields
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">view/gesture-pipeline.ts, view/live-region.ts, view/capability.ts</td>
+            <td>
+              <a href="./refusals.html">Refusals</a> §3 if a gesture veto or the live region changed
+            </td>
+          </tr>
+          <tr>
             <td class="mono">time/*</td>
             <td>
               <a href="./classes.html">Class map</a> §2 (Diagram 4). If <code>temporal-polyfill</code> is
@@ -166,7 +179,8 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
             <td class="mono">api/* or extensions/*</td>
             <td>
               <a href="./classes.html">Class map</a> §3–§4, <a href="./layers.html">Layers</a> if the
-              public surface's allowed imports moved, <a href="./files.html">File inventory</a>, and
+              public surface's allowed imports moved, <a href="./files.html">File inventory</a>,
+              <a href="./refusals.html">Refusals</a> if the error helper or a plugin report changed, and
               <a href="./index.html">Overview</a> §2 if the consumer call site changed
             </td>
           </tr>
@@ -245,8 +259,9 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
         <ul class="plain">
           <li>
             Standalone HTML. Each page opens from the filesystem and is served by <code>pnpm dev</code>
-            alongside the demos. Keep it that way: no CDN scripts and no fetches. (<code>diagram.html</code>
-            is the one page that loads a web font; every other page uses system fonts only.)
+            alongside the demos. Keep it that way: no CDN scripts and no fetches.
+            <code>diagram.html</code> and <code>refusals.html</code> are the two pages that load a web
+            font; every other page uses system fonts only.
           </li>
           <li>
             <strong>Navigation is generated, not typed.</strong> Every page mounts two navs:
@@ -266,7 +281,9 @@ grep -rn 'class="src"' harness/docs/*.html     # the full source index</code></p
             <code>doc.css</code> (<code>.bx</code>, <code>.bx.pure/.dom/.api/.warn/.hot</code>,
             <code>.edge</code>, <code>.edge.ret</code>, <code>.edge.hot</code>, <code>.life</code>,
             <code>.t</code>, <code>.s</code>, <code>.xs</code>). Colours come from CSS custom properties, so
-            both themes work with no second definition. Never hardcode a hex value in an SVG.
+            both themes work with no second definition. Never hardcode a hex value in an SVG — except
+            <code>refusals.html</code>, whose sequence diagram keeps the diagram-skill tokens on a light
+            paper frame in both themes.
           </li>
           <li>
             Each SVG defines its own arrowhead marker with a unique id (<code>a3</code>, <code>a4</code>,

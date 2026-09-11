@@ -21,7 +21,7 @@
           <a href="./classes.html">Class map</a> for what the class does, and into
           <a href="./lifecycle.html">Lifecycle</a> for when it runs.
         </p>
-        <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
+        <div class="updated"><span class="k">updated</span> 2026-09-09 — slice S5</div>
         <div class="meta">
           <span>slice: S5</span>
           <span>150 non-test files in src/</span>
@@ -399,10 +399,11 @@
             </tr>
             <tr>
               <td class="mono">data/error-reporting.ts</td>
-              <td class="mono">raiseErrorOn(), createErrorRaiser()</td>
+              <td class="mono">raiseErrorOn(), createErrorRaiser(), buildRefusalReport()</td>
               <td>
-                Stamps an Error report with <code>now()</code> and raises it on a bus. <code>render/</code>
-                and <code>extensions/</code> take a <code>RaiseError</code> by injection instead.
+                Stamps an Error report with <code>now()</code> and raises it on a bus. Builds the one
+                shape a refused <code>before*</code> veto reports. <code>render/</code> and
+                <code>extensions/</code> take a <code>RaiseError</code> by injection instead.
               </td>
             </tr>
             <tr>
@@ -415,10 +416,11 @@
             </tr>
             <tr>
               <td class="mono">data/event-bus.ts</td>
-              <td class="mono">EventBus</td>
+              <td class="mono">EventBus, RefusalNote</td>
               <td>
                 Generic typed pub/sub with sync veto. The <code>beforeChange</code>/<code>change</code>
-                fan-out channel shared by dataset and view.
+                fan-out channel shared by dataset and view. <code>RefusalNote</code> holds the first
+                <code>refuse(reason)</code> words from one emit.
               </td>
             </tr>
             <tr>

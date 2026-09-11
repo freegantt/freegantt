@@ -5,7 +5,9 @@
 **Form:** the same settled-spec form as [`plans/s3-direct-manipulation/README.md`](../s3-direct-manipulation/README.md) — this file is the tracker and the shared context; each step file holds the decisions it implements and its TODO boxes.
 **Tick as you go:** When you finish a TODO item, tick its box in that step file. Tick it in the same change as the code. Tick each item when it lands. Do not wait for S4.11 or the slice gate.
 **Last review:** [`plans/reviews/2026-08-31-s4.3-s4.4.html`](../reviews/2026-08-31-s4.3-s4.4.html) — S4.3/S4.4 branch review. Spec-review findings already landed in this spec (2026-08-31): sort binds `FieldCompare` from declared Fields; `produceItemsForRow`/`packRow`; X2 is `'header'`; `CustomRow` is the public custom-source DTO.
-**Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md).
+**Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md) (superseded by [0011](../../docs/adr/0011-consumer-values-live-in-props.md)).
+
+> **Live Field and kind rules: ADRs 0011–0015.** This file records what S4 shipped. D-S4-2's adapter, D-S4-35's omitted `source`, and Q17 are superseded. The Field key is the address (`props`). There is no stored `kind`.
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
 
@@ -26,14 +28,14 @@
 | **Q7** | Does `computeFrame` grow row sources, trees, emitters and packing inside its current loop? | **No.** It becomes composition over four named stages, each its own module with one reason to change. The function is 293 lines and already carries culling, header bands and decorations; four more concerns inside it is the ball of mud this slice is most likely to produce. §S4.6, D-S4-19. |
 | **Q8** | Is `hierarchy: { autoGroup: true }` the default? | **Yes.** Nesting is the common case. Pass `{ autoGroup: false }` to keep a `'span'` parent as authored. §S4.5, D-S4-17. |
 | **Q9** | Is `progress` a core Field? | **No — it is scheduling-plugin data (ADR 0008).** It is not on `Entry`. `weightedMeanByDuration` still ships as an Aggregator. |
-| **Q10** | How does a Field become a Grid column? | **It declares `column`.** Same split AG Grid uses (row data vs `columnDefs`), except aggregation stays on the Field, not on the column. `gridColumns` lists which columnable Fields this Gantt shows. Default is still `['name']`. `parentId` / `segments` / `meta` have no `column`. Naming them throws `FieldNotColumnableError`. §S4.3, D-S4-12. |
+| **Q10** | How does a Field become a Grid column? | **It declares `column`.** Same split a comparable data grid uses (row data vs `columnDefs`), except aggregation stays on the Field, not on the column. `gridColumns` lists which columnable Fields this Gantt shows. Default is still `['name']`. `parentId` / `segments` / `meta` have no `column`. Naming them throws `FieldNotColumnableError`. §S4.3, D-S4-12. |
 | **Q11** | What does a shipped Aggregator do with holes? | **It skips them** and never throws. All skipped → `undefined` (keep stored). §S4.1, D-S4-3. |
 | **Q12** | After a Segment write, who owns `start`/`end`? | **The envelope, in the same transaction.** A `start`/`end` write on a segmented entry throws `SegmentsOutOfSyncError`. §S4.10, D-S4-30. |
 | **Q13** | Does `autoGroup` promote a Kind that is not `'span'`? | **No.** `'span'` only. Already-`'group'` is a no-op. No throw. §S4.5, D-S4-17. |
 | **Q14** | What is in `gantt.collapsed`, and what does a grouping-header cell show? | **`RowId`s.** Entries-source ids equal `EntryId`. Header `cells[0]` is `headerLabel`; the rest are empty. §S4.6, D-S4-22, D-S4-23. |
 | **Q15** | Does `transaction.ts` keep a static import of the Rollup? | **Yes — it is the one importer**, same as S2's span leaf. Default is on. `rollUpKinds: 'none'` (or `[]`) keeps the values the caller assigned on the parent. Delete `rollup.ts` is that same stored result. No public `rollUp` function. §S4.2, D-S4-6, D-S4-7. |
 | **Q16** | If a Field omits `rollUp`, what happens? | **After Field-type merge, it does not participate — unless the type supplied a name.** A Field type's `rollUp` is the default Aggregator name (shipped or a consumer name in `aggregators`). The Field's own keys win, so `rollUp: 'none'` opts that Field out. There is no global default Aggregator and no shipped `number`/`instant` types. Dates use `min`/`max`, not `sum`. §S4.1, D-S4-3. |
-| **Q17** | Must `{ key: 'cost', type: 'money' }` also name `source: { from: 'meta', key: 'cost' }`? | **No.** Omitted `source` is `meta` under the Field key (D-S4-35). `Entry` stays closed: top-level unknown keys still drop; `update({ cost })` writes `entry.meta.cost` and creates `meta` if needed. Two Fields may not share one `meta` slot (`DuplicateFieldSourceError`). The long form remains for a remapped Document key. |
+| **Q17** | Must `{ key: 'cost', type: 'money' }` also name `source: { from: 'meta', key: 'cost' }`? | **Superseded by ADR 0011.** The Field key is the address: `{ key: 'cost' }` is `entry.props.cost`. S4 shipped: omitted `source` is the consumer bag under the Field key (D-S4-35). |
 | **Q18** | Where does currency formatting live? | **`formatValue` on the Field type.** Money stays a number in the store. The cell is text. `cellRenderer` is S5, on the Grid column. §S4.3, D-S4-14. |
 | **Q19** | Can a view override sort order? | **Yes — `RowSort.compare`.** Default is `asc`/`desc` on the **stored** value, never on `formatValue`. Then `FieldCompare.compareStored` (every declared Field, same Gantt locale bind as columns), then a shipped compare. Sort does not require the Field on the Grid. §S4.3, S4.9, D-S4-13, D-S4-28. |
 | **Q20** | Whose `locale` drives `formatValue` and default string sort? | **This Gantt's `locale`, at resolve time.** `ResolvedColumn.format` and `FieldCompare.compareStored` are bound then. `FieldContext` has no `locale`. A headless `Dataset` does not format cells. `locale` does not travel in the Document. §S4.3, D-S4-13. |
@@ -166,7 +168,7 @@ const gantt = new Gantt({
   rowSource: { source: 'entries', tree: true, heightMode: 'pack', filter: byTeam, sort: { field: 'start' } },
 });
 
-gantt.rowSource = { source: 'group', groupBy: (entry) => entry.meta.team };
+gantt.rowSource = { source: 'group', groupBy: (entry) => entry.props.team };
 ```
 
 Group headers render the `groupBy` label in column 0 and **blank cells** elsewhere. Per-team aggregates are the caller's data — declare a computed Field or write through a group entry (D-S4-11). The grid does not invent them.
@@ -202,11 +204,11 @@ Full prose lives in the step file that implements each decision.
 | Decision | Topic | Step |
 |---|---|---|
 | D-S4-1 | Types in `model/`, one registry in `data/`, whole declaration stored | S4.1 |
-| D-S4-2 | One `FieldSource` adapter | S4.1 |
+| D-S4-2 | One `FieldSource` adapter | S4.1. **Superseded by ADR 0011** — the key is the address. |
 | D-S4-3 | Aggregators by name; skip holes; no function on the Field | S4.1 |
 | D-S4-4 | Core Fields are ordinary declarations; no `progress` | S4.1 |
 | D-S4-5 | Declaration errors at construction | S4.1 |
-| D-S4-35 | Omitted `source` is `meta` under the Field key | S4.1 |
+| D-S4-35 | Omitted `source` is `meta` under the Field key | S4.1. **Superseded by ADR 0011** — `{ key: 'cost' }` is `entry.props.cost`. |
 | D-S4-6 | `derivedSpanKinds` → `rollUpKinds`; `'none'` keeps authored parents | S4.2 |
 | D-S4-7 | `rollup.ts` is a leaf; one importer `transaction.ts`; default on | S4.2 |
 | D-S4-8 | Ancestor chains only; one path for every Aggregator | S4.2 |
@@ -265,7 +267,7 @@ Read these before you touch `src/`.
 | Foot-gun | Answer |
 |---|---|
 | A consumer field is written but never rolls up | After type merge the Field has no `rollUp` or `'none'`, or the parent's Kind is not in `rollUpKinds` (including `'none'`) (D-S4-3, D-S4-6) |
-| `update('t1', { meta: {...} })` loses a declared value | Whole-`meta` write emits the `meta` row **and** one row per changed declared key; apply order is `meta` first (D-S4-2) |
+| `update('t1', { meta: {...} })` loses a declared value | **Superseded by ADR 0011.** There is no `props` key on `update()`. S4 shipped a whole-bag write that also emitted per-key rows (D-S4-2). |
 | An aggregate appears in the Document that the consumer did not want | The Field is `entry`- or `meta`-sourced. A `compute` source never reaches the Document (ADR 0005) |
 | A consumer Aggregator reads the zoom level | Forbidden. A computed Field reads the Dataset only; its cache key assumes it (D-S4-10) |
 | A drag reverts with no message | It does not: an Aggregator that throws raises `AggregatorFailedError` out of the commit (D-S4-9) |
@@ -276,8 +278,8 @@ Read these before you touch `src/`.
 | Two Gantts on one Dataset fight over collapse | Collapse is per Gantt, like selection (D-S4-22) |
 | `Row.kind: 'header'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
 | A drag on one bar moves only that Segment | It depends on the Selection, by construction: a click on that bar selected only that Segment, so it alone moves and the envelope follows; a grid-row click selected every Segment of the row, so a drag steps them all by the same delta instead (D-S4-30, ADR 0010, `spec-211-gesture-units.md`). One Segment moves through `entries.update(id, { segments })` |
-| I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.meta.cost` (D-S4-35). Use `update({ cost })` or read through the Field. |
-| A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `meta`, or write it through `update({ cost })` after construction (D-S4-35). |
+| I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.props.cost` (ADR 0011; S4 stored it as `entry.meta.cost`, D-S4-35). Use `update({ cost })` or `entries.read`. |
+| A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `props`, or write it through `update({ cost })` after construction (ADR 0011; S4 said the old bag name, D-S4-35). |
 | Two Fields silently share `meta.cost` | They cannot. That is `DuplicateFieldSourceError` at construction (D-S4-35). |
 | `{ field: 'cost', header: 'Budget' }` drops the Field's `align: 'end'` | It should not. The object form merges per-key over the Field's `column` defaults (D-S4-12). |
 | A grouped view shows per-team sums in header cells | It does not. Group headers show the label in column 0 and blank cells elsewhere (D-S4-23, D-S4-11). |

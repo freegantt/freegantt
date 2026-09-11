@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — How a refusal reaches the caller</title>
+    <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .skill-paper {
+        background: #f5f5f5;
+      }
+      .skill-paper svg {
+        min-width: 800px;
+        max-width: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
+        <h1>How a refusal reaches the caller</h1>
+        <p class="tagline">
+          A <code>beforeChange</code> handler says no. Core writes nothing. It raises one Error report.
+          It throws <code>MutationCancelledError</code> back to the call that started the write.
+        </p>
+        <div class="updated"><span class="k">updated</span> 2026-09-09 — slice S5</div>
+        <div class="meta">
+          <span>slice: S5</span>
+          <span>one builder: buildRefusalReport</span>
+          <span>severity: info — the library said no on purpose</span>
+        </div>
+        <nav aria-label="Sections on this page">
+          <a href="#s1"><b>1</b>The Dataset door</a>
+          <a href="#s2"><b>2</b>Each step</a>
+          <a href="#s3"><b>3</b>The other doors</a>
+          <a href="#s4"><b>4</b>What the report carries</a>
+        </nav>
+      </header>
+
+      <main>
+      <!-- ══════════════════════════════════════════════════════════ 1 -->
+      <section id="s1">
+        <h2><span class="num">1</span>The Dataset door</h2>
+        <p class="lede">
+          This is the path a programmatic write takes when a <code>beforeChange</code> handler refuses
+          it. The caller is <code>dataset.entries.update</code>, or any other mutator that ends in
+          <code>commitChangeSet</code>. Undo and redo use the same tail.
+        </p>
+        <p class="src">
+          <b>derived from</b> data/transaction.ts, data/error-reporting.ts, data/event-bus.ts,
+          model/error-report.ts, model/errors.ts, api/watch-all-errors.ts, api/attempt-mutation.ts
+        </p>
+
+        <figure>
+          <div class="scroller skill-paper">
+            <svg
+              viewBox="0 0 960 600"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-labelledby="refusal-flow-title refusal-flow-desc"
+            >
+              <title id="refusal-flow-title">A beforeChange refusal, caller to output</title>
+              <desc id="refusal-flow-desc">
+                Sequence diagram of a Dataset write that a beforeChange handler refuses: the update
+                call, the veto, the Error report, and the thrown MutationCancelledError.
+              </desc>
+              <defs>
+                <marker id="refusal-flow-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="#4f5d75" />
+                </marker>
+                <marker
+                  id="refusal-flow-arrow-accent"
+                  markerWidth="8"
+                  markerHeight="6"
+                  refX="7"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 8 3, 0 6" fill="#eb6c36" />
+                </marker>
+                <marker
+                  id="refusal-flow-arrow-link"
+                  markerWidth="8"
+                  markerHeight="6"
+                  refX="7"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8" />
+                </marker>
+                <marker
+                  id="refusal-flow-arrow-open"
+                  markerWidth="8"
+                  markerHeight="6"
+                  refX="7"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2" />
+                </marker>
+              </defs>
+
+              <rect width="100%" height="100%" fill="#f5f5f5" />
+
+              <line
+                x1="120"
+                y1="96"
+                x2="120"
+                y2="488"
+                stroke="rgba(45,49,66,0.20)"
+                stroke-width="1"
+                stroke-dasharray="3,3"
+              />
+              <line
+                x1="360"
+                y1="96"
+                x2="360"
+                y2="488"
+                stroke="rgba(45,49,66,0.20)"
+                stroke-width="1"
+                stroke-dasharray="3,3"
+              />
+              <line
+                x1="600"
+                y1="96"
+                x2="600"
+                y2="488"
+                stroke="rgba(45,49,66,0.20)"
+                stroke-width="1"
+                stroke-dasharray="3,3"
+              />
+              <line
+                x1="840"
+                y1="96"
+                x2="840"
+                y2="488"
+                stroke="rgba(45,49,66,0.20)"
+                stroke-width="1"
+                stroke-dasharray="3,3"
+              />
+
+              <rect
+                x="116"
+                y="156"
+                width="8"
+                height="304"
+                fill="rgba(45,49,66,0.06)"
+                stroke="#4f5d75"
+                stroke-width="0.8"
+              />
+              <rect
+                x="356"
+                y="156"
+                width="8"
+                height="304"
+                fill="rgba(45,49,66,0.06)"
+                stroke="#4f5d75"
+                stroke-width="0.8"
+              />
+              <rect
+                x="596"
+                y="196"
+                width="8"
+                height="112"
+                fill="rgba(45,49,66,0.06)"
+                stroke="#4f5d75"
+                stroke-width="0.8"
+              />
+              <rect
+                x="836"
+                y="408"
+                width="8"
+                height="24"
+                fill="rgba(45,49,66,0.06)"
+                stroke="#4f5d75"
+                stroke-width="0.8"
+              />
+
+              <line
+                x1="120"
+                y1="160"
+                x2="360"
+                y2="160"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <line
+                x1="360"
+                y1="200"
+                x2="600"
+                y2="200"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <path
+                d="M 604 240 L 640 240 L 640 272 L 604 272"
+                fill="none"
+                stroke="#eb6c36"
+                stroke-width="1.4"
+                marker-end="url(#refusal-flow-arrow-accent)"
+              />
+              <line
+                x1="600"
+                y1="304"
+                x2="364"
+                y2="304"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                stroke-dasharray="5,4"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <path
+                d="M 364 344 L 400 344 L 400 376 L 364 376"
+                fill="none"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <line
+                x1="360"
+                y1="416"
+                x2="840"
+                y2="416"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                stroke-dasharray="5,4"
+                marker-end="url(#refusal-flow-arrow-open)"
+              />
+              <line
+                x1="360"
+                y1="456"
+                x2="124"
+                y2="456"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                stroke-dasharray="5,4"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+
+              <rect x="192" y="140" width="96" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="240"
+                y="149"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                ENTRIES.UPDATE
+              </text>
+
+              <rect x="436" y="180" width="88" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="480"
+                y="189"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                BEFORECHANGE
+              </text>
+
+              <rect x="648" y="248" width="96" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="696"
+                y="257"
+                fill="#eb6c36"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                REFUSE(REASON)
+              </text>
+
+              <rect x="436" y="284" width="88" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="480"
+                y="293"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                RETURN FALSE
+              </text>
+
+              <rect x="412" y="352" width="88" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="456"
+                y="361"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                BUILD REPORT
+              </text>
+
+              <rect x="680" y="396" width="80" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="720"
+                y="405"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                EMIT ERROR
+              </text>
+
+              <rect x="196" y="436" width="88" height="12" rx="2" fill="#f5f5f5" />
+              <text
+                x="240"
+                y="445"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.06em"
+              >
+                THROW CANCEL
+              </text>
+
+              <rect x="40" y="40" width="160" height="56" rx="6" fill="#f5f5f5" />
+              <rect
+                x="40"
+                y="40"
+                width="160"
+                height="56"
+                rx="6"
+                fill="rgba(79,93,117,0.10)"
+                stroke="#7a8399"
+                stroke-width="1"
+              />
+              <rect
+                x="48"
+                y="46"
+                width="28"
+                height="12"
+                rx="2"
+                fill="transparent"
+                stroke="rgba(122,131,153,0.40)"
+                stroke-width="0.8"
+              />
+              <text
+                x="62"
+                y="55"
+                fill="#7a8399"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.08em"
+              >
+                APP
+              </text>
+              <text
+                x="120"
+                y="70"
+                fill="#2d3142"
+                font-size="12"
+                font-weight="600"
+                font-family="'Geist', system-ui, sans-serif"
+                text-anchor="middle"
+              >
+                Caller
+              </text>
+              <text
+                x="120"
+                y="86"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+              >
+                entries.update
+              </text>
+
+              <rect x="280" y="40" width="160" height="56" rx="6" fill="#f5f5f5" />
+              <rect
+                x="280"
+                y="40"
+                width="160"
+                height="56"
+                rx="6"
+                fill="#ffffff"
+                stroke="#2d3142"
+                stroke-width="1"
+              />
+              <rect
+                x="288"
+                y="46"
+                width="32"
+                height="12"
+                rx="2"
+                fill="transparent"
+                stroke="rgba(45,49,66,0.40)"
+                stroke-width="0.8"
+              />
+              <text
+                x="304"
+                y="55"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.08em"
+              >
+                DATA
+              </text>
+              <text
+                x="360"
+                y="70"
+                fill="#2d3142"
+                font-size="12"
+                font-weight="600"
+                font-family="'Geist', system-ui, sans-serif"
+                text-anchor="middle"
+              >
+                Dataset
+              </text>
+              <text
+                x="360"
+                y="86"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+              >
+                commitChangeSet
+              </text>
+
+              <rect x="520" y="40" width="160" height="56" rx="6" fill="#f5f5f5" />
+              <rect
+                x="520"
+                y="40"
+                width="160"
+                height="56"
+                rx="6"
+                fill="rgba(235,108,54,0.08)"
+                stroke="#eb6c36"
+                stroke-width="1"
+              />
+              <rect
+                x="528"
+                y="46"
+                width="28"
+                height="12"
+                rx="2"
+                fill="transparent"
+                stroke="rgba(235,108,54,0.50)"
+                stroke-width="0.8"
+              />
+              <text
+                x="542"
+                y="55"
+                fill="#eb6c36"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.08em"
+              >
+                EVT
+              </text>
+              <text
+                x="600"
+                y="70"
+                fill="#2d3142"
+                font-size="12"
+                font-weight="600"
+                font-family="'Geist', system-ui, sans-serif"
+                text-anchor="middle"
+              >
+                Handler
+              </text>
+              <text
+                x="600"
+                y="86"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+              >
+                beforeChange
+              </text>
+
+              <rect x="760" y="40" width="160" height="56" rx="6" fill="#f5f5f5" />
+              <rect
+                x="760"
+                y="40"
+                width="160"
+                height="56"
+                rx="6"
+                fill="rgba(45,49,66,0.05)"
+                stroke="#4f5d75"
+                stroke-width="1"
+              />
+              <rect
+                x="768"
+                y="46"
+                width="28"
+                height="12"
+                rx="2"
+                fill="transparent"
+                stroke="rgba(79,93,117,0.40)"
+                stroke-width="0.8"
+              />
+              <text
+                x="782"
+                y="55"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+                letter-spacing="0.08em"
+              >
+                OUT
+              </text>
+              <text
+                x="840"
+                y="70"
+                fill="#2d3142"
+                font-size="12"
+                font-weight="600"
+                font-family="'Geist', system-ui, sans-serif"
+                text-anchor="middle"
+              >
+                Subscriber
+              </text>
+              <text
+                x="840"
+                y="86"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                text-anchor="middle"
+              >
+                error event
+              </text>
+
+              <line
+                x1="40"
+                y1="504"
+                x2="920"
+                y2="504"
+                stroke="rgba(45,49,66,0.10)"
+                stroke-width="0.8"
+              />
+              <text
+                x="40"
+                y="520"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+                letter-spacing="0.14em"
+              >
+                LEGEND
+              </text>
+
+              <rect
+                x="40"
+                y="540"
+                width="14"
+                height="10"
+                rx="2"
+                fill="rgba(235,108,54,0.08)"
+                stroke="#eb6c36"
+                stroke-width="1"
+              />
+              <text
+                x="60"
+                y="548"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+              >
+                handler · refuse
+              </text>
+
+              <line
+                x1="200"
+                y1="545"
+                x2="232"
+                y2="545"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <text
+                x="240"
+                y="548"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+              >
+                call
+              </text>
+
+              <line
+                x1="292"
+                y1="545"
+                x2="324"
+                y2="545"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                stroke-dasharray="5,4"
+                marker-end="url(#refusal-flow-arrow)"
+              />
+              <text
+                x="332"
+                y="548"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+              >
+                return
+              </text>
+
+              <line
+                x1="400"
+                y1="545"
+                x2="432"
+                y2="545"
+                stroke="#4f5d75"
+                stroke-width="1.2"
+                stroke-dasharray="5,4"
+                marker-end="url(#refusal-flow-arrow-open)"
+              />
+              <text
+                x="440"
+                y="548"
+                fill="#4f5d75"
+                font-size="8"
+                font-family="'Geist Mono', ui-monospace, monospace"
+              >
+                notify
+              </text>
+            </svg>
+          </div>
+          <figcaption>
+            A <code>beforeChange</code> veto inside <code>commitChangeSet</code>. Coral is the
+            <code>refuse()</code> call. The open dashed arrow is the <code>error</code> event. The filled
+            dashed arrow back to the caller is the throw.
+          </figcaption>
+        </figure>
+
+        <pre><code>dataset.on('beforeChange', ({ refuse }) => refuse('t1 is locked.'));
+dataset.entries.update('t1', { name: 'Framing' });
+// throws MutationCancelledError
+// Dataset 'error' fires when something is subscribed</code></pre>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 2 -->
+      <section id="s2">
+        <h2><span class="num">2</span>Each step</h2>
+        <p class="lede">
+          Time runs down the diagram. The store never applies the changeset. The two outputs are the
+          throw and, when a listener exists, the Error report.
+        </p>
+        <p class="src">
+          <b>derived from</b> data/transaction.ts, data/error-reporting.ts, data/event-bus.ts,
+          model/errors.ts
+        </p>
+
+        <table>
+          <tr>
+            <th>step</th>
+            <th>what runs</th>
+            <th>what it does</th>
+          </tr>
+          <tr>
+            <td class="mono">ENTRIES.UPDATE</td>
+            <td class="mono">entries.update → runTransaction → commitChangeSet</td>
+            <td>
+              The body stages the edit. The extension hook and the Rollup run. Core builds one
+              changeset, then asks <code>beforeChange</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">BEFORECHANGE</td>
+            <td class="mono">bus.emit('beforeChange', { changeSet, refuse })</td>
+            <td>
+              Core makes one <code>RefusalNote</code> per emit and puts <code>refuse</code> on the
+              payload. Every handler runs. A veto from one handler does not skip the rest.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">REFUSE(REASON)</td>
+            <td class="mono">refuse('t1 is locked.')</td>
+            <td>
+              The call writes the words onto the note and returns <code>false</code>. The first reason
+              wins. Two handlers never join their sentences. A bare <code>false</code> still refuses,
+              with no reason.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">RETURN FALSE</td>
+            <td class="mono">emit → false</td>
+            <td>
+              Core discards the write set. Nothing is stored. No <code>change</code> event fires.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">BUILD REPORT</td>
+            <td class="mono">buildRefusalReport + MutationCancelledError</td>
+            <td>
+              One builder, in <code>data/error-reporting.ts</code>. For this door the message is the
+              thrown error's own wording. Severity is <code>info</code>. <code>by</code> is
+              <code>consumer</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">EMIT ERROR</td>
+            <td class="mono">raiseErrorOn(dataset.bus, report)</td>
+            <td>
+              The report reaches a listener on the Dataset <code>error</code> event. If nobody
+              listens, this step does nothing. This site has no console fallback. A Gantt does not
+              forward Dataset reports — two Gantts on one Dataset would each hear the same report
+              twice. Call <code>watchAllErrors([dataset, gantt], …)</code> to hear both buses.
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">THROW CANCEL</td>
+            <td class="mono">throw MutationCancelledError</td>
+            <td>
+              This output always happens. The error carries the refused changeset and the reason.
+              <code>attemptMutation(() => …)</code> catches it and returns <code>false</code>, so a
+              button does not need its own <code>try</code>/<code>catch</code>. Any other error still
+              throws.
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 3 -->
+      <section id="s3">
+        <h2><span class="num">3</span>The other doors</h2>
+        <p class="lede">
+          Three vetoes share <code>buildRefusalReport</code>. The cell editor raises its own report.
+          A silent <code>canWrite</code> refusal is not this flow: no handle paints, and no report
+          fires.
+        </p>
+        <p class="src">
+          <b>derived from</b> view/gesture-pipeline.ts, view/live-region.ts, view/capability.ts,
+          extensions/features/inline-editing.ts, api/gantt.ts
+        </p>
+
+        <table>
+          <tr>
+            <th>door</th>
+            <th>who says no</th>
+            <th>throw</th>
+            <th>report bus</th>
+            <th>live region</th>
+          </tr>
+          <tr>
+            <td class="mono">beforeChange</td>
+            <td>a Dataset handler</td>
+            <td><code>MutationCancelledError</code></td>
+            <td>Dataset <code>error</code></td>
+            <td>no — subscribe with <code>watchAllErrors</code></td>
+          </tr>
+          <tr>
+            <td class="mono">beforeEntryMove / beforeEntryResize</td>
+            <td>a Gantt handler</td>
+            <td>none — the pipeline restores the preview</td>
+            <td>Gantt <code>error</code>, codes <code>entry-move-cancelled</code> / <code>entry-resize-cancelled</code></td>
+            <td>yes — <code>LiveRegion</code> is already subscribed</td>
+          </tr>
+          <tr>
+            <td class="mono">cell editor</td>
+            <td>the <code>inlineEditing()</code> plugin</td>
+            <td>none — the editor stays open, or a notice sits on the cell</td>
+            <td>Gantt <code>error</code>, plugin codes such as <code>derived-value</code></td>
+            <td>yes — same Gantt bus</td>
+          </tr>
+        </table>
+
+        <div class="note">
+          <strong>A refused gesture commit is one record, not two.</strong>
+          The pipeline reports a silent <code>beforeEntryMove</code> / <code>beforeEntryResize</code>
+          veto. When the gesture passes that gate and then <code>beforeChange</code> refuses the
+          write, <code>data/transaction.ts</code> already raised the Dataset report.
+          <code>commitEntryEdits</code> returns <code>false</code>, and the pipeline does not raise a
+          second one.
+        </div>
+
+        <p>
+          A drag that a <code>beforeEntryMove</code> handler refuses uses the same
+          <code>refuse(reason)</code> call. Core builds the sentence itself, because that door has no
+          thrown error to quote:
+        </p>
+        <pre><code>gantt.on('beforeEntryMove', (move) =>
+  move.start &lt; mobilization ? move.refuse('The drop is before mobilization.') : undefined,
+);</code></pre>
+        <p>
+          The report message is
+          <code>Nothing was saved. A beforeEntryMove handler refused this move and said: "…".</code>
+          A bare <code>false</code> drops the <code>and said</code> clause.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ 4 -->
+      <section id="s4">
+        <h2><span class="num">4</span>What the report carries</h2>
+        <p class="lede">
+          An Error report is the record a consumer subscribes to. A <code>FreeGanttError</code> is the
+          class a consumer catches. They are two different things. Core raises reports and keeps none.
+        </p>
+        <p class="src">
+          <b>derived from</b> model/error-report.ts, data/error-reporting.ts, view/live-region.ts,
+          api/watch-all-errors.ts, harness/main.ts, harness/editing.ts, harness/data.ts
+        </p>
+
+        <table>
+          <tr>
+            <th class="mono">field</th>
+            <th>on a beforeChange refusal</th>
+          </tr>
+          <tr>
+            <td class="mono">at</td>
+            <td>stamped by the raiser from <code>time/</code>'s <code>now()</code></td>
+          </tr>
+          <tr>
+            <td class="mono">code</td>
+            <td><code>mutation-cancelled</code></td>
+          </tr>
+          <tr>
+            <td class="mono">message</td>
+            <td>
+              the thrown error's sentence, including the handler's words when they called
+              <code>refuse</code>
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">severity</td>
+            <td><code>info</code> — the library said no on purpose</td>
+          </tr>
+          <tr>
+            <td class="mono">by</td>
+            <td><code>consumer</code> — the bus saw a handler return <code>false</code></td>
+          </tr>
+          <tr>
+            <td class="mono">reason</td>
+            <td>the handler's own words, or absent after a bare <code>false</code></td>
+          </tr>
+          <tr>
+            <td class="mono">cause</td>
+            <td>the <code>MutationCancelledError</code>, which still holds the changeset</td>
+          </tr>
+        </table>
+
+        <p>
+          <code>LiveRegion</code> reads the Gantt <code>error</code> event and copies
+          <code>report.message</code> into a polite live region for <code>info</code> and
+          <code>error</code>. It stays silent on <code>warning</code>. A Dataset refusal never reaches
+          that node on its own.
+        </p>
+        <p>
+          The harness demos call <code>watchAllErrors([dataset, gantt], …)</code> and log each report.
+          That is how a Dataset refusal becomes a line in the demo log.
+        </p>
+      </section>
+
+        <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
+    </div>
+
+    <footer class="wrap">
+      Spec: <code>plans/00</code>–<code>04</code>. Consumer API: <code>README.md</code> and
+      <code>docs/05-consumer-api.md</code>. Glossary: <code>CONTEXT.md</code>. Decisions:
+      <code>docs/adr/</code>. Demos live one folder up in <code>harness/</code>.
+    </footer>
+  </body>
+</html>

@@ -12,6 +12,7 @@ type DocsPageId =
   | 'layers'
   | 'files'
   | 'lifecycle'
+  | 'refusals'
   | 'classes'
   | 'timeline'
   | 'plugins'
@@ -36,6 +37,12 @@ const DOCS_PAGES: readonly DocsPage[] = [
   { id: 'layers', label: 'Layers', file: 'layers.html', title: 'Layer map & import rules' },
   { id: 'files', label: 'Files', file: 'files.html', title: 'File inventory' },
   { id: 'lifecycle', label: 'Lifecycle', file: 'lifecycle.html', title: 'Construction, render, notification' },
+  {
+    id: 'refusals',
+    label: 'Refusals',
+    file: 'refusals.html',
+    title: 'How a refusal reaches the caller',
+  },
   { id: 'classes', label: 'Class map', file: 'classes.html', title: 'Class map, layer by layer' },
   { id: 'timeline', label: 'Timeline', file: 'timeline.html', title: 'How the timeline paints' },
   { id: 'plugins', label: 'Plugins', file: 'plugins.html', title: 'Plugin lifecycle' },

@@ -54,7 +54,7 @@ L4 is a *convenience* layer: it runs a fast subset of L2/L3 early, for the agent
 | `plans/01` §11 | I1–I14 | the matrix in `01-invariant-guard-matrix.md` |
 | `plans/02` | naming pairs, no "not implemented", JSON contract | event-pair test + api-report diff + custom lint rule |
 | `plans/04` §1 | exactly one runtime dep | package-shape test + import allowlist |
-| `CLAUDE.md` | vendor-name ban, workflow rules | repo-wide grep check |
+| `CLAUDE.md` | vendor-name ban (ADRs exempt), workflow rules | repo-wide grep check |
 
 ## 4. What we deliberately do **not** automate
 

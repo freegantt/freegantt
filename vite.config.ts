@@ -42,6 +42,7 @@ export default defineConfig({
         'docs-layers': page('docs/layers.html'),
         'docs-files': page('docs/files.html'),
         'docs-lifecycle': page('docs/lifecycle.html'),
+        'docs-refusals': page('docs/refusals.html'),
         'docs-classes': page('docs/classes.html'),
         'docs-timeline': page('docs/timeline.html'),
         'docs-plugins': page('docs/plugins.html'),
