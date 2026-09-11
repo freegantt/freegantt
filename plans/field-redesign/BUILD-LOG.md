@@ -1044,3 +1044,86 @@ tsc-cleanup pass's scope.
 **Why this stayed a Q, not a J:** both are `src/` behaviour, not test authoring, and reversing either
 needs a decision only the author (or whoever re-reads decision 6's own intent) should make — not an
 agent mid-cleanup guessing which of two plausible readings was meant.
+
+### J25 — Build 3b handoff: mid-build stop, N7 confirmed fixed by reordering (no restructure needed), tsc 136 → 72
+
+**Raised:** 2026-09-11, Build 3b, continuing J19's tsc-cleanup pass. **Status:** open — the receiving
+note for whoever continues. Written at the coordinator's request at ~207k context, at a commit
+boundary (`ae4a99a`, `entry-store.mutation.test.ts` just landed).
+
+**tsc count.** Command: `pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"`. Session start
+(inherited from J19): **136**. Right now: **72**. All 72 remaining are in `*.test.ts` files; `src/`,
+`harness/`, `fixtures/` stay at 0 (unchanged this session).
+
+```
+15 src/data/transaction.test.ts
+ 5 src/layout/frame-layout.test.ts
+ 5 src/data/rollup.test.ts
+ 5 src/data/rollup.property.test.ts
+ 4 src/view/frame-settings.test.ts
+ 3 src/view/gesture-pipeline.test.ts
+ 3 src/data/entry-reader.test.ts
+ (~30 more files, 1-2 errors each)
+```
+Re-run the breakdown yourself (`pnpm exec tsc --noEmit 2>&1 | grep "error TS" | sed 's/(.*//' | sort
+| uniq -c | sort -rn`) — this is a snapshot. `src/data/transaction.test.ts` jumped from 7 (J19's
+snapshot) to 15 — not a regression from this session (nothing here touched that file); J19's own
+count was itself already stale by the time it was written, per its own disclaimer.
+
+**N7 (the dispatch's Task 1): fixed by reordering — no shell restructure was needed.** Full detail
+already in the "N7" note above (marked **FIXED**) and in `J20`. Summary: `GanttShellOptions` gained
+three constructor-only options (`plugins`, `zoomPresets`, `selectedSegmentIds`); the constructor
+applies them through its own existing live setters (`this.plugins = …` etc.) a few statements
+*before* its final `this.#phase = 'live'; this.#frames.flush();`, instead of `api/gantt.ts` assigning
+`this.#shell.plugins` etc. *after* the `new GanttShell(...)` call returns. All three moved together —
+`zoomPresets`/`selectedSegmentIds` were never a separate problem, just the same three lines the
+dispatch named. Nothing in `GanttShell`'s construction order needed to change beyond that: every
+collaborator a plugin's `setup()` can reach was already built earlier in the constructor, and
+`resolveLook`/`Capabilities` already read their registries live at render time rather than a cached
+snapshot (J16), so moving the assignment earlier changes nothing but which frame the result first
+paints on. Verified via `pnpm exec vitest run src/api/gantt.test.ts` (196/196 pass, no `await`
+added to either N7-affected test) and a stable `tsc` count (136, unchanged) before and after.
+
+**Task 2 (the 3 failing tests in `gantt.test.ts`):** all 3 fixed. Two were N7 itself. The third
+(`[review P2]`) was a genuine test bug (J20): `barFor()` keyed a bar by `data-kind`, which correctly
+reverts to `'leaf'` once a plugin's look is uninstalled — rewritten to key on `data-item-id`'s
+`${entryId}:${segmentIndex}` convention instead, stable across a look change. 196/196 pass.
+
+**Task 3 (tsc cleanup), files finished this session, in commit order:**
+1. `src/api/gantt.test.ts` + N7 fix (`94053ff`) — J20 (test), the "N7 — FIXED" note (src/).
+2. `src/api/dataset.test.ts` (`ef12a66`) — J21. 25 → 0 errors, 49/49 tests pass.
+3. `src/layout/frame.test.ts` (`2d4b92e`) — J22. 15 → 0 errors, 46/46 tests pass (one snapshot
+   updated, verified as the pre-existing `.kind`→`.look` rename only).
+4. `src/view/gantt-shell.test.ts` (`fa9fee4`) — J23. 13 → 0 errors, 35/35 tests pass.
+5. `src/data/entry-store.mutation.test.ts` (`ae4a99a`) — J24/**Q2**. 11 → 0 errors, **49/52 tests
+   pass** — 3 left red on purpose, reported as Q2 above. Read Q2 before anyone touches
+   `entry-store.ts`'s write-refusal guard or `data/rollup.ts`/`data/write-set.ts`.
+
+**Every test deleted or weakened this session, one line each (full detail lives in J20–J24 above —
+this is the audit-ready summary the coordinator asked for):**
+- `gantt.test.ts` `[review P2]`: **no assertion deleted** — `barFor()` rewritten to key on a stable
+  id instead of the now-unstable `data-kind` (J20).
+- `dataset.test.ts`: deleted 2 tests for retired `rollUpKinds`/`hierarchy.autoGroup` (feature gone
+  end to end, J17); 1 test renamed + narrowed (dropped its `rollUpKinds`/`hierarchy` assertions,
+  kept its `childrenOf` claim); 1 test dropped its `entry.kind` half, kept its `props` half; 6 spots
+  dropped a dead `kind: 'group'` marker with no assertion change (J21).
+- `frame.test.ts`: deleted the whole "milestone floor" describe block (5 tests) — `barSpan`'s
+  `diamondSizePx` parameter and `DEFAULT_DIAMOND_SIZE_PX` are gone, ADR 0013's own diamond deletion;
+  kept and generalized 2 of its sibling cases that don't depend on a diamond. 2 `groupBy` closures,
+  2 column-format closures, and 1 rollup-parent marker rewritten structurally, no assertion lost
+  (J22).
+- `gantt-shell.test.ts`: no test deleted; 14 dead `kind`/`rollUpKinds`/`isRollUpKind` spots removed,
+  zero assertion changes (J23).
+- `entry-store.mutation.test.ts`: deleted 1 test for a retired `rollUpKinds` opt-out (feature gone,
+  same as `dataset.test.ts`); merged 2 near-duplicate ADR 0012 tests into 1 (no coverage lost, they
+  asserted the same thing under two labels); deleted 1 further duplicate of that same merged claim;
+  rewrote 1 test's "undo" mechanism from a now-refused manual `update()` loop to
+  `replay(invertChangeSet(...))`, assertion unchanged; **left 3 tests red** rather than weaken them
+  (Q2) (J24).
+
+**Next agent's first move:** `src/data/transaction.test.ts` (15 errors, the current largest) is the
+next file, top-down, same pattern. **Read Q2 before touching `entry-store.ts`, `data/rollup.ts`, or
+`data/write-set.ts` for any reason** — two real conflicts are open there, not yet the author's
+call, and `transaction.test.ts` likely exercises the same write-refusal path Q2's first finding
+names (it is one layer below `entry-store.ts`), so more red tests down there may be the same root
+cause, not new ones.
