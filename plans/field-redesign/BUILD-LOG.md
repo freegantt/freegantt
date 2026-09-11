@@ -90,7 +90,17 @@ guard-loosening arm were never relaxed — both still exit 2.
 Build 0 found a two-way name collision on `Document`. Only the serialized-`Dataset` `Document` is
 retired; the DOM one keeps the name. The comment is posted. The issue stays open for the author.
 
-### N2 — `harness/main.ts` naming residue — **carried to the review phase**
+### N2 — Build 0 landed before this file existed — **a known gap**
+
+Build 0 (ADR 0016) finished on 2026-09-10, and this log was created after it. Its judgement calls
+were reported in a chat window and are not written down here. The coordinator verified its **result**
+against the repo — the verdict line, the format grep, the ordering of `pluginStore` before the
+deletions — but a call it made along the way may be unrecorded.
+
+The end-of-redesign review reads Build 0's six commits with that in mind. Builds 1 to 5 write here as
+they go, so the gap does not repeat.
+
+### N3 — `harness/main.ts` naming residue — **carried to the review phase**
 
 `#document-json` / `documentJson` and `#export-btn` / `exportBtn` survive in the harness. "Document"
 is retired and nothing is exported any more. This is naming residue, not an API gap, so Build 0 did
