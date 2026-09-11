@@ -75,6 +75,24 @@ There is exactly one sanctioned way to bypass a custom rule: an inline disable *
 
 A dedicated CI job (`disables`) collects every `eslint-disable` for a `freegantt/*` rule and fails if one lacks a ` -- ` reason. The count is printed in the job summary, so growth is visible in review. Disables of the layer graph (dependency-cruiser) are not available inline at all: the graph is edited in one file, in a reviewed commit, or not at all.
 
+### 5.1 `isDevMode()` is not an escape hatch, and "warn in dev mode" is the phrase to distrust
+
+`isDevMode()` (`src/data/dev-mode.ts`) reads `import.meta.env.DEV`. That is not a runtime question. Vite replaces it with a literal when the code reading it is built, and the code reading it is **this library** — so the value is fixed when this repo builds `dist/`. A consumer's own dev server never re-evaluates it. Their development build and their production build both receive `false`.
+
+**Never gate anything a consumer needs to see.**
+
+A diagnostic behind this flag is not a warning that appears in development. It is a warning deleted from the product. It is worse than an omission, for three reasons that compound:
+
+- It reads as deliberate. A reviewer sees an intent that the mechanism does not deliver.
+- Our tests run with `DEV === true`, so the gated branch is the only branch they exercise. The suite is green and proves nothing about what a consumer gets.
+- Nobody reports the absence. A consumer cannot miss a line they have never seen.
+
+This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'look-claimed-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
+
+**What it is legitimately for:** making *our own* development stricter, at a cost we do not want to charge a consumer. `transaction.ts` deep-freezes a ChangeSet so our tests catch a mutation. `build-commit-change-set.ts` asserts an extension hook did not overwrite the body. Both would still be correct if they never ran anywhere else. The test is: *would a consumer want this?* If yes, it must not be gated.
+
+**The replacement, when the answer is yes:** raise it through `raiseError` at `severity: 'warning'`, in every build. When the real concern is cost rather than noise, remove the cost by not asking the question — `produce-items.ts` stops its claim scan at the first match when no report sink is wired, rather than gating the report.
+
 ## 6. Implementation order
 
 Guardrails land before the code they guard (`plans/04` §3, "the S0 order of operations"). Concretely:
