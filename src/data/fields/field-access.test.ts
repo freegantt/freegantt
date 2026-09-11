@@ -10,7 +10,6 @@ import {
   entryAfterEdit,
   proposedKeysOf,
   readField,
-  statesProposedKeys,
   withProposedKeys,
   writeField,
   writeOntoEntry,
@@ -128,10 +127,7 @@ describe('readField / writeField (D-S4-2)', () => {
     expect(merged.end).toBe(9);
   });
 
-  it('statesProposedKeys is true for every ProposedEdit — proposedKeys is required (ADR 0011)', () => {
-    expect(statesProposedKeys(edit({ name: 'a' }))).toBe(true);
-    expect(statesProposedKeys(withProposedKeys(edit({ name: 'a' }), []))).toBe(true);
-    expect(statesProposedKeys(undefined)).toBe(false);
+  it('proposedKeysOf reads the keys an edit states it writes', () => {
     expect(proposedKeysOf(edit({ name: 'a' })).size).toBe(1);
     expect(proposedKeysOf(withProposedKeys(edit(), [])).size).toBe(0);
   });
