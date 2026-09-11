@@ -358,9 +358,15 @@ export class EntryStore implements EntryStoreContract {
       for (const field of Object.keys(edit)) {
         if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
       }
-      // ADR 0013: nothing but the Rollup writes a rolling-up parent's cell. Refused whole, before
-      // any write — a mixed patch such as `{ start, cost }` with a derived `cost` writes nothing.
-      if (this.childrenOf(key).length > 0) {
+      // ADR 0013's derived-arm refusal is a consumer-door check (`01` §6, line 81): it fires only
+      // for a standalone call that opens its own transaction. A call joining a transaction already
+      // open — the library's own internal bookkeeping (`#removeSegmentsFrom`'s dateless clear), or
+      // a consumer's own multi-write `dataset.transaction()` body — is decision 5's territory
+      // instead: the Rollup yields to whatever a body proposes (`editProposesField`, `rollup.ts`),
+      // so refusing here would fight a decision this store does not own (Q6, BUILD-LOG). Refused
+      // whole, before any write — a mixed patch such as `{ start, cost }` with a derived `cost`
+      // writes nothing.
+      if (this.#opensOwnTransaction() && this.childrenOf(key).length > 0) {
         for (const field of Object.keys(edit)) {
           if (rollsUp(this.#registry.get(field)!)) {
             throw new DerivedFieldNotWritableError(field, key, 'entries.update');
@@ -434,6 +440,14 @@ export class EntryStore implements EntryStoreContract {
       return;
     }
     this.update(id, { segments: remaining });
+  }
+
+  /** True while the coming `#mutate` call is the one opening the transaction, not joining one a
+   *  caller already has open — read after `runTransaction`'s own increment (D-S2-8), so `=== 1`
+   *  means no other frame is still on the stack. `TransactionData.openTransactions` names this
+   *  store as its second reader (`data/transaction.ts`, the first and sole writer). */
+  #opensOwnTransaction(): boolean {
+    return this.#runner?.openTransactions === 1;
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
