@@ -215,7 +215,24 @@ deletions — but a call it made along the way may be unrecorded.
 The end-of-redesign review reads Build 0's six commits with that in mind. Builds 1 to 5 write here as
 they go, so the gap does not repeat.
 
-### N3 — `harness/main.ts` naming residue — **carried to the review phase**
+### N3 — Build 3's file was missing the Segment restoration — **FIXED**
+
+**Found:** 2026-09-11, by the coordinator, verifying Build 1's close-out.
+
+J3 and J9 both defer the roll-up parent's Segment to ADR 0013, and ADR 0012 assigns it there in
+writing. **Build 3's own work list did not carry it**, and neither did ADR 0013 — its single mention
+of a Segment is about ingest. A build agent reads one build file and its ADR, so the item was
+addressed to a reader who would never see it. The deferral would have quietly become a deletion, and
+the branch would ship a summary bar no click can select.
+
+Added to [`build/build-3-0013-derivation.md`](build/build-3-0013-derivation.md) as a work item and as
+a named gate assertion.
+
+**The lesson for every remaining build:** deferring work to a later build is not done when the log
+records it. It is done when the *receiving build's file* carries it. A defer that lives only in a J
+entry is a defer nobody receives.
+
+### N4 — `harness/main.ts` naming residue — **carried to the review phase**
 
 `#document-json` / `documentJson` and `#export-btn` / `exportBtn` survive in the harness. "Document"
 is retired and nothing is exported any more. This is naming residue, not an API gap, so Build 0 did
