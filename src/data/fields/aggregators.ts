@@ -12,7 +12,8 @@ function isFiniteNumber(value: unknown): value is number {
 
 function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
   const duration = ctx.durationOf(entry);
-  if (!isFiniteNumber(duration.value) || duration.value === 0) return undefined;
+  // A non-spanning Entry (ADR 0012) has no duration — same hole as a non-finite one.
+  if (duration === undefined || !isFiniteNumber(duration.value) || duration.value === 0) return undefined;
   return duration.value;
 }
 

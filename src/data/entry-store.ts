@@ -384,11 +384,11 @@ export class EntryStore implements EntryStoreContract {
    *  ADR 0010). Reads through `update`/`remove` for each Entry it touches, so the changeset reports
    *  the same `{from, to}` rows either call reports on its own — no second write path. */
   removeSegments(ids: readonly (SegmentId | string)[]): void {
-    this.#mutate((token) => {
+    this.#mutate(() => {
       const requested = new Set(ids.map((id) => segmentId(id)));
       if (requested.size === 0) return;
       for (const [ownerId, removedIds] of this.#groupSegmentsByOwner(requested)) {
-        this.#removeSegmentsFrom(token, ownerId, removedIds);
+        this.#removeSegmentsFrom(ownerId, removedIds);
       }
     });
   }
@@ -409,39 +409,21 @@ export class EntryStore implements EntryStoreContract {
     return grouped;
   }
 
-  /** Removes `removedIds` from one Entry's Segments. Removing the last one removes the Entry itself,
-   *  in the same transaction — an Entry never survives as an empty record (#212). That removal is
-   *  narrower than `entries.remove(id)`: it takes only `id`, never `id`'s descendants (#212, fix
-   *  plan R3, ADR 0010). `entries.remove` is a deliberate "delete this branch" call; losing a last
-   *  bar to a `Delete` keypress is not the same request, so a child promotes to `id`'s own parent
-   *  instead of disappearing with it. Otherwise the remaining Segments go through `update`, the
-   *  normal edit path, which recomputes the envelope around them itself (#212, finding 4: `toStoredEdit`
-   *  is the one owner) — this call names no `start` or `end` of its own, so there is nothing here
-   *  that could disagree with them. */
-  #removeSegmentsFrom(token: TxToken, id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
+  /** Removes `removedIds` from one Entry's Segments. Removing the last one clears both dates instead
+   *  of removing the Entry (ADR 0012: a dateless Entry is legal, so a bar's own last Segment going away
+   *  no longer has to take the row with it). The Entry, its id, and its descendants all stay untouched
+   *  — only `entries.remove(id)` deletes a row. Otherwise the remaining Segments go through `update`,
+   *  the normal edit path, which recomputes the envelope around them itself (#212, finding 4:
+   *  `toStoredEdit` is the one owner) — this call names no `start` or `end` of its own, so there is
+   *  nothing here that could disagree with them. */
+  #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
     const entry = this.get(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
-      this.#reparentChildrenOf(token, id, entry.parentId);
-      this.stageRemove(token, id);
+      this.update(id, { start: undefined, end: undefined });
       return;
     }
     this.update(id, { segments: remaining });
-  }
-
-  /** Moves `id`'s direct children up to `parentId` — `id`'s own parent, or the root when it had none
-   *  — before `id` is staged for removal (#212, fix plan R3). A grandchild's `parentId` already
-   *  names its own (surviving) parent, so re-parenting the direct children carries the rest of the
-   *  subtree with them; nothing below the direct children needs to move. */
-  #reparentChildrenOf(token: TxToken, id: EntryId, parentId: EntryId | undefined): void {
-    for (const child of this.childrenOf(id)) {
-      const edit: StoredEdit = {};
-      // Deliberate exactOptionalPropertyTypes escape, same posture as `source-strategy.ts`'s meta
-      // clear: an explicit `undefined` un-parents the child to the root, distinct from the key being
-      // absent, which `entryAfterEdit` would then leave the child's parentId untouched by.
-      (edit as Record<string, unknown>)['parentId'] = parentId;
-      this.stageUpdate(token, child.id, edit);
-    }
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {

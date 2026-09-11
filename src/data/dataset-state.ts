@@ -169,8 +169,6 @@ export class DatasetState implements Dataset {
     this.#entryContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
-      referenceDate: this.referenceDate,
-      rollUpKinds: this.#rollUpKinds,
       mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
@@ -277,15 +275,22 @@ export class DatasetState implements Dataset {
     return changeSetId(this.#changeSetCounter);
   }
 
+  /** `TransactionData.mintSegmentId` (ADR 0012) — `build-commit-change-set.ts`'s real counter for a
+   *  plugin cascade that turns a dateless Entry spanning for the first time. Shares `#nextSegmentId`
+   *  with construction ingest (`toEntries`), so a minted id never collides with an authored one. */
+  mintSegmentId(): SegmentId {
+    return this.#nextSegmentId();
+  }
+
   get rollUpKinds(): ReadonlySet<EntryKind> {
     return this.#rollUpKinds;
   }
 
-  /** Live assignment of `'none'` or `[]` opts every kind out (D-S4-6). */
+  /** Live assignment of `'none'` or `[]` opts every kind out (D-S4-6). `#entryContext` no longer
+   *  carries `rollUpKinds` (ADR 0012 deleted the referenceDate-fill it existed for) — the Rollup
+   *  pass reads `this.rollUpKinds` above instead. */
   setRollUpKinds(value: RollUpKinds): void {
-    const next = resolveRollUpKinds(value);
-    this.#rollUpKinds = next;
-    this.#entryContext.rollUpKinds = next;
+    this.#rollUpKinds = resolveRollUpKinds(value);
   }
 
   get hierarchy(): DatasetHierarchy {

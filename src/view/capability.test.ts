@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityInputs, Interactions, KindDefaults } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import type { Entry, EntryKind, Field, FieldKey } from '../model/index.js';
+import type { Entry, EntryKind, Field, FieldKey, Instant } from '../model/index.js';
 import { entryId, segmentId } from '../model/index.js';
 
 function entry(overrides: Partial<Entry> = {}): Entry {
-  const start = 0 as Entry['start'];
-  const end = 1 as Entry['end'];
+  const start = 0 as Instant;
+  const end = 1 as Instant;
   return {
     id: entryId('e1'),
     kind: 'span',

@@ -110,10 +110,11 @@ function fieldContextFor(ctx: PluginContext): FieldContext {
     timeZone: ctx.dataset.timeZone,
     read: <K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined =>
       ctx.dataset.entries.fieldValue(entry.id, key),
-    durationOf: (entry: Entry) => ({
-      value: ctx.dataset.time.diffDays(entry.start, entry.end),
-      unit: 'day',
-    }),
+    durationOf: (entry: Entry) => {
+      // An Entry that does not span (ADR 0012) has no duration; `diffDays` needs two real dates.
+      if (entry.start === undefined || entry.end === undefined) return undefined;
+      return { value: ctx.dataset.time.diffDays(entry.start, entry.end), unit: 'day' };
+    },
   };
 }
 
@@ -757,13 +758,9 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       function openDate(pending: PendingOpen, entry: Entry, field: Field): void {
         // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
         // so a consumer-declared date Field reads back as `unknown` without this.
+        // A blank cell (ADR 0012: the Entry does not hold this date) opens empty. This is the same
+        // as any other empty cell — it is not broken, so nothing refuses it.
         const raw = ctx.dataset.entries.fieldValue(entry.id, field.key) as Instant | undefined;
-        if (raw === undefined) {
-          // A date control needs a date to seed. Nothing here is broken, so the cell says so rather
-          // than looking like a dead double-click (review SP1).
-          pending.refuse('no-date-value');
-          return;
-        }
         const factory = options.dateInput;
         let dateInput: DateInput;
         if (factory !== undefined) {
@@ -773,13 +770,14 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           // Instant that is not local midnight would silently round-trip to midnight on an
           // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
-          if (ctx.dataset.time.startOfDay(raw) !== raw) {
+          // A blank cell has no Instant to check, so it never trips this refusal.
+          if (raw !== undefined && ctx.dataset.time.startOfDay(raw) !== raw) {
             pending.refuse('time-of-day');
             return;
           }
           dateInput = createDefaultDateInput(ctx.dataset.time);
         }
-        dateInput.write(raw);
+        if (raw !== undefined) dateInput.write(raw);
 
         pending.mount({
           element: dateInput.element,

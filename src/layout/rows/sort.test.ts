@@ -120,6 +120,18 @@ describe('applySort (S4.9)', () => {
     expect(sorted.map((row) => row.id)).toEqual([rowId('short'), rowId('long')]);
   });
 
+  it('a row with neither date sorts last on asc and on desc, not direction * order (ADR 0012 Gate)', () => {
+    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [] };
+    const entries = [entry('a', { start: 1 }), dateless, entry('b', { start: 2 })];
+    const built = resolveEntriesSource(entries, { source: 'entries' });
+
+    const asc = applySort(built, entries, { field: 'start' }, compares);
+    expect(asc.map((row) => row.id)).toEqual([rowId('a'), rowId('b'), rowId('none')]);
+
+    const desc = applySort(built, entries, { field: 'start', direction: 'desc' }, compares);
+    expect(desc.map((row) => row.id)).toEqual([rowId('b'), rowId('a'), rowId('none')]);
+  });
+
   it('a Field-type compare on Duration.value is what FieldCompare.compareStored runs', () => {
     const duration = compares.find((compare) => compare.key === 'duration');
     expect(

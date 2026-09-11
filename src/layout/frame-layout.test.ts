@@ -29,7 +29,13 @@ vi.mock('./row-height-index.js', async (importOriginal) => {
   };
 });
 
-const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
+// Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
+// with both dates.
+const scale = createTimeScale({
+  timeZone: 'UTC',
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+  pxPerMs: 1 / 1000,
+});
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const itemProducerRegistry = createItemProducerRegistry();
@@ -52,7 +58,10 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
 }
 
 function overlappingEntry(base: Entry, copies: number): Entry {
-  const { start, end } = base;
+  // Load-bearing non-null assertion (ADR 0012): every fixture entry this file feeds it is
+  // authored with both dates.
+  const start = base.start!;
+  const end = base.end!;
   return {
     ...base,
     segments: Array.from({ length: copies }, (_, index) => ({
@@ -140,16 +149,16 @@ describe('FrameLayout', () => {
         entryId: entry.id,
         kind,
         label: entry.name,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
       {
         id: itemId(entry.id, 9),
         entryId: entry.id,
         kind,
         label: entry.name,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
     ]);
     const entry: Entry = { ...sampleEntries[0]!, kind };

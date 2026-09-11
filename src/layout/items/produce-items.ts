@@ -49,9 +49,14 @@ function entryItem(
  *  common case a plugin author writes (review P3): `ctx.layout.registerItemProducer(MY_KIND,
  *  (entry) => [wholeEntryItem(entry)])`. Public because the alternative is eight hand-written
  *  lines that must get the Item id convention right from documentation alone. Pure and DOM-free,
- *  like every other `layout/` function. */
+ *  like every other `layout/` function.
+ *
+ *  Load-bearing cast (ADR 0012, Build 1, J2 in BUILD-LOG.md): a non-spanning Entry has no
+ *  `start`/`end` to draw, so `produceItemsForRow` never calls any producer — shipped or a
+ *  plugin's own — for one. That contract, not the type, is why `entry.start`/`entry.end` are
+ *  read here as if they were always present. */
 export function wholeEntryItem(entry: Entry): Item {
-  return entryItem(entry, 0, entry.start, entry.end);
+  return entryItem(entry, 0, entry.start as Instant, entry.end as Instant);
 }
 
 export interface ItemProducerRegistry {
@@ -71,6 +76,9 @@ function produceSpanItems(entry: Entry): readonly Item[] {
   if (segments !== undefined && segments.length > 0) {
     return segments.map((segment, index) => entryItem(entry, index, segment.start, segment.end, segment.id));
   }
+  // Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
+  // start/end case). Same load-bearing cast as `wholeEntryItem` above — `produceItemsForRow`
+  // never calls this producer for a non-spanning Entry (ADR 0012, Build 1, J2).
   return [wholeEntryItem(entry)];
 }
 
@@ -80,9 +88,10 @@ function produceGroupItems(entry: Entry): readonly Item[] {
 }
 
 // render/ draws the diamond off data-kind (D-S4-24). A milestone marks one instant, so its Item
-// ends where it starts.
+// ends where it starts. Load-bearing cast, same reason as `wholeEntryItem` (ADR 0012, J2): a
+// milestone Entry reaching here already has a `start` — `produceItemsForRow` filters it otherwise.
 function produceMilestoneItems(entry: Entry): readonly Item[] {
-  return [entryItem(entry, 0, entry.start, entry.start)];
+  return [entryItem(entry, 0, entry.start as Instant, entry.start as Instant)];
 }
 
 /** `Object.entries` types a value as `ItemProducer | undefined` under `noUncheckedIndexedAccess` —
@@ -122,6 +131,11 @@ export function produceItemsForRow(
   for (const id of row.entryIds) {
     const entry = entryById.get(id);
     if (entry === undefined) continue;
+    // An Entry spans iff both dates are present, and draws nothing until it does (ADR 0012). No
+    // producer — shipped or a plugin's own — ever sees a non-spanning Entry, so `wholeEntryItem`
+    // and the two producers below may read `entry.start`/`entry.end` as always present (J2,
+    // BUILD-LOG.md).
+    if (entry.start === undefined || entry.end === undefined) continue;
     items.push(...registry.producerFor(entry.kind)(entry));
   }
   return items;

@@ -3,7 +3,7 @@ import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, EntryEdit, EntryId } from '../model/index.js';
+import type { Entry, EntryEdit, EntryId, Instant } from '../model/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
 import type { EditExtender, EntryEdits, StoredEdit, StoredEdits } from './edit-extension.js';
@@ -12,10 +12,10 @@ function entry(id: string): Entry {
   return {
     id: entryId(id),
     name: id,
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
+    start: 0 as Instant,
+    end: 1 as Instant,
     kind: 'span',
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
   };
 }
 

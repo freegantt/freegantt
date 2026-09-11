@@ -1706,12 +1706,32 @@ export class GanttShell {
   reveal(id: EntryId | SegmentId): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
-    if (entry !== undefined) return this.#revealSpan(entry.id, entry, entry.start, entry.end);
+    if (entry !== undefined) {
+      // A non-spanning Entry draws no bar (ADR 0012), so there is no x/width to reveal. Only the
+      // row still shows (#232-adjacent gap surfaced by Build 1, no existing rule covered it).
+      if (entry.start === undefined || entry.end === undefined) return this.#revealRow(entry.id);
+      return this.#revealSpan(entry.id, entry, entry.start, entry.end);
+    }
     const ownerId = entries.entryIdOfSegment(id);
     const owner = ownerId === undefined ? undefined : entries.get(ownerId);
     const segment = owner?.segments.find((candidate) => candidate.id === id);
     if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
     return this.#revealSpan(owner.id, owner, segment.start, segment.end);
+  }
+
+  /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
+   *  stays exactly where it was (#232-adjacent gap, ADR 0012, Build 1). */
+  #revealRow(ownerId: EntryId): void {
+    let rowIndex = this.#layout.rowIndexForEntry(ownerId);
+    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
+      this.#frames.flush();
+      rowIndex = this.#layout.rowIndexForEntry(ownerId);
+    }
+    const position = this.#viewport.scroll.state.position;
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : position.y;
+    // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
+    // only y — the same no-op-on-x idiom `#rovingFocusPorts`'s own `revealRow` above already uses.
+    this.#viewport.reveal({ x: position.x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
   #revealSpan(ownerId: EntryId, kindSource: Pick<Entry, 'kind'>, start: Instant, end: Instant): void {

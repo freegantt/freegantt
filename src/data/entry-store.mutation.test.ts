@@ -10,8 +10,8 @@ import * as fieldAccess from './fields/field-access.js';
 import {
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
+  EmptySegmentsError,
   EntryNotFoundError,
-  InvalidInstantError,
   ParentCycleError,
   SegmentNotFoundError,
   UnknownFieldError,
@@ -67,6 +67,24 @@ describe('entries.add', () => {
     expect(seen[0]?.added).toHaveLength(1);
     expect(seen[0]?.added[0]?.entity.id).toBe(entryId('t9'));
   });
+
+  it('add({}) stores no dates and no Segments (ADR 0012 Gate)', () => {
+    const state = dataset();
+    const entry = state.entries.add({ id: 't9', name: 'Roofing' });
+
+    expect(entry.start).toBeUndefined();
+    expect(entry.end).toBeUndefined();
+    expect(entry.segments).toHaveLength(0);
+  });
+
+  it('add({ start }) stores one date and mints no Segment (ADR 0012 Gate)', () => {
+    const state = dataset();
+    const entry = state.entries.add({ id: 't9', name: 'Roofing', start: 0 });
+
+    expect(entry.start).toBe(toInstant('UTC', 0));
+    expect(entry.end).toBeUndefined();
+    expect(entry.segments).toHaveLength(0);
+  });
 });
 
 describe('entries.update', () => {
@@ -88,6 +106,23 @@ describe('entries.update', () => {
 
     state.entries.update('t1', { name: 'Framing — north wing' });
     expect(seen).toHaveLength(1); // the no-op update commits nothing, so no second changeset
+  });
+
+  it('update(id, { start: undefined, end: undefined }) clears both dates and the Segments (ADR 0012 Gate)', () => {
+    const state = dataset([{ id: 't1', name: 'Framing', start: '2026-01-01', end: '2026-01-05' }]);
+
+    const cleared = state.entries.update('t1', { start: undefined, end: undefined });
+
+    expect(cleared.start).toBeUndefined();
+    expect(cleared.end).toBeUndefined();
+    expect(cleared.segments).toHaveLength(0);
+  });
+
+  it('update(id, { segments: [] }) still throws EmptySegmentsError (ADR 0012 Gate)', () => {
+    const state = dataset([{ id: 't1', name: 'Framing', start: '2026-01-01', end: '2026-01-05' }]);
+
+    expect(() => state.entries.update('t1', { segments: [] })).toThrow(EmptySegmentsError);
+    expect(state.entries.get('t1')?.segments).toHaveLength(1);
   });
 
   it('an envelope write on a one-segment entry moves that segment, and the changeset says so', () => {
@@ -221,7 +256,7 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
     expect(state.entries.get('t2')?.segments.map((segment) => segment.id)).toEqual([segmentId('b1')]);
   });
 
-  it("removing an Entry's last Segment removes the Entry", () => {
+  it("removing an Entry's last Segment keeps the Entry and clears both dates (ADR 0012)", () => {
     const state = dataset([
       { id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
       { id: 'other' },
@@ -229,11 +264,15 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
 
     state.entries.removeSegments(['sole']);
 
-    expect(state.entries.has('t1')).toBe(false);
+    const entry = state.entries.get('t1');
+    expect(entry).toBeDefined();
+    expect(entry?.start).toBeUndefined();
+    expect(entry?.end).toBeUndefined();
+    expect(entry?.segments).toHaveLength(0);
     expect(state.entries.has('other')).toBe(true);
   });
 
-  it('undo after a last-Segment removal restores the Entry and its Segment with the same ids', () => {
+  it('undo after a last-Segment removal restores the dates and the Segment with the same id', () => {
     const state = dataset([{ id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] }]);
 
     state.entries.removeSegments(['sole']);
@@ -244,59 +283,19 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
     expect(restored?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
   });
 
-  describe("a last-Segment removal never takes the removed Entry's descendants with it (#212, R3)", () => {
-    it('promotes a direct child to the root when the removed Entry had no parent itself', () => {
-      const state = dataset([
-        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-      ]);
-      const seen = changeSets(state);
+  it("a last-Segment removal never touches the Entry's descendants (ADR 0012: the Entry survives, unlike the old #212 removal)", () => {
+    const state = dataset([
+      { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+      { id: 'child', parentId: 'ps' },
+    ]);
 
-      state.entries.removeSegments(['sole']);
+    state.entries.removeSegments(['sole']);
 
-      expect(state.entries.has('ps')).toBe(false);
-      expect(state.entries.has('child')).toBe(true);
-      expect(state.entries.get('child')?.parentId).toBeUndefined();
-      expect(seen).toHaveLength(1);
-      expect(seen[0]?.updated).toContainEqual(
-        expect.objectContaining({
-          id: entryId('child'),
-          field: 'parentId',
-          from: entryId('ps'),
-          to: undefined,
-        }),
-      );
-    });
-
-    it("promotes a direct child to the removed Entry's own parent, leaving the rest of the subtree in place", () => {
-      const state = dataset([
-        { id: 'gp' },
-        { id: 'ps', parentId: 'gp', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-        { id: 'grandchild', parentId: 'child' },
-      ]);
-
-      state.entries.removeSegments(['sole']);
-
-      expect(state.entries.has('ps')).toBe(false);
-      expect(state.entries.get('child')?.parentId).toBe(entryId('gp'));
-      expect(state.entries.get('grandchild')?.parentId).toBe(entryId('child'));
-      expect(state.entries.size).toBe(3);
-    });
-
-    it("undo restores the removed Entry, its Segment id, and the promoted child's original parentId", () => {
-      const state = dataset([
-        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-      ]);
-
-      state.entries.removeSegments(['sole']);
-      state.undo();
-
-      expect(state.entries.has('ps')).toBe(true);
-      expect(state.entries.get('ps')?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
-      expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
-    });
+    // `ps` gains a child, so it derives (`rollUpKinds`) and the Rollup redraws its span from
+    // `child` right away — the dates this call cleared, not whether `ps` itself survived, so
+    // that half of ADR 0012's contract is `entries.mutation.test.ts`'s childless case above.
+    expect(state.entries.has('ps')).toBe(true);
+    expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
   });
 
   it('an unknown segment id throws SegmentNotFoundError, and stages nothing', () => {
@@ -677,17 +676,19 @@ describe('auto-wrap (D-S2-8)', () => {
 });
 
 describe('roll-up kinds (§1.5)', () => {
-  it('a roll-up kind with no dates gets a zero-length span at the reference date', () => {
+  it('a childless roll-up kind with no dates stays dateless (ADR 0012)', () => {
     const state = dataset();
     const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
 
-    expect(group.start).toBe(state.referenceDate);
-    expect(group.end).toBe(state.referenceDate);
+    expect(group.start).toBeUndefined();
+    expect(group.end).toBeUndefined();
   });
 
-  it('a non-deriving kind with no dates throws InvalidInstantError', () => {
+  it('a non-deriving kind with no dates is legal — one date, or none, is not an error (ADR 0012)', () => {
     const state = dataset();
-    expect(() => state.entries.add({ id: 't1', name: 'Roofing', kind: 'span' })).toThrow(InvalidInstantError);
+    const entry = state.entries.add({ id: 't1', name: 'Roofing', kind: 'span' });
+    expect(entry.start).toBeUndefined();
+    expect(entry.end).toBeUndefined();
   });
 });
 
@@ -793,11 +794,11 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
   });
 
-  it('a childless group keeps its reference-date span', () => {
+  it('a childless group stays dateless (ADR 0012)', () => {
     const state = dataset();
     const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
-    expect(group.start).toBe(state.referenceDate);
-    expect(group.end).toBe(state.referenceDate);
+    expect(group.start).toBeUndefined();
+    expect(group.end).toBeUndefined();
   });
 
   it('with rollUpKinds: [], nothing rolls up at all', () => {

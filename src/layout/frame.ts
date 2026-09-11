@@ -77,7 +77,9 @@ const KIND_SPAN_FLOOR_MULTIPLIER: Readonly<Partial<Record<EntryKind, number>>> =
 });
 
 export function barSpan(
-  entry: Pick<Entry, 'start' | 'end' | 'kind'>,
+  // `Pick<Item, ...>`, not `Entry` — every caller hands this an `Item` (`produceItemsForRow` never
+  // produces one for a non-spanning Entry, ADR 0012), whose `start`/`end` stay required.
+  entry: Pick<Item, 'start' | 'end' | 'kind'>,
   scale: TimeScale,
   diamondSizePx: number = DEFAULT_DIAMOND_SIZE_PX,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,

@@ -35,8 +35,8 @@ describe('TimeScaleModel', () => {
     const model = new TimeScaleModel();
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
-    expect(model.scale.xForInstant(entries[0]!.start)).toBe(0);
-    expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
+    expect(model.scale.xForInstant(entries[0]!.start!)).toBe(0);
+    expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
   });
 
   it('spans every bound dataset, so one scale can carry two Gantt instances (D9)', () => {
@@ -93,7 +93,7 @@ describe('TimeScaleModel', () => {
     expect(model.scale.xForInstant(instant('2026-09-02T00:00:00Z'))).toBeCloseTo(
       dayPreset.preferredTickWidthPx,
     );
-    expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
+    expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start!)).toBeCloseTo(
       dayPreset.preferredTickWidthPx,
     );
   });
@@ -109,10 +109,10 @@ describe('TimeScaleModel', () => {
     const at = entries[0]!.start;
     bindTimeScale(
       zeroSpan,
-      { timeZone: 'UTC', entries: [{ ...entries[0]!, end: at }], paneWidth: 800 },
+      { timeZone: 'UTC', entries: [{ ...entries[0]!, end: at! }], paneWidth: 800 },
       noop,
     );
-    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at)).toBeCloseTo(
+    expect(zeroSpan.scale.widthForDuration({ value: 1, unit: 'day' }, at!)).toBeCloseTo(
       dayPreset.preferredTickWidthPx,
     );
   });
@@ -122,7 +122,7 @@ describe('TimeScaleModel', () => {
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
 
-    expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(500);
+    expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(500);
   });
 
   it('is readable before anything binds', () => {
@@ -208,12 +208,12 @@ describe('TimeScaleModel', () => {
     it('setPaneWidth invalidates and notifies when the width actually changes', () => {
       const model = new TimeScaleModel();
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
+      expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
 
       // 600px over this fixture's 5-day span is 120px/day, still clear of dayPreset's density
       // floor (96px/day) — the resize itself is what's under test, not the floor.
       handle.setPaneWidth(600);
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(600);
+      expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(600);
     });
 
     it('setPaneWidth is a no-op (no notify, no invalidation) when the width is unchanged', () => {
@@ -232,11 +232,11 @@ describe('TimeScaleModel', () => {
       const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 600 }, noop);
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 1000 }, noop);
       // Narrowest of {600, 1000} is 600.
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(600);
+      expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(600);
 
       handleA.setPaneWidth(0);
       // A is unmeasured (display:none) and excluded from fitWidth; B's 1000 is the only measured width left.
-      expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(1000);
+      expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(1000);
     });
   });
 
@@ -261,7 +261,7 @@ describe('TimeScaleModel', () => {
       const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       const seen: number[] = [];
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () =>
-        seen.push(model.scale.xForInstant(entries[1]!.end)),
+        seen.push(model.scale.xForInstant(entries[1]!.end!)),
       );
       seen.length = 0; // drop the notify from this binding's own bind() call
 
@@ -306,7 +306,7 @@ describe('TimeScaleModel', () => {
 
       // dayPreset's preferredTickWidthPx now already clears its own density floor (header
       // readability follow-up), so 'preset' fit resolves to the preferred density directly.
-      expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start)).toBeCloseTo(
+      expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start!)).toBeCloseTo(
         dayPreset.preferredTickWidthPx,
       );
     });
@@ -318,7 +318,7 @@ describe('TimeScaleModel', () => {
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       expect(model.fit).toBe(0.01);
-      expect(model.scale.widthForDuration({ value: 1, unit: 'millisecond' }, entries[0]!.start)).toBeCloseTo(
+      expect(model.scale.widthForDuration({ value: 1, unit: 'millisecond' }, entries[0]!.start!)).toBeCloseTo(
         0.01,
       );
     });
@@ -397,10 +397,10 @@ describe('TimeScaleModel', () => {
     const model = new TimeScaleModel();
     const binding = { timeZone: 'UTC', entries, paneWidth: 800 };
     bindTimeScale(model, binding, noop);
-    expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
+    expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
 
     // The model copied the binding at bind time; mutating the caller's object does nothing.
     (binding as { paneWidth: number }).paneWidth = 100;
-    expect(model.scale.xForInstant(entries[1]!.end)).toBeCloseTo(800);
+    expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
   });
 });

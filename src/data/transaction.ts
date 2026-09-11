@@ -13,6 +13,7 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
@@ -98,6 +99,9 @@ export interface TransactionData {
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
   bumpDatasetRevision(): void;
+  /** The commit path's real counter (ADR 0012) — see `CommitChangeSetInput.mintSegmentId`, the
+   *  structurally-narrower shape `buildCommitChangeSet` actually reads. */
+  mintSegmentId(): SegmentId;
 }
 
 /**

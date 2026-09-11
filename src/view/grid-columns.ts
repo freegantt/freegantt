@@ -8,7 +8,9 @@ import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
 import { pickDefined } from '../layout/index.js';
 
-export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name']);
+// The date path is the grid (ADR 0012): the date editor opens on a blank cell and writes one Field,
+// so a dateless row is dated there.
+export const DEFAULT_GRID_COLUMNS: readonly GridColumnInput[] = Object.freeze(['name', 'start', 'end']);
 
 /** #139: what a column measures when nobody names a width for it. A Grid column is fixed-width by
  *  default — it keeps the width it was given, and the column set scrolls the pane once it outgrows
