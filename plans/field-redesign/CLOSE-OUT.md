@@ -1,6 +1,6 @@
 # Close-out — ADRs 0011 to 0016
 
-**Every numbered decision and every grill call-site is closed. None is built.** All **six** ADRs are `proposed`, `src/` still ships `meta`, `Entry.kind`, `entries.fieldValue` and `schema: 4`, and the locked specs already state most of the new rules. The [2026-09-10 grill](README.md#grill-2026-09-10) overruled 0012 #4, 0011 #1 for `add()`, and 0015 #18's default, and closed Q12b, Q15, and Q16. This file is what is left, in order.
+**Every numbered decision and every grill call-site is closed. None is built.** All **six** ADRs are `proposed`. `src/` still ships `meta`, `Entry.kind`, `entries.fieldValue` and `schema: 4` — that is HEAD, not the target. [`BUILD-SPEC.md`](BUILD-SPEC.md) §3 is the target: dates optional, no `kind`, `props` not `meta`, no save format. The locked specs already state most of the new rules. The [2026-09-10 grill](README.md#grill-2026-09-10) overruled 0012 #4, 0011 #1 for `add()`, and 0015 #18's default, and closed Q12b, Q15, and Q16. This file is what is left, in order.
 
 **Landing order is fixed:** **0016** → 0012 → 0011 → 0013 → 0014 → 0015. **No build spends a schema number** — [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md) deletes the save format that carried them, and [the counter](shared/rulings.md#3--the-schema-restarts-release-gate) dissolves with it. Each ADR's own *The work* section is working material. [`BUILD-SPEC.md`](BUILD-SPEC.md) is the verified plan across all six, and it wins where a work list still names a Document.
 

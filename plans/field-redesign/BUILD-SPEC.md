@@ -1,6 +1,10 @@
 # BUILD-SPEC — the field redesign, ADRs 0016 → 0012 → 0011 → 0013 → 0014 → 0015
 
-**Read this before you write code for the field redesign.** Every decision is closed. No line is built. This file holds the verification of the claims, the six builds in landing order, the target state, the issues, and the checklist.
+**Read this before you write code for the field redesign.** Every decision is closed. No line is built.
+
+**Section 3 is the target.** Dates are optional. There is no `kind` on `Entry`. There is no `meta`. There is no save format. Section 2 is the landing order. Section 5 is the checklist.
+
+**Section 1 is not the target.** It is a snapshot of what `src/` still ships, so each build knows what to cut. A row that says `start` is required, or that `kind` and `meta` sit on `Entry`, is a fact about HEAD. The build named in that row retires it.
 
 **This file plans. It does not rule.** Where an ADR already ruled, this file cites the ADR. Where the working notes disagree with `src/`, section 1 says so and gives a resolution. Where the resolution needs the author, section 1 marks it **BLOCKED — author**.
 
@@ -25,53 +29,53 @@
 
 # 1 — Verification report
 
-## 1.1 What was checked
+## 1.1 What `src/` still ships — a HEAD snapshot, not a ruling
 
-Every load-bearing line reference, symbol name, count and gate that this file carries into sections 2–5 was opened in the file it names. The greps below were run at `58dd99e` on `adr-0011-field-redesign`.
+Every load-bearing line in sections 2–5 was opened in the file it names. The greps ran at `58dd99e` on `adr-0011-field-redesign`. **Open the file again when you edit it.** Line numbers drift.
 
-**Claims that hold, checked one by one.** Do not re-check these.
+**This table is the cut list.** It is what the code does *today*, before any of the six builds. It is not what to ship. Copy a row into new code and you re-land a retired rule. The target is §3.
 
-| Claim | File | Result |
+| What `src/` does today | File | Retired by |
 |---|---|---|
-| `libraryWriteRule` holds the editable and derived arms in one function | `src/view/capability.ts:114-121` | **Holds.** `:119` reads `isRollUpKind(entry.kind) && rollsUp(field)`; `:120` reads `field.editable === true` |
-| `rollsUp` already lives in `data/` | `src/data/fields/field-registry.ts:97` | **Holds** |
-| `entries.update()` throws `UnknownFieldError` today | `src/data/entry-store.ts:358` | **Holds.** `entries.fieldValue` throws the same at `:195` |
-| `start` and `end` are required on `Entry` | `src/model/entry.ts:31,33` | **Holds.** `kind` is at `:29`, `meta?: TMeta` at `:39` |
-| `StoredEdit` is `Partial<Omit<Entry,'id'>> & { proposedKeys? }` | `src/model/entry.ts:108` | **Holds** |
-| `CoreFieldValues extends Omit<Entry,'id'>` | `src/model/field.ts:19` | **Holds.** Public at `src/api/index.ts:57` |
-| The `editable` comment still says *Default `false`* and claims I14 | `src/model/field.ts:125-127` | **Holds** |
-| `fieldValue<K extends FieldKey>(id, field: K)` | `src/model/dataset.ts:41` | **Holds** |
-| The `fieldValue` renderer payload sits on two context types | `src/model/field.ts:61-63`, `src/layout/renderer.ts:52-55` | **Holds** |
-| `#fieldValueForCell` | `src/view/gantt-shell.ts:1551` | **Holds.** Two call sites, `:591` and `:600` |
-| `#mergeCoreFieldOverride` merges `editable` and never reads `source` | `src/data/fields/field-registry.ts:211-226` | **Holds.** `CORE_FIELD_OVERRIDABLE_KEYS = ['editable']` at `:101` |
-| `FieldRegistry.all` is one array identity for the registry's life | `src/data/fields/field-registry.ts:137-142` | **Holds** |
-| `authored` drops core keys, so a core override never serializes | `src/data/fields/field-registry.ts:149-153` | **Holds.** This is 0015's API gap |
-| The `authored` comment states plugin values sit in `Entry.meta` | `src/data/fields/field-registry.ts:148` | **Holds** |
-| `metaRecord`, `metaKey`, `metaSlot` exist | `source-strategy.ts:19,103`, `field-registry.ts:50` | **Holds** |
-| The `referenceDate` fill | `src/data/entry-reader.ts:170` | **Holds.** `InvalidInstantError` throws at `:172` and `:178` |
-| `durationOf` is unguarded and yields `NaN` | `src/data/fields/field-access.ts:92`, `src/time/instant.ts:41` | **Holds.** `diffMs` is `a - b` |
-| `isOptionalEntryKey` names `'meta'` | `src/data/fields/field-access.ts:26` | **Holds** |
-| `mergeStoredEdits` shallow-spreads | `src/data/fields/field-access.ts:49` | **Holds** |
-| `mergeEntryEdits` shallow-spreads | `src/data/edit-extension.ts:38` | **Holds.** The function opens at `:35` |
-| `writeDeclaredMetaFields` walks the edit's top level | `src/data/fields/field-access.ts:141` | **Holds** |
-| `fieldsWrittenBy` skips `'meta'` | `src/data/build-commit-change-set.ts:100,106` | **Holds** |
-| The Rollup asks `kind` twice and structure once | `src/data/rollup.ts:69,75,184` | **Holds.** `:81` is a third `kinds.has` |
-| `editProposesField` has one call site in `src/` | `src/data/rollup.ts:196` | **Holds.** `refuted.md` item 8 is correct |
-| An Aggregator's `undefined` is skipped | `src/data/rollup.ts:208` | **Holds** |
-| `body` and `merged` are two declared sets with two stated jobs | `src/data/rollup.ts:23-26` | **Holds** |
-| `RegistrationClosedError` fires after `setup()` returns | `src/extensions/plugin-runtime.ts:54` | **Holds** |
-| *"removing every child demotes nothing"* is pinned by name | `src/data/hierarchy.test.ts:116` | **Holds** |
-| `MS` is public | `src/time/instant.ts:45`, `src/api/index.ts:365` | **Holds** |
-| `dataset.fields` and `Dataset.plugins` are read-only getters | `src/api/dataset.ts:240`, `:182` | **Holds** |
-| `toJSON` / `fromJSON` are the public doors | `src/api/dataset.ts:312`, `:326`, options at `:328` | **Holds** |
-| `reportCorrectedRollUps` compares `start` and `end` only | `src/data/serialization/index.ts:86-105` | **Holds** |
-| The build writes `schema: 4` and reads `1`–`4` | `src/data/serialization/read.ts:1-2`, `index.ts:69` | **Holds** |
-| `e2e/write-refusal.spec.ts` exists | `e2e/write-refusal.spec.ts` | **Holds** |
-| `harness/planner.ts:31` writes two generics that disagree about `critical` | `harness/planner.ts:31`, `:161` | **Holds.** `PlannerMeta` carries `critical`; the second generic does not |
-| The harness double cast | `harness/main.ts:89` | **Holds** |
-| The harness comment claims the lock rides in the Document | `harness/data.ts:39-40` | **Holds** |
-| No spike path reaches `src/`, `harness/` or `e2e/` | grep | **Holds.** Returns 0 |
-| The 0011 code gate returns 423 today | grep | **Holds** — but the gate is unreachable. See 1.2 **V1** |
+| `libraryWriteRule` holds the editable and derived arms in one function. `:119` still asks `isRollUpKind(entry.kind)`; `:120` still asks `field.editable === true` | `src/view/capability.ts:114-121` | **0011** moves it into `data/` with no policy change. **0013** replaces the `kind` test. **0015** replaces the boolean |
+| `rollsUp` already lives in `data/` | `src/data/fields/field-registry.ts:97` | stays — 0013 and 0015 call it |
+| `entries.update()` throws `UnknownFieldError` only | `src/data/entry-store.ts:358` | stays as the exists arm. `entries.fieldValue` throws the same at `:195` until **0014** renames it |
+| `Entry.start` and `Entry.end` are still **required**. `kind` is still at `:29`. `meta?: TMeta` is still at `:39` | `src/model/entry.ts:31,33` | **0012** makes both dates optional. **0013** deletes `kind`. **0011** renames `meta` → `props`. None of the three is the target |
+| `StoredEdit` is `Partial<Omit<Entry,'id'>> & { proposedKeys? }` | `src/model/entry.ts:108` | **0011** → `ProposedEdit` |
+| `CoreFieldValues extends Omit<Entry,'id'>` | `src/model/field.ts:19` | **0011** also omits `'props'`. Public at `src/api/index.ts:57` |
+| The `editable` comment still says *Default `false`* and claims I14 | `src/model/field.ts:125-127` | **0015** — default is `'anywhere'` |
+| `fieldValue<K extends FieldKey>(id, field: K)` | `src/model/dataset.ts:41` | **0014** → `read` |
+| The `fieldValue` renderer payload sits on two context types | `src/model/field.ts:61-63`, `src/layout/renderer.ts:52-55` | **0014** — pair becomes `text` and `value` |
+| `#fieldValueForCell` | `src/view/gantt-shell.ts:1551` | **0014** → `#cellValueFor`. Two call sites, `:591` and `:600` |
+| `#mergeCoreFieldOverride` merges `editable` and never reads `source` | `src/data/fields/field-registry.ts:211-226` | stays. `CORE_FIELD_OVERRIDABLE_KEYS = ['editable']` at `:101` |
+| `FieldRegistry.all` is one array identity for the registry's life | `src/data/fields/field-registry.ts:137-142` | stays — `setFieldEditable` replaces that identity |
+| `authored` drops core keys, so a core override never serializes | `src/data/fields/field-registry.ts:149-153` | **0016** deletes `authored`. There is no Document to serialize into |
+| The `authored` comment states plugin values sit in `Entry.meta` | `src/data/fields/field-registry.ts:148` | **0016** deletes the comment with `authored` |
+| `metaRecord`, `metaKey`, `metaSlot` exist | `source-strategy.ts:19,103`, `field-registry.ts:50` | **0011** deletes them. There is no `meta` |
+| The `referenceDate` fill still mints a date the user did not author | `src/data/entry-reader.ts:170` | **0012** deletes it. `InvalidInstantError` at `:172` and `:178` stays for unreadable dates only |
+| `durationOf` is unguarded and yields `NaN` | `src/data/fields/field-access.ts:92`, `src/time/instant.ts:41` | **0012** guards it. **0014** deletes `durationOf`. `diffMs` is `a - b` |
+| `isOptionalEntryKey` names `'meta'` | `src/data/fields/field-access.ts:26` | **0011** follows the rename. **0012** adds `start` and `end` |
+| `mergeStoredEdits` shallow-spreads | `src/data/fields/field-access.ts:49` | **0011** merges `props` per key |
+| `mergeEntryEdits` shallow-spreads | `src/data/edit-extension.ts:38` | **0011** merges `props` per key. Function opens at `:35` |
+| `writeDeclaredMetaFields` walks the edit's top level | `src/data/fields/field-access.ts:141` | **0011** also walks inside `props` on a nested constructor record |
+| `fieldsWrittenBy` skips `'meta'` | `src/data/build-commit-change-set.ts:100,106` | **0011** follows the rename |
+| The Rollup asks `kind` twice and structure once | `src/data/rollup.ts:69,75,184` | **0013** asks structure only. `:81` is a third `kinds.has` |
+| `editProposesField` has one call site in `src/` | `src/data/rollup.ts:196` | stays — `refuted.md` item 8. Do not unify `body` / `merged` |
+| An Aggregator's `undefined` is skipped, so a parent can keep a stale envelope | `src/data/rollup.ts:208` | **0013** — on a rolling-up parent, `undefined` means no value |
+| `body` and `merged` are two declared sets with two stated jobs | `src/data/rollup.ts:23-26` | stays |
+| `RegistrationClosedError` fires after `setup()` returns | `src/extensions/plugin-runtime.ts:54` | stays |
+| *"removing every child demotes nothing"* is pinned by name | `src/data/hierarchy.test.ts:116` | **0013** overrules it. Demotion leaves name, no dates, no bar |
+| `MS` is public | `src/time/instant.ts:45`, `src/api/index.ts:365` | stays |
+| `dataset.fields` and `Dataset.plugins` are read-only getters | `src/api/dataset.ts:240`, `:182` | stays |
+| `toJSON` / `fromJSON` are still the public save doors | `src/api/dataset.ts:312`, `:326`, options at `:328` | **0016** deletes them. The library holds no save format |
+| `reportCorrectedRollUps` compares `start` and `end` only | `src/data/serialization/index.ts:86-105` | **0016** deletes it with the reader |
+| The format writes `schema: 4` and reads `1`–`4` | `src/data/serialization/read.ts:1-2`, `index.ts:69` | **0016** deletes the format. No build spends a schema number |
+| `e2e/write-refusal.spec.ts` exists | `e2e/write-refusal.spec.ts` | stays. **0015** adds an `entries.update()` assertion |
+| `harness/planner.ts:31` writes two generics that disagree about `critical` | `harness/planner.ts:31`, `:161` | **0011** — one generic. `PlannerMeta` becomes `PlannerEntryProps` |
+| The harness double cast | `harness/main.ts:89` | not this redesign. Declare the globals as bare `Dataset` on `main` (V20) |
+| The harness comment claims the lock rides in the Document | `harness/data.ts:39-40` | **0016** B5 — the export/import feature goes with `fromJSON` |
+| No spike path reaches `src/`, `harness/` or `e2e/` | grep | stays — gate, expect 0 |
+| The unscoped 0011 `meta` grep returns 423 today | grep | **V1** — unreachable. Use the TypeScript-scoped gate |
 
 ## 1.2 Inconsistencies found
 
@@ -549,7 +553,7 @@ Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites
 
 **The one question it answers.** May an Entry hold no dates?
 
-**Depends on.** Build 0016 only, and loosely: `data/serialization/` is deleted by then, so this build has no reader arm to add. It lands second because `model/entry.ts:31,33` makes `start` and `end` required, and ADR 0013 needs a dateless Entry to be representable.
+**Depends on.** Build 0016 only, and loosely: `data/serialization/` is deleted by then, so this build has no reader arm to add. It lands second because **HEAD still requires** `start` and `end` at `model/entry.ts:31,33`, and ADR 0013's demotion produces a dateless Entry. This build is what makes those dates optional. The target is §3.1.
 
 **Layers it changes.**
 
@@ -619,7 +623,7 @@ grep -rn --include='*.ts' '\bmeta\b\|FieldSource\|source: {' src/ harness/ | gre
 pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log
 ```
 
-Plus the **seven type tests** from `types.md`. These compile: `{ start: undefined }`, `{ parentId: undefined }`, `{ owner: undefined }` with `owner` required on `TProps`. These do not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`, `{ props: { owner: 'Sam' } }`.
+Plus the **seven type tests** from `types.md`. These compile: `{ start: undefined }`, `{ parentId: undefined }`, `{ owner: undefined }` with `owner` required on `TProps`. These do not: `{ kind: undefined }`, `{ name: undefined }`, `{ segments: undefined }`, `{ props: { owner: 'Sam' } }`. **`kind` is still on `Entry` during this build.** Build 0013 deletes it. Do not keep `kind` because this list names it.
 
 **Traps.**
 
