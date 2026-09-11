@@ -4,6 +4,7 @@ import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
 import type { Entry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
+import type { EntryMove } from './event-bus.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
@@ -67,6 +68,9 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
     canGesture: () => true,
+    // ADR 0013: an ordinary bar writes itself. The fixtures here are childless, and a test that
+    // wants a parent bar's drag overrides this with the descendants below it.
+    entriesMovedBy: (entry) => [entry],
     commitEntryEdits: () => true,
     emit: (name, payload) => {
       emitted.push([name, payload]);
@@ -927,5 +931,92 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
     expect(walks).toBe(0);
     expect(sawStart).not.toBe(0 as unknown as Instant);
+  });
+});
+
+describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
+  /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
+  function startOnly(id: string, start: number): Entry {
+    return {
+      id: entryId(id),
+      name: id,
+      start: start as Instant,
+      segments: [],
+      props: {},
+    };
+  }
+
+  /** One phase bar over two children — the shape a real roll-up parent is always in. `entriesMovedBy`
+   *  answers the way `view/capability.ts` does: the parent writes the rows below it, never itself. */
+  function withParent(children: readonly Entry[]) {
+    const parent = entry('phase', 100, 400);
+    return withRoster([parent, ...children], {
+      entriesMovedBy: (grabbed) => (grabbed.id === parent.id ? children : [grabbed]),
+    });
+  }
+
+  it('writes the descendants, leaves the parent unwritten, and names the parent in the event', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, emitted } = withParent([child]);
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('phase'), { kind: 'move' })!.commit(50);
+
+    expect(committed).toBe(true);
+    // One transaction, one undo: `commitEntryEdits` is called once, with the descendants alone.
+    expect(written).toHaveLength(1);
+    expect([...written[0]!.keys()]).toEqual([entryId('child')]);
+    const move = emitted[1]![1] as EntryMove;
+    expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove', 'entryMove']);
+    // `event.entry` is the parent you grabbed, and its span is the envelope it lands on.
+    expect(move.entry).toBe(entryId('phase'));
+    expect(move.start).toBe(150);
+    expect(move.end).toBe(450);
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150, end: 250 }]);
+  });
+
+  it('moves a child that holds only a start, and proposes no end for it', async () => {
+    const child = startOnly('child', 100);
+    const { deps, emitted } = withParent([child]);
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    await pipeline.session(entryId('phase'), { kind: 'move' })!.commit(50);
+
+    const edit = written[0]!.get(entryId('child'))!;
+    expect(edit.start).toBe(150);
+    expect(edit.end).toBeUndefined();
+    expect([...edit.proposedKeys]).toEqual(['start']);
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150 }]);
+  });
+
+  it('previews the parent bar following the pointer, though it writes nothing', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, applied } = withParent([child]);
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('phase'), { kind: 'move' })!.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied[0] as readonly { itemId: string; dx: number; extra: boolean }[];
+    // The parent's own bar is the caller's gesture, not an extender's ghost, so `extra` stays false.
+    expect(preview.map((item) => [item.itemId, item.dx, item.extra])).toEqual([
+      [itemId(entryId('phase')), 50, false],
+      [itemId(entryId('child')), 50, false],
+    ]);
   });
 });

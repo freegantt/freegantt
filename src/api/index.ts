@@ -126,6 +126,7 @@ export type {
   NavigationChange,
   SelectionChange,
   CollapseChange,
+  ProposedDates,
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,

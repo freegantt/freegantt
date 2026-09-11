@@ -72,6 +72,12 @@ export interface Capabilities {
   /** #256: the one answer to "may this Field's value change on this Entry". Every writer asks it:
    *  the cell editor, the resize drag, the move drag and the keyboard nudge. */
   canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+  /** ADR 0013: which Entries a move of this bar writes. An ordinary bar writes itself. A parent's
+   *  own `start`/`end` roll up from its children. So a parent bar writes the dated descendants below
+   *  it instead, and the Rollup moves the parent's own envelope at commit.
+   *
+   *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
+  entriesMovedBy(entry: Entry): readonly Entry[];
 }
 
 /** S5.9, D-S5-22: `ctx.interaction.registerLookDefaults(look, defaults)` is a plugin's per-look
@@ -91,6 +97,10 @@ export interface CapabilityInputs {
    *  `GanttShell` passes `(entry) => dataset.entries.childrenOf(entry.id).length > 0` straight
    *  through. */
   hasChildren: (entry: Entry) => boolean;
+  /** ADR 0013: every Entry below this one, deepest included. A parent bar's drag translates the
+   *  dated descendants under it. So "may this parent move" asks about the whole subtree, and not
+   *  about one level. `GanttShell` passes `data/entry-tree.ts`'s own `descendantsOf`. */
+  descendantsOf: (entry: Entry) => readonly Entry[];
   /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
    *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
@@ -104,6 +114,10 @@ export interface CapabilityInputs {
   /** S5.9, D-S5-22. */
   registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
 }
+
+/** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
+ *  the hover path (I5). */
+const NOTHING_MOVES: readonly Entry[] = Object.freeze([]);
 
 /** Is there a value here to write at all? This is structure, not policy. So it sits above every
  *  rule. No consumer predicate and no plugin default opens a cell with no stored home.
@@ -123,15 +137,19 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
  *  left to special-case a gesture off of (ADR 0013). `canWrite` below decides whether that gesture
  *  can carry its write out.
  *
- *  A parent is *not* named here, and needs no name. Its `start` and `end` both roll up, so
- *  `canWrite` closes both edges already. That closes move and resize with them. */
+ *  A parent is *not* named here, and needs no name. Its `start` and `end` both roll up, so it writes
+ *  no date of its own. What a parent bar's move writes is the subtree below it (ADR 0013), and
+ *  `entriesMovedBy` answers that. Resize stays closed on a parent: one edge of a derived envelope
+ *  names no descendant to resize. */
 function gestureIsOffered(): boolean {
   return true;
 }
 
-/** Which dates does this gesture set, and may it set them? `move` shifts the whole bar. So it sets
- *  both dates and needs both. This is the hole #256 found: a locked `start` hid its own handle, and
- *  a move rewrote it anyway. `resize` sets the dragged edge's own Field. `select` sets nothing.
+/** Which dates does this gesture set, and may it set them? `move` shifts the whole bar. A leaf bar
+ *  sets both dates and needs both. That is the hole #256 found: a locked `start` hid its own handle,
+ *  and a move rewrote it anyway. A parent bar sets no date of its own, so it asks what its
+ *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
+ *  sets nothing.
  *
  *  A drag also writes `segments`, and this asks nothing about that Field. `segments` is not a second
  *  value the user aims at. It is where the same span is stored, and `draftForResize` recomputes the
@@ -144,12 +162,13 @@ function mayWriteTheDatesItSets(
   entry: Entry,
   edge: 'start' | 'end' | undefined,
   canWrite: (entry: Entry, field: FieldKey) => WriteVerdict,
+  moveWritesSomething: (entry: Entry) => boolean,
 ): boolean {
   switch (capability) {
     case 'select':
       return true;
     case 'move':
-      return canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+      return moveWritesSomething(entry);
     case 'resize':
       // No edge asked means "either handle" — the affordance pass asks each edge by name.
       if (edge !== undefined) return canWrite(entry, edge).ok;
@@ -177,7 +196,7 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
  *  or answer `interactions.edit` for the cell. One home for "may this value change" is the whole
  *  point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
-  const { interactions, hasChildren, fieldFor, lookOf, registeredDefaultsFor } = inputs;
+  const { interactions, hasChildren, descendantsOf, fieldFor, lookOf, registeredDefaultsFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
@@ -190,6 +209,43 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
     return libraryWriteRule(hasChildren(entry), declared);
   };
 
+  /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when both of them may
+   *  change. It asks about the Fields, never about the values, so a dateless leaf answers the same
+   *  as a dated one. */
+  const movesItsOwnDates = (entry: Entry): boolean =>
+    canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+
+  /** ADR 0013: a descendant travels with the parent bar when every date it holds may change. It is
+   *  not the leaf rule above. A child with a `start` and no `end` moves that `start`. A closed `end`
+   *  it never had must not stop it. */
+  const mayTranslateTheDatesItHolds = (entry: Entry): boolean =>
+    (entry.start === undefined || canWrite(entry, 'start').ok) &&
+    (entry.end === undefined || canWrite(entry, 'end').ok);
+
+  const entriesMovedBy = (entry: Entry): readonly Entry[] => {
+    if (!hasChildren(entry)) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
+    const moved: Entry[] = [];
+    for (const descendant of descendantsOf(entry)) {
+      // A descendant with children of its own derives its dates the same way this parent does.
+      // The walk passes over it, and reaches the dated rows below it.
+      if (hasChildren(descendant)) continue;
+      // "Children with neither date are skipped" (ADR 0013) — there is nothing to translate.
+      if (descendant.start === undefined && descendant.end === undefined) continue;
+      // One locked descendant refuses the whole gesture. A parent bar that moved part of its own
+      // subtree would land somewhere the gesture never showed. The envelope it paints while dragging
+      // is the whole subtree translated. The Rollup would then compute a different one.
+      if (!mayTranslateTheDatesItHolds(descendant)) return NOTHING_MOVES;
+      moved.push(descendant);
+    }
+    return moved;
+  };
+
+  /** Does this bar's move write anything at all? `entriesMovedBy` says *what* it writes; this says
+   *  *whether*. The hover path asks this one (`can('move', …)` resolves an affordance), so an
+   *  ordinary bar answers it without building a list (I5). */
+  const moveWritesSomething = (entry: Entry): boolean =>
+    hasChildren(entry) ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
+
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
     const rule = interactions?.[capability];
     if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
@@ -201,8 +257,9 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
   return {
     can(capability, entry, edge) {
       if (!isOffered(capability, entry)) return false;
-      return mayWriteTheDatesItSets(capability, entry, edge, canWrite);
+      return mayWriteTheDatesItSets(capability, entry, edge, canWrite, moveWritesSomething);
     },
     canWrite,
+    entriesMovedBy,
   };
 }

@@ -25,6 +25,10 @@ function entry(overrides: Partial<Entry> = {}): Entry {
 // (`layout/items/produce-items.ts`). This file has no Dataset to ask, so it marks the one fact each
 // test cares about on the Entry's own `props` and reads the mark straight back.
 const isMarkedParent = (entry: Entry): boolean => entry.props['isParent'] === true;
+/** ADR 0013: what a parent bar's own drag would write. A test that cares hands over its own subtree;
+ *  every other test here marks a parent with no children to find, which is what an empty list says. */
+const markedChildren = (entry: Entry): readonly Entry[] =>
+  (entry.props['children'] as readonly Entry[] | undefined) ?? [];
 const markedLook = (entry: Entry): EntryLook => (entry.props['look'] as EntryLook | undefined) ?? 'leaf';
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
@@ -45,6 +49,7 @@ function capabilities(
 ): ReturnType<typeof resolveCapabilities> {
   return resolveCapabilities({
     hasChildren: isMarkedParent,
+    descendantsOf: markedChildren,
     lookOf: markedLook,
     fieldFor: fieldsWith(...fieldOverrides),
     ...overrides,
@@ -62,12 +67,23 @@ describe('resolveCapabilities — gestures', () => {
     expect(caps.can('select', e)).toBe(true);
   });
 
-  it('defaults a roll-up parent to move/resize false, select true', () => {
+  it('defaults a roll-up parent to move true, resize false, select true (ADR 0013)', () => {
     const caps = capabilities();
-    const e = entry({ props: { isParent: true } });
-    expect(caps.can('move', e)).toBe(false);
-    expect(caps.can('resize', e)).toBe(false);
-    expect(caps.can('select', e)).toBe(true);
+    const child = entry({ id: entryId('c1'), name: 'c1' });
+    const parent = entry({ props: { isParent: true, children: [child] } });
+    // The move translates the child below it. The resize stays closed: one edge of a derived
+    // envelope names no descendant to resize.
+    expect(caps.can('move', parent)).toBe(true);
+    expect(caps.can('resize', parent)).toBe(false);
+    expect(caps.can('select', parent)).toBe(true);
+  });
+
+  it('refuses a parent move when nothing below it holds a date — there is nothing to translate', () => {
+    const caps = capabilities();
+    const dateless: Entry = { id: entryId('c1'), name: 'c1', segments: [], props: {} };
+    const parent = entry({ props: { isParent: true, children: [dateless] } });
+    expect(caps.can('move', parent)).toBe(false);
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
   });
 
   it('defaults a childless entry the same as any other — there is no consumer-defined kind to name', () => {
@@ -206,11 +222,13 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
     expect(caps.can('move', entry())).toBe(true);
   });
 
-  it('interactions.edit opens a roll-up parent it would otherwise refuse', () => {
+  it('interactions.edit opens a roll-up parent cell it would otherwise refuse', () => {
     const caps = capabilities({ interactions: { edit: true } });
     const parent = entry({ props: { isParent: true } });
     expect(caps.canWrite(parent, 'start').ok).toBe(true);
-    expect(caps.can('move', parent)).toBe(true);
+    // ADR 0013: the parent's own cell is open, and its move still does not write it. What a parent
+    // bar's move writes is the subtree below it, which this marked parent has none of.
+    expect(caps.can('move', parent)).toBe(false);
   });
 });
 
@@ -312,5 +330,63 @@ describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
   it('a registered edit default opens a Field the library would have refused', () => {
     const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { edit: true }) }, lockedEnd);
     expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'end').ok).toBe(true);
+  });
+});
+
+describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", () => {
+  const dated = (id: string): Entry => entry({ id: entryId(id), name: id });
+  /** One date and no Segment (ADR 0012): the row shows in the grid and draws no bar. */
+  const startOnly = (id: string): Entry => ({
+    id: entryId(id),
+    name: id,
+    start: 0 as Instant,
+    segments: [],
+    props: {},
+  });
+
+  it('answers an ordinary bar with itself', () => {
+    const caps = capabilities();
+    const leaf = dated('e1');
+    expect(caps.entriesMovedBy(leaf)).toEqual([leaf]);
+  });
+
+  it('answers a parent with the dated descendants below it, and never with the parent', () => {
+    const child = dated('c1');
+    const grandchild = dated('g1');
+    const middle = entry({
+      id: entryId('m1'),
+      name: 'm1',
+      props: { isParent: true, children: [grandchild] },
+    });
+    const parent = entry({ props: { isParent: true, children: [child, middle] } });
+    const caps = capabilities({
+      descendantsOf: (e) => (e.id === parent.id ? [child, middle, grandchild] : markedChildren(e)),
+    });
+    // `middle` derives its own dates from `grandchild`, so the walk passes over it and writes the
+    // rows that hold their own dates.
+    expect(caps.entriesMovedBy(parent)).toEqual([child, grandchild]);
+  });
+
+  it("moves a child that holds only a start — the author's own case", () => {
+    const child = startOnly('c1');
+    const caps = capabilities();
+    const parent = entry({ props: { isParent: true, children: [child] } });
+    expect(caps.entriesMovedBy(parent)).toEqual([child]);
+    expect(caps.can('move', parent)).toBe(true);
+  });
+
+  it('refuses the whole gesture when one descendant may not be written', () => {
+    const caps = capabilities({}, lockedEnd);
+    const parent = entry({ props: { isParent: true, children: [dated('c1')] } });
+    // A parent bar that moved part of its own subtree would land somewhere the drag never showed.
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+  });
+
+  it('still moves a start-only child whose end is locked — it has no end to write', () => {
+    const child = startOnly('c1');
+    const caps = capabilities({}, lockedEnd);
+    const parent = entry({ props: { isParent: true, children: [child] } });
+    expect(caps.entriesMovedBy(parent)).toEqual([child]);
   });
 });
