@@ -106,9 +106,10 @@ test('an open editor stays over its cell while the pane scrolls (#158)', async (
 // dismisses the notice first, so Playwright's own actionability check passes either way.) Second,
 // the notice must land on its own cell rather than somewhere absurd.
 //
-// `program` is the reachable refusal on this page: it is the demo tree's one `kind: 'group'` row, and
-// Budget (the `cost` Field) declares both `editable` and a `sum` rollup. A span row with children is
-// not the same case — it has a twisty, but its own stored `cost`, and it edits normally.
+// `program` is the reachable refusal on this page: it is the demo tree's outermost row with
+// children, and Budget (the `cost` Field) declares both `editable` and a `sum` rollup. ADR 0013
+// makes having children the whole predicate, so every row with children refuses the same way, and a
+// childless row edits normally.
 test('a refused cell names the reason, and the notice lets the next click through (R4)', async ({ page }) => {
   await page.goto('/');
   const groupRow = page.locator('#gantt .fg-row[data-entry-id="program"]');

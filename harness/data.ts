@@ -16,7 +16,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetEventMap } from '../src/api/index.js';
+import type { DatasetEventMap, Entry, EntryEdit, EntryEdits, EntryId } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -37,8 +37,28 @@ declare global {
 // the same answer narrowed to one row through `interactions.edit`.
 //
 // `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
+// ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
+// `money` rolls up with `sum`, so the write that reverses a sum is a split — read `distribute` as the
+// Aggregator backwards. This page splits evenly and puts the rounding remainder on the last child,
+// so the Rollup reads back exactly the number the button asked for. A page that wanted a split by
+// duration, or by each child's current share, would write that here instead; the library ships no
+// guessed default, because there is none to defend.
 const COST_FIELDS = {
-  fieldTypes: { money: { rollUp: 'sum' as const } },
+  fieldTypes: {
+    money: {
+      rollUp: 'sum' as const,
+      distribute(total: number | undefined, children: readonly Entry[]): EntryEdits | undefined {
+        if (total === undefined || children.length === 0) return undefined;
+        const share = Math.floor(total / children.length);
+        const edits = new Map<EntryId, EntryEdit>();
+        children.forEach((child, index) => {
+          const last = index === children.length - 1;
+          edits.set(child.id, { cost: last ? total - share * (children.length - 1) : share });
+        });
+        return edits;
+      },
+    },
+  },
   fields: [
     { key: 'cost' as const, type: 'money' },
     { key: 'end' as const, editable: false },
@@ -46,8 +66,10 @@ const COST_FIELDS = {
 };
 
 // S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
+// ADR 0013: "Phase" derives because it has children. It authors no classification, and no dates —
+// the Rollup fills its span from Task A and Task B.
 const ROLLUP_TREE = [
-  { id: 'phase', name: 'Phase', kind: 'group' as const },
+  { id: 'phase', name: 'Phase' },
   {
     id: 'task-a',
     name: 'Task A',

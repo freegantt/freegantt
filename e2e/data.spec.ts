@@ -105,3 +105,33 @@ test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', as
   expect(undoRow).toBeDefined();
   expect(undoRow).toContain(`Renamed before undo → ${original}`);
 });
+
+// ADR 0013 amendment: a rolling-up parent's cell is read-only until the Field says what a write to
+// it means. `harness/data.ts` gives `money` a `distribute` that splits evenly, so "Set cost 500" on
+// the phase row writes the children and the Rollup reads 500 back off them.
+test('Set cost 500 on a rolling-up parent splits to its children and rolls back up (ADR 0013)', async ({
+  page,
+}) => {
+  await page.goto('/data.html');
+  await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
+
+  const { entryId: parentId } = await selectBar(page, page.locator('#gantt .fg-bar-summary').first());
+
+  await expect(page.locator('#cost-btn')).toBeEnabled();
+  await page.click('#cost-btn');
+
+  const costs = await page.evaluate((id) => {
+    const dataset = window.__dataset;
+    const children = dataset.entries.childrenOf(id);
+    return {
+      parent: Number(dataset.entries.fieldValue(id, 'cost')),
+      children: children.map((child) => Number(dataset.entries.fieldValue(child.id, 'cost'))),
+    };
+  }, parentId);
+
+  expect(costs.children.length).toBeGreaterThan(1);
+  // Every child carries a share, and the shares sum back to what the button asked for.
+  for (const share of costs.children) expect(share).toBeGreaterThan(0);
+  expect(costs.children.reduce((sum, share) => sum + share, 0)).toBe(500);
+  expect(costs.parent).toBe(500);
+});
