@@ -203,6 +203,9 @@ function move(deltaMs: number): void {
   attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) {
+        // A selected row with no bar has no dates to shift (ADR 0012) — skip it, same as a row
+        // with no grip to grab under a drag gesture.
+        if (entry.start === undefined || entry.end === undefined) continue;
         dataset.entries.update(entry.id, {
           start: addMs(entry.start, deltaMs),
           end: addMs(entry.end, deltaMs),

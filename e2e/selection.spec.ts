@@ -124,7 +124,7 @@ async function showSegmentedSpan(page: import('@playwright/test').Page): Promise
   const { entryId, segmentCount } = await page.evaluate(() => {
     const entry = window.__dataset.entries.all.find((candidate) => candidate.segments.length > 1);
     if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
-    window.__gantt.zoomToSpan({ start: entry.start, end: entry.end });
+    window.__gantt.zoomToSpan({ start: entry.start!, end: entry.end! });
     return { entryId: String(entry.id), segmentCount: entry.segments.length };
   });
   // Wait for every Segment to paint, not just the second one. A caller that counts bars right

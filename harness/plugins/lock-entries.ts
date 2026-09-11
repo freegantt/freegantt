@@ -64,7 +64,8 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
         for (const [id] of lockedRows()) {
           if (request.proposed.has(id)) continue;
           const entry = request.entries.get(id);
-          if (entry === undefined) continue;
+          // A locked entry with no dates has nothing to move (ADR 0012).
+          if (entry === undefined || entry.start === undefined) continue;
           // `moveEntryTo`, never `{ start, end }` (D-S5-50). An Entry may draw several Segments, and
           // then an envelope alone names none of them, so core refuses that write rather than guess
           // which one to move (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). This says the whole
@@ -108,7 +109,7 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
 function movedBy(request: EditRequest): number | undefined {
   for (const [id, edit] of request.proposed) {
     const before = request.entries.get(id);
-    if (before === undefined || edit.start === undefined) continue;
+    if (before === undefined || before.start === undefined || edit.start === undefined) continue;
     const moved = diffMs(edit.start, before.start);
     if (moved !== 0) return moved;
   }

@@ -22,7 +22,9 @@ function entryIdFromItemId(itemId: string): string {
 async function selectFirstBar(
   page: import('@playwright/test').Page,
 ): Promise<{ entryId: string; name: string }> {
-  const bar = page.locator('#gantt .fg-bar').first();
+  // A `fg-bar-summary` (a roll-up parent's own bar) draws no Segment of its own (ADR 0012, ADR
+  // 0013 restores it) — selection.spec.ts's own bar-picking helpers skip it for the same reason.
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
   await bar.click();
   await expect(page.locator('#rename-btn')).toBeEnabled();
