@@ -2156,3 +2156,45 @@ On a refitting page a drag that did nothing is indistinguishable from one that w
 **The rule to take from it.** A geometry assertion inherits the page's `range` mode. `'fitDataset'`
 makes bar pixels a claim about the *shape* of the data, never its position, because the scale
 absorbs any translation that moves everything.
+
+### J36 — the 13 review findings are cherry-picked; four of the seven commits needed a hand
+
+**Raised:** 2026-09-11. **Status:** all 13 applied, gate green.
+
+The author ruled cherry-pick rather than `git merge`, because a conflict resolution that silently
+drops a review fix is invisible while a finding re-applied deliberately is checkable. That ruling
+paid for itself: **three of the seven commits conflicted, and in every case HEAD was the newer and
+more correct side.** A merge would have offered the same choice with less to read.
+
+| Finding | Commit | What a blind apply would have done |
+|---|---|---|
+| F9, F10 | `4ad6874` | Reintroduced `kind: 'span'` on a test Entry. ADR 0013 deleted `kind`; it failed `typecheck`, not review. Its variable was called `dateless` while holding a `start` — now `startOnly`. |
+| F17 | `ef85819` | Clean. |
+| F1 | `1ceb9cb`, `3cfcf58` | Reintroduced imports of `Entry` and `EntryKind`, one of which no longer exists. |
+| F3–F7 | `1d045ae` | Reintroduced `kind` in `ENTRY_INPUT_KEYS`, and the phrase "a roll-up-kind entry". |
+| F11, F15, F16 | `60f857f` | Clean. |
+| F18 | `da9ea82` | Reintroduced a fixture comment naming `kind` as the Field it writes. |
+| F20 | `2807fb8` | Recorded three of six ADRs built, on a day when four are. |
+
+**One finding's intent outlived its diff.** F3–F7 deleted a sentence in `dataset-state.ts` saying a
+Dataset built from a saved shape gets the construction Rollup for free. HEAD had rewritten the
+surrounding comment, so the deletion conflicted — but ADR 0016 deleted the save format, so the
+sentence is about nothing. Kept HEAD's wording and applied the deletion to it. **A conflict is not
+permission to drop the finding.**
+
+**F18's "49 references" were almost all prose.** One production call site (`dataset-state.ts`), 24
+uses of the test file's own local helper, and comments for the rest. Four of those comments sit in
+`src/model/entry.ts`, which the finding never names, because `EntryLook` and `spansTime` moved there
+after it was written (J30, J32). Those were swept too, and the hazard grep the worksheet asked for
+now returns hits only inside the local helper.
+
+**Two process notes worth keeping.**
+
+`git add -u` staged the author's own uncommitted work-in-progress along with the cherry-pick. Caught
+it by reading `git diff --cached --stat` against `git show <commit> --name-only` before committing,
+and unstaged seven files. **Stage a cherry-pick by naming its own files.** The handoff already said
+not to `git add -A` over that work; `-u` is the same mistake with a quieter flag.
+
+`test/guards/retired-words.test.ts` caught F1's comment saying "hosts" — `host` is retired
+(D-S1.11-6, #64). Its sibling "Hosting" in `model/write-verdict.ts` slips the `\bhosts?\b` regex.
+Both are changed to "declares", because the word is retired, not the regex match.
