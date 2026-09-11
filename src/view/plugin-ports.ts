@@ -206,7 +206,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     announceEntryEdit(payload: EntryFieldEdit): void;
     /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
      *  consumer's own `interactions`, above the library's structure-or-look table. `defaults`
-     *  answers only the looks it names ('parent', 'leaf', or a plugin's own); an omitted gesture
+     *  answers only the looks it names ('parent', 'leaf', or a plugin's own). An omitted gesture
      *  still falls through to the library table for that look. Legal only while `setup` runs
      *  (D-S5-4); removed automatically when this plugin is disposed. When two plugins register
      *  defaults for the same look, the newest registration wins, and disposing one plugin never
