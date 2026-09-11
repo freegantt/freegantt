@@ -1,5 +1,5 @@
 ---
-status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
+status: accepted — built and verified 2026-09-11, in the field redesign. Verdict: [BUILD-SPEC.md §Build 1](../../plans/field-redesign/BUILD-SPEC.md#build-1--adr-0012-optional-dates).
 decided: an Entry spans iff both `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans; one date without the other is legal (decision 4, grill 2026-09-10); default `gridColumns` is `['name', 'start', 'end']`; core does not paint a diamond.
 open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The working material is in `plans/field-redesign/0012-optional-dates/`.
 ---

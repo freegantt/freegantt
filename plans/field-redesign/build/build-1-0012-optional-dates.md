@@ -32,23 +32,23 @@ interface Entry {
 
 ## Work
 
-- [ ] Make `Entry.start` (`src/model/entry.ts:31`) and `Entry.end` (`:33`) optional, independently.
-- [ ] Guard the duration calculation at `src/data/fields/field-access.ts:92` **first**.
-- [ ] Keep `durationOf` as a thin wrapper around the guarded helper. Build 4 deletes it.
-- [ ] Delete the `referenceDate` fill at `src/data/entry-reader.ts:170`. It is written down under **D-S2-10** and **D-S2-22** — name both halves, or a reader retires the wrong sentence.
-- [ ] Add `start` and `end` to `isOptionalEntryKey` (`src/data/fields/field-access.ts:26`).
-- [ ] Give `src/data/entry-reader.ts` a `length === 0` arm for Segments.
-- [ ] Mint a Segment when the second date arrives. Drop it when one date of the pair is cleared.
-- [ ] Stop `Entry.segments` being *never empty*.
-- [ ] Change `DEFAULT_GRID_COLUMNS` to `['name', 'start', 'end']` (`src/view/grid-columns.ts:11`).
-- [ ] Skip bar geometry for a row that does not span.
-- [ ] Sort a row with neither date **last** on `asc` **and** on `desc`.
-- [ ] Include a one-date instant in `range: 'fitDataset'`.
-- [ ] Open the date editor on a blank cell. Stop refusing with `no-date-value` (`src/extensions/features/inline-editing.ts:764`).
-- [ ] Make `removeSegments` of the last Segment keep the Entry and clear both dates.
-- [ ] Bind grid-row Delete on the name cell to `remove(id)`, not `removeSegments`.
-- [ ] Correct the duration test-stub list before you edit tests. See *The stub list* below.
-- [ ] Close the build — see [`README.md#close-every-build`](README.md).
+- [x] Make `Entry.start` (`src/model/entry.ts:31`) and `Entry.end` (`:33`) optional, independently.
+- [x] Guard the duration calculation at `src/data/fields/field-access.ts:92` **first**.
+- [x] Keep `durationOf` as a thin wrapper around the guarded helper. Build 4 deletes it.
+- [x] Delete the `referenceDate` fill at `src/data/entry-reader.ts:170`. It is written down under **D-S2-10** and **D-S2-22** — name both halves, or a reader retires the wrong sentence.
+- [x] Add `start` and `end` to `isOptionalEntryKey` (`src/data/fields/field-access.ts:26`).
+- [x] Give `src/data/entry-reader.ts` a `length === 0` arm for Segments.
+- [x] Mint a Segment when the second date arrives. Drop it when one date of the pair is cleared.
+- [x] Stop `Entry.segments` being *never empty*.
+- [x] Change `DEFAULT_GRID_COLUMNS` to `['name', 'start', 'end']` (`src/view/grid-columns.ts:11`).
+- [x] Skip bar geometry for a row that does not span.
+- [x] Sort a row with neither date **last** on `asc` **and** on `desc`.
+- [x] Include a one-date instant in `range: 'fitDataset'`.
+- [x] Open the date editor on a blank cell. Stop refusing with `no-date-value` (`src/extensions/features/inline-editing.ts:764`).
+- [x] Make `removeSegments` of the last Segment keep the Entry and clear both dates.
+- [x] Bind grid-row Delete on the name cell to `remove(id)`, not `removeSegments`.
+- [x] Correct the duration test-stub list before you edit tests. See *The stub list* below.
+- [x] Close the build — see [`README.md#close-every-build`](README.md).
 
 **Slices it touches.** S2 (the Segment invariant), S3 (a bar with no grip), S4 (sort comparators, the dateless parent), S5 (the date editor). **Re-run the S2, S3, S4 and S5 slice gates.**
 
