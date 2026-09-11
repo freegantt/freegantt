@@ -7,7 +7,8 @@ import type { EntryEdit, EntryId, GanttPlugin } from 'freegantt';
 
 const BUFFER_KIND = 'buffer';
 
-/** A consumer-defined `'buffer'` look, proven through the four seams D-S5-22 names: what shape it
+/** A consumer-defined `'buffer'` look, proven through the seams D-S5-22 names: which entries wear it
+ *  (`ctx.layout.registerLookClaim`), what shape it
  *  draws (`ctx.layout.registerItemProducer`), how it looks (`ctx.view.registerRenderer('bar', …)`),
  *  what you can do to it (`ctx.interaction.registerLookDefaults` — no resize, a buffer has no edge
  *  worth dragging), and what actions it offers (`ctx.commands.register` with a `when` scoped to the
@@ -15,21 +16,23 @@ const BUFFER_KIND = 'buffer';
  *
  *  ADR 0013: `Entry` carries no stored classification any more, so this plugin stores which ids it
  *  owns itself — `ownedIds`, named at construction — the same pattern the scheduling plugin's own
- *  pin flag and Dependency data use (ADR 0002). Its item producer answers "is this mine?" by
- *  claiming an owned id (a non-empty `Item[]`) and declining every other one (`[]`); a producer that
- *  declines never reaches the paint or capability seams for that Entry, which is why those two ask
- *  the same `Set` directly instead. */
+ *  pin flag and Dependency data use (ADR 0002). Its look claim answers "is this mine?" from that
+ *  same `Set`, and its producer then draws whatever the claim won — two registrations, one question
+ *  each (Q10). Before that ruling the producer answered both by drawing and returning `[]` for an
+ *  entry it did not own, which made core build Items only to count and discard them. */
 export function bufferKind(ownedIds: Iterable<string>): GanttPlugin {
   const owned = new Set<EntryId>(ownedIds as Iterable<EntryId>);
   return {
     id: 'demo.bufferKind',
     setup(ctx) {
+      // Which entries are mine? The ids this plugin owns. Core asks this before anything draws, so
+      // no producer has to answer it by drawing (Q10).
+      ctx.layout.registerLookClaim(BUFFER_KIND, (entry) => owned.has(entry.id));
+
       // What shape does it draw? One whole-entry Item, same as a parent or a leaf with no segments —
       // a buffer has no internal structure to slice. `wholeEntryItem` is the library's own, so the
       // Item id convention has one owner (review P3).
-      ctx.layout.registerItemProducer(BUFFER_KIND, (entry) =>
-        owned.has(entry.id) ? [wholeEntryItem(entry, BUFFER_KIND)] : [],
-      );
+      ctx.layout.registerItemProducer(BUFFER_KIND, (entry) => [wholeEntryItem(entry, BUFFER_KIND)]);
 
       // How does it look? A hatched fill, painted through the ordinary bar renderer seam — no
       // bespoke paint path.

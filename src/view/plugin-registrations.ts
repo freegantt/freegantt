@@ -1,6 +1,8 @@
-// view/ — the five seams a plugin registers into, in one place, each with the refresh it owes
-// (#170). Five things share one lifetime: a renderer, a decoration provider, an Item producer, a
-// per-look capability default and a Grid column. Register one, and the Gantt shows it. Dispose one,
+// view/ — the seams a plugin registers into, in one place, each with the refresh it owes
+// (#170). Six things share one lifetime: a renderer, a decoration provider, an Item producer, a
+// look claim (Q10), a per-look capability default and a Grid column. The claim and the producer are
+// a pair: one says which entries wear a look, the other says what that look draws. Register one,
+// and the Gantt shows it. Dispose one,
 // and the Gantt shows what wins next (#155). What differs is which pass has to run again. That is
 // the one thing a reader used to have to reassemble from three files.
 //
@@ -17,6 +19,7 @@ import type {
   EntryLook,
   ItemProducer,
   ItemProducerRegistry,
+  LookClaim,
   RegisteredDecorationProvider,
   RendererFor,
   RendererPoint,
@@ -46,6 +49,7 @@ export interface PluginRegistrar {
   registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
   registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
+  registerLookClaim(look: EntryLook, claim: LookClaim, pluginId: PluginId): Disposer;
   registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
@@ -118,6 +122,20 @@ export class PluginRegistrations implements PluginRegistrar {
       () => this.itemProducers.register(look, producer),
       () => {
         this.#ports.invalidateItems();
+        this.#ports.requestFrame();
+      },
+    );
+  }
+
+  /** Q10. A claim changes which Entry wears which look, so it changes what paints *and* what every
+   *  gesture is allowed to do. Both edges run the item invalidation a producer registration runs,
+   *  and the capability re-resolution a look default runs. */
+  registerLookClaim(look: EntryLook, claim: LookClaim, pluginId: PluginId): Disposer {
+    return this.#onBothEdges(
+      () => this.itemProducers.registerClaim(look, claim, pluginId),
+      () => {
+        this.#ports.invalidateItems();
+        this.#ports.refreshCapabilities();
         this.#ports.requestFrame();
       },
     );

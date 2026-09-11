@@ -14,7 +14,16 @@ export { pickDefined } from './pick-defined.js';
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
 export { createItemProducerRegistry, wholeEntryItem, resolveLook } from './items/produce-items.js';
-export type { EntryLook, Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
+export type {
+  DoubleLookClaim,
+  EntryLook,
+  Item,
+  ItemProducer,
+  ItemProducerRegistry,
+  LookClaim,
+  LookClaimant,
+  ReportDoubleClaim,
+} from './items/produce-items.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
