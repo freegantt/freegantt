@@ -31,6 +31,7 @@ import type {
   EntryLook,
   FrameBar,
   ItemProducer,
+  LookClaim,
   RendererFor,
   RendererPoint,
   ResolvedColumn,
@@ -95,7 +96,7 @@ export interface GanttShellPorts {
   keymap: KeyHandlerRegistrar & {
     register(binding: KeyBinding<unknown>): Disposer;
   };
-  /** The five seams a plugin registers into, each already carrying the refresh it owes (#170). */
+  /** The seams a plugin registers into, each already carrying the refresh it owes (#170). */
   registrations: PluginRegistrar;
   /** D-S5-11's precedence, already merged with the consumer's own live `tooltipRenderer`. */
   resolveTooltipRenderer(): ResolvedRenderer<TooltipRenderer> | undefined;
@@ -363,6 +364,19 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  plugin never disturbs another plugin's registration on the same look. The returned
      *  `Disposer` removes it sooner (#155). */
     registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
+    /** Claims which entries wear `look` (Q10). A plugin registers this beside its producer: the
+     *  claim says *which* entries are this plugin's, the producer says *what* they draw. An Entry
+     *  no claim answers yes for falls back to the structure look — parent or leaf.
+     *
+     *  The first registered claim to answer yes wins, and a second claim on the same Entry is
+     *  ignored. In dev mode that second claim also raises a `'look-claimed-twice'` Error report
+     *  naming both plugins. The library never arbitrates between plugins: the consumer chose which
+     *  ones to install, so core reports and carries on.
+     *
+     *  `claim` runs on the hover path, so keep it cheap — a `Set` read is the intended shape. It is
+     *  pure: it answers a question and draws nothing. Legal only while `setup` runs (D-S5-4), and
+     *  disposal removes it the same way every other `register*` seam's does. */
+    registerLookClaim(look: EntryLook, claim: LookClaim): Disposer;
   };
 }
 
@@ -492,6 +506,8 @@ export function buildPluginPorts(
     layout: {
       registerItemProducer: (look, producer) =>
         registerWhileOpen(() => shell.registrations.registerItemProducer(look, producer)),
+      registerLookClaim: (look, claim) =>
+        registerWhileOpen(() => shell.registrations.registerLookClaim(look, claim, pluginId)),
     },
   };
 

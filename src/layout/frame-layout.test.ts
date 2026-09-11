@@ -143,6 +143,7 @@ describe('FrameLayout', () => {
     // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
     const look = 'twin';
     const registry = createItemProducerRegistry();
+    registry.registerClaim(look, () => true);
     registry.register(look, (entry) => [
       {
         id: itemId(entry.id, 7),
@@ -189,6 +190,7 @@ describe('FrameLayout', () => {
     // A whole-entry look (a group, a milestone) draws one bar over the whole Entry, so it drew no
     // single Segment. It still stands for all of them: a click on it selects the Entry's work.
     const registry = createItemProducerRegistry();
+    registry.registerClaim('milestone', () => true);
     registry.register('milestone', (entry) => [
       {
         id: itemId(entry.id, 0),

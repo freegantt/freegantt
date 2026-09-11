@@ -599,7 +599,7 @@ describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50
   // asks the question, and this pins that the answer a caller sees did not move.
   it('names an empty segment list for a start-only Entry, which holds nothing to translate', () => {
     const context = createContext();
-    const [startOnly] = toEntries([{ id: 'o1', name: 'Open', start: '2026-01-01' }], context);
+    const [startOnly] = toEntries([{ id: 'o1', name: 'Open', start: '2026-01-01' }], context, registry);
 
     const edit = moveEntryTo(startOnly!, instant(utc('2026-01-03T00:00:00Z')));
 
