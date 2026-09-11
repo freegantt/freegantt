@@ -15,7 +15,7 @@ import type {
   EntryId,
   GridColumnInput,
   Instant,
-  RendererByKind,
+  RendererByLook,
   ResolvedBarLabel,
 } from '../src/api/index.js';
 import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
@@ -208,7 +208,7 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
   return description;
 }
 
-const PHASE_BARS: RendererByKind = { '*': phaseBar, group: phaseRail, milestone: checkpointDiamond };
+const PHASE_BARS: RendererByLook = { '*': phaseBar, group: phaseRail, milestone: checkpointDiamond };
 
 const gantt = new Gantt({
   container: '#gantt',

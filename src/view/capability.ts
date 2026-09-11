@@ -12,10 +12,11 @@
 
 import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
-import type { Entry, EntryKind, Field, FieldKey } from '../model/index.js';
+import type { Entry, Field, FieldKey } from '../model/index.js';
+import type { EntryLook } from '../layout/index.js';
 
 /** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
- *  (U4: `interactions: { resize: e => e.kind !== 'group' }`). */
+ *  (U4: `interactions: { resize: e => e.props.locked !== true }`). */
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 /** #256: the write rule takes the cell, because a write names one. Call:
@@ -73,7 +74,7 @@ export interface Capabilities {
   canWrite(entry: Entry, field: FieldKey): WriteVerdict;
 }
 
-/** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` is a plugin's per-kind
+/** S5.9, D-S5-22: `ctx.interaction.registerLookDefaults(look, defaults)` is a plugin's per-look
  *  answer. It sits one level below a consumer's own `interactions`, and one level above the library
  *  rules. It carries the same keys as `Interactions`, but a plain boolean only.
  *
@@ -86,14 +87,20 @@ export type KindDefaults = { [K in keyof Interactions]?: boolean };
  *  Field lookup joined a list that already read badly at the call site. */
 export interface CapabilityInputs {
   interactions?: Interactions | undefined;
-  /** From the bound `Dataset` — `GanttShell` passes `dataset.isRollUpKind` straight through, never
-   *  `rollUpKinds` itself (S3, D-S3-9). */
-  isRollUpKind: (kind: EntryKind) => boolean;
-  /** From the bound `Dataset` — `dataset.field`. The library write rule reads three keys off it:
-   *  `source`, `rollUp` and `editable`. */
+  /** ADR 0013: an Entry derives when it has children — structure, not a stored classification.
+   *  `GanttShell` passes `(entry) => dataset.entries.childrenOf(entry.id).length > 0` straight
+   *  through. */
+  hasChildren: (entry: Entry) => boolean;
+  /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
+   *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
+  /** ADR 0013: the look `layout/`'s item production would resolve for this Entry — structure first,
+   *  then whichever plugin-owned look claims it (`layout/items/produce-items.ts`'s `resolveLook`).
+   *  `registeredDefaultsFor` keys on this, not on structure alone, so a plugin's own
+   *  `registerLookDefaults('buffer', …)` reaches the Entries it claims. */
+  lookOf: (entry: Entry) => EntryLook;
   /** S5.9, D-S5-22. */
-  registeredDefaultsFor?: ((kind: EntryKind) => KindDefaults | undefined) | undefined;
+  registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
 }
 
 /** Is there a value here to write at all? This is structure, not policy. So it sits above every
@@ -109,16 +116,14 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
   return field !== undefined && !('compute' in field);
 }
 
-/** Does this gesture mean anything for this Entry, before anyone asks what it would write? A
- *  milestone is zero-length by construction, so it has no edge to drag. `select` writes nothing, so
- *  it is always offered. I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10). Every other
- *  kind is offered every gesture, shipped or consumer-defined. `canWrite` below then decides
- *  whether that gesture can carry its write out.
+/** Does this gesture mean anything for this Entry, before anyone asks what it would write? Every
+ *  Entry is offered every gesture, shipped or consumer-defined — there is no stored classification
+ *  left to special-case a gesture off of (ADR 0013). `canWrite` below decides whether that gesture
+ *  can carry its write out.
  *
- *  A roll-up kind is *not* named here, and needs no name. Its `start` and `end` both roll up, so
+ *  A parent is *not* named here, and needs no name. Its `start` and `end` both roll up, so
  *  `canWrite` closes both edges already. That closes move and resize with them. */
-function gestureIsOffered(capability: GestureCapability, entry: Entry): boolean {
-  if (capability === 'resize' && entry.kind === 'milestone') return false;
+function gestureIsOffered(): boolean {
   return true;
 }
 
@@ -170,7 +175,7 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
  *  or answer `interactions.edit` for the cell. One home for "may this value change" is the whole
  *  point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
-  const { interactions, isRollUpKind, fieldFor, registeredDefaultsFor } = inputs;
+  const { interactions, hasChildren, fieldFor, lookOf, registeredDefaultsFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
@@ -178,17 +183,17 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
     const rule = interactions?.edit;
     const answer = typeof rule === 'function' ? rule(entry, field) : rule;
     if (answer !== undefined) return answer ? WRITABLE : NOT_WRITABLE;
-    const registered = registeredDefaultsFor?.(entry.kind)?.edit;
+    const registered = registeredDefaultsFor?.(lookOf(entry))?.edit;
     if (registered !== undefined) return registered ? WRITABLE : NOT_WRITABLE;
-    return libraryWriteRule(entry, declared, isRollUpKind);
+    return libraryWriteRule(hasChildren(entry), declared);
   };
 
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
     const rule = interactions?.[capability];
     if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
-    const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
+    const registered = registeredDefaultsFor?.(lookOf(entry))?.[capability];
     if (registered !== undefined) return registered;
-    return gestureIsOffered(capability, entry);
+    return gestureIsOffered();
   };
 
   return {

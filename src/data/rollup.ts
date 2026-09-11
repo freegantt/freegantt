@@ -1,19 +1,11 @@
-// data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving a
-// roll-up-kind parent every rolling-up Field from its children, bottom-up, on every commit
-// (`01` §2.5/§2.6, S4.2). A leaf module — only `data/build-commit-change-set.ts` (commit path) and
-// `data/transaction.ts` (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file
-// and every entry keeps its authored values — the same stored result a consumer gets from
-// `rollUpKinds: 'none'`.
+// data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving every
+// parent (an Entry with at least one child, ADR 0013 — there is no stored classification) its
+// rolling-up Fields from its children, bottom-up, on every commit (`01` §2.5/§2.6, S4.2). A leaf
+// module — only `data/build-commit-change-set.ts` (commit path) and `data/transaction.ts`
+// (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
+// its authored values.
 
-import type {
-  Entry,
-  EntryId,
-  EntryKind,
-  FieldContext,
-  FieldUpdated,
-  Instant,
-  TimeSpan,
-} from '../model/index.js';
+import type { Entry, EntryId, FieldContext, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
@@ -66,28 +58,24 @@ function collectTouchedIds(
 
 function parentsToRecompute(
   entries: ReadonlyMap<EntryId, Entry>,
-  kinds: ReadonlySet<EntryKind>,
+  byParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   touched: ReadonlySet<EntryId> | undefined,
 ): readonly EntryId[] {
-  if (kinds.size === 0) return [];
+  const isParent = (id: EntryId): boolean => (byParent.get(id)?.length ?? 0) > 0;
 
   const parents = new Set<EntryId>();
   if (touched === undefined) {
-    for (const entry of entries.values()) {
-      if (kinds.has(entry.kind)) parents.add(entry.id);
+    for (const id of entries.keys()) {
+      if (isParent(id)) parents.add(id);
     }
   } else {
     for (const id of touched) {
       for (const ancestor of ancestorsOf(id, entries)) parents.add(ancestor);
-      const entry = entries.get(id);
-      if (entry !== undefined && kinds.has(entry.kind)) parents.add(id);
+      if (isParent(id)) parents.add(id);
     }
   }
 
-  const filtered = Array.from(parents).filter((id) => {
-    const entry = entries.get(id);
-    return entry !== undefined && kinds.has(entry.kind);
-  });
+  const filtered = Array.from(parents).filter(isParent);
 
   const depthById = new Map<EntryId, number>();
   for (const id of filtered) depthById.set(id, depthOf(id, entries));
@@ -125,14 +113,29 @@ function widenSegmentsToEnvelope(
   registry: FieldRegistry,
   ctx: FieldContext,
   parentId: EntryId,
+  mintSegmentId: () => SegmentId,
   updated: FieldUpdated[],
 ): Entry {
   const segmentsField = registry.get('segments');
-  if (!segmentsField || parent.segments.length === 0) return parent;
+  if (!segmentsField) return parent;
+  // Not spanning — nothing to hold a Segment over (ADR 0012). A dateless parent (every child
+  // dateless too) already stores `segments: []`; there is nothing to widen or mint.
+  if (parent.start === undefined || parent.end === undefined) return parent;
 
-  // Load-bearing cast (ADR 0012): `parent.segments.length > 0` above already means this parent
-  // spans, so `start`/`end` are both present.
-  const target: TimeSpan = { start: parent.start as Instant, end: parent.end as Instant };
+  const target: TimeSpan = { start: parent.start, end: parent.end };
+
+  if (parent.segments.length === 0) {
+    // ADR 0013 (BUILD-LOG J3/J9): the Rollup can give a parent a real `start`/`end` from its
+    // children with no Segment of its own — ingest only fills one for an *authored* span (ADR
+    // 0012 retired that fill for everything else), and this parent never authored one. A bar with
+    // no Segment cannot be selected, so mint the one Segment ingest would have minted had this
+    // envelope been authored, over the derived span.
+    const minted = [{ id: mintSegmentId(), start: target.start, end: target.end }];
+    const from = readField(parent, segmentsField, ctx);
+    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: minted });
+    return writeOntoEntry(parent, segmentsField, minted);
+  }
+
   const nextSegments = fitSegmentsToEnvelope(parent.segments, target);
   if (nextSegments === parent.segments) return parent;
 
@@ -163,11 +166,9 @@ export function rollUpFields(
   committed: ReadonlyMap<EntryId, Entry>,
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
-  rollUpKinds: ReadonlySet<EntryKind>,
   ctx: FieldContext,
+  mintSegmentId: () => SegmentId,
 ): readonly FieldUpdated[] {
-  if (rollUpKinds.size === 0) return [];
-
   const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return [];
 
@@ -176,14 +177,14 @@ export function rollUpFields(
   const emptyEdits: ProposedEdits = new Map();
   const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
-  // Effective tree includes extender and autoGroup overlays so a parent promoted on this commit
-  // is already a roll-up Kind when `parentsToRecompute` reads `entry.kind` (D-S4-17).
+  // Effective tree includes extender overlays, so a parent promoted on this commit (a `parentId`
+  // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
   const entries =
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
   const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
 
   const byParent = childIdsByParent(entries);
-  const parents = parentsToRecompute(entries, rollUpKinds, touched);
+  const parents = parentsToRecompute(entries, byParent, touched);
   const computed = new Map<EntryId, Entry>();
   const updated: FieldUpdated[] = [];
 
@@ -216,16 +217,33 @@ export function rollUpFields(
         throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }
 
-      if (value === undefined) continue;
-
       const from = readField(effectiveParent, field, ctx);
+
+      if (value === undefined) {
+        // ADR 0013, decision 5/6 and #270: an Aggregator with no opinion means *no value* on a
+        // parent — never "keep whatever is stored," which is stale by construction the moment
+        // nothing but the Rollup may write this cell. `from === undefined` is already clear; there
+        // is nothing to drop.
+        if (from === undefined) continue;
+        updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
+        effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
+        continue;
+      }
+
       if (registry.valuesEqual(String(field.key), from, value)) continue;
 
       updated.push({ store: 'entries', id: parentId, field: field.key, from, to: value });
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
-    effectiveParent = widenSegmentsToEnvelope(effectiveParent, registry, ctx, parentId, updated);
+    effectiveParent = widenSegmentsToEnvelope(
+      effectiveParent,
+      registry,
+      ctx,
+      parentId,
+      mintSegmentId,
+      updated,
+    );
     computed.set(parentId, effectiveParent);
   }
 

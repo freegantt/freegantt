@@ -189,7 +189,7 @@ type RowBandGeom = {
 };
 type BarGeom = Pick<
   FrameBar,
-  'kind' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
+  'look' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
 > & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
@@ -200,10 +200,10 @@ type BarGeom = Pick<
    *  or a `barRenderer` result already owns this bar's content). */
   labelPlacement: BarLabelPlacement | undefined;
 };
-/** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (kind === …)`. */
+/** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (look === …)`. Core ships no diamond
+ *  (ADR 0013); a plugin's own look paints through its own `barRenderer` registration instead. */
 const BAR_SHAPE_CLASS = Object.freeze({
-  group: 'fg-bar-summary',
-  milestone: 'fg-bar-diamond',
+  parent: 'fg-bar-summary',
 }) as Readonly<Record<string, string>>;
 
 /** 1-based, so the first row reads 'odd' — the same counting `--fg-row-odd-bg` is named for. The
@@ -438,8 +438,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   const itemIdsByEntryId = new Map<EntryId, ItemId[]>();
   /** The mounted bars that paint for each Segment (#212, ADR 0010) — the Segment→Items relation the
    *  Selection is keyed by. A bar that drew one Segment is filed under it. A bar that drew an Entry's
-   *  whole span (a group, a milestone) is filed under every Segment of that Entry, because any of
-   *  them selects it. `syncBars` is the only writer, so the selection diff never scans mounted bars. */
+   *  whole span (a parent, or a plugin's own look) is filed under every Segment of that Entry,
+   *  because any of them selects it. `syncBars` is the only writer, so the selection diff never scans
+   *  mounted bars. */
   const itemIdsBySegmentId = new Map<SegmentId, ItemId[]>();
   /** Which Segment each mounted bar drew, or nothing for a whole-span bar. The handle pair reads it
    *  to find the one bar a one-Segment Selection named. `syncBars` is the only writer. */
@@ -1116,7 +1117,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       key: (bar) => bar.id,
       create: (bar) => {
         const node = document.createElement('div');
-        node.className = barClassName(bar.kind);
+        node.className = barClassName(bar.look);
         node.dataset[ITEM_ID_KEY] = bar.id;
         node.dataset[TESTID_KEY] = BAR_TESTID;
         node.setAttribute('role', 'img');
@@ -1144,7 +1145,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           barLabelGapPx,
           contentWidthPx,
         );
-        const resolved = resolveBarRenderer(bar.kind);
+        const resolved = resolveBarRenderer(bar.look);
         let content: ElementDescription | undefined;
         if (resolved !== undefined) {
           const entry = entryById(bar.entryId);
@@ -1164,7 +1165,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         labelWidthByItemId.set(bar.id, content === undefined ? textWidth : undefined);
         labelPlacementByItemId.set(bar.id, paintedPlacement);
         return {
-          kind: bar.kind,
+          look: bar.look,
           label: bar.label,
           x: bar.x,
           y: bar.y,
@@ -1181,16 +1182,16 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         };
       },
       patch: (node, geom) => {
-        node.className = barClassName(geom.kind);
-        node.dataset['kind'] = geom.kind;
+        node.className = barClassName(geom.look);
+        node.dataset['kind'] = geom.look;
         // #212: which Segment a bar draws is a frame fact, not a birth fact, so `patch` writes it.
         // A bar node's key is `${entryId}:${segmentIndex}`, and an index renumbers when a Segment
         // goes. The node survives and draws its neighbour, so a stamp written once at creation lies.
         if (geom.segmentId === undefined) delete node.dataset[SEGMENT_ID_KEY];
         else node.dataset[SEGMENT_ID_KEY] = geom.segmentId;
-        // States a fact about the paint, not a judgement on the kind (plans/01 §2.5) — a milestone
-        // carries it exactly like any other bar `barSpan` floored. Pair with `data-kind` to tell a
-        // floored milestone from a floored span.
+        // States a fact about the paint, not a judgement on the look (plans/01 §2.5) — every bar
+        // `barSpan` floors carries it the same way. Pair with `data-kind` to tell which look was
+        // floored.
         if (geom.minimumSpan) node.dataset['span'] = 'minimum';
         else delete node.dataset['span'];
         node.dataset['flag'] = flagTokens(geom.flags);

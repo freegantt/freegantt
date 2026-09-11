@@ -22,6 +22,7 @@ import type {
 import {
   entryId,
   segmentId,
+  DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   EntryNotFoundError,
@@ -43,7 +44,7 @@ import {
   entryAfterEdit,
   writeOntoEntry,
 } from './fields/field-access.js';
-import { FieldRegistry } from './fields/field-registry.js';
+import { FieldRegistry, rollsUp } from './fields/field-registry.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -356,6 +357,15 @@ export class EntryStore implements EntryStoreContract {
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
       for (const field of Object.keys(edit)) {
         if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
+      }
+      // ADR 0013: nothing but the Rollup writes a rolling-up parent's cell. Refused whole, before
+      // any write — a mixed patch such as `{ start, cost }` with a derived `cost` writes nothing.
+      if (this.childrenOf(key).length > 0) {
+        for (const field of Object.keys(edit)) {
+          if (rollsUp(this.#registry.get(field)!)) {
+            throw new DerivedFieldNotWritableError(field, key, 'entries.update');
+          }
+        }
       }
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');

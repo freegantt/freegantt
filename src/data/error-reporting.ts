@@ -3,7 +3,14 @@
 // (I10 forbids reading a clock anywhere else). `view/` and `api/` import this directly; `render/` and
 // `extensions/` may not reach `data/` at all, so they take a `RaiseError` by injection instead.
 
-import type { EntryId, ErrorCode, ErrorReport, ErrorReportInput, RaiseError } from '../model/index.js';
+import type {
+  EntryId,
+  ErrorCode,
+  ErrorReport,
+  ErrorReportInput,
+  FieldUpdated,
+  RaiseError,
+} from '../model/index.js';
 import { FreeGanttError } from '../model/index.js';
 import { now } from '../time/index.js';
 import type { RefusalNote } from './event-bus.js';
@@ -87,4 +94,27 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
   const noun = REFUSAL_NOUN[event];
   const said = reason === undefined ? '.' : ` and said: "${reason}".`;
   return `Nothing was saved. A ${event} handler refused this ${noun}${said}`;
+}
+
+/** ADR 0013, decision 5: a batch ingest (`new Dataset({ entries })`) that drops one or more
+ *  authored values off a parent's rolling-up Field raises **one** report, naming the count, the
+ *  distinct Field keys, and up to three of the affected Entry ids — never one report per value,
+ *  which a 500-parent constructor array would otherwise turn into 500 lines. `dropped` is the
+ *  Rollup's own output, already narrowed to the rows this drop produced (`from` defined, `to`
+ *  `undefined`). Always raised at `severity: 'warning'` — no `isDevMode()` gate (D-S5-41). */
+export function buildDerivedValuesDroppedReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
+  const keys = [...new Set(dropped.map((row) => String(row.field)))];
+  const ids = [...new Set(dropped.map((row) => String(row.id)))];
+  const shown = ids.slice(0, 3);
+  const more = ids.length > shown.length ? `, and ${ids.length - shown.length} more` : '';
+  return {
+    code: 'derived-values-dropped',
+    severity: 'warning',
+    by: 'core',
+    message:
+      `${dropped.length} authored value${dropped.length === 1 ? '' : 's'} on ` +
+      `${keys.map((key) => `"${key}"`).join(', ')} ${keys.length === 1 ? 'was' : 'were'} dropped: ` +
+      `${shown.map((id) => `"${id}"`).join(', ')}${more} already had children when this Dataset was ` +
+      `built, so the Rollup owns ${keys.length === 1 ? 'that value' : 'those values'} now.`,
+  };
 }

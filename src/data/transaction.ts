@@ -7,23 +7,20 @@ import type {
   ChangeSet,
   ChangeSetId,
   DatasetEventMap,
-  DatasetHierarchy,
   Entry,
   EntryId,
-  EntryKind,
   FieldContext,
   FieldUpdated,
   SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
 import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
-import { buildCommitChangeSet, diffEdits } from './build-commit-change-set.js';
-import { buildRefusalReport, raiseErrorOn } from './error-reporting.js';
+import { buildCommitChangeSet } from './build-commit-change-set.js';
+import { buildDerivedValuesDroppedReport, buildRefusalReport, raiseErrorOn } from './error-reporting.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
-import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { isDevMode } from './dev-mode.js';
@@ -88,14 +85,6 @@ export interface TransactionData {
    *  sync token. */
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
-  /** Kinds whose rolling-up Fields the Rollup derives from their children, every commit (`01` §2.5,
-   *  D-S4-7). `build-commit-change-set.ts` is the only one that turns it into a rollup call on the
-   *  commit path — `rollup-is-removable` (`.dependency-cruiser.cjs`) says so. Construction rollup
-   *  below is the second call site in this file. */
-  readonly rollUpKinds: ReadonlySet<EntryKind>;
-  /** First-child promotion (D-S4-17). `build-commit-change-set.ts` imports `hierarchy.ts` on the
-   *  commit path (`autogroup-is-removable`); construction promotion below is the second call site. */
-  readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
   bumpDatasetRevision(): void;
@@ -115,36 +104,34 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
   data.bumpDatasetRevision();
 }
 
-function applyConstructionPromote(data: TransactionData): void {
-  const byId = data.entries.committedById();
-  const edits = promoteNewParents(byId, undefined, data.hierarchy);
-  if (edits.size === 0) return;
-
-  writeConstructionUpdates(data, diffEdits(byId, edits, data.fields, data.fieldContext));
-}
-
 /**
  * Runs the Rollup once against `data`'s freshly built entries, with no proposed edits — every
- * `new Dataset(...)` gets this (`01` §2.6, D-S2-22): a `{ kind: 'group' }` given children only
- * through the initial array gets real rolled-up values before anyone reads it, not just after the
- * first later transaction touches one of those children.
+ * `new Dataset(...)` gets this (`01` §2.6, D-S2-22): a parent given children only through the
+ * initial array gets real rolled-up values before anyone reads it, not just after the first later
+ * transaction touches one of those children. Structure alone decides who is a parent (ADR 0013) —
+ * there is no promotion pass to run first any more.
  *
  * Writes any correction straight into the store and returns early if there is none. There is no
  * `beforeChange`/`change` here and no history record (S2.5) — construction emits nothing (`01` §2.6),
  * so this bypasses `runTransaction` entirely rather than opening a transaction only to suppress its
  * notifications. A `'load'` origin arrives with its own producer later (D-S2-11).
  *
- * Promotion runs first (D-S4-17): a constructed `'span'` with children becomes `'group'` before
- * the Rollup walks, so the same construction also fills the envelope. The second and last caller
- * of `rollUpFields` in `src/**`, alongside `build-commit-change-set.ts` on the commit path — both
- * keep `rollup-is-removable` (D-S4-7) honest. The same for `promoteNewParents` /
- * `autogroup-is-removable`.
+ * The only caller of `rollUpFields` outside `build-commit-change-set.ts`'s commit path — both keep
+ * `rollup-is-removable` (D-S4-7) honest.
+ *
+ * ADR 0013 decision 5: a construction array that authors a rolling-up Field on an entry that already
+ * has children in that same array gets it dropped here, and this raises **one** aggregate warning
+ * for the whole construction — never one per value.
  */
 export function applyConstructionRollUp(data: TransactionData): void {
-  applyConstructionPromote(data);
   const byId = data.entries.committedById();
-  const updated = rollUpFields(byId, undefined, data.fields, data.rollUpKinds, data.fieldContext);
+  const updated = rollUpFields(byId, undefined, data.fields, data.fieldContext, () => data.mintSegmentId());
   writeConstructionUpdates(data, updated);
+
+  const dropped = updated.filter((row) => row.to === undefined);
+  if (dropped.length > 0) {
+    raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(dropped));
+  }
 }
 
 /** Opens the write set on every store one transaction spans. Entries and plugin stores stage

@@ -1,19 +1,13 @@
+// ADR 0013: there is no `autoGroup` and no `kind` any more. An Entry derives when it has children —
+// gaining one promotes it, losing the last one demotes it — and neither door writes a Field for it.
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
 import { entryId } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
-function withAutoGroup(
-  entries: {
-    id: string;
-    parentId?: string;
-    kind?: string;
-    start?: string;
-    end?: string;
-    name?: string;
-  }[],
-  autoGroup = true,
+function withEntries(
+  entries: { id: string; parentId?: string; start?: string; end?: string; name?: string; cost?: number }[],
 ) {
   return new DatasetState({
     entries: entries.map((e) => ({
@@ -23,13 +17,13 @@ function withAutoGroup(
       ...e,
     })),
     timeZone: 'UTC',
-    hierarchy: { autoGroup },
+    fields: [{ key: 'cost', rollUp: 'sum' }],
   });
 }
 
-describe('autoGroup (S4.5, [S4-A9])', () => {
-  it('add({ parentId }) promotes a span parent; one changeset carries kind and the parent span', () => {
-    const state = withAutoGroup([
+describe('structure decides derivation (ADR 0013)', () => {
+  it('add({ parentId }) promotes a childless entry; one changeset carries the new span, no kind row', () => {
+    const state = withEntries([
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05' },
     ]);
@@ -42,17 +36,10 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
       }
     });
 
-    state.entries.add({
-      id: 'c2',
-      parentId: 'p1',
-      name: 'c2',
-      start: '2026-06-01',
-      end: '2026-06-05',
-    });
+    state.entries.add({ id: 'c2', parentId: 'p1', name: 'c2', start: '2026-06-01', end: '2026-06-05' });
 
     expect(changeCount).toBe(1);
-    expect(state.entries.get('p1')!.kind).toBe('group');
-    expect(rows.some((row) => row.field === 'kind' && row.from === 'span' && row.to === 'group')).toBe(true);
+    expect(rows.some((row) => row.field === 'kind')).toBe(false);
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-06-01'));
     expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-06-05', 'inclusive'));
     expect(rows.some((row) => row.field === 'start')).toBe(true);
@@ -60,107 +47,68 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
   });
 
   it('update(id, { parentId }) promotes the new parent in the same changeset', () => {
-    const state = withAutoGroup([
+    const state = withEntries([
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05' },
     ]);
-    let kindRow = false;
+    expect(state.entries.childrenOf('p1')).toEqual([]);
+
+    state.entries.update('c1', { parentId: 'p1' });
+
+    expect(state.entries.childrenOf('p1')).toHaveLength(1);
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
+    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+  });
+
+  it('promotion drops the parent’s authored rolling-up value in the same ChangeSet as the parentId write', () => {
+    const state = withEntries([
+      { id: 'p1', start: '2026-01-01', end: '2026-01-02', cost: 500 },
+      { id: 'c1', start: '2026-03-01', end: '2026-03-05', cost: 10 },
+    ]);
+    expect(state.entries.get('p1')!.props.cost).toBe(500);
+
+    let sawCostDrop = false;
     state.on('change', ({ changeSet }) => {
-      kindRow = fieldRowsOf(changeSet).some(
-        (row) =>
-          row.id === entryId('p1') && row.field === 'kind' && row.from === 'span' && row.to === 'group',
+      sawCostDrop = fieldRowsOf(changeSet).some(
+        (row) => row.id === entryId('p1') && row.field === 'cost' && row.from === 500 && row.to === 10,
       );
     });
 
     state.entries.update('c1', { parentId: 'p1' });
 
-    expect(state.entries.get('p1')!.kind).toBe('group');
-    expect(kindRow).toBe(true);
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
-    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+    expect(sawCostDrop).toBe(true);
+    expect(state.entries.get('p1')!.props.cost).toBe(10);
   });
 
-  it("a non-span parent is not promoted; a second child on an already-'group' promotes nothing", () => {
-    const state = withAutoGroup([
-      { id: 'm1', kind: 'buffer', start: '2026-01-01', end: '2026-01-02' },
-      { id: 'g1', kind: 'group', start: '2026-02-01', end: '2026-02-10' },
-      { id: 'leaf', parentId: 'g1', start: '2026-02-01', end: '2026-02-10' },
-    ]);
-    const kinds: string[] = [];
-    state.on('change', ({ changeSet }) => {
-      for (const row of fieldRowsOf(changeSet)) {
-        if (row.field === 'kind') kinds.push(`${String(row.id)}:${String(row.to)}`);
-      }
-    });
-
-    state.entries.add({
-      id: 'under-m',
-      parentId: 'm1',
-      name: 'under-m',
-      start: '2026-04-01',
-      end: '2026-04-02',
-    });
-    expect(state.entries.get('m1')!.kind).toBe('buffer');
-
-    state.entries.add({
-      id: 'under-g',
-      parentId: 'g1',
-      name: 'under-g',
-      start: '2026-08-01',
-      end: '2026-08-05',
-    });
-    expect(state.entries.get('g1')!.kind).toBe('group');
-    expect(kinds).toEqual([]);
-  });
-
-  it('[S4-A9] removing every child demotes nothing', () => {
-    const state = withAutoGroup([
-      { id: 'p1', kind: 'group' },
+  it('[ADR 0013] losing the last child demotes: name stays, dates clear, no bar', () => {
+    const state = withEntries([
+      { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-05' },
     ]);
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
 
     state.entries.remove('c1');
 
-    expect(state.entries.get('p1')!.kind).toBe('group');
+    const p1 = state.entries.get('p1')!;
+    expect(p1.name).toBe('p1');
+    expect(p1.start).toBeUndefined();
+    expect(p1.end).toBeUndefined();
+    expect(p1.segments).toEqual([]);
     expect(state.entries.childrenOf('p1')).toEqual([]);
   });
 
-  it('autoGroup: false promotes nothing anywhere', () => {
-    const state = new DatasetState({
-      entries: [
-        { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-02' },
-        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
-      ],
-      timeZone: 'UTC',
-      hierarchy: { autoGroup: false },
-    });
-    expect(state.hierarchy.autoGroup).toBe(false);
-    expect(state.entries.get('p1')!.kind).toBe('span');
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-01-01'));
-
-    state.entries.add({
-      id: 'c2',
-      parentId: 'p1',
-      name: 'c2',
-      start: '2026-06-01',
-      end: '2026-06-05',
-    });
-    expect(state.entries.get('p1')!.kind).toBe('span');
-  });
-
-  it('construction promotes a span that already has children, silently', () => {
-    const state = withAutoGroup([
+  it('construction rolls up a parent that already has children, silently', () => {
+    const state = withEntries([
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-05' },
     ]);
 
-    expect(state.entries.get('p1')!.kind).toBe('group');
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(state.canUndo).toBe(false);
   });
 
-  it('undo of a promoting transaction restores kind and the parent span together', () => {
-    const state = withAutoGroup([
+  it('undo of a promoting transaction restores the parent span and the parentId together', () => {
+    const state = withEntries([
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05' },
     ]);
@@ -168,10 +116,10 @@ describe('autoGroup (S4.5, [S4-A9])', () => {
     const end = state.entries.get('p1')!.end;
 
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.get('p1')!.kind).toBe('group');
+    expect(state.entries.childrenOf('p1')).toHaveLength(1);
 
     state.undo();
-    expect(state.entries.get('p1')!.kind).toBe('span');
+    expect(state.entries.childrenOf('p1')).toEqual([]);
     expect(state.entries.get('p1')!.start).toBe(start);
     expect(state.entries.get('p1')!.end).toBe(end);
     expect(state.entries.get('c1')!.parentId).toBeUndefined();

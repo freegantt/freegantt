@@ -35,7 +35,7 @@
 // `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
 // its own container.
 
-import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_DIAMOND_SIZE_PX } from '../layout/index.js';
+import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
 
 const MARKER_ATTR = 'data-freegantt-styles';
 
@@ -330,15 +330,6 @@ ${DARK_COLOR_TOKENS}
    sits at the tile's bottom centre is the same downward triangle the design draws with a border
    trick — and a border trick needs an element of its own, which a rail with two ends does not have. */
 .fg-bar-summary::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
-/* Bug hunt (S5 fixes): a milestone's painted span is floored and centred on the instant by
-   barSpan (layout/frame.ts) so the rotated diamond — and the selection outline on .fg-bar itself
-   — both fit inside the bar box. --fg-diamond-size is the one Token layout's floor and this glyph's
-   own size share (CONTEXT.md), read the same way as --fg-tick-box-floor. color: transparent hides
-   the diamond's own painted glyph from double-painting under ::before's own fill — .fg-bar-label
-   opts back into a real ink below, because J1 lets a milestone carry a label same as any other bar. */
-.fg-bar-diamond { background: transparent; overflow: visible; color: transparent; }
-.fg-bar-diamond::before { content: ''; box-sizing: border-box; position: absolute; top: 50%; left: 50%; width: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); height: var(--fg-diamond-size, ${DEFAULT_DIAMOND_SIZE_PX}px); background: var(--fg-bar-fill-painted); border: var(--fg-diamond-stroke, none); transform: translate(-50%, -50%) rotate(45deg); }
-.fg-bar-diamond .fg-bar-label { color: var(--fg-bar-label-color); }
 /* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
    min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
@@ -367,13 +358,6 @@ ${DARK_COLOR_TOKENS}
 .fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
 .fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
 .fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
-/* A diamond's box is its hit target, not its ink, exactly as a group bar's is: the shared outline
-   frames a full-height rectangle of empty pane around a glyph the size of a checkbox. Both states
-   paint on the glyph, where they ring the rotated shape itself. Same running order as the rail's —
-   after the shared rules, so equal specificity resolves this way. */
-.fg-bar-diamond[data-state~="hovered"], .fg-bar-diamond[data-state~="selected"] { outline: none; box-shadow: none; }
-.fg-bar-diamond[data-state~="hovered"]::before { box-shadow: 0 0 0 1px var(--fg-hover-ring); }
-.fg-bar-diamond[data-state~="selected"]::before { box-shadow: 0 0 0 2px var(--fg-selection-color); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }

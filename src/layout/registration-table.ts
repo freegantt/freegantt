@@ -29,7 +29,7 @@ function winner<V>(stack: Registration<V>[] | undefined): Registration<V> | unde
   return stack?.[stack.length - 1];
 }
 
-/** Call: `createRegistrationTable<EntryKind, ItemProducer>([['span', produceSpanItems]])`. Initial
+/** Call: `createRegistrationTable<EntryLook, ItemProducer>([['leaf', produceLeafItems]])`. Initial
  *  pairs are the floor nothing disposes; a later pair for the same key replaces an earlier one. */
 export function createRegistrationTable<K, V>(
   initial: Iterable<readonly [K, V]> = [],

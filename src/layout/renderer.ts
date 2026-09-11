@@ -40,7 +40,7 @@ export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | unde
 /** Per-kind map for `barRenderer` only (D-S5-12) — a cell belongs to a column and a header to a
  *  column/band, neither has a kind to key on. `'*'` is the catch-all; an exact `entry.kind` match
  *  wins over it, and the library default wins when neither matches. */
-export type RendererByKind = Readonly<Record<string, BarRenderer>>;
+export type RendererByLook = Readonly<Record<string, BarRenderer>>;
 
 export interface CellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row (`layout/rows`). */
@@ -70,7 +70,7 @@ export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescriptio
 /** What `ctx.view.registerRenderer(point, renderer)` and `GanttOptions`'s four renderer keys both
  *  accept for one `point` — only `bar` also takes the per-kind map form (D-S5-12). */
 export type RendererFor<P extends RendererPoint> = P extends 'bar'
-  ? BarRenderer | RendererByKind
+  ? BarRenderer | RendererByLook
   : P extends 'cell'
     ? CellRenderer
     : P extends 'header'

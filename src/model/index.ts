@@ -19,7 +19,6 @@ export type {
   Entry,
   Segment,
   SegmentInput,
-  EntryKind,
   EntryInput,
   EntryEdit,
   PropsEdit,
@@ -31,7 +30,7 @@ export type {
 } from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
-export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
+export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
 export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
 export type {
@@ -94,6 +93,7 @@ export {
   DuplicatePropsKeyError,
   IllegalCoreFieldOverrideError,
   ComputedFieldCannotBeWrittenError,
+  DerivedFieldNotWritableError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldNotColumnableError,

@@ -26,7 +26,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByKind,
+  RendererByLook,
 } from '../layout/index.js';
 import type {
   Entry,
@@ -151,7 +151,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
    *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
    *  branching. `undefined` returned from either form keeps the library's own bar output. */
-  barRenderer?: BarRenderer | RendererByKind;
+  barRenderer?: BarRenderer | RendererByLook;
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
   cellRenderer?: CellRenderer;
@@ -422,14 +422,14 @@ export class Gantt<TProps = unknown> {
     this.#shell.barLabels = value;
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByKind`
+  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByLook`
    *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
    *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
-  get barRenderer(): BarRenderer | RendererByKind | undefined {
+  get barRenderer(): BarRenderer | RendererByLook | undefined {
     return this.#shell.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
     this.#shell.barRenderer = renderer;
   }
 

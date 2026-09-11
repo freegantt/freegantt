@@ -10,7 +10,6 @@ import type {
   EditRequest,
   ProposedEdits,
   EntryInput,
-  EntryKind,
   EntryStore as EntryStoreContract,
   Field,
   FieldKey,
@@ -23,10 +22,9 @@ import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
-import type { DatasetHierarchy, PluginId, RollUpKinds } from '../model/index.js';
+import type { PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
-export type { DatasetHierarchy };
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -69,20 +67,12 @@ export interface DatasetOptions<TProps = unknown> {
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
   dateOnlyEnd?: DateOnlyEndRule;
-  /** Kinds whose rolling-up Fields the Rollup derives from their children every commit (`01` §2.5/§2.6).
-   *  Defaults to `['group']`. `rollUpKinds: 'none'` or `[]` opts every kind out of derivation, which is
-   *  the supported way to ask for hand-set values everywhere. */
-  rollUpKinds?: RollUpKinds;
   /** Consumer Field declarations. Core Fields are already in the registry (D-S4-4). */
   fields?: readonly Field[];
   /** Named Field type bundles. A Field's own keys win over the bundle (D-S4-3). */
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
-  /** First-child promotion (D-S4-17). Default is `{ autoGroup: true }`: a `'span'` parent
-   *  becomes `'group'` in the same transaction that gives it its first child. Pass
-   *  `{ autoGroup: false }` to keep Kind exactly as authored. Promotion never demotes. */
-  hierarchy?: DatasetHierarchy;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
@@ -203,24 +193,6 @@ export class Dataset<TProps = unknown> {
     return this.#state.dateOnlyEnd;
   }
 
-  get rollUpKinds(): readonly EntryKind[] {
-    return [...this.#state.rollUpKinds];
-  }
-
-  set rollUpKinds(value: RollUpKinds) {
-    this.#state.setRollUpKinds(value);
-  }
-
-  /** Call: `dataset.hierarchy = { autoGroup: false }`. Later first-child commits obey this.
-   *  Existing `'span'` parents do not promote until they gain a child under `autoGroup: true`. */
-  get hierarchy(): DatasetHierarchy {
-    return { autoGroup: this.#state.hierarchy.autoGroup };
-  }
-
-  set hierarchy(value: DatasetHierarchy) {
-    this.#state.setHierarchy(value);
-  }
-
   /** The resolved Field for this key, or `undefined` when the key is not declared. This is the
    *  declaration, not an Entry value; `entries.fieldValue` reads the value. */
   field(key: FieldKey): Field | undefined {
@@ -231,12 +203,6 @@ export class Dataset<TProps = unknown> {
    *  named `type` bundle merges in. */
   get fields(): { readonly all: readonly Field[] } {
     return { all: this.#state.fields.all };
-  }
-
-  /** `model/`'s `Dataset` interface (S3, D-S3-9) — `GanttShell` asks this, never `rollUpKinds`
-   *  itself, to resolve the per-kind capability default table. */
-  isRollUpKind(kind: EntryKind): boolean {
-    return this.#state.isRollUpKind(kind);
   }
 
   /** A counter that rises once per committed change. Call: `if (dataset.datasetRevision !== seen)`
