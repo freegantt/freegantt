@@ -47,23 +47,37 @@ The configured trailer is `Co-Authored-By: Claude Opus 5 (1M context) <noreply@a
 The branch is pushed now, so a rewrite costs a force-push. It was free when this was raised.
 Every later build carries the correct trailer.
 
-### Q3 — Does the `sonnet[1m]` frontmatter suffix take effect?
-
-**Raised:** 2026-09-10. **Status:** open, the measurement is running.
-
-Build 0's agent ran on plain `sonnet` and auto-compacted twice near 166k tokens. That is the ceiling
-of a 200k window, not a 1M window. The model documentation says Sonnet 5 always runs at 1M and has no
-`[1m]` suffix to select. The transcript disagrees with the documentation.
-
-Build 1 runs with `model: sonnet[1m]` in `.agents/agents/implementer.md`. Its watcher prints
-`SUFFIX DID NOT TAKE` if it compacts below 200k.
-
-**Two answers are still possible:** the subagent really gets a 200k window, or the harness compacts
-subagents at a fixed point whatever the window is. The author is waiting on this result.
-
 ---
 
 ## Answered
+
+### Q3 — Does the `sonnet[1m]` frontmatter suffix take effect? — **ANSWERED: no**
+
+**Raised and answered:** 2026-09-10, by measurement.
+
+Build 0's agent ran on plain `sonnet` and auto-compacted twice near 166k tokens. Build 1 ran with
+`model: sonnet[1m]` in `.agents/agents/implementer.md` and auto-compacted at **164,666** tokens — the
+same ceiling. **The suffix changed nothing.** A build agent gets roughly 166k of usable context and
+then compacts, whatever the frontmatter says.
+
+The model documentation says Sonnet 5 always runs at 1M and has no `[1m]` suffix to select. The
+transcript disagrees. Which half is wrong — a real 200k window, or a harness that compacts subagents
+at a fixed point regardless — is **not worth chasing**, and the author closed the question.
+
+**What replaces the handoff ladder.** The 200k / 250k / 300k rungs can never fire below a 166k
+ceiling, so they were always inert. Compaction is now simply allowed: an agent that compacts keeps
+working. The real control is scope.
+
+**One subagent per build file.** Author's ruling, 2026-09-10. The unit is the build — one file, one
+ADR — not a checkbox inside it. An agent works its whole build file and stops; it never picks up the
+next one, and a build is never split across two agents. Six builds, so six agents: Build 0 is done,
+Build 1 is running, and **four remain** — 0011, 0013, 0014, 0015.
+
+That bounds context without a ladder, because no agent carries a second build's history. The context
+watcher is retired with the ladder it served.
+
+The `sonnet[1m]` suffix stays in the frontmatter. It is proven inert, not harmful, and removing it
+would only be cosmetic.
 
 ### Q4 — May the builds edit `plans/**` without asking each time? — **ANSWERED: yes**
 
