@@ -249,11 +249,19 @@ export class Gantt<TProps = unknown> {
         'cellRenderer',
         'headerRenderer',
         'tooltipRenderer',
+        'zoomPresets',
       ]),
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
+      // N7: a constructor-supplied plugin/selection reaches frame 1 only if `GanttShell` installs
+      // it before its own first paint — see that constructor's own comment just ahead of
+      // `#frames.flush()`. `this` is captured, not read, so `ctx.gantt` is real by the time any
+      // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
+      // `buildPluginContext` already carries).
+      ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
+      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
@@ -284,9 +292,11 @@ export class Gantt<TProps = unknown> {
           }),
         // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
         // `api/Dataset` and `gantt` is `this`. See `api/plugin.ts`'s file header for why `view/` may
-        // name neither. `this` is captured, not read: by the time a plugin's `setup()` runs, `#shell`
-        // below is assigned — the `plugins` assignment after this call. `zoomPresets`/`selection`
-        // already rely on that same ordering. Every other member arrives already grouped from
+        // name neither. `this` is captured, not read (N7): a plugin's `setup()` runs *inside* the
+        // `new GanttShell(...)` call above, before this constructor reaches its own closing brace,
+        // so `#shell` is not yet assigned — but `ctx.gantt` only needs `this` to exist, not `#shell`
+        // to be set, and nothing a plugin's `setup()` runs synchronously reads `#shell` (only
+        // event handlers registered for later do). Every other member arrives already grouped from
         // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
         // edit there, and a member in the wrong group no longer compiles.
         buildPluginContext: (parts): PluginContext<TProps> => ({
@@ -302,9 +312,6 @@ export class Gantt<TProps = unknown> {
         now,
       },
     });
-    if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
-    if (options.selectedSegmentIds !== undefined) this.#shell.selection = options.selectedSegmentIds;
-    if (options.plugins !== undefined) this.#shell.plugins = options.plugins;
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`

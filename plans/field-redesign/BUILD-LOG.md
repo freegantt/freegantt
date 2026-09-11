@@ -827,3 +827,41 @@ named as the worst one. `resolveLook` itself is correct; the ordering around it 
 defers that paint until the constructor's options are all applied). `zoomPresets` and `selection` sit
 on the same three lines and deserve the same question. See [[J16]] — this is the `EntryLook`/
 `resolveLook` design, the part already flagged as most worth a reviewer's second look.
+
+**FIXED**, 2026-09-11, Build 3b. `GanttShellOptions` gained three constructor-only options —
+`plugins`, `zoomPresets`, `selectedSegmentIds` — applied through the shell's own existing live
+setters (`this.plugins = …`, `this.zoomPresets = …`, `this.selection = …`) right before the
+constructor's own `this.#phase = 'live'; this.#frames.flush();`. `resolveLook`/`Capabilities`
+already read their registries live at render time rather than a cached snapshot taken once (J16),
+so no other ordering in the constructor needed to move — plugin `setup()` runs after every
+collaborator it can reach (`#registrations`, `#commandRegistry`, `#keymap`, `#segmentSelection`,
+`#viewport`) is already built, same as a post-construction assignment would see. `api/gantt.ts` now
+passes `plugins`/`selectedSegmentIds` into the `new GanttShell({...})` call instead of assigning
+`this.#shell.plugins`/`.selection` after it returns (`zoomPresets` folded into the existing
+`pickDefined` list, since its type is identical on both sides). The old three post-construction
+lines are deleted; no behaviour depends on them running late any more.
+
+**Why this stays a reordering, not a restructure:** `GanttShell`'s constructor already builds every
+plugin-relevant collaborator before its own final flush — the fix only moves *when within that same
+constructor* three already-existing live setters are called, from "after `api/gantt.ts`'s
+constructor returns" to "a few statements before this constructor's own last line." No new
+collaborator, no new field, no change to `resolveLook` itself (J16's design stands untouched).
+
+**Verified:** `pnpm exec tsc --noEmit` stays at 136 errors (no new ones in `gantt.ts`/`gantt-shell.ts`).
+`pnpm exec vitest run src/api/gantt.test.ts` — 196/196 pass, including the two tests J19 named as
+N7 casualties ("a custom milestone barRenderer paints a diamond…", "clearCapabilityRule restores a
+registered look default (#195)") with **no `await` added** to either.
+
+### J20 — `[review P2]`'s `barFor` helper now keys on the Entry's own id, not `data-kind`
+
+**Raised:** 2026-09-11, Build 3b, closing out J19's failure #1. **Status:** a test fix, not a `src/`
+change — the dispatch's own diagnosis (J19) already named the right mechanism.
+
+`barFor(kind)` found a bar by `data-kind`, which is exactly the attribute ADR 0013 makes unstable
+across a plugin drop (a claimed Entry's look reverts to structural `'leaf'`, and `data-kind` reverts
+with it). Rewrote it to `barFor(entryId)`, matching `data-item-id`'s `${entryId}:${segmentIndex}`
+convention (`layout/items/produce-items.ts`) with a `startsWith` check — the bar node for a given
+Entry is the same DOM node before and after a plugin drop (I8), so this is stable across every
+assertion in the test. The test's own intent (each plugin's class shows up and goes away with its
+own install/uninstall) is unchanged; only how the test locates the bar element changed. No assertion
+was weakened or deleted.

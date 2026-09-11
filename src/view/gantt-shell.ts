@@ -332,6 +332,15 @@ export interface GanttShellOptions {
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
+  /** Installed before this shell's first paint (N7) — so a plugin-defined look, keybinding or
+   *  command reaches frame 1, the same as every other constructor option, instead of only showing
+   *  up once `Gantt.plugins`'s live setter runs after this constructor already returned. */
+  plugins?: readonly ShellPlugin<unknown>[];
+  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
+  zoomPresets?: readonly PresetRef[];
+  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
+   *  (`SegmentId | string`), same asymmetry the live `selection` setter already has. */
+  selectedSegmentIds?: readonly (SegmentId | string)[];
   /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
   wiring: GanttShellWiring;
 }
@@ -855,6 +864,17 @@ export class GanttShell {
     if (options.collapsed !== undefined) {
       this.#treeCollapse.hydrate(options.collapsed);
     }
+    // N7: applied through the same live setters `api/gantt.ts` used to call *after* this
+    // constructor returned — moved here, ahead of the first flush below, so a constructor-supplied
+    // plugin's look/keybinding/command and a constructor-supplied zoom/selection all reach frame 1.
+    // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
+    // `#segmentSelection`, `#viewport`) is already built above, so `setup()` sees the same shell a
+    // post-construction assignment would have. `resolveLook`/`Capabilities` read these registries
+    // live at render time (never a cached snapshot), so applying them a few lines earlier than the
+    // old post-construction assignment changes nothing but which frame the result first appears in.
+    if (options.plugins !== undefined) this.plugins = options.plugins;
+    if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
+    if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
     this.#phase = 'live';
     this.#frames.flush();
 

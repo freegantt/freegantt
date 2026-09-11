@@ -2937,35 +2937,41 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
       timeZone: 'UTC',
     });
-    const buffer = bufferKind([sampleEntries[0]!.id]);
-    const risk = riskKind([sampleEntries[1]!.id]);
+    const bufferEntryId = sampleEntries[0]!.id;
+    const riskEntryId = sampleEntries[1]!.id;
+    const buffer = bufferKind([bufferEntryId]);
+    const risk = riskKind([riskEntryId]);
     const gantt = new Gantt({ container, dataset, plugins: [buffer, risk] });
     const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
     await paint();
 
-    const barFor = (kind: string): HTMLElement =>
-      Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).find(
-        (bar) => bar.getAttribute('data-kind') === kind,
+    // Keyed by `data-item-id` (the Entry's own id), not `data-kind`: under ADR 0013 a look is
+    // resolved fresh every frame from the installed producers, so `data-kind` reverts to `leaf`
+    // the moment a plugin drops — the bar itself (and the Entry it draws) does not move.
+    const barFor = (entryId: string): HTMLElement =>
+      Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).find((bar) =>
+        bar.getAttribute('data-item-id')?.startsWith(`${entryId}:`),
       )!;
 
     // Both installed, and both painted their own class from their own `bar` registration.
     expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.bufferKind', 'demo.riskKind']);
-    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(true);
-    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(true);
+    expect(barFor(bufferEntryId).classList.contains('demo-buffer-bar')).toBe(true);
+    expect(barFor(riskEntryId).classList.contains('demo-risk-bar')).toBe(true);
 
-    // Dropping the first-registered plugin leaves the second painting.
+    // Dropping the first-registered plugin leaves the second painting; the dropped Entry's bar
+    // still exists (structural `leaf`), it just no longer carries the plugin's class.
     gantt.plugins = [risk];
     await paint();
-    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(false);
-    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(true);
+    expect(barFor(bufferEntryId).classList.contains('demo-buffer-bar')).toBe(false);
+    expect(barFor(riskEntryId).classList.contains('demo-risk-bar')).toBe(true);
 
     // Re-installing is an ordinary sequence (#155), and the other disposal order behaves the same.
     gantt.plugins = [buffer, risk];
     await paint();
     gantt.plugins = [buffer];
     await paint();
-    expect(barFor('buffer').classList.contains('demo-buffer-bar')).toBe(true);
-    expect(barFor('risk').classList.contains('demo-risk-bar')).toBe(false);
+    expect(barFor(bufferEntryId).classList.contains('demo-buffer-bar')).toBe(true);
+    expect(barFor(riskEntryId).classList.contains('demo-risk-bar')).toBe(false);
 
     gantt.destroy();
     container.remove();
