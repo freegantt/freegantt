@@ -494,6 +494,14 @@ The spec calls all three harness sites "textarea dumps". `data.ts` is not one: `
 
 `history.property.test.ts` calls `toDocument` at `:131`, `:134`, `:194` and `:198`. **I7 does not change.** Only the comparison changes.
 
+#### B11 — `JSON.stringify(dataset)` changes answer in silence
+
+`toJSON` is not only our method name. **`JSON.stringify` calls a `toJSON()` method when the value has one**, so `JSON.stringify(dataset)` returns the whole Document today.
+
+`Dataset` holds `#state`, `#time` and `#plugins`, and a `#` field is not an own enumerable property. **So after this build `JSON.stringify(dataset)` returns `{}`.** No error, no warning, an empty object.
+
+Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites call `dataset.toJSON()` by name. **The build decides whether an app author is owed a dev-mode warning**, or whether `{}` is the honest answer for an object that holds no format.
+
 #### B10 — what stays, and must be proved to stay
 
 `new Dataset({ entries })`, loose input, `PluginStores` itself, `reserve`, `read`, and the passenger rows a Dataset carries for a plugin it never installed (D-S5-30). This build removes a way out, never a way in.
