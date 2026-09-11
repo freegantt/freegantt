@@ -414,6 +414,36 @@ almost entirely mechanical (`kind: 'x'` in a test fixture → drop it or move it
 `EntryKind`/`RollUpKinds`/`DatasetHierarchy` imports → delete). Do not re-derive the design questions
 above; they are settled (J16/J17) unless a reviewer reverses them.
 
+### J18 — `milestoneKind()`, a new harness plugin, replaces every fixture's `kind: 'milestone'`
+
+**Raised:** 2026-09-11, Build 3 (ADR 0013), continuing from J17's handoff. **Status:** informational —
+a mechanical application of J16's own pattern, not a new design decision.
+
+Three call sites authored `kind: 'milestone'` on one or more ids purely to reach a diamond bar:
+`fixtures/demo-dataset.ts` (`entry-4`, read by `harness/main.ts`), `harness/plugins.ts` (`entry-39`),
+and `fixtures/planner-dataset.ts` (every row whose flag string contains `m`, read by
+`harness/planner.ts`). Core ships no milestone producer any more (the work item this build file
+already ticked), so none of the three could just delete the property — each page still wants the
+look. Added `harness/plugins/milestone-kind.ts`, a fourth peer of `bufferKind()`/`riskKind()`: same
+`ownedIds`-at-construction shape, but it registers only the item-producer seam (D-S5-22's "what shape
+does it draw?") since none of the three pages ever gave a milestone its own move/resize rule or
+command — the other three seams stay at the library default, unlike `bufferKind()`/`riskKind()`.
+`fixtures/demo-dataset.ts` now exports `MILESTONE_ENTRY_ID`; `fixtures/planner-dataset.ts` now exports
+`plannerCheckpointEntryIds` (filled by `entryForRow` as it builds each row, since a checkpoint used to
+be `flags.includes('m')` at that same call site). Both fixtures' own "which rows are work rows, not a
+phase or a checkpoint" logic (`planner-dataset.ts`'s `WORK_ROW_NUMBERS`, the `ref` compute Field) moved
+from `entry.kind === undefined` to `parentId !== undefined && !checkpointIds.has(id)` — a phase has no
+`parentId` in this fixture, so the two structural facts (has a parent, is not a named checkpoint) say
+the same thing the old classification did. `harness/planner.ts`'s `PHASE_BARS` renamed its `group` key
+to `parent`: a phase is any row with children, which now reaches the structural `'parent'` look with no
+plugin at all (J16) — no plugin was written for the phase rail, only for the checkpoint diamond.
+
+Also removed in the same pass: `harness/hierarchy.ts`'s `autoGroup` checkbox and the
+`dataset.hierarchy = { autoGroup }` write it drove. `rollUpKinds`/`hierarchy.autoGroup` are deleted
+outright by this build (a ticked work item), so there is no config left for that checkbox to toggle —
+the behaviour it used to switch off is now unconditional. `harness/hierarchy.html` drops the checkbox
+markup; nothing replaces it, because nothing needs replacing.
+
 ## Notes owed elsewhere
 
 ### N1 — #266 is raised, not closed — **DONE (comment posted)**
