@@ -953,10 +953,10 @@ anyway for consistency since it is the same dead field the other twelve are. Lef
 **Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 13).
 `pnpm exec vitest run src/view/gantt-shell.test.ts` — 35/35 pass, no snapshot involved.
 
-### J24 — `src/data/entry-store.mutation.test.ts`: compiles clean; 3 of 52 tests fail for a real `src/` reason, left unfixed and reported below (Q2)
+### J24 — `src/data/entry-store.mutation.test.ts`: compiles clean; 3 of 52 tests fail for a real `src/` reason, left unfixed and reported below (Q6)
 
 **Raised:** 2026-09-11, Build 3b, continuing the tsc-cleanup pass. **Status:** the compile fixes are
-mechanical (test rewrites); the three runtime failures are **not** test bugs — see Q2 immediately
+mechanical (test rewrites); the three runtime failures are **not** test bugs — see Q6 immediately
 below, which is the important part of this entry.
 
 Compile-only changes, mechanical, following the same pattern as J21–J23:
@@ -985,11 +985,36 @@ Compile-only changes, mechanical, following the same pattern as J21–J23:
   restores both fields) is unchanged; only the mechanism used to revert changed.
 
 **Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 11).
-`pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **49/52 pass, 3 fail** — see Q2.
+`pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **49/52 pass, 3 fail** — see Q6.
 
-### Q2 — Two apparent `src/` conflicts surfaced by running (not just compiling) `entry-store.mutation.test.ts` — needs the author's read before anyone touches `entry-store.ts`/rollup internals
+### Q6 — Two apparent `src/` conflicts surfaced by running (not just compiling) `entry-store.mutation.test.ts` — needs the author's read before anyone touches `entry-store.ts`/rollup internals
 
-**Raised:** 2026-09-11, Build 3b. **Status:** open. Per CLAUDE.md's stop rule and the dispatch's own
+**Raised:** 2026-09-11, Build 3b. **Status:** open, with a coordinator's reading below that narrows
+what the author has to decide.
+
+> **Coordinator's note, 2026-09-11 — the guard is not decision 6, and ADR 0013 says where it belongs.**
+> Build 3b calls the refusal "decision 6". It is not. ADR 0013 line 74 states decision 6 verbatim:
+> *"An Entry that starts rolling up drops its authored values, and the Rollup recalculates them…
+> **The library never refuses this.**"* Decision 6 is about **promotion dropping values**, and it
+> explicitly never refuses a write.
+>
+> The refusal is a different mechanism — the **derived arm** of the write resolver, line 81: *"This
+> ADR fills the derived arm and wires **`entries.update()`** to it."* Line 91 adds: *"Parent **cells**
+> stay refused."* Both name a **consumer-facing door**. ADR 0013's own "six doors" list is six
+> consumer entry points; internal bookkeeping is not among them.
+>
+> The guard as built sits in `EntryStore.update()`, which is **both** the consumer door and the
+> library's own internal write path. That is why it catches `#removeSegmentsFrom()`'s structural
+> `{ start: undefined, end: undefined }` and the same-transaction proposal that rollup §1.5 protects.
+> So this reads as a **placement** bug, not a contradiction between decisions 5 and 6: the refusal
+> belongs at the consumer door, above the library's internal writes, and both red tests then pass
+> without either decision being reversed.
+>
+> **Still the author's call** — moving a guard changes what every one of the six doors refuses, and
+> the third finding (quadratic scaling) is unrelated and still undiagnosed. But the author is
+> choosing *where the guard sits*, not *which decision to overturn*.
+
+Per CLAUDE.md's stop rule and the dispatch's own
 instruction ("if a test is red because `src/` is genuinely wrong, stop and report it... do not
 change the test"), **the three tests below are left red, unmodified from before this session's
 `kind`-removal edits** (two of them — `removeSegments`/quadratic-scaling — were never touched by
@@ -1095,8 +1120,8 @@ reverts to `'leaf'` once a plugin's look is uninstalled — rewritten to key on 
 3. `src/layout/frame.test.ts` (`2d4b92e`) — J22. 15 → 0 errors, 46/46 tests pass (one snapshot
    updated, verified as the pre-existing `.kind`→`.look` rename only).
 4. `src/view/gantt-shell.test.ts` (`fa9fee4`) — J23. 13 → 0 errors, 35/35 tests pass.
-5. `src/data/entry-store.mutation.test.ts` (`ae4a99a`) — J24/**Q2**. 11 → 0 errors, **49/52 tests
-   pass** — 3 left red on purpose, reported as Q2 above. Read Q2 before anyone touches
+5. `src/data/entry-store.mutation.test.ts` (`ae4a99a`) — J24/**Q6**. 11 → 0 errors, **49/52 tests
+   pass** — 3 left red on purpose, reported as Q6 above. Read Q6 before anyone touches
    `entry-store.ts`'s write-refusal guard or `data/rollup.ts`/`data/write-set.ts`.
 
 **Every test deleted or weakened this session, one line each (full detail lives in J20–J24 above —
@@ -1119,10 +1144,10 @@ this is the audit-ready summary the coordinator asked for):**
   asserted the same thing under two labels); deleted 1 further duplicate of that same merged claim;
   rewrote 1 test's "undo" mechanism from a now-refused manual `update()` loop to
   `replay(invertChangeSet(...))`, assertion unchanged; **left 3 tests red** rather than weaken them
-  (Q2) (J24).
+  (Q6) (J24).
 
 **Superseded by J26 below**: `src/data/transaction.test.ts` is now done (0 errors, 44/44 pass, no
-write-refusal conflict surfaced there — Q2's second finding above's worry did not materialize for
+write-refusal conflict surfaced there — Q6's second finding above's worry did not materialize for
 this file).
 
 ### J26 — Build 3b handoff #2: forced stop at ~251k context, `plans/field-redesign/build/build-3-0013-derivation.md` untouched, no boxes ticked
@@ -1225,7 +1250,7 @@ an arithmetic check is possible without re-deriving it.**
   a 1-for-1 rename; the 3 delete/merge lines above sum to −3 net over the "roll-up kinds"/"rollup"
   describes). 1 test's undo mechanism rewritten (`replay(invertChangeSet(...))` instead of a manual
   `update()` loop), 0 assertion change. First runnable count: 52 total, 49 passing, 3 failing on
-  purpose (Q2) — **not weakened, left red**.
+  purpose (Q6) — **not weakened, left red**.
 - `transaction.test.ts`: **0 deleted.** 6 dead-property removals (0 assertion change) plus 1
   assertion line dropped (`expect(parent.kind).toBe('group')` — the old kind-promotion side effect,
   which no longer exists; the test's other two assertions, the actual D-S4-17 same-commit-rollup
@@ -1240,7 +1265,7 @@ with **no reduction in the number of distinct claims tested** — the underlying
 still-standing test names is the same behaviour it named before this session touched it.
 
 **5. Tests where the test was right and `src/` was wrong — left failing, not touched. Full detail
-in Q2 above; named again here per the coordinator's numbered list:**
+in Q6 above; named again here per the coordinator's numbered list:**
 - `entry-store.mutation.test.ts` > `entries.removeSegments (#212, ADR 0010)` > `"a last-Segment
   removal never touches the Entry's descendants (ADR 0012...)"` — `entries.update()`'s write-refusal
   guard (decision 6) also blocks the library's *own* internal `#removeSegmentsFrom()` bookkeeping
@@ -1258,6 +1283,6 @@ in Q2 above; named again here per the coordinator's numbered list:**
 and per-file `vitest run` were used to verify each commit.
 
 **Next agent's first move:** `src/layout/frame-layout.test.ts` (5 errors) is the next-largest file,
-same pattern. **Read Q2 before touching `entry-store.ts`, `data/rollup.ts`, or `data/write-set.ts`
+same pattern. **Read Q6 before touching `entry-store.ts`, `data/rollup.ts`, or `data/write-set.ts`
 for any reason** — two real conflicts and one unexplained regression are open there, none yet the
 author's call.
