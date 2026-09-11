@@ -22,7 +22,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
 } from '../src/api/index.js';
-import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import { demoFieldOptions, demoTreeEntryInputs, MILESTONE_ENTRY_ID } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -30,6 +30,7 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
@@ -413,13 +414,14 @@ popupBtn.addEventListener('click', () => {
 });
 
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
-// The demo tree's own "Requirements review" (`entry-4`) is already `kind: 'milestone'`, and every
-// leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the existing
-// dataset rather than adding renderer-only fixture data. `fg-bar-diamond`'s own shape is structural,
-// from `entry.kind` alone (D-S4-24), outside a renderer's bounded scope (I13) — the demo renderer
-// recolors it via the `--fg-bar-fill` custom property its own `::before` already reads.
+// ADR 0013: core ships no diamond and no `'milestone'` kind, so "Requirements review" (`entry-4`)
+// reaches the `'milestone'` key below through `milestoneKind()`, a plugin that owns that one id the
+// same way `bufferKind()`/`riskKind()` do (`plugins.ts`) — installed below, once, at page load.
+// Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
+// existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
+gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 const BUDGET_THRESHOLD = 5000;
 
 const demoBarRenderer: RendererByLook = {

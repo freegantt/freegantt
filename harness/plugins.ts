@@ -3,6 +3,7 @@ import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
 import type { RendererByLook, CellRenderer, GanttPlugin } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { milestoneKind } from './plugins/milestone-kind.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -38,10 +39,7 @@ const dataset = new Dataset({
   // Dataset must (ADR 0011: an undeclared key is refused at `entries.update()`).
   fields: [{ key: 'cost', type: 'money' }, { key: 'consumed' }, { key: 'accepted' }],
   entries: sampleEntries.map((entry) => {
-    if (entry.id === MILESTONE_ENTRY_ID) return { ...entry, kind: 'milestone' as const };
     if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, props: { cost: 1500 } };
-    if (entry.id === BUFFER_ENTRY_ID) return { ...entry, kind: 'buffer' };
-    if (entry.id === RISK_ENTRY_ID) return { ...entry, kind: 'risk' };
     return entry;
   }),
 });
@@ -78,6 +76,7 @@ toggleBtn.addEventListener('click', () => {
 const demoPopup = popupDemo();
 gantt.installPlugin(selectionShortcuts(writeLog));
 gantt.installPlugin(demoPopup);
+gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -95,11 +94,10 @@ popupBtn.addEventListener('click', () => {
 // `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
 // the whole point of a declared Field is that a consumer reads it by name, not by storage key.
 
-// `fg-bar-diamond`'s own shape is structural, from `entry.kind` alone (D-S4-24), outside a
-// renderer's bounded scope (attr/class/style/text/children, I13) — it stays applied underneath
-// whatever a `barRenderer` paints. Its `::before` reads the `--fg-bar-fill` custom property, which
-// inherits from this bar node, so recoloring the diamond (rather than fighting its shape) is what a
-// `style` write actually reaches; `demo-milestone`'s own class carries the rest (the label below).
+// ADR 0013: core ships no diamond and no `'milestone'` kind, so `milestoneKind()` (a plugin that
+// owns `MILESTONE_ENTRY_ID` alone, `harness/plugins/milestone-kind.ts`) makes the `'milestone'` key
+// below real; `demo-milestone`'s own class draws the diamond shape (`harness-chrome.css`), and the
+// `--fg-bar-fill` custom property it reads recolors it.
 // S5.9: `buffer` and `risk` paint the same classes their own plugins register
 // (harness/plugins/buffer-kind.ts, harness/plugins/risk-kind.ts) — named here too because a
 // consumer's own per-kind map wins over a plugin for every kind it names, and falls to the library
@@ -163,7 +161,7 @@ weekendToggle.addEventListener('change', () => {
 let kindPlugins: readonly GanttPlugin[] = [];
 
 function installKindPlugins(): void {
-  kindPlugins = [contextMenu(), bufferKind(), riskKind()];
+  kindPlugins = [contextMenu(), bufferKind([BUFFER_ENTRY_ID]), riskKind([RISK_ENTRY_ID])];
   for (const plugin of kindPlugins) gantt.installPlugin(plugin);
 }
 

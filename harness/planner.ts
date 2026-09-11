@@ -18,11 +18,17 @@ import type {
   RendererByLook,
   ResolvedBarLabel,
 } from '../src/api/index.js';
-import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
+import {
+  plannerCheckpointEntryIds,
+  plannerEntryInputs,
+  plannerFieldOptions,
+  plannerSpan,
+} from '../fixtures/planner-dataset.js';
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import type { PlannerThemeChoice } from './planner-toolbar.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: what this page shows, the config that does it, and the spec section behind it.
@@ -33,6 +39,8 @@ const dataset = new Dataset<PlannerEntryProps>({
   timeZone: 'UTC',
   ...plannerFieldOptions,
 });
+
+const checkpointEntryIds = new Set(plannerCheckpointEntryIds);
 
 // The design's own column set, left to right. Each one names a Field and carries presentation only —
 // the width, the alignment, and where a cell paints something other than its formatted text.
@@ -59,13 +67,15 @@ function phaseFill(phase: unknown): string | undefined {
 function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (entry === undefined) return undefined;
   const props = entry.props as PlannerEntryProps | undefined;
+  const isPhase = dataset.entries.childrenOf(entry.id).length > 0;
+  const isCheckpoint = checkpointEntryIds.has(String(entry.id));
   const children: (ElementDescription & { key?: string })[] = [];
   const fill = phaseFill(props?.phase);
-  if (fill !== undefined && entry.kind !== 'group' && entry.kind !== 'milestone') {
+  if (fill !== undefined && !isPhase && !isCheckpoint) {
     children.push({ key: 'tag', class: { 'demo-phase-tag': true }, style: { background: fill } });
   }
   children.push({ key: 'name', class: { 'demo-task-name': true }, text: value });
-  return { class: { 'demo-task-cell': true, 'demo-task-cell-group': entry.kind === 'group' }, children };
+  return { class: { 'demo-task-cell': true, 'demo-task-cell-group': isPhase }, children };
 }
 
 /** The Own cell: initials in a phase-coloured disc. #264 tracks the image column type this wants to
@@ -208,7 +218,10 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
   return description;
 }
 
-const PHASE_BARS: RendererByLook = { '*': phaseBar, group: phaseRail, milestone: checkpointDiamond };
+// ADR 0013: core computes only the `'parent'`/`'leaf'` structural looks itself — a phase (any row
+// with children) reaches `'parent'` with no plugin at all. A checkpoint is not structural, so
+// `milestoneKind()` (installed below, owning `plannerCheckpointEntryIds`) makes `'milestone'` real.
+const PHASE_BARS: RendererByLook = { '*': phaseBar, parent: phaseRail, milestone: checkpointDiamond };
 
 const gantt = new Gantt({
   container: '#gantt',
@@ -228,6 +241,7 @@ const gantt = new Gantt({
 // Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2) — a working plugin over
 // the public surface alone, install and a CSS band, nothing this page re-derives.
 gantt.installPlugin(weekendShading());
+gantt.installPlugin(milestoneKind(plannerCheckpointEntryIds));
 
 const THEME_STORAGE_KEY = 'freegantt-planner-theme';
 

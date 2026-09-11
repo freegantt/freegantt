@@ -6,9 +6,12 @@
 // where the design puts it: 71 days into a 133-day build, mid-Structural-Framing. A fixture frozen
 // on fixed dates would show the Today line off the left edge within a month of being written.
 //
-// Vocabulary note: `Entry` is the record, `kind: 'group'` is a phase, `kind: 'milestone'` is a
-// checkpoint. "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) —
-// this fixture is a construction plan because a consumer said so, not because the library knows one.
+// Vocabulary note: `Entry` is the record. A phase is a row with children — ADR 0013 leaves it no
+// stored classification, so `harness/planner.ts` asks `childrenOf` the way any other consumer would.
+// A checkpoint is a row this fixture names in `plannerCheckpointEntryIds`, the same "a plugin that
+// needs another look stores which ids it owns" pattern `harness/plugins/milestone-kind.ts` uses.
+// "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) — this fixture
+// is a construction plan because a consumer said so, not because the library knows one.
 
 import { addMs, instant, MS } from '../src/api/index.js';
 import type { Entry, EntryInput, Field, Instant } from '../src/api/index.js';
@@ -120,14 +123,20 @@ const PHASES: readonly Phase[] = [
   },
 ];
 
+/** Every checkpoint row's id, in authored order — `harness/planner.ts` hands this to
+ *  `milestoneKind()` (`harness/plugins/milestone-kind.ts`) the same way `demo-dataset.ts` hands its
+ *  own single milestone id to `main.ts`. Filled by `entryForRow` as it builds each row. */
+export const plannerCheckpointEntryIds: string[] = [];
+
 function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerEntryProps> {
   const [id, name, owner, startDay, durationDays, progress, flags] = row;
   const isCheckpoint = flags.includes('m');
   const meta: PlannerEntryProps = { progress, phase: phase.hue };
   if (owner !== '') meta.owner = owner;
   if (flags.includes('c')) meta.critical = true;
+  if (isCheckpoint) plannerCheckpointEntryIds.push(id);
 
-  const entry: EntryInput<PlannerEntryProps> = {
+  return {
     id,
     name,
     parentId: phase.id,
@@ -137,24 +146,26 @@ function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerEntryProp
     end: dayOffset(startDay + (isCheckpoint ? 1 : durationDays)),
     props: meta,
   };
-  if (isCheckpoint) entry.kind = 'milestone';
-  return entry;
 }
 
-/** The plan: five phases, each a `kind: 'group'` parent, with its own rows under it. A phase states
- *  no dates of its own — `start`/`end` roll up from its children, which is what core already does. */
+/** The plan: five phases, each a row with children, with its own rows under it. A phase states no
+ *  dates of its own — `start`/`end` roll up from its children, which is what core already does. It
+ *  needs no stored classification (ADR 0013): a row with children already draws the parent look. */
 export const plannerEntryInputs: readonly EntryInput<PlannerEntryProps>[] = PHASES.flatMap((phase) => [
-  { id: phase.id, name: phase.name, kind: 'group' as const, props: { phase: phase.hue } },
+  { id: phase.id, name: phase.name, props: { phase: phase.hue } },
   ...phase.rows.map((row) => entryForRow(row, phase)),
 ]);
+
+const CHECKPOINT_ENTRY_IDS = new Set(plannerCheckpointEntryIds);
 
 /** What the `#` column counts: work rows, numbered from 1 in authored order. A phase and a
  *  checkpoint are both skipped, so the numbers run unbroken down the work itself — the design's own
  *  reading of the column. Authored order is the fixture's to state, which is why the map is built
- *  here beside the entries rather than derived from a rendered row. */
+ *  here beside the entries rather than derived from a rendered row. A phase has no `parentId`; a
+ *  checkpoint does, so it is told apart by id, the same way `harness/planner.ts` tells its bar apart. */
 const WORK_ROW_NUMBERS = new Map<string, number>(
   plannerEntryInputs
-    .filter((entry) => entry.kind === undefined)
+    .filter((entry) => entry.parentId !== undefined && !CHECKPOINT_ENTRY_IDS.has(String(entry.id)))
     .map((entry, index) => [String(entry.id), index + 1]),
 );
 
@@ -176,7 +187,7 @@ const PLANNER_FIELDS: readonly Field[] = [
   {
     key: 'ref',
     compute: (entry: Entry) =>
-      entry.kind === 'milestone' ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
+      CHECKPOINT_ENTRY_IDS.has(String(entry.id)) ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
     // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width
     // gives way, not the number.
