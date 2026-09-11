@@ -43,6 +43,7 @@ function spanEntry(id: string, extras: Partial<Entry> = {}): Entry {
     end: asInstant(10),
     kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start: asInstant(0), end: asInstant(10) }],
+    props: {},
     ...extras,
   };
 }
@@ -101,7 +102,14 @@ describe('produceItemsForRow', () => {
   });
 
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
-    const t1: Entry = { id: entryId('t1'), name: 't1', kind: 'span', start: asInstant(0), segments: [] };
+    const t1: Entry = {
+      id: entryId('t1'),
+      name: 't1',
+      kind: 'span',
+      start: asInstant(0),
+      segments: [],
+      props: {},
+    };
     expect(t1.end).toBeUndefined();
     const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(0);

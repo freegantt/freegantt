@@ -10,8 +10,9 @@
 // per Field. `Interactions.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import { rollsUp } from '../data/fields/field-registry.js';
-import type { BuiltInErrorCode, Entry, EntryKind, Field, FieldKey } from '../model/index.js';
+import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
+import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
+import type { Entry, EntryKind, Field, FieldKey } from '../model/index.js';
 
 /** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
  *  (U4: `interactions: { resize: e => e.kind !== 'group' }`). */
@@ -55,21 +56,13 @@ export interface Interactions {
 
 /** Why a write is refused, when the refusal is worth words. A refusal that carries no reason is
  *  already visible: no handle paints, and no editor opens. The cell editor stays silent for it
- *  (`s5.8-inline-editing.md` §1, "Which refusals speak"). One spelling, shared with
- *  `model/error-report.ts`'s `BuiltInErrorCode` and the cell editor's own `REFUSAL_TEXT`. */
-export type WriteRefusalReason = Extract<BuiltInErrorCode, 'derived-value'>;
+ *  (`s5.8-inline-editing.md` §1, "Which refusals speak"). `data/write-rule.ts` owns the type — the
+ *  resolver moved there in ADR 0011 — and this is the name the app-author surface publishes it
+ *  under. */
+export type WriteRefusalReason = FieldWriteRefusalReason;
 
 /** May this cell's value change, and if not, is the refusal worth explaining? */
-export type WriteVerdict =
-  { readonly ok: true } | { readonly ok: false; readonly reason?: WriteRefusalReason };
-
-// One verdict object per answer, frozen and shared. `canWrite` sits behind hover affordance
-// resolution. A verdict built per hover would allocate where the hot path must not (I5). This is the
-// shape `gesture-pipeline.ts`'s own `NO_EXTRA_EDITS` uses: a frozen constant, never a singleton that
-// holds state (no module-level singletons, plans/01 §6).
-const WRITABLE: WriteVerdict = Object.freeze({ ok: true });
-const NOT_WRITABLE: WriteVerdict = Object.freeze({ ok: false });
-const DERIVED: WriteVerdict = Object.freeze({ ok: false, reason: 'derived-value' as const });
+export type WriteVerdict = FieldWriteVerdict;
 
 export interface Capabilities {
   /** `edge` narrows a `'resize'` question to one handle (#142). With no edge, `'resize'` asks
@@ -103,34 +96,17 @@ export interface CapabilityInputs {
   registeredDefaultsFor?: ((kind: EntryKind) => KindDefaults | undefined) | undefined;
 }
 
-/** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
- *
- *  The Rollup pass writes a roll-up parent's rolling-up Field off its children. A user write there
- *  would commit, and the next Rollup would overwrite it. That refusal is worth words, and they are
- *  the words the cell editor has always shown. `rollsUp` is the Rollup pass's own test, so this
- *  refuses exactly the set that pass would overwrite.
- *
- *  Everything else is the Field's own `editable`, which defaults to `false`. */
-function libraryWriteRule(
-  entry: Entry,
-  field: Field,
-  isRollUpKind: (kind: EntryKind) => boolean,
-): WriteVerdict {
-  if (isRollUpKind(entry.kind) && rollsUp(field)) return DERIVED;
-  return field.editable === true ? WRITABLE : NOT_WRITABLE;
-}
-
 /** Is there a value here to write at all? This is structure, not policy. So it sits above every
  *  rule. No consumer predicate and no plugin default opens a cell with no stored home.
  *
- *  Two kinds of cell have none. An undeclared key names no Field. A `compute`-sourced Field computes
- *  on read and owns no home by declaration (ADR 0005); `duration` is the shipped one.
+ *  Two kinds of cell have none. An undeclared key names no Field. A `compute` Field computes
+ *  on read and owns no home by declaration (ADR 0011); `duration` is the shipped one.
  *
  *  This check used to sit below the consumer rule. `interactions: { edit: true }` reads like "turn
  *  editing on", and it opened the Duration cell. The editor then took a typed value, and the write
  *  went nowhere. */
 function hasSomewhereToWrite(field: Field | undefined): field is Field {
-  return field !== undefined && field.source?.from !== 'compute';
+  return field !== undefined && !('compute' in field);
 }
 
 /** Does this gesture mean anything for this Entry, before anyone asks what it would write? A

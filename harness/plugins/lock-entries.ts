@@ -6,7 +6,7 @@ import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits, moveEntryTo } fro
 import type { DatasetPlugin, EditRequest, EntryEdit, EntryId, PluginStore } from 'freegantt';
 
 /** What the store holds per locked entry. One key today; a real plugin's row grows without ever
- *  colliding with the application's own `meta` — that is what a store is for (ADR 0002, D-S5-24). */
+ *  colliding with the application's own `props` — that is what a store is for (ADR 0002, D-S5-24). */
 interface LockRow {
   readonly locked: true;
 }

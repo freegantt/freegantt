@@ -19,6 +19,7 @@ function entry(id: string, parentId?: string): Entry {
     end,
     kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: {},
   };
   if (parentId !== undefined) record.parentId = entryId(parentId);
   return record;

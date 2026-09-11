@@ -2,8 +2,8 @@
 // holding every plugin's rows in one place, so a transaction stages, folds and applies plugin rows
 // through the same three steps `EntryStore` already uses for entries.
 //
-// ADR 0002 named the problem this solves: per-plugin per-entry data must not live in `Entry.meta`, or
-// an application and a plugin collide in one field.
+// ADR 0002 named the problem this solves: per-plugin per-entry data must not live in `entry.props`,
+// or an application and a plugin collide in one field.
 //
 // A store row is changeset content on its own. `pendingRows` is what makes a transaction whose only
 // write is a plugin row build a changeset at all — without it `buildCommitChangeSet` finds nothing,

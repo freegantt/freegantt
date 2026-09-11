@@ -16,7 +16,7 @@ import type {
   RaiseError,
   Refusable,
   SegmentId,
-  StoredEdits,
+  ProposedEdits,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
@@ -32,7 +32,7 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
 
 /** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
  *  allocates nothing (I5). */
-const NO_EXTRA_EDITS: StoredEdits = Object.freeze(new Map());
+const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
 const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
 
@@ -55,7 +55,7 @@ export interface GesturePipelineDeps {
    *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
    *  question to one handle (#142); every other capability ignores it. */
   canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean;
-  commitEntryEdits(edits: StoredEdits): boolean;
+  commitEntryEdits(edits: ProposedEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
    *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
@@ -65,7 +65,7 @@ export interface GesturePipelineDeps {
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
    *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
    *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
-  extraEditsFor?: (request: EditRequest) => StoredEdits;
+  extraEditsFor?: (request: EditRequest) => ProposedEdits;
   /** What `extraEditsFor`'s `EditRequest.entries` reads — the *committed* Entries keyed by id, never
    *  the in-flight draft (D-S5-45). An installed extender may cascade to an Entry outside the
    *  caller's own draft, so `entryById` alone cannot answer it.
@@ -110,7 +110,7 @@ export class GesturePipeline {
   #deps: GesturePipelineDeps;
   /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
-  #scheduledDraft: StoredEdits | undefined;
+  #scheduledDraft: ProposedEdits | undefined;
   #previewFrame: FrameScheduler;
   /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
@@ -229,7 +229,7 @@ export class GesturePipeline {
     dxPx: number,
     options: DraftOptions | undefined,
     selectedSegmentIds: ReadonlySet<SegmentId>,
-  ): StoredEdits {
+  ): ProposedEdits {
     const snap = this.#resolveSnap(options?.suspendSnap);
     const base = {
       zone: this.#deps.timeZone(),
@@ -250,7 +250,7 @@ export class GesturePipeline {
    *  `commitEntryEdits` does the actual write and folds a sync veto and a `MutationCancelledError`
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles (D-S3-17). */
-  #commit(gesture: EntryGesture, draft: StoredEdits): Promise<boolean> {
+  #commit(gesture: EntryGesture, draft: ProposedEdits): Promise<boolean> {
     this.#scheduledCursorX = undefined;
     if (draft.size === 0) return Promise.resolve(false);
     const spans = [...draft].flatMap(([id, edit]) =>
@@ -302,7 +302,7 @@ export class GesturePipeline {
    *  settle — `false` clears the hold and writes nothing. */
   #settle(
     result: boolean | Promise<boolean>,
-    draft: StoredEdits,
+    draft: ProposedEdits,
     itemIds: readonly ItemId[],
     refusal: GestureRefusal,
     finish: () => boolean,
@@ -349,7 +349,7 @@ export class GesturePipeline {
    *  the last unsnapped pointer preview, not the stored origin) and arm-locks `session()` until
    *  `result` settles. Paint is one immediate `applyGestureState`, not a rAF-cleared preview plus a
    *  separate pending write. */
-  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: StoredEdits): Promise<boolean> {
+  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: ProposedEdits): Promise<boolean> {
     this.#heldItemIds = itemIds;
     this.#scheduledDraft = draft;
     this.#previewFrame.flush();
@@ -367,7 +367,7 @@ export class GesturePipeline {
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
    *  draft, but only the last one before the next frame is ever painted. */
-  #preview(draft: StoredEdits | undefined, cursorX?: number): void {
+  #preview(draft: ProposedEdits | undefined, cursorX?: number): void {
     this.#scheduledDraft = draft;
     this.#scheduledCursorX = draft === undefined ? undefined : cursorX;
     this.#previewFrame.request();
@@ -387,7 +387,7 @@ export class GesturePipeline {
     };
   }
 
-  #computePreview(draft: StoredEdits | undefined): readonly ItemPreview[] | undefined {
+  #computePreview(draft: ProposedEdits | undefined): readonly ItemPreview[] | undefined {
     if (!draft || draft.size === 0) return undefined;
     const extra = this.#extraFor(draft);
     const entries: Entry[] = [];
@@ -428,7 +428,7 @@ export class GesturePipeline {
    *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
    *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
-  #extraFor(draft: StoredEdits): StoredEdits {
+  #extraFor(draft: ProposedEdits): ProposedEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
     const entries = this.#deps.committedEntriesById?.() ?? NO_ENTRIES;

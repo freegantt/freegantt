@@ -11,10 +11,10 @@
 // this fixture is a construction plan because a consumer said so, not because the library knows one.
 
 import { addMs, instant, MS } from '../src/api/index.js';
-import type { EntryInput, Field, Instant } from '../src/api/index.js';
+import type { Entry, EntryInput, Field, Instant } from '../src/api/index.js';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
-export interface PlannerMeta {
+export interface PlannerEntryProps {
   /** Initials in the Own column. Absent on a phase and on a checkpoint. */
   owner?: string;
   /** Percent complete, 0–100. A phase rolls its children's up, duration-weighted. */
@@ -120,14 +120,14 @@ const PHASES: readonly Phase[] = [
   },
 ];
 
-function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerMeta> {
+function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerEntryProps> {
   const [id, name, owner, startDay, durationDays, progress, flags] = row;
   const isCheckpoint = flags.includes('m');
-  const meta: PlannerMeta = { progress, phase: phase.hue };
+  const meta: PlannerEntryProps = { progress, phase: phase.hue };
   if (owner !== '') meta.owner = owner;
   if (flags.includes('c')) meta.critical = true;
 
-  const entry: EntryInput<PlannerMeta> = {
+  const entry: EntryInput<PlannerEntryProps> = {
     id,
     name,
     parentId: phase.id,
@@ -135,7 +135,7 @@ function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerMeta> {
     // A checkpoint is one instant. Core stores a half-open span, so its end is the next day and the
     // milestone renderer floors the painted width around the instant itself.
     end: dayOffset(startDay + (isCheckpoint ? 1 : durationDays)),
-    meta,
+    props: meta,
   };
   if (isCheckpoint) entry.kind = 'milestone';
   return entry;
@@ -143,8 +143,8 @@ function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerMeta> {
 
 /** The plan: five phases, each a `kind: 'group'` parent, with its own rows under it. A phase states
  *  no dates of its own — `start`/`end` roll up from its children, which is what core already does. */
-export const plannerEntryInputs: readonly EntryInput<PlannerMeta>[] = PHASES.flatMap((phase) => [
-  { id: phase.id, name: phase.name, kind: 'group' as const, meta: { phase: phase.hue } },
+export const plannerEntryInputs: readonly EntryInput<PlannerEntryProps>[] = PHASES.flatMap((phase) => [
+  { id: phase.id, name: phase.name, kind: 'group' as const, props: { phase: phase.hue } },
   ...phase.rows.map((row) => entryForRow(row, phase)),
 ]);
 
@@ -171,15 +171,12 @@ const PLANNER_FIELDS: readonly Field[] = [
   { key: 'critical' },
   // The design's `#` column: a work row shows its own number, a phase shows nothing, and a
   // checkpoint shows a diamond instead of a number. It has no stored home and never rolls up, which
-  // is exactly what a `compute` source is for (ADR 0005) — and it is the one column on this page
+  // is exactly what a `compute` Field is for (ADR 0011) — and it is the one column on this page
   // that refuses the editor for a reason a reader can see.
   {
     key: 'ref',
-    source: {
-      from: 'compute',
-      read: (entry) =>
-        entry.kind === 'milestone' ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
-    },
+    compute: (entry: Entry) =>
+      entry.kind === 'milestone' ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
     // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width
     // gives way, not the number.

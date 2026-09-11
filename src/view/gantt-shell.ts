@@ -90,7 +90,7 @@ import type {
   RowId,
   SegmentId,
   Size,
-  StoredEdits,
+  ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
@@ -202,7 +202,7 @@ export interface GanttShellWiring {
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
    *  away, supplies this instead. It answers `false` for a sync veto and for a
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
-  commitEntryEdits?: (edits: StoredEdits) => boolean;
+  commitEntryEdits?: (edits: ProposedEdits) => boolean;
   /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
    *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset` and the
    *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same
@@ -327,7 +327,7 @@ export interface GanttShellOptions {
    *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
    *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
-  extraEditsFor?: (request: EditRequest) => StoredEdits;
+  extraEditsFor?: (request: EditRequest) => ProposedEdits;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
@@ -1545,7 +1545,7 @@ export class GanttShell {
   }
 
   /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
-   *  an `entry`-, `meta`- or `compute`-sourced Field alike (ADR 0005). It shares the memo
+   *  a core, `props`-addressed or `compute` Field alike (ADR 0011). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
   #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {

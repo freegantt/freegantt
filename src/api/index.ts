@@ -22,10 +22,10 @@ export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
 // composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
 // `moveEntryTo` (D-S5-50) builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
-// (#197) takes and returns. StoredEdit is the read side — what `EditRequest.proposed` holds — and
-// StoredEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
+// (#197) takes and returns. ProposedEdit is the read side — what `EditRequest.proposed` holds — and
+// ProposedEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
 // a helper over it, needs to name the read side too).
-export type { EditRequest, EditExtender, EntryEdits, StoredEdit, StoredEdits } from '../model/index.js';
+export type { EditRequest, EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from '../model/index.js';
 export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 // S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
@@ -60,7 +60,6 @@ export type {
   FieldValue,
   Field,
   FieldType,
-  FieldSource,
   FieldContext,
   FormatContext,
   RollUpContext,
@@ -78,6 +77,7 @@ export type {
   EntityRemoved,
   FieldUpdated,
   EntryEdit,
+  PropsEdit,
   DatasetEventMap,
 } from '../model/index.js';
 // The consumer-History write path (`plans/s2-data-core/s2b-undo-replay-seam.md`): `invertChangeSet`
@@ -216,9 +216,10 @@ export {
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
+  DuplicatePropsKeyError,
+  ReservedFieldKeyError,
   IllegalCoreFieldOverrideError,
-  DuplicateFieldSourceError,
-  InvalidFieldSourceError,
+  ComputedFieldCannotBeWrittenError,
   UnknownAggregatorError,
   AggregatorFailedError,
   UnknownFieldTypeError,

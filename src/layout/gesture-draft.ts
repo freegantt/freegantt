@@ -1,5 +1,5 @@
 // layout/ — the pure gesture math a drag needs (plans/s3-direct-manipulation/s3.3-drag-move.md
-// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (a `StoredEdits`,
+// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (a `ProposedEdits`,
 // D-S3-2) from `GesturePipeline.session()` (`#draftFor`), which calls `draftForMove` here.
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
@@ -10,8 +10,8 @@ import type {
   Instant,
   ItemId,
   SegmentId,
-  StoredEdit,
-  StoredEdits,
+  ProposedEdit,
+  ProposedEdits,
   TimeUnit,
 } from '../model/index.js';
 import { itemId } from '../model/index.js';
@@ -50,7 +50,7 @@ export interface DraftInput {
  *  (D-S3-3, D-S3-19). What paints selected is what moves (#211, #212): an Entry moves the Segments
  *  the Selection holds, and rewrites the envelope around them. A Selection that holds every Segment
  *  moves the whole Entry. Empty when `input.entries` is empty — a gesture with nothing to move. */
-export function draftForMove(input: DraftInput): StoredEdits {
+export function draftForMove(input: DraftInput): ProposedEdits {
   const { zone, scale, snap, entries, dxPx, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
@@ -60,7 +60,7 @@ export function draftForMove(input: DraftInput): StoredEdits {
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
 
-  const edits = new Map<EntryId, StoredEdit>();
+  const edits = new Map<EntryId, ProposedEdit>();
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
     for (const entry of entries) {
@@ -90,7 +90,7 @@ export function draftForMove(input: DraftInput): StoredEdits {
  *  is what the handles bracket (#211, #212). A resize reaches only the one selected Segment that
  *  holds the dragged edge: the `start` handle moves the earliest selected Segment's start, the `end`
  *  handle moves the latest selected Segment's end, and every sibling stays where it is. */
-export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): StoredEdits {
+export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): ProposedEdits {
   const { zone, scale, snap, entries, dxPx, edge, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
@@ -100,7 +100,7 @@ export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): S
   const rawCandidate = scale.instantForX(anchorX + dxPx);
   const snappedCandidate = snapInstant(zone, rawCandidate, snap);
 
-  const edits = new Map<EntryId, StoredEdit>();
+  const edits = new Map<EntryId, ProposedEdit>();
 
   if (snap === 'none') {
     const deltaMs = diffMs(snappedCandidate, anchorInstant);
@@ -174,14 +174,22 @@ function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], ed
 /** Moves the reached Segments of `entry` by `deltaMs` and rewrites the envelope around them. Every
  *  Segment keeps its own id: a Selection points at ids, so a rewrite that dropped them would unselect
  *  the very bar the user is dragging (#212). */
-function moveEdit(entry: Entry, deltaMs: number, indexes: readonly number[]): StoredEdit {
+function moveEdit(entry: Entry, deltaMs: number, indexes: readonly number[]): ProposedEdit {
   const moving = new Set(indexes);
   const segments = entry.segments.map((segment, index) =>
     moving.has(index)
       ? { ...segment, start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) }
       : segment,
   );
-  return { segments, ...envelopeOfSegments(segments) };
+  // `ProposedEdit`'s brand/`props`/`proposedKeys` are required (ADR 0011); `layout/` may not import
+  // `data/`'s `emptyProposedEdit` (layout-boundary), so this is the one place that shape is inlined.
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments,
+    ...envelopeOfSegments(segments),
+  };
 }
 
 /** Same as `moveEdit`, stepped by a calendar unit instead of a millisecond delta (keyboard nudge,
@@ -192,7 +200,7 @@ function stepMoveEdit(
   unit: TimeUnit,
   amount: number,
   indexes: readonly number[],
-): StoredEdit {
+): ProposedEdit {
   const moving = new Set(indexes);
   const segments = entry.segments.map((segment, index) =>
     moving.has(index)
@@ -203,7 +211,15 @@ function stepMoveEdit(
         }
       : segment,
   );
-  return { segments, ...envelopeOfSegments(segments) };
+  // `ProposedEdit`'s brand/`props`/`proposedKeys` are required (ADR 0011); `layout/` may not import
+  // `data/`'s `emptyProposedEdit` (layout-boundary), so this is the one place that shape is inlined.
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments,
+    ...envelopeOfSegments(segments),
+  };
 }
 
 /** Resizes `entry`'s `edge` to `moved`. Only the reached Segment holding that edge moves. Zero-length
@@ -214,7 +230,7 @@ function resizeEdit(
   edge: 'start' | 'end',
   moved: Instant,
   indexes: readonly number[],
-): StoredEdit {
+): ProposedEdit {
   const dragged = segmentIndexAtEnvelopeEdge(entry, indexes, edge);
   const segments = entry.segments.map((segment, index) => {
     if (index !== dragged) return segment;
@@ -225,7 +241,15 @@ function resizeEdit(
     const end = moved < segment.start ? segment.start : moved;
     return { ...segment, start: segment.start, end };
   });
-  return { segments, ...envelopeOfSegments(segments) };
+  // `ProposedEdit`'s brand/`props`/`proposedKeys` are required (ADR 0011); `layout/` may not import
+  // `data/`'s `emptyProposedEdit` (layout-boundary), so this is the one place that shape is inlined.
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments,
+    ...envelopeOfSegments(segments),
+  };
 }
 
 /** What the hot-path paint needs to preview a draft with no frame rebuild (D-S3-18): a pixel offset
@@ -241,9 +265,9 @@ export interface ItemPreview {
 
 export interface PreviewOffsetsInput {
   /** The caller's own draft. */
-  proposed: StoredEdits;
+  proposed: ProposedEdits;
   /** Extension-hook extras layered on top (S3.6). Empty until then. */
-  extra: StoredEdits;
+  extra: ProposedEdits;
   /** Committed entries `proposed`/`extra` are diffed against — one lookup per row, not a dataset scan. */
   entries: readonly Entry[];
   scale: TimeScale;
@@ -254,7 +278,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const out: ItemPreview[] = [];
 
-  function pushOffset(id: EntryId, edit: StoredEdit, isExtra: boolean): void {
+  function pushOffset(id: EntryId, edit: ProposedEdit, isExtra: boolean): void {
     const original = byId.get(id);
     if (!original) return;
     if (edit.segments !== undefined) {

@@ -222,13 +222,17 @@ describe('History', () => {
     expect(JSON.stringify(state.entries.all.map((entry) => entry.id))).toBe(before);
   });
 
-  it('undo of an optional field edit removes the key instead of writing undefined onto the Entry', () => {
-    const state = dataset([{ id: 't1' }]);
-    expect('meta' in state.entries.get('t1')!).toBe(false);
+  it('undo of a declared props key removes the key instead of writing undefined onto props', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fields: [{ key: 'team' }],
+    });
+    expect('team' in state.entries.get('t1')!.props).toBe(false);
 
-    state.entries.update('t1', { meta: { team: 'A' } });
+    state.entries.update('t1', { team: 'A' });
     state.undo();
 
-    expect('meta' in state.entries.get('t1')!).toBe(false);
+    expect('team' in state.entries.get('t1')!.props).toBe(false);
   });
 });

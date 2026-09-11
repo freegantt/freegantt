@@ -69,7 +69,7 @@ describe('rollUpFields property (S4.2 §3)', () => {
               name: `l${i}`,
               start: '2026-01-01',
               end: `2026-01-${String(2 + (i % 4)).padStart(2, '0')}`,
-              meta: { cost },
+              props: { cost },
             })),
           ];
           const state = metricDataset(entries, rollUp);

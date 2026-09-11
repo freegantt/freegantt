@@ -184,6 +184,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
       end: day(2),
       ...(opts.parentId !== undefined ? { parentId: entryId(opts.parentId) } : {}),
       segments: [{ id: segmentId(`${id}-1`), start: day(0), end: day(2) }],
+      props: {},
     };
   }
 

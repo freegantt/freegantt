@@ -15,20 +15,21 @@ import type {
   FieldContext,
   FieldUpdated,
   SegmentId,
-  StoredEdit,
+  ProposedEdit,
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import type { EditRequest, StoredEdits } from './edit-extension.js';
+import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import { reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
-  mergeStoredEdits,
-  mergeStoredEditsByEntry,
+  emptyProposedEdit,
+  mergeProposedEdits,
+  mergeProposedEditsByEntry,
   entryAfterEdit,
   proposedKeysOf,
-  statesProposedKeys,
+  withProposedKeys,
 } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { promoteNewParents } from './hierarchy.js';
@@ -41,7 +42,7 @@ export interface CommitChangeSetEntryStore {
   committedById(): ReadonlyMap<EntryId, Entry>;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
-  pendingEdits(): StoredEdits;
+  pendingEdits(): ProposedEdits;
   /** Which of `start`/`end`/`segments` the body itself named on each pending edit (#232) — see
    *  `EntryStore.pendingAuthoredEnvelopeKeys`. */
   pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
@@ -73,7 +74,7 @@ export interface CommitChangeSetInput {
 
 export function diffEdits(
   byId: ReadonlyMap<EntryId, Entry>,
-  edits: StoredEdits,
+  edits: ProposedEdits,
   fields: FieldRegistry,
   ctx: FieldContext,
 ): FieldUpdated[] {
@@ -93,24 +94,13 @@ const NO_ENVELOPE_KEYS: ReadonlySet<string> = Object.freeze(new Set<string>());
  *  a reader debugging it. */
 const SHARED_ENVELOPE_OPERATION = 'transaction body and edit extender';
 
-/** Which Fields an edit writes, however it states them: a storage key it holds, or a proposed key.
- *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197).
- *
- *  `meta` is the *container* a meta-sourced Field writes through, never a Field in its own right. An
- *  edit that states `proposedKeys` already names the real Field inside `meta`, so the raw loop skips
- *  `meta` for such an edit (#209) — including it unconditionally made two different meta-sourced
- *  Fields on one Entry intersect on "meta" and I4 refuse a transaction that writes no Field twice. An
- *  edit with no stated `proposedKeys` still needs the raw `meta` key, because nothing else names what
- *  it wrote. */
-function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
-  const states = statesProposedKeys(edit);
-  const keys = new Set<string>(proposedKeysOf(edit));
-  for (const key of Object.keys(edit)) {
-    if (key === 'proposedKeys') continue;
-    if (states && key === 'meta') continue;
-    keys.add(key);
-  }
-  return keys;
+/** Which Fields an edit writes. `proposedKeys` is required on every `ProposedEdit` (ADR 0011), so it
+ *  always names the real Field — a declared `props` key by its own name, never the `props` container
+ *  itself, which is bookkeeping on the edit, not a Field in its own right (#197). There is no more
+ *  raw-key fallback: walking `Object.keys(edit)` would pick up `__brand`/`props`/`proposedKeys` as if
+ *  they were Field names, which is exactly the bug this function existed to avoid. */
+function fieldsWrittenBy(edit: ProposedEdit): ReadonlySet<string> {
+  return proposedKeysOf(edit);
 }
 
 /** Which Fields an edit's *author* stated, for the I4 guard (#232). `fieldsWrittenBy` above answers
@@ -120,7 +110,7 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
  *  got paired onto a sole Segment or read back from one. Only `authoredEnvelopeKeys` — captured before
  *  `reconcileEnvelope` runs — tells the two apart. */
 function authoredFieldsWrittenBy(
-  edit: StoredEdit,
+  edit: ProposedEdit,
   authoredEnvelopeKeys: ReadonlySet<string>,
 ): ReadonlySet<string> {
   const fields = new Set(fieldsWrittenBy(edit));
@@ -130,9 +120,9 @@ function authoredFieldsWrittenBy(
 }
 
 function guardExtensionHookDoesNotOverwriteBody(
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-  extenderEdits: StoredEdits,
+  extenderEdits: ProposedEdits,
   extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
 ): void {
   if (!isDevMode()) return;
@@ -168,36 +158,47 @@ function guardExtensionHookDoesNotOverwriteBody(
  *  the other's Segment. */
 function reconcileSharedEnvelope(
   original: Entry,
-  bodyEdit: StoredEdit,
+  bodyEdit: ProposedEdit,
   bodyAuthoredKeys: ReadonlySet<string>,
-  extenderEdit: StoredEdit,
+  extenderEdit: ProposedEdit,
   extenderAuthoredKeys: ReadonlySet<string>,
-): StoredEdit {
-  const patch: Record<string, unknown> = {};
+): ProposedEdit {
+  const patch: ProposedEdit = { ...emptyProposedEdit() };
+  const bag = patch as Record<string, unknown>;
   const bodyBag = bodyEdit as Record<string, unknown>;
   const extenderBag = extenderEdit as Record<string, unknown>;
-  for (const key of bodyAuthoredKeys) patch[key] = bodyBag[key];
-  for (const key of extenderAuthoredKeys) patch[key] = extenderBag[key];
-  return reconcileEnvelope(original, patch, SHARED_ENVELOPE_OPERATION).edit;
+  for (const key of bodyAuthoredKeys) bag[key] = bodyBag[key];
+  for (const key of extenderAuthoredKeys) bag[key] = extenderBag[key];
+  const reconciled = reconcileEnvelope(original, patch, SHARED_ENVELOPE_OPERATION);
+  // `patch` already carried `__brand`/`props`/`proposedKeys` before `reconcileEnvelope` ran, so
+  // `addedKeys` never names them — only the caller's own authored keys and whatever
+  // `reconcileEnvelope` newly derived (`segments` paired on, or `start`/`end` read back) belong in
+  // the reconciled edit's own `proposedKeys` (ADR 0011: it is required now, so this states it,
+  // rather than leaving it the empty set `emptyProposedEdit()` seeded).
+  return withProposedKeys(reconciled.edit, [
+    ...bodyAuthoredKeys,
+    ...extenderAuthoredKeys,
+    ...reconciled.addedKeys,
+  ]);
 }
 
 /** Merges the body's and the extender's edits, keyed by Entry, correcting the envelope once where
- *  both authored it (#232) — `mergeStoredEditsByEntry` alone is enough everywhere else, because only
+ *  both authored it (#232) — `mergeProposedEditsByEntry` alone is enough everywhere else, because only
  *  `start`/`end`/`segments` are ever silently re-derived by reconciliation. This is the one merge the
  *  commit path diffs, replacing the two separate diffs of `proposed` and `extenderEdits` that used to
  *  let one field reach the `ChangeSet` twice with two different `to` values (#232). */
 function mergeBodyAndExtenderEdits(
   byId: ReadonlyMap<EntryId, Entry>,
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-  extenderEdits: StoredEdits,
+  extenderEdits: ProposedEdits,
   extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-): StoredEdits {
+): ProposedEdits {
   if (extenderEdits.size === 0) return proposed;
-  const merged = new Map<EntryId, StoredEdit>(proposed);
+  const merged = new Map<EntryId, ProposedEdit>(proposed);
   for (const [id, extenderEdit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
-    let combined = mergeStoredEdits(bodyEdit, extenderEdit);
+    let combined = mergeProposedEdits(bodyEdit, extenderEdit);
     const bodyEnvelope = bodyAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
     const extenderEnvelope = extenderAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
     const original =
@@ -210,7 +211,14 @@ function mergeBodyAndExtenderEdits(
         extenderEdit,
         extenderEnvelope,
       );
-      combined = { ...combined, ...reconciledEnvelope };
+      // Not a blind spread (ADR 0011, the two-shallow-spread trap): `reconciledEnvelope.props` is
+      // always `{}` — `reconcileSharedEnvelope` only ever resolves `start`/`end`/`segments` — so
+      // spreading it whole would wipe every declared key `combined` already carries. The envelope
+      // keys it resolved win; `combined`'s own `props` and the union of both `proposedKeys` survive.
+      combined = withProposedKeys(
+        { ...combined, ...reconciledEnvelope, props: combined.props },
+        new Set([...proposedKeysOf(combined), ...proposedKeysOf(reconciledEnvelope)]),
+      );
     }
     merged.set(id, combined);
   }
@@ -290,8 +298,8 @@ export function buildCommitChangeSet(
   // `EditExtender` that rewrites `segments` on an entity this same transaction adds must still land
   // on the entity the changeset publishes (#212 R2 fix-plan review, finding A): the earlier code here
   // overlaid `hierarchyEdits` alone, so a reconciled extender edit for a same-transaction add computed
-  // a correct `StoredEdit` upstream but never reached the stored entity.
-  const extraEditsForAdded = mergeStoredEditsByEntry(extenderEdits, hierarchyEdits);
+  // a correct `ProposedEdit` upstream but never reached the stored entity.
+  const extraEditsForAdded = mergeProposedEditsByEntry(extenderEdits, hierarchyEdits);
   const addedEntitiesForFold =
     extraEditsForAdded.size === 0
       ? addedEntities
@@ -305,7 +313,7 @@ export function buildCommitChangeSet(
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergeStoredEditsByEntry(mergedBodyAndExtender, hierarchyEdits) },
+      edits: { body: proposed, merged: mergeProposedEditsByEntry(mergedBodyAndExtender, hierarchyEdits) },
     },
     data.fields,
     data.rollUpKinds,

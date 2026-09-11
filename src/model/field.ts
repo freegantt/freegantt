@@ -5,18 +5,20 @@ import type { Duration } from './time.js';
 import type { Entry } from './entry.js';
 import type { ElementDescription } from './render.js';
 
-/** The shipped subset — keys of `Entry` except `id`. The comparator exhaustiveness check stays over
- *  this set (ADR 0005 §28). */
-export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+/** The shipped subset — keys of `Entry` except `id` and `props`. The comparator exhaustiveness check
+ *  stays over this set (ADR 0005 §28). `props` omits alongside this, or neither does (ADR 0011):
+ *  change one and not the other, and `read(id, 'props')` types as the whole bag while the registry
+ *  refuses the key at runtime. */
+export type CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>;
 
 /** A Field's name, and the changeset's `field`. Open by construction (D-S2-26, ADR 0005). */
 export type FieldKey = CoreFieldKey | (string & {});
 
-/** What each shipped Field reads as: the `Entry` keys, plus `duration` — the one core Field that
- *  computes its value and owns no `Entry` key (`data/fields/core-fields.ts`). `meta` reads as
- *  `unknown` here even on a `Dataset<TMeta>`; the typed way to a consumer's own meta is
- *  `entries.get(id)?.meta`. */
-export interface CoreFieldValues extends Omit<Entry, 'id'> {
+/** What each shipped Field reads as: the `Entry` keys (minus `props`, ADR 0011's one reserved key),
+ *  plus `duration` — the one core Field that computes its value and owns no `Entry` key
+ *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
+ *  `entries.get(id)?.props`. */
+export interface CoreFieldValues extends Omit<Entry, 'id' | 'props'> {
   /** `end - start`, computed on read (`CORE_FIELDS`) — the one core Field with no `Entry` key. */
   duration: Duration;
 }
@@ -28,23 +30,18 @@ export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues
   ? CoreFieldValues[K]
   : unknown;
 
-/** A Field's value on a Dataset that declared `TFields` — what `entries.fieldValue` answers. A core
+/** A Field's value on a Dataset that declared `TProps` — what `entries.fieldValue` answers. A core
  *  key reads as its shipped type, a declared key as the type the consumer wrote, and any other key
- *  as `unknown`. `TFields` stops at the Dataset (ADR 0005). */
-export type FieldValue<TFields, K extends FieldKey> = K extends keyof CoreFieldValues
+ *  as `unknown`. One generic types both `entry.props` and this (ADR 0011); `TProps` stops at the
+ *  Dataset (ADR 0005). */
+export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldValues
   ? CoreFieldValues[K]
-  : K extends keyof TFields
-    ? TFields[K]
+  : K extends keyof TProps
+    ? TProps[K]
     : unknown;
 
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 export type FieldTypeName = string & {};
-
-/** Where the value lives. The choice decides whether a rolled-up parent value is stored. */
-export type FieldSource =
-  | { from: 'entry'; field: CoreFieldKey }
-  | { from: 'meta'; key?: string }
-  | { from: 'compute'; read(entry: Entry, ctx: FieldContext): unknown };
 
 /** What a per-column `cellRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
  *  `CellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
@@ -118,59 +115,104 @@ export interface TooltipColumn {
  *  `Field` is declared — `FieldRegistry`, `DatasetOptions.fields` and `FieldLookup` all hold bare
  *  `Field` (`Field<unknown>`), so nothing downstream of declaration re-checks it (ADR 0005, #141
  *  item #4). This is deliberate, not a gap: the registry is heterogeneous and string-keyed by
- *  design, and closing it over a compile-time schema would be a different library. */
-export interface Field<TValue = unknown> {
-  key: FieldKey;
-  type?: FieldTypeName;
-  /** Whether this Field's value may change: the inline cell editor honours it (S5.8), and bar
-   *  drag-resize honours the same answer for `start`/`end` (#142) — one home for "may this value
-   *  change," asked by every gesture that writes it (I14). Default `false`.
-   *
-   *  A core Field (`start`, `name`, ...) is declared by the library and cannot be redeclared, so a
-   *  consumer overrides only this key on one through `DatasetOptions.fields`/`ctx.fields.register`
-   *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
-   *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`). */
-  editable?: boolean;
-  /** Default: `{ from: 'meta', key: this Field's key }` (D-S4-35). */
-  source?: FieldSource;
-  /** Name only — a function does not serialize (ADR 0005). */
+ *  design, and closing it over a compile-time schema would be a different library.
+ *
+ *  **The union is exclusive** (ADR 0011): a stored Field may roll up and may be edited; a `compute`
+ *  Field may do neither, and runs on every row, a rolling-up parent included. `compute` is the
+ *  discriminant — `'compute' in field` is the one test the registry's `hasSomewhereToWrite` and the
+ *  write resolver both ask. Declaring a key does not create it: carrying a value is free, and a Field
+ *  exists only because the library has a job to do with it — a sort, a format, a rollup, an editor, a
+ *  column. */
+export type Field<TValue = unknown> =
+  | {
+      key: FieldKey;
+      type?: FieldTypeName;
+      /** Name only — a function does not serialize (ADR 0005). */
+      rollUp?: AggregatorName;
+      /** Whether this Field's value may change: the inline cell editor honours it (S5.8), and bar
+       *  drag-resize honours the same answer for `start`/`end` (#142) — one home for "may this value
+       *  change," asked by every gesture that writes it (I14). Default `false`.
+       *
+       *  A core Field (`start`, `name`, ...) is declared by the library and cannot be redeclared, so a
+       *  consumer overrides only this key on one through `DatasetOptions.fields`/`ctx.fields.register`
+       *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
+       *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`). */
+      editable?: boolean;
+      // `compute` is genuinely absent here, not `compute?: never`: `'compute' in field` is the
+      // discriminant `hasSomewhereToWrite` and the write resolver both ask, and TypeScript's `in`
+      // narrowing only excludes an arm that never declares the key at all — a `never`-typed optional
+      // key still counts as declared, and the check would stop narrowing at all.
+      equals?(a: TValue | undefined, b: TValue | undefined): boolean;
+      compare?(a: TValue | undefined, b: TValue | undefined): number;
+      /** `entry` is the row this value came from. `FormatContext` is built once per `resolveColumns`
+       *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
+       *  cell — a formatter that needs the Entry declares this third parameter instead; every other
+       *  formatter still assigns with two, or one (#240). */
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+      /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
+       *  back into a stored value. `undefined` means the text names no value — the editor stays open in
+       *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
+       *  currency-formatted `"€1.234,56"` cannot be parsed back without knowing the format that produced
+       *  it), so the library ships no guessed default: with no `parseValue`, `type: 'text'` (or no `type`
+       *  at all) reads and writes the raw string, and every other named `type` refuses to open the
+       *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
+       *  routes it through the `dateInput` seam instead (D-S5-20). */
+      parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+      /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
+       *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
+       *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
+       *  stored value is not itself a string (a `'number'` input's `.value` is still a string). Has no
+       *  effect on a `type: 'date'` Field — that never reaches the generic editor, routing through the
+       *  `dateInput` seam instead (D-S5-20). For a full widget swap, not just the native input type, veto
+       *  with `beforeEntryEdit` and mount your own control. */
+      inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+      /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
+       *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
+       *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
+       *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
+       *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
+       *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
+       *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
+      column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    }
+  | {
+      key: FieldKey;
+      type?: FieldTypeName;
+      rollUp?: never;
+      editable?: never;
+      /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
+       *  read a value through `entry.props`, and read a Field — a core key, `duration`, or another
+       *  Field's own `compute` arm — through `ctx.read`. `entry.props` alone cannot reach those.
+       *  Named `compute`, not `get`: `get` already names three unrelated jobs in this codebase. */
+      compute(entry: Entry, ctx: FieldContext): TValue | undefined;
+      compare?(a: TValue | undefined, b: TValue | undefined): number;
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+      column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+      // Declared `never` (never abbreviated away, unlike the ADR's shorthand comment) so a caller
+      // holding a bare `Field` can read `field.equals`/`.parseValue`/`.inputType` without narrowing
+      // the union first — the same reason `rollUp`/`editable`/`compute` cross-declare above.
+      equals?: never;
+      parseValue?: never;
+      inputType?: never;
+    };
+
+/** A stored-Field bundle applied by name to many Fields (`registerType`) — `key`, `type` and the
+ *  `compute`/`rollUp`/`editable` discriminants left out. Written directly rather than derived from
+ *  `Field` with `Omit`: `Omit` does not distribute over a union, so it would collapse to the two
+ *  arms' *common* keys and drop `equals`/`parseValue`/`inputType` — `percent` (`field-types.ts`)
+ *  needs `parseValue` and `inputType` on its own bundle. */
+export interface FieldType<TValue = unknown> {
+  /** A Field naming this type may still override it (D-S4-3) — `{ key: 'cost', type: 'money',
+   *  rollUp: 'none' }` opts one Field on a shared type out. */
   rollUp?: AggregatorName;
+  editable?: boolean;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
-  /** `entry` is the row this value came from. `FormatContext` is built once per `resolveColumns`
-   *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
-   *  cell — a formatter that needs the Entry declares this third parameter instead; every other
-   *  formatter still assigns with two, or one (#240). */
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-  /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
-   *  back into a stored value. `undefined` means the text names no value — the editor stays open in
-   *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
-   *  currency-formatted `"€1.234,56"` cannot be parsed back without knowing the format that produced
-   *  it), so the library ships no guessed default: with no `parseValue`, `type: 'text'` (or no `type`
-   *  at all) reads and writes the raw string, and every other named `type` refuses to open the
-   *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
-   *  routes it through the `dateInput` seam instead (D-S5-20). */
   parseValue?(text: string, ctx: FieldContext): TValue | undefined;
-  /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
-   *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
-   *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
-   *  stored value is not itself a string (a `'number'` input's `.value` is still a string). Has no
-   *  effect on a `type: 'date'` Field — that never reaches the generic editor, routing through the
-   *  `dateInput` seam instead (D-S5-20). For a full widget swap, not just the native input type, veto
-   *  with `beforeEntryEdit` and mount your own control. */
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
-  /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
-   *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
-   *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
-   *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
-   *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
-   *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
-   *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
   column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
 }
-
-/** A `Field` with `key` and `source` omitted — one bundle applied by name to many Fields. */
-export type FieldType<TValue = unknown> = Omit<Field<TValue>, 'key' | 'source' | 'type'>;
 
 /** What `createFieldContext` and column resolve need — `FieldRegistry.get` and `dataset.field` both satisfy this. */
 export type FieldLookup = {

@@ -24,7 +24,7 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
     parentId: 'phase-a',
     start: '2026-03-01',
     end: '2026-03-08',
-    meta: { cost: 100, team: 'alpha' },
+    props: { cost: 100, team: 'alpha' },
   },
   {
     id: 'task-alpha-2',
@@ -32,7 +32,7 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
     parentId: 'phase-a',
     start: '2026-03-06',
     end: '2026-03-12',
-    meta: { cost: 200, team: 'alpha' },
+    props: { cost: 200, team: 'alpha' },
   },
   {
     id: 'task-beta',
@@ -40,7 +40,7 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
     parentId: 'phase-a',
     start: '2026-03-10',
     end: '2026-03-14',
-    meta: { cost: 150, team: 'beta' },
+    props: { cost: 150, team: 'beta' },
   },
   {
     id: 'deep-leaf',
@@ -48,7 +48,7 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
     parentId: 'task-alpha-1',
     start: '2026-03-02',
     end: '2026-03-04',
-    meta: { cost: 50, team: 'alpha' },
+    props: { cost: 50, team: 'alpha' },
   },
   {
     id: 'gate',
@@ -69,7 +69,7 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
       { start: '2026-04-02T00:00:00.000Z', end: '2026-04-06T00:00:00.000Z' },
       { start: '2026-04-03T00:00:00.000Z', end: '2026-04-15T00:00:00.000Z' },
     ],
-    meta: { cost: 300, team: 'alpha' },
+    props: { cost: 300, team: 'alpha' },
   },
 ];
 

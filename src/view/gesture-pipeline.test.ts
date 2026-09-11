@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, ErrorReportInput, Instant, StoredEdits } from '../model/index.js';
+import type { Entry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
 
@@ -25,6 +25,16 @@ const linearScale: TimeScale = {
  *  of its own. This one stands in wherever only the tick unit is unused. */
 const barePreset = {} as unknown as ViewPreset;
 
+/** A `ProposedEdit` fixture: fills the required brand/`props`/`proposedKeys` a raw envelope patch
+ *  no longer carries (ADR 0011). */
+function pe(patch: Record<string, unknown>): {
+  __brand: 'ProposedEdit';
+  props: Record<string, unknown>;
+  proposedKeys: Set<string>;
+} & typeof patch {
+  return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(Object.keys(patch)), ...patch };
+}
+
 function entry(id: string, start: number, end: number): Entry {
   const startInstant = start as Instant;
   const endInstant = end as Instant;
@@ -35,6 +45,7 @@ function entry(id: string, start: number, end: number): Entry {
     start: startInstant,
     end: endInstant,
     segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+    props: {},
   };
 }
 
@@ -188,7 +199,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       commitEntryEdits: (edits) => {
         committed.push(edits);
@@ -206,6 +217,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [
         { ...segmented.segments[0], start: 40, end: 140 },
         { ...segmented.segments[1], start: 240, end: 340 },
@@ -223,7 +237,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-b')],
       commitEntryEdits: (edits) => {
@@ -245,6 +259,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [segmented.segments[0], { ...segmented.segments[1], start: 240, end: 340 }],
       start: 0,
       end: 340,
@@ -266,7 +283,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('unpicked-b'), start: 400 as Instant, end: 500 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps } = withRoster([picked, unpicked], {
       selectedEntryIds: () => [picked.id, unpicked.id],
       selectedSegmentIds: () => [segmentId('picked-b')],
@@ -298,7 +315,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-a')],
       commitEntryEdits: (edits) => {
@@ -312,6 +329,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await session.commit(40);
     // The selected Segment (0) grows; the envelope-latest Segment (1) never moves.
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [{ ...segmented.segments[0], start: 0, end: 140 }, segmented.segments[1]],
       start: 0,
       end: 300,
@@ -688,7 +708,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const requests: unknown[] = [];
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (request) => {
         requests.push(request);
-        return new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+        return new Map([[x.id, pe({ start: 350, end: 450 })]]);
       };
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
@@ -734,15 +754,15 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
           { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
           { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
         ],
+        props: {},
       };
       const committedEntriesById = () =>
         new Map([
           [a.id, a],
           [x.id, x],
         ]);
-      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
-        new Map([[x.id, { start: 350 as unknown as Instant }]]);
-      const commitEntryEdits = vi.fn((draft: StoredEdits) => {
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => new Map([[x.id, pe({ start: 350 })]]);
+      const commitEntryEdits = vi.fn((draft: ProposedEdits) => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
         // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
@@ -786,7 +806,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const a = entry('a', 100, 200);
       const x = entry('x', 300, 400);
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
-        new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+        new Map([[x.id, pe({ start: 350, end: 450 })]]);
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
         committedEntriesById: () =>

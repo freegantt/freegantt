@@ -4,7 +4,7 @@
 // keys on the kind, so `'buffer'` and `'risk'` are neighbours rather than rivals.
 
 import { wholeEntryItem } from 'freegantt';
-import type { GanttPlugin } from 'freegantt';
+import type { EntryEdit, GanttPlugin } from 'freegantt';
 
 const RISK_KIND = 'risk';
 
@@ -32,7 +32,9 @@ export function riskKind(): GanttPlugin {
         when: ({ entry }) => entry?.kind === RISK_KIND,
         run: ({ entry }) => {
           if (entry === undefined) return;
-          ctx.dataset.entries.update(entry.id, { meta: { accepted: true } });
+          // See buffer-kind.ts's own comment: `accepted` is declared on the harness's Dataset, and this
+          // cast bridges the same static gap for an untyped plugin.
+          ctx.dataset.entries.update(entry.id, { accepted: true } as EntryEdit);
         },
       });
 

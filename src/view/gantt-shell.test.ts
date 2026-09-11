@@ -134,6 +134,7 @@ const entries: Entry[] = [
     end: instant('2026-09-03T00:00:00Z'),
     kind: 'span',
     segments: [{ id: segmentId('t1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+    props: {},
   },
 ];
 
@@ -148,6 +149,7 @@ function tallEntries(count: number): Entry[] {
       end,
       kind: 'span' as const,
       segments: [{ id: segmentId(`e${i}-1`), start, end }],
+      props: {},
     };
   });
 }
@@ -189,6 +191,7 @@ describe('GanttShell header band', () => {
         end: instant('2026-09-20T00:00:00Z'),
         kind: 'span',
         segments: [{ id: segmentId('w1-1'), start: rangeStart, end: instant('2026-09-20T00:00:00Z') }],
+        props: {},
       },
     ];
     const shellB = new GanttShell({
@@ -520,6 +523,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           end,
           kind: 'span' as const,
           segments: [{ id: segmentId(`e${i}-1`), start, end }],
+          props: {},
         };
       });
       const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tall), scale, scroll });
@@ -659,6 +663,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const child: Entry = {
         id: entryId('c'),
@@ -668,6 +673,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const shell = new GanttShell({
         wiring: {},
@@ -703,7 +709,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('a-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
-        meta: { team: 'red' },
+        props: { team: 'red' },
       };
       const shell = new GanttShell({
         wiring: {},
@@ -712,7 +718,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         scroll,
         rowSource: {
           source: 'group',
-          groupBy: (row) => String((row.meta as { team: string }).team),
+          groupBy: (row) => String((row.props as { team: string }).team),
         },
         collapsed: [rowId('group:red')],
       });
@@ -745,6 +751,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const first: Entry = {
         id: entryId('c1'),
@@ -754,6 +761,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const second: Entry = {
         id: entryId('c2'),
@@ -763,6 +771,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c2-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const shell = new GanttShell({
         wiring: {},
@@ -1065,6 +1074,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
           end: instant('2026-09-04T00:00:00Z'),
         },
       ],
+      props: {},
     };
     const container = document.createElement('div');
     let propose: ((next: readonly SegmentId[]) => void) | undefined;
@@ -1128,6 +1138,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         end: rangeEnd,
         kind: 'span',
         segments: [{ id: segmentId('one-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
       {
         id: entryId('two'),
@@ -1136,6 +1147,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         end: rangeEnd,
         kind: 'span',
         segments: [{ id: segmentId('two-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
       {
         id: entryId('three'),
@@ -1144,6 +1156,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         end: rangeEnd,
         kind: 'span',
         segments: [{ id: segmentId('three-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
     ];
     const container = document.createElement('div');

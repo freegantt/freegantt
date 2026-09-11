@@ -54,7 +54,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 // `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
+const dataset = new Dataset<{ cost?: number; team?: string }>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,

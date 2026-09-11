@@ -544,6 +544,7 @@ describe('computeFrame — horizontal culling', () => {
       end,
       kind: 'span',
       segments: [{ id: segmentId(`${id}-1`), start, end }],
+      props: {},
     };
   }
 
@@ -928,6 +929,7 @@ describe(
         end,
         kind: 'span',
         segments: [{ id: segmentId(`${input.id}-1`), start, end }],
+        props: {},
       };
     });
     const largeScale = createTimeScale({ timeZone: 'UTC', range: spanOf(large[0]!), pxPerMs: 1 / 100_000 });

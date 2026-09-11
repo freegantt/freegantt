@@ -16,7 +16,8 @@ const entry = {} as Entry;
 
 describe('percent — the shipped Field type', () => {
   it('formats 0, 35, 100 and 120 in en-US', () => {
-    const format = percent.formatValue!;
+    const format = (value: number | undefined, formatCtx: FormatContext, e: Entry): string =>
+      percent.formatValue!(value, formatCtx, e);
     expect(format(0, ctx('en-US'), entry)).toBe('0%');
     expect(format(35, ctx('en-US'), entry)).toBe('35%');
     expect(format(100, ctx('en-US'), entry)).toBe('100%');
@@ -42,7 +43,8 @@ describe('percent — the shipped Field type', () => {
   });
 
   it('parses a bare number, a percent sign, and padded whitespace', () => {
-    const parse = percent.parseValue!;
+    const parse = (text: string, parseCtx: FormatContext): number | undefined =>
+      percent.parseValue!(text, parseCtx);
     expect(parse('35', ctx('en-US'))).toBe(35);
     expect(parse('35%', ctx('en-US'))).toBe(35);
     expect(parse(' 35 % ', ctx('en-US'))).toBe(35);

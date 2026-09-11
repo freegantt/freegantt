@@ -18,7 +18,7 @@ function entry(id: string, team: string): Entry {
     end,
     kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
-    meta: { team },
+    props: { team },
   };
 }
 
@@ -26,7 +26,7 @@ describe('resolveGroupSource', () => {
   it('emits one header per groupBy value in first-seen order, then an entry row per member', () => {
     const rows = resolveGroupSource([entry('a', 'red'), entry('b', 'blue'), entry('c', 'red')], {
       source: 'group',
-      groupBy: (e) => String((e.meta as { team: string }).team),
+      groupBy: (e) => String((e.props as { team: string }).team),
     });
     expect(rows.map((r) => r.kind)).toEqual(['header', 'entry', 'entry', 'header', 'entry']);
     expect(rows[0]).toMatchObject({
@@ -46,7 +46,7 @@ describe('resolveRows collapse (group)', () => {
   it('a collapsed header omits its entry rows', () => {
     const rows = resolveRows({
       entries: [entry('a', 'red'), entry('b', 'blue')],
-      rows: { source: 'group', groupBy: (e) => String((e.meta as { team: string }).team) },
+      rows: { source: 'group', groupBy: (e) => String((e.props as { team: string }).team) },
       collapsed: [rowId('group:red')],
     });
     expect(rows.map((r) => r.id)).toEqual([rowId('group:red'), rowId('group:blue'), rowId('b')]);

@@ -130,15 +130,15 @@ describe('new Dataset()', () => {
   it('carries optional fields through, and leaves absent ones absent', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      entries: [oneEntry({ kind: 'milestone', meta: { team: 'A' } })],
+      entries: [oneEntry({ kind: 'milestone', props: { team: 'A' } })],
     });
     const entry = first(dataset);
     expect(entry.kind).toBe('milestone');
-    expect(entry.meta).toEqual({ team: 'A' });
+    expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
     // `segments` is always present (#212): every Entry stores at least one Segment.
     expect(Object.keys(entry).sort()).toEqual(
-      ['end', 'id', 'kind', 'meta', 'segments', 'start', 'name'].sort(),
+      ['end', 'id', 'kind', 'props', 'segments', 'start', 'name'].sort(),
     );
   });
 
@@ -293,7 +293,7 @@ describe('Dataset transaction/on/off delegation', () => {
       fields: [{ key: 'cost', type: 'money' }],
       entries: [
         { id: 'root', name: 'Sitework', kind: 'group' },
-        oneEntry({ id: 'leaf', parentId: 'root', meta: { cost: 100 } }),
+        oneEntry({ id: 'leaf', parentId: 'root', props: { cost: 100 } }),
       ],
     });
     expect(dataset.entries.fieldValue('root', 'cost')).toBe(100);
@@ -384,7 +384,7 @@ describe('Dataset fields (S4.1)', () => {
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: [oneEntry({ meta: { cost: 400 } })],
+      entries: [oneEntry({ props: { cost: 400 } })],
     });
 
     expect(dataset.field('cost')).toEqual(
@@ -392,7 +392,6 @@ describe('Dataset fields (S4.1)', () => {
         key: 'cost',
         type: 'money',
         rollUp: 'sum',
-        source: { from: 'meta', key: 'cost' },
       }),
     );
     expect(dataset.field('missing')).toBeUndefined();
@@ -408,7 +407,7 @@ describe('Dataset fields (S4.1)', () => {
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: [oneEntry({ meta: { cost: 400 } })],
+      entries: [oneEntry({ props: { cost: 400 } })],
     });
     const changes: ChangeSet[] = [];
     dataset.on('change', ({ changeSet }) => {
@@ -418,7 +417,7 @@ describe('Dataset fields (S4.1)', () => {
     const updated = dataset.entries.update('t1', { start: '2026-09-05', cost: 500 });
 
     expect(changes).toHaveLength(1);
-    expect(updated.meta).toEqual({ cost: 500 });
+    expect(updated.props).toEqual({ cost: 500 });
     const fields = fieldRowsOf(changes[0]!)
       .map((row) => row.field)
       .sort();
@@ -443,7 +442,7 @@ describe('Dataset fields (S4.1)', () => {
           parentId: 'root',
           start: '2026-01-01',
           end: '2026-01-05',
-          meta: { cost: 100 },
+          props: { cost: 100 },
         },
       ],
     });
@@ -472,7 +471,7 @@ describe('Dataset fields (S4.1)', () => {
           parentId: 'root',
           start: '2026-01-01',
           end: '2026-01-05',
-          meta: { cost: 40, team: 'A' },
+          props: { cost: 40, team: 'A' },
         },
         {
           id: 'b',
@@ -480,7 +479,7 @@ describe('Dataset fields (S4.1)', () => {
           parentId: 'root',
           start: '2026-01-01',
           end: '2026-01-05',
-          meta: { cost: 60, team: 'B' },
+          props: { cost: 60, team: 'B' },
         },
       ],
     });
@@ -489,13 +488,13 @@ describe('Dataset fields (S4.1)', () => {
     dataset.entries.update('a', { cost: 50 });
 
     expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
-    expect(dataset.entries.get('b')?.meta).toEqual({ cost: 60, team: 'B' });
-    expect(dataset.entries.get('root')?.meta).toEqual({ cost: 110 });
+    expect(dataset.entries.get('b')?.props).toEqual({ cost: 60, team: 'B' });
+    expect(dataset.entries.get('root')?.props).toEqual({ cost: 110 });
   });
 });
 
 describe('entries.fieldValue', () => {
-  it('reads a meta Field without going through entry.meta', () => {
+  it('reads a props-addressed Field without going through entry.props directly', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'cost', type: 'money' }],
@@ -547,8 +546,8 @@ describe('entries.fieldValue', () => {
 });
 
 describe('Dataset generics (#123)', () => {
-  it('types meta from TMeta and declared Field writes from TFields', () => {
-    const dataset = new Dataset<{ team: string }, { cost: number }>({
+  it('types props from one TProps generic — declared Field keys and passenger keys alike', () => {
+    const dataset = new Dataset<{ team: string; cost: number }>({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
@@ -558,16 +557,16 @@ describe('Dataset generics (#123)', () => {
           name: 'Design',
           start: '2026-09-01',
           end: '2026-09-08',
-          meta: { team: 'A' },
+          props: { team: 'A' },
         },
       ],
     });
 
-    const team: string | undefined = dataset.entries.get('t1')?.meta?.team;
+    const team: string | undefined = dataset.entries.get('t1')?.props?.team;
     expect(team).toBe('A');
 
     const updated = dataset.entries.update('t1', { cost: 500 });
-    expect(updated.meta?.team).toBe('A');
+    expect(updated.props?.team).toBe('A');
 
     // The key types the read — no type argument at the call, and no `as` (#144, ADR 0005).
     const cost: number | undefined = dataset.entries.fieldValue('t1', 'cost');
@@ -658,7 +657,7 @@ describe('Dataset plugins (S5.10)', () => {
       timeZone: 'UTC',
       entries: [
         { id: 'p1', name: 'Sitework', kind: 'group', start: '2026-09-01', end: '2026-09-02' },
-        oneEntry({ id: 't1', parentId: 'p1', meta: { cost: 500 } }),
+        oneEntry({ id: 't1', parentId: 'p1', props: { cost: 500 } }),
       ],
       plugins: [declaresCost],
     });
@@ -760,7 +759,7 @@ describe('Dataset plugins (S5.10)', () => {
           parentId: 'root',
           start: '2026-01-01',
           end: '2026-01-05',
-          meta: { cost: 100 },
+          props: { cost: 100 },
         },
       ],
       plugins: [movesLeaf, proposesCost],
@@ -789,7 +788,7 @@ describe('Dataset plugins (S5.10)', () => {
 });
 
 describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
-  /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `meta`. */
+  /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
   const declaresRisk: DatasetPlugin = {
     id: 'demo.risk',
     setup(ctx) {
@@ -800,13 +799,13 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
   const withRisk = (): Dataset =>
     new Dataset({
       timeZone: 'UTC',
-      entries: [oneEntry({ meta: { risk: 'high' } })],
+      entries: [oneEntry({ props: { risk: 'high' } })],
       fields: [{ key: 'note' }],
       plugins: [declaresRisk],
     });
 
-  it('keeps the plugin’s values, which live in meta and never needed the declaration', () => {
-    expect(withRisk().entries.get('t1')?.meta).toEqual({ risk: 'high' });
+  it('keeps the plugin’s values, which live in props and never needed the declaration', () => {
+    expect(withRisk().entries.get('t1')?.props).toEqual({ risk: 'high' });
   });
 
   it('authors no orphan Field when the reading application leaves the plugin out', () => {
@@ -820,7 +819,7 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     expect(reloaded.field('risk')).toBeUndefined();
     expect(reloaded.field('note')).toBeDefined();
     // The plugin's data is still there, opaque, waiting for the plugin to come back.
-    expect(reloaded.entries.get('t1')?.meta).toEqual({ risk: 'high' });
+    expect(reloaded.entries.get('t1')?.props).toEqual({ risk: 'high' });
   });
 
   it('re-declares cleanly when the reading application installs the same plugin again', () => {

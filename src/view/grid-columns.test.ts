@@ -44,7 +44,7 @@ const entry: Entry = {
   start: entryStart,
   end: entryEnd,
   segments: [{ id: segmentId('t1-1'), start: entryStart, end: entryEnd }],
-  meta: { cost: 500 },
+  props: { cost: 500 },
 };
 
 describe('resolveColumns (D-S4-12)', () => {
@@ -119,8 +119,8 @@ describe('resolveColumns (D-S4-12)', () => {
     );
   });
 
-  it("gridColumns: ['meta'] throws FieldNotColumnableError", () => {
-    expect(() => resolveColumns(['meta'], lookupFrom(CORE_FIELDS), { timeZone: zone })).toThrow(
+  it("gridColumns: ['parentId'] throws FieldNotColumnableError — a core Field with no column", () => {
+    expect(() => resolveColumns(['parentId'], lookupFrom(CORE_FIELDS), { timeZone: zone })).toThrow(
       FieldNotColumnableError,
     );
   });
@@ -148,7 +148,7 @@ describe('resolveFieldCompares (D-S4-13)', () => {
 
   it('the duration cell on a dateless row is blank, not "NaN d" (ADR 0012 Gate)', () => {
     const columns = resolveColumns(['duration'], lookupFrom(CORE_FIELDS), { timeZone: zone, locale });
-    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [] };
+    const dateless: Entry = { id: entryId('none'), name: 'none', kind: 'span', segments: [], props: {} };
     expect(columns[0]?.format(dateless)).toBe('');
   });
 

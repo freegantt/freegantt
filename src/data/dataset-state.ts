@@ -22,13 +22,13 @@ import type {
   Disposer,
   EditExtender,
   EditRequest,
-  StoredEdits,
+  ProposedEdits,
   ExtenderWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, toStoredEdits, toEditsReading, toEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, toProposedEdits, toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
@@ -172,7 +172,7 @@ export class DatasetState implements Dataset {
       mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
-      toEntries(options.entries, this.#entryContext),
+      toEntries(options.entries, this.#entryContext, this.fields),
       this.#entryContext,
       this.fields,
       this.fieldContext,
@@ -212,10 +212,10 @@ export class DatasetState implements Dataset {
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *
    *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
-   *  `EntryEdits`, the same object `entries.update()` takes, and `toStoredEdits` reads it through the
+   *  `EntryEdits`, the same object `entries.update()` takes, and `toProposedEdits` reads it through the
    *  dataset's own zone and end rule. */
-  extraEditsFor(request: EditRequest): StoredEdits {
-    return toStoredEdits(
+  extraEditsFor(request: EditRequest): ProposedEdits {
+    return toProposedEdits(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
@@ -227,8 +227,8 @@ export class DatasetState implements Dataset {
    *  the same as `extraEditsFor` above, but also reports which of `start`/`end`/`segments` the
    *  occupant's own loose edit named on each Entry. `buildCommitChangeSet` needs that fact to tell
    *  the hook's authored envelope keys from the ones `reconcileEnvelope` derives on the hook's
-   *  behalf — `StoredEdit.proposedKeys` alone conflates the two (#232). Not part of the public
-   *  surface: an app author never reads an envelope key list, only the reconciled `StoredEdits`
+   *  behalf — `ProposedEdit.proposedKeys` alone conflates the two (#232). Not part of the public
+   *  surface: an app author never reads an envelope key list, only the reconciled `ProposedEdits`
    *  `extraEditsFor` already gives them. */
   extraEditsReadingFor(request: EditRequest): EditsReading {
     return toEditsReading(

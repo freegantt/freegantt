@@ -11,7 +11,7 @@ function treeDataset(
     kind?: string;
     start?: string;
     end?: string;
-    meta?: { cost?: number };
+    props?: { cost?: number };
   }[],
   options: { rollUpKinds?: readonly string[] | 'none'; hierarchy?: { autoGroup: boolean } } = {},
 ) {
@@ -36,22 +36,22 @@ function costOf(state: DatasetState, id: string): number | undefined {
 }
 
 describe('rollUpFields (S4.2)', () => {
-  it('construction writes parent meta.cost from children (D-S4-35)', () => {
+  it('construction writes parent props.cost from children (ADR 0011)', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },
-      { id: 'a', parentId: 'root', meta: { cost: 40 } },
-      { id: 'b', parentId: 'root', meta: { cost: 60 } },
+      { id: 'a', parentId: 'root', props: { cost: 40 } },
+      { id: 'b', parentId: 'root', props: { cost: 60 } },
     ]);
 
     expect(costOf(state, 'root')).toBe(100);
-    expect((state.entries.get('root')!.meta as { cost: number }).cost).toBe(100);
+    expect((state.entries.get('root')!.props as { cost: number }).cost).toBe(100);
   });
 
   it('sum rolls cost up two levels in one commit', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },
       { id: 'mid', parentId: 'root', kind: 'group' },
-      { id: 'leaf', parentId: 'mid', meta: { cost: 100 } },
+      { id: 'leaf', parentId: 'mid', props: { cost: 100 } },
     ]);
 
     state.entries.update('leaf', { cost: 250 });
@@ -63,8 +63,8 @@ describe('rollUpFields (S4.2)', () => {
   it('a parent not in rollUpKinds keeps its authored cost', () => {
     const state = treeDataset(
       [
-        { id: 'p1', kind: 'span', meta: { cost: 99 } },
-        { id: 'c1', parentId: 'p1', meta: { cost: 10 } },
+        { id: 'p1', kind: 'span', props: { cost: 99 } },
+        { id: 'c1', parentId: 'p1', props: { cost: 10 } },
       ],
       { rollUpKinds: ['group'], hierarchy: { autoGroup: false } },
     );
@@ -77,8 +77,8 @@ describe('rollUpFields (S4.2)', () => {
   it("rollUpKinds: 'none' leaves the caller's parent start/end/cost after a child edit", () => {
     const state = new DatasetState({
       entries: [
-        { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05', name: 'p1', meta: { cost: 40 } },
-        { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05', name: 'c1', meta: { cost: 10 } },
+        { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05', name: 'p1', props: { cost: 40 } },
+        { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05', name: 'c1', props: { cost: 10 } },
       ],
       timeZone: 'UTC',
       rollUpKinds: 'none',
@@ -121,7 +121,7 @@ describe('rollUpFields (S4.2)', () => {
     const state = new DatasetState({
       entries: [
         { id: 'p1', kind: 'group', name: 'p1' },
-        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-05', meta: { cost: 1 } },
+        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-05', props: { cost: 1 } },
       ],
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
@@ -132,7 +132,7 @@ describe('rollUpFields (S4.2)', () => {
           if (rollupCalls > 1) throw new Error('boom');
           let total = 0;
           for (const child of children) {
-            const value = (child.meta as { cost?: number } | undefined)?.cost;
+            const value = (child.props as { cost?: number } | undefined)?.cost;
             if (typeof value === 'number') total += value;
           }
           return total;
@@ -160,7 +160,7 @@ describe('rollUpFields (S4.2)', () => {
   it('[S4-A1] undo reverts a rolled-up parent cost with the child edit in one step', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },
-      { id: 'leaf', parentId: 'root', meta: { cost: 100 } },
+      { id: 'leaf', parentId: 'root', props: { cost: 100 } },
     ]);
 
     state.entries.update('leaf', { cost: 500 });
@@ -174,8 +174,8 @@ describe('rollUpFields (S4.2)', () => {
   it('a parent whose Field has rollUp: none keeps its cost while span still rolls up', () => {
     const state = new DatasetState({
       entries: [
-        { id: 'p1', kind: 'group', name: 'p1', meta: { notes: 5 } },
-        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-05', meta: { notes: 2 } },
+        { id: 'p1', kind: 'group', name: 'p1', props: { notes: 5 } },
+        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-05', props: { notes: 2 } },
       ],
       timeZone: 'UTC',
       fieldTypes: { tally: { rollUp: 'sum' } },
@@ -192,7 +192,7 @@ describe('rollUpFields (S4.2)', () => {
     const state = treeDataset([
       { id: 'a', kind: 'group' },
       { id: 'b', kind: 'group' },
-      { id: 'c', parentId: 'a', meta: { cost: 10 } },
+      { id: 'c', parentId: 'a', props: { cost: 10 } },
     ]);
 
     state.entries.update('c', { parentId: 'b', cost: 20 });
@@ -205,8 +205,8 @@ describe('rollUpFields (S4.2)', () => {
     it('[P1 regression] the review probe: parent cost drops when the cheaper child is removed', () => {
       const state = treeDataset([
         { id: 'p', kind: 'group' },
-        { id: 'a', parentId: 'p', meta: { cost: 10 } },
-        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+        { id: 'a', parentId: 'p', props: { cost: 10 } },
+        { id: 'b', parentId: 'p', props: { cost: 5 } },
       ]);
 
       expect(costOf(state, 'p')).toBe(15);
@@ -214,14 +214,14 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.remove('b');
 
       expect(costOf(state, 'p')).toBe(10);
-      expect((state.entries.get('p')!.meta as { cost: number }).cost).toBe(10);
+      expect((state.entries.get('p')!.props as { cost: number }).cost).toBe(10);
     });
 
     it('[P1 regression] removing the child that extended the parent span shrinks start/end', () => {
       const state = treeDataset([
         { id: 'p', kind: 'group', start: '2026-01-01', end: '2026-01-10' },
-        { id: 'a', parentId: 'p', start: '2026-01-01', end: '2026-01-05', meta: { cost: 10 } },
-        { id: 'b', parentId: 'p', start: '2026-06-01', end: '2026-06-10', meta: { cost: 5 } },
+        { id: 'a', parentId: 'p', start: '2026-01-01', end: '2026-01-05', props: { cost: 10 } },
+        { id: 'b', parentId: 'p', start: '2026-06-01', end: '2026-06-10', props: { cost: 5 } },
       ]);
 
       const before = state.entries.get('p')!;
@@ -239,8 +239,8 @@ describe('rollUpFields (S4.2)', () => {
       const state = treeDataset([
         { id: 'root', kind: 'group' },
         { id: 'mid', parentId: 'root', kind: 'group' },
-        { id: 'leaf', parentId: 'mid', meta: { cost: 100 } },
-        { id: 'sibling', parentId: 'mid', meta: { cost: 25 } },
+        { id: 'leaf', parentId: 'mid', props: { cost: 100 } },
+        { id: 'sibling', parentId: 'mid', props: { cost: 25 } },
       ]);
 
       expect(costOf(state, 'mid')).toBe(125);
@@ -255,8 +255,8 @@ describe('rollUpFields (S4.2)', () => {
     it('[P1] undo restores the parent aggregate with the removed child', () => {
       const state = treeDataset([
         { id: 'p', kind: 'group' },
-        { id: 'a', parentId: 'p', meta: { cost: 10 } },
-        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+        { id: 'a', parentId: 'p', props: { cost: 10 } },
+        { id: 'b', parentId: 'p', props: { cost: 5 } },
       ]);
 
       state.entries.remove('b');
@@ -273,8 +273,8 @@ describe('rollUpFields (S4.2)', () => {
     it('[P1] removal records the parent rollup in the changeset', () => {
       const state = treeDataset([
         { id: 'p', kind: 'group' },
-        { id: 'a', parentId: 'p', meta: { cost: 10 } },
-        { id: 'b', parentId: 'p', meta: { cost: 5 } },
+        { id: 'a', parentId: 'p', props: { cost: 10 } },
+        { id: 'b', parentId: 'p', props: { cost: 5 } },
       ]);
 
       let changeSet: ChangeSet | undefined;
@@ -301,8 +301,8 @@ describe('rollUpFields (S4.2)', () => {
   it('D-S4-11: every store child counts toward the parent, including one a view would hide', () => {
     const state = treeDataset([
       { id: 'root', kind: 'group' },
-      { id: 'visible', parentId: 'root', meta: { cost: 40 } },
-      { id: 'hidden', parentId: 'root', meta: { cost: 60 } },
+      { id: 'visible', parentId: 'root', props: { cost: 40 } },
+      { id: 'hidden', parentId: 'root', props: { cost: 60 } },
     ]);
 
     expect(costOf(state, 'root')).toBe(100);

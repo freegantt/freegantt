@@ -154,7 +154,7 @@ describe('[S5-A1] tooltips() (S5.5, D-S5-13)', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset({
-      entries: [{ id: 'e1', name: 'Task', start: '2026-01-01', end: '2026-01-02', meta: { cost: 500 } }],
+      entries: [{ id: 'e1', name: 'Task', start: '2026-01-01', end: '2026-01-02', props: { cost: 500 } }],
       fields: [{ key: 'cost', column: {} }],
       timeZone: 'UTC',
     });

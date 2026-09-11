@@ -19,7 +19,7 @@ import type {
   ResolvedBarLabel,
 } from '../src/api/index.js';
 import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
-import type { PlannerMeta } from '../fixtures/planner-dataset.js';
+import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import type { PlannerThemeChoice } from './planner-toolbar.js';
 import { weekendShading } from './plugins/weekend-shading.js';
@@ -28,7 +28,7 @@ import { mountPageBrief } from './docs/page-brief.js';
 // D-S5-29: what this page shows, the config that does it, and the spec section behind it.
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'planner');
 
-const dataset = new Dataset<PlannerMeta, { owner?: string; progress?: number; phase?: number }>({
+const dataset = new Dataset<PlannerEntryProps>({
   entries: plannerEntryInputs,
   timeZone: 'UTC',
   ...plannerFieldOptions,
@@ -58,9 +58,9 @@ function phaseFill(phase: unknown): string | undefined {
  *  bar already says which phase they are. */
 function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (entry === undefined) return undefined;
-  const meta = entry.meta as PlannerMeta | undefined;
+  const props = entry.props as PlannerEntryProps | undefined;
   const children: (ElementDescription & { key?: string })[] = [];
-  const fill = phaseFill(meta?.phase);
+  const fill = phaseFill(props?.phase);
   if (fill !== undefined && entry.kind !== 'group' && entry.kind !== 'milestone') {
     children.push({ key: 'tag', class: { 'demo-phase-tag': true }, style: { background: fill } });
   }
@@ -72,7 +72,7 @@ function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescripti
  *  be — a photo rather than initials — which has no declared Field type yet. Initials until it does. */
 function ownerCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (value === '') return { text: '' };
-  const fill = phaseFill((entry?.meta as PlannerMeta | undefined)?.phase);
+  const fill = phaseFill((entry?.props as PlannerEntryProps | undefined)?.phase);
   return {
     class: { 'demo-avatar': true },
     ...(fill === undefined ? {} : { style: { background: fill } }),
@@ -161,9 +161,9 @@ function progressOf(entryId: EntryId): number | undefined {
  *  its label, and an inset ring when the row is on the critical path. `'*'` registers it as the
  *  catch-all, so any kind this page does not answer for by name lands here. */
 function phaseBar({ entry, label }: BarRendererContext): ElementDescription | undefined {
-  const meta = entry.meta as PlannerMeta | undefined;
-  const fill = phaseFill(meta?.phase);
-  const description: ElementDescription = { class: { 'demo-critical': meta?.critical === true } };
+  const props = entry.props as PlannerEntryProps | undefined;
+  const fill = phaseFill(props?.phase);
+  const description: ElementDescription = { class: { 'demo-critical': props?.critical === true } };
   if (fill !== undefined) description.style = { '--fg-bar-fill': fill };
 
   const children: (ElementDescription & { key?: string })[] = [];
@@ -175,7 +175,7 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   // The critical ring is a child, not a box-shadow on the bar. The bar's own shadow slot belongs to
   // the library — `hovered` and `dragging` both paint there — and a second box-shadow rule on
   // `.fg-bar` would replace theirs rather than join it. A nested ring composes with both for free.
-  if (meta?.critical === true) {
+  if (props?.critical === true) {
     children.push({ key: 'critical', class: { 'demo-critical-ring': true } });
   }
   if (children.length > 0) description.children = children;

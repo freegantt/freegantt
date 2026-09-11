@@ -28,6 +28,7 @@ function entry(id: string, segmentIds: readonly string[]): Entry {
       start: instant(i * 100),
       end: instant((i + 1) * 100),
     })),
+    props: {},
   };
 }
 

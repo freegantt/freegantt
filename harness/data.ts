@@ -54,7 +54,7 @@ const ROLLUP_TREE = [
     parentId: 'phase',
     start: '2026-01-01',
     end: '2026-01-10',
-    meta: { cost: 100 },
+    props: { cost: 100 },
   },
   {
     id: 'task-b',
@@ -62,7 +62,7 @@ const ROLLUP_TREE = [
     parentId: 'phase',
     start: '2026-01-15',
     end: '2026-01-20',
-    meta: { cost: 200 },
+    props: { cost: 200 },
   },
 ];
 
@@ -72,7 +72,7 @@ const ROLLUP_TREE = [
 // fresh one at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost: number }, { cost: number }>({
+const dataset = new Dataset<{ cost: number }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
