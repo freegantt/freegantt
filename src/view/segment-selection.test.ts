@@ -39,8 +39,6 @@ function entryStoreOf(entries: readonly Entry[]): EntryStore {
   return new EntryStore(entries, {
     timeZone,
     dateOnlyEnd: 'inclusive',
-    referenceDate: instant(0),
-    rollUpKinds: new Set(['group']),
     mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
   });
 }

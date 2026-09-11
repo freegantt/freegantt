@@ -84,7 +84,7 @@ describe('draftForMove', () => {
     // 24 — so the wall-clock hour survives the transition instead of drifting with it.
     const a = entry('a', '2026-03-07T17:00:00Z', '2026-03-07T19:00:00Z'); // 12:00-14:00 EST
     const target = instant('2026-03-08T16:00:00Z'); // 12:00 EDT
-    const dxPx = scale.xForInstant(target) - scale.xForInstant(a.start);
+    const dxPx = scale.xForInstant(target) - scale.xForInstant(a.start!);
     const draft = draftForMove({
       zone: ZONE,
       scale,

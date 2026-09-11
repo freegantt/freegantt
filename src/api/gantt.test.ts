@@ -100,7 +100,7 @@ describe('Gantt', () => {
 
   it('two Gantt instances sharing one TimeScaleModel compute identical bar positions (D9 seam)', () => {
     const scale = new TimeScaleModel({
-      range: { start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
     });
     const containerA = document.createElement('div');
     const containerB = document.createElement('div');
@@ -1810,15 +1810,15 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it("default gridColumns is ['name']", () => {
+  it("default gridColumns is ['name', 'start', 'end'] (ADR 0012: dates are no longer guaranteed)", () => {
     const container = document.createElement('div');
     const gantt = new Gantt({
       container,
       dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
     });
-    expect(gantt.gridColumns).toEqual(['name']);
+    expect(gantt.gridColumns).toEqual(['name', 'start', 'end']);
     const row = container.querySelector('.fg-row')!;
-    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(1);
+    expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(3);
     gantt.destroy();
   });
 });
@@ -2229,8 +2229,8 @@ describe('Gantt plugin kind registrations (S5.9, D-S5-21/D-S5-22)', () => {
                 entryId: entry.id,
                 kind: entry.kind,
                 label: `buffer: ${entry.name}`,
-                start: entry.start,
-                end: entry.end,
+                start: entry.start!,
+                end: entry.end!,
               },
             ]);
             return () => {};
@@ -3341,16 +3341,20 @@ describe('Gantt Delete key (ADR 0010, #212)', () => {
     container.remove();
   });
 
-  it("deleting an Entry's last Segment removes the Entry, and one undo restores both", () => {
+  it("deleting an Entry's last Segment keeps the Entry dateless, and one undo restores it (ADR 0012)", () => {
     const { container, gantt, dataset } = makeSegmentedGantt();
-    // "plain" draws a single Segment ingest filled in — its row's Delete needs no special case
-    // (ADR 0010): removing that one Segment removes the Entry with it, same transaction.
+    // "plain" draws a single Segment ingest filled in. Removing that one Segment no longer removes
+    // the Entry (ADR 0012 supersedes ADR 0010's own removal here): the row stays, dateless.
     const plainSegmentIds = dataset.entries.get('plain')!.segments.map((s) => s.id);
     gantt.selectedSegmentIds = plainSegmentIds;
 
     pressDelete(container);
 
-    expect(dataset.entries.get('plain')).toBeUndefined();
+    const cleared = dataset.entries.get('plain');
+    expect(cleared).toBeDefined();
+    expect(cleared?.start).toBeUndefined();
+    expect(cleared?.end).toBeUndefined();
+    expect(cleared?.segments).toHaveLength(0);
 
     dataset.undo();
 
@@ -3449,7 +3453,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('a group entry (rollUpKinds) gets neither the grab cursor nor a handle', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ id: 'g1', kind: 'group', name: 'Group' }, ...sampleEntries],
+      // A childless group holds no dates and draws no bar at all (ADR 0012), so this gives it one
+      // child to roll up from — the case a real "collapsed group" row is always in.
+      entries: [
+        { id: 'g1', kind: 'group', name: 'Group' },
+        { ...sampleEntries[0]!, parentId: 'g1' },
+        ...sampleEntries.slice(1),
+      ],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({ container, dataset });
@@ -3858,8 +3868,8 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
           id: 'm1',
           kind: 'milestone',
           name: 'Milestone',
-          start: sampleEntries[0]!.start,
-          end: sampleEntries[0]!.start,
+          start: sampleEntries[0]!.start!,
+          end: sampleEntries[0]!.start!,
         },
       ],
       timeZone: 'UTC',
@@ -4342,8 +4352,8 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
           ? {
               ...entry,
               segments: [
-                { start: entry.start, end: entry.end },
-                { start: entry.start, end: entry.end },
+                { start: entry.start!, end: entry.end! },
+                { start: entry.start!, end: entry.end! },
               ],
             }
           : entry,
@@ -4361,7 +4371,7 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
     expect(yBefore).toBe(80);
 
     dataset.entries.update(sampleEntries[0]!.id, {
-      segments: [{ start: sampleEntries[0]!.start, end: sampleEntries[0]!.end }],
+      segments: [{ start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! }],
     });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 

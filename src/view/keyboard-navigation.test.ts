@@ -163,8 +163,6 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
       entries: new EntryStore(entries, {
         timeZone: zone,
         dateOnlyEnd: 'inclusive' as const,
-        referenceDate: 0 as Instant,
-        rollUpKinds: new Set(['group']),
         mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
       }),
       timeZone: zone,

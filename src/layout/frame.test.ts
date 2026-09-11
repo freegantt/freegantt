@@ -27,9 +27,22 @@ import {
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry } from '../model/index.js';
+import type { Entry, Instant, TimeSpan } from '../model/index.js';
 
-const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
+/** Every fixture entry this file reads is authored with both dates — this asserts what the
+ *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
+function spanOf(entry: Entry): TimeSpan {
+  return { start: entry.start as Instant, end: entry.end as Instant };
+}
+
+/** `barSpan`'s own input shape (`Pick<Item, 'start' | 'end' | 'kind'>`) — every fixture entry this
+ *  file feeds it is authored with both dates, so this asserts what `spanOf` above already does,
+ *  plus `kind`. */
+function barSpanFields(entry: Entry): { start: Instant; end: Instant; kind: Entry['kind'] } {
+  return { ...spanOf(entry), kind: entry.kind };
+}
+
+const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
@@ -121,7 +134,7 @@ describe('computeFrame', () => {
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry)}`,
+      `${entry.name}, ${formatDate(scale.timeZone, entry.start as Instant)} – ${formatEndInclusive(scale.timeZone, spanOf(entry))}`,
     );
   });
 
@@ -468,8 +481,8 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
     };
     const frame = computeFrame({
@@ -491,8 +504,8 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
     };
     const grouped = { ...sampleEntries[1]!, kind: 'group' };
@@ -917,7 +930,7 @@ describe(
         segments: [{ id: segmentId(`${input.id}-1`), start, end }],
       };
     });
-    const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
+    const largeScale = createTimeScale({ timeZone: 'UTC', range: spanOf(large[0]!), pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
       const frame = computeFrame({
@@ -982,9 +995,9 @@ describe('computeFrame lanes (S4.8)', () => {
   const overlapping: Entry = {
     ...sampleEntries[0]!,
     segments: [
-      { id: segmentId('lane-1'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { id: segmentId('lane-2'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { id: segmentId('lane-3'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      { id: segmentId('lane-2'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      { id: segmentId('lane-3'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
     ],
   };
 
@@ -1028,28 +1041,28 @@ describe('computeFrame lanes (S4.8)', () => {
 });
 
 describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () => {
-  const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+  const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start! };
 
   it('keeps the Entry itself zero-width — the painted span floors, not the instant', () => {
     expect(milestone.start).toEqual(milestone.end);
   });
 
   it('floors a milestone bar to the rotated diamond bounding box, centred on the instant', () => {
-    const { x, width } = barSpan(milestone, scale);
+    const { x, width } = barSpan(barSpanFields(milestone), scale);
     const floor = DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2;
     expect(width).toBe(floor);
     expect(width).toBeGreaterThan(0);
-    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start as Instant));
   });
 
   it('honours a custom diamondSizePx the same way --fg-diamond-size would', () => {
-    const { x, width } = barSpan(milestone, scale, 20);
+    const { x, width } = barSpan(barSpanFields(milestone), scale, 20);
     expect(width).toBe(20 * Math.SQRT2);
-    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
+    expect(x + width / 2).toBe(scale.xForInstant(milestone.start as Instant));
   });
 
   it('stamps minimumSpan on a floored milestone bar', () => {
-    const { minimumSpan } = barSpan(milestone, scale);
+    const { minimumSpan } = barSpan(barSpanFields(milestone), scale);
     expect(minimumSpan).toBe(true);
   });
 
@@ -1065,7 +1078,7 @@ describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () =
       itemProducerRegistry,
     });
     const bar = frame.bars[0]!;
-    const revealSpan = barSpan(milestone, scale);
+    const revealSpan = barSpan(barSpanFields(milestone), scale);
     expect(bar.width).toBe(revealSpan.width);
     expect(bar.x).toBe(revealSpan.x);
   });
@@ -1073,32 +1086,32 @@ describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () =
 
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width, non-milestone kind at minBarWidthPx and stamps minimumSpan', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
-    const { x, width, minimumSpan } = barSpan(zeroWidthSpan, scale);
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const { x, width, minimumSpan } = barSpan(barSpanFields(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
-    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start));
+    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
   it('never shrinks a milestone floor below its own diamond bounding box', () => {
-    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start! };
     // A tiny minBarWidthPx must not shrink the milestone floor below diamondSizePx * √2.
-    const { width } = barSpan(milestone, scale, DEFAULT_DIAMOND_SIZE_PX, 1);
+    const { width } = barSpan(barSpanFields(milestone), scale, DEFAULT_DIAMOND_SIZE_PX, 1);
     expect(width).toBe(DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2);
   });
 
   it('widens minBarWidthPx past a milestone floor too small for it', () => {
-    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
-    const { width } = barSpan(milestone, scale, 1, 40);
+    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start! };
+    const { width } = barSpan(barSpanFields(milestone), scale, 1, 40);
     expect(width).toBe(40);
   });
 
   it('centres a floored, non-zero-width bar on its own midpoint, not on its start', () => {
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
-    const startX = scale.xForInstant(sampleEntries[0]!.start);
+    const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
     const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
-    const { x, width, minimumSpan } = barSpan(narrowSpan, scale);
+    const { x, width, minimumSpan } = barSpan(barSpanFields(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
     expect(x + width / 2).toBe(startX + 2.5);
@@ -1106,10 +1119,12 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, minimumSpan } = barSpan(wideSpan, scale);
-    expect(width).toBe(scale.xForInstant(wideSpan.end) - scale.xForInstant(wideSpan.start));
+    const { x, width, minimumSpan } = barSpan(barSpanFields(wideSpan), scale);
+    expect(width).toBe(
+      scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),
+    );
     expect(width).toBeGreaterThan(DEFAULT_MIN_BAR_WIDTH_PX);
-    expect(x).toBe(scale.xForInstant(wideSpan.start));
+    expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
     expect(minimumSpan).toBe(false);
   });
 });

@@ -5,7 +5,15 @@
 // and every entry keeps its authored values — the same stored result a consumer gets from
 // `rollUpKinds: 'none'`.
 
-import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
+import type {
+  Entry,
+  EntryId,
+  EntryKind,
+  FieldContext,
+  FieldUpdated,
+  Instant,
+  TimeSpan,
+} from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { StoredEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
@@ -122,7 +130,10 @@ function widenSegmentsToEnvelope(
   const segmentsField = registry.get('segments');
   if (!segmentsField || parent.segments.length === 0) return parent;
 
-  const nextSegments = fitSegmentsToEnvelope(parent.segments, parent);
+  // Load-bearing cast (ADR 0012): `parent.segments.length > 0` above already means this parent
+  // spans, so `start`/`end` are both present.
+  const target: TimeSpan = { start: parent.start as Instant, end: parent.end as Instant };
+  const nextSegments = fitSegmentsToEnvelope(parent.segments, target);
   if (nextSegments === parent.segments) return parent;
 
   const from = readField(parent, segmentsField, ctx);

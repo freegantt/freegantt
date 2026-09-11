@@ -11,6 +11,7 @@ import type {
   Entry,
   EntryId,
   ErrorCode,
+  Instant,
   ItemId,
   RaiseError,
   Refusable,
@@ -214,7 +215,11 @@ export class GesturePipeline {
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
-    const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
+    // Load-bearing cast (ADR 0012): a gesture exists only for an Entry with a grip to grab, which
+    // means it already spans — see `layout/gesture-draft.ts`'s own guard, J4 in BUILD-LOG.md.
+    const anchorInstant = (
+      gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start
+    ) as Instant;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 

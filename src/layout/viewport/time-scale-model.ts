@@ -115,6 +115,14 @@ function sameRange(a: 'fitDataset' | TimeSpan, b: 'fitDataset' | TimeSpan): bool
   return a.start === b.start && a.end === b.end;
 }
 
+/** Widens `span` to cover `at` — `undefined` in, a one-instant span out; a span already covering
+ *  `at` comes back unchanged. `'fitDataset'` (ADR 0012) folds `start` and `end` in independently,
+ *  one instant at a time, so a one-date Entry still moves the window. */
+function includeInstant(span: TimeSpan | undefined, at: Instant): TimeSpan {
+  if (span === undefined) return { start: at, end: at };
+  return { start: at < span.start ? at : span.start, end: at > span.end ? at : span.end };
+}
+
 /** Per-instance state `bindTimeScale` needs but which is not on the published type (issue #84,
  *  ADR 0007): `bind`/`unbind` are not class methods, so there is nothing for a caller holding a
  *  `TimeScaleModel` reference to call. `view/` is the only importer of `bindTimeScale`.
@@ -216,12 +224,11 @@ export class TimeScaleModel {
       }
       if (this.#range !== 'fitDataset') continue;
       for (const entry of binding.entries) {
-        if (!span) {
-          span = { start: entry.start, end: entry.end };
-          continue;
-        }
-        if (entry.start < span.start) span.start = entry.start;
-        if (entry.end > span.end) span.end = entry.end;
+        // A one-date Entry still widens `'fitDataset'` (ADR 0012): `start` and `end` fold in
+        // independently, one instant at a time, rather than requiring the pair `entry.start <
+        // span.start` used to assume.
+        if (entry.start !== undefined) span = includeInstant(span, entry.start);
+        if (entry.end !== undefined) span = includeInstant(span, entry.end);
       }
     }
     timeZone ??= UNBOUND_ZONE;

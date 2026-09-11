@@ -42,8 +42,8 @@ describe('FrameMemory (A2)', () => {
       ...one,
       segments: [one, one, one].map((span, index) => ({
         id: segmentId(`${one.id}-${index}`),
-        start: span.start,
-        end: span.end,
+        start: span.start!,
+        end: span.end!,
       })),
     };
     memory.sync({

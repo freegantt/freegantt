@@ -18,14 +18,17 @@ function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
 
 const point = (x: number, y: number) => ({ x, y });
 
+// Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
+// with both dates, so `sampleEntries[0]!.start`/`.end` are always present. `render/` may not
+// import `model/` (dependency-cruiser render-boundary), so `!` names no type — it just asserts.
 const scale: TimeScale = {
-  range: sampleEntries[0]!,
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
   timeZone: 'UTC',
   pxPerMs: 1,
   xForInstant: () => 0,
-  instantForX: () => sampleEntries[0]!.start,
+  instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 100,
-  ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+  ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
   contentWidth: 100,
 };
 const preset: ViewPreset = {
@@ -42,8 +45,8 @@ const itemProducerRegistry = createItemProducerRegistry();
 function segmentsOf(entry: (typeof sampleEntries)[number], count: number) {
   return Array.from({ length: count }, (_, index) => ({
     id: segmentId(`${entry.id}-${index}`),
-    start: entry.start,
-    end: entry.end,
+    start: entry.start!,
+    end: entry.end!,
   }));
 }
 
@@ -682,12 +685,12 @@ describe('render/dom backend', () => {
     // leave the old, full-width Segment still drawing the bar.
     const zeroWidth = {
       ...sampleEntries[1]!,
-      end: sampleEntries[1]!.start,
+      end: sampleEntries[1]!.start!,
       segments: [
-        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start, end: sampleEntries[1]!.start },
+        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start!, end: sampleEntries[1]!.start! },
       ],
     };
-    const milestone = { ...sampleEntries[2]!, kind: 'milestone', end: sampleEntries[2]!.start };
+    const milestone = { ...sampleEntries[2]!, kind: 'milestone', end: sampleEntries[2]!.start! };
     const frame = computeFrame({
       entries: [ordinary, zeroWidth, milestone],
       scale: realScale,
@@ -1203,7 +1206,7 @@ describe('render/dom backend', () => {
     expect(bar.segmentIds).toEqual(drawn.segments.map((segment) => segment.id));
 
     // The Dataset drops both Segments this bar drew and grows a third one. Nothing renders.
-    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start, end: drawn.end };
+    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start!, end: drawn.end! };
     live = { ...drawn, segments: [laterSegment] };
 
     backend.sync(frame);
@@ -1647,10 +1650,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1700,10 +1703,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1754,10 +1757,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1946,9 +1949,9 @@ describe('render/dom backend', () => {
         {
           ...entry,
           segments: [
-            { id: segmentId(`${entry.id}-0`), start: entry.start, end: entry.end },
-            { id: segmentId(`${entry.id}-1`), start: entry.start, end: entry.end },
-            { id: segmentId(`${entry.id}-2`), start: entry.start, end: entry.end },
+            { id: segmentId(`${entry.id}-0`), start: entry.start!, end: entry.end! },
+            { id: segmentId(`${entry.id}-1`), start: entry.start!, end: entry.end! },
+            { id: segmentId(`${entry.id}-2`), start: entry.start!, end: entry.end! },
           ],
         },
       ],
@@ -2184,16 +2187,16 @@ describe('render/dom backend', () => {
     function scaleFor(barX: number, barWidth: number, contentWidthPx: number): TimeScale {
       let call = 0;
       return {
-        range: sampleEntries[0]!,
+        range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
         timeZone: 'UTC',
         pxPerMs: 1,
         xForInstant: () => {
           call += 1;
           return call % 2 === 1 ? barX : barX + barWidth;
         },
-        instantForX: () => sampleEntries[0]!.start,
+        instantForX: () => sampleEntries[0]!.start!,
         widthForDuration: () => barWidth,
-        ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+        ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
         contentWidth: contentWidthPx,
       };
     }

@@ -23,8 +23,8 @@ import type { FieldRegistry, ResolvedField } from './field-registry.js';
 export type { FieldLookup, FieldReadMemo };
 export { withProposedKeys, proposedKeysOf, statesProposedKeys };
 
-function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta' {
-  return key === 'parentId' || key === 'segments' || key === 'meta';
+function isOptionalEntryKey(key: string): key is 'parentId' | 'segments' | 'meta' | 'start' | 'end' {
+  return key === 'parentId' || key === 'segments' || key === 'meta' || key === 'start' || key === 'end';
 }
 
 /** Which Field keys an edit claims to write. An edit that carries `proposedKeys` states them; a raw
@@ -89,7 +89,10 @@ export function createFieldContext(
       // stored value to the key's declared type — the cast is where the Field key's type is claimed.
       return readField(entry, field as ResolvedField, ctx, memo?.()) as CoreFieldValue<K> | undefined;
     },
-    durationOf(entry: Entry): Duration {
+    durationOf(entry: Entry): Duration | undefined {
+      // An Entry that does not span (ADR 0012) has no duration to state. `diffMs` is plain
+      // subtraction — an absent date yields `NaN`, never a throw — so this guard has to run first.
+      if (entry.start === undefined || entry.end === undefined) return undefined;
       return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
     },
   };

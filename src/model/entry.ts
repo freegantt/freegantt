@@ -28,12 +28,15 @@ export interface Entry<TMeta = unknown> {
   /** Authored, never derived — see plans/01 §2.5. */
   kind: EntryKind;
   name: string;
-  start: Instant;
-  /** Exclusive — see plans/01 §5. */
-  end: Instant;
-  /** Every stretch this Entry draws, never empty (#212). Interrupted work stores several bars on one
-   * row; everything else stores the single Segment ingest filled in over `[start, end)`. `start` and
-   * `end` stay the envelope over all of them. */
+  /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
+   * Segment and draws a bar. */
+  start?: Instant;
+  /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012); see `start`. */
+  end?: Instant;
+  /** Every stretch this Entry draws. Empty when the Entry does not span (ADR 0012, revises #212's
+   * "never empty"). A spanning Entry stores at least one Segment: interrupted work stores several
+   * bars on one row; everything else stores the single Segment ingest filled in over `[start, end)`.
+   * `start` and `end` stay the envelope over all of them. */
   segments: readonly Segment[];
   /** Consumer-owned, typed via generic. */
   meta?: TMeta;
@@ -55,11 +58,10 @@ export interface EntryInput<TMeta = unknown> {
   /** Authored, never derived — see plans/01 §2.5. Default 'span'. */
   kind?: EntryKind;
   name: string;
-  /** Required for a `kind` whose span is authored. Omit both `start` and `end` for a
-   * `rollUpKinds` kind (default `'group'`) to let the Rollup fill them in — the store
-   * writes a zero-length span at the dataset's reference date until the rollup runs (`01` §2.5,
-   * S2.3 §1.5). Omitting one but not the other, or omitting both on a non-deriving kind, is an
-   * `InvalidInstantError`: the field is required and `undefined` names no instant. */
+  /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
+   * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment
+   * and draws no bar otherwise. One date with no other is legal and stores as written. An unreadable
+   * date is still an `InvalidInstantError`. */
   start?: InstantInput;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput;
@@ -82,7 +84,11 @@ export interface EntryInput<TMeta = unknown> {
 export type EntryEdit<
   TMeta = unknown,
   TFields extends Record<string, unknown> = Record<string, unknown>,
-> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
+> = Partial<Omit<EntryInput<TMeta>, 'id' | 'start' | 'end'>> &
+  // `start`/`end` widen past `Partial`'s "optional key" so `update(id, { start: undefined })` — the
+  // un-date verb (ADR 0012) — type-checks as "clear this date," distinct from omitting the key
+  // ("leave it"). `exactOptionalPropertyTypes` tells the two apart only when the union says so.
+  { start?: InstantInput | undefined; end?: InstantInput | undefined } & Partial<TFields>;
 
 /** The **read** shape: an edit core has already read, with every date an `Instant` rather than a loose
  *  `InstantInput`. `EntryEdit` above is the **write** shape (`plans/02`, one write shape). Nobody
@@ -105,7 +111,11 @@ export type EntryEdit<
  *
  *  `proposedKeys` carries the Field keys the caller proposed. It is part of the edit, not a side
  *  channel — spread keeps it, and overlay never copies it onto an Entry. */
-export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
+export type StoredEdit = Partial<Omit<Entry, 'id' | 'start' | 'end'>> & {
+  // Same widening as `EntryEdit`, for the same reason: `stored.start = undefined` has to be legal
+  // once `toEditReading` reads an explicit clear off the wire (ADR 0012).
+  start?: Instant | undefined;
+  end?: Instant | undefined;
   readonly proposedKeys?: ReadonlySet<string>;
 };
 

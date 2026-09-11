@@ -271,6 +271,10 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
       return;
     }
     if (edit.start === undefined || edit.end === undefined) return;
+    // A gesture reaches this branch only for an Entry that already has a grip to grab, which means
+    // it already spans (ADR 0012) — but nothing narrows `original` here, so this guards rather than
+    // casts: a dateless Entry paints no offset instead of a crash if that assumption is ever wrong.
+    if (original.start === undefined || original.end === undefined) return;
     const x0 = scale.xForInstant(original.start);
     const x1 = scale.xForInstant(edit.start);
     const width0 = scale.xForInstant(original.end) - x0;

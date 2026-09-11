@@ -37,6 +37,11 @@ function formatEnd(
   entry: Entry,
 ): string {
   if (value === undefined || value === null) return '';
+  // End with no start (ADR 0012) shows the stored end as a plain instant — no inclusive-display
+  // adjustment, because there is no paired start to be inclusive against. Guessing one is not this
+  // Field's job.
+  if (entry.start === undefined)
+    return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
   const span = { start: entry.start, end: value as Instant };
   return formatEndInclusive(ctx.timeZone, span, ctx.locale, DATE_TIME_FORMAT);
 }

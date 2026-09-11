@@ -100,13 +100,20 @@ describe('produceItemsForRow', () => {
     expect(items[0]?.kind).toBe('phase');
   });
 
-  it('[S4-A8] an empty group produces one Item; a child gives the group a real span', () => {
+  it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
+    const t1: Entry = { id: entryId('t1'), name: 't1', kind: 'span', start: asInstant(0), segments: [] };
+    expect(t1.end).toBeUndefined();
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(items).toHaveLength(0);
+  });
+
+  it('[S4-A8] an empty group produces no Item; a child gives the group a real span (ADR 0012)', () => {
     const dataset = emptyGroupDataset();
     const empty = dataset.entries.get('g1')!;
+    expect(empty.start).toBeUndefined();
+    expect(empty.end).toBeUndefined();
     const emptyItems = produceItemsForRow(planned([empty.id]), entryByIdFor([empty]), registry);
-    expect(emptyItems).toHaveLength(1);
-    expect(emptyItems[0]?.kind).toBe(empty.kind);
-    expect(emptyItems[0]?.start).toBe(empty.end);
+    expect(emptyItems).toHaveLength(0);
 
     dataset.entries.add({
       id: 'c1',
@@ -132,8 +139,8 @@ describe('produceItemsForRow', () => {
         entryId: entry.id,
         kind: entry.kind,
         label: `buffer:${entry.name}`,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
     ]);
     const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
@@ -170,8 +177,8 @@ describe('produceItemsForRow', () => {
         entryId: entry.id,
         kind: entry.kind,
         label: `first:${entry.name}`,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
     ]);
     own.register('buffer', (entry) => [
@@ -180,8 +187,8 @@ describe('produceItemsForRow', () => {
         entryId: entry.id,
         kind: entry.kind,
         label: `second:${entry.name}`,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
     ]);
     disposeFirst();

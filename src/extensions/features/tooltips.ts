@@ -8,7 +8,7 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { ElementDescription, Entry, TooltipColumn } from '../../model/index.js';
+import type { ElementDescription, Entry, Instant, TooltipColumn } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
 export interface TooltipsOptions {
@@ -27,8 +27,14 @@ function defaultContent(
   locale: Intl.LocalesArgument | undefined,
   columns: readonly TooltipColumn[],
 ): ElementDescription {
-  const start = formatDate(timeZone, entry.start, locale);
-  const end = formatEndInclusive(timeZone, entry, locale);
+  // Load-bearing cast (ADR 0012): a tooltip belongs to a bar. A non-spanning Entry draws none
+  // (see `openFor`'s own comment below), so `entry.start`/`.end` are always present here.
+  const start = formatDate(timeZone, entry.start as Instant, locale);
+  const end = formatEndInclusive(
+    timeZone,
+    { start: entry.start as Instant, end: entry.end as Instant },
+    locale,
+  );
   const dates = start === end ? start : `${start} – ${end}`;
   return {
     class: { 'fg-tooltip': true },

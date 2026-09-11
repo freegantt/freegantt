@@ -73,15 +73,17 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         return;
       case 'update-start': {
         const current = state.entries.get(op.id);
+        // Load-bearing non-null assertion (ADR 0012): every 'add' op above authors both dates,
+        // so an entry this generator can still find always spans.
         if (current === undefined) return;
-        if (op.start >= current.end) return;
+        if (op.start >= current.end!) return;
         state.entries.update(op.id, { start: op.start });
         return;
       }
       case 'update-end': {
         const current = state.entries.get(op.id);
         if (current === undefined) return;
-        if (op.end <= current.start) return;
+        if (op.end <= current.start!) return;
         state.entries.update(op.id, { end: op.end });
         return;
       }
@@ -92,8 +94,8 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         const current = state.entries.get(op.id);
         if (current === undefined) return;
         state.entries.update(op.id, {
-          start: addMs(current.start, op.deltaMs),
-          end: addMs(current.end, op.deltaMs),
+          start: addMs(current.start!, op.deltaMs),
+          end: addMs(current.end!, op.deltaMs),
         });
         return;
       }

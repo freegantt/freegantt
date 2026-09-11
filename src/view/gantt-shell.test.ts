@@ -334,8 +334,13 @@ describe('scroll (D9, #9)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 10 * DEFAULT_ROW_HEIGHT }); // 10 rows
       shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
+      // The default `gridColumns` now also paints `start`/`end` (ADR 0012), so the name cell alone
+      // — not the whole row's textContent — is what still names one Entry unambiguously.
       const labelsAt = (): string[] =>
-        Array.from(container.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
+        Array.from(
+          container.querySelectorAll('.fg-row'),
+          (row) => row.querySelector('[data-field="name"]')?.textContent?.trim() ?? '',
+        );
 
       expect(labelsAt()).toContain('Entry 0');
       expect(labelsAt()).not.toContain('Entry 40');

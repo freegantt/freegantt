@@ -31,8 +31,6 @@ function createContext(): EntryReadContext {
   return {
     timeZone: 'UTC',
     dateOnlyEnd: 'inclusive' as const,
-    referenceDate: instant('2026-01-01T00:00:00Z'),
-    rollUpKinds: new Set(['group']),
     mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
   };
 }
@@ -348,7 +346,7 @@ describe('reconcileExtenderEdits reads the effective, not the stale, entry (find
     const effective = buildEffectiveEntries(committed, [], [], new Map([[single!.id, bodyEdit]]));
     const [effectiveEntry] = effective.values();
 
-    const extenderEdits = new Map([[single!.id, { start: addMs(effectiveEntry!.start, 5) }]]);
+    const extenderEdits = new Map([[single!.id, { start: addMs(effectiveEntry!.start!, 5) }]]);
 
     expect(() => reconcileExtenderEdits(effective, extenderEdits)).toThrow(SegmentsOutOfSyncError);
   });
@@ -715,16 +713,16 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
     expect(fromCascade.message).not.toContain('entries.update');
   });
 
-  // D-S5-46, and it is load-bearing: a rollUpKinds entry with no dates gets a zero-length span until
-  // the Rollup runs, and `gesture-draft.ts`'s resize clamp produces one as its way of refusing an
-  // inversion. Tidying `<` into `<=` in `reconcileEnvelope` breaks both at once.
+  // D-S5-46, and it is load-bearing: `gesture-draft.ts`'s resize clamp produces a zero-length span
+  // as its own way of refusing an inversion (ADR 0012 does not touch this rule). Tidying `<` into
+  // `<=` in `reconcileEnvelope` breaks that clamp.
   it('leaves a zero-length span legal', () => {
     const context = createContext();
     const [entry] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
     );
-    const zeroLength = instant(entry!.start);
+    const zeroLength = instant(entry!.start!);
 
     const stored = toStoredEdit({ end: zeroLength }, context, entry!, registry, 'entries.update');
     expect(stored.start).toBe(stored.end);

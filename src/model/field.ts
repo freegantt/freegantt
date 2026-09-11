@@ -186,7 +186,9 @@ export type FieldLookup = {
 export interface FieldContext {
   readonly timeZone: string;
   read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
-  durationOf(entry: Entry): Duration;
+  /** `undefined` iff `entry` does not span (ADR 0012) — an Entry with no `start`/`end` has no
+   *  duration to state. */
+  durationOf(entry: Entry): Duration | undefined;
 }
 
 /** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13). */

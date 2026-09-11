@@ -14,10 +14,10 @@ function entry(id: string, meta?: unknown): Entry {
   const item: Entry = {
     id: entryId(id),
     name: id,
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
+    start: 0 as Instant,
+    end: 1 as Instant,
     kind: 'span',
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
   };
   if (meta !== undefined) item.meta = meta;
   return item;

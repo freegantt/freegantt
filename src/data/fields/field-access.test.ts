@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
-import type { Entry, StoredEdit } from '../../model/index.js';
+import type { Entry, Instant, StoredEdit } from '../../model/index.js';
 import {
   createFieldContext,
   createRollUpContext,
@@ -21,9 +21,9 @@ const span = (meta?: unknown): Entry => {
     id: entryId('t1'),
     name: 't1',
     kind: 'span',
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
-    segments: [{ id: segmentId('t1-seg'), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+    start: 0 as Instant,
+    end: 1 as Instant,
+    segments: [{ id: segmentId('t1-seg'), start: 0 as Instant, end: 1 as Instant }],
   };
   if (meta !== undefined) entry.meta = meta;
   return entry;
@@ -72,9 +72,14 @@ describe('readField / writeField (D-S4-2)', () => {
     expect('meta' in writeOntoEntry(entry, cost, undefined)).toBe(false);
   });
 
-  it('reads a compute Field through durationOf', () => {
+  it('reads a compute Field through the guarded durationOf', () => {
     const entry = span();
     expect(readField(entry, duration, fieldCtx)).toEqual({ value: 1, unit: 'millisecond' });
+  });
+
+  it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
+    const dateless: Entry = { id: entryId('t2'), name: 't2', kind: 'span', segments: [] };
+    expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 
   it('writeOntoEntry writes cost onto parent', () => {

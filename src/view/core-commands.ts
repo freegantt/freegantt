@@ -120,21 +120,35 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.selectPreviousSegment(),
   });
-  // #212, ADR 0010: the right-click menu and the `Delete` key run this one command. Both read
-  // `ctx.target.segmentIds` and call `removeSegments` — a grid-row Delete needs no special case,
-  // because removing an Entry's last Segment already removes the Entry, in the same transaction.
+  // #212, ADR 0010, ADR 0012: the right-click menu and the `Delete` key run this one command. A
+  // `'bar'` target names the one Segment the user picked, so it reads `segmentIds` and calls
+  // `removeSegments` — removing an Entry's last Segment now keeps the Entry dateless (ADR 0012), so
+  // this alone never deletes a row. Every other target (a grid row or cell) names the whole record,
+  // so it reads `entryIds` and calls `remove` — the row's own delete, not a bar's.
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
   register({
     id: 'freegantt.deleteSelection',
     label: 'Delete',
-    when: (ctx) => (asCtx(ctx).target?.segmentIds?.length ?? 0) > 0,
+    when: (ctx) => {
+      const target = asCtx(ctx).target;
+      if (target === undefined) return false;
+      return target.kind === 'bar'
+        ? (target.segmentIds?.length ?? 0) > 0
+        : (target.entryIds?.length ?? 0) > 0;
+    },
     run: (ctx) => {
-      const segmentIds = asCtx(ctx).target?.segmentIds;
-      if (segmentIds === undefined || segmentIds.length === 0) return;
+      const target = asCtx(ctx).target;
+      if (target === undefined) return;
       try {
-        asCtx(ctx).dataset?.entries.removeSegments(segmentIds);
+        if (target.kind === 'bar') {
+          const segmentIds = target.segmentIds;
+          if (segmentIds === undefined || segmentIds.length === 0) return;
+          asCtx(ctx).dataset?.entries.removeSegments(segmentIds);
+        } else {
+          for (const id of target.entryIds ?? []) asCtx(ctx).dataset?.entries.remove(id);
+        }
       } catch (error) {
         if (!(error instanceof MutationCancelledError)) throw error;
       }

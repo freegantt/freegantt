@@ -14,6 +14,7 @@ import type {
   EntryKind,
   FieldContext,
   FieldUpdated,
+  SegmentId,
   StoredEdit,
   StoreRowUpdated,
 } from '../model/index.js';
@@ -64,6 +65,10 @@ export interface CommitChangeSetInput {
   readonly fieldContext: FieldContext;
   readonly rollUpKinds: ReadonlySet<EntryKind>;
   nextChangeSetId(): ChangeSetId;
+  /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
+   *  spanning for the first time always mints a real `SegmentId` here, because this path always
+   *  reaches the store. `entry-reader.ts`'s `reconcileExtenderEdits` is the one caller. */
+  mintSegmentId(): SegmentId;
 }
 
 export function diffEdits(
@@ -250,7 +255,9 @@ export function buildCommitChangeSet(
     proposed,
     entryAfterEdits: (id) => effectiveForExtender.get(id),
   });
-  const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored);
+  const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored, () =>
+    data.mintSegmentId(),
+  );
   guardExtensionHookDoesNotOverwriteBody(
     proposed,
     bodyAuthoredEnvelopeKeys,
