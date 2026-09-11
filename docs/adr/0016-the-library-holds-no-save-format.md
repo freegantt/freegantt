@@ -1,5 +1,5 @@
 ---
-status: proposed — a draft, not a decision. Opened 2026-09-10, in the field redesign.
+status: accepted — built and verified 2026-09-10, in the field redesign. Verdict: [BUILD-SPEC.md §1](../../plans/field-redesign/BUILD-SPEC.md#1--verification-report).
 decided: the library holds no save format; `toJSON`, `fromJSON`, the Document types, the `schema` integer and `data/serialization/` are deleted; persistence is the consumer's job, through read surfaces that already ship; a plugin publishes its own reader and gets no serialization hook.
 open: none. One question opened and closed on 2026-09-10 — `props` stands, on the two reasons that never mentioned serialization.
 ---
