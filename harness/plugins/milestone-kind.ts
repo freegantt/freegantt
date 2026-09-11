@@ -17,9 +17,9 @@ export function milestoneKind(ownedIds: Iterable<string>): GanttPlugin {
   return {
     id: 'demo.milestoneKind',
     setup(ctx) {
-      ctx.layout.registerItemProducer(MILESTONE_KIND, (entry) =>
-        owned.has(entry.id) ? [wholeEntryItem(entry, MILESTONE_KIND)] : [],
-      );
+      // Which entries are mine, and what shape do they draw? The two halves of one look (Q10).
+      ctx.layout.registerLookClaim(MILESTONE_KIND, (entry) => owned.has(entry.id));
+      ctx.layout.registerItemProducer(MILESTONE_KIND, (entry) => [wholeEntryItem(entry, MILESTONE_KIND)]);
       // No disposer: `ctx.disposables` already retracts the registration (review P4).
     },
   };

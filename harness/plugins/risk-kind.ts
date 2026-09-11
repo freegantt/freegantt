@@ -8,7 +8,7 @@ import type { EntryEdit, EntryId, GanttPlugin } from 'freegantt';
 
 const RISK_KIND = 'risk';
 
-/** A consumer-defined `'risk'` look, over the same four seams D-S5-22 names — and the proof that a
+/** A consumer-defined `'risk'` look, over the same seams D-S5-22 names — and the proof that a
  *  second look-defining plugin is an ordinary install, not a collision. ADR 0013: this plugin, like
  *  `bufferKind()`, stores which ids it owns itself — see that file's own comment. */
 export function riskKind(ownedIds: Iterable<string>): GanttPlugin {
@@ -16,11 +16,12 @@ export function riskKind(ownedIds: Iterable<string>): GanttPlugin {
   return {
     id: 'demo.riskKind',
     setup(ctx) {
+      // Which entries are mine? The ids this plugin owns (Q10).
+      ctx.layout.registerLookClaim(RISK_KIND, (entry) => owned.has(entry.id));
+
       // What shape does it draw? One Item over the whole entry. `wholeEntryItem` is the library's
       // own, so this plugin never restates the Item id convention (review P3).
-      ctx.layout.registerItemProducer(RISK_KIND, (entry) =>
-        owned.has(entry.id) ? [wholeEntryItem(entry, RISK_KIND)] : [],
-      );
+      ctx.layout.registerItemProducer(RISK_KIND, (entry) => [wholeEntryItem(entry, RISK_KIND)]);
 
       // How does it look? Its own class, through the ordinary bar renderer seam. `bufferKind()`
       // registers on the same point for its own look, and both registrations stand (review P2).
