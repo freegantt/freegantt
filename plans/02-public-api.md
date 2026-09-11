@@ -737,7 +737,7 @@ Every read above already ships. An application maps these into its own shape and
 
 - **Changesets are the incremental counterpart**: `dataset.on('change')` carries `{from, to}` per field, which is what discharges this document's promise that a sync adapter be *"an extension, not a core change"*. `dataset.apply(changeSet)` is what such an extension writes; it is not in S2 (D-S2-11).
 - **View state is not data.** Column widths, collapsed rows and scroll position were never part of the format. Whether the library helps save them is a separate question, and ADR 0016 does not answer it.
-- **`D7` in `plans/00` still names a versioned `toJSON`/`fromJSON`.** That row is owed an edit. Its headline — persistence is consumer-owned — is what ADR 0016 makes truer; only the mechanism sentence is superseded.
+- **A plugin's rows come out through `dataset.pluginStore(id)`**, or through its no-argument form for every store this Dataset holds. A Dataset carries no rows for a plugin it does not install: passenger data went with the format it existed to protect (ADR 0016, D-S5-24).
 ---
 
 ## 7. Developer experience commitments

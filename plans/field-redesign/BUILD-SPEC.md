@@ -541,7 +541,7 @@ The spec calls all three harness sites "textarea dumps". `data.ts` is not one: `
 
 `Dataset` holds `#state`, `#time` and `#plugins`, and a `#` field is not an own enumerable property. **So after this build `JSON.stringify(dataset)` returns `{}`.** No error, no warning, an empty object.
 
-Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites call `dataset.toJSON()` by name. **The build decides whether an app author is owed a dev-mode warning**, or whether `{}` is the honest answer for an object that holds no format.
+Nothing in `src/`, `harness/` or `e2e/` relies on it — all three harness sites call `dataset.toJSON()` by name. **Ruled 2026-09-10: no warning, and `{}` is the honest answer.** A warning needs a `toJSON` to live in, and a `toJSON` that exists only to complain is the surface this ADR deletes, wearing a different hat. A `Dataset` is a live object with a History and subscribers; it was never a value to stringify. **`plans/02` §7's dev-mode warning list gains no row.**
 
 #### B10 — what stays, and must be proved to stay
 
@@ -1220,9 +1220,9 @@ Do all five, in this order, for the build you just finished.
 | `CONTEXT.md` — the **Document** glossary entry now names the browser's `document` and nothing else, with an `_Avoid_` line citing #266 — **LANDED `4e0dc3d`** | author | Build 0016 |
 | `plans/02` default `gridColumns` was `['name']` (`:480`). ADR 0012 rules `['name', 'start', 'end']` — **V18. LANDED `5f21f2d`** | author | Build 0012 |
 | `plans/02` said a date path was owed. The grid is the date path — **LANDED `5f21f2d`** | author | Build 0012 |
-| **`.dependency-cruiser.cjs`** — delete the `serialization-is-removable` rule (`:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`). **This is the one item the hook really blocks**: `protect-spec.sh:81-89` exits 2 on that file, where a `plans/` edit only warns. **It cannot land early.** The rule guards a folder that still ships, so deleting it before the folder weakens a live guard for no gain. It goes in the same commit as the folder | **author** | Build 0016 |
-| **`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`** — D-S5-24's passenger-data posture and D-S5-30's *"not a store anyone may read"* are retired by the 2026-09-10 passenger ruling. Mark them, keep the text | **author** | Build 0016 |
-| **`plans/00` D7** — the locked decision row still reads *"Versioned `toJSON`/`fromJSON` + well-defined changeset events"*. ADR 0016 deletes the first half and leaves the second. Its headline, *Consumer-owned via changesets*, is what ADR 0016 makes truer. **Found 2026-09-10 during the §5.7 edits. ADR 0016's own consequence list never named it. A D1–D12 row is a higher bar than prose, so it waits for its own ruling** | **author** | Build 0016 |
+| **`.dependency-cruiser.cjs`** — **AUTHORIZED 2026-09-10, and it still lands with the folder.** Delete the `serialization-is-removable` rule (`:155-161`) and its red test (`scripts/guard-red-test.mjs:80-82`). **This is the one item the hook really blocks**: `protect-spec.sh:81-89` exits 2 on that file, where a `plans/` edit only warns. **It cannot land early.** The rule guards a folder that still ships, so deleting it before the folder weakens a live guard for no gain. It goes in the same commit as the folder | **author** | Build 0016 |
+| `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md:73` — D-S5-24's passenger-data bullet marked retired, the rest of D-S5-24 kept — **LANDED**. **D-S5-30's *"not a store anyone may read"* lives in `plugin-store.ts:73`, not in the spec, so it is the build's comment to rewrite** | author | Build 0016 |
+| `plans/00` **D7** — the row now reads *the library holds no save format*, and records what it said before. Its headline, *persistence is consumer-owned*, never moved — **LANDED** | author | Build 0016 |
 | `CONTEXT.md` owes an `entry.props` glossary entry, and owes the deletion of the **Field source** entry | **author** | Build 0011 |
 | `CONTEXT.md` owes `_Avoid_`: **phase**, **grouped entry** | **author** | Build 0013 |
 | `CONTEXT.md` owes an Entry **spans** entry | **author** | Build 0012 |

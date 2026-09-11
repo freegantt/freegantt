@@ -585,10 +585,13 @@ Every `register*` that declares a Field (`ctx.fields.register`) or a Grid column
 (`ctx.view.registerGridColumn`) records the calling plugin's id. **Authored** is the consumer's half
 of that answer, and it is what the consumer's own surfaces report: `gantt.gridColumns` and both halves
 of a `gridColumnsChange` payload carry the columns the consumer wrote, before and after a resize or a
-reorder; `FieldRegistry.authored` answers the same question for Fields. A plugin's declaration is
-code, and the plugin makes it again on its next install, so a consumer never saves one. A
-`PluginStore`'s rows go the other way on purpose: they are data the plugin cannot rebuild, so the
-Dataset keeps them under their owner's id as passenger data (D-S5-24). Data outlives its plugin; a declaration does not.
+reorder. **For a Field the answer is recorded and not published**: its one reader was
+`FieldRegistry.authored`, which told a Document which Fields to write, and ADR 0016 removed it. A
+plugin's declaration is code, and the plugin makes it again on its next install, so a consumer never
+saves one. A `PluginStore`'s rows go the other way on purpose: they are data the plugin cannot
+rebuild, so the Dataset keeps them under their owner's id for as long as it lives (D-S5-24), and an
+application reads them out with `dataset.pluginStore(id)`. Data outlives its plugin; a declaration
+does not.
 _Avoid_: Owner (a `PluginStore` has an owner, which is who may _write_ it; a declarer is who _made_
 one declaration), provenance as a public word (it names the rule, not an API member)
 

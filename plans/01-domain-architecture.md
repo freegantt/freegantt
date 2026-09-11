@@ -829,7 +829,7 @@ runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ct
 retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
 owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
 "a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
-keeps them under the plugin's own id as passenger data (D-S5-24), and `store.read` lets a later
+keeps them under the plugin's own id for as long as it lives (D-S5-24), and `store.read` lets a later
 plugin — the setup order `requires` fixes — read an earlier plugin's rows.
 
 `ctx.view.dom` is the whole plugin-to-DOM contract (review N1/A3):

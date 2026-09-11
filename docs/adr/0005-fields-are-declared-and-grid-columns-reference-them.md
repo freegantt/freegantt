@@ -1,4 +1,6 @@
-> **Superseded by [ADR 0011](0011-consumer-values-live-in-props.md) if accepted.** ADRs 0011–0015 are `proposed`, and no line of them is in `src/`, so this body is still what the code does. Do not rewrite it. When 0011 is accepted, drop the *if accepted* and this ADR's Field rules are history.
+> **Superseded by [ADR 0011](0011-consumer-values-live-in-props.md) if accepted.** ADRs 0011–0016 are `proposed`, and no line of them is in `src/`, so this body is still what the code does. Do not rewrite it. When 0011 is accepted, drop the *if accepted* and this ADR's Field rules are history.
+>
+> **One argument in this body is already void.** This ADR rejected flat consumer keys partly because *"the one thing a grid does not do: we serialize"*. [ADR 0016](0016-the-library-holds-no-save-format.md) deletes the save format, so that charge no longer stands. The rejection survives on its other reasons — see ADR 0016's *The one question this raised*. **The body stays as written**, because an ADR records the reasoning of its day.
 
 # Fields are declared, and grid columns reference them
 
