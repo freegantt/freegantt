@@ -16,7 +16,6 @@ function entry(id: string, props?: Record<string, unknown>): Entry {
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
     props: props ?? {},
   };
@@ -82,13 +81,13 @@ describe('diffEdit', () => {
     const rows = diffEdit(
       entries(t1),
       t1.id,
-      edit({ name: 'Framing', kind: 'milestone' }),
+      edit({ name: 'Framing', parentId: entryId('root') }),
       registry,
       fieldCtx,
     );
     expect(rows).toEqual([
       { store: 'entries', id: t1.id, field: 'name', from: 't1', to: 'Framing' },
-      { store: 'entries', id: t1.id, field: 'kind', from: 'span', to: 'milestone' },
+      { store: 'entries', id: t1.id, field: 'parentId', from: undefined, to: entryId('root') },
     ]);
   });
 

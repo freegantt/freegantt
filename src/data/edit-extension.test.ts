@@ -14,7 +14,6 @@ function entry(id: string): Entry {
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
     props: {},
   };
@@ -150,9 +149,9 @@ describe('composing two extenders that write one Entry (#197)', () => {
 // back to the raw keys only when `proposedKeys` is absent. The third merge then carried `[]` as the
 // base's stated keys, `diffEdit` took its authored branch, and only the last plugin got a row.
 //
-// The fixture writes `name`, `kind` and `parentId` — non-date Fields on purpose. Date Fields
-// (`start`/`end`) on one Entry hit the envelope-companion collision in `toProposedEdit` (#232), which is a
-// different defect.
+// The fixture writes `name`, `tag` (a consumer prop) and `parentId` — non-date Fields on purpose.
+// Date Fields (`start`/`end`) on one Entry hit the envelope-companion collision in `toProposedEdit`
+// (#232), which is a different defect.
 describe('composing three extenders that write one Entry (#238)', () => {
   const target = entryId('t2');
 
@@ -168,9 +167,10 @@ describe('composing three extenders that write one Entry (#238)', () => {
         { id: 't2', name: 't2', start: 0, end: 10 },
       ],
       timeZone: 'UTC',
+      fields: [{ key: 'tag' }],
     });
     state.setExtender(writes({ name: 'A' }));
-    state.setExtender(writes({ kind: 'milestone' }));
+    state.setExtender(writes({ tag: 'milestone' }));
     state.setExtender(writes({ parentId: entryId('t1') }));
     return state;
   }
@@ -185,7 +185,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
 
     const committed = state.entries.get(target);
     expect(committed?.name).toBe('A');
-    expect(committed?.kind).toBe('milestone');
+    expect((committed?.props as { tag?: string } | undefined)?.tag).toBe('milestone');
     expect(committed?.parentId).toBe(entryId('t1'));
   });
 
@@ -206,6 +206,6 @@ describe('composing three extenders that write one Entry (#238)', () => {
       .filter((row) => row.id === target)
       .map((row) => row.field)
       .sort();
-    expect(onTarget).toEqual(['kind', 'name', 'parentId']);
+    expect(onTarget).toEqual(['name', 'parentId', 'tag']);
   });
 });
