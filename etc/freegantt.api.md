@@ -263,7 +263,6 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     get fields(): {
         readonly all: readonly Field[];
     };
-    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>): Dataset<TMeta, TFields>;
     get hierarchy(): DatasetHierarchy;
     set hierarchy(value: DatasetHierarchy);
     isRollUpKind(kind: EntryKind): boolean;
@@ -272,6 +271,9 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     get plugins(): readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
+    pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
+    // (undocumented)
+    pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
     redo(): void;
     replay(changeSet: ChangeSet): void;
     // (undocumented)
@@ -280,25 +282,8 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     get time(): ZonedTime;
     // (undocumented)
     get timeZone(): string;
-    toJSON(): DatasetDocument<TMeta>;
     transaction<T>(body: () => T): T;
     undo(): void;
-}
-
-// @public
-export interface DatasetDocument<TMeta = unknown> {
-    // (undocumented)
-    dateOnlyEnd: DateOnlyEndRule;
-    // (undocumented)
-    entries: readonly EntryDocument<TMeta>[];
-    fields?: readonly SerializedField[];
-    plugins?: PluginDocument;
-    // (undocumented)
-    rollUpKinds: readonly EntryKind[];
-    // (undocumented)
-    schema: 1 | 2 | 3 | 4;
-    // (undocumented)
-    timeZone: string;
 }
 
 // @public
@@ -631,27 +616,6 @@ export interface Entry<TMeta = unknown> {
     segments: readonly Segment[];
     // (undocumented)
     start: Instant;
-}
-
-// @public
-export interface EntryDocument<TMeta = unknown> {
-    // (undocumented)
-    end: string;
-    // (undocumented)
-    id: string;
-    kind?: EntryKind;
-    meta?: TMeta;
-    // (undocumented)
-    name: string;
-    // (undocumented)
-    parentId?: string;
-    segments?: readonly {
-        id: string;
-        start: string;
-        end: string;
-    }[];
-    // (undocumented)
-    start: string;
 }
 
 // @public
@@ -1595,9 +1559,6 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
 }
 
 // @public
-export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
-
-// @public
 export type PluginErrorReport = Omit<ErrorReportInput, 'by'>;
 
 // @public
@@ -1929,22 +1890,6 @@ export interface SelectionChange {
     readonly to: readonly SegmentId[];
 }
 
-// @public
-export type SerializedField = {
-    key: FieldKey;
-    type?: FieldTypeName;
-    source: {
-        from: 'entry';
-        field: CoreFieldKey;
-    } | {
-        from: 'meta';
-        key: string;
-    };
-    rollUp?: AggregatorName;
-    editable?: boolean;
-    column?: Omit<GridColumnBase, 'field' | 'hidden' | 'cellRenderer'> & GridColumnSizing;
-};
-
 // @public (undocumented)
 export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
@@ -2149,15 +2094,6 @@ export class UnreadableCellValueError extends FreeGanttError {
     // (undocumented)
     readonly field: FieldKey;
     readonly text: string | undefined;
-}
-
-// @public
-export class UnsupportedSchemaError extends FreeGanttError {
-    constructor(schema: number, supported: readonly number[]);
-    // (undocumented)
-    readonly schema: number;
-    // (undocumented)
-    readonly supported: readonly number[];
 }
 
 // @public
