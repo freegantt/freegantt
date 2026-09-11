@@ -1581,3 +1581,29 @@ sufficient for this button. That determination is still owed.
 (silently carried, read by nothing) rather than a compile error, because it is assigned through a
 variable reference rather than a literal, so TS's excess-property check never sees it. Confirmed
 `harness/` is still 0 tsc errors as measured. Flagging since Task 2 touches this exact file next.
+
+### J30 `EntryLook` moved to `model/`: a public signature needs a nameable type
+
+**Made alone, 2026-09-11, commit `86c5e14`. Coordinator, while accepting the ADR 0013 api-report.**
+
+`api-extractor` reported `EntryLook` as a forgotten export. It was declared in
+`layout/items/produce-items.ts` and reached six public signatures: `Item.look`, `wholeEntryItem`,
+`registerItemProducer`, `registerLookDefaults`, and two `Item` shapes. `plans/01` §1 says only `api/`
+and `model/` types are public, so this was a boundary break and a usability break at once — a
+consumer could receive the value and had no name to declare it with.
+
+The judgement: this is not a new decision, it is a restoration. `EntryKind`, the type `EntryLook`
+replaced, lived in `src/model/entry.ts` and was public. The redesign moved the concept without
+moving its home. So `EntryLook` goes back to `model/entry.ts`, and `layout/` re-exports it for the
+importers that already name it. `model/` is types only with zero dependencies, and a bare string
+union adds neither.
+
+**Why this was not left for the author.** It restores a property the surface already had, rather than
+choosing a new one. The alternative — accept the report with the warning in it — would have written a
+known public-surface defect into `etc/freegantt.api.md` under the appearance of review, which is the
+one thing that file exists to prevent.
+
+**Not fixed here, and still owed:** `FieldWriteRefusalReason` and `FieldWriteVerdict` are forgotten
+exports too. They are pre-existing, they are F1's subject in the cherry-pick worksheet, and F1 is
+blocked on Q5 (the `model/` carve-out). `EntryEnvelope` and `RemovableEntryKey` are the other two,
+both pre-existing and deliberate.
