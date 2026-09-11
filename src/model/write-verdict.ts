@@ -1,6 +1,6 @@
 // model/ — the public verdict pair a plugin author reads off `ctx.interaction.canWrite`
 // (`view/capability.ts`). `data/write-rule.ts` computes it (ADR 0011's write resolver); `view/`
-// republishes it under these names. Hosting the pair here, not in `data/`, is what keeps both of
+// republishes it under these names. Declaring the pair here, not in `data/`, is what keeps both of
 // those files' public exports actually reachable — "only `api/` and `model/` types are public".
 
 import type { BuiltInErrorCode } from './error-report.js';
