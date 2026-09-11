@@ -269,7 +269,7 @@ interface Field<TValue = unknown> {
   type?: FieldTypeName;                             // a bundle; the field's own keys win over it
   compute?(entry: Entry, ctx: FieldContext): TValue | undefined;  // no stored home when present
   rollUp?: AggregatorName;                          // 'min' | 'max' | 'sum' | 'count' | 'none' | yours
-  /** How far a value may change. Stored as the enum. `true`/`false` are input aliases for `'anywhere'`/`'never'`. Default `'api'`. */
+  /** How far a value may change. Stored as the enum. `true`/`false` are input aliases for `'anywhere'`/`'never'`. Default `'anywhere'`. */
   editable?: 'never' | 'api' | 'anywhere' | boolean;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value

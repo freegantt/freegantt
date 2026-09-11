@@ -42,7 +42,7 @@ The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It
 
 **18.** One key, three named states. Absent is `'anywhere'` (grill 2026-09-10; was `'api'`). Copying the view rule lost. A three-way boolean lost. Do not special-case “has `column`”.
 
-**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, and replay still write. `update()` and the grid refuse change. Un-date is a change. The lock serializes as `"never"`. `beforeChange` does not replace this.
+**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, and replay still write. `update()` and the grid refuse change. Un-date is a change. **Do not serialize the lock.** `fields.all` already reads the merge. `beforeChange` does not replace this.
 
 **23.** `{ key: 'start', editable: false }` constructs. `{ key: 'start' }` is a no-op. `{ key: 'start', column }` throws.
 

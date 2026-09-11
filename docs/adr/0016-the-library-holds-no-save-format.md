@@ -6,7 +6,7 @@ open: none. One question opened and closed on 2026-09-10 — `props` stands, on 
 
 # The library holds no save format
 
-**This ADR deletes a public surface, and it makes the four ADRs after it smaller.** ADRs 0012, 0011, 0013, 0014 and 0015 each spend a schema number today. None of them spends one after this lands.
+**This ADR deletes a public surface, and it makes the five ADRs after it smaller.** ADRs 0012, 0011, 0013, 0014 and 0015 each spend a schema number today. None of them spends one after this lands.
 
 ## Context
 
@@ -83,7 +83,7 @@ Two survive, and neither mentions serialization:
 
 **This is stated and not buried, because it is the one place this ADR touches a closed decision.** The author ruled it the day the ADR opened.
 
-**Build 0011 owes [ADR 0011](0011-consumer-values-live-in-props.md) one correction.** Its *Considered options* row for flat consumer properties lists four charges, and two are void from this ADR onward. A later reader who counts four and finds two dead cannot tell whether the decision survived. The row names the two that carry it.
+**ADR 0011's rejection row already names the two charges that carry it.** A later reader who opens that row sees the voided Document charges struck, and the two that remain.
 
 ## Consequences
 

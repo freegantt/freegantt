@@ -16,7 +16,7 @@ Decision 16 closed against the branded `ProposedEdit` (0011 decision 22). Decisi
 
 [0011](../0011-consumer-values-in-props/README.md) ships HEAD's posture under a new name, and **this ADR widens it additively** to `Readonly<Partial<TProps & PluginEntryProps>>`, with plugin keys prefixed. Additive, so the rename does not wait ([the pairwise check](../README.md#where-the-decisions-could-walk-over-each-other-and-why-they-do-not)).
 
-**Deciding late costs no file rewrite.** HEAD holds plugin values as bare keys. This ADR prefixes plugin-**declared** keys at runtime — not 0011's 184-occurrence `StoredEdit` rename. [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted the Document, so there is no schema 8. The prefix still lands because two writers share one bag.
+**Deciding late costs no file rewrite.** HEAD holds plugin values as bare keys. This ADR prefixes plugin-**declared** keys at runtime — not 0011's 267-occurrence `StoredEdit` rename (BUILD-SPEC V3). [ADR 0016](../../../docs/adr/0016-the-library-holds-no-save-format.md) deleted the Document, so there is no schema 8. The prefix still lands because two writers share one bag.
 
 ## 9 and 12 closed together
 
@@ -168,7 +168,7 @@ Its own recommendation was *"measure before deciding"*, which is work, not a rul
 ## The build — `read`, and duration is a compute Field
 
 - Rename `entries.fieldValue` → `entries.read` with **serena**. Same signature, same `FieldValue<TProps, K>` return. `UnknownFieldError` still names the door.
-- Delete `FieldContext.durationOf`. Test stubs that build a context by hand drop that key (`field-access.test.ts`, `field-types.test.ts`, `layout/rows/filter.test.ts`, `layout/rows/sort.test.ts`).
+- Delete `FieldContext.durationOf`. Two stubs drop that key (`field-types.test.ts`, `layout/rows/filter.test.ts`). Rewrite `field-access.test.ts:75` — it is a test **name**, not a stub. Leave `layout/rows/sort.test.ts` alone: its `durationOf` is a local helper (**V6**).
 - The `duration` core Field's compute arm calls the guarded helper in `field-access.ts` (0012's guard, millisecond unit). It does not call `ctx.read(entry, 'duration')`.
 - `weightedMeanByDuration` (`aggregators.ts:14`) reads `ctx.read(entry, 'duration')`. Skip a child whose duration is `undefined`.
 - `inline-editing.ts:108-117`'s `fieldContextFor` stops supplying `durationOf`. Its `read` already forwards to `entries.read`. The whole-day approximation goes with the method. That is [#274](https://github.com/Pawel-IT/FreeGantt/issues/274).

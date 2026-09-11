@@ -1,6 +1,6 @@
 # The prose sweep — one sweep, all five ADRs
 
-**Landed 2026-09-10.** The locked-spec gate returned 0. The F table stays as the changelog.
+**Landed 2026-09-10.** The F table stays as the changelog. The 2026-09-10 grill then overruled the F-table default `'api'` to `'anywhere'`. Do not copy `'api'` from this table into a spec.
 
 **This was group F, and it stays one job.** Splitting it per ADR would run `protect-spec.sh` four times over the same files and leave four half-swept specs between landings. **The sweep runs once, after every open decision in all five ADRs has closed.** Landing 0011–0013 is not enough: 0014 and 0015 still change locked-spec sentences.
 
