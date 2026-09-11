@@ -68,8 +68,8 @@ export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDesc
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 /** Every `GridColumn` key except its sizing. Split out so the sizing pair (`width`/`flex`) can join
- *  it as an exclusive union — here, in `Field.column` below, and in `SerializedField.column`
- *  (`model/document.ts`), each of which drops a different subset of these keys (#249). */
+ *  it as an exclusive union — here, and in `Field.column` below, each of which drops a different
+ *  subset of these keys (#249). */
 export interface GridColumnBase {
   field: FieldKey;
   header?: string;
@@ -97,8 +97,8 @@ export interface GridColumnBase {
  *  named `width` is still rejected — only *omitting* the other key satisfies `?: never`. */
 export type GridColumnSizing = { width?: number; flex?: never } | { width?: never; flex?: number };
 
-/** Presentation only. Never carries an aggregate — `data/` never holds a renderer; `toJSON` never
- *  sees one (D-S5-17). */
+/** Presentation only. Never carries an aggregate — `data/` never holds a renderer, and no reader of
+ *  this Dataset ever sees one (D-S5-17). */
 export type GridColumn = GridColumnBase & GridColumnSizing;
 
 /** What a consumer writes: a Field key, or a column object. */

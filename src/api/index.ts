@@ -82,8 +82,7 @@ export type {
 } from '../model/index.js';
 // The consumer-History write path (`plans/s2-data-core/s2b-undo-replay-seam.md`): `invertChangeSet`
 // turns a recorded changeset into its undo; `Dataset.replay` writes it back. `data/change-set.js` is a
-// submodule of the `data` layer, not the `data` layer boundary itself — `api/` importing it directly
-// matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
+// submodule of the `data` layer, not the `data` layer boundary itself — `api/` may import it directly.
 export { invertChangeSet, fieldRowsOf } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type {
@@ -229,7 +228,6 @@ export {
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,
-  UnsupportedSchemaError,
   DuplicatePluginIdError,
   PluginNotInstalledError,
   MissingPluginError,
@@ -277,7 +275,6 @@ export type {
   TimeSpanInput,
   DateOnlyEndRule,
 } from '../model/index.js';
-export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from '../model/index.js';
 export type {
   RowSource,
   EntriesRowSource,

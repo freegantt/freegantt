@@ -1,14 +1,7 @@
 // data/ — one FieldSource strategy table (A4). Registry, read/write, and the document codec
 // all ask here so `from` is not switched in four places.
 
-import type {
-  Entry,
-  Field,
-  FieldSource,
-  FieldContext,
-  SerializedField,
-  StoredEdit,
-} from '../../model/index.js';
+import type { Entry, Field, FieldSource, FieldContext, StoredEdit } from '../../model/index.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
 
 export interface FieldReadMemo {
@@ -63,7 +56,6 @@ export interface SourceStrategy {
   ): unknown;
   write(edit: StoredEdit, entry: Entry, field: Field & { source: FieldSource }, value: unknown): StoredEdit;
   proposes(edit: StoredEdit, field: Field & { source: FieldSource }): boolean;
-  serialize(source: FieldSource): SerializedField['source'] | undefined;
 }
 
 const entryStrategy = {
@@ -88,10 +80,6 @@ const entryStrategy = {
     const source = field.source;
     if (source.from !== 'entry') return false;
     return edit[source.field] !== undefined;
-  },
-  serialize(source) {
-    if (source.from !== 'entry') return undefined;
-    return { from: 'entry', field: source.field };
   },
 } as const satisfies SourceStrategy;
 
@@ -118,10 +106,6 @@ const metaStrategy = {
   proposes(edit, field) {
     return proposedKeysOf(edit).has(String(field.key));
   },
-  serialize(source) {
-    if (source.from !== 'meta' || source.key === undefined) return undefined;
-    return { from: 'meta', key: source.key };
-  },
 } as const satisfies SourceStrategy;
 
 const computeStrategy = {
@@ -142,9 +126,6 @@ const computeStrategy = {
   },
   proposes() {
     return false;
-  },
-  serialize() {
-    return undefined;
   },
 } as const satisfies SourceStrategy;
 

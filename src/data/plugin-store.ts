@@ -14,7 +14,6 @@
 import type {
   ChangeSet,
   EntryId,
-  PluginDocument,
   PluginId,
   PluginStore,
   PluginStoreName,
@@ -40,21 +39,17 @@ type Rows = Map<EntryId, object>;
 type StagedRows = Map<EntryId, object | undefined>;
 
 export class PluginStores {
-  /** Every plugin's committed rows, the plugins this Dataset never installed included — those are
-   *  passenger data the Document carries through untouched (D-S5-24). */
+  /** Every plugin's committed rows. A row enters one way only: written by a plugin that installed and
+   *  reserved a store (D-S5-24). With no save format left to protect, a Dataset carries no row for a
+   *  plugin it does not install — `#reserved` and `#committed` never disagree. */
   readonly #committed = new Map<PluginStoreName, Rows>();
   /** One handle per reserving plugin, so a second `reserve()` returns the same store (issue #137 F17). */
   readonly #reserved = new Map<PluginStoreName, PluginStore<never>>();
   #writeSet: Map<PluginStoreName, StagedRows> | null = null;
   readonly #runner: TransactionData | undefined;
 
-  constructor(seed?: PluginDocument, runner?: TransactionData) {
+  constructor(runner?: TransactionData) {
     this.#runner = runner;
-    for (const [id, rows] of Object.entries(seed ?? {})) {
-      const stored: Rows = new Map();
-      for (const [entry, row] of Object.entries(rows)) stored.set(entryId(entry), row as object);
-      if (stored.size > 0) this.#committed.set(pluginStoreName(id), stored);
-    }
   }
 
   /** Call: `ctx.store.reserve<LockRow>()`. Idempotent — the same plugin reserving twice gets the same
@@ -69,12 +64,19 @@ export class PluginStores {
   }
 
   /** Call: `ctx.store.read<DependencyRow>('freegantt/dependencies')`. `undefined` when that plugin
-   *  never reserved a store — rows this Dataset only carries for an uninstalled plugin are not a
-   *  store anyone may read, they are passenger data (D-S5-30). */
+   *  never reserved a store. */
   read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined {
     const name = pluginStoreName(pluginId);
     if (!this.#reserved.has(name)) return undefined;
     return this.#buildView<T>(name);
+  }
+
+  /** Call: `dataset.pluginStore()`'s no-argument form. Every store an installed plugin has reserved,
+   *  keyed by plugin id — the record `Object.entries` walks to save every plugin's rows in one loop. */
+  readAll(): Readonly<Record<PluginId, PluginStoreView<object>>> {
+    const stores: Record<PluginId, PluginStoreView<object>> = {};
+    for (const name of this.#reserved.keys()) stores[pluginIdOf(name)] = this.#buildView(name);
+    return stores;
   }
 
   // `all` is a getter on both handles below, so it must read the live rows at each call rather than
@@ -212,19 +214,5 @@ export class PluginStores {
     const rows = this.#committed.get(row.store) ?? new Map<EntryId, object>();
     rows.set(row.id, row.to as object);
     this.#committed.set(row.store, rows);
-  }
-
-  /** Call: `toJSON`'s `plugins` key. Every plugin's rows, the ones no installed plugin owns included
-   *  (D-S5-24's passenger-data posture). `undefined` when no plugin holds a row, so a Dataset with no
-   *  plugin data writes no `plugins` key at all. */
-  toDocument(): PluginDocument | undefined {
-    const document: Record<string, Record<string, unknown>> = {};
-    for (const [name, rows] of this.#committed) {
-      if (rows.size === 0) continue;
-      const encoded: Record<string, unknown> = {};
-      for (const [id, row] of rows) encoded[id] = row;
-      document[pluginIdOf(name)] = encoded;
-    }
-    return Object.keys(document).length === 0 ? undefined : document;
   }
 }

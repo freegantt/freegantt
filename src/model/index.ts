@@ -33,7 +33,6 @@ export type { ElementDescription } from './render.js';
 export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
 export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
-export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from './document.js';
 export type {
   StoreName,
   PluginStoreName,
@@ -103,7 +102,6 @@ export {
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,
-  UnsupportedSchemaError,
   DuplicatePluginIdError,
   PluginNotInstalledError,
   MissingPluginError,

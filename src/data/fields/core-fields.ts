@@ -123,8 +123,8 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
 ]);
 
-/** Whether `key` names one of the Fields above. `data/` asks twice: the codec never writes a core
- *  Field into a Document, and `FieldRegistry.authored` never reports one as consumer-written. */
+/** Whether `key` names one of the Fields above — a core Field a consumer never overrides its way
+ *  out of (`FieldRegistry`'s override rules ask this before a consumer declaration wins a key). */
 export function isCoreFieldKey(key: FieldKey): boolean {
   return CORE_FIELDS.some((field) => field.key === key);
 }
