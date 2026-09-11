@@ -486,6 +486,41 @@ Gantt events (`entryMove`, `selectionChange`, `collapseChange`, `navigationChang
 `Gantt`. Data events (`change`, `beforeChange`) fire on the `Dataset`. Every mutating interaction has
 a cancelable `before*` pair where veto applies — see `plans/02-public-api.md` §3 for the full table.
 
+### Talking to a server
+
+Two shapes, and they answer different questions.
+
+| You want                                           | Door                                      | What the user sees                                                           |
+| -------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| The server is **told** the move happened           | `entryMove`, or `change` on the `Dataset` | Nothing waits. The bar stays where the user dropped it                       |
+| The server **decides** whether the move is allowed | `beforeEntryMove` returning a `Promise`   | The bar holds at the drop point, dimmed and dotted, until the answer arrives |
+
+Pick the first unless the server can genuinely refuse.
+
+```ts
+import { invertChangeSet } from 'freegantt';
+
+dataset.on('change', ({ changeSet }) => {
+  if (changeSet.origin !== 'user') return; // do not re-post an undo or a rollback
+  void api.save(changeSet).catch(() => {
+    dataset.replay(invertChangeSet(changeSet)); // reverse this one, not the last one
+  });
+});
+```
+
+Nothing blocks the thread either way. `beforeEntryMove`, `beforeEntryResize` and `beforeEntryEdit`
+may return `Promise<void | false>` (D-S3-17). Every other event is sync-only, `beforeChange`
+included: a data commit has nothing to suspend into, so the async door stays where the gestures are.
+
+While such a `Promise` is unsettled, the Gantt arms no new move or resize, and keyboard editing
+refuses with it. Scrolling, selection and column drags keep working. So does every write through
+`dataset.entries.update()` — which is why a stale draft is possible; see below.
+
+Two open defects sit on that door. A handler that never settles holds the gesture forever
+([#272](https://github.com/Pawel-IT/FreeGantt/issues/272)), so race your own timeout for now. A
+commit that lands during the wait leaves the held draft stale
+([#273](https://github.com/Pawel-IT/FreeGantt/issues/273)).
+
 ## Styling and theming
 
 `Gantt` injects its own default stylesheet once per `document` (`<style data-freegantt-styles>`),
