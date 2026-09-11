@@ -1056,7 +1056,7 @@ boundary (`ae4a99a`, `entry-store.mutation.test.ts` just landed).
 `harness/`, `fixtures/` stay at 0 (unchanged this session).
 
 ```
-15 src/data/transaction.test.ts
+7 src/data/transaction.test.ts
  5 src/layout/frame-layout.test.ts
  5 src/data/rollup.test.ts
  5 src/data/rollup.property.test.ts
@@ -1121,7 +1121,8 @@ this is the audit-ready summary the coordinator asked for):**
   `replay(invertChangeSet(...))`, assertion unchanged; **left 3 tests red** rather than weaken them
   (Q2) (J24).
 
-**Next agent's first move:** `src/data/transaction.test.ts` (15 errors, the current largest) is the
+**Next agent's first move:** `src/data/transaction.test.ts` (7 errors — corrected; the snapshot table
+above briefly said 15, a copy error caught immediately after this entry was written) is the
 next file, top-down, same pattern. **Read Q2 before touching `entry-store.ts`, `data/rollup.ts`, or
 `data/write-set.ts` for any reason** — two real conflicts are open there, not yet the author's
 call, and `transaction.test.ts` likely exercises the same write-refusal path Q2's first finding

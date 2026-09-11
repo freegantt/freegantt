@@ -119,7 +119,6 @@ describe('runTransaction', () => {
           name: 't9',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('t9-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
@@ -148,7 +147,6 @@ describe('runTransaction', () => {
           name: 'reborn',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('t1-reborn-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
@@ -221,7 +219,6 @@ describe('runTransaction', () => {
           name: 'child',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('child-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
@@ -718,8 +715,8 @@ describe('runTransaction', () => {
     }));
     const state = new DatasetState({
       entries: [
-        { id: 'root', kind: 'group', name: 'root' },
-        { id: 'other', kind: 'group', name: 'other' },
+        { id: 'root', name: 'root' },
+        { id: 'other', name: 'other' },
         {
           id: 'kept',
           parentId: 'other',
@@ -771,7 +768,6 @@ describe('runTransaction', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     const parent = state.entries.get('p1')!;
-    expect(parent.kind).toBe('group');
     expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
@@ -900,7 +896,6 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
             // reconciliation-target bug this test is about.
             start: toInstant('UTC', '2026-01-01'),
             end: toInstant('UTC', '2026-03-01'),
-            kind: 'span',
             segments: [
               {
                 id: segmentId('sg1'),
