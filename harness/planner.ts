@@ -98,6 +98,11 @@ function startCell({ fieldValue }: ColumnCellRendererContext): ElementDescriptio
  *  inclusive date a reader expects, in the same compact format as Start. */
 function finishCell({ entry, fieldValue }: ColumnCellRendererContext): ElementDescription | undefined {
   if (entry === undefined || fieldValue === undefined) return { text: '' };
+  // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
+  // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
+  if (entry.start === undefined) {
+    return { text: formatDate(dataset.timeZone, fieldValue as Instant, undefined, COMPACT_DATE_FORMAT) };
+  }
   const span = { start: entry.start, end: fieldValue as Instant };
   return { text: formatEndInclusive(dataset.timeZone, span, undefined, COMPACT_DATE_FORMAT) };
 }
@@ -312,7 +317,16 @@ function renderSelection(): void {
     return;
   }
   const zone = dataset.timeZone;
-  const span = `${formatDate(zone, first.start)} → ${formatEndInclusive(zone, first)}`;
+  // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has,
+  // instead of assuming the pair `formatEndInclusive` needs.
+  const span =
+    first.start !== undefined && first.end !== undefined
+      ? `${formatDate(zone, first.start)} → ${formatEndInclusive(zone, { start: first.start, end: first.end })}`
+      : first.start !== undefined
+        ? `${formatDate(zone, first.start)} → —`
+        : first.end !== undefined
+          ? `— → ${formatDate(zone, first.end)}`
+          : 'No dates';
   const done = dataset.entries.fieldValue(first.id, 'progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
