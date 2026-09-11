@@ -130,16 +130,13 @@ describe('new Dataset()', () => {
   it('carries optional fields through, and leaves absent ones absent', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      entries: [oneEntry({ kind: 'milestone', props: { team: 'A' } })],
+      entries: [oneEntry({ props: { team: 'A' } })],
     });
     const entry = first(dataset);
-    expect(entry.kind).toBe('milestone');
     expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
     // `segments` is always present (#212): every Entry stores at least one Segment.
-    expect(Object.keys(entry).sort()).toEqual(
-      ['end', 'id', 'kind', 'props', 'segments', 'start', 'name'].sort(),
-    );
+    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'props', 'segments', 'start', 'name'].sort());
   });
 
   it('does not mutate the entries the consumer handed it', () => {
@@ -219,59 +216,12 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(fired).toBe(false);
   });
 
-  it('entries.childrenOf returns direct children; rollUpKinds defaults to group', () => {
+  it('entries.childrenOf returns direct children', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      entries: [{ id: 'p1', name: 'Sitework', kind: 'group' }, oneEntry({ id: 't1', parentId: 'p1' })],
+      entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1' })],
     });
-    expect(dataset.rollUpKinds).toEqual(['group']);
-    expect(dataset.hierarchy).toEqual({ autoGroup: true });
     expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
-  });
-
-  it("rollUpKinds setter accepts 'none' and [] as empty-list sugar (D-S4-6)", () => {
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [{ id: 'p1', name: 'Sitework', kind: 'group', start: '2026-01-01', end: '2026-01-05' }],
-    });
-    dataset.rollUpKinds = 'none';
-    expect(dataset.rollUpKinds).toEqual([]);
-    expect(dataset.isRollUpKind('group')).toBe(false);
-    dataset.rollUpKinds = [];
-    expect(dataset.rollUpKinds).toEqual([]);
-    dataset.rollUpKinds = ['group'];
-    expect(dataset.rollUpKinds).toEqual(['group']);
-    expect(dataset.isRollUpKind('group')).toBe(true);
-  });
-
-  it('live hierarchy.autoGroup changes later first-child promotions only', () => {
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'p-off', name: 'Off', start: '2026-01-01', end: '2026-01-05' },
-        { id: 'p-on', name: 'On', start: '2026-01-01', end: '2026-01-05' },
-      ],
-    });
-    dataset.hierarchy = { autoGroup: false };
-    dataset.entries.add({
-      id: 'c-off',
-      parentId: 'p-off',
-      name: 'Child off',
-      start: '2026-02-01',
-      end: '2026-02-05',
-    });
-    expect(dataset.entries.get('p-off')!.kind).toBe('span');
-
-    dataset.hierarchy = { autoGroup: true };
-    dataset.entries.add({
-      id: 'c-on',
-      parentId: 'p-on',
-      name: 'Child on',
-      start: '2026-03-01',
-      end: '2026-03-05',
-    });
-    expect(dataset.entries.get('p-on')!.kind).toBe('group');
-    expect(dataset.entries.get('p-off')!.kind).toBe('span');
   });
 
   it('off() stops a handler from seeing further events', () => {
@@ -292,7 +242,7 @@ describe('Dataset transaction/on/off delegation', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       entries: [
-        { id: 'root', name: 'Sitework', kind: 'group' },
+        { id: 'root', name: 'Sitework' },
         oneEntry({ id: 'leaf', parentId: 'root', props: { cost: 100 } }),
       ],
     });
@@ -331,10 +281,7 @@ describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
   it('a consumer History built on on/replay/invertChangeSet undoes a rollup cascade, restoring both rows', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      entries: [
-        { id: 'parent', name: 'Sitework', kind: 'group' },
-        oneEntry({ id: 'child', parentId: 'parent' }),
-      ],
+      entries: [{ id: 'parent', name: 'Sitework' }, oneEntry({ id: 'child', parentId: 'parent' })],
     });
     const parentBefore = dataset.entries.get('parent')!;
     const childBefore = dataset.entries.get('child')!;
@@ -435,7 +382,7 @@ describe('Dataset fields (S4.1)', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       entries: [
-        { id: 'root', name: 'Root', kind: 'group' },
+        { id: 'root', name: 'Root' },
         {
           id: 'leaf',
           name: 'Leaf',
@@ -464,7 +411,7 @@ describe('Dataset fields (S4.1)', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       entries: [
-        { id: 'root', name: 'Root', kind: 'group' },
+        { id: 'root', name: 'Root' },
         {
           id: 'a',
           name: 'A',
@@ -656,7 +603,7 @@ describe('Dataset plugins (S5.10)', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
-        { id: 'p1', name: 'Sitework', kind: 'group', start: '2026-09-01', end: '2026-09-02' },
+        { id: 'p1', name: 'Sitework', start: '2026-09-01', end: '2026-09-02' },
         oneEntry({ id: 't1', parentId: 'p1', props: { cost: 500 } }),
       ],
       plugins: [declaresCost],
@@ -752,7 +699,7 @@ describe('Dataset plugins (S5.10)', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       entries: [
-        { id: 'root', name: 'Root', kind: 'group' },
+        { id: 'root', name: 'Root' },
         {
           id: 'leaf',
           name: 'Leaf',
