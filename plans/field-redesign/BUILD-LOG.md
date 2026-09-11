@@ -20,22 +20,33 @@ Settled rulings move to [`shared/rulings.md`](shared/rulings.md). Refused approa
 
 ## Open
 
-### Q1 — Does #212's stale `schema: 4` sentence get a note?
+### Q1 — Does #212's stale text get a note? — **ANSWERED: yes, and it is posted**
 
-**Raised:** 2026-09-10, Build 0 (ADR 0016). **Status:** open, waiting for the author.
+**Raised:** 2026-09-10, Build 0. **Answered:** 2026-09-11, by the author.
 
 Issue #212 is **already closed** — 2026-09-06, `COMPLETED`, label `fixed needs review`. An earlier
-coordinator note called it a close candidate. That note was wrong; no close is owed.
+coordinator note called it a close candidate. That note was wrong; no close was owed.
 
-The body still carries one sentence ADR 0016 retires:
+Checking the body turned up **two** superseded decisions, not one:
 
-> **`SegmentId` is stable, and the document goes to `schema: 4`.**
+1. *"Deleting the last Segment deletes the Entry."* **Reversed by ADR 0012.** A dateless Entry is
+   legal now, so the cascade is not needed to keep the store consistent. `removeSegments` on the last
+   Segment clears both dates and keeps the Entry, its id and its descendants; `#reparentChildrenOf`
+   is deleted. See J5.
+2. *"the document goes to `schema: 4`."* **Retired by ADR 0016.** `SegmentId` stability stands;
+   the schema half has nothing left to describe. Persisting Segment ids is the consumer's job.
 
-`SegmentId` stability stands. The `schema: 4` half does not: there is no document and no schema
-counter. Segment-id persistence is the consumer's job now, through `entries.all`.
+[Comment posted](https://github.com/Pawel-IT/FreeGantt/issues/212#issuecomment-5635059776). The issue
+stays closed. Nothing else in #212 changed — the two-part rule, the pane deciding the unit, and
+`CommandTarget`'s two sets all stand.
 
-**The question:** does the author want a comment on the closed issue that says so, or does the ADR
-record it well enough on its own?
+### Q2 — Do Build 0's six commit trailers get rewritten? — **ANSWERED: no**
+
+**Raised:** 2026-09-10. **Answered:** 2026-09-11, by the author. Leave them.
+
+Build 0's six commits carry `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` instead of the
+configured `Claude Opus 5 (1M context)`. The branch is pushed, so a rewrite would need a force-push,
+and the trailer is wrong in a way that costs nothing. Builds 1 onward carry the correct trailer.
 
 ### Q4 — May the builds edit `plans/**` without asking each time? — **ANSWERED: yes**
 
