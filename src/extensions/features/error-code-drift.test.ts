@@ -24,6 +24,7 @@ const KNOWN_CODES: Record<BuiltInErrorCode, true> = {
   'scale-options-ignored': true,
   'rollup-corrected': true,
   'derived-value': true,
+  'derived-values-dropped': true,
   'no-parse-value': true,
   'no-date-value': true,
   'time-of-day': true,
