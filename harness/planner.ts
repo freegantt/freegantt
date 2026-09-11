@@ -199,19 +199,21 @@ function phaseRail(): ElementDescription | undefined {
   return undefined;
 }
 
-/** A checkpoint (DESIGN-FACTS §2.5): the library's diamond glyph, filled when the checkpoint is done
- *  and hollow — the pane's background behind a 1.5px stroke — while it is not. Which one is a fact
- *  about this page's data, so the page answers it; the shape, its size and its states stay the
- *  library's, reached through published tokens alone. The label rides in the row ink beside it, not
- *  in the fill's own ink: there is no fill to read a label against. */
+/** A checkpoint (DESIGN-FACTS §2.5): a diamond glyph, filled when the checkpoint is done and hollow —
+ *  the pane's background behind a 1.5px stroke — while it is not. Which one is a fact about this
+ *  page's data, so the page answers it. ADR 0013 retired core's diamond, so this page owns the shape
+ *  too: `.demo-checkpoint` in `planner.html` draws it, and this renderer names the fill and the
+ *  stroke. The label rides in the row ink beside it, not in the fill's own ink: there is no fill to
+ *  read a label against. */
 function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescription | undefined {
   const done = progressOf(entry.id) === 100;
   const description: ElementDescription = {
+    class: { 'demo-checkpoint': true },
     style: done
       ? { '--fg-bar-fill': 'var(--fg-row-label-color)' }
       : {
           '--fg-bar-fill': 'var(--fg-pane-bg)',
-          '--fg-diamond-stroke': '1.5px solid var(--fg-row-label-color)',
+          '--demo-checkpoint-stroke': '1.5px solid var(--fg-row-label-color)',
         },
   };
   if (label !== undefined) description.children = [barLabel(label, 'demo-checkpoint-label')];
