@@ -22,6 +22,7 @@ Six ADRs are decided. No line is built. This folder is the work.
 8. **Never work around a gap in `src/`.** Stop. Report the gap. Ask the author if core closes it first. This is `CLAUDE.md`'s stop rule.
 9. **A line number here is a hint, not a fact.** The numbers come from `main` on 2026-09-10. Open the file. Numbers drift.
 10. **Read [`../shared/refuted.md`](../shared/refuted.md) before you propose an alternative.** Fourteen approaches are already refused.
+11. **Log every question and every judgement call in [`../BUILD-LOG.md`](../BUILD-LOG.md).** Write the entry the moment it comes up, not at the end. A call you made alone gets a **J** entry, so a reviewer can find it and reverse it. A question for the author gets a **Q** entry and waits. A session ends; this file does not.
 
 ---
 
@@ -111,3 +112,4 @@ Go here only when you need it. None of it is needed to build.
 | An approach already refused | [`../shared/refuted.md`](../shared/refuted.md) |
 | The verification record, and the author's rulings on it | [`../BUILD-SPEC.md`](../BUILD-SPEC.md) §1 |
 | What the whole redesign still owes | [`../CLOSE-OUT.md`](../CLOSE-OUT.md) |
+| A question still open, or a call an earlier build made alone | [`../BUILD-LOG.md`](../BUILD-LOG.md) |

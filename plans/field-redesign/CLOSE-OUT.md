@@ -41,6 +41,7 @@
 | Question | File |
 |---|---|
 | **How to build it** — the hard rules, the landing order, one file per build | [`build/README.md`](build/README.md) |
+| A question a build raised, or a call it made alone | [`BUILD-LOG.md`](BUILD-LOG.md) |
 | The verification record behind those files, and the author's rulings | [`BUILD-SPEC.md`](BUILD-SPEC.md) |
 | What was decided, and why | `docs/adr/0011`–`0016` |
 | The working material behind one decision | `plans/field-redesign/00xx-*/README.md` |
