@@ -892,3 +892,45 @@ own instruction ("`kind: 'x'` in a test fixture -> drop it or move it to `props`
 
 **Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 25). `pnpm exec vitest run
 src/api/dataset.test.ts` — 49/49 pass.
+
+### J22 — `src/layout/frame.test.ts`: the whole "milestone floor" describe block deleted; every other `kind` spot rewritten structurally
+
+**Raised:** 2026-09-11, Build 3b, continuing the tsc-cleanup pass. **Status:** mechanical, following
+J17's own instruction, with one describe block that is a real deletion (a retired feature, not a
+weakened assertion) and one rewrite worth a second look.
+
+- `barSpan`'s own signature dropped its `diamondSizePx` parameter and `DEFAULT_DIAMOND_SIZE_PX`
+  export entirely (J17: "Diamond deletion... is done across `layout/frame.ts`"), so the whole
+  `describe('barSpan — milestone floor (bug hunt: milestone highlight box)')` block and its two
+  diamond-specific cases inside `describe('barSpan — a minimum painted bar width ...')` (`'never
+  shrinks a milestone floor...'`, `'widens minBarWidthPx past a milestone floor...'`) test a
+  parameter and a constant that no longer exist. **Deleted outright** — there is nothing to restate
+  them against, the same reasoning as the retired `rollUpKinds`/`autoGroup` tests in J21. Kept (and
+  generalized off "milestone" to "a zero-width span", since the floor behaviour itself is
+  look-independent now): "floors a zero-width span at minBarWidthPx and stamps minimumSpan",
+  "honours a custom minBarWidthPx" (renamed from the diamond-specific "honours a custom
+  diamondSizePx"), and the two midpoint-centring cases, all still exercising the one floor rule
+  `barSpan` still has.
+- The `barSpanFields()` test helper (added `kind` to `spanOf()`'s `{start, end}` because the old
+  `barSpan(entry, scale, diamondSizePx?, minBarWidthPx?)` read `entry.kind` to pick the diamond vs.
+  rect floor) is deleted; every call site now uses `spanOf()` directly, matching `barSpan`'s current
+  `Pick<Item, 'start' | 'end'>` parameter.
+- Two `groupBy: (entry) => entry.kind` (header-row tests unrelated to what the group key names)
+  became `groupBy: () => 'all'` — the tests assert a header row exists with no entries of its own,
+  not anything about the grouping key's content.
+- The "fills each cell..." / "fills cells from LayoutInput.columns..." pair used a `field: 'kind'`
+  column reading `entry.kind` purely as a second, distinct field alongside `name` — switched to
+  `field: 'id'` reading `entry.id`, an equally distinct, always-present field. No claim about `kind`
+  specifically was ever part of either test's own name or assertion.
+- "carries the segmentId its Item had... (#212)": `grouped = { ...sampleEntries[1]!, kind: 'group' }`
+  made a whole-entry (parent) bar the old way. A whole-entry bar is now structural (a real child), so
+  `grouped` lost the `kind` marker and gained one (`groupedChild`, `parentId: grouped.id`) — the
+  assertion under test (a parent's own bar carries no `segmentId`) is unchanged.
+- `entryAt()` (the `horizontal culling` describe's own entry builder): dropped a bare `kind: 'span'`
+  with no other change — every Entry it builds is childless, so it already resolved to `'leaf'`
+  structurally.
+
+**Verified:** `pnpm exec tsc --noEmit` shows 0 errors in this file (was 15).
+`pnpm exec vitest run src/layout/frame.test.ts` — 46/46 pass after `-u`, which updated exactly the
+pre-existing `FrameBar.kind` → `.look` snapshot rename (already verified as a pure rename in J17) —
+`git diff` on the snapshot shows only `-"kind": "span"` / `+"look": "leaf"`, nothing else changed.
