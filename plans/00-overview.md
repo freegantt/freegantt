@@ -79,7 +79,7 @@ flowchart LR
 |---|---|
 | S0 → S1 | Layer-boundary lint rules active and failing on violation; harness renders fixture bars; layout tested headlessly. |
 | S1 → S2 | Grid and timeline provably share row geometry (single source, pixel-identical) — `[S1-A2]`; viewport/scale objects are external and injectable — `[S1-A4]`. `pnpm gate` proves both (plans/s1.11-close-the-gate/README.md D-S1.11-9). |
-| S2 → S1.12 | Undo round-trips are exact (property test, `[S2-A1]`); JSON round-trip is byte-stable (`[S2-A2]`); changesets carry `from` and `to` (`[S2-A4]`). Discharged. |
+| S2 → S1.12 | Undo round-trips are exact (property test, `[S2-A1]`); ~~JSON round-trip is byte-stable (`[S2-A2]`)~~ — **retired by ADR 0016 (2026-09-10): there is no JSON round-trip. The library holds no save format, and `[S2-A2]`'s property test went with it.** Changesets carry `from` and `to` (`[S2-A4]`). Discharged. |
 | S1.12 → S3 | Timeline density, zoom navigation, and date formatting (`[S1-A6]`–`[S1-A10]`, `plans/s1.12-timeline-navigation/README.md`). Discharged. |
 | S1.13 → S3 | Date lines public shape (`[S1-A11]`–`[S1-A14]`, `plans/s1.13-date-lines/README.md`). Discharged. |
 | S3 → S4 | Every data gesture is cancelable `before*` → one transaction → after (`[S3-A1]`); Escape restores (`[S3-A2]`); hover allocates nothing (`[S3-A3]`); extender extras ghost (`[S3-A4]`); capabilities gate pointer and keyboard (`[S3-A5]`); undo reverts user edit + extras (`[S3-A6]`); viewport gestures write nothing (`[S3-A7]`); Cursor line during drag (`[S3-A8]`). Identity extender is enough; no scheduling plugin. |
