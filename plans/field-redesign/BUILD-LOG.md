@@ -209,6 +209,48 @@ applies to it after the delete.
 
 ---
 
+### J16 — A custom "look" (buffer/risk) is dispatched by trial, not by a stored classification; the four seams keep string keys but core only ever computes `'parent'`/`'leaf'` itself
+
+**Raised:** 2026-09-11, Build 3 (ADR 0013). **Status:** standing, load-bearing for the item-producer
+and capability seams — flagged for review given how much of D-S5-22's rewrite this settles.
+
+`plans/01:771/776` already show the target shape: `registerItemProducer(look: 'parent' | 'leaf' |
+(string & {}), producer)` and `registerLookDefaults(look, defaults)` — a plain string key, same shape
+as today's `EntryKind`-keyed registries. But `entry.kind` is gone, so nothing hands core a `'buffer'`
+string for a specific Entry any more, and `api/gantt.test.ts`'s `[review P2]` test still requires two
+kind-defining plugins (`bufferKind()`, `riskKind()`) to install side by side with **zero collision** —
+so a plugin's custom look must still reach real dispatch, not just sit in an inert table.
+
+**The call:** a custom-look producer decides ownership itself and answers by *not* claiming the
+Entry — it returns `[]` for an Entry it doesn't own, the same "no items" value `produceItemsForRow`
+already uses for other cases. `produceItemsForRow` tries every *non-structural* registered look
+(`ItemProducerRegistry`'s existing `keys()`, minus `'parent'`/`'leaf'`) before falling back to the
+structural producer for `hasChildren ? 'parent' : 'leaf'`; the first non-empty result wins, and each
+`Item`/`FrameBar` carries the `look` string whichever producer built it stamped on — `entryItem`/
+`wholeEntryItem` now take `look` as an explicit parameter instead of reading `entry.kind`. The bar
+renderer needs no new logic: it already resolves per-`item.look`, so `'buffer'`/`'risk'` reach
+`bar:buffer`/`bar:risk` exactly as before, structurally unchanged.
+
+Capability defaults have no producer function to test ownership against (`KindDefaults` is inert
+data), so they cannot use the same trial. `resolveCapabilities`'s `CapabilityInputs` gained a single
+`lookOf: (entry: Entry) => EntryLook` function — `layout/items/produce-items.ts` exports the same
+trial (`resolveLook`) `GanttShell` already needs for item production, and both seams call the one
+function so an Entry's look reads the same everywhere.
+
+**What a plugin author does differently now:** "stores which ids it owns" (ADR 0013's own words) is
+literal — `harness/plugins/buffer-kind.ts`/`risk-kind.ts` no longer read `entry.kind === 'buffer'`
+(gone). They take the owned ids as a constructor argument (`bufferKind(ownedIds)`), keep a `Set` in
+closure, and their producer/`command.when` both check membership directly. `api/gantt.test.ts`'s three
+`[S5-A3]`/`[review P2]` tests are rewritten to pass ids in at plugin construction instead of authoring
+`{ kind: 'buffer' }` on the test fixture.
+
+**Why this is a J and not a Q:** the shape in `plans/01` is already locked (two ADRs' worth of prose
+sweep), and the "two plugins, zero collision" behaviour is an existing, passing test this build must
+not regress — so *some* dispatch-by-trial was unavoidable once `entry.kind` left. What is a genuine
+judgment call, and worth a reviewer's second look, is putting the trial inside `layout/` as a shared
+`resolveLook` rather than inventing a fifth public seam (a "look resolver" registration) that no
+locked spec names.
+
 ## Notes owed elsewhere
 
 ### N1 — #266 is raised, not closed — **DONE (comment posted)**

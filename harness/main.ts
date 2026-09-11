@@ -18,7 +18,7 @@ import type {
   RowSource,
   DatasetEventMap,
   GanttPlugin,
-  RendererByKind,
+  RendererByLook,
   CellRenderer,
   HeaderRenderer,
 } from '../src/api/index.js';
@@ -422,7 +422,7 @@ popupBtn.addEventListener('click', () => {
 // paints `ctx.value`, the string the library formatted from it.
 const BUDGET_THRESHOLD = 5000;
 
-const demoBarRenderer: RendererByKind = {
+const demoBarRenderer: RendererByLook = {
   milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
 };
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>

@@ -82,7 +82,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
   it('kind defaults re-resolve capabilities on both edges, and paint nothing themselves', () => {
     const { registrations, counts } = harness();
 
-    const dispose = registrations.registerKindDefaults('buffer', {});
+    const dispose = registrations.registerLookDefaults('buffer', {});
     expect(counts).toMatchObject({ capabilities: 1, frames: 0, items: 0 });
 
     dispose();
@@ -106,10 +106,10 @@ describe('PluginRegistrations — the tables it reads back', () => {
     const { registrations } = harness();
     const defaults = { move: false };
 
-    registrations.registerKindDefaults('buffer', defaults);
+    registrations.registerLookDefaults('buffer', defaults);
 
-    expect(registrations.kindDefaultsFor('buffer')).toBe(defaults);
-    expect(registrations.kindDefaultsFor('risk')).toBeUndefined();
+    expect(registrations.lookDefaultsFor('buffer')).toBe(defaults);
+    expect(registrations.lookDefaultsFor('risk')).toBeUndefined();
   });
 
   it('a second plugin on one kind wins, and disposing it restores the first (#154)', () => {
@@ -117,12 +117,12 @@ describe('PluginRegistrations — the tables it reads back', () => {
     const first = { move: false };
     const second = { move: true };
 
-    registrations.registerKindDefaults('buffer', first);
-    const disposeSecond = registrations.registerKindDefaults('buffer', second);
-    expect(registrations.kindDefaultsFor('buffer')).toBe(second);
+    registrations.registerLookDefaults('buffer', first);
+    const disposeSecond = registrations.registerLookDefaults('buffer', second);
+    expect(registrations.lookDefaultsFor('buffer')).toBe(second);
 
     disposeSecond();
-    expect(registrations.kindDefaultsFor('buffer')).toBe(first);
+    expect(registrations.lookDefaultsFor('buffer')).toBe(first);
   });
 
   it('every decoration provider paints, in registration order — not only the newest', () => {

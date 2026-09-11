@@ -1,17 +1,15 @@
-// data/ — the five-stage commit pipeline (C1): body edits → extension hook → autoGroup promotion →
-// rollup → fold. The only module that imports `rollup.ts` and `hierarchy.ts` on the commit path
-// (`rollup-is-removable`, `autogroup-is-removable`).
+// data/ — the four-stage commit pipeline (C1, ADR 0013 dropped the autoGroup promotion stage): body
+// edits → extension hook → rollup → fold. The only module that imports `rollup.ts` on the commit path
+// (`rollup-is-removable`).
 
 import type {
   ChangeOrigin,
   ChangeSet,
   ChangeSetId,
-  DatasetHierarchy,
   EntityAdded,
   EntityRemoved,
   Entry,
   EntryId,
-  EntryKind,
   FieldContext,
   FieldUpdated,
   SegmentId,
@@ -26,13 +24,11 @@ import { buildEffectiveEntries } from './entry-tree.js';
 import {
   emptyProposedEdit,
   mergeProposedEdits,
-  mergeProposedEditsByEntry,
   entryAfterEdit,
   proposedKeysOf,
   withProposedKeys,
 } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
-import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -61,10 +57,8 @@ export interface CommitChangeSetInput {
   /** The commit path's own door onto the extension hook (#232) — see
    *  `TransactionData.extraEditsReadingFor`. */
   extraEditsReadingFor(request: EditRequest): EditsReading;
-  readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
-  readonly rollUpKinds: ReadonlySet<EntryKind>;
   nextChangeSetId(): ChangeSetId;
   /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
    *  spanning for the first time always mints a real `SegmentId` here, because this path always
@@ -287,24 +281,15 @@ export function buildCommitChangeSet(
   );
   const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldContext);
 
-  const hierarchyEdits = promoteNewParents(
-    byId,
-    { added, removed, edits: mergedBodyAndExtender },
-    data.hierarchy,
-  );
-  const hierarchyUpdated = diffEdits(byId, hierarchyEdits, data.fields, data.fieldContext);
-
-  // An added entity folds in its own extender cascade too, not only its hierarchy promotion — an
-  // `EditExtender` that rewrites `segments` on an entity this same transaction adds must still land
-  // on the entity the changeset publishes (#212 R2 fix-plan review, finding A): the earlier code here
-  // overlaid `hierarchyEdits` alone, so a reconciled extender edit for a same-transaction add computed
-  // a correct `ProposedEdit` upstream but never reached the stored entity.
-  const extraEditsForAdded = mergeProposedEditsByEntry(extenderEdits, hierarchyEdits);
+  // An added entity folds in its own extender cascade — an `EditExtender` that rewrites `segments`
+  // on an entity this same transaction adds must still land on the entity the changeset publishes
+  // (#212 R2 fix-plan review, finding A). There is no hierarchy-promotion cascade to fold in beside
+  // it any more (ADR 0013): a parent is structural, so nothing writes a Field for gaining a child.
   const addedEntitiesForFold =
-    extraEditsForAdded.size === 0
+    extenderEdits.size === 0
       ? addedEntities
       : addedEntities.map((row) => {
-          const extra = extraEditsForAdded.get(row.entity.id);
+          const extra = extenderEdits.get(row.entity.id);
           return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
@@ -313,11 +298,11 @@ export function buildCommitChangeSet(
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergeProposedEditsByEntry(mergedBodyAndExtender, hierarchyEdits) },
+      edits: { body: proposed, merged: mergedBodyAndExtender },
     },
     data.fields,
-    data.rollUpKinds,
     data.fieldContext,
+    () => data.mintSegmentId(),
   );
 
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
@@ -325,7 +310,6 @@ export function buildCommitChangeSet(
 
   return foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
     ...bodyAndExtenderUpdated,
-    ...hierarchyUpdated,
     ...rollupUpdated,
     ...pluginRows,
   ]);

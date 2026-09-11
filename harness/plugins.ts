@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
-import type { RendererByKind, CellRenderer, GanttPlugin } from '../src/api/index.js';
+import type { RendererByLook, CellRenderer, GanttPlugin } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -106,7 +106,7 @@ popupBtn.addEventListener('click', () => {
 // default for every kind it misses (D-S5-11). Uncheck this toggle to see both plugin registrations
 // take over instead — same pixels, two different sources, and neither plugin refuses the other
 // (review P2).
-const demoBarRenderer: RendererByKind = {
+const demoBarRenderer: RendererByLook = {
   milestone: () => ({
     class: { 'demo-milestone': true },
     style: { '--fg-bar-fill': '#7b2cbf' },

@@ -431,6 +431,27 @@ export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
   }
 }
 
+/** `code: 'derived-field-not-writable'` — `entries.update()` named a Field on an Entry that has
+ *  children, and that Field rolls up (ADR 0013). Nothing but the Rollup writes a rolling-up parent's
+ *  cell: a write here would commit and the next Rollup would overwrite it in silence, so the library
+ *  refuses instead. A `compute` Field has no stored home at all and is
+ *  `ComputedFieldCannotBeWrittenError`; this is for a Field that *does* have one, just not on this
+ *  Entry right now. */
+export class DerivedFieldNotWritableError extends FreeGanttError {
+  readonly key: string;
+  readonly entryId: string;
+
+  constructor(key: string, entryId: string, operation: string) {
+    super(
+      'derived-field-not-writable',
+      `${operation}: "${entryId}" has children, so "${key}" rolls up from them and cannot be written directly. Write the children instead, or remove them to make "${entryId}" a normal entry again.`,
+    );
+    this.name = 'DerivedFieldNotWritableError';
+    this.key = key;
+    this.entryId = entryId;
+  }
+}
+
 /** `code: 'unknown-aggregator'` — `rollUp` names an Aggregator that is not shipped and not in
  *  `DatasetOptions.aggregators` (D-S4-5). */
 export class UnknownAggregatorError extends FreeGanttError {

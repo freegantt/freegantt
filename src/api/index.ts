@@ -1,5 +1,5 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions, DatasetHierarchy, DatasetPlugin, DatasetPluginContext } from './dataset.js';
+export type { DatasetOptions, DatasetPlugin, DatasetPluginContext } from './dataset.js';
 // S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
 // aliases above, plus the vocabulary a plugin author names directly — its own store, another
 // plugin's read-only view, and the wrapper that composes onto the extension hook.
@@ -26,7 +26,6 @@ export { moveEntryTo } from './dataset-plugin.js';
 // ProposedEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
 // a helper over it, needs to name the read side too).
 export type { EditRequest, EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from '../model/index.js';
-export type { RollUpKinds } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 // S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
 // emitter identity. Beside `attemptMutation` because it is the same kind of helper — the boilerplate
@@ -220,6 +219,7 @@ export {
   ReservedFieldKeyError,
   IllegalCoreFieldOverrideError,
   ComputedFieldCannotBeWrittenError,
+  DerivedFieldNotWritableError,
   UnknownAggregatorError,
   AggregatorFailedError,
   UnknownFieldTypeError,
@@ -254,7 +254,6 @@ export type { PluginId, Disposer, KeyChord } from '../model/index.js';
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
-  EntryKind,
   EntryId,
   Segment,
   SegmentId,
@@ -314,7 +313,7 @@ export type {
   BarLabels,
   BarLabelPlacement,
   ResolvedBarLabel,
-  RendererByKind,
+  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,

@@ -3,9 +3,6 @@
 import type { EntryId, SegmentId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
 
-/** Open classification — see plans/01 §2.5. Shipped kinds ship; consumers add their own. */
-export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
-
 /** One dated stretch of an Entry, and the unit the Selection holds (#212, ADR 0010). Interrupted
  * work stores several; an Entry that never mentioned one stores a single Segment over its own span,
  * filled at ingest, so every Entry reads the same way and no caller carries a "no segments" branch.
@@ -25,8 +22,8 @@ export interface Entry<TProps = Record<string, unknown>> {
   id: EntryId;
   /** Hierarchy; roots have none. */
   parentId?: EntryId;
-  /** Authored, never derived — see plans/01 §2.5. */
-  kind: EntryKind;
+  /** No stored classification (ADR 0013). An Entry derives when it has children — `childrenOf`
+   *  answers that; there is nothing to read off the Entry itself. */
   name: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
    * Segment and draws a bar. */
@@ -59,8 +56,8 @@ export interface EntryInput<TProps = Record<string, unknown>> {
   id: string;
   /** Hierarchy; roots have none. */
   parentId?: string;
-  /** Authored, never derived — see plans/01 §2.5. Default 'span'. */
-  kind?: EntryKind;
+  /** No stored classification (ADR 0013). An Entry derives when it has children — gaining one
+   *  promotes it, losing the last one demotes it, and nothing here says which. */
   name: string;
   /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
    * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment

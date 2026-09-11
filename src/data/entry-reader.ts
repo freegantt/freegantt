@@ -163,16 +163,7 @@ function toEntryDates(
 /** Every key `EntryInput` itself declares — the envelope this walk never treats as a `props`
  *  candidate, flat or nested. Frozen, not a `Set`: one array literal, read-only for the module's
  *  whole life, so it carries no state a second Gantt instance could share (I2). */
-const ENVELOPE_INPUT_KEYS = Object.freeze([
-  'id',
-  'parentId',
-  'kind',
-  'name',
-  'start',
-  'end',
-  'segments',
-  'props',
-]);
+const ENTRY_INPUT_KEYS = Object.freeze(['id', 'parentId', 'name', 'start', 'end', 'segments', 'props']);
 
 function warnIngest(message: string): void {
   console.warn(`FreeGantt: ${message}`);
@@ -204,7 +195,7 @@ function propsFromInput(
   }
   const flat = input as unknown as Readonly<Record<string, unknown>>;
   for (const key of Object.keys(flat)) {
-    if (ENVELOPE_INPUT_KEYS.includes(key)) continue;
+    if (ENTRY_INPUT_KEYS.includes(key)) continue;
     if (!registry.has(key)) {
       warnIngest(`"${id}" carries an undeclared key "${key}". Declare it in "fields" to make it writable.`);
       continue;
@@ -221,7 +212,6 @@ export function toEntry(
   registry: FieldRegistry,
   operation: string,
 ): Entry {
-  const kind = input.kind ?? 'span';
   const id = entryId(input.id);
   const owner: EditOrigin = { entryId: id, operation };
   const dates = toEntryDates(input, context, owner);
@@ -230,7 +220,6 @@ export function toEntry(
   const entry: Entry = {
     id,
     name: input.name,
-    kind,
     segments,
     props: propsFromInput(input, registry, id),
   };
@@ -566,7 +555,6 @@ export function toEditReading(
   const proposed = new Set<string>(Object.keys(edit));
   const authoredEnvelopeKeys = authoredEnvelopeKeysOf(edit);
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
-  if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
   // `'start' in edit` — not `edit.start !== undefined` — so `update(id, { start: undefined })` (the
   // un-date verb, ADR 0012) reaches `stored.start = undefined` rather than being read as "untouched".

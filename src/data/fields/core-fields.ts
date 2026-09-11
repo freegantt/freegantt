@@ -92,12 +92,6 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     column: { header: 'End', width: 120 },
   },
   {
-    key: 'kind',
-    equals: byReference,
-    formatValue: stringifyPrimitive,
-    column: { header: 'Kind', width: 100 },
-  },
-  {
     key: 'parentId',
     equals: byReference,
   },

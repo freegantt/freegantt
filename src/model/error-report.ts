@@ -48,6 +48,10 @@ export type BuiltInErrorCode =
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
+  // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
+  // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
+  // raise this code once per operation (decision 5) — never per value.
+  | 'derived-values-dropped'
   // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code
   // (D-S5-40). `by` is that plugin's id, not `'core'`.
   | 'derived-value'
@@ -61,7 +65,7 @@ export type BuiltInErrorCode =
 
 /** The machine-readable half of an Error report — kebab-case, and open at the tail so a plugin can
  *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
- *  the `(string & {})` tail is the same shape `EntryKind` already uses.
+ *  the `(string & {})` tail is the same shape `EntryLook` already uses.
  *
  *  A code that names a thrown `FreeGanttError` matches that class's own `code`, so a consumer that
  *  already switches on `error.code` reads the report the same way. */

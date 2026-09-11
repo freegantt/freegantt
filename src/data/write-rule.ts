@@ -8,7 +8,7 @@
 // `UnknownFieldError` for the existence arm and does not call this function — ADR 0013 wires the
 // derived arm, ADR 0015 wires the editable arm and claims I14.
 
-import type { BuiltInErrorCode, Entry, EntryKind, Field } from '../model/index.js';
+import type { BuiltInErrorCode, Field } from '../model/index.js';
 import { rollsUp } from './fields/field-registry.js';
 
 /** Why a write is refused, when the refusal is worth words. Shared with `model/error-report.ts`'s
@@ -29,17 +29,14 @@ export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'de
 
 /** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
  *
- *  The Rollup pass writes a roll-up parent's rolling-up Field off its children. A user write there
- *  would commit, and the next Rollup would overwrite it. That refusal is worth words, and they are
- *  the words the cell editor has always shown. `rollsUp` is the Rollup pass's own test, so this
- *  refuses exactly the set that pass would overwrite.
+ *  The Rollup pass writes a rolling-up parent's rolling-up Field off its children — a parent is any
+ *  Entry with at least one child (ADR 0013: derivation is structure, not a stored classification). A
+ *  user write there would commit, and the next Rollup would overwrite it. That refusal is worth
+ *  words, and they are the words the cell editor has always shown. `rollsUp` is the Rollup pass's own
+ *  test, so this refuses exactly the set that pass would overwrite.
  *
  *  Everything else is the Field's own `editable`, which defaults to `false`. */
-export function libraryWriteRule(
-  entry: Entry,
-  field: Field,
-  isRollUpKind: (kind: EntryKind) => boolean,
-): FieldWriteVerdict {
-  if (isRollUpKind(entry.kind) && rollsUp(field)) return DERIVED;
+export function libraryWriteRule(hasChildren: boolean, field: Field): FieldWriteVerdict {
+  if (hasChildren && rollsUp(field)) return DERIVED;
   return field.editable === true ? WRITABLE : NOT_WRITABLE;
 }

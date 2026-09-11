@@ -8,6 +8,7 @@ import {
   TimeScaleModel,
   Viewport,
   createItemProducerRegistry,
+  resolveLook,
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
@@ -28,7 +29,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByKind,
+  RendererByLook,
   FrameBar,
 } from '../layout/index.js';
 
@@ -304,7 +305,7 @@ export interface GanttShellOptions {
   /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
-  barRenderer?: BarRenderer | RendererByKind;
+  barRenderer?: BarRenderer | RendererByLook;
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. */
   cellRenderer?: CellRenderer;
@@ -569,8 +570,8 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        resolveBarRenderer: (kind) =>
-          this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
+        resolveBarRenderer: (look) =>
+          this.#registrations.renderers.resolveBar(look, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
@@ -923,11 +924,11 @@ export class GanttShell {
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
-  get barRenderer(): BarRenderer | RendererByKind | undefined {
+  get barRenderer(): BarRenderer | RendererByLook | undefined {
     return this.#frameSettings.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
     this.#frameSettings.set({ barRenderer: renderer });
   }
 
@@ -1107,18 +1108,24 @@ export class GanttShell {
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
-   *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here, rather than
+   *  interactions`, and `registerLookDefaults`'s own gate all re-derive from here, rather than
    *  repeating the three-argument call. */
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities({
       interactions: this.#interactions,
-      isRollUpKind: (kind) => this.#options.dataset.isRollUpKind(kind),
+      hasChildren: (entry) => this.#options.dataset.entries.childrenOf(entry.id).length > 0,
       fieldFor: (key) => this.#options.dataset.field(key),
-      registeredDefaultsFor: (kind) => this.#registrations.kindDefaultsFor(kind),
+      lookOf: (entry) =>
+        resolveLook(
+          entry,
+          this.#registrations.itemProducers,
+          this.#options.dataset.entries.childrenOf(entry.id).length > 0,
+        ),
+      registeredDefaultsFor: (look) => this.#registrations.lookDefaultsFor(look),
     });
   }
 
-  /** `set interactions` and `registerKindDefaults`'s register/dispose pair both change an input
+  /** `set interactions` and `registerLookDefaults`'s register/dispose pair both change an input
    *  `#resolveCapabilities` reads. So both re-resolve the capability table and re-derive the
    *  affordance ids the same way (#154). This method writes that once, instead of three times. The
    *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to
@@ -1710,13 +1717,13 @@ export class GanttShell {
       // A non-spanning Entry draws no bar (ADR 0012), so there is no x/width to reveal. Only the
       // row still shows (#232-adjacent gap surfaced by Build 1, no existing rule covered it).
       if (entry.start === undefined || entry.end === undefined) return this.#revealRow(entry.id);
-      return this.#revealSpan(entry.id, entry, entry.start, entry.end);
+      return this.#revealSpan(entry.id, entry.start, entry.end);
     }
     const ownerId = entries.entryIdOfSegment(id);
     const owner = ownerId === undefined ? undefined : entries.get(ownerId);
     const segment = owner?.segments.find((candidate) => candidate.id === id);
     if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
-    return this.#revealSpan(owner.id, owner, segment.start, segment.end);
+    return this.#revealSpan(owner.id, segment.start, segment.end);
   }
 
   /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
@@ -1734,13 +1741,8 @@ export class GanttShell {
     this.#viewport.reveal({ x: position.x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
-  #revealSpan(ownerId: EntryId, kindSource: Pick<Entry, 'kind'>, start: Instant, end: Instant): void {
-    const { x, width } = barSpan(
-      { start, end, kind: kindSource.kind },
-      this.#viewport.timeScale,
-      this.#frameSettings.diamondSizePx,
-      this.#frameSettings.minBarWidthPx,
-    );
+  #revealSpan(ownerId: EntryId, start: Instant, end: Instant): void {
+    const { x, width } = barSpan({ start, end }, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
     let rowIndex = this.#layout.rowIndexForEntry(ownerId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
       this.#frames.flush();
