@@ -37,6 +37,7 @@ export type { ElementDescription } from './render.js';
 export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
 export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
+export type { WriteVerdict, WriteRefusalReason } from './write-verdict.js';
 export type {
   StoreName,
   PluginStoreName,
