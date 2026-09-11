@@ -1424,3 +1424,60 @@ adopted, this bug is still owed a fix on its own.** It is not contingent on that
 reports none while holding a dated child is lying about its span — the same class of defect ADR 0013
 line 118 already names (*"HEAD keep-stale leaves a parent that lies about dates"*), in the opposite
 direction.
+
+**CLOSED 2026-09-11 in `221fbdd`.** `#removeSegmentsFrom()` clears the envelope only where the Entry
+owns its own dates — `if (this.#hasChildren(id)) return;` before the clear. `ps` now reads `100..200`
+after the removal, off its child. The test above gained the assertion that was missing
+(`expect(state.entries.get('ps')?.start).toBe(100)`), its child gained distinct dates so the
+assertion can fail, and the stale comment is replaced by the account of what this entry found.
+
+### J28 — the amendment as built: one resolver, `Field.distribute`, and no origin exemption
+
+**Raised:** 2026-09-11, derived-write design agent. **Status:** closed. Design in
+`docs/adr/0013-…` ("Amendment, 2026-09-11"), commit `a52420f`; code in `221fbdd`.
+
+**The judgement calls, so the next agent does not re-take them.**
+
+1. **`EditOrigin` is not used, and the dispatch asked for a ruling on it.** It is the right signal if
+   the library's own bookkeeping ever needs an exemption from a consumer rule — no consumer can set
+   it. This design needs no exemption. The one internal caller that looked like it needed one
+   (`#removeSegmentsFrom`) was writing a cell the Rollup owns, which is [[N8]]. Fixing that removed
+   the need for a library-only door, so none was built. **One rule, one path.**
+2. **Decision 5's test was rewritten, with the coordinator's ruling and the author's authorization.**
+   The old body seeded a parent with a child already in place, then wrote its span through the
+   consumer door — the exact call the amendment refuses, and the exact call Q7's bypass probe made.
+   No rule resolved from the Field declaration can tell those two apart, which is why this needed a
+   ruling, not a workaround. The claim it proves is unchanged: the Rollup yields to a
+   same-transaction proposal. The structure moved to the case that is honest under one rule — `x` is
+   a **leaf** when the write is proposed, and gains a child in the same transaction. Measured before
+   the rewrite: `x` keeps `50..60` over a child at `100..200`.
+3. **A decline and an absent `distribute` raise the same error.** `DerivedFieldNotWritableError`
+   either way, on the same Field key. A consumer writes one `catch`, not two. An empty map counts as
+   a decline: a policy with nothing to write is a policy that says no.
+4. **The parent's own cell stays refused even for a Field that distributes.** An edit a `distribute`
+   aims back at the Entry being written is refused — that cell is the Rollup's, and the recursion
+   would not terminate. Distributed edits otherwise go through `entries.update()` itself, so a child
+   that is a rolling-up parent distributes again or refuses, and the walk ends at the leaves.
+5. **Core `start`/`end` cannot be given a `distribute` today**, because `CORE_FIELD_OVERRIDABLE_KEYS`
+   (`field-registry.ts`) admits `editable` only. That is deliberate and it matches the unamended half
+   of ADR 0013 line 91: *"Do not distribute a typed parent value down to children."* A parent bar
+   **drag** translates descendants (line 93) and is a different job with a different door. A consumer
+   Field is where `distribute` is reachable. Widening that list is a decision, not a follow-up.
+6. **`distribute` is declared as a method, not as a property of type `FieldDistributor`.** `TValue`
+   sits in a parameter, so a property makes `Field<number>` stop being assignable to
+   `Field<unknown>`, and `SHIPPED_FIELD_TYPES` stops compiling. The same reason `equals` and
+   `compare` are methods. `FieldDistributor` is still exported — it is the type a consumer writes one
+   against.
+7. **J27's O(n²) fix holds, and not by accident.** The door asks `#hasChildren`, not
+   `childrenOf(id).length > 0`: the second builds an overlay Entry per staged edit, which is what
+   made `removeSegments` quadratic. `#hasChildren` reads the committed index first and reaches the
+   staged edits only when `WriteSet.stagedParents` — a new filter kept current by
+   `stageAdd`/`stageUpdate`, exactly as `segmentOwner` is — says some staged edit named this id as a
+   parent. `"S1: …scales with entryCount, not entryCount²"` passes.
+
+**Verified:** `pnpm exec vitest run src/data/entry-store.mutation.test.ts` — **59/59** (was 52/52;
++7 new tests, 1 rewritten, 1 given the [[N8]] assertion). Full `pnpm exec vitest run` before and
+after, `FAIL` lists diffed: **identical, 30 failing in 14 files both times**, passing 1841 → 1848.
+`pnpm exec tsc --noEmit` — **65 errors before and after**, every one in a `*.test.ts`, the inherited
+[[J26]] count. `pnpm exec eslint src harness fixtures` — 3 errors before and after, all three in
+inherited `*.test.ts` files.
