@@ -65,7 +65,7 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'p1', start: '2026-01-01', end: '2026-01-02', cost: 500 },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05', cost: 10 },
     ]);
-    expect(state.entries.get('p1')!.props.cost).toBe(500);
+    expect(state.entries.get('p1')!.props['cost']).toBe(500);
 
     let sawCostDrop = false;
     state.on('change', ({ changeSet }) => {
@@ -77,7 +77,7 @@ describe('structure decides derivation (ADR 0013)', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     expect(sawCostDrop).toBe(true);
-    expect(state.entries.get('p1')!.props.cost).toBe(10);
+    expect(state.entries.get('p1')!.props['cost']).toBe(10);
   });
 
   it('[ADR 0013] losing the last child demotes: name stays, dates clear, no bar', () => {
