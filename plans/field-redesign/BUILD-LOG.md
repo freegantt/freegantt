@@ -1389,3 +1389,38 @@ is a design decision, so it is not an agent's to make.
 
 **Alternative:** accept the current behaviour and amend ADR 0013 line 91 to say the refusal is a
 consumer-door convenience, not an invariant. Honest, but it weakens a stated guarantee.
+
+### N8 — `removeSegments()` on a parent clears its dates and the Rollup never restores them, even with a dated child
+
+**Found:** 2026-09-11 by the derived-write design agent; **independently reproduced by the
+coordinator** before it was acted on. Live on this branch right now.
+
+```
+ps  { segments: [sole 0..10] },  child { parentId: 'ps', 100..200 }
+before removeSegments(['sole'])   ps = 100..200      (rolled up from child)
+after  removeSegments(['sole'])   ps = undefined, undefined
+                                  child = 100..200   (untouched)
+```
+
+A parent with a dated child ends up with **no dates at all**.
+
+**Why.** `#removeSegmentsFrom()` clears the Entry's envelope with
+`this.update(id, { start: undefined, end: undefined })` when the last Segment goes — correct for an
+Entry that owns its own dates (ADR 0012: it survives, dateless). But on a **parent**, that clear is a
+proposal inside the transaction body, and decision 5 makes the Rollup **yield** to a same-transaction
+proposal. So the Rollup declines to recompute the very dates the clear just removed.
+
+**Why no test caught it.** `"a last-Segment removal never touches the Entry's descendants"`
+(`entry-store.mutation.test.ts:285`) asserts only that `ps` still exists and that `child` is still
+parented. It never reads `ps`'s dates. Worse, **its own comment documents the behaviour that does not
+happen**: *"the Rollup redraws its span from `child` right away."* A stale comment sitting directly
+over a live defect.
+
+**Relationship to the amendment.** The [[Q7]] amendment fixes this as a side effect: the clear runs
+only where the Entry owns its own dates, so a parent never reaches it. **If the amendment is not
+adopted, this bug is still owed a fix on its own.** It is not contingent on that design.
+
+**Do not "fix" it by asserting the current behaviour.** The dates belong to the child; a parent that
+reports none while holding a dated child is lying about its span — the same class of defect ADR 0013
+line 118 already names (*"HEAD keep-stale leaves a parent that lies about dates"*), in the opposite
+direction.
