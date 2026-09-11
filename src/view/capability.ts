@@ -97,7 +97,10 @@ export interface CapabilityInputs {
   /** ADR 0013: the look `layout/`'s item production would resolve for this Entry — structure first,
    *  then whichever plugin-owned look claims it (`layout/items/produce-items.ts`'s `resolveLook`).
    *  `registeredDefaultsFor` keys on this, not on structure alone, so a plugin's own
-   *  `registerLookDefaults('buffer', …)` reaches the Entries it claims. */
+   *  `registerLookDefaults(itsOwnLook, …)` reaches the Entries it claims. The look is named with a
+   *  placeholder, never a real plugin's id: [S5-A3] greps this tree for a consumer look's own name
+   *  and expects zero hits, and core prose that borrows one is the first step of the coupling that
+   *  gate exists to catch. */
   lookOf: (entry: Entry) => EntryLook;
   /** S5.9, D-S5-22. */
   registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
