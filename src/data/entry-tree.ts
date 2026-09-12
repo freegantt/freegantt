@@ -56,7 +56,7 @@ export function entryAfterEdits(
 
 /** Every walk below asks `parentIdOf` which Entry is the parent (ADR 0020), never `entry.parentId`
  *  — core's own source answers that field, and a plugin's source answers something else. Hand these
- *  a **checked** source (`checkHierarchySource`): a chain that loops never terminates otherwise. */
+ *  a **checked** source (`checkHierarchyAnswers`): a chain that loops never terminates otherwise. */
 export function childIdsByParent(
   entries: ReadonlyMap<EntryId, StoredEntry>,
   parentIdOf: HierarchySource,

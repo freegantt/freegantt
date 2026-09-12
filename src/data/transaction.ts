@@ -23,6 +23,7 @@ import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { rollUpFields } from './rollup.js';
+import type { ParentIndex } from './hierarchy-source.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -38,6 +39,8 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
+  committedParents(): ParentIndex;
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
@@ -140,7 +143,7 @@ export function applyConstructionRollUp(data: TransactionData): void {
     data.fields,
     data.fieldAccess,
     () => data.mintSegmentId(),
-    data.hierarchySource,
+    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
   );
   writeConstructionUpdates(data, updated);
 

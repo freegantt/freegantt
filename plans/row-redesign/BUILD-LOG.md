@@ -1478,3 +1478,88 @@ own doc now says "every bar no variant paints", and names the rule that claims a
 written and reverted), and have `gantt-shell.ts`'s `#paintFor` prefer the catch-all when the rule
 that won came from core. Expect the two e2e specs above to need the planner's own `parent` variant
 back — the one J40 deleted.
+
+---
+
+## J62 — the check is pure, and core raises a refused answer where it happens
+
+**Review fixes, F5.**
+
+`checkHierarchySource` raised its Faults from inside an `alien-signals` `computed`. A computed is
+lazy, so the documented rule — "reported once per revision" — was really "once per evaluation, and
+only if somebody evaluates". A headless Dataset, which is where a plugin's own tests run, reported
+nothing at all.
+
+**The call: the check answers, and the store raises.** `checkHierarchyAnswers(entries, source)` is
+pure now. It hands back `{ parents, refused }`, and `refused` is a list of ordinary Error reports.
+`EntryStore#reportRefusedHierarchyAnswers()` raises them, and it is called at the three points where
+the answers can change: at construction, each time a plugin composes the seam, and on every
+revision. Never from a read.
+
+**Why not "move the check out of the computed".** The review's own remedy was to raise from the
+commit path. That silences the construction case entirely, which is the only case `F4` reaches — no
+commit has happened yet. Both doors are needed, so the report is a separate call at every door
+rather than a side effect inside one of them.
+
+**A construction-time refusal reaches the `console`, not an `error` handler.** No consumer can
+subscribe before `new Dataset(...)` returns. That is the posture the construction Rollup's own
+`derived-values-dropped` report already takes (ADR 0013, decision 5), and the tests read the
+fallback for that half.
+
+**Deduped per revision, by message.** A plugin composing the seam checks again inside the same
+revision, so the row the consumer mis-parented would otherwise be reported twice at construction.
+
+**The `core` size budget moves 78 kB → 79 kB.** Measured: 77.93 kB before this cluster, 78.18 kB
+after — 250 B for `F4`, `F5` and `F6` together. Brotli noise at this scale is ±60 B (removing the
+dedupe measured *larger* than keeping it), so there was no honest way to trim into 70 B of headroom.
+`J60` rejected a design for 89 B; this is not that case — there is no second design that reports a
+Fault deterministically for less.
+
+**To reverse:** give `checkHierarchyAnswers` its `report?: RaiseError` parameter back, call it from
+the `#hierarchy` computed, and delete `#reportRefusedHierarchyAnswers` and its three call sites.
+
+---
+
+## J63 — a refused hierarchy answer names whoever answered it
+
+**Review fixes, F4.**
+
+Both hierarchy Faults hard-coded `by: 'plugin'`, so `new Dataset({ entries: [{ id: 'a', parentId:
+'nope' }] })` — no plugin anywhere — told the consumer a plugin did it, in words (`the source`) that
+`plans/02` calls an expert door.
+
+**The call: the answer names the author, and a flag cannot.** A boolean set when a plugin claims the
+seam is wrong, because a source composes: `entry.props.phaseId ?? next(entry)` falls through and
+hands back the row's own `parentId`. So core compares the answer with `entry.parentId`. Equal means
+the consumer stored that value, and the report says `by: 'consumer'` and names `parentId`. Anything
+else is a plugin's own answer, and keeps the old wording.
+
+A plugin that answers with the same id the row already stores is reported as the consumer's. That is
+correct: the value is the consumer's, the fix is on the consumer's row, and blaming the plugin would
+send them to the wrong file.
+
+**To reverse:** drop the `authored` branch in `refuse` and hard-code `by: 'plugin'` with the source
+wording.
+
+---
+
+## J64 — the Rollup reads the store's committed parent index
+
+**Review fixes, F6.**
+
+The Rollup walked the whole Dataset five times per commit, and two of the five were new on this
+branch. One of those two re-derived what `EntryStore` already holds: the checked parents of the
+committed rows, memoized per revision.
+
+`rollUpFields` now takes a `RollUpTree` — `{ committedParents, source }` — instead of the bare
+source. The committed half is the store's index; the source still answers for the effective tree,
+which is a tree no revision holds and no index can hold. Four sweeps, and the store and the Rollup
+can no longer disagree about who a row's parent was.
+
+**The evaluation this forces is deliberate, not inherited.** Reading `committedParents()` from the
+commit path evaluates the `#hierarchy` computed there. Under `J62` that computed raises nothing, so
+no Fault fires as a side effect of this change — the commit path reports because
+`endTransaction` calls `#reportRefusedHierarchyAnswers()` on purpose.
+
+**To reverse:** put `hierarchySource` back as `rollUpFields`'s sixth parameter and rebuild
+`parentOfPrior` with `checkHierarchyAnswers(committed, source)`.

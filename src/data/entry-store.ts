@@ -59,8 +59,8 @@ import {
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { LiveEntries, unknownFieldError } from './live-entry.js';
-import { checkHierarchySource, parentIdFrom, storedParentSource } from './hierarchy-source.js';
-import type { ParentIndex } from './hierarchy-source.js';
+import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
+import type { CheckedHierarchy, ParentIndex } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
@@ -145,9 +145,13 @@ export class EntryStore implements EntryStoreContract {
    *  reads it, so composing a source invalidates them all. */
   #hierarchySource = signal<HierarchySource>(storedParentSource);
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
-   *  revision, so an unknown parent id and a cycle are each reported once per revision and never
-   *  once per read. */
-  #parentById: () => ParentIndex;
+   *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
+   *  never depends on who read first (`F5`). `#reportRefusedHierarchyAnswers` raises. */
+  #hierarchy: () => CheckedHierarchy;
+  /** Which answers have already been raised, and for which revision. A revision is the documented
+   *  unit — one report per refused answer per revision — and a plugin that composes the seam checks
+   *  again inside the same revision, so the same bad answer must not be raised twice for it. */
+  #reportedRefusals = { revision: -1, messages: new Set<string>() };
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
   /** Ancestor count per committed row, cached beside `#byParent` for the same reason `hasChildren`
    *  is: `entry.depth` is a property, and a walk inside a getter breaks ADR 0017's rule 4. */
@@ -213,14 +217,14 @@ export class EntryStore implements EntryStoreContract {
       return Array.from(this.#byId.values());
     });
     this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
-    this.#parentById = computed(() => {
+    this.#hierarchy = computed(() => {
       this.#revision.get();
-      return checkHierarchySource(this.#byId, this.#hierarchySource.get(), this.#raiseError);
+      return checkHierarchyAnswers(this.#byId, this.#hierarchySource.get());
     });
     this.#byParent = computed(() => {
       // Core inverts the source's answer (ADR 0020). One parent per Entry goes in, so nothing can
       // produce two parents for one row, and sibling order stays the order the rows are in.
-      const parentById = this.#parentById();
+      const parentById = this.committedParents();
       const byParent = new Map<EntryId | undefined, StoredEntry[]>();
       for (const entry of this.#all()) {
         const parentId = parentById.get(entry.id);
@@ -243,6 +247,38 @@ export class EntryStore implements EntryStoreContract {
       walk(undefined, 0);
       return depthById;
     });
+    // The authored rows are answers too, and nobody has read a row yet (`F5`).
+    this.#reportRefusedHierarchyAnswers();
+  }
+
+  /** The checked tree for the committed rows. Memoized per revision, so the commit path, the Rollup
+   *  and every live row read one index rather than three walks that happen to agree (`F6`). */
+  committedParents(): ParentIndex {
+    return this.#hierarchy().parents;
+  }
+
+  /** Raises every answer core refused, once (ADR 0020, `F5`).
+   *
+   *  Called where the answers can change and nowhere else — at construction, on every commit, and
+   *  each time a plugin composes the seam. Not from the read path: a Fault that waits for somebody
+   *  to look is a Fault a headless Dataset never sees, and a plugin's own tests run headless.
+   *  A construction-time refusal reaches the `console` fallback and no `error` handler, because no
+   *  consumer can subscribe before the constructor returns — the same posture the construction
+   *  Rollup's own `derived-values-dropped` report already takes (ADR 0013, decision 5).
+   *
+   *  The raise lands after the write set closes and before `change` fans out, so a handler that
+   *  writes in response is outside the notification window `data/` forbids a mutation in. */
+  #reportRefusedHierarchyAnswers(): void {
+    const revision = this.#revision.get();
+    if (this.#reportedRefusals.revision !== revision) {
+      this.#reportedRefusals = { revision, messages: new Set<string>() };
+    }
+    const raised = this.#reportedRefusals.messages;
+    for (const report of this.#hierarchy().refused) {
+      if (raised.has(report.message)) continue;
+      raised.add(report.message);
+      this.#raiseError(report, () => console.warn(`FreeGantt: ${report.message}`));
+    }
   }
 
   /** How many ancestors `id` has. The committed index answers it for free; an open transaction
@@ -269,7 +305,7 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** One call to whichever source is current, branded. Every tree read inside an open transaction
-   *  goes through this — the committed index goes through `checkHierarchySource` instead. */
+   *  goes through this — the committed index goes through `checkHierarchyAnswers` instead. */
   #askSource(entry: StoredEntry): EntryId | undefined {
     return parentIdFrom(this.#hierarchySource.get(), entry);
   }
@@ -278,7 +314,7 @@ export class EntryStore implements EntryStoreContract {
    *  Committed, it is the checked answer the index holds. Inside an open transaction, it is what the
    *  source says about the row this transaction leaves. */
   parentIdOf(entry: StoredEntry): EntryId | undefined {
-    if (!this.#writeSet) return this.#parentById().get(entry.id);
+    if (!this.#writeSet) return this.committedParents().get(entry.id);
     return this.#askSource(entry);
   }
 
@@ -295,6 +331,9 @@ export class EntryStore implements EntryStoreContract {
    *  reaches a plugin through `ctx.hierarchy` alone. */
   setHierarchySource(wrap: HierarchySourceWrapper): void {
     this.#hierarchySource.set(wrap(this.#hierarchySource.get()));
+    // A new occupant answers about the rows already here, so its refused answers are news now
+    // (`F5`) — not when the next commit or the next read happens to ask.
+    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Live rows; *which* rows is committed-only, so this array does not grow inside an open
@@ -859,6 +898,9 @@ export class EntryStore implements EntryStoreContract {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
     this.#revision.set(this.#revision.get() + 1);
+    // A rolled-up Field write can move the tree: a source may read any `props` key, and this is a
+    // revision like any other.
+    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
@@ -875,6 +917,7 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
+    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
