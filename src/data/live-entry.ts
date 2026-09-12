@@ -121,12 +121,19 @@ class LiveEntry implements Entry {
   }
 
   /** A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
-   *  overflow answers no question. */
+   *  overflow answers no question.
+   *
+   *  `seen` is the same guard `#depthOf` carries in the store: inside an open transaction the tree
+   *  is the raw source's answer, which core has not checked yet, so a source that loops would walk
+   *  `b,a,b,a,…` forever. Each row is answered once, and the link that closes a loop is dropped. */
   descendants(): readonly Entry[] {
     const found: Entry[] = [];
+    const seen = new Set<EntryId>([this.id]);
     const pending: EntryId[] = [this.id];
     while (pending.length > 0) {
       for (const child of this.#source.storedChildrenOf(pending.pop()!)) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
         found.push(this.#source.entryFor(child.id));
         pending.push(child.id);
       }
