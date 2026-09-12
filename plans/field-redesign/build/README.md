@@ -96,7 +96,7 @@ The two `plans/02` rows for Build 5 landed on 2026-09-11 and are struck through 
 | ~~`plans/02` — add `dataset.setFieldEditable` to the §2 verb list, beside `hideGridColumn`~~ **DONE 2026-09-11** | 5 |
 | ~~`plans/02` — it still calls the `fields` lock a hole~~ **DONE 2026-09-11.** The hole is now scoped to adding or removing a Field **key**; locking a declared column is solved by `setFieldEditable` | 5 |
 | `plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands. If the build cannot honour the new wording, the wording is wrong, not the build | 5 |
-| The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9` drop when the last build merges. ADR 0005's banner is **blocked** — an accepted ADR is superseded, never edited | last |
+| ~~The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9`~~ **DONE 2026-09-11.** They named five built ADRs as `proposed`, so a reader got a false answer. `plans/01`'s banner is deleted. The other two now name ADR 0014's `entries.read` alone, and drop when Build 4 merges. ADR 0005's banner is **blocked** — an accepted ADR is superseded, never edited | last |
 
 ---
 

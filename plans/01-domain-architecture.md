@@ -2,8 +2,6 @@
 
 Companion to `00-overview.md` (decisions D1–D12 are cited by number). This document defines the layers, the domain model, the contracts between modules, and the invariants that CI enforces.
 
-> **§2.5, §2.6 and I14 are ahead of `src/`.** ADRs 0014 and 0015 are still `proposed`. ADRs 0011, 0012, 0013 and 0016 are `accepted` and built, so `Entry.props`, optional dates, derivation by children and no save format are the shipped code, not a plan. `src/` ships `editable?: boolean` until Build 5 lands the enum. **Build 5 closes the last item, so delete this banner when it lands.** [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
-
 ---
 
 ## 1. Layer map
