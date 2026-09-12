@@ -120,6 +120,10 @@
         <button id="expand-all-btn" type="button">Expand all</button>
         <button id="collapse-all-btn" type="button">Collapse all</button>
         <button id="reparent-btn" type="button">Reparent beta under plain parent</button>
+        <!-- ADR 0020: the same move, through a plugin's own key instead of parentId. "Empty phase"
+             has no children and no dates; give the gate review a phaseId and it becomes a parent in
+             fact — it derives, it rolls up cost and span, and it paints as a summary. -->
+        <button id="phase-btn" type="button">Nest gate review under Empty phase (plugin tree)</button>
         <label>
           <input id="custom-editor-checkbox" type="checkbox" /> Bring your own editor (beforeEntryEdit, Name
           only)
