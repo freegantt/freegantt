@@ -1592,3 +1592,22 @@ construction-time hierarchy refusal.
 
 **To reverse:** delete the port, the `'unknown-variant-field'` code and its row in
 `error-code-drift.test.ts`, and return `false` from `valueMatches` with no report.
+
+---
+
+## J66 — S5's own files keep their words, under a banner that says what replaced them
+
+**Review fixes, the question `F12` left open.**
+
+`plans/s5-extensibility-and-editing/README.md` and `s5.13-gallery-and-gate.md` still name
+`GanttPlugin` and `DatasetPlugin`. `F12` fixed `plans/01` §10 and stopped there, and the previous
+agent argued these two are slice history rather than locked spec.
+
+**The call: mark them, do not rewrite them.** A slice tracker records what that slice decided, in
+the words it decided them in — `D-S5-1` *was* "two contracts, two hosts", and editing that sentence
+would make the record say a decision was never taken. But a reader cannot tell history from
+instruction with nothing on the page, and `README.md` is where an agent goes for S5's context. So
+each file opens with one banner: the pair is retired, `definePlugin` replaced it, and each name maps
+to the half it became.
+
+**To reverse:** delete the two banners.
