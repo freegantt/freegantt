@@ -95,7 +95,7 @@ export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, StoredEnt
 
 /** Every Entry below `id`, deepest included, read one level at a time through `childrenOf` — the
  *  walk `view/capability.ts` needs to answer what a parent bar's drag writes (ADR 0013). Call:
- *  `descendantsOf(parent.id, (id) => dataset.entries.childrenOf(id))`.
+ *  `descendantsOf(parent.id, (id) => store.storedChildrenOf(id))`.
  *
  *  A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
  *  overflow answers no question. */

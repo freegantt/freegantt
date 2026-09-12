@@ -42,7 +42,7 @@ describe('EntryStore', () => {
     expect(store.size).toBe(2);
   });
 
-  it('childrenOf returns children in insertion order', () => {
+  it('storedChildrenOf returns children in insertion order', () => {
     const store = new EntryStore(
       [entry('root'), entry('a', 'root'), entry('b', 'root'), entry('c')],
       createContext(),

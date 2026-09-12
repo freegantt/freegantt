@@ -128,6 +128,18 @@ class LiveEntry implements Entry {
     return found;
   }
 
+  /**
+   * `JSON.stringify(entry)` hands back the stored values, not `{"id": …}` alone.
+   *
+   * Every value on this row is a getter, and `JSON.stringify` reads own enumerable properties only,
+   * so without this hook a consumer who serializes `entries.all` loses every name, date and Segment
+   * and is told nothing. It is deliberately **not** on the `Entry` interface: `toInput()` is the one
+   * copy door a caller names (ADR 0017), and this is the platform calling that same door.
+   */
+  toJSON(): EntryInput {
+    return this.toInput();
+  }
+
   toInput(): EntryInput {
     const stored = this.#stored();
     if (stored === undefined) return { id: this.id, name: '' };

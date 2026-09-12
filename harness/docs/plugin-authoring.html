@@ -54,11 +54,13 @@
       </header>
       <main>
         <div class="note">
-          <strong>Draft — this page publishes ADRs 0017–0020, and none of them is accepted yet.</strong>
+          <strong>Draft — this page publishes ADRs 0017–0020. 0017 is accepted and built; 0018–0020
+          are not.</strong>
           It is here to be read and argued with, not to be copied.
-          <strong>It is ahead of <code>src/</code>.</strong> The library ships
-          <code>entries.fieldValue(id, key)</code> where this page writes <code>entry.read(key)</code>,
-          and the four seams one variant replaces are still the installed API. No sample on this page
+          <strong>It is ahead of <code>src/</code> for everything 0017 does not cover.</strong> The
+          library ships <code>entry.read(key)</code>, <code>entry.duration()</code> and the live
+          <code>Entry</code> this page writes, and the four seams one variant replaces are still the
+          installed API. No sample on this page
           is typechecked against the built package. The samples that are typechecked live in
           <a href="../../docs/06-plugin-authoring.md"><code>docs/06-plugin-authoring.md</code></a>,
           and that guide describes HEAD.
@@ -696,7 +698,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             <strong>One question, one call site.</strong> A Field read is
             <code>entry.read(key)</code>, and that is the same call an app author writes and a
             plugin writes. <code>entries.fieldValue(id, key)</code> and
-            <code>ctx.read(entry, key)</code> both retire — they were the same question with two
+            <code>ctx.read(entry, key)</code> are both gone — they were the same question with two
             doors. A <code>compute</code> Field still reads a sibling Field, and a duration: it asks
             the pass it runs in, which names no row because it is computing exactly one —
             <code>ctx.read(key)</code>, <code>ctx.duration()</code>, <code>ctx.children()</code>. <code>entry.props.k</code> is storage, not a resolver: it misses a

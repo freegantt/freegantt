@@ -217,7 +217,7 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(fired).toBe(false);
   });
 
-  it('entries.childrenOf returns direct children', () => {
+  it('entry.children() returns direct children', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1' })],

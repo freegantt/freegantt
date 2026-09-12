@@ -72,7 +72,7 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.
  *  The public `Dataset` class also exposes construction options and `transaction()` — those stay on
  *  the class, because a view never opens a transaction. There is no `isRollUpKind` any more (ADR
- *  0013): derivation is structure, so `view/capability.ts` asks `entries.childrenOf(id).length > 0`
+ *  0013): derivation is structure, so `view/capability.ts` asks `entry.hasChildren`
  *  directly instead of a per-kind predicate — there is no separate shape to hide. */
 export interface Dataset<TProps = Record<string, unknown>> {
   readonly entries: EntryStore<TProps>;
