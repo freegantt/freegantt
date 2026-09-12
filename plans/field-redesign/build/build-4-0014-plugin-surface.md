@@ -1,12 +1,14 @@
-# Build 4 — ADR 0014, the plugin-author surface
+# Build 4 — ADR 0014, the plugin-author surface — **WITHDRAWN**
 
-**The one question it answers.** Where do a plugin's values live, and what are the read doors called?
+> **Do not build this. Do not tick these boxes.** The author withdrew ADR 0014 on 2026-09-11, before this build started, and marked it `not planned`. No line of it ever reached `src/`.
+>
+> **What that means for the code.** `entries.fieldValue` is the by-key door for good. `durationOf` stays. A cell renderer keeps the pair it has. No registry check enforces a plugin key prefix — a prefix is a convention a plugin follows, and `scheduling:progress` (ADR 0008) is the example. Every `fieldValue` in `src/`, `harness/` and `e2e/` is correct, and none of it is debt.
+>
+> **The page stays** so a later reader can see what was considered and dropped. Read it as history. The one question below was never answered, and the work list below was never run.
 
-**Read first.** [`docs/adr/0014`](../../../docs/adr/0014-the-plugin-author-surface.md). Then [`README.md`](README.md) in this folder.
+**The one question it would have answered.** Where do a plugin's values live, and what are the read doors called?
 
-**Lands after.** Build 2, for `props`. Nothing else. This build blocks nothing, and nothing blocks it.
-
-**Tick each box as you finish it.** Do not batch the ticks.
+**Read first.** [`docs/adr/0014`](../../../docs/adr/0014-the-plugin-author-surface.md), whose status line carries the withdrawal.
 
 ---
 
