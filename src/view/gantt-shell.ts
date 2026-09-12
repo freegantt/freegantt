@@ -426,10 +426,6 @@ export class GanttShell {
    *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
   #lastBarById = new Map<ItemId, FrameBar>();
-  /** The committed Entries keyed by id, and the `datasetRevision` they were built from.
-   *  `#committedEntriesById` below is the only reader and the only writer. */
-  #entriesById: ReadonlyMap<EntryId, Entry> = new Map();
-  #entriesByIdRevision: number | undefined;
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
@@ -753,7 +749,7 @@ export class GanttShell {
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
-      committedEntriesById: () => this.#committedEntriesById(),
+      committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.locale,
       applyGestureState: (preview, pendingItemIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
@@ -1527,22 +1523,6 @@ export class GanttShell {
   #panBy(dx: number, dy: number): void {
     const { x, y } = this.#viewport.scroll.state.position;
     this.#viewport.scroll.panTo({ x: x + dx, y: y + dy });
-  }
-
-  /** The committed Entries keyed by id — what the edit-extension hook reads a drag preview against
-   *  (`GesturePipeline#extraFor`). It is rebuilt only when the Dataset says it changed.
-   *
-   *  That reader runs once per rAF frame for the whole length of a drag. Rebuilding the map there
-   *  copied every Entry in the Dataset sixty times a second (I5). A drag commits once, at the end,
-   *  so a drag now rebuilds this at most once. One revision is the whole cache key, because
-   *  `EditRequest.entries` is committed-only by contract (D-S5-45). */
-  #committedEntriesById(): ReadonlyMap<EntryId, Entry> {
-    const revision = this.#options.dataset.datasetRevision;
-    if (revision !== this.#entriesByIdRevision) {
-      this.#entriesById = new Map(this.#options.dataset.entries.all.map((entry) => [entry.id, entry]));
-      this.#entriesByIdRevision = revision;
-    }
-    return this.#entriesById;
   }
 
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path

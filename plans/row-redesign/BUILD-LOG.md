@@ -498,3 +498,31 @@ the callback all go. `CapabilityInputs` loses `hasChildren` and `descendantsOf` 
 `gantt-shell.ts` stops building three `childrenOf` closures.
 
 **To reverse:** put the boolean back as a positional argument.
+
+---
+
+## J20 — `entries.storedValues` is the one door onto the committed stored rows
+
+**Build 1, Unit C. Done in the code. This closes an API gap, and it is filed under `CLAUDE.md`'s
+stop rule rather than worked around.**
+
+`entries.all` hands back live rows (`J10`). One caller must not read now: `GesturePipeline#extraFor`
+builds `EditRequest.entries`, which is the state a cascade computes a delta **against** and is
+committed-only by contract (D-S5-45). With only `all` on the surface, `view/` would have had to
+rebuild a `StoredEntry` per row out of `entry.toInput()` every commit — a re-derivation of what the
+store already holds, in exactly the place the stop rule names.
+
+**The call.** `EntryStoreView.storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>`. The store
+hands out its own `#byId` index read-only, so there is no copy and one map identity per commit.
+
+**It deletes a hand-rolled cache.** `gantt-shell.ts` held `#entriesById` plus `#entriesByIdRevision`
+and rebuilt the map whenever `datasetRevision` moved, because rebuilding it per rAF frame copied the
+whole Dataset sixty times a second (I5). Both fields and the memo are gone: the store's index is
+already stable per commit.
+
+**This does not reopen ADR 0017 rule 2.** The refused shape was `all: readonly StoredEntry[]` — the
+row list `layout/` receives, which is the one that must stay live or `entries-source.ts` rebuilds the
+tree out of `parentId`. `storedValues` is a second, narrower door, named for the one question it
+answers, and `layout/` never calls it.
+
+**To reverse:** delete the member and rebuild the map in `view/` from `toInput()`.

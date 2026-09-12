@@ -241,6 +241,12 @@ export class EntryStore implements EntryStoreContract {
     return this.#all();
   }
 
+  /** The committed rows as stored values, keyed by id (ADR 0017, P4). The store's own index, handed
+   *  out read-only — never a copy, so a drag preview reading it every frame allocates nothing. */
+  get storedValues(): ReadonlyMap<EntryId, StoredEntry> {
+    return this.#byId;
+  }
+
   /** The live row for `id`, or `undefined` once nothing by that id exists. */
   get(id: EntryId | string): Entry | undefined {
     const key = entryId(id);
