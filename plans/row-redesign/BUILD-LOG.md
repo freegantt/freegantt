@@ -1563,3 +1563,32 @@ no Fault fires as a side effect of this change — the commit path reports becau
 
 **To reverse:** put `hierarchySource` back as `rollUpFields`'s sixth parameter and rebuild
 `parentOfPrior` with `checkHierarchyAnswers(committed, source)`.
+
+---
+
+## J65 — a variant rule that names an undeclared key says so
+
+**Review fixes, `J59`'s deferred half.**
+
+`J59` made a field match on a key no Field declares claim no row, and left it silent. The rule simply
+stopped matching, and nothing said why — a typo and a working rule look the same from the page.
+
+**The call: the rule reports at match time, and the report is a new code.**
+`VariantRegistryPorts.reportUnknownFieldMatch` sits beside `reportDoubleClaim`, and `GanttShell`
+raises `'unknown-variant-field'` from it. Match time, never registration time: which keys are
+declared is live, and a Gantt rebound to another Dataset declares a different set — a check at
+registration would report a key that is about to become real.
+
+**Deduped inside the compiled rule, not at the shell.** A rule that names a missing key names it on
+every row of every pass, so the shell's own `Set` would allocate a claimant per row on the hover
+path. The `Set` lives in `compileRule`'s closure instead: one allocation at the rule's first row,
+and nothing after it. The cost is that a rebind which un-declares a key already reported stays
+quiet. The first report already said the sentence.
+
+**A rule in `GanttOptions.variants` reports to the `console`, not to an `error` handler.** It
+resolves during the constructor's own first paint, which is before any consumer handler exists —
+the same trap `Q10`'s own test names for a plugin collision, and the same answer `J62` gives for a
+construction-time hierarchy refusal.
+
+**To reverse:** delete the port, the `'unknown-variant-field'` code and its row in
+`error-code-drift.test.ts`, and return `false` from `valueMatches` with no report.

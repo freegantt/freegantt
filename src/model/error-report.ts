@@ -61,6 +61,10 @@ export type BuiltInErrorCode =
   // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
   // the rule walk stops at the first yes and never looks for a second.
   | 'variant-claimed-twice'
+  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule claims no
+  // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
+  // down, and a plugin whose key the Dataset never declared is the same case.
+  | 'unknown-variant-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.

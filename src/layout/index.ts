@@ -21,6 +21,8 @@ export type {
   EntryVariant,
   FieldMatch,
   ReportDoubleClaim,
+  ReportUnknownFieldMatch,
+  UnknownFieldMatch,
   VariantClaimant,
   VariantPredicate,
   VariantRegistry,

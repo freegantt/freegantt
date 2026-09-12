@@ -7,7 +7,7 @@ import { itemId } from '../../model/index.js';
 import type { Entry, Field, FieldKey } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import { createVariantRegistry } from './variants.js';
-import type { DoubleVariantClaim } from './variants.js';
+import type { DoubleVariantClaim, UnknownFieldMatch } from './variants.js';
 
 function spanEntry(id: string, props: Record<string, unknown> = {}): Entry {
   return entryDouble({ id, start: 0, end: 10, props });
@@ -163,6 +163,20 @@ describe('what a field match compares (J6)', () => {
     registry.addPluginVariant({ name: 'typo', when: { mileStone: true } });
 
     expect(registry.resolveFor(spanEntry('a', { mileStone: true })).name).toBe('leaf');
+  });
+
+  it('names the rule and the key when a match reads a key no Field declares (J59)', () => {
+    const seen: UnknownFieldMatch[] = [];
+    const registry = createVariantRegistry({
+      ...declaring({ key: 'milestone' }),
+      reportUnknownFieldMatch: (match) => seen.push(match),
+    });
+    registry.addPluginVariant({ name: 'typo', when: { mileStone: true } }, 'demo.typo');
+
+    expect(registry.resolveFor(spanEntry('a', { mileStone: true })).name).toBe('leaf');
+    // One report per rule and key, however many rows the rule is asked about.
+    registry.resolveFor(spanEntry('b', { mileStone: true }));
+    expect(seen).toEqual([{ rule: { variant: 'typo', pluginId: 'demo.typo' }, key: 'mileStone' }]);
   });
 
   it('reads a predicate for "has a value", which is the question a match does not ask', () => {

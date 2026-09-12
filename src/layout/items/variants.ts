@@ -105,6 +105,26 @@ export interface VariantClaimant {
   pluginId?: PluginId;
 }
 
+/** A `when` names a key no Field declares. The rule claims no row — the match answers no rather
+ *  than taking the layout pass down — and this names the rule and the key, so the typo is visible
+ *  instead of silent (`J59`). A plugin that means to match on its own key declares it from its
+ *  `data` half. */
+export interface UnknownFieldMatch {
+  /** The rule that names the key. */
+  rule: VariantClaimant;
+  key: FieldKey;
+}
+
+/** Where an `UnknownFieldMatch` goes — `GanttShell` supplies one, the same way it supplies
+ *  `ReportDoubleClaim`. Which keys are declared is **live**: a Gantt rebound to another Dataset
+ *  declares a different set, so this is asked at match time and never at registration.
+ *
+ *  One report per rule and key. The rule holds that set itself, so a rule that names a missing key
+ *  allocates once at its first row and nothing on any row after — the hover path's own budget (I5).
+ *  The cost of holding it there is that a rebind which un-declares a key already reported stays
+ *  quiet; the first report already said the sentence. */
+export type ReportUnknownFieldMatch = (match: UnknownFieldMatch) => void;
+
 /** Where a `DoubleVariantClaim` goes. `GanttShell` supplies one — see its `#reportDoubleClaim`,
  *  which raises the `'variant-claimed-twice'` report and holds the one-per-pair rule. A registry
  *  built without one resolves a double claim silently to the newest rule, and never asks a second
@@ -161,6 +181,7 @@ export interface VariantRegistryPorts {
    *  outside a Dataset says so with `() => undefined`: no key is declared. */
   fieldFor: (key: FieldKey) => Field | undefined;
   reportDoubleClaim?: ReportDoubleClaim | undefined;
+  reportUnknownFieldMatch?: ReportUnknownFieldMatch | undefined;
 }
 
 /** The summary rail's class, and nothing else — no text, no children. So the library keeps painting
@@ -214,10 +235,20 @@ function produceLeafItems(entry: Entry): readonly Item[] {
  *  that Field's own `equals`. The Field is looked up per read rather than at registration: a Gantt
  *  may be rebound to another Dataset, and a match names one or two keys, so the lookup is a Map
  *  read per key per row. */
-function compileRule(rule: VariantRule, fieldFor: VariantRegistryPorts['fieldFor']): VariantPredicate {
+function compileRule(
+  rule: VariantRule,
+  fieldFor: VariantRegistryPorts['fieldFor'],
+  reportUnknownKey: (key: FieldKey) => void,
+): VariantPredicate {
   if (typeof rule === 'function') return rule;
   const keys = Object.keys(rule);
-  return (entry) => keys.every((key) => valueMatches(entry, key, rule[key], fieldFor));
+  const reported = new Set<FieldKey>();
+  const reportOnce = (key: FieldKey): void => {
+    if (reported.has(key)) return;
+    reported.add(key);
+    reportUnknownKey(key);
+  };
+  return (entry) => keys.every((key) => valueMatches(entry, key, rule[key], fieldFor, reportOnce));
 }
 
 function valueMatches(
@@ -225,22 +256,29 @@ function valueMatches(
   key: FieldKey,
   expected: unknown,
   fieldFor: VariantRegistryPorts['fieldFor'],
+  reportUnknownKey: (key: FieldKey) => void,
 ): boolean {
   // The lookup comes first, and a key no Field declares answers no. `entry.read` throws on such a
   // key, and this runs on every row of every layout pass, so reading first would take the frame
   // down for a typo — or for the one rule a chrome plugin cannot help itself with, because it
-  // installs after the Dataset closes its Field gate.
+  // installs after the Dataset closes its Field gate. Claiming nothing is the answer; saying so is
+  // the report (`J59`).
   const field = fieldFor(key);
-  if (field === undefined) return false;
+  if (field === undefined) {
+    reportUnknownKey(key);
+    return false;
+  }
   const actual = entry.read(key);
   // Called on the Field, never detached: a consumer's own `equals` may read `this`.
   return field.equals !== undefined ? field.equals(actual, expected) : Object.is(actual, expected);
 }
 
 function claimantOf(registration: VariantRegistration): VariantClaimant {
-  return registration.pluginId === undefined
-    ? { variant: registration.variant.name }
-    : { variant: registration.variant.name, pluginId: registration.pluginId };
+  return claimant(registration.variant.name, registration.pluginId);
+}
+
+function claimant(variant: string, pluginId: PluginId | undefined): VariantClaimant {
+  return pluginId === undefined ? { variant } : { variant, pluginId };
 }
 
 /** Does this registration say which rows it claims? A `1` sorts before a `0`, so every rule that
@@ -270,6 +308,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
   const { fieldFor } = ports;
   /** A `const` copy, so the walk below narrows it once instead of on every pass. */
   const report = ports.reportDoubleClaim;
+  const reportUnknownFieldMatch = ports.reportUnknownFieldMatch;
   let nextSeq = 0;
   const live: VariantRegistration[] = [];
   /** The walk order, held between registration changes (#188's pattern): `resolveFor` runs on every
@@ -285,7 +324,12 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         paint: variant.paint,
         can: variant.can,
       },
-      claim: variant.when === undefined ? undefined : compileRule(variant.when, fieldFor),
+      claim:
+        variant.when === undefined
+          ? undefined
+          : compileRule(variant.when, fieldFor, (key) =>
+              reportUnknownFieldMatch?.({ rule: claimant(variant.name, pluginId), key }),
+            ),
       rank,
       seq: nextSeq++,
       pluginId,

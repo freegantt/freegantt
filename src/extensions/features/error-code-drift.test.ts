@@ -26,6 +26,7 @@ const KNOWN_CODES: Record<BuiltInErrorCode, true> = {
   'unknown-parent': true,
   'hierarchy-cycle': true,
   'variant-claimed-twice': true,
+  'unknown-variant-field': true,
   'derived-value': true,
   'derived-values-dropped': true,
   'no-parse-value': true,
