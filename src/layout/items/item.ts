@@ -24,22 +24,30 @@ export interface Item {
  *  whole-entry Item, which is the line both shipped examples used to hand-write (ADR 0018). */
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
-/** The two questions item production asks about a variant: which one this row wears, and what that
- *  one draws. `VariantRegistry` (`variants.ts`) answers them, plus two more the frame pass never
- *  asks — how a variant looks, and what you can do to it. So this narrower face is what
+/** One row's variant, as the item pass reads it: which one won, and what it draws. `variants.ts`
+ *  widens it with how it looks and what you can do to it — those two name `BarRenderer`, and this
+ *  file must not, or `layout/` grows an import ring through `renderer.ts`. */
+export interface DrawnVariant {
+  /** The `data-variant` a consumer styles, and the word a command's `when` reads. */
+  readonly name: string;
+  /** What it draws — its own `items`, or the whole-entry default bound at registration. */
+  readonly items: ItemProducer;
+}
+
+/** The one question item production asks about a variant: which one this row wears. The answer
+ *  carries what it draws. `VariantRegistry` (`variants.ts`) answers it, and its own face publishes
+ *  the registration doors the frame pass never calls. So this narrower face is what
  *  `layout/frame.ts` and `produce-items.ts` name, and `layout/` keeps one direction of imports. */
 export interface VariantItems {
-  variantFor(entry: Entry): string;
-  itemsFor(variant: string): ItemProducer | undefined;
+  resolveFor(entry: Entry): DrawnVariant | undefined;
 }
 
 /** What a frame pass reads before a Gantt binds its own registry to it. It draws nothing, because
- *  an unbound pass has no Entry to draw either — `produceItemsForRow` asks `variantFor` only for an
+ *  an unbound pass has no Entry to draw either — `produceItemsForRow` asks `resolveFor` only for an
  *  Entry it already found. One frozen object, never a per-instance one: it holds no state, so two
  *  Gantts sharing it cannot see each other (I2). */
 export const NO_VARIANTS: VariantItems = Object.freeze({
-  variantFor: () => '',
-  itemsFor: () => undefined,
+  resolveFor: () => undefined,
 });
 
 /** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer builds its

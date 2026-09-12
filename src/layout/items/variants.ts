@@ -19,8 +19,19 @@ import type {
   PluginId,
 } from '../../model/index.js';
 import type { BarRenderer } from '../renderer.js';
-import type { Item, ItemProducer, VariantItems } from './item.js';
+import type { DrawnVariant, Item, ItemProducer, VariantItems } from './item.js';
 import { wholeEntryItem, entryItem } from './item.js';
+
+/** One row's variant, as the rule that won answered it. Every seam reads its four answers off this
+ *  one object, so what a row draws, how it looks and what you can do to it always come from the
+ *  same registration — never from a second lookup by name, which can answer with a different rule
+ *  that happens to share the name (`F3`). */
+export interface ResolvedVariant extends DrawnVariant {
+  /** How it looks, or `undefined` for the library's own bar. */
+  readonly paint: BarRenderer | undefined;
+  /** What you can do to it, or `undefined` for no opinion at this level. */
+  readonly can: Interactions | undefined;
+}
 
 /** A rule that reads the whole row. Call: `when: (entry) => entry.duration()?.value === 0`. It runs
  *  on the hover path, so keep it cheap: it answers a question and draws nothing. */
@@ -61,8 +72,10 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
   /** This variant's identity — the `data-variant` a consumer styles, and the registry key. It names
    *  a DOM identity, never a stored value. */
   name: string;
-  /** Which rows wear it. Omit it on the last-resort variant, which answers for every row nothing
-   *  newer claims — core's own `leaf` is the shipped one. */
+  /** Which rows wear it. Omit it to write a last resort, which answers for every row **no rule
+   *  claims** — core's own `leaf` is the shipped one, and omitting `when` is how a plugin re-skins
+   *  it. A last resort never outranks a rule that states a claim, core's own `parent` included, so
+   *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
   when?: VariantRule<TProps>;
   /** What shape it draws. Default: one whole-entry Item (`wholeEntryItem`). */
   items?: ItemProducer;
@@ -107,8 +120,9 @@ const CONSUMER_RANK = 2;
 
 interface VariantRegistration {
   readonly variant: EntryVariant;
-  /** `variant.items`, or the whole-entry default, bound to this variant's name once here. */
-  readonly items: ItemProducer;
+  /** What every seam reads once this registration wins. Built once here, so the walk allocates
+   *  nothing and no seam looks a second answer up by name. */
+  readonly resolved: ResolvedVariant;
   /** `variant.when`, compiled to one predicate. Absent on the last-resort variant, which claims
    *  nothing and therefore never collides with anything. */
   readonly claim: VariantPredicate | undefined;
@@ -118,16 +132,14 @@ interface VariantRegistration {
 }
 
 export interface VariantRegistry extends VariantItems {
-  /** The variant this row wears. Walks newest-first, over the consumer's rules, then every plugin's,
-   *  then core's two, and stops at the first rule that answers yes (`Q5`). Every row resolves,
-   *  because core's `leaf` carries no `when`. */
-  variantFor(entry: Entry): string;
-  /** What `variant` draws — its own `items`, or the whole-entry default. */
-  itemsFor(variant: string): ItemProducer | undefined;
-  /** How `variant` looks, or `undefined` for the library's own bar. */
-  paintFor(variant: string): BarRenderer | undefined;
-  /** What `variant` allows, or `undefined` for no opinion at this level. */
-  interactionsFor(variant: string): Interactions | undefined;
+  /** The variant this row wears, as one object. Walks newest-first, over the consumer's rules, then
+   *  every plugin's, then core's two, and stops at the first rule that answers yes (`Q5`). Every row
+   *  resolves, because core's `leaf` carries no `when`.
+   *
+   *  It answers with the registration that won, never with its name alone. Two registrations may
+   *  share one name — a consumer's own rule over a plugin's of the same name is the shipped case —
+   *  and a second lookup by name can land on the other one (`F3`). */
+  resolveFor(entry: Entry): ResolvedVariant;
   /** `ctx.variants.add(variant)` — a plugin's own. It wins over core's two and loses to the
    *  consumer's. The returned `Disposer` removes exactly this registration. */
   addPluginVariant(variant: EntryVariant, pluginId?: PluginId): Disposer;
@@ -231,8 +243,14 @@ function claimantOf(registration: VariantRegistration): VariantClaimant {
     : { variant: registration.variant.name, pluginId: registration.pluginId };
 }
 
-/** Does this rule answer yes for this row? The last-resort variant carries no rule, so it answers
- *  yes for every row nothing newer claimed. */
+/** Does this registration say which rows it claims? A `1` sorts before a `0`, so every rule that
+ *  states a claim is asked before any last resort — core's own `leaf` included. */
+function statesAClaim(registration: VariantRegistration): number {
+  return registration.claim === undefined ? 0 : 1;
+}
+
+/** Does this rule answer yes for this row? A last-resort variant carries no rule, so it answers
+ *  yes for every row nothing claimed. */
 function answersYes(registration: VariantRegistration, entry: Entry): boolean {
   return registration.claim === undefined || registration.claim(entry);
 }
@@ -254,15 +272,19 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
   const report = ports.reportDoubleClaim;
   let nextSeq = 0;
   const live: VariantRegistration[] = [];
-  /** The walk order, held between registration changes (#188's pattern): `variantFor` runs on every
+  /** The walk order, held between registration changes (#188's pattern): `resolveFor` runs on every
    *  hover change, where the budget is zero allocation. */
   let ordered: readonly VariantRegistration[] | undefined;
-  let byName: Map<string, VariantRegistration> | undefined;
 
   const register = (variant: EntryVariant, rank: number, pluginId: PluginId | undefined): Disposer => {
     const registration: VariantRegistration = {
       variant,
-      items: variant.items ?? ((entry) => [wholeEntryItem(entry, variant.name)]),
+      resolved: {
+        name: variant.name,
+        items: variant.items ?? ((entry) => [wholeEntryItem(entry, variant.name)]),
+        paint: variant.paint,
+        can: variant.can,
+      },
       claim: variant.when === undefined ? undefined : compileRule(variant.when, fieldFor),
       rank,
       seq: nextSeq++,
@@ -270,7 +292,6 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
     };
     live.push(registration);
     ordered = undefined;
-    byName = undefined;
     let disposed = false;
     return () => {
       if (disposed) return;
@@ -278,31 +299,28 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       const index = live.indexOf(registration);
       if (index !== -1) live.splice(index, 1);
       ordered = undefined;
-      byName = undefined;
     };
   };
 
-  /** Newest first: the consumer's rules, then every plugin's, then core's two. */
+  /** Newest first: the consumer's rules, then every plugin's, then core's `parent` — and after all
+   *  of those, the floors, in the same order.
+   *
+   *  **A rule with no `when` is a last resort, and a last resort never outranks a claim** (`P2-3`).
+   *  Rank alone put a plugin's floor over core's `parent`, so `ctx.variants.add({ name: 'leaf',
+   *  paint })` — the re-skin this file documents — answered for every row and every summary rail in
+   *  the Gantt stopped drawing. Sorting the floors last makes that registration re-skin the floor
+   *  and leave every claim standing. */
   const walkOrder = (): readonly VariantRegistration[] =>
-    (ordered ??= [...live].sort((a, b) => b.rank - a.rank || b.seq - a.seq));
-
-  /** The registration that answers for one name, at the same precedence `variantFor` walks. Two
-   *  variants may share a name — a plugin re-skinning `leaf` is the case — and the winner is the
-   *  one that would also have claimed the row. */
-  const registrationFor = (name: string): VariantRegistration | undefined => {
-    if (byName === undefined) {
-      byName = new Map();
-      for (const registration of walkOrder()) {
-        if (!byName.has(registration.variant.name)) byName.set(registration.variant.name, registration);
-      }
-    }
-    return byName.get(name);
-  };
+    (ordered ??= [...live].sort(
+      (a, b) => statesAClaim(b) - statesAClaim(a) || b.rank - a.rank || b.seq - a.seq,
+    ));
 
   for (const variant of CORE_VARIANTS) register(variant, CORE_RANK, undefined);
+  /** Core's `leaf`, as the answer for a row no rule claimed. Nothing can dispose it. */
+  const coreFloor = live[0]!.resolved;
 
   return {
-    variantFor(entry) {
+    resolveFor(entry) {
       let painted: VariantRegistration | undefined;
       for (const registration of walkOrder()) {
         if (painted !== undefined && !canCollide(painted, registration)) break;
@@ -321,12 +339,9 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         break;
       }
       // Core's `leaf` carries no `when` and nothing can dispose it, so `painted` is always set. The
-      // name is stated rather than asserted, so the answer stays total without a `!`.
-      return painted?.variant.name ?? LEAF_VARIANT_NAME;
+      // floor is stated rather than asserted, so the answer stays total without a `!`.
+      return painted?.resolved ?? coreFloor;
     },
-    itemsFor: (variant) => registrationFor(variant)?.items,
-    paintFor: (variant) => registrationFor(variant)?.variant.paint,
-    interactionsFor: (variant) => registrationFor(variant)?.variant.can,
     addPluginVariant: (variant, pluginId) => register(variant, PLUGIN_RANK, pluginId),
     addConsumerVariant: (variant) => register(variant, CONSUMER_RANK, undefined),
   };

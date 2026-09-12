@@ -21,8 +21,8 @@ describe('which rule wins', () => {
       { id: 'c', parentId: 'p', start: 0, end: 10 },
     ]);
 
-    expect(registry.variantFor(parent!)).toBe('parent');
-    expect(registry.variantFor(child!)).toBe('leaf');
+    expect(registry.resolveFor(parent!).name).toBe('parent');
+    expect(registry.resolveFor(child!).name).toBe('leaf');
   });
 
   it('lets a plugin variant override core’s own `parent` on a row with children (Q5)', () => {
@@ -34,7 +34,7 @@ describe('which rule wins', () => {
 
     registry.addPluginVariant({ name: 'phase', when: (entry) => entry.hasChildren });
 
-    expect(registry.variantFor(parent!)).toBe('phase');
+    expect(registry.resolveFor(parent!).name).toBe('phase');
   });
 
   it('lets the newest of two plugin rules win, and disposing it restores the older one', () => {
@@ -43,10 +43,10 @@ describe('which rule wins', () => {
 
     registry.addPluginVariant({ name: 'buffer', when: () => true });
     const disposeNewest = registry.addPluginVariant({ name: 'risk', when: () => true });
-    expect(registry.variantFor(t1)).toBe('risk');
+    expect(registry.resolveFor(t1).name).toBe('risk');
 
     disposeNewest();
-    expect(registry.variantFor(t1)).toBe('buffer');
+    expect(registry.resolveFor(t1).name).toBe('buffer');
   });
 
   it('lets a consumer variant win over a plugin’s, even though the plugin registered later', () => {
@@ -56,7 +56,7 @@ describe('which rule wins', () => {
     registry.addConsumerVariant({ name: 'mine', when: () => true });
     registry.addPluginVariant({ name: 'theirs', when: () => true });
 
-    expect(registry.variantFor(t1)).toBe('mine');
+    expect(registry.resolveFor(t1).name).toBe('mine');
   });
 
   it('claims a row added after the rule was installed — the bug the id set caused', () => {
@@ -65,17 +65,46 @@ describe('which rule wins', () => {
 
     const later = spanEntry('added-later', { buffer: true });
 
-    expect(registry.variantFor(later)).toBe('buffer');
+    expect(registry.resolveFor(later).name).toBe('buffer');
   });
 
   it('treats a variant with no `when` as the last resort, and every row still resolves', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
-    const t1 = spanEntry('t1');
 
     registry.addPluginVariant({ name: 'everything' });
 
-    expect(registry.variantFor(t1)).toBe('everything');
-    expect(registry.variantFor(spanEntry('t2'))).toBe('everything');
+    expect(registry.resolveFor(spanEntry('t1')).name).toBe('everything');
+    expect(registry.resolveFor(spanEntry('t2')).name).toBe('everything');
+  });
+
+  it('keeps core’s `parent` on a summary row when a plugin re-skins the floor (P2-3)', () => {
+    // `ctx.variants.add({ name: 'leaf', paint })` is the documented re-skin, and it states no
+    // `when`. Rank alone put it over core's `parent`, and every summary rail stopped drawing.
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const [parent, child] = entryDoubles([
+      { id: 'p', start: 0, end: 10 },
+      { id: 'c', parentId: 'p', start: 0, end: 10 },
+    ]);
+    const paint = (): undefined => undefined;
+
+    registry.addPluginVariant({ name: 'leaf', paint });
+
+    expect(registry.resolveFor(parent!).name).toBe('parent');
+    expect(registry.resolveFor(parent!).paint).not.toBe(paint);
+    expect(registry.resolveFor(child!).name).toBe('leaf');
+    expect(registry.resolveFor(child!).paint).toBe(paint);
+  });
+
+  it('claims every row, core’s summary included, when the rule says so out loud', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const [parent] = entryDoubles([
+      { id: 'p', start: 0, end: 10 },
+      { id: 'c', parentId: 'p', start: 0, end: 10 },
+    ]);
+
+    registry.addPluginVariant({ name: 'everything', when: () => true });
+
+    expect(registry.resolveFor(parent!).name).toBe('everything');
   });
 });
 
@@ -92,24 +121,24 @@ describe('what a field match compares (J6)', () => {
     const registry = createVariantRegistry(declaring({ key: 'milestone' }));
     registry.addPluginVariant({ name: 'milestone', when: { milestone: true } });
 
-    expect(registry.variantFor(spanEntry('a', { milestone: true }))).toBe('milestone');
-    expect(registry.variantFor(spanEntry('b', { milestone: false }))).toBe('leaf');
+    expect(registry.resolveFor(spanEntry('a', { milestone: true })).name).toBe('milestone');
+    expect(registry.resolveFor(spanEntry('b', { milestone: false })).name).toBe('leaf');
   });
 
   it('never means "has a value": `{ flag: true }` passes over `flag: "yes"`', () => {
     const registry = createVariantRegistry(declaring({ key: 'flag' }));
     registry.addPluginVariant({ name: 'flagged', when: { flag: true } });
 
-    expect(registry.variantFor(spanEntry('a', { flag: 'yes' }))).toBe('leaf');
-    expect(registry.variantFor(spanEntry('b', { flag: true }))).toBe('flagged');
+    expect(registry.resolveFor(spanEntry('a', { flag: 'yes' })).name).toBe('leaf');
+    expect(registry.resolveFor(spanEntry('b', { flag: true })).name).toBe('flagged');
   });
 
   it('ANDs its keys', () => {
     const registry = createVariantRegistry(declaring({ key: 'milestone' }, { key: 'locked' }));
     registry.addPluginVariant({ name: 'both', when: { milestone: true, locked: false } });
 
-    expect(registry.variantFor(spanEntry('a', { milestone: true, locked: false }))).toBe('both');
-    expect(registry.variantFor(spanEntry('b', { milestone: true, locked: true }))).toBe('leaf');
+    expect(registry.resolveFor(spanEntry('a', { milestone: true, locked: false })).name).toBe('both');
+    expect(registry.resolveFor(spanEntry('b', { milestone: true, locked: true })).name).toBe('leaf');
   });
 
   it('compares through the Field’s own `equals`, and falls back to Object.is with none', () => {
@@ -120,11 +149,11 @@ describe('what a field match compares (J6)', () => {
     const registry = createVariantRegistry(declaring(caseInsensitive));
     registry.addPluginVariant({ name: 'blocked', when: { status: 'BLOCKED' } });
 
-    expect(registry.variantFor(spanEntry('a', { status: 'blocked' }))).toBe('blocked');
+    expect(registry.resolveFor(spanEntry('a', { status: 'blocked' })).name).toBe('blocked');
 
     const strict = createVariantRegistry(declaring({ key: 'status' }));
     strict.addPluginVariant({ name: 'blocked', when: { status: 'BLOCKED' } });
-    expect(strict.variantFor(spanEntry('a', { status: 'blocked' }))).toBe('leaf');
+    expect(strict.resolveFor(spanEntry('a', { status: 'blocked' })).name).toBe('leaf');
   });
 
   it('claims no row at all when no Field declares the key (F2)', () => {
@@ -133,7 +162,7 @@ describe('what a field match compares (J6)', () => {
     const registry = createVariantRegistry(declaring({ key: 'milestone' }));
     registry.addPluginVariant({ name: 'typo', when: { mileStone: true } });
 
-    expect(registry.variantFor(spanEntry('a', { mileStone: true }))).toBe('leaf');
+    expect(registry.resolveFor(spanEntry('a', { mileStone: true })).name).toBe('leaf');
   });
 
   it('reads a predicate for "has a value", which is the question a match does not ask', () => {
@@ -143,8 +172,8 @@ describe('what a field match compares (J6)', () => {
       when: (entry) => entry.read('demo:phaseId') !== undefined,
     });
 
-    expect(registry.variantFor(spanEntry('a', { 'demo:phaseId': 'p1' }))).toBe('phased');
-    expect(registry.variantFor(spanEntry('b'))).toBe('leaf');
+    expect(registry.resolveFor(spanEntry('a', { 'demo:phaseId': 'p1' })).name).toBe('phased');
+    expect(registry.resolveFor(spanEntry('b')).name).toBe('leaf');
   });
 });
 
@@ -164,7 +193,7 @@ describe('what the double-claim diagnostic reports (J36)', () => {
     registry.addPluginVariant({ name: 'buffer', when: () => true }, 'demo.buffer');
     registry.addPluginVariant({ name: 'risk', when: () => true }, 'demo.risk');
 
-    expect(registry.variantFor(t1)).toBe('risk');
+    expect(registry.resolveFor(t1).name).toBe('risk');
     expect(seen).toEqual([
       {
         entryId: t1.id,
@@ -183,7 +212,7 @@ describe('what the double-claim diagnostic reports (J36)', () => {
 
     registry.addPluginVariant({ name: 'phase', when: (entry) => entry.hasChildren }, 'demo.phase');
 
-    expect(registry.variantFor(parent!)).toBe('phase');
+    expect(registry.resolveFor(parent!).name).toBe('phase');
     expect(seen).toEqual([]);
   });
 
@@ -193,14 +222,14 @@ describe('what the double-claim diagnostic reports (J36)', () => {
     registry.addPluginVariant({ name: 'theirs', when: () => true }, 'demo.theirs');
     registry.addConsumerVariant({ name: 'mine', when: () => true });
 
-    expect(registry.variantFor(spanEntry('t1'))).toBe('mine');
+    expect(registry.resolveFor(spanEntry('t1')).name).toBe('mine');
     expect(seen).toEqual([]);
   });
 });
 
 describe('what a variant answers about itself', () => {
   it('draws one whole-entry Item with no `items` of its own, and its own producer with one', () => {
-    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const registry = createVariantRegistry(declaring({ key: 'plain' }, { key: 'twin' }));
     const t1 = spanEntry('t1');
 
     registry.addPluginVariant({ name: 'plain', when: { plain: true } });
@@ -219,32 +248,48 @@ describe('what a variant answers about itself', () => {
       ],
     });
 
-    expect(registry.itemsFor('plain')?.(t1)).toHaveLength(1);
-    expect(registry.itemsFor('twin')?.(t1)[0]?.id).toBe(itemId(t1.id, 7));
+    expect(registry.resolveFor(spanEntry('a', { plain: true })).items(t1)).toHaveLength(1);
+    expect(registry.resolveFor(spanEntry('b', { twin: true })).items(t1)[0]?.id).toBe(itemId(t1.id, 7));
   });
 
-  it('answers its own `paint` and `can` by name, and nothing for a name nobody registered', () => {
+  it('answers the `paint` and `can` of the rule that claimed the row, and nothing for core’s floor', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const paint = (): undefined => undefined;
     const can = { resize: false };
 
-    registry.addPluginVariant({ name: 'buffer', when: () => true, paint, can });
+    registry.addPluginVariant({ name: 'buffer', when: (entry) => entry.id === 'claimed', paint, can });
 
-    expect(registry.paintFor('buffer')).toBe(paint);
-    expect(registry.interactionsFor('buffer')).toBe(can);
-    expect(registry.paintFor('nobody')).toBeUndefined();
-    expect(registry.interactionsFor('nobody')).toBeUndefined();
+    expect(registry.resolveFor(spanEntry('claimed')).paint).toBe(paint);
+    expect(registry.resolveFor(spanEntry('claimed')).can).toBe(can);
+    expect(registry.resolveFor(spanEntry('other')).paint).toBeUndefined();
+    expect(registry.resolveFor(spanEntry('other')).can).toBeUndefined();
+  });
+
+  it('reads `paint` off the rule that won, never off another rule of the same name (F3)', () => {
+    // Two rules share one name and split the rows between them. A lookup by name answered with the
+    // newest rule's paint whichever one claimed the row.
+    const registry = createVariantRegistry(declaring({ key: 'a' }));
+    const first = (): undefined => undefined;
+    const second = (): undefined => undefined;
+    registry.addConsumerVariant({ name: 'x', when: { a: 1 }, paint: first, items: () => [] });
+    registry.addConsumerVariant({ name: 'x', when: { a: 2 }, paint: second });
+
+    const one = registry.resolveFor(spanEntry('one', { a: 1 }));
+    expect(one.name).toBe('x');
+    expect(one.paint).toBe(first);
+    expect(one.items(spanEntry('one', { a: 1 }))).toEqual([]);
+    expect(registry.resolveFor(spanEntry('two', { a: 2 })).paint).toBe(second);
   });
 
   it('lets a plugin re-skin core’s own `leaf`, and disposal restores core’s producer', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
-    const shipped = registry.itemsFor('leaf');
+    const shipped = registry.resolveFor(t1).items;
 
     const dispose = registry.addPluginVariant({ name: 'leaf', items: () => [] });
-    expect(registry.itemsFor('leaf')?.(t1)).toEqual([]);
+    expect(registry.resolveFor(t1).items(t1)).toEqual([]);
 
     dispose();
-    expect(registry.itemsFor('leaf')).toBe(shipped);
+    expect(registry.resolveFor(t1).items).toBe(shipped);
   });
 });

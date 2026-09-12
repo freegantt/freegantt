@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { PluginRegistrations } from './plugin-registrations.js';
 import type { PluginRegistrationPorts } from './plugin-registrations.js';
 import { createVariantRegistry } from '../layout/index.js';
+import { entryDouble } from '../layout/entry-double.js';
 import type { Disposer, GridColumnInput, PluginId } from '../model/index.js';
 
 const PLUGIN: PluginId = 'demo.plugin';
@@ -94,14 +95,14 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 });
 
 describe('PluginRegistrations — the tables it reads back', () => {
-  it('answers a variant’s own `can`, and undefined for a name nobody registered', () => {
+  it('answers a variant’s own `can`, and undefined for a row no rule claimed', () => {
     const { registrations } = harness();
     const can = { move: false };
 
-    registrations.registerVariant({ name: 'buffer', when: () => true, can }, PLUGIN);
+    registrations.registerVariant({ name: 'buffer', when: (entry) => entry.id === 'claimed', can }, PLUGIN);
 
-    expect(registrations.variants.interactionsFor('buffer')).toBe(can);
-    expect(registrations.variants.interactionsFor('risk')).toBeUndefined();
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'claimed' })).can).toBe(can);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'other' })).can).toBeUndefined();
   });
 
   it('a second plugin on one variant name wins, and disposing it restores the first (#154)', () => {
@@ -114,10 +115,10 @@ describe('PluginRegistrations — the tables it reads back', () => {
       { name: 'buffer', when: () => true, can: second },
       'demo.other',
     );
-    expect(registrations.variants.interactionsFor('buffer')).toBe(second);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).can).toBe(second);
 
     disposeSecond();
-    expect(registrations.variants.interactionsFor('buffer')).toBe(first);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).can).toBe(first);
   });
 
   it('every decoration provider paints, in registration order — not only the newest', () => {

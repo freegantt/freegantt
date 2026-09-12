@@ -16,7 +16,7 @@ import type { Item, VariantItems } from './item.js';
  *  A variant with no producer of its own draws one whole-entry Item, which the registry binds at
  *  registration. So this never answers "nothing" for a variant the registry knows. */
 export function resolveItems(entry: Entry, registry: VariantItems): readonly Item[] {
-  return registry.itemsFor(registry.variantFor(entry))?.(entry) ?? [];
+  return registry.resolveFor(entry)?.items(entry) ?? [];
 }
 
 /** Call: `produceItemsForRow(planned, entryById, registry)`. The registry is required — one per
