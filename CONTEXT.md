@@ -583,15 +583,23 @@ time or a `RowId`, never pixels; `layout/decorations.ts` converts through the bo
 and several providers on one layer all paint, in registration order.
 _Avoid_: Overlay, band (both name one _kind_ of Decoration's shape, not the registration mechanism)
 
-**GanttPlugin**:
-The public extension contract: an `id` plus a `setup(ctx)` that returns a `Disposer`, or nothing.
-A plugin returns one only for a resource it owns itself — a timer, a socket, a subscription of its
-own. Every `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so
-most plugins return nothing at all (review P4). Built-in features (tooltips, context menu, editors) are themselves GanttPlugins using the same `PluginContext` a third party would use — no back-door capabilities reserved for first-party code.
-_Avoid_: Extension (Extensions is the name of the source layer that runs plugins; GanttPlugin is the unit within it)
+**Plugin**, **ChromePlugin**, **DataPlugin**:
+The public extension contract (ADR 0019): an `id`, an optional `requires`, and one or both halves.
+`data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs as
+the `Dataset` constructs. `view(ctx)` registers variants, renderers, commands and keys, and runs as a
+`Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the `Gantt`.
+A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is where the
+state lives, because a Field must exist before the first Rollup. **Plugin** is either. `definePlugin`
+is the door, and it narrows to the arm the object fills. Either half may return a `Disposer`, and
+only for a resource the plugin owns itself — a timer, a socket, a subscription of its own. Every
+`register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so most plugins
+return nothing at all (review P4). Built-in features (tooltips, context menu, editors) are themselves
+ChromePlugins using the same `PluginContext` a third party would use — no back-door capabilities
+reserved for first-party code.
+_Avoid_: GanttPlugin, DatasetPlugin (the retired pair, one install site each — ADR 0019 replaced both with one type), Extension (Extensions is the name of the source layer that runs plugins; a Plugin is the unit within it)
 
 **PluginContext**:
-The object `setup(ctx)` receives — a GanttPlugin's entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint). Every `register*` on it returns a `Disposer` and lives exactly as long as the plugin does; collisions resolve by one policy per seam shape (`plans/02` §4.4, and the Registration table entry above). `view/plugin-ports.ts` declares the whole shape, grouped the way a plugin reads it (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`); `api/gantt.ts` adds `dataset` and `gantt` and nothing else, so a new seam is one edit in one file.
+The object a `view(ctx)` half receives — its entire world: dataset access, the event bus (including cancelable `before*` events), registration for decorations/columns/renderers/item-producers/interaction-controllers/keybindings, the command registry, and a disposable store. A plugin may not reach into anything outside it (enforced by the import-boundary lint). Every `register*` on it returns a `Disposer` and lives exactly as long as the plugin does; collisions resolve by one policy per seam shape (`plans/02` §4.4, and the Registration table entry above). `view/plugin-ports.ts` declares the whole shape, grouped the way a plugin reads it (`ctx.commands`, `ctx.interaction.*`, `ctx.view.*`, `ctx.layout.*`); `api/gantt.ts` adds `dataset` and `gantt` and nothing else, so a new seam is one edit in one file.
 **Plugin ports**:
 What `view/plugin-ports.ts` builds for one installed plugin (`buildPluginPorts(shellPorts, pluginId)`): the grouped `PluginContext` members `GanttShell` owns — the **`PluginContextParts`** — plus that plugin's own `RegistrationGate` and `DisposableStore`. `GanttShellPorts` is the seam back — the registries, the frame loop and the event bus the ports write into — the same named-ports idiom `CoreCommandPorts` and `ColumnChromePorts` already set. `registerWhileOpen` is the one gated shape inside it: it asserts the gate, registers, invalidates, files the `Disposer` with the plugin's store, and returns it. A new seam names what registers and what must run again; it transcribes nothing.
 _Avoid_: `PluginContextPorts` (renamed 2026-09-05, issue #183 — `api/index.ts` exports that member
@@ -621,11 +629,11 @@ one declaration), provenance as a public word (it names the rule, not an API mem
 The two verbs a plugin uses to raise the one event pair it owns (`ctx.interaction.proposeEntryEdit`, `ctx.interaction.announceEntryEdit`). **Propose** asks, and the answer is a Veto: `true`/`undefined`, `false`, or an unsettled `Promise` (D-S3-17). The caller must read it. **Announce** tells, after the commit, and returns `void`. `GanttShell#proposeChange` uses Propose in the same sense for every cancelable Gantt-state change.
 _Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing went out, and says nothing about whether a decision comes back; `EventBus.emit` keeps the word for the bus's own mechanism)
 
-**DatasetPlugin**, **EditExtender**, **PluginStore**:
-Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a `DatasetPlugin` occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Landed in S5.10 (#15, #156). `DatasetPlugin` and its context live in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
+**EditExtender**, **PluginStore**:
+Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a plugin's `data` half occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field. Landed in S5.10 (#15, #156). The plugin shapes live in `api/plugin.ts` and the `data` half's context in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
 
 **PluginRuntime**:
-The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `GanttPlugin` list (S5.1, D-S5-1/D-S5-3). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `setup()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `setup()` throw unwinds only the batch just added, leaving the previously installed set untouched.
+The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `view` halves (S5.1, D-S5-1/D-S5-3). That list is the Dataset's own plugins plus this Gantt's chrome, sorted under one `requires` graph (ADR 0019). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `view()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `view()` throw unwinds only the batch just added, leaving the previously installed set untouched.
 _Avoid_: PluginHost (retired — "Host" is repo-wide retired vocabulary, see Consumer)
 
 **Command**:

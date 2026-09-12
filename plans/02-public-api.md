@@ -326,7 +326,7 @@ Documented in this order; each level solves what the previous can't, and consume
 | 2 | **State classes / parts** | `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--warn) }` |
 | 3 | **Renderer callbacks** | `barRenderer`, `cellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
-| 5 | **Plugins** | full `GanttPlugin` (see `01` §10): fields, decorations, columns, controllers, commands |
+| 5 | **Plugins** | one `definePlugin({ data, view })` (see `01` §10): fields, decorations, columns, controllers, commands |
 
 Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — a property whose zero value would be nonsense (a zero-height row is not a row) rejects it; a property whose zero value is a real, intentional choice (a consumer turning the grid pane off) keeps it. Re-read cadence stays the caller's own choice, and is stated at each call site — some properties read once at construction, others read again on every pane measurement, none per render.
 
@@ -338,7 +338,7 @@ S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-
 
 **D-S3-10 amendment (bug hunt, "grid row highlight and row click" — locked pre-1.0, no compat shim needed).** A click on a `.fg-row` in the grid pane is the same select as a click on that row's own bar: plain replaces, ctrl/⌘ toggles, and shift ranges over the Segments in draw order (ADR 0010, #212). A grid-row click names every Segment its row owns, so a range that ends on one takes that whole row. It never arms move or resize — a grid-row pointerdown never grabs `EntryGestureSession`. A click on `.fg-row-twisty` is not a row hit at all: collapse stays on the twisty, never selection. An empty *timeline* click still clears `gantt.selectedSegmentIds` (ADR 0010, #212 — `gantt.selectedIds` until then), with either button — a right-click is a click for this rule (#199/#205 follow-up). A miss on the grid pane (a header row, padding, a twisty) never does — only the timeline's own empty click is "the" clearing gesture. `data-state~="selected"` paints on the matching `.fg-row` the same way it already does on `.fg-bar` — same `--fg-selection-color` Token, a background instead of an outline (`.fg-bar[data-state~="selected"]`, `.fg-row[data-state~="selected"]`). A row click selects **every Segment of every Entry** the row owns (`FrameRow.entryIds`, #185; widened to Segments by ADR 0010, #212, because the grid pane's unit is the row); the row's cells still describe the first Entry. A grouping header row carries no entry and is never selectable.
 
-Three reasons support this rule. First, D-S3-10 already names the empty timeline click as "the" clearing gesture. The same pixels must not give two different answers for two different buttons. Second, common desktop file managers clear a selection on a background right-click. The background menu that opens acts on the container, and a surviving highlight would misstate the menu's scope. Third, on a bar or a row the pointer path writes nothing; `contextMenu()` decides what the Selection becomes (§4.5, the right-click rule).
+Three reasons support this rule. First, D-S3-10 already names the empty timeline click as "the" clearing gesture. The same pixels must not give two different answers for two different buttons. Second, common desktop file managers clear a selection on a background right-click. The background menu that opens acts on the container, and a surviving highlight would misstate the menu's scope. Third, on a bar or a row the pointer path writes nothing; `contextMenu()` decides what the Selection becomes (§4.6, the right-click rule).
 
 The clear rides on `pointerup`. `contextmenu` fires before `pointerup` on macOS and Linux, and after `pointerup` on Windows. So the empty-timeline clear can land before or after the menu opens, depending on the platform. A command's `when` always sees the Selection as of the moment the menu opens, on every platform — it never sees a fixed ordering guarantee against the clear.
 
@@ -565,7 +565,46 @@ Group header rows show the `groupBy` label in column 0 and blank cells elsewhere
 
 Published types: `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`, `CustomRowInput`, `RowHeightMode`, `RowSourceCommon`, `RowId`, `CollapseChange`, `RowFilter`, `RowSort`, `FilterPolicy`, and the four the getter reads back — `ResolvedRowSource`, `ResolvedEntriesRowSource`, `ResolvedGroupRowSource`, `ResolvedCustomRowSource`.
 
-### 4.4 Plugin registrations: one collision policy, one lifetime (#155)
+### 4.4 One plugin, two halves, one install site (ADR 0019)
+
+**A plugin is one object.** `definePlugin({ id, requires, data, view })` is the door.
+
+```ts
+const scheduling = () =>
+  definePlugin({
+    id: 'freegantt.scheduling',
+    requires: ['freegantt.calendar'],
+    data(ctx) {
+      /* fields, the edit hook, the store — DOM-free, runs as the Dataset constructs */
+    },
+    view(ctx) {
+      /* variants, renderers, commands, keys — runs as a Gantt mounts */
+    },
+  });
+
+const dataset = new Dataset({ entries, plugins: [scheduling()] });
+const gantt = new Gantt({ dataset }); // its Fields, variants, bars and menu are already there
+```
+
+**The install site is where the state lives.** A plugin with a `data` half installs on the
+`Dataset`, because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that
+Dataset then runs the `view` half once, each with its own context, so I2 holds by construction. A
+chrome-only plugin — `weekendShading()` — has no `data` half and keeps installing on the `Gantt`.
+`gantt.plugins` stays live-reconfigurable, and `dataset.plugins` stays read-only.
+
+**The type refuses the wrong site first.** `GanttOptions.plugins` takes `ChromePlugin` alone, which
+carries `data?: never`, so a plugin with a `data` half is a red squiggle in the editor. The runtime
+refusal — `PluginSetupError`, with a message naming the Dataset — is the second line, for the caller
+the compiler never met: plain JavaScript, or a list a helper widened. No new error type ships.
+
+**`requires` sits on the one type and covers both halves.** A Gantt sorts the Dataset's own plugins
+together with its own chrome under that one graph (D-S5-31), so a chrome plugin may require a plugin
+whose only half is `data`. There is no ordering knob.
+
+Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
+and the generic `*Of` shapes behind each. The retired pair is `GanttPlugin` / `DatasetPlugin`.
+
+### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 
 A `PluginContext` hands a plugin six `register*` seams. They answer a collision the same way, so an
 app author installing two plugins meets one rule rather than one rule per seam.
@@ -625,7 +664,7 @@ one file. A member declared in the wrong group does not compile.
 `ctx.view.resolveTooltipColumns(entry)` and `ctx.interaction.canWrite(entry, field)` (#256). None of the three is
 gated: a plugin reads them for as long as it runs, not only while `setup` runs.
 
-### 4.5 The plugin-to-DOM seam: `ctx.view.dom` and `ctx.view.onDomEvent`
+### 4.6 The plugin-to-DOM seam: `ctx.view.dom` and `ctx.view.onDomEvent`
 
 A plugin never writes a `.fg-*` selector or a `data-*` key of the rendered Gantt. It asks
 `ctx.view.dom` instead:
