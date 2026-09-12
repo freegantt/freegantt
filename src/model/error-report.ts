@@ -48,6 +48,11 @@ export type BuiltInErrorCode =
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
+  // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops
+  // back on itself. Core refuses the answer, reads that Entry as a root and carries on — `by` is
+  // `'plugin'`, because core's own source reads a `parentId` that `entries.update` already checked.
+  | 'unknown-parent'
+  | 'hierarchy-cycle'
   // Q10, ADR 0018: two rules from one source both claimed one Entry's variant. The newest paints,
   // the other is ignored, and this names both. Raised in every build, not behind `isDevMode()` —
   // that flag resolves when this repo builds `dist/`, so gating it would delete the line from every

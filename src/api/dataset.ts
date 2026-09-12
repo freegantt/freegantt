@@ -25,7 +25,7 @@ import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
 import type { DatasetPluginContextOf } from './dataset-plugin.js';
 import type { PluginOf } from './plugin.js';
-import type { PluginId } from '../model/index.js';
+import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 
@@ -171,6 +171,15 @@ export class Dataset<TProps = unknown> {
           setExtender: (wrap) => {
             gate.assertOpen();
             state.setExtender(wrap);
+          },
+        },
+        hierarchy: {
+          // Trusted, unchecked TProps cast — the same trust boundary the class note above describes.
+          // `data/` holds one erased tree for every Dataset; `TProps` types the plugin author's own
+          // read of `entry.props` and reaches no further.
+          setSource: (wrap) => {
+            gate.assertOpen();
+            state.setHierarchySource(wrap as HierarchySourceWrapper);
           },
         },
         store: {

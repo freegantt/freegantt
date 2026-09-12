@@ -27,6 +27,9 @@ export interface EntrySource {
   /** The row as this transaction leaves it, or `undefined` once it is removed. */
   storedEntry(id: EntryId): StoredEntry | undefined;
   storedChildrenOf(id: EntryId): readonly StoredEntry[];
+  /** Which Entry the hierarchy source names as the parent of this row (ADR 0020). The store checks
+   *  the answer; this row only asks. */
+  parentIdOf(entry: StoredEntry): EntryId | undefined;
   hasChildren(id: EntryId): boolean;
   depthOf(id: EntryId): number;
   /** The one `Entry` this store holds for `id` — how `children()` and `parent()` hand back rows. */
@@ -109,7 +112,10 @@ class LiveEntry implements Entry {
   }
 
   parent(): Entry | undefined {
-    const parentId = this.#stored()?.parentId;
+    const stored = this.#stored();
+    // The hierarchy source answers this, not `stored.parentId` (ADR 0020) — a plugin may own the
+    // tree, and then `children()`, `depth` and `descendants()` all follow the same answer.
+    const parentId = stored === undefined ? undefined : this.#source.parentIdOf(stored);
     if (parentId === undefined) return undefined;
     return this.#source.storedEntry(parentId) === undefined ? undefined : this.#source.entryFor(parentId);
   }

@@ -10,6 +10,7 @@ import type {
   StoredEntry,
   EntryId,
   FieldUpdated,
+  HierarchySource,
   SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
@@ -91,6 +92,10 @@ export interface TransactionData {
   readonly bus: EventBus<DatasetEventMap>;
   readonly fields: FieldRegistry;
   readonly fieldAccess: FieldAccess;
+  /** The tree the Rollup walks (ADR 0020). A getter, not a fixed field, because a plugin composes
+   *  onto the occupant while it sets up — the store and the Rollup read the same one, which is why
+   *  a plugin that changes the tree has changed the Rollup and the two can never disagree. */
+  readonly hierarchySource: HierarchySource;
   bumpDatasetRevision(): void;
   /** The commit path's real counter (ADR 0012) — see `CommitChangeSetInput.mintSegmentId`, the
    *  structurally-narrower shape `buildCommitChangeSet` actually reads. */
@@ -129,8 +134,13 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldAccess, () =>
-    data.mintSegmentId(),
+  const { updated } = rollUpFields(
+    byId,
+    undefined,
+    data.fields,
+    data.fieldAccess,
+    () => data.mintSegmentId(),
+    data.hierarchySource,
   );
   writeConstructionUpdates(data, updated);
 

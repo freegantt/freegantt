@@ -21,6 +21,8 @@ import type {
   EditRequest,
   ProposedEdits,
   ExtenderWrapper,
+  HierarchySource,
+  HierarchySourceWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
@@ -31,6 +33,7 @@ import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
+import { createErrorRaiser } from './error-reporting.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
@@ -159,6 +162,7 @@ export class DatasetState implements Dataset {
       this.fields,
       this.fieldAccess,
       this,
+      createErrorRaiser(this.bus),
     );
     this.#entryStoreReady = true;
     this.pluginStores = new PluginStores(this);
@@ -218,6 +222,19 @@ export class DatasetState implements Dataset {
       (id) => request.entryAfterEdits(id),
       this.fields,
     );
+  }
+
+  /** The tree every read and every Rollup goes through (ADR 0020). Core's own source is
+   *  `(entry) => entry.parentId`; the store holds whichever occupant plugins composed onto it. */
+  get hierarchySource(): HierarchySource {
+    return this.entries.hierarchySource;
+  }
+
+  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setExtender` below does (D-S5-23, ADR 0020). */
+  setHierarchySource(wrap: HierarchySourceWrapper): void {
+    this.entries.setHierarchySource(wrap);
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.
