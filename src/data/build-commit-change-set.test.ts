@@ -3,7 +3,7 @@ import { DatasetState } from './dataset-state.js';
 import { SegmentsOutOfSyncError, entryId } from '../model/index.js';
 import type { ChangeSet, DatasetEventMap } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
-import type { EntryEdits, StoredEdit } from './edit-extension.js';
+import type { EntryEdit, EntryEdits } from './edit-extension.js';
 
 // data/build-commit-change-set.ts, reconcileSharedEnvelope (#232, D-S5-49): a body author and an
 // extender author each name their own envelope key on the same Entry, and the two disagree. Neither
@@ -18,7 +18,7 @@ describe('a body-authored segments write and an extender-authored start write th
       timeZone: 'UTC',
       // The extender always answers with a start the body's segments write cannot agree with.
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
+        new Map<ReturnType<typeof entryId>, EntryEdit>([
           [entryId('t1'), { start: toInstant('UTC', '2026-01-05') }],
         ]),
     });

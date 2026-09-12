@@ -29,7 +29,13 @@ vi.mock('./row-height-index.js', async (importOriginal) => {
   };
 });
 
-const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
+// Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
+// with both dates.
+const scale = createTimeScale({
+  timeZone: 'UTC',
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+  pxPerMs: 1 / 1000,
+});
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const itemProducerRegistry = createItemProducerRegistry();
@@ -52,7 +58,10 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
 }
 
 function overlappingEntry(base: Entry, copies: number): Entry {
-  const { start, end } = base;
+  // Load-bearing non-null assertion (ADR 0012): every fixture entry this file feeds it is
+  // authored with both dates.
+  const start = base.start!;
+  const end = base.end!;
   return {
     ...base,
     segments: Array.from({ length: copies }, (_, index) => ({
@@ -130,29 +139,30 @@ describe('FrameLayout', () => {
     expect(layout.itemIdsForEntry(segmented.id)).toHaveLength(3);
   });
 
-  it('itemIdsForEntry answers a plugin Kind that draws its own Items (#185)', () => {
+  it('itemIdsForEntry answers a plugin look that draws its own Items (#185)', () => {
     // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
-    const kind = 'twin';
+    const look = 'twin';
     const registry = createItemProducerRegistry();
-    registry.register(kind, (entry) => [
+    registry.registerClaim(look, () => true);
+    registry.register(look, (entry) => [
       {
         id: itemId(entry.id, 7),
         entryId: entry.id,
-        kind,
+        look,
         label: entry.name,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
       {
         id: itemId(entry.id, 9),
         entryId: entry.id,
-        kind,
+        look,
         label: entry.name,
-        start: entry.start,
-        end: entry.end,
+        start: entry.start!,
+        end: entry.end!,
       },
     ]);
-    const entry: Entry = { ...sampleEntries[0]!, kind };
+    const entry: Entry = sampleEntries[0]!;
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [entry], itemProducerRegistry: registry }));
 
@@ -176,17 +186,29 @@ describe('FrameLayout', () => {
     );
   });
 
-  it('segmentIdsForItem names every Segment of the Entry for a group or milestone bar (#212)', () => {
-    // A milestone draws one bar over the whole Entry, so it drew no single Segment. It still stands
-    // for all of them: a click on it selects the Entry's work, whichever stretch that is.
+  it('segmentIdsForItem names every Segment of the Entry for a whole-entry look (#212)', () => {
+    // A whole-entry look (a group, a milestone) draws one bar over the whole Entry, so it drew no
+    // single Segment. It still stands for all of them: a click on it selects the Entry's work.
+    const registry = createItemProducerRegistry();
+    registry.registerClaim('milestone', () => true);
+    registry.register('milestone', (entry) => [
+      {
+        id: itemId(entry.id, 0),
+        entryId: entry.id,
+        look: 'milestone',
+        label: entry.name,
+        start: entry.start!,
+        end: entry.end!,
+      },
+    ]);
     const layout = new FrameLayout();
-    const milestone: Entry = { ...overlappingEntry(sampleEntries[0]!, 2), kind: 'milestone' };
-    const frame = layout.computeFrame(input({ entries: [milestone] }));
+    const wholeSpan = overlappingEntry(sampleEntries[0]!, 2);
+    const frame = layout.computeFrame(input({ entries: [wholeSpan], itemProducerRegistry: registry }));
 
     expect(frame.bars).toHaveLength(1);
     expect(frame.bars[0]!.segmentId).toBeUndefined();
     expect(layout.segmentIdsForItem(frame.bars[0]!.id)).toEqual(
-      milestone.segments.map((segment) => segment.id),
+      wholeSpan.segments.map((segment) => segment.id),
     );
   });
 
@@ -236,7 +258,7 @@ describe('FrameLayout', () => {
     const frame = layout.computeFrame(
       input({
         entries: sampleEntries.slice(0, 4),
-        rows: { source: 'group', groupBy: (entry) => entry.kind },
+        rows: { source: 'group', groupBy: () => 'all' },
       }),
     );
 

@@ -1,7 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { toDocument } from './serialization/index.js';
 import { entryId } from '../model/index.js';
 import { addMs } from '../time/index.js';
 import type { EditExtender } from './edit-extension.js';
@@ -74,15 +73,17 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         return;
       case 'update-start': {
         const current = state.entries.get(op.id);
+        // Load-bearing non-null assertion (ADR 0012): every 'add' op above authors both dates,
+        // so an entry this generator can still find always spans.
         if (current === undefined) return;
-        if (op.start >= current.end) return;
+        if (op.start >= current.end!) return;
         state.entries.update(op.id, { start: op.start });
         return;
       }
       case 'update-end': {
         const current = state.entries.get(op.id);
         if (current === undefined) return;
-        if (op.end <= current.start) return;
+        if (op.end <= current.start!) return;
         state.entries.update(op.id, { end: op.end });
         return;
       }
@@ -93,8 +94,8 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         const current = state.entries.get(op.id);
         if (current === undefined) return;
         state.entries.update(op.id, {
-          start: addMs(current.start, op.deltaMs),
-          end: addMs(current.end, op.deltaMs),
+          start: addMs(current.start!, op.deltaMs),
+          end: addMs(current.end!, op.deltaMs),
         });
         return;
       }
@@ -122,16 +123,23 @@ function undoAll(state: DatasetState): void {
   while (state.canUndo) state.undo();
 }
 
+/** A test-local equality snapshot — every stored Entry, in store order. Not a public shape; it exists
+ *  only so this test can ask "did undo restore exactly what was there before?" (I7 does not change,
+ *  only the way the comparison reads two states). */
+function snapshotOf(state: DatasetState): string {
+  return JSON.stringify(state.entries.all);
+}
+
 function assertUndoRestores(seed: readonly EntryInput[], ops: Op[], editExtender?: EditExtender): void {
   const state = new DatasetState({
     timeZone: 'UTC',
     entries: seed,
     ...(editExtender !== undefined ? { editExtender } : {}),
   });
-  const before = JSON.stringify(toDocument(state));
+  const before = snapshotOf(state);
   for (const op of ops) applyOp(state, op);
   undoAll(state);
-  const after = JSON.stringify(toDocument(state));
+  const after = snapshotOf(state);
   expect(after).toBe(before);
 }
 
@@ -143,7 +151,7 @@ const seedSpans: readonly EntryInput[] = [
 ];
 
 const seedGroups: readonly EntryInput[] = [
-  { id: 'p', kind: 'group', name: 'p' },
+  { id: 'p', name: 'p' },
   { id: 'a', parentId: 'p', name: 'a', start: 0, end: 100 },
   { id: 'b', parentId: 'p', name: 'b', start: 100, end: 200 },
 ];
@@ -153,7 +161,7 @@ const cascade: EditExtender = ({ proposed }) => {
   return new Map();
 };
 
-describe('[S2-A1] undo-all restores byte-identical toDocument', () => {
+describe('[S2-A1] undo-all restores every stored Entry byte-identical', () => {
   it('with the identity extender and no deriving kinds', () => {
     fc.assert(
       fc.property(fc.array(opArb, { minLength: 1, maxLength: 50 }), (ops) => {
@@ -182,8 +190,8 @@ describe('[S2-A1] undo-all restores byte-identical toDocument', () => {
   });
 });
 
-describe('[S4-A9] autoGroup undo', () => {
-  it('undo of a promoting transaction restores kind and the parent span together', () => {
+describe('[S4-A9] promotion undo', () => {
+  it('undo of a promoting transaction restores the parent structure and its own span together', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -191,10 +199,11 @@ describe('[S4-A9] autoGroup undo', () => {
         { id: 'c1', name: 'c1', start: '2026-03-01', end: '2026-03-05' },
       ],
     });
-    const before = JSON.stringify(toDocument(state));
+    const before = snapshotOf(state);
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.get('p1')!.kind).toBe('group');
+    expect(state.entries.childrenOf('p1')).toHaveLength(1);
     undoAll(state);
-    expect(JSON.stringify(toDocument(state))).toBe(before);
+    expect(state.entries.childrenOf('p1')).toHaveLength(0);
+    expect(snapshotOf(state)).toBe(before);
   });
 });

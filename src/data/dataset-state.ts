@@ -9,27 +9,23 @@ import type {
   DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
-  DatasetHierarchy,
   EntryInput,
-  EntryKind,
   Field,
   FieldContext,
   FieldKey,
   FieldType,
   Instant,
-  PluginDocument,
-  RollUpKinds,
   SegmentId,
   Disposer,
   EditExtender,
   EditRequest,
-  StoredEdits,
+  ProposedEdits,
   ExtenderWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, toStoredEdits, toEditsReading, toEntries } from './entry-reader.js';
+import { authoredSegmentIdsOf, toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
@@ -45,18 +41,6 @@ import { ComputedFieldCache } from './computed-cache.js';
 
 export type { HistoryOptions };
 
-/** `'none'` and `[]` both disable derivation; omitted defaults to `['group']`. */
-export function resolveRollUpKinds(input: RollUpKinds | undefined): ReadonlySet<EntryKind> {
-  if (input === 'none') return new Set();
-  const list = input ?? ['group'];
-  if (list.length === 0) return new Set();
-  return new Set(list);
-}
-
-function resolveHierarchy(input: DatasetHierarchy | undefined): DatasetHierarchy {
-  return { autoGroup: input?.autoGroup !== false };
-}
-
 export interface DatasetStateOptions {
   entries: readonly EntryInput[];
   timeZone: string;
@@ -65,16 +49,9 @@ export interface DatasetStateOptions {
    *  `history: { capacity: 0 }` is not a supported way to disable it; construct without `data/history.ts`
    *  for that (D-S2-23), which S2 has no consumer-facing option for yet. */
   history?: HistoryOptions;
-  /** Kinds whose rolling-up Fields the Rollup derives from their children, every commit
-   *  (`01` §2.5/§2.6). Defaults to `['group']`. `rollUpKinds: 'none'` or `[]` opts every kind out —
-   *  the supported way to ask for hand-set values everywhere (S4.2). */
-  rollUpKinds?: RollUpKinds;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   aggregators?: Readonly<Record<string, Aggregator>>;
-  /** First-child promotion (D-S4-17). Defaults to `{ autoGroup: true }`. Pass
-   *  `{ autoGroup: false }` to keep `'span'` parents as authored. */
-  hierarchy?: DatasetHierarchy;
   /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
   referenceDate?: Instant;
@@ -89,9 +66,6 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Plugin rows a Document carried in (D-S5-24). Rows whose plugin this Dataset does not install are
-   *  kept and written back untouched — passenger data, the posture an undeclared `meta` key has. */
-  pluginRows?: PluginDocument;
   /** Installs this Dataset's `DatasetPlugin` list and returns the disposer for the whole set. Called
    *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
    *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
@@ -109,8 +83,7 @@ export class DatasetState implements Dataset {
   readonly dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read this Dataset performs, via time/'s `now()` (CONTEXT.md, Reference
    *  date) — unless `DatasetStateOptions.referenceDate` freezes it for a test. Fixed for the
-   *  Dataset's lifetime — not re-derived on every layout pass. Used to initialize a roll-up-kind
-   *  entry's zero-length span before the Rollup gives it a real one. */
+   *  Dataset's lifetime — not re-derived on every layout pass. */
   readonly referenceDate: Instant;
   /** Every plugin's own per-entry rows (D-S5-24). One per Dataset, never shared (I2). */
   readonly pluginStores: PluginStores;
@@ -127,13 +100,7 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
-  /** Kinds whose rolling-up Fields the Rollup derives from their children (`01` §2.5). Live-reconfigurable
-   *  (D-S4-6). Read by `data/transaction.ts`'s commit step — this class hands over the *kinds*, never
-   *  the function (`rollup-is-removable`, D-S4-7). */
-  #rollUpKinds: ReadonlySet<EntryKind>;
   readonly #entryContext: EntryReadContext;
-  /** First-child promotion (D-S4-17). Live — later commits read this; existing Kind stays. */
-  #hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
   readonly computedCache = new ComputedFieldCache();
@@ -158,8 +125,6 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = options.referenceDate ?? now();
     this.#editExtender = options.editExtender ?? identityExtender;
-    this.#rollUpKinds = resolveRollUpKinds(options.rollUpKinds);
-    this.#hierarchy = resolveHierarchy(options.hierarchy);
     this.fields = new FieldRegistry({
       fields: options.fields ?? [],
       fieldTypes: options.fieldTypes ?? {},
@@ -173,28 +138,25 @@ export class DatasetState implements Dataset {
     this.#entryContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
-      referenceDate: this.referenceDate,
-      rollUpKinds: this.#rollUpKinds,
       mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
-      toEntries(options.entries, this.#entryContext),
+      toEntries(options.entries, this.#entryContext, this.fields),
       this.#entryContext,
       this.fields,
       this.fieldContext,
       this,
     );
     this.#entryStoreReady = true;
-    this.pluginStores = new PluginStores(options.pluginRows, this);
+    this.pluginStores = new PluginStores(this);
     // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
     // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
     // plugin declares is in the registry before the Rollup first walks (D-S5-4). History subscribes
     // after, so installing a plugin is not itself an undoable step.
     this.#disposePlugins = options.installPlugins?.(this);
-    // `01` §2.6 / README.md D-S2-22: a roll-up-kind entry given children only through the initial
-    // array gets real rolled-up values before anyone reads it, not just after the first later
-    // transaction touches one of those children. `fromJSON` gets this for free, being construction
-    // like any other.
+    // `01` §2.6 / README.md D-S2-22: a parent given children only through the initial array gets
+    // real rolled-up values before anyone reads it, not just after the first later transaction
+    // touches one of those children.
     applyConstructionRollUp(this);
     // Subscribes to `change` right here, before the constructor returns and so before any consumer
     // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
@@ -218,23 +180,23 @@ export class DatasetState implements Dataset {
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
    *
    *  It is also where the hook's loose writes become storage-shaped (#209 C3): the occupant returns
-   *  `EntryEdits`, the same object `entries.update()` takes, and `toStoredEdits` reads it through the
+   *  `EntryEdits`, the same object `entries.update()` takes, and `toEditsReading` reads it through the
    *  dataset's own zone and end rule. */
-  extraEditsFor(request: EditRequest): StoredEdits {
-    return toStoredEdits(
+  extraEditsFor(request: EditRequest): ProposedEdits {
+    return toEditsReading(
       this.#editExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,
-    );
+    ).stored;
   }
 
   /** The commit path's own door onto the extension hook (#232) — calls the occupant exactly once,
    *  the same as `extraEditsFor` above, but also reports which of `start`/`end`/`segments` the
    *  occupant's own loose edit named on each Entry. `buildCommitChangeSet` needs that fact to tell
    *  the hook's authored envelope keys from the ones `reconcileEnvelope` derives on the hook's
-   *  behalf — `StoredEdit.proposedKeys` alone conflates the two (#232). Not part of the public
-   *  surface: an app author never reads an envelope key list, only the reconciled `StoredEdits`
+   *  behalf — `ProposedEdit.proposedKeys` alone conflates the two (#232). Not part of the public
+   *  surface: an app author never reads an envelope key list, only the reconciled `ProposedEdits`
    *  `extraEditsFor` already gives them. */
   extraEditsReadingFor(request: EditRequest): EditsReading {
     return toEditsReading(
@@ -281,30 +243,11 @@ export class DatasetState implements Dataset {
     return changeSetId(this.#changeSetCounter);
   }
 
-  get rollUpKinds(): ReadonlySet<EntryKind> {
-    return this.#rollUpKinds;
-  }
-
-  /** Live assignment of `'none'` or `[]` opts every kind out (D-S4-6). */
-  setRollUpKinds(value: RollUpKinds): void {
-    const next = resolveRollUpKinds(value);
-    this.#rollUpKinds = next;
-    this.#entryContext.rollUpKinds = next;
-  }
-
-  get hierarchy(): DatasetHierarchy {
-    return this.#hierarchy;
-  }
-
-  /** Call: `state.setHierarchy({ autoGroup: false })`. Later first-child commits obey this. */
-  setHierarchy(value: DatasetHierarchy): void {
-    this.#hierarchy = resolveHierarchy(value);
-  }
-
-  /** `model/`'s `Dataset` interface (S3, D-S3-9) — a predicate rather than exposing `rollUpKinds`
-   *  itself, so `view/capability.ts` can ask the one question it needs without naming the Set's shape. */
-  isRollUpKind(kind: EntryKind): boolean {
-    return this.rollUpKinds.has(kind);
+  /** `TransactionData.mintSegmentId` (ADR 0012) — `build-commit-change-set.ts`'s real counter for a
+   *  plugin cascade that turns a dateless Entry spanning for the first time. Shares `#nextSegmentId`
+   *  with construction ingest (`toEntries`), so a minted id never collides with an authored one. */
+  mintSegmentId(): SegmentId {
+    return this.#nextSegmentId();
   }
 
   /** Call: `dataset.field('cost')` — the resolved declaration, or `undefined`. */

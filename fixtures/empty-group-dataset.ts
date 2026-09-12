@@ -1,10 +1,12 @@
-// Empty `'group'` for [S4-A8]: Dataset writes the zero-length span at the reference date.
+// Childless entry for [S4-A8]: a row with no children holds no dates at all (ADR 0012) — it neither
+// spans nor draws a bar until a child gives the Rollup pass something to derive from. ADR 0013: it
+// is not a "group" — there is no stored classification, and it looks like a plain Entry either way.
 
 import { Dataset } from '../src/api/dataset.js';
 
 export function emptyGroupDataset(): Dataset {
   return new Dataset({
-    entries: [{ id: 'g1', kind: 'group', name: 'g1' }],
+    entries: [{ id: 'g1', name: 'g1' }],
     timeZone: 'UTC',
   });
 }

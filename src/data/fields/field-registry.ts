@@ -7,23 +7,16 @@
 // read-only where `Gantt.plugins` is not. `extensions/install-dataset-plugins.ts` closes each plugin's
 // registration gate the moment its `setup()` returns, so a later call is `RegistrationClosedError`.
 //
-// Every declaration records who made it (D-S5-33): the library, the consumer, or one named plugin.
-// `all` answers what this Dataset resolves against; `authored` answers what the consumer wrote, which
-// is the only half `toJSON` writes. A plugin re-declares its own Fields the next time it is installed,
-// so a Document that carried them would author a Field with no plugin behind it.
+// `all` answers what this Dataset resolves against, core Fields, the consumer's own, and a plugin's,
+// in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
+// the caller already holds, not data the library owes a reader (ADR 0016).
 
-import type {
-  Aggregator,
-  Field,
-  FieldKey,
-  FieldSource,
-  FieldType,
-  GridColumnSizing,
-  PluginId,
-} from '../../model/index.js';
+import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../../model/index.js';
 import {
+  ComputedFieldCannotBeWrittenError,
+  UnknownFieldError,
+  ReservedFieldKeyError,
   DuplicateFieldKeyError,
-  DuplicateFieldSourceError,
   IllegalCoreFieldOverrideError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
@@ -31,15 +24,14 @@ import {
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import { SHIPPED_FIELD_TYPES } from './field-types.js';
-import { storedSourceOf } from './normalize-source.js';
+import { sizingOfColumn } from './column-sizing.js';
 
-export interface ResolvedField extends Field {
-  readonly source: FieldSource;
-}
+/** A Field after its `type` bundle merges in — the shape every reader beyond declaration holds
+ *  (ADR 0011: the union above is a declaration-site aid, so this stays a plain `Field`, not a second
+ *  shape narrowed to one arm). */
+export type ResolvedField = Field;
 
-export interface RollingUpField extends ResolvedField {
-  readonly rollUp: Exclude<string, 'none'>;
-}
+export type RollingUpField = ResolvedField & { rollUp: Exclude<string, 'none'> };
 
 export interface FieldRegistryOptions {
   fields?: readonly Field[];
@@ -47,26 +39,13 @@ export interface FieldRegistryOptions {
   aggregators?: Readonly<Record<string, Aggregator>>;
 }
 
-function metaSlot(source: FieldSource): string | undefined {
-  if (source.from !== 'meta') return undefined;
-  return source.key ?? undefined;
-}
-
-/** The `width`/`flex` pair of one column declaration, and nothing else it carries. Spreading the
- *  whole declaration in its place puts every other key back — which is the bug `mergeColumn` had. */
-function sizingPairOf(column: NonNullable<Field['column']>): GridColumnSizing {
-  if (column.width !== undefined) return { width: column.width };
-  if (column.flex !== undefined) return { flex: column.flex };
-  return {};
-}
-
 /** #142/percent-shipped: `field.column` and `bundle.column` merge one level deep, not whole-object.
  *  A shallow `{ ...bundle, ...field }` lets a Field naming only `column: { header }` drop the type's
  *  whole `column` bundle — its alignment included — the moment it wants to keep its own header.
- *  `width`/`flex` still merge as the one pair they are (#249, mirrored from `view/grid-columns.ts`):
- *  a Field that sizes itself at all replaces the type's sizing whole, never key by key. Take the
- *  pair off whichever declaration owns the sizing — never that declaration itself, or the loser's
- *  header and alignment ride in behind it. */
+ *  `width`/`flex` still merge as the one pair they are (#249): a Field that sizes itself at all
+ *  replaces the type's sizing whole, never key by key. `sizingOfColumn` picks that pair; take it off
+ *  whichever declaration owns the sizing — never that declaration itself, or the loser's header and
+ *  alignment ride in behind it. */
 function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column'] {
   const from = bundle?.column;
   const own = field.column;
@@ -74,14 +53,13 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
   if (own === undefined) return from;
   const { width: _fromWidth, flex: _fromFlex, ...fromRest } = from;
   const { width: _ownWidth, flex: _ownFlex, ...ownRest } = own;
-  const sizesItself = own.width !== undefined || own.flex !== undefined;
-  return { ...fromRest, ...ownRest, ...sizingPairOf(sizesItself ? own : from) };
+  return { ...fromRest, ...ownRest, ...sizingOfColumn(own, from) };
 }
 
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
-  const merged: Field = bundle === undefined ? { ...field } : { ...bundle, ...field };
+  const merged = bundle === undefined ? { ...field } : { ...bundle, ...field };
   const column = mergeColumn(field, bundle);
-  return { ...merged, ...(column !== undefined ? { column } : {}), source: storedSourceOf(field) };
+  return toStoredEditable({ ...merged, ...(column !== undefined ? { column } : {}) });
 }
 
 /** #142: the only keys a consumer declaration may carry when it names a core Field's key. A core
@@ -98,6 +76,29 @@ export function rollsUp(field: Field): boolean {
   return field.rollUp !== undefined && field.rollUp !== 'none';
 }
 
+/** How far may this Field's value change (ADR 0015)? One accessor, because the alias table and the
+ *  default belong in one place: `data/write-rule.ts` reads it at both thresholds, and a Field
+ *  declared by hand — a test's own literal, a `FieldLookup` a consumer wrote — still reaches those
+ *  thresholds carrying the boolean the public type accepts.
+ *
+ *  An **absent** key answers `'anywhere'`: a declared value is editable until the consumer locks it
+ *  (decision 18, grill 2026-09-10). The default lives here and nowhere else, so no core Field and no
+ *  spec sentence restates it. */
+export function editableOf(field: Field): FieldEditable {
+  const declared = field.editable;
+  if (declared === undefined || declared === true) return 'anywhere';
+  if (declared === false) return 'never';
+  return declared;
+}
+
+/** The stored spelling of one declaration's `editable`. `true`/`false` are input-only aliases, the
+ *  way an ISO string is an input alias for an `Instant`, so `dataset.fields.all` reads back one
+ *  word. An absent key stays absent — `editableOf` owns the default (ADR 0015). */
+function toStoredEditable(field: Field): Field {
+  if (typeof field.editable !== 'boolean') return field;
+  return { ...field, editable: field.editable ? 'anywhere' : 'never' };
+}
+
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable'] as const;
 
 /** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
@@ -110,16 +111,12 @@ function illegalCoreOverrideKey(field: Field): string | undefined {
 }
 
 export class FieldRegistry {
-  readonly #resolved: ResolvedField[] = [];
+  #resolved: ResolvedField[] = [];
   readonly #byKey = new Map<string, ResolvedField>();
-  /** D-S5-33: the plugin that declared each plugin-declared key. A key absent here came from the
-   *  library (a core Field) or from the consumer's own `fields` option. */
-  readonly #declaringPlugin = new Map<string, PluginId>();
   /** #142: every core key a consumer has already overridden (`#mergeCoreFieldOverride`) — a second
    *  declaration naming the same core key is a clash, same as two ordinary declarations sharing a
    *  key. */
   readonly #consumerOverriddenCoreKeys = new Set<string>();
-  readonly #metaSlots = new Map<string, string>();
   readonly #aggregators: Record<string, Aggregator>;
   readonly #fieldTypes: Record<string, FieldType>;
 
@@ -134,35 +131,24 @@ export class FieldRegistry {
     for (const field of options.fields ?? []) this.#add(field, true);
   }
 
-  /** Declaration order, core Fields first. One array identity for this registry's whole life: every
-   *  `register` call runs during construction, before anything reads a Field, so no reader ever sees
-   *  this array grow. */
+  /** Declaration order, core Fields first. The array never grows after construction: every
+   *  `register` call runs there, before anything reads a Field. `setEditable` replaces it with a
+   *  copy of the same length, so a reader that cached it by identity sees the new `editable` and a
+   *  reader mid-pass keeps a list that stays true (#187). */
   get all(): readonly ResolvedField[] {
     return this.#resolved;
-  }
-
-  /** Call: `encodeFieldDocument(dataset.fields.authored)`. The Fields the consumer wrote, in
-   *  declaration order — core Fields and every plugin-declared Field left out (D-S5-33). This is what
-   *  a Document carries: a plugin declares its own Fields again on its next install, so writing them
-   *  here would author a Field the reading application has nothing behind. The plugin's *values* are
-   *  not affected — those sit in `Entry.meta`, which round-trips whether the Field is declared or not. */
-  get authored(): readonly ResolvedField[] {
-    return this.#resolved.filter(
-      (field) => !isCoreFieldKey(field.key) && !this.#declaringPlugin.has(String(field.key)),
-    );
   }
 
   get aggregators(): Readonly<Record<string, Aggregator>> {
     return this.#aggregators;
   }
 
-  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' }, 'acme/locks')`. Same rules a
-   *  constructor-time declaration obeys — a duplicate key, an unknown Field type, an unknown
-   *  Aggregator and a taken `meta` slot each throw the error they already throw at construction.
-   *  `declaredBy` is the calling plugin's own id, so this Field stays out of `authored` (D-S5-33). */
-  register(field: Field, declaredBy: PluginId): void {
+  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
+   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a
+   *  `compute` Field naming `rollUp`/`editable` each throw the error they already throw at
+   *  construction. */
+  register(field: Field): void {
     this.#add(field, true);
-    this.#declaringPlugin.set(String(field.key), declaredBy);
   }
 
   /** Call: `ctx.fields.registerType('money', { rollUp: 'sum' })`. Register a type before the Field
@@ -182,6 +168,9 @@ export class FieldRegistry {
 
   #add(field: Field, fromConsumer: boolean): void {
     const key = String(field.key);
+    // ADR 0011: `props` is the one reserved key — it names the whole bag a `props`-addressed Field
+    // lives inside, so a Field cannot claim that name for itself.
+    if (key === 'props') throw new ReservedFieldKeyError(key);
     if (fromConsumer && isCoreFieldKey(field.key)) {
       this.#mergeCoreFieldOverride(field, key);
       return;
@@ -191,14 +180,14 @@ export class FieldRegistry {
       throw new UnknownFieldTypeError(field.type);
     }
     const merged = mergeField(field, field.type === undefined ? undefined : this.#fieldTypes[field.type]);
+    // ADR 0011: a `compute` Field has no stored home, so `rollUp`/`editable` beside it is refused here,
+    // at registration — before `editable`, or the surviving message tells a consumer to declare an
+    // `editable` this door already rejects.
+    if ('compute' in merged && (merged.rollUp !== undefined || merged.editable !== undefined)) {
+      throw new ComputedFieldCannotBeWrittenError(key, 'fields');
+    }
     if (merged.rollUp !== undefined && this.#aggregators[merged.rollUp] === undefined) {
       throw new UnknownAggregatorError(merged.rollUp);
-    }
-    const slot = metaSlot(merged.source);
-    if (slot !== undefined) {
-      const owner = this.#metaSlots.get(slot);
-      if (owner !== undefined) throw new DuplicateFieldSourceError(slot);
-      this.#metaSlots.set(slot, merged.key);
     }
     this.#byKey.set(key, merged);
     this.#resolved.push(merged);
@@ -216,13 +205,33 @@ export class FieldRegistry {
     }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
-    const merged: ResolvedField = {
+    const merged = toStoredEditable({
       ...core,
       ...(field.editable !== undefined ? { editable: field.editable } : {}),
-    };
+    });
     this.#byKey.set(key, merged);
     this.#resolved[this.#resolved.indexOf(core)] = merged;
     this.#consumerOverriddenCoreKeys.add(key);
+  }
+
+  /** Call: `dataset.setFieldEditable('start', 'never')` — the one Field attribute that may change
+   *  after setup (ADR 0015, Q16). It changes a declared Field; it never adds one, so an unknown key
+   *  is `UnknownFieldError`.
+   *
+   *  It copies the Field and replaces `all`'s array identity, because a config value is a value
+   *  (#187): a reader caches that array by identity, and a poke at `dataset.field('start').editable`
+   *  would change nothing it can see. The Field a caller already holds keeps the answer it had — it
+   *  is a resolved snapshot, not a signal. */
+  setEditable(key: FieldKey, editable: FieldEditable | boolean): void {
+    const field = this.get(key);
+    if (field === undefined) throw new UnknownFieldError(key, 'dataset.setFieldEditable');
+    // `compute` first, and for the reason the register door checks it first: a compute Field has no
+    // stored home, so opening it would promise a write that lands nowhere (ADR 0015).
+    if ('compute' in field)
+      throw new ComputedFieldCannotBeWrittenError(String(key), 'dataset.setFieldEditable');
+    const next = toStoredEditable({ ...field, editable });
+    this.#byKey.set(String(key), next);
+    this.#resolved = this.#resolved.map((declared) => (declared === field ? next : declared));
   }
 
   get(key: FieldKey): ResolvedField | undefined {

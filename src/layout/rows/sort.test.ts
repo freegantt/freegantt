@@ -17,11 +17,10 @@ function entry(id: string, opts?: { parentId?: string; start?: number; end?: num
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: opts?.cost !== undefined ? { cost: opts.cost } : {},
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
-  if (opts?.cost !== undefined) row.meta = { cost: opts.cost };
   return row;
 }
 
@@ -30,7 +29,7 @@ function durationOf(row: Entry): Duration {
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: Entry) => (row.meta as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
   return [
     {
       key: 'name',
@@ -118,6 +117,18 @@ describe('applySort (S4.9)', () => {
     const built = resolveEntriesSource(entries, { source: 'entries' });
     const sorted = applySort(built, entries, { field: 'duration' }, compares);
     expect(sorted.map((row) => row.id)).toEqual([rowId('short'), rowId('long')]);
+  });
+
+  it('a row with neither date sorts last on asc and on desc, not direction * order (ADR 0012 Gate)', () => {
+    const dateless: Entry = { id: entryId('none'), name: 'none', segments: [], props: {} };
+    const entries = [entry('a', { start: 1 }), dateless, entry('b', { start: 2 })];
+    const built = resolveEntriesSource(entries, { source: 'entries' });
+
+    const asc = applySort(built, entries, { field: 'start' }, compares);
+    expect(asc.map((row) => row.id)).toEqual([rowId('a'), rowId('b'), rowId('none')]);
+
+    const desc = applySort(built, entries, { field: 'start', direction: 'desc' }, compares);
+    expect(desc.map((row) => row.id)).toEqual([rowId('b'), rowId('a'), rowId('none')]);
   });
 
   it('a Field-type compare on Duration.value is what FieldCompare.compareStored runs', () => {

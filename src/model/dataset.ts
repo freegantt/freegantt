@@ -3,42 +3,29 @@
 // not a snapshot array (D-S2-2). `Dataset` here is the bindable surface a Gantt holds; the public
 // class adds `transaction()` and the construction-time options a view never reads.
 
-import type { Entry, EntryEdit, EntryInput, EntryKind } from './entry.js';
+import type { Entry, EntryEdit, EntryInput } from './entry.js';
 import type { Field, FieldKey, FieldValue } from './field.js';
 import type { EntryId, SegmentId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
-/** Which parent Kinds derive rolling-up Fields from their children (`01` §2.6, D-S4-6). `'none'` and
- *  `[]` both mean no Kind derives. */
-export type RollUpKinds = readonly EntryKind[] | 'none';
-
-/** Parent/child Kind policy on a Dataset (`02` §2, D-S4-17). Default is on. Call:
- *  `new Dataset({ hierarchy: { autoGroup: false }, entries })` to opt out. */
-export interface DatasetHierarchy {
-  readonly autoGroup: boolean;
-}
-
 /** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
  *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */
-export interface EntryStoreView<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> {
-  readonly all: readonly Entry<TMeta>[];
-  get(id: EntryId | string): Entry<TMeta> | undefined;
+export interface EntryStoreView<TProps = Record<string, unknown>> {
+  readonly all: readonly Entry<TProps>[];
+  get(id: EntryId | string): Entry<TProps> | undefined;
   has(id: EntryId | string): boolean;
   readonly size: number;
   /** Direct children, in insertion order. An entry with no children returns `[]`. */
-  childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
-  /** The value of `field` on this entry. Routes through the Field registry, so a meta Field and
-   *  a compute Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
+  childrenOf(id: EntryId | string): readonly Entry<TProps>[];
+  /** The value of `field` on this entry. Routes through the Field registry, so a `props` Field and
+   *  a `compute` Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
    *  A missing id throws `EntryNotFoundError`.
    *
-   *  The return type comes from the key: `'start'` reads as an `Instant`, and a key `TFields`
+   *  The return type comes from the key: `'start'` reads as an `Instant`, and a key `TProps`
    *  declares reads as the type the consumer wrote (ADR 0005). This is the far end of the
-   *  `Dataset<TMeta, TFields>` generics, and where they stop. */
-  fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
+   *  `Dataset<TProps>` generic, and where it stops. */
+  fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TProps, K> | undefined;
   /** The Entry that draws `id`, or `undefined` when no Entry does (ADR 0010, #212). Call:
    *  `dataset.entries.entryIdOfSegment(segmentId)`. */
   entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
@@ -57,12 +44,20 @@ export interface EntryStoreView<
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
  *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8). */
-export interface EntryStore<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> extends EntryStoreView<TMeta, TFields> {
-  add(input: EntryInput<TMeta>): Entry<TMeta>;
-  update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
+export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
+  /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011, Q15):
+   *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
+   *  a passenger key — naming one both there and at the top throws.
+   *
+   *  Typed as plain `EntryInput<TProps>`, not the `& Partial<TProps>` intersection Q15's wording
+   *  suggests: that intersection is uninhabitable by a named `EntryInput<TProps>[]` value once
+   *  `TProps` defaults to an open record (`Partial<Record<string, unknown>>` demands an index
+   *  signature `EntryInput` does not carry), which broke every fixture that pre-types its own array.
+   *  Ingest itself still reads a flat declared key off any object at runtime — `propsFromInput`
+   *  (`entry-reader.ts`) does not consult this type — so a caller loses only the static
+   *  autocomplete/check, not the behaviour. Flagged for the author (BUILD-LOG Q). */
+  add(input: EntryInput<TProps>): Entry<TProps>;
+  update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
   /** Removes Segments in one transaction, across several Entries when `ids` names several (ADR
    *  0010, #212). An Entry that keeps a Segment gets its envelope recomputed; an Entry whose last
@@ -71,20 +66,17 @@ export interface EntryStore<
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.
- *  The public `Dataset` class also exposes construction options (`dateOnlyEnd`, `rollUpKinds`'s
- *  full list) and `transaction()` — those stay on the class, because a view never opens a transaction.
- *  `isRollUpKind` is the one exception (S3, D-S3-9): `view/capability.ts`'s per-kind default
- *  table needs to know whether an entry's values are the Rollup's output before it can answer whether
- *  that entry accepts `move`/`resize`, and a single predicate answers that without exposing the
- *  `rollUpKinds` set's own shape (`ReadonlySet` internally, a plain array on the public class). */
-export interface Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
-  readonly entries: EntryStore<TMeta, TFields>;
+ *  The public `Dataset` class also exposes construction options and `transaction()` — those stay on
+ *  the class, because a view never opens a transaction. There is no `isRollUpKind` any more (ADR
+ *  0013): derivation is structure, so `view/capability.ts` asks `entries.childrenOf(id).length > 0`
+ *  directly instead of a per-kind predicate — there is no separate shape to hide. */
+export interface Dataset<TProps = Record<string, unknown>> {
+  readonly entries: EntryStore<TProps>;
   readonly timeZone: string;
   /** Resolved Field declarations this Dataset owns, core Fields included. */
   readonly fields: { readonly all: readonly Field[] };
   /** Resolved declaration for this key, or `undefined` when the key is not declared. */
   field(key: FieldKey): Field | undefined;
-  isRollUpKind(kind: EntryKind): boolean;
   /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26). */
   readonly datasetRevision: number;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

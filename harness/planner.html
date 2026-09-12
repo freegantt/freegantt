@@ -263,6 +263,39 @@
         color: var(--fg-bar-label-outside-color);
         overflow: visible;
       }
+      /* The checkpoint glyph (DESIGN-FACTS §2.5). ADR 0013 retired core's diamond, so this page
+         draws it: the bar box stays the hit target, and the rotated square is the ink. It reads
+         `--fg-bar-fill-painted`, so `checkpointDiamond()`'s own fill — row ink when done, pane
+         background behind a stroke when not — reaches the paint. */
+      .demo-checkpoint {
+        background: transparent;
+        overflow: visible;
+        color: transparent;
+      }
+      .demo-checkpoint::before {
+        content: '';
+        box-sizing: border-box;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 13px;
+        height: 13px;
+        background: var(--fg-bar-fill-painted);
+        border: var(--demo-checkpoint-stroke, none);
+        transform: translate(-50%, -50%) rotate(45deg);
+      }
+      .demo-checkpoint[data-state~='hovered'],
+      .demo-checkpoint[data-state~='selected'] {
+        outline: none;
+        box-shadow: none;
+      }
+      .demo-checkpoint[data-state~='hovered']::before {
+        box-shadow: 0 0 0 1px var(--fg-hover-ring);
+      }
+      .demo-checkpoint[data-state~='selected']::before {
+        box-shadow: 0 0 0 2px var(--fg-selection-color);
+      }
+
       /* A checkpoint's label reads on the pane in the row's own ink, 10px off the diamond's point
          (DESIGN-FACTS §2.5) — the diamond has no fill to read a label against, so the muted outside
          ink the design gives a span's label would sit next to nothing. */

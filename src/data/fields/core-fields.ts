@@ -1,5 +1,5 @@
-// data/ — core Fields are ordinary declarations (D-S4-4). They always set `source` explicitly so
-// omitted-source cannot steal `start` into `meta.start`. `progress` is not declared (ADR 0008).
+// data/ — core Fields are ordinary declarations (D-S4-4). A core key reads and writes the Entry
+// directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
 import type { Duration, Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
@@ -37,6 +37,11 @@ function formatEnd(
   entry: Entry,
 ): string {
   if (value === undefined || value === null) return '';
+  // End with no start (ADR 0012) shows the stored end as a plain instant — no inclusive-display
+  // adjustment, because there is no paired start to be inclusive against. Guessing one is not this
+  // Field's job.
+  if (entry.start === undefined)
+    return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
   const span = { start: entry.start, end: value as Instant };
   return formatEndInclusive(ctx.timeZone, span, ctx.locale, DATE_TIME_FORMAT);
 }
@@ -58,73 +63,55 @@ function compareDuration(a: Duration | undefined, b: Duration | undefined): numb
 export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
     key: 'name',
-    source: { from: 'entry', field: 'name' },
     equals: byReference,
     formatValue: stringifyPrimitive,
     // #142: a stored, ordinary value with nothing else that ever rewrites it — nothing refuses an
-    // edit here by default.
-    editable: true,
+    // edit here by default. ADR 0015 states the word rather than the alias: `'anywhere'` is what
+    // `true` already meant.
+    editable: 'anywhere',
     // #139: the Name column carries the tree indent and twisty on top of its text, so its natural
     // width is wider than a date's.
     column: { header: 'Name', width: 240 },
   },
   {
     key: 'start',
-    source: { from: 'entry', field: 'start' },
     rollUp: 'min',
     equals: byReference,
     formatValue: formatStart,
-    // #142: one answer gates the inline cell editor and bar drag-resize alike (I14) — `true` is
-    // what every span kind already allowed a resize drag to write before this Field existed.
-    editable: true,
+    // #142: one answer gates the inline cell editor and bar drag-resize alike (I14) —
+    // `'anywhere'` is what every span kind already allowed a resize drag to write before this Field
+    // existed. A consumer locks it with `{ key: 'start', editable: false }` (ADR 0015).
+    editable: 'anywhere',
     column: { header: 'Start', width: 120 },
   },
   {
     key: 'end',
-    source: { from: 'entry', field: 'end' },
     rollUp: 'max',
     equals: byReference,
     formatValue: formatEnd,
     // #142: see `start` above — the same one answer, the same reason.
-    editable: true,
+    editable: 'anywhere',
     column: { header: 'End', width: 120 },
   },
   {
-    key: 'kind',
-    source: { from: 'entry', field: 'kind' },
-    equals: byReference,
-    formatValue: stringifyPrimitive,
-    column: { header: 'Kind', width: 100 },
-  },
-  {
     key: 'parentId',
-    source: { from: 'entry', field: 'parentId' },
     equals: byReference,
   },
   {
     key: 'segments',
-    source: { from: 'entry', field: 'segments' },
     equals: segmentsEqual,
   },
   {
-    key: 'meta',
-    source: { from: 'entry', field: 'meta' },
-    equals: byReference,
-  },
-  {
     key: 'duration',
-    source: {
-      from: 'compute',
-      read: (entry, ctx) => ctx.durationOf(entry),
-    },
+    compute: (entry, ctx) => ctx.durationOf(entry),
     compare: compareDuration,
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end', width: 100 },
   },
 ]);
 
-/** Whether `key` names one of the Fields above. `data/` asks twice: the codec never writes a core
- *  Field into a Document, and `FieldRegistry.authored` never reports one as consumer-written. */
+/** Whether `key` names one of the Fields above — a core Field a consumer never overrides its way
+ *  out of (`FieldRegistry`'s override rules ask this before a consumer declaration wins a key). */
 export function isCoreFieldKey(key: FieldKey): boolean {
   return CORE_FIELDS.some((field) => field.key === key);
 }

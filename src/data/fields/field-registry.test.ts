@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { FieldRegistry } from './field-registry.js';
+import { editableOf, FieldRegistry } from './field-registry.js';
 import { createFieldContext, writeField } from './field-access.js';
 import type { Field, FieldType } from '../../model/index.js';
 import {
+  ComputedFieldCannotBeWrittenError,
   DuplicateFieldKeyError,
-  DuplicateFieldSourceError,
   IllegalCoreFieldOverrideError,
+  ReservedFieldKeyError,
   segmentId,
   UnknownAggregatorError,
+  UnknownFieldError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
 
@@ -37,14 +39,19 @@ describe('FieldRegistry type merge (D-S4-3)', () => {
   });
 });
 
-describe('D-S4-35 omitted source', () => {
-  it('{ key: cost, type: money } and meta.cost on the input reads 500', () => {
+// ADR 0011: a Field key is the whole address. The per-Field storage-strategy table retires —
+// a non-core key always lives in `entry.props`, under its own name, with no second address to
+// collide on and nothing to read back.
+describe('ADR 0011 — a Field key is the whole address', () => {
+  it('{ key: "props" } throws ReservedFieldKeyError — props is the one reserved key', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'props' }] })).toThrow(ReservedFieldKeyError);
+  });
+
+  it('{ key: cost, type: money } reads entry.props.cost, unmediated', () => {
     const registry = new FieldRegistry({
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
-    const field = registry.get('cost')!;
-    expect(field.source).toEqual({ from: 'meta', key: 'cost' });
     const entry = {
       id: 't1' as never,
       name: 't1',
@@ -52,39 +59,13 @@ describe('D-S4-35 omitted source', () => {
       start: 0 as never,
       end: 1 as never,
       segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
-      meta: { cost: 500 },
+      props: { cost: 500 },
     };
     expect(ctx(registry).read(entry, 'cost')).toBe(500);
   });
 
-  it('{ from: meta, key: budget } maps a different Document key', () => {
-    const registry = new FieldRegistry({
-      fields: [{ key: 'cost', source: { from: 'meta', key: 'budget' } }],
-    });
-    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'budget' });
-    const entry = {
-      id: 't1' as never,
-      name: 't1',
-      kind: 'span' as const,
-      start: 0 as never,
-      end: 1 as never,
-      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
-      meta: { budget: 1, cost: 2 },
-    };
-    expect(ctx(registry).read(entry, 'cost')).toBe(1);
-  });
-
   it('{ key: start } with no other key is a no-op override and does not throw', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'start' }] })).not.toThrow();
-  });
-
-  it('two Fields that share one meta slot throw DuplicateFieldSourceError', () => {
-    expect(
-      () =>
-        new FieldRegistry({
-          fields: [{ key: 'cost' }, { key: 'budget', source: { from: 'meta', key: 'cost' } }],
-        }),
-    ).toThrow(DuplicateFieldSourceError);
   });
 
   it('an unknown Field type throws UnknownFieldTypeError', () => {
@@ -105,6 +86,24 @@ describe('D-S4-35 omitted source', () => {
     );
   });
 
+  it('a compute Field naming rollUp throws ComputedFieldCannotBeWrittenError at registration', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [{ key: 'ref', compute: () => 'x', rollUp: 'sum' } as unknown as Field],
+        }),
+    ).toThrow(ComputedFieldCannotBeWrittenError);
+  });
+
+  it('a compute Field naming editable throws ComputedFieldCannotBeWrittenError at registration', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [{ key: 'ref', compute: () => 'x', editable: true } as unknown as Field],
+        }),
+    ).toThrow(ComputedFieldCannotBeWrittenError);
+  });
+
   it('bound FieldContext.read looks up by key after writeField', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
     const context = ctx(registry);
@@ -115,24 +114,22 @@ describe('D-S4-35 omitted source', () => {
       start: 0 as never,
       end: 1 as never,
       segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
+      props: {},
     };
     const cost = registry.get('cost')!;
-    const written = writeField({}, entry, cost, 500);
-    expect(written.meta).toEqual({ cost: 500 });
-    const next = { ...entry, meta: written.meta };
+    const written = writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, cost, 500);
+    expect(written.props).toEqual({ cost: 500 });
+    const next = { ...entry, props: written.props };
     expect(context.read(next, 'cost')).toBe(500);
-  });
-
-  it('toJSON of an omitted-source Field is the resolved source (read view)', () => {
-    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
-    expect(registry.get('cost')?.source).toEqual({ from: 'meta', key: 'cost' });
   });
 });
 
 describe("#142 a consumer may override a core Field's editable, and nothing else", () => {
-  it('{ key: start, editable: false } merges onto the core Field', () => {
+  // ADR 0015: `false` is an input alias, so the stored Field holds the enum and every reader — the
+  // write door, the grid, and `dataset.fields.all` — reads one word back.
+  it("{ key: start, editable: false } merges onto the core Field, and stores as 'never'", () => {
     const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
-    expect(registry.get('start')?.editable).toBe(false);
+    expect(registry.get('start')?.editable).toBe('never');
   });
 
   it('the merged Field keeps its declaration-order position in `all`', () => {
@@ -142,9 +139,9 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
   });
 
   it('a core-key declaration carrying a key other than editable throws IllegalCoreFieldOverrideError', () => {
-    expect(
-      () => new FieldRegistry({ fields: [{ key: 'start', source: { from: 'meta', key: 's' } }] }),
-    ).toThrow(IllegalCoreFieldOverrideError);
+    expect(() => new FieldRegistry({ fields: [{ key: 'start', rollUp: 'none' }] })).toThrow(
+      IllegalCoreFieldOverrideError,
+    );
   });
 
   it('the illegal-override error names the offending key', () => {
@@ -170,9 +167,60 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
     ).toThrow(DuplicateFieldKeyError);
   });
 
+  it("a registration writing editable: true stores 'anywhere', the word it aliases", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost', editable: true }] });
+    expect(registry.get('cost')?.editable).toBe('anywhere');
+  });
+
+  it('a Field that declares no editable stores none, because editableOf answers the default', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    expect(registry.get('cost')).not.toHaveProperty('editable');
+    expect(editableOf(registry.get('cost')!)).toBe('anywhere');
+  });
+
   it('a core-key override does not affect a sibling core Field', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
-    expect(registry.get('end')?.editable).not.toBe(false);
+    expect(registry.get('end')?.editable).toBe('anywhere');
+  });
+});
+
+describe('setEditable — the one attribute that changes after setup (ADR 0015, Q16)', () => {
+  it("reads the new value back, and 'all' carries a new array identity so a subscriber notices", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    const before = registry.all;
+
+    registry.setEditable('cost', 'never');
+
+    expect(registry.get('cost')?.editable).toBe('never');
+    expect(registry.all).not.toBe(before);
+    expect(registry.all.map((field) => field.key)).toEqual(before.map((field) => field.key));
+  });
+
+  it('leaves the Field a caller already holds alone — it is a snapshot, not a signal', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost', editable: 'api' }] });
+    const held = registry.get('cost')!;
+
+    registry.setEditable('cost', 'never');
+
+    expect(held.editable).toBe('api');
+  });
+
+  it('takes the boolean aliases, and stores the word', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    registry.setEditable('cost', false);
+    expect(registry.get('cost')?.editable).toBe('never');
+    registry.setEditable('cost', true);
+    expect(registry.get('cost')?.editable).toBe('anywhere');
+  });
+
+  it('refuses a key no Field declares — this door changes a Field, it never adds one', () => {
+    const registry = new FieldRegistry();
+    expect(() => registry.setEditable('nothing-declares-this', 'never')).toThrow(UnknownFieldError);
+  });
+
+  it('refuses a compute Field, the same answer the registration door gives', () => {
+    const registry = new FieldRegistry();
+    expect(() => registry.setEditable('duration', 'never')).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 

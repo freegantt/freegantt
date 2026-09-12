@@ -48,7 +48,6 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
     referenceDate: 0 as Instant,
-    rollUpKinds: new Set(['group']),
     mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
@@ -57,7 +56,6 @@ function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
     entries: new EntryStore(entries, context),
     timeZone,
     datasetRevision: 0,
-    isRollUpKind: () => false,
     fields: { all: CORE_FIELDS },
     field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),
     on: () => {},
@@ -132,8 +130,8 @@ const entries: Entry[] = [
     name: 'Entry 1',
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
-    kind: 'span',
     segments: [{ id: segmentId('t1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+    props: {},
   },
 ];
 
@@ -146,8 +144,8 @@ function tallEntries(count: number): Entry[] {
       name: `Entry ${i}`,
       start,
       end,
-      kind: 'span' as const,
       segments: [{ id: segmentId(`e${i}-1`), start, end }],
+      props: {},
     };
   });
 }
@@ -187,8 +185,8 @@ describe('GanttShell header band', () => {
         name: 'W1',
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
-        kind: 'span',
         segments: [{ id: segmentId('w1-1'), start: rangeStart, end: instant('2026-09-20T00:00:00Z') }],
+        props: {},
       },
     ];
     const shellB = new GanttShell({
@@ -334,8 +332,13 @@ describe('scroll (D9, #9)', () => {
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 10 * DEFAULT_ROW_HEIGHT }); // 10 rows
       shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
+      // The default `gridColumns` now also paints `start`/`end` (ADR 0012), so the name cell alone
+      // — not the whole row's textContent — is what still names one Entry unambiguously.
       const labelsAt = (): string[] =>
-        Array.from(container.querySelectorAll('.fg-row'), (row) => row.textContent ?? '');
+        Array.from(
+          container.querySelectorAll('.fg-row'),
+          (row) => row.querySelector('[data-field="name"]')?.textContent?.trim() ?? '',
+        );
 
       expect(labelsAt()).toContain('Entry 0');
       expect(labelsAt()).not.toContain('Entry 40');
@@ -513,8 +516,8 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           name: `Entry ${i}`,
           start,
           end,
-          kind: 'span' as const,
           segments: [{ id: segmentId(`e${i}-1`), start, end }],
+          props: {},
         };
       });
       const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tall), scale, scroll });
@@ -650,19 +653,19 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const parent: Entry = {
         id: entryId('p'),
         name: 'p',
-        kind: 'span',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const child: Entry = {
         id: entryId('c'),
         name: 'c',
-        kind: 'span',
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const shell = new GanttShell({
         wiring: {},
@@ -694,11 +697,10 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const alpha: Entry = {
         id: entryId('a'),
         name: 'a',
-        kind: 'span',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('a-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
-        meta: { team: 'red' },
+        props: { team: 'red' },
       };
       const shell = new GanttShell({
         wiring: {},
@@ -707,7 +709,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         scroll,
         rowSource: {
           source: 'group',
-          groupBy: (row) => String((row.meta as { team: string }).team),
+          groupBy: (row) => String((row.props as { team: string }).team),
         },
         collapsed: [rowId('group:red')],
       });
@@ -736,28 +738,28 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const parent: Entry = {
         id: entryId('p'),
         name: 'p',
-        kind: 'span',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const first: Entry = {
         id: entryId('c1'),
         name: 'c1',
-        kind: 'span',
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const second: Entry = {
         id: entryId('c2'),
         name: 'c2',
-        kind: 'span',
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         segments: [{ id: segmentId('c2-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
       };
       const shell = new GanttShell({
         wiring: {},
@@ -1051,7 +1053,6 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       name: 'segmented',
       start: rangeStart,
       end: instant('2026-09-05T00:00:00Z'),
-      kind: 'span',
       segments: [
         { id: segmentId('seg-1'), start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
         {
@@ -1060,6 +1061,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
           end: instant('2026-09-04T00:00:00Z'),
         },
       ],
+      props: {},
     };
     const container = document.createElement('div');
     let propose: ((next: readonly SegmentId[]) => void) | undefined;
@@ -1121,24 +1123,24 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         name: 'one',
         start: rangeStart,
         end: rangeEnd,
-        kind: 'span',
         segments: [{ id: segmentId('one-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
       {
         id: entryId('two'),
         name: 'two',
         start: rangeStart,
         end: rangeEnd,
-        kind: 'span',
         segments: [{ id: segmentId('two-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
       {
         id: entryId('three'),
         name: 'three',
         start: rangeStart,
         end: rangeEnd,
-        kind: 'span',
         segments: [{ id: segmentId('three-1'), start: rangeStart, end: rangeEnd }],
+        props: {},
       },
     ];
     const container = document.createElement('div');

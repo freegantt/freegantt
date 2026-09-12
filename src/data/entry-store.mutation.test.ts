@@ -4,32 +4,34 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { fieldRowsOf } from './change-set.js';
+import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import * as fieldAccess from './fields/field-access.js';
 import {
+  ComputedFieldCannotBeWrittenError,
+  DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
+  EmptySegmentsError,
   EntryNotFoundError,
-  InvalidInstantError,
+  FieldNotEditableError,
   ParentCycleError,
   SegmentNotFoundError,
   UnknownFieldError,
   entryId,
   segmentId,
 } from '../model/index.js';
-import type { ChangeSet, EntryInput } from '../model/index.js';
+import type { ChangeSet, EntryInput, Field } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
 }
 
-function dataset(entries: Seed[] = [], options: { rollUpKinds?: readonly string[] } = {}): DatasetState {
+function dataset(entries: Seed[] = []): DatasetState {
   return new DatasetState({
     entries: entries.map((e) => ({ start: 0, end: 1, ...e, name: e.name ?? e.id })),
     timeZone: 'UTC',
-    ...options,
   });
 }
 
@@ -67,6 +69,24 @@ describe('entries.add', () => {
     expect(seen[0]?.added).toHaveLength(1);
     expect(seen[0]?.added[0]?.entity.id).toBe(entryId('t9'));
   });
+
+  it('add({}) stores no dates and no Segments (ADR 0012 Gate)', () => {
+    const state = dataset();
+    const entry = state.entries.add({ id: 't9', name: 'Roofing' });
+
+    expect(entry.start).toBeUndefined();
+    expect(entry.end).toBeUndefined();
+    expect(entry.segments).toHaveLength(0);
+  });
+
+  it('add({ start }) stores one date and mints no Segment (ADR 0012 Gate)', () => {
+    const state = dataset();
+    const entry = state.entries.add({ id: 't9', name: 'Roofing', start: 0 });
+
+    expect(entry.start).toBe(toInstant('UTC', 0));
+    expect(entry.end).toBeUndefined();
+    expect(entry.segments).toHaveLength(0);
+  });
 });
 
 describe('entries.update', () => {
@@ -74,20 +94,37 @@ describe('entries.update', () => {
     const state = dataset([{ id: 't1', name: 'Framing' }]);
     const seen = changeSets(state);
 
-    const updated = state.entries.update('t1', { name: 'Framing — north wing', kind: 'milestone' });
+    const updated = state.entries.update('t1', { name: 'Framing — north wing', end: 5 });
 
     expect(updated.name).toBe('Framing — north wing');
-    expect(updated.kind).toBe('milestone');
+    expect(updated.end).toBe(5);
     expect(seen).toHaveLength(1);
     expect(seen[0]?.updated).toEqual(
       expect.arrayContaining([
         { store: 'entries', id: entryId('t1'), field: 'name', from: 'Framing', to: 'Framing — north wing' },
-        { store: 'entries', id: entryId('t1'), field: 'kind', from: 'span', to: 'milestone' },
+        { store: 'entries', id: entryId('t1'), field: 'end', from: 1, to: 5 },
       ]),
     );
 
     state.entries.update('t1', { name: 'Framing — north wing' });
     expect(seen).toHaveLength(1); // the no-op update commits nothing, so no second changeset
+  });
+
+  it('update(id, { start: undefined, end: undefined }) clears both dates and the Segments (ADR 0012 Gate)', () => {
+    const state = dataset([{ id: 't1', name: 'Framing', start: '2026-01-01', end: '2026-01-05' }]);
+
+    const cleared = state.entries.update('t1', { start: undefined, end: undefined });
+
+    expect(cleared.start).toBeUndefined();
+    expect(cleared.end).toBeUndefined();
+    expect(cleared.segments).toHaveLength(0);
+  });
+
+  it('update(id, { segments: [] }) still throws EmptySegmentsError (ADR 0012 Gate)', () => {
+    const state = dataset([{ id: 't1', name: 'Framing', start: '2026-01-01', end: '2026-01-05' }]);
+
+    expect(() => state.entries.update('t1', { segments: [] })).toThrow(EmptySegmentsError);
+    expect(state.entries.get('t1')?.segments).toHaveLength(1);
   });
 
   it('an envelope write on a one-segment entry moves that segment, and the changeset says so', () => {
@@ -137,7 +174,7 @@ describe('entries.update', () => {
     const seen = changeSets(state);
     expect(() => state.entries.update('t1', { cost: 500 })).toThrow(UnknownFieldError);
     expect(seen).toHaveLength(0);
-    expect(state.entries.get('t1')?.meta).toBeUndefined();
+    expect(state.entries.get('t1')?.props).toEqual({});
   });
 });
 
@@ -221,7 +258,7 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
     expect(state.entries.get('t2')?.segments.map((segment) => segment.id)).toEqual([segmentId('b1')]);
   });
 
-  it("removing an Entry's last Segment removes the Entry", () => {
+  it("removing an Entry's last Segment keeps the Entry and clears both dates (ADR 0012)", () => {
     const state = dataset([
       { id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
       { id: 'other' },
@@ -229,11 +266,15 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
 
     state.entries.removeSegments(['sole']);
 
-    expect(state.entries.has('t1')).toBe(false);
+    const entry = state.entries.get('t1');
+    expect(entry).toBeDefined();
+    expect(entry?.start).toBeUndefined();
+    expect(entry?.end).toBeUndefined();
+    expect(entry?.segments).toHaveLength(0);
     expect(state.entries.has('other')).toBe(true);
   });
 
-  it('undo after a last-Segment removal restores the Entry and its Segment with the same ids', () => {
+  it('undo after a last-Segment removal restores the dates and the Segment with the same id', () => {
     const state = dataset([{ id: 't1', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] }]);
 
     state.entries.removeSegments(['sole']);
@@ -244,59 +285,26 @@ describe('entries.removeSegments (#212, ADR 0010)', () => {
     expect(restored?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
   });
 
-  describe("a last-Segment removal never takes the removed Entry's descendants with it (#212, R3)", () => {
-    it('promotes a direct child to the root when the removed Entry had no parent itself', () => {
-      const state = dataset([
-        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-      ]);
-      const seen = changeSets(state);
+  it("a last-Segment removal never touches the Entry's descendants (ADR 0012: the Entry survives, unlike the old #212 removal)", () => {
+    const state = dataset([
+      { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
+      { id: 'child', parentId: 'ps', start: 100, end: 200 },
+    ]);
 
-      state.entries.removeSegments(['sole']);
+    state.entries.removeSegments(['sole']);
 
-      expect(state.entries.has('ps')).toBe(false);
-      expect(state.entries.has('child')).toBe(true);
-      expect(state.entries.get('child')?.parentId).toBeUndefined();
-      expect(seen).toHaveLength(1);
-      expect(seen[0]?.updated).toContainEqual(
-        expect.objectContaining({
-          id: entryId('child'),
-          field: 'parentId',
-          from: entryId('ps'),
-          to: undefined,
-        }),
-      );
-    });
+    expect(state.entries.has('ps')).toBe(true);
+    expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
 
-    it("promotes a direct child to the removed Entry's own parent, leaving the rest of the subtree in place", () => {
-      const state = dataset([
-        { id: 'gp' },
-        { id: 'ps', parentId: 'gp', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-        { id: 'grandchild', parentId: 'child' },
-      ]);
-
-      state.entries.removeSegments(['sole']);
-
-      expect(state.entries.has('ps')).toBe(false);
-      expect(state.entries.get('child')?.parentId).toBe(entryId('gp'));
-      expect(state.entries.get('grandchild')?.parentId).toBe(entryId('child'));
-      expect(state.entries.size).toBe(3);
-    });
-
-    it("undo restores the removed Entry, its Segment id, and the promoted child's original parentId", () => {
-      const state = dataset([
-        { id: 'ps', start: 0, end: 10, segments: [{ id: 'sole', start: 0, end: 10 }] },
-        { id: 'child', parentId: 'ps' },
-      ]);
-
-      state.entries.removeSegments(['sole']);
-      state.undo();
-
-      expect(state.entries.has('ps')).toBe(true);
-      expect(state.entries.get('ps')?.segments.map((segment) => segment.id)).toEqual([segmentId('sole')]);
-      expect(state.entries.get('child')?.parentId).toBe(entryId('ps'));
-    });
+    // `ps` has a child, so its dates are the Rollup's (ADR 0013), and they still read off `child`
+    // after the Segment goes. This assertion is new (N8, BUILD-LOG): the comment that stood here
+    // claimed the Rollup "redraws its span from `child` right away", and it did not — the internal
+    // clear proposed `{ start: undefined, end: undefined }` in the transaction body, the Rollup
+    // yielded to that proposal (decision 5), and `ps` committed dateless over a dated child. The
+    // clear now runs only where the Entry owns its own dates. Nothing asserted this, which is why
+    // it went unnoticed.
+    expect(state.entries.get('ps')?.start).toBe(100);
+    expect(state.entries.get('ps')?.end).toBe(200);
   });
 
   it('an unknown segment id throws SegmentNotFoundError, and stages nothing', () => {
@@ -630,7 +638,7 @@ describe('Segment→Entry index review fixes (#212, 2026-09-05 review)', () => {
 
     // The fix reads Segment ownership straight off `WriteSet.segmentOwner` — one map lookup per
     // id — so a 4x larger transaction costs at most a small multiple more overlay rebuilds, the
-    // ones `get()`/`toStoredEdit` already pay once per Entry regardless of this fix. Before the fix,
+    // ones `get()`/`toEditReading` already pay once per Entry regardless of this fix. Before the fix,
     // the same 4x grew the call count roughly 16x (quadratic): each Entry's uniqueness check
     // rebuilt an overlay for every id already staged ahead of it.
     expect(large).toBeLessThan(small * 4 + 50);
@@ -676,18 +684,14 @@ describe('auto-wrap (D-S2-8)', () => {
   });
 });
 
-describe('roll-up kinds (§1.5)', () => {
-  it('a roll-up kind with no dates gets a zero-length span at the reference date', () => {
+describe('roll-up (§1.5)', () => {
+  // ADR 0013: rollup is structural now (any Entry with children rolls up), so a childless Entry
+  // and a leaf Entry are the same case — one date, or none, is not an error either way.
+  it('an Entry with no dates and no children is legal, and stays dateless (ADR 0012)', () => {
     const state = dataset();
-    const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
-
-    expect(group.start).toBe(state.referenceDate);
-    expect(group.end).toBe(state.referenceDate);
-  });
-
-  it('a non-deriving kind with no dates throws InvalidInstantError', () => {
-    const state = dataset();
-    expect(() => state.entries.add({ id: 't1', name: 'Roofing', kind: 'span' })).toThrow(InvalidInstantError);
+    const entry = state.entries.add({ id: 't1', name: 'Roofing' });
+    expect(entry.start).toBeUndefined();
+    expect(entry.end).toBeUndefined();
   });
 });
 
@@ -720,7 +724,7 @@ describe('read-your-own-writes validation (§1.3)', () => {
 describe('rollup (§1.5)', () => {
   it('moving a child moves its parent, in one changeset — reverting both fields restores both', () => {
     const state = dataset([
-      { id: 'p1', kind: 'group' },
+      { id: 'p1' },
       { id: 'c1', parentId: 'p1', start: '2026-01-01', end: '2026-01-10' },
     ]);
     const before = state.entries.get('p1')!;
@@ -731,28 +735,26 @@ describe('rollup (§1.5)', () => {
     expect(seen).toHaveLength(1);
     const parentRows = fieldRowsOf(seen[0]!).filter((row) => row.id === entryId('p1'));
     // `segments` rides along (#212 B1 fix): p1 draws one Segment, and the Rollup keeps it paired
-    // with the envelope it just rolled up, the same way `toStoredEdit` pairs a direct `update(id, {
+    // with the envelope it just rolled up, the same way `toEditReading` pairs a direct `update(id, {
     // start })`.
     expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'segments', 'start']);
     const after = state.entries.get('p1')!;
     expect(after.start).not.toBe(before.start);
     expect(after.end).not.toBe(before.end);
 
-    // "one undo restores both": reverting via the changeset's own `from` values, in one transaction,
-    // brings the parent back to its pre-move span — there is no history module yet to call directly.
-    state.transaction(() => {
-      for (const row of parentRows) {
-        state.entries.update('p1', { [row.field]: row.from });
-      }
-    });
+    // "one undo restores both": `entries.update()` now refuses a direct write to a rolled-up field
+    // on a parent that still has children (`DerivedFieldNotWritableError`, this build's own decision
+    // 6) — so undo goes through `replay(invertChangeSet(...))`, the same door
+    // `api/dataset.test.ts`'s "a consumer History..." test uses, not a manual per-field `update()`.
+    state.replay(invertChangeSet(seen[0]!));
     expect(state.entries.get('p1')?.start).toBe(before.start);
     expect(state.entries.get('p1')?.end).toBe(before.end);
   });
 
   it('a two-level tree rolls up in one pass', () => {
     const state = dataset([
-      { id: 'root', kind: 'group' },
-      { id: 'mid', parentId: 'root', kind: 'group' },
+      { id: 'root' },
+      { id: 'mid', parentId: 'root' },
       { id: 'leaf', parentId: 'mid', start: '2026-03-01', end: '2026-03-05' },
     ]);
 
@@ -766,9 +768,9 @@ describe('rollup (§1.5)', () => {
     expect(root.end).toBe(mid.end);
   });
 
-  it('a group with children declared in the same construction array has a real span from the start', () => {
+  it('a parent with children declared in the same construction array has a real span from the start', () => {
     const state = dataset([
-      { id: 'p1', kind: 'group' },
+      { id: 'p1' },
       { id: 'c1', parentId: 'p1', start: '2026-01-01', end: '2026-01-10' },
     ]);
 
@@ -777,43 +779,127 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive'));
   });
 
-  it('a group whose span the same transaction proposed keeps the proposed value', () => {
-    const state = dataset([
-      { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
-      { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
-    ]);
+  it('an Entry written as a leaf keeps the proposed span when the same transaction gives it a child', () => {
+    // Decision 5: the Rollup yields to a field the caller proposed in the same transaction. This
+    // test used to seed `p1` with a child already in place and write `p1`'s span through the
+    // consumer door. The ADR 0013 amendment (2026-09-11) refuses that write from every direction,
+    // so the case moved to the structure that makes it honest: `x` is a **leaf** when the write is
+    // proposed, so the write is legal, and it gains a child in the same transaction. The claim is
+    // unchanged — the proposal wins over the cascade — and the write is one the door still allows.
+    const state = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
 
     state.transaction(() => {
-      state.entries.update('p1', { start: '2026-09-01', end: '2026-09-02' });
-      state.entries.update('c1', { start: '2026-12-01', end: '2026-12-02' });
+      state.entries.update('x', { start: '2026-09-01', end: '2026-09-02' });
+      state.entries.add({ id: 'c1', name: 'c1', parentId: 'x', start: '2026-12-01', end: '2026-12-02' });
     });
 
-    const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-09-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
+    const x = state.entries.get('x')!;
+    expect(x.start).toBe(toInstant('UTC', '2026-09-01'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
   });
+});
 
-  it('a childless group keeps its reference-date span', () => {
-    const state = dataset();
-    const group = state.entries.add({ id: 'p1', name: 'Sitework', kind: 'group' });
-    expect(group.start).toBe(state.referenceDate);
-    expect(group.end).toBe(state.referenceDate);
-  });
-
-  it('with rollUpKinds: [], nothing rolls up at all', () => {
-    const state = dataset(
-      [
-        { id: 'p1', kind: 'group', start: '2026-01-01', end: '2026-01-05' },
-        { id: 'c1', parentId: 'p1', start: '2026-06-01', end: '2026-06-05' },
+describe('a derived cell is read-only until the Field says what a write means (ADR 0013 amendment)', () => {
+  /** A Dataset with one rolling-up consumer Field. `distribute`, when given, is what a write to a
+   *  rolling-up parent's `cost` cell means. */
+  function costDataset(distribute?: Field<number>['distribute']): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1', start: 0, end: 1 },
+        { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1, props: { cost: 10 } },
+        { id: 'c2', name: 'c2', parentId: 'p1', start: 0, end: 1, props: { cost: 20 } },
       ],
-      { rollUpKinds: [] },
+      fields: [{ key: 'cost', rollUp: 'sum', editable: true, ...(distribute ? { distribute } : {}) }],
+    });
+  }
+
+  it('a parent cell with no distribute is refused standalone, and refused inside a transaction', () => {
+    // The point of the exercise (Q7): permission follows the thing written, never the call that
+    // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
+    const standalone = costDataset();
+    expect(() => standalone.entries.update('p1', { cost: 500 })).toThrow(DerivedFieldNotWritableError);
+    expect(standalone.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const batched = costDataset();
+    expect(() =>
+      batched.transaction(() => {
+        batched.entries.update('p1', { cost: 500 });
+      }),
+    ).toThrow(DerivedFieldNotWritableError);
+    expect(batched.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const batchedWithCompany = costDataset();
+    expect(() =>
+      batchedWithCompany.transaction(() => {
+        batchedWithCompany.entries.update('c1', { cost: 11 });
+        batchedWithCompany.entries.update('p1', { cost: 500 });
+      }),
+    ).toThrow(DerivedFieldNotWritableError);
+    expect(batchedWithCompany.entries.fieldValue('c1', 'cost')).toBe(10);
+    expect(batchedWithCompany.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a Field that declares distribute writes the children, and the Rollup reads the cell back', () => {
+    const state = costDataset((total, children) => {
+      const share = (total as number) / children.length;
+      return new Map(children.map((child) => [child.id, { cost: share }]));
+    });
+
+    state.entries.update('p1', { cost: 900 });
+
+    expect(state.entries.fieldValue('c1', 'cost')).toBe(450);
+    expect(state.entries.fieldValue('c2', 'cost')).toBe(450);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(900);
+  });
+
+  it('the distributed writes and their rolled-up parent land in one changeset, and one undo step', () => {
+    const state = costDataset(
+      (total, children) =>
+        new Map(children.map((child) => [child.id, { cost: (total as number) / children.length }])),
     );
+    const seen = changeSets(state);
 
-    state.entries.update('c1', { start: '2026-09-01', end: '2026-09-05' });
+    state.entries.update('p1', { cost: 900 });
 
-    const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-01-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+    expect(seen).toHaveLength(1);
+    const rows = fieldRowsOf(seen[0]!).map(
+      (row) => `${row.id}.${row.field}: ${String(row.from)} → ${String(row.to)}`,
+    );
+    expect(rows).toEqual(
+      expect.arrayContaining(['c1.cost: 10 → 450', 'c2.cost: 20 → 450', 'p1.cost: 30 → 900']),
+    );
+  });
+
+  it('a distribute that declines refuses the write, with the same error an absent one gives', () => {
+    const state = costDataset(() => undefined);
+    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(30);
+
+    const empty = costDataset(() => new Map());
+    expect(() => empty.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(empty.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a distribute that writes back to the parent is refused — that cell is the Rollup’s', () => {
+    const state = costDataset(() => new Map([[entryId('p1'), { cost: 900 }]]));
+    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(30);
+  });
+
+  it('a mixed patch is refused whole, before any write', () => {
+    const state = costDataset();
+    expect(() => state.entries.update('p1', { name: 'renamed', cost: 500 })).toThrow(
+      DerivedFieldNotWritableError,
+    );
+    expect(state.entries.get('p1')?.name).toBe('p1');
+  });
+
+  it('a leaf writes its own rolling-up cell, with or without a distribute', () => {
+    const state = costDataset();
+    state.entries.update('c1', { cost: 99 });
+    expect(state.entries.fieldValue('c1', 'cost')).toBe(99);
+    expect(state.entries.fieldValue('p1', 'cost')).toBe(119);
   });
 });
 
@@ -838,7 +924,7 @@ describe('removability (D-S2-23)', () => {
   it('with identityExtender injected explicitly, the fixture rolls up nothing and behaves identically', () => {
     const state = new DatasetState({
       entries: [
-        { id: 'p1', name: 'p1', kind: 'group', start: 0, end: 1 },
+        { id: 'p1', name: 'p1', start: 0, end: 1 },
         { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1 },
       ],
       timeZone: 'UTC',
@@ -850,5 +936,124 @@ describe('removability (D-S2-23)', () => {
     const p1 = state.entries.get('p1')!;
     expect(p1.start).toBe(toInstant('UTC', '2026-05-01'));
     expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'inclusive'));
+  });
+});
+
+describe('the write door: what entries.update() refuses (ADR 0015)', () => {
+  /** One Dataset holding all three `editable` states, plus the shipped `compute` Field. `start` is
+   *  the lock, `owner` is the app-owned value a user never types, and `cost` declares nothing — so
+   *  it answers the default, `'anywhere'`. */
+  function doorDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05', props: { cost: 10, owner: 'ana' } },
+      ],
+      fields: [{ key: 'start', editable: false }, { key: 'owner', editable: 'api' }, { key: 'cost' }],
+    });
+  }
+
+  it("refuses a 'never' Field, and writes nothing", () => {
+    const state = doorDataset();
+
+    expect(() => state.entries.update('e1', { start: '2026-03-01' })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+
+  it("un-dating a 'never' Field is a change too, so it throws as well", () => {
+    const state = doorDataset();
+
+    expect(() => state.entries.update('e1', { start: undefined })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+
+  it("writes an 'api' Field — that state closes the grid cell, never this door", () => {
+    const state = doorDataset();
+
+    state.entries.update('e1', { owner: 'bo' });
+
+    expect(state.entries.fieldValue('e1', 'owner')).toBe('bo');
+  });
+
+  it('writes a Field that declares no editable at all, because the default is anywhere', () => {
+    const state = doorDataset();
+
+    state.entries.update('e1', { cost: 42 });
+
+    expect(state.entries.fieldValue('e1', 'cost')).toBe(42);
+  });
+
+  it('refuses a compute Field, and the message names this door', () => {
+    const state = doorDataset();
+
+    try {
+      state.entries.update('e1', { duration: 1 });
+      expect.unreachable('expected ComputedFieldCannotBeWrittenError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ComputedFieldCannotBeWrittenError);
+      expect((error as ComputedFieldCannotBeWrittenError).message).toContain('entries.update');
+    }
+  });
+
+  // A lock names what a *caller* may write, never what the library may.
+  it('lets construction, entries.add() and History replay write a locked Field', () => {
+    const state = doorDataset();
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+
+    state.entries.add({ id: 'e2', name: 'e2', start: '2026-02-01', end: '2026-02-03' });
+    expect(state.entries.get('e2')!.start).toBe(toInstant('UTC', '2026-02-01'));
+
+    // The replay half: move a date while the Field is open, lock it, then undo. The undo replays a
+    // `start` write onto a Field the consumer has since locked, and it must still land.
+    const openThenLocked = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
+    openThenLocked.entries.update('x', { start: '2026-01-03' });
+    openThenLocked.fields.setEditable('start', 'never');
+
+    openThenLocked.undo();
+
+    expect(openThenLocked.entries.get('x')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+});
+
+describe('a lock holds at every caller-facing door (ADR 0015)', () => {
+  /** Removing the last Segment un-dates the Entry, and un-dating is a change. So a locked `end`
+   *  refuses that removal too — and the message names `entries.removeSegments`, the call the
+   *  consumer wrote, never the `update` it delegates to (J37, BUILD-LOG). */
+  it("refuses a last-Segment removal that would un-date a 'never' end, and names that door", () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05' }],
+      fields: [{ key: 'end', editable: false }],
+    });
+    const only = state.entries.get('e1')!.segments[0]!.id;
+
+    try {
+      state.entries.removeSegments([only]);
+      expect.unreachable('expected FieldNotEditableError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(FieldNotEditableError);
+      expect((error as FieldNotEditableError).operation).toBe('entries.removeSegments');
+    }
+    expect(state.entries.get('e1')!.segments).toHaveLength(1);
+  });
+
+  it('removes a Segment from an Entry whose dates are open, as it always did', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        {
+          id: 'e1',
+          name: 'e1',
+          segments: [
+            { id: 's1', start: '2026-01-01', end: '2026-01-02' },
+            { id: 's2', start: '2026-01-04', end: '2026-01-05' },
+          ],
+        },
+      ],
+    });
+
+    state.entries.removeSegments(['s1']);
+
+    expect(state.entries.get('e1')!.segments.map((segment) => segment.id)).toEqual([segmentId('s2')]);
   });
 });

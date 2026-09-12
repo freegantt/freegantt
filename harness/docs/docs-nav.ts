@@ -16,6 +16,7 @@ type DocsPageId =
   | 'classes'
   | 'timeline'
   | 'plugins'
+  | 'plugin-authoring'
   | 'diagram'
   | 'maintaining';
 
@@ -46,6 +47,12 @@ const DOCS_PAGES: readonly DocsPage[] = [
   { id: 'classes', label: 'Class map', file: 'classes.html', title: 'Class map, layer by layer' },
   { id: 'timeline', label: 'Timeline', file: 'timeline.html', title: 'How the timeline paints' },
   { id: 'plugins', label: 'Plugins', file: 'plugins.html', title: 'Plugin lifecycle' },
+  {
+    id: 'plugin-authoring',
+    label: 'Authoring',
+    file: 'plugin-authoring.html',
+    title: 'Writing a plugin',
+  },
   { id: 'diagram', label: 'Diagrams', file: 'diagram.html', title: 'Module map diagrams' },
   { id: 'maintaining', label: 'Maintaining', file: 'maintaining.html', title: 'How to keep these pages true' },
 ];

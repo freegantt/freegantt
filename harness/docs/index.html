@@ -109,10 +109,13 @@ pnpm build          # production build of the same pages into dist-harness/</cod
           <tr>
             <td class="mono">plugins.html</td>
             <td>
-              The plugin runtime: renderers by kind, weekend shading, extra kinds, commands, and a popup
+              The plugin runtime: weekend shading, a milestone variant, extra variants, commands, and a popup
               demo. Driven by <code>harness/plugins.ts</code>.
             </td>
-            <td><a href="./plugins.html">Plugin lifecycle</a></td>
+            <td>
+              <a href="./plugins.html">Plugin lifecycle</a>,
+              <a href="./plugin-authoring.html">Writing a plugin</a>
+            </td>
           </tr>
         </table>
 
@@ -288,6 +291,15 @@ gantt.on('beforeEntryMove', () =&gt; false); // every mutating interaction has a
               What <code>installPlugin</code> and <code>uninstallPlugin</code> do, when the registration
               gate is open, how <code>install()</code> diffs a plugin list by id, and how a Dataset plugin's
               setup order resolves from <code>requires</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3><a href="./plugin-authoring.html">Writing a plugin</a></h3>
+            <p class="path">plugin-authoring.html</p>
+            <p>
+              A draft of the plugin-author surface after ADRs 0017–0020: one plugin with a data half
+              and a view half, an Entry that answers questions about itself, a variant as one object,
+              and the seams each half fills. None of those four is accepted yet.
             </p>
           </article>
           <article class="card">

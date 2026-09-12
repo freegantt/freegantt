@@ -20,7 +20,6 @@ function entry(id: string, segmentIds: readonly string[]): Entry {
   return {
     id: entryId(id),
     name: id,
-    kind: 'span',
     start: instant(0),
     end: instant(segmentIds.length * 100),
     segments: segmentIds.map((sid, i) => ({
@@ -28,6 +27,7 @@ function entry(id: string, segmentIds: readonly string[]): Entry {
       start: instant(i * 100),
       end: instant((i + 1) * 100),
     })),
+    props: {},
   };
 }
 
@@ -39,8 +39,6 @@ function entryStoreOf(entries: readonly Entry[]): EntryStore {
   return new EntryStore(entries, {
     timeZone,
     dateOnlyEnd: 'inclusive',
-    referenceDate: instant(0),
-    rollUpKinds: new Set(['group']),
     mintSegmentId: () => segmentId(`minted-${++mintedCount}`),
   });
 }

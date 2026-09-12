@@ -13,6 +13,7 @@ import type {
   EntryId,
   EntryInput,
   EntryEdit,
+  EntryEdits,
   FieldContext,
   FieldKey,
   FieldValue,
@@ -22,16 +23,19 @@ import type {
 import {
   entryId,
   segmentId,
+  ComputedFieldCannotBeWrittenError,
+  DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   EntryNotFoundError,
+  FieldNotEditableError,
   ParentCycleError,
   SegmentNotFoundError,
   UnknownFieldError,
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import type { StoredEdit, StoredEdits } from './edit-extension.js';
+import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { authoredEnvelopeKeysOf, toEditReading, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
@@ -39,11 +43,13 @@ import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
   createFieldContext,
-  mergeStoredEdits,
+  createRollUpContext,
+  mergeProposedEdits,
   entryAfterEdit,
   writeOntoEntry,
 } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
+import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -61,7 +67,7 @@ function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry
 interface WriteSet {
   added: Map<EntryId, Entry>;
   removed: Set<EntryId>;
-  edits: Map<EntryId, StoredEdit>;
+  edits: Map<EntryId, ProposedEdit>;
   /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
    *  `reconcileEnvelope` paired or back-derived the rest (#232) — `pendingAuthoredEnvelopeKeys()`
    *  hands this to `buildCommitChangeSet`, which needs it to tell the body's own envelope write from
@@ -74,6 +80,12 @@ interface WriteSet {
    *  never a scan of the write set. An id absent from this map was never touched this transaction,
    *  so `#segmentOwnerInWriteSet` falls through to the committed index for it. */
   segmentOwner: Map<SegmentId, EntryId | null>;
+  /** Every id a staged add or update pointed a `parentId` at, in this transaction. A filter, not an
+   *  index: it over-answers (an id whose child was later reparented away stays in it), and a miss is
+   *  the only answer it is trusted for. `#hasChildren` runs on every consumer write, and without this
+   *  it would walk the staged edits each time — the O(n²) shape finding S1 (#212) already killed once
+   *  for Segment ids. Kept current by `stageAdd`/`stageUpdate`, the same way `segmentOwner` is. */
+  stagedParents: Set<EntryId>;
 }
 
 /** Records a Segment ownership change into `writeSet.segmentOwner` (finding S1, #212) — called by
@@ -229,6 +241,33 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
+  /** Does this Entry derive — has it at least one child, as this transaction leaves it (ADR 0013)?
+   *  The consumer door asks this on every write, so it answers without building one overlay Entry per
+   *  staged edit, which is what `childrenOf` above does: it reads the committed index first, and
+   *  reaches the staged edits only when `stagedParents` says some edit named this id as a parent. */
+  #hasChildren(parent: EntryId): boolean {
+    const writeSet = this.#writeSet;
+    for (const committed of this.#byParent().get(parent) ?? []) {
+      if (!writeSet) return true;
+      if (writeSet.removed.has(committed.id)) continue;
+      const staged = writeSet.added.get(committed.id);
+      if (staged) {
+        if (staged.parentId === parent) return true;
+        continue;
+      }
+      const edit = writeSet.edits.get(committed.id);
+      if (edit === undefined || !('parentId' in edit) || edit.parentId === parent) return true;
+    }
+    if (!writeSet || !writeSet.stagedParents.has(parent)) return false;
+    for (const added of writeSet.added.values()) {
+      if (added.parentId === parent) return true;
+    }
+    for (const [id, edit] of writeSet.edits) {
+      if (edit.parentId === parent && !writeSet.removed.has(id)) return true;
+    }
+    return false;
+  }
+
   /** Call: `dataset.entries.entryIdOfSegment(segmentId)`. The Entry that draws `id`, or `undefined`
    *  when no Entry does (ADR 0010, #212, finding 6) — one map lookup against `#entryIdBySegmentId`,
    *  never a walk of `all`. Read through the write set inside an open transaction, the same
@@ -343,7 +382,7 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = toEntry(input, this.#context, 'entries.add');
+      const entry = toEntry(input, this.#context, this.#registry, 'entries.add');
       this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
@@ -351,24 +390,96 @@ export class EntryStore implements EntryStoreContract {
   }
 
   update(id: EntryId | string, edit: EntryEdit): Entry {
+    return this.#updateFrom('entries.update', id, edit);
+  }
+
+  /** The body every door that edits one Entry shares. `operation` is the call the consumer actually
+   *  wrote, so a refusal names a door they can act on: `entries.removeSegments` removes a Segment
+   *  through this same body, and a caller who never wrote `update` must not be told about it. */
+  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): Entry {
     return this.#mutate((token) => {
       const key = entryId(id);
-      if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
-      for (const field of Object.keys(edit)) {
-        if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
-      }
+      if (!this.has(key)) throw new EntryNotFoundError(key, operation);
+      for (const field of Object.keys(edit)) this.#assertFieldTakesThisWrite(field, operation);
+      const { own, toChildren } = this.#splitDerivedWrites(key, edit, operation);
       if (edit.parentId !== undefined) {
-        this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
+        this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
       const current = this.get(key)!;
-      const reading = toEditReading(edit, this.#context, current, this.#registry, 'entries.update');
-      const stored = reading.stored;
-      if (stored.segments !== undefined) {
-        this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
+      if (Object.keys(own).length > 0) {
+        const reading = toEditReading(own, this.#context, current, this.#registry, operation);
+        const stored = reading.stored;
+        if (stored.segments !== undefined) {
+          this.#assertSegmentIdsUnique(stored.segments, key, operation);
+        }
+        this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
       }
-      this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
+      // Each distributed edit lands through the door it would have come in by, so a child that is
+      // itself a rolling-up parent distributes again, or refuses. The walk ends at the leaves.
+      for (const edits of toChildren) {
+        for (const [childId, childEdit] of edits) this.#updateFrom(operation, childId, childEdit);
+      }
       return this.get(key)!;
     });
+  }
+
+  /** Does the Field this key names take a write from this door at all? Three questions, in the one
+   *  order that leaves the caller somewhere to go (ADR 0015).
+   *
+   *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`:
+   *  a compute Field owns no stored home, and it may not carry `editable` either, so asking
+   *  `editable` first would answer "declare an editable" about a key the register door refuses. Then
+   *  the API threshold, which refuses the lock and nothing else.
+   *
+   *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
+   *  is `#splitDerivedWrites`, below. */
+  #assertFieldTakesThisWrite(field: string, operation: string): void {
+    const declared = this.#registry.get(field);
+    if (declared === undefined) throw new UnknownFieldError(field, operation);
+    if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
+    if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
+  }
+
+  /** Splits one patch into what lands on `id` itself and what its Fields distribute to the children
+   *  (ADR 0013, amendment 2026-09-11). Every Field resolves, and every `distribute` runs, **before**
+   *  anything stages: a mixed patch such as `{ name, cost }` with a refused `cost` writes neither
+   *  half, because a partial apply would leave a transaction in a state no `before*` event described.
+   *
+   *  The answer reads the Field declaration and one structural fact, through the one resolver
+   *  `view/capability.ts` also reads. It asks nothing about the call — whether it opened this
+   *  transaction or joined one a consumer already had open makes no difference to what is allowed. */
+  #splitDerivedWrites(
+    id: EntryId,
+    edit: EntryEdit,
+    operation: string,
+  ): { own: EntryEdit; toChildren: readonly EntryEdits[] } {
+    if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
+    const own: Record<string, unknown> = { ...edit };
+    const toChildren: EntryEdits[] = [];
+    let children: readonly Entry[] | undefined;
+    for (const [field, value] of Object.entries(edit)) {
+      const declared = this.#registry.get(field)!;
+      if (resolveWriteTarget(true, declared) === 'entry') continue;
+      if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, operation);
+      children ??= this.childrenOf(id);
+      // Called on its own declaration, never detached from it — the same way `equals` and
+      // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
+      const edits = declared.distribute(
+        value,
+        children,
+        this.get(id)!,
+        createRollUpContext(this.#fieldContext, field),
+      );
+      // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
+      // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
+      // nothing to write — is refused with the same error an absent `distribute` gives.
+      if (edits === undefined || edits.size === 0 || edits.has(id)) {
+        throw new DerivedFieldNotWritableError(field, id, operation);
+      }
+      toChildren.push(edits);
+      delete own[field];
+    }
+    return { own, toChildren };
   }
 
   remove(id: EntryId | string): void {
@@ -384,11 +495,11 @@ export class EntryStore implements EntryStoreContract {
    *  ADR 0010). Reads through `update`/`remove` for each Entry it touches, so the changeset reports
    *  the same `{from, to}` rows either call reports on its own — no second write path. */
   removeSegments(ids: readonly (SegmentId | string)[]): void {
-    this.#mutate((token) => {
+    this.#mutate(() => {
       const requested = new Set(ids.map((id) => segmentId(id)));
       if (requested.size === 0) return;
       for (const [ownerId, removedIds] of this.#groupSegmentsByOwner(requested)) {
-        this.#removeSegmentsFrom(token, ownerId, removedIds);
+        this.#removeSegmentsFrom(ownerId, removedIds);
       }
     });
   }
@@ -409,39 +520,26 @@ export class EntryStore implements EntryStoreContract {
     return grouped;
   }
 
-  /** Removes `removedIds` from one Entry's Segments. Removing the last one removes the Entry itself,
-   *  in the same transaction — an Entry never survives as an empty record (#212). That removal is
-   *  narrower than `entries.remove(id)`: it takes only `id`, never `id`'s descendants (#212, fix
-   *  plan R3, ADR 0010). `entries.remove` is a deliberate "delete this branch" call; losing a last
-   *  bar to a `Delete` keypress is not the same request, so a child promotes to `id`'s own parent
-   *  instead of disappearing with it. Otherwise the remaining Segments go through `update`, the
-   *  normal edit path, which recomputes the envelope around them itself (#212, finding 4: `toStoredEdit`
-   *  is the one owner) — this call names no `start` or `end` of its own, so there is nothing here
-   *  that could disagree with them. */
-  #removeSegmentsFrom(token: TxToken, id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
+  /** Removes `removedIds` from one Entry's Segments. Removing the last one clears both dates instead
+   *  of removing the Entry (ADR 0012: a dateless Entry is legal, so a bar's own last Segment going away
+   *  no longer has to take the row with it). The Entry, its id, and its descendants all stay untouched
+   *  — only `entries.remove(id)` deletes a row. Otherwise the remaining Segments go through `update`,
+   *  the normal edit path, which recomputes the envelope around them itself (#212, finding 4:
+   *  `toEditReading` is the one owner) — this call names no `start` or `end` of its own, so there is
+   *  nothing here that could disagree with them. */
+  #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
     const entry = this.get(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
-      this.#reparentChildrenOf(token, id, entry.parentId);
-      this.stageRemove(token, id);
+      // Only an Entry that owns its own dates has dates to clear. On one with children the dates are
+      // the Rollup's (ADR 0013), and clearing them did real damage: the clear is a proposal in the
+      // transaction body, so the Rollup yielded to it (decision 5) and a parent with a dated child
+      // committed with no dates at all (N8, BUILD-LOG). The library obeys the rule it publishes.
+      if (this.#hasChildren(id)) return;
+      this.#updateFrom('entries.removeSegments', id, { start: undefined, end: undefined });
       return;
     }
-    this.update(id, { segments: remaining });
-  }
-
-  /** Moves `id`'s direct children up to `parentId` — `id`'s own parent, or the root when it had none
-   *  — before `id` is staged for removal (#212, fix plan R3). A grandchild's `parentId` already
-   *  names its own (surviving) parent, so re-parenting the direct children carries the rest of the
-   *  subtree with them; nothing below the direct children needs to move. */
-  #reparentChildrenOf(token: TxToken, id: EntryId, parentId: EntryId | undefined): void {
-    for (const child of this.childrenOf(id)) {
-      const edit: StoredEdit = {};
-      // Deliberate exactOptionalPropertyTypes escape, same posture as `source-strategy.ts`'s meta
-      // clear: an explicit `undefined` un-parents the child to the root, distinct from the key being
-      // absent, which `entryAfterEdit` would then leave the child's parentId untouched by.
-      (edit as Record<string, unknown>)['parentId'] = parentId;
-      this.stageUpdate(token, child.id, edit);
-    }
+    this.#updateFrom('entries.removeSegments', id, { segments: remaining });
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
@@ -503,6 +601,7 @@ export class EntryStore implements EntryStoreContract {
       edits: new Map(),
       authoredEnvelopeKeys: new Map(),
       segmentOwner: new Map(),
+      stagedParents: new Set(),
     };
   }
 
@@ -518,22 +617,24 @@ export class EntryStore implements EntryStoreContract {
     writeSet.added.set(entry.id, entry);
     writeSet.removed.delete(entry.id);
     writeSet.edits.delete(entry.id);
+    if (entry.parentId !== undefined) writeSet.stagedParents.add(entry.parentId);
     recordSegmentOwnership(writeSet, entry.id, replaced?.segments, entry.segments);
   }
 
   /** `authoredEnvelopeKeys` names which of `start`/`end`/`segments` the caller itself wrote into
    *  `edit`, before any envelope reconciliation ran (#232) — `update()` below passes the fact
-   *  `toEditReading` already computed. A caller that stages a raw `StoredEdit` directly (a
+   *  `toEditReading` already computed. A caller that stages a raw `ProposedEdit` directly (a
    *  same-transaction reparent, a test fixture) has done no such reconciliation, so the default —
    *  the triad-intersection of `edit`'s own keys — is exactly that edit's authored keys too. */
   stageUpdate(
     _token: TxToken,
     id: EntryId,
-    edit: StoredEdit,
+    edit: ProposedEdit,
     authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
   ): void {
     const writeSet = this.#openWriteSet();
     const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
+    if (edit.parentId !== undefined) writeSet.stagedParents.add(edit.parentId);
     const staged = writeSet.added.get(id);
     if (staged) {
       const merged = entryAfterEdit(staged, edit);
@@ -541,7 +642,7 @@ export class EntryStore implements EntryStoreContract {
       if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, merged.segments);
       return;
     }
-    writeSet.edits.set(id, mergeStoredEdits(writeSet.edits.get(id), edit));
+    writeSet.edits.set(id, mergeProposedEdits(writeSet.edits.get(id), edit));
     if (authoredEnvelopeKeys.size > 0) {
       const existing = writeSet.authoredEnvelopeKeys.get(id);
       writeSet.authoredEnvelopeKeys.set(
@@ -576,7 +677,7 @@ export class EntryStore implements EntryStoreContract {
     return result;
   }
 
-  pendingEdits(): StoredEdits {
+  pendingEdits(): ProposedEdits {
     return this.#writeSet?.edits ?? new Map();
   }
 

@@ -81,14 +81,15 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       register: (binding) => registry.add(`keybinding:${binding.chord}`),
       registerHandler: (chord) => registry.add(`handler:${chord}`),
     },
-    // #170: one object answers all five register seams now, and each carries the refresh it owes.
+    // #170: one object answers every register seam now, and each carries the refresh it owes.
     // What each one invalidates is `plugin-registrations.test.ts`'s subject. This file asks only what
     // `buildPluginPorts` still decides: the gate, and who holds the disposer.
     registrations: {
       registerRenderer: (point) => registry.add(`renderer:${point}`),
       registerDecoration: (layer) => registry.add(`decoration:${layer}`),
       registerItemProducer: (kind) => registry.add(`producer:${kind}`),
-      registerKindDefaults: (kind) => registry.add(`defaults:${kind}`),
+      registerLookClaim: (look) => registry.add(`claim:${look}`),
+      registerLookDefaults: (kind) => registry.add(`defaults:${kind}`),
       registerGridColumn: () => registry.add('column'),
     },
     resolveTooltipRenderer: () => undefined,
@@ -116,11 +117,12 @@ const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts
     'interaction.registerKeybinding',
     (p) => p.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.run' }),
   ],
-  ['interaction.registerKindDefaults', (p) => p.interaction.registerKindDefaults('buffer', {})],
+  ['interaction.registerLookDefaults', (p) => p.interaction.registerLookDefaults('buffer', {})],
   ['view.registerRenderer', (p) => p.view.registerRenderer('cell', () => ({ text: '' }))],
   ['view.registerDecoration', (p) => p.view.registerDecoration('underBars', () => [])],
   ['view.registerGridColumn', (p) => p.view.registerGridColumn('cost')],
   ['layout.registerItemProducer', (p) => p.layout.registerItemProducer('buffer', () => [])],
+  ['layout.registerLookClaim', (p) => p.layout.registerLookClaim('buffer', () => false)],
 ];
 
 describe('buildPluginPorts — the D-S5-4 gate', () => {

@@ -91,8 +91,8 @@ export interface DatasetPluginContextOf<TDataset> {
  *
  * `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
  * must exist before the first Rollup (D-S5-4), so adding one later would mean re-rolling the whole
- * dataset under a Field the Document never had. A consumer that wants a different plugin set builds a
- * Dataset with it.
+ * dataset under a Field its earlier Rollups never summed. A consumer that wants a different plugin
+ * set builds a Dataset with it.
  */
 export interface DatasetPluginOf<TDataset> {
   id: PluginId;

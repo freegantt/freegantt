@@ -16,14 +16,16 @@ import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import type { Entry, EntryId } from '../model/index.js';
 import { segmentId } from '../model/index.js';
 
+// Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
+// with both dates.
 const scale: TimeScale = {
-  range: sampleEntries[0]!,
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
   timeZone: 'UTC',
   pxPerMs: 1,
   xForInstant: () => 0,
-  instantForX: () => sampleEntries[0]!.start,
+  instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 100,
-  ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+  ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
   contentWidth: 100,
 };
 const preset: ViewPreset = {
@@ -268,8 +270,8 @@ describe('ContainerDom — finding an element from an id', () => {
     const segmented: Entry = {
       ...entries[0]!,
       segments: [
-        { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start, end: entries[0]!.end },
-        { id: segmentId(`${entries[0]!.id}-1`), start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start!, end: entries[0]!.end! },
+        { id: segmentId(`${entries[0]!.id}-1`), start: entries[0]!.start!, end: entries[0]!.end! },
       ],
     };
     const gantt = paintOneGantt([segmented]);
@@ -313,8 +315,8 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   const twoSegments: Entry = {
     ...entries[0]!,
     segments: [
-      { id: segmentId('seg-a'), start: entries[0]!.start, end: entries[0]!.end },
-      { id: segmentId('seg-b'), start: entries[0]!.start, end: entries[0]!.end },
+      { id: segmentId('seg-a'), start: entries[0]!.start!, end: entries[0]!.end! },
+      { id: segmentId('seg-b'), start: entries[0]!.start!, end: entries[0]!.end! },
     ],
   };
 
@@ -328,11 +330,12 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   });
 
   it('a whole-Entry bar names every Segment of its Entry, because it draws no single one', () => {
-    // A milestone producer emits one Item over the whole Entry, so the bar carries no
-    // `data-segment-id`. The node still stands for the Entry, and the Entry is its Segments.
-    const milestone: Entry = { ...twoSegments, kind: 'milestone' };
-    const gantt = paintOneGantt([milestone]);
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
+    // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
+    // and the Entry is its Segments.
+    const child: Entry = { ...entries[1]!, parentId: twoSegments.id };
+    const gantt = paintOneGantt([twoSegments, child]);
+    const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
 
     expect(bar.dataset['segmentId']).toBeUndefined();
     expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a'), segmentId('seg-b')]);
@@ -363,9 +366,9 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
     const threeSegments: Entry = {
       ...entries[0]!,
       segments: [
-        { id: segmentId('sg1'), start: entries[0]!.start, end: entries[0]!.end },
-        { id: segmentId('sg2'), start: entries[0]!.start, end: entries[0]!.end },
-        { id: segmentId('sg3'), start: entries[0]!.start, end: entries[0]!.end },
+        { id: segmentId('sg1'), start: entries[0]!.start!, end: entries[0]!.end! },
+        { id: segmentId('sg2'), start: entries[0]!.start!, end: entries[0]!.end! },
+        { id: segmentId('sg3'), start: entries[0]!.start!, end: entries[0]!.end! },
       ],
     };
     const gantt = paintOneGantt([threeSegments]);

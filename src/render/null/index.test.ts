@@ -7,11 +7,11 @@ import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 // render/ only imports layout/ (plans/01 §1), which type-exports TimeScale/ViewPreset but not the
 // runtime time/ constructors — so this fake stands in rather than reaching past the boundary.
 const scale: TimeScale = {
-  range: sampleEntries[0]!,
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
   timeZone: 'UTC',
   pxPerMs: 1,
   xForInstant: () => 0,
-  instantForX: () => sampleEntries[0]!.start,
+  instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 0,
   ticks: () => [],
   contentWidth: 0,

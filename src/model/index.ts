@@ -17,23 +17,27 @@ export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.j
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type {
   Entry,
+  EntryLook,
   Segment,
   SegmentInput,
-  EntryKind,
   EntryInput,
   EntryEdit,
-  StoredEdit,
-  StoredEdits,
+  PropsEdit,
+  ProposedEdit,
+  ProposedEdits,
   EntryEdits,
   EditRequest,
   EditExtender,
 } from './entry.js';
+// The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
+// ids.ts and errors.ts — see `spansTime`'s own comment for why the carve-out admits it.
+export { spansTime } from './entry.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
-export type { Dataset, DatasetHierarchy, EntryStore, EntryStoreView, RollUpKinds } from './dataset.js';
+export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
 export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
-export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from './document.js';
+export type { WriteVerdict, WriteRefusalReason } from './write-verdict.js';
 export type {
   StoreName,
   PluginStoreName,
@@ -54,14 +58,15 @@ export type {
   FieldValue,
   AggregatorName,
   FieldTypeName,
-  FieldSource,
   Field,
+  FieldEditable,
   FieldType,
   FieldLookup,
   FieldContext,
   FormatContext,
   RollUpContext,
   Aggregator,
+  FieldDistributor,
   GridColumn,
   GridColumnInput,
   GridColumnBase,
@@ -91,9 +96,12 @@ export {
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
+  ReservedFieldKeyError,
+  DuplicatePropsKeyError,
   IllegalCoreFieldOverrideError,
-  DuplicateFieldSourceError,
-  InvalidFieldSourceError,
+  ComputedFieldCannotBeWrittenError,
+  FieldNotEditableError,
+  DerivedFieldNotWritableError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldNotColumnableError,
@@ -103,7 +111,6 @@ export {
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,
-  UnsupportedSchemaError,
   DuplicatePluginIdError,
   PluginNotInstalledError,
   MissingPluginError,

@@ -116,7 +116,7 @@ export function resolveActedOn(clicked: ActedOn, selected: ActedOn): ActedOn {
  *  `gantt.commands.run(id)`. S5.2 ships `dataset`/`gantt` (read the same way `PluginContext` does)
  *  plus `entry`/`target`; nothing here is privileged beyond the public `Gantt`/`Dataset` surface. */
 /** `TDataset` defaults to the public, untyped `Dataset` the same way `TGantt` defaults to
- *  `unknown` — a plugin author binding their own `Dataset<TMeta, TFields>` gets a typed
+ *  `unknown` — a plugin author binding their own `Dataset<TProps>` gets a typed
  *  `ctx.dataset` at every `when`/`run`; code with no reason to bind either type argument sees the
  *  exact surface it always has (#141 item #9). */
 export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {

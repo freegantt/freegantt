@@ -1,13 +1,13 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
-import type { Entry, EntryId, StoredEdits } from '../model/index.js';
+import type { Entry, EntryId, ProposedEdits } from '../model/index.js';
 import { entryAfterEdit } from './fields/field-access.js';
 
 export function buildEffectiveEntries(
   committed: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
 ): ReadonlyMap<EntryId, Entry> {
   const map = new Map(committed);
   for (const entry of removed) map.delete(entry.id);
@@ -25,7 +25,7 @@ export function buildEffectiveEntries(
  *  form: a commit must also apply `added` and `removed`, which a per-id read cannot see. */
 export function effectiveEntriesFor(
   committed: ReadonlyMap<EntryId, Entry>,
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   ids: Iterable<EntryId>,
 ): ReadonlyMap<EntryId, Entry> {
   const map = new Map<EntryId, Entry>();
@@ -44,7 +44,7 @@ export function effectiveEntriesFor(
  *  itself allocates only when `id` actually has an edit pending. */
 export function entryAfterEdits(
   committed: ReadonlyMap<EntryId, Entry>,
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   id: EntryId,
 ): Entry | undefined {
   const current = committed.get(id);
@@ -91,4 +91,25 @@ export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): 
     current = entries.get(current)?.parentId;
   }
   return result;
+}
+
+/** Every Entry below `id`, deepest included, read one level at a time through `childrenOf` — the
+ *  walk `view/capability.ts` needs to answer what a parent bar's drag writes (ADR 0013). Call:
+ *  `descendantsOf(parent.id, (id) => dataset.entries.childrenOf(id))`.
+ *
+ *  A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
+ *  overflow answers no question. */
+export function descendantsOf(
+  id: EntryId,
+  childrenOf: (parent: EntryId) => readonly Entry[],
+): readonly Entry[] {
+  const found: Entry[] = [];
+  const pending: EntryId[] = [id];
+  while (pending.length > 0) {
+    for (const child of childrenOf(pending.pop()!)) {
+      found.push(child);
+      pending.push(child.id);
+    }
+  }
+  return found;
 }

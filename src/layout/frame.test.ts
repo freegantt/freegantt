@@ -1,12 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  computeFrame,
-  placeFrame,
-  resolveLayoutRows,
-  barSpan,
-  DEFAULT_DIAMOND_SIZE_PX,
-  DEFAULT_MIN_BAR_WIDTH_PX,
-} from './frame.js';
+import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_MIN_BAR_WIDTH_PX } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
@@ -27,9 +20,15 @@ import {
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry } from '../model/index.js';
+import type { Entry, Instant, TimeSpan } from '../model/index.js';
 
-const scale = createTimeScale({ timeZone: 'UTC', range: sampleEntries[0]!, pxPerMs: 1 / 1000 });
+/** Every fixture entry this file reads is authored with both dates — this asserts what the
+ *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
+function spanOf(entry: Entry): TimeSpan {
+  return { start: entry.start as Instant, end: entry.end as Instant };
+}
+
+const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
@@ -84,7 +83,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       itemProducerRegistry,
-      rows: { source: 'group', groupBy: (entry) => entry.kind },
+      rows: { source: 'group', groupBy: () => 'all' },
     });
 
     const header = frame.rows.find((row) => row.kind === 'header');
@@ -121,7 +120,7 @@ describe('computeFrame', () => {
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(scale.timeZone, entry.start)} – ${formatEndInclusive(scale.timeZone, entry)}`,
+      `${entry.name}, ${formatDate(scale.timeZone, entry.start as Instant)} – ${formatEndInclusive(scale.timeZone, spanOf(entry))}`,
     );
   });
 
@@ -170,8 +169,8 @@ describe('computeFrame', () => {
     const nameField = {
       formatValue: (value: unknown) => `name:${String(value)}`,
     };
-    const kindField = {
-      formatValue: (value: unknown) => `kind:${String(value)}`,
+    const idField = {
+      formatValue: (value: unknown) => `id:${String(value)}`,
     };
     const frame = computeFrame({
       entries: sampleEntries.slice(0, 1),
@@ -190,16 +189,16 @@ describe('computeFrame', () => {
           format: (entry) => nameField.formatValue(entry.name),
         },
         {
-          field: 'kind',
-          header: 'Kind',
+          field: 'id',
+          header: 'Id',
           align: 'start',
-          format: (entry) => kindField.formatValue(entry.kind),
+          format: (entry) => idField.formatValue(entry.id),
         },
       ],
     });
     expect(frame.rows[0]?.cells).toEqual([
       nameField.formatValue(sampleEntries[0]!.name),
-      kindField.formatValue(sampleEntries[0]!.kind),
+      idField.formatValue(sampleEntries[0]!.id),
     ]);
   });
 
@@ -215,11 +214,11 @@ describe('computeFrame', () => {
       itemProducerRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
-        { field: 'kind', header: 'Kind', align: 'start', format: (entry) => entry.kind },
+        { field: 'id', header: 'Id', align: 'start', format: (entry) => entry.id },
       ],
     });
-    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.kind]);
-    expect(frame.columns.map((c) => c.field)).toEqual(['name', 'kind']);
+    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.id]);
+    expect(frame.columns.map((c) => c.field)).toEqual(['name', 'id']);
   });
 
   it('culls rows outside the vertical window (#20), with overscan disabled', () => {
@@ -454,7 +453,7 @@ describe('computeFrame', () => {
       ...base,
       revision: 1,
       datasetRevision: 0,
-      rows: { source: 'group', groupBy: (entry) => entry.kind },
+      rows: { source: 'group', groupBy: () => 'all' },
     });
     const idsFor = (frame: ReturnType<typeof computeFrame>, id: typeof child.id) =>
       frame.bars.filter((bar) => String(bar.entryId) === String(id)).map((bar) => bar.id);
@@ -468,8 +467,8 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
     };
     const frame = computeFrame({
@@ -491,13 +490,16 @@ describe('computeFrame', () => {
     const entry = {
       ...sampleEntries[0]!,
       segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start, end: sampleEntries[1]!.end },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end, end: sampleEntries[2]!.end },
+        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
     };
-    const grouped = { ...sampleEntries[1]!, kind: 'group' };
+    // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
+    // marker, to draw the parent's own summary bar instead of a Segment bar.
+    const grouped = { ...sampleEntries[1]! };
+    const groupedChild = { ...sampleEntries[2]!, id: entryId('grouped-child'), parentId: grouped.id };
     const frame = computeFrame({
-      entries: [entry, grouped],
+      entries: [entry, grouped, groupedChild],
       scale,
       preset,
       visible,
@@ -529,8 +531,8 @@ describe('computeFrame — horizontal culling', () => {
       name: id,
       start,
       end,
-      kind: 'span',
       segments: [{ id: segmentId(`${id}-1`), start, end }],
+      props: {},
     };
   }
 
@@ -915,9 +917,10 @@ describe(
         end,
         kind: 'span',
         segments: [{ id: segmentId(`${input.id}-1`), start, end }],
+        props: {},
       };
     });
-    const largeScale = createTimeScale({ timeZone: 'UTC', range: large[0]!, pxPerMs: 1 / 100_000 });
+    const largeScale = createTimeScale({ timeZone: 'UTC', range: spanOf(large[0]!), pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
       const frame = computeFrame({
@@ -982,9 +985,9 @@ describe('computeFrame lanes (S4.8)', () => {
   const overlapping: Entry = {
     ...sampleEntries[0]!,
     segments: [
-      { id: segmentId('lane-1'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { id: segmentId('lane-2'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
-      { id: segmentId('lane-3'), start: sampleEntries[0]!.start, end: sampleEntries[0]!.end },
+      { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      { id: segmentId('lane-2'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      { id: segmentId('lane-3'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
     ],
   };
 
@@ -1027,78 +1030,27 @@ describe('computeFrame lanes (S4.8)', () => {
   });
 });
 
-describe('barSpan — milestone floor (bug hunt: milestone highlight box)', () => {
-  const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
-
-  it('keeps the Entry itself zero-width — the painted span floors, not the instant', () => {
-    expect(milestone.start).toEqual(milestone.end);
-  });
-
-  it('floors a milestone bar to the rotated diamond bounding box, centred on the instant', () => {
-    const { x, width } = barSpan(milestone, scale);
-    const floor = DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2;
-    expect(width).toBe(floor);
-    expect(width).toBeGreaterThan(0);
-    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
-  });
-
-  it('honours a custom diamondSizePx the same way --fg-diamond-size would', () => {
-    const { x, width } = barSpan(milestone, scale, 20);
-    expect(width).toBe(20 * Math.SQRT2);
-    expect(x + width / 2).toBe(scale.xForInstant(milestone.start));
-  });
-
-  it('stamps minimumSpan on a floored milestone bar', () => {
-    const { minimumSpan } = barSpan(milestone, scale);
-    expect(minimumSpan).toBe(true);
-  });
-
-  it("computeFrame's bar and GanttShell.reveal's span agree on the same floored box", () => {
-    const frame = computeFrame({
-      entries: [milestone],
-      scale,
-      preset,
-      visible,
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      itemProducerRegistry,
-    });
-    const bar = frame.bars[0]!;
-    const revealSpan = barSpan(milestone, scale);
-    expect(bar.width).toBe(revealSpan.width);
-    expect(bar.x).toBe(revealSpan.x);
-  });
-});
-
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
-  it('floors a zero-width, non-milestone kind at minBarWidthPx and stamps minimumSpan', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start };
-    const { x, width, minimumSpan } = barSpan(zeroWidthSpan, scale);
+  it('floors a zero-width span at minBarWidthPx and stamps minimumSpan', () => {
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const { x, width, minimumSpan } = barSpan(spanOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
-    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start));
+    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
-  it('never shrinks a milestone floor below its own diamond bounding box', () => {
-    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
-    // A tiny minBarWidthPx must not shrink the milestone floor below diamondSizePx * √2.
-    const { width } = barSpan(milestone, scale, DEFAULT_DIAMOND_SIZE_PX, 1);
-    expect(width).toBe(DEFAULT_DIAMOND_SIZE_PX * Math.SQRT2);
-  });
-
-  it('widens minBarWidthPx past a milestone floor too small for it', () => {
-    const milestone: Entry = { ...sampleEntries[0]!, kind: 'milestone', end: sampleEntries[0]!.start };
-    const { width } = barSpan(milestone, scale, 1, 40);
+  it('honours a custom minBarWidthPx', () => {
+    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const { width } = barSpan(spanOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
 
   it('centres a floored, non-zero-width bar on its own midpoint, not on its start', () => {
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
-    const startX = scale.xForInstant(sampleEntries[0]!.start);
+    const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
     const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
-    const { x, width, minimumSpan } = barSpan(narrowSpan, scale);
+    const { x, width, minimumSpan } = barSpan(spanOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
     expect(x + width / 2).toBe(startX + 2.5);
@@ -1106,10 +1058,12 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, minimumSpan } = barSpan(wideSpan, scale);
-    expect(width).toBe(scale.xForInstant(wideSpan.end) - scale.xForInstant(wideSpan.start));
+    const { x, width, minimumSpan } = barSpan(spanOf(wideSpan), scale);
+    expect(width).toBe(
+      scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),
+    );
     expect(width).toBeGreaterThan(DEFAULT_MIN_BAR_WIDTH_PX);
-    expect(x).toBe(scale.xForInstant(wideSpan.start));
+    expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
     expect(minimumSpan).toBe(false);
   });
 });

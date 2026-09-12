@@ -39,7 +39,7 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
   end: shift(entry.end!),
 }));
 
-export type DemoMeta = { cost?: number; team?: string };
+export type DemoEntryProps = { cost?: number; team?: string };
 
 /** Nested work tree for the generic demo: Program → workstream → work → a few grandchildren. */
 const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
@@ -159,47 +159,51 @@ export const demoFieldOptions = {
 } as const;
 
 /** Root spans that sit beside Program — not in the nested work tree. */
-const DEMO_ROOT_SPANS: readonly EntryInput<DemoMeta>[] = [
+const DEMO_ROOT_SPANS: readonly EntryInput<DemoEntryProps>[] = [
   {
     id: 'ops-oncall',
     name: 'Ops on-call',
     start: shift('2026-09-08'),
     end: shift('2026-09-12'),
-    meta: { cost: 800, team: 'ops' },
+    props: { cost: 800, team: 'ops' },
   },
   {
     id: 'staff-training',
     name: 'Staff training',
     start: shift('2026-10-06'),
     end: shift('2026-10-10'),
-    meta: { cost: 1200, team: 'ops' },
+    props: { cost: 1200, team: 'ops' },
   },
 ];
 
+// ADR 0013: `kind` left `Entry`, so "Requirements review" is no longer a stored milestone kind.
+// `main.ts` owns which ids look like a milestone (`milestoneKind()`, `harness/plugins/`), and
+// reads this id rather than re-deriving it from a fixture it does not otherwise touch.
+export const MILESTONE_ENTRY_ID = 'entry-4';
+
 /** Generic-demo entries: two root spans, then a four-level Program tree. */
-export const demoTreeEntryInputs: EntryInput<DemoMeta>[] = [
+export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
   ...DEMO_ROOT_SPANS,
-  { id: 'program', name: 'Program', kind: 'group' },
+  { id: 'program', name: 'Program' },
   ...demoEntryInputs.map((entry, i) => {
     const id = entry.id ?? '';
     const parentId = DEMO_PARENT[id];
     const workstream = workstreamOf(id);
     const team = workstream !== undefined ? WORKSTREAM_TEAM[workstream] : undefined;
     const isLeaf = DEMO_CHILDREN[id] === undefined;
-    const meta: DemoMeta = {
+    const props: DemoEntryProps = {
       ...(isLeaf ? { cost: (i + 1) * 250 } : {}),
       ...(team !== undefined ? { team } : {}),
     };
-    const next: EntryInput<DemoMeta> = { id, name: entry.name };
+    const next: EntryInput<DemoEntryProps> = { id, name: entry.name };
     if (entry.start !== undefined) next.start = entry.start;
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
-    if (id === 'entry-4') next.kind = 'milestone';
     // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
     // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
     // hand to cover a Segment that runs past it.
     if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
-    if (Object.keys(meta).length > 0) next.meta = meta;
+    if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),
 ];

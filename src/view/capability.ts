@@ -10,11 +10,13 @@
 // per Field. `Interactions.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import { rollsUp } from '../data/fields/field-registry.js';
-import type { BuiltInErrorCode, Entry, EntryKind, Field, FieldKey } from '../model/index.js';
+import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
+import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
+import type { Entry, Field, FieldKey } from '../model/index.js';
+import type { EntryLook } from '../layout/index.js';
 
 /** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
- *  (U4: `interactions: { resize: e => e.kind !== 'group' }`). */
+ *  (U4: `interactions: { resize: e => e.props.locked !== true }`). */
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
 
 /** #256: the write rule takes the cell, because a write names one. Call:
@@ -55,21 +57,13 @@ export interface Interactions {
 
 /** Why a write is refused, when the refusal is worth words. A refusal that carries no reason is
  *  already visible: no handle paints, and no editor opens. The cell editor stays silent for it
- *  (`s5.8-inline-editing.md` §1, "Which refusals speak"). One spelling, shared with
- *  `model/error-report.ts`'s `BuiltInErrorCode` and the cell editor's own `REFUSAL_TEXT`. */
-export type WriteRefusalReason = Extract<BuiltInErrorCode, 'derived-value'>;
+ *  (`s5.8-inline-editing.md` §1, "Which refusals speak"). `data/write-rule.ts` owns the type — the
+ *  resolver moved there in ADR 0011 — and this is the name the app-author surface publishes it
+ *  under. */
+export type WriteRefusalReason = FieldWriteRefusalReason;
 
 /** May this cell's value change, and if not, is the refusal worth explaining? */
-export type WriteVerdict =
-  { readonly ok: true } | { readonly ok: false; readonly reason?: WriteRefusalReason };
-
-// One verdict object per answer, frozen and shared. `canWrite` sits behind hover affordance
-// resolution. A verdict built per hover would allocate where the hot path must not (I5). This is the
-// shape `gesture-pipeline.ts`'s own `NO_EXTRA_EDITS` uses: a frozen constant, never a singleton that
-// holds state (no module-level singletons, plans/01 §6).
-const WRITABLE: WriteVerdict = Object.freeze({ ok: true });
-const NOT_WRITABLE: WriteVerdict = Object.freeze({ ok: false });
-const DERIVED: WriteVerdict = Object.freeze({ ok: false, reason: 'derived-value' as const });
+export type WriteVerdict = FieldWriteVerdict;
 
 export interface Capabilities {
   /** `edge` narrows a `'resize'` question to one handle (#142). With no edge, `'resize'` asks
@@ -78,9 +72,15 @@ export interface Capabilities {
   /** #256: the one answer to "may this Field's value change on this Entry". Every writer asks it:
    *  the cell editor, the resize drag, the move drag and the keyboard nudge. */
   canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+  /** ADR 0013: which Entries a move of this bar writes. An ordinary bar writes itself. A parent's
+   *  own `start`/`end` roll up from its children. So a parent bar writes the dated descendants below
+   *  it instead, and the Rollup moves the parent's own envelope at commit.
+   *
+   *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
+  entriesMovedBy(entry: Entry): readonly Entry[];
 }
 
-/** S5.9, D-S5-22: `ctx.interaction.registerKindDefaults(kind, defaults)` is a plugin's per-kind
+/** S5.9, D-S5-22: `ctx.interaction.registerLookDefaults(look, defaults)` is a plugin's per-look
  *  answer. It sits one level below a consumer's own `interactions`, and one level above the library
  *  rules. It carries the same keys as `Interactions`, but a plain boolean only.
  *
@@ -93,62 +93,63 @@ export type KindDefaults = { [K in keyof Interactions]?: boolean };
  *  Field lookup joined a list that already read badly at the call site. */
 export interface CapabilityInputs {
   interactions?: Interactions | undefined;
-  /** From the bound `Dataset` — `GanttShell` passes `dataset.isRollUpKind` straight through, never
-   *  `rollUpKinds` itself (S3, D-S3-9). */
-  isRollUpKind: (kind: EntryKind) => boolean;
-  /** From the bound `Dataset` — `dataset.field`. The library write rule reads three keys off it:
-   *  `source`, `rollUp` and `editable`. */
+  /** ADR 0013: an Entry derives when it has children — structure, not a stored classification.
+   *  `GanttShell` passes `(entry) => dataset.entries.childrenOf(entry.id).length > 0` straight
+   *  through. */
+  hasChildren: (entry: Entry) => boolean;
+  /** ADR 0013: every Entry below this one, deepest included. A parent bar's drag translates the
+   *  dated descendants under it. So "may this parent move" asks about the whole subtree, and not
+   *  about one level. `GanttShell` passes `data/entry-tree.ts`'s own `descendantsOf`. */
+  descendantsOf: (entry: Entry) => readonly Entry[];
+  /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
+   *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
+  /** ADR 0013: the look `layout/`'s item production would resolve for this Entry — structure first,
+   *  then whichever plugin-owned look claims it (`layout/items/produce-items.ts`'s `resolveLook`).
+   *  `registeredDefaultsFor` keys on this, not on structure alone, so a plugin's own
+   *  `registerLookDefaults(itsOwnLook, …)` reaches the Entries it claims. The look is named with a
+   *  placeholder, never a real plugin's id. [S5-A3] greps this tree for a consumer look's own name
+   *  and expects zero hits. Core prose that borrows one starts the coupling that gate catches. */
+  lookOf: (entry: Entry) => EntryLook;
   /** S5.9, D-S5-22. */
-  registeredDefaultsFor?: ((kind: EntryKind) => KindDefaults | undefined) | undefined;
+  registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
 }
 
-/** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
- *
- *  The Rollup pass writes a roll-up parent's rolling-up Field off its children. A user write there
- *  would commit, and the next Rollup would overwrite it. That refusal is worth words, and they are
- *  the words the cell editor has always shown. `rollsUp` is the Rollup pass's own test, so this
- *  refuses exactly the set that pass would overwrite.
- *
- *  Everything else is the Field's own `editable`, which defaults to `false`. */
-function libraryWriteRule(
-  entry: Entry,
-  field: Field,
-  isRollUpKind: (kind: EntryKind) => boolean,
-): WriteVerdict {
-  if (isRollUpKind(entry.kind) && rollsUp(field)) return DERIVED;
-  return field.editable === true ? WRITABLE : NOT_WRITABLE;
-}
+/** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
+ *  the hover path (I5). */
+const NOTHING_MOVES: readonly Entry[] = Object.freeze([]);
 
 /** Is there a value here to write at all? This is structure, not policy. So it sits above every
  *  rule. No consumer predicate and no plugin default opens a cell with no stored home.
  *
- *  Two kinds of cell have none. An undeclared key names no Field. A `compute`-sourced Field computes
- *  on read and owns no home by declaration (ADR 0005); `duration` is the shipped one.
+ *  Two kinds of cell have none. An undeclared key names no Field. A `compute` Field computes
+ *  on read and owns no home by declaration (ADR 0011); `duration` is the shipped one.
  *
  *  This check used to sit below the consumer rule. `interactions: { edit: true }` reads like "turn
  *  editing on", and it opened the Duration cell. The editor then took a typed value, and the write
  *  went nowhere. */
 function hasSomewhereToWrite(field: Field | undefined): field is Field {
-  return field !== undefined && field.source?.from !== 'compute';
+  return field !== undefined && !('compute' in field);
 }
 
-/** Does this gesture mean anything for this Entry, before anyone asks what it would write? A
- *  milestone is zero-length by construction, so it has no edge to drag. `select` writes nothing, so
- *  it is always offered. I14's hide half is a vacant no-op for it (D-S3-9/D-S3-10). Every other
- *  kind is offered every gesture, shipped or consumer-defined. `canWrite` below then decides
- *  whether that gesture can carry its write out.
+/** Does this gesture mean anything for this Entry, before anyone asks what it would write? Every
+ *  Entry is offered every gesture, shipped or consumer-defined — there is no stored classification
+ *  left to special-case a gesture off of (ADR 0013). `canWrite` below decides whether that gesture
+ *  can carry its write out.
  *
- *  A roll-up kind is *not* named here, and needs no name. Its `start` and `end` both roll up, so
- *  `canWrite` closes both edges already. That closes move and resize with them. */
-function gestureIsOffered(capability: GestureCapability, entry: Entry): boolean {
-  if (capability === 'resize' && entry.kind === 'milestone') return false;
+ *  A parent is *not* named here, and needs no name. Its `start` and `end` both roll up, so it writes
+ *  no date of its own. What a parent bar's move writes is the subtree below it (ADR 0013), and
+ *  `entriesMovedBy` answers that. Resize stays closed on a parent: one edge of a derived envelope
+ *  names no descendant to resize. */
+function gestureIsOffered(): boolean {
   return true;
 }
 
-/** Which dates does this gesture set, and may it set them? `move` shifts the whole bar. So it sets
- *  both dates and needs both. This is the hole #256 found: a locked `start` hid its own handle, and
- *  a move rewrote it anyway. `resize` sets the dragged edge's own Field. `select` sets nothing.
+/** Which dates does this gesture set, and may it set them? `move` shifts the whole bar. A leaf bar
+ *  sets both dates and needs both. That is the hole #256 found: a locked `start` hid its own handle,
+ *  and a move rewrote it anyway. A parent bar sets no date of its own, so it asks what its
+ *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
+ *  sets nothing.
  *
  *  A drag also writes `segments`, and this asks nothing about that Field. `segments` is not a second
  *  value the user aims at. It is where the same span is stored, and `draftForResize` recomputes the
@@ -161,12 +162,13 @@ function mayWriteTheDatesItSets(
   entry: Entry,
   edge: 'start' | 'end' | undefined,
   canWrite: (entry: Entry, field: FieldKey) => WriteVerdict,
+  moveWritesSomething: (entry: Entry) => boolean,
 ): boolean {
   switch (capability) {
     case 'select':
       return true;
     case 'move':
-      return canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+      return moveWritesSomething(entry);
     case 'resize':
       // No edge asked means "either handle" — the affordance pass asks each edge by name.
       if (edge !== undefined) return canWrite(entry, edge).ok;
@@ -194,7 +196,7 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
  *  or answer `interactions.edit` for the cell. One home for "may this value change" is the whole
  *  point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
-  const { interactions, isRollUpKind, fieldFor, registeredDefaultsFor } = inputs;
+  const { interactions, hasChildren, descendantsOf, fieldFor, lookOf, registeredDefaultsFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
@@ -202,24 +204,62 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
     const rule = interactions?.edit;
     const answer = typeof rule === 'function' ? rule(entry, field) : rule;
     if (answer !== undefined) return answer ? WRITABLE : NOT_WRITABLE;
-    const registered = registeredDefaultsFor?.(entry.kind)?.edit;
+    const registered = registeredDefaultsFor?.(lookOf(entry))?.edit;
     if (registered !== undefined) return registered ? WRITABLE : NOT_WRITABLE;
-    return libraryWriteRule(entry, declared, isRollUpKind);
+    return libraryWriteRule(hasChildren(entry), declared);
   };
+
+  /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when both of them may
+   *  change. It asks about the Fields, never about the values, so a dateless leaf answers the same
+   *  as a dated one. */
+  const movesItsOwnDates = (entry: Entry): boolean =>
+    canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+
+  /** ADR 0013: a descendant travels with the parent bar when every date it holds may change. It is
+   *  not the leaf rule above. A child with a `start` and no `end` moves that `start`. A closed `end`
+   *  it never had must not stop it. */
+  const mayTranslateTheDatesItHolds = (entry: Entry): boolean =>
+    (entry.start === undefined || canWrite(entry, 'start').ok) &&
+    (entry.end === undefined || canWrite(entry, 'end').ok);
+
+  const entriesMovedBy = (entry: Entry): readonly Entry[] => {
+    if (!hasChildren(entry)) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
+    const moved: Entry[] = [];
+    for (const descendant of descendantsOf(entry)) {
+      // A descendant with children of its own derives its dates the same way this parent does.
+      // The walk passes over it, and reaches the dated rows below it.
+      if (hasChildren(descendant)) continue;
+      // "Children with neither date are skipped" (ADR 0013) — there is nothing to translate.
+      if (descendant.start === undefined && descendant.end === undefined) continue;
+      // One locked descendant refuses the whole gesture. A parent bar that moved part of its own
+      // subtree would land somewhere the gesture never showed. The envelope it paints while dragging
+      // is the whole subtree translated. The Rollup would then compute a different one.
+      if (!mayTranslateTheDatesItHolds(descendant)) return NOTHING_MOVES;
+      moved.push(descendant);
+    }
+    return moved;
+  };
+
+  /** Does this bar's move write anything at all? `entriesMovedBy` says *what* it writes; this says
+   *  *whether*. The hover path asks this one (`can('move', …)` resolves an affordance), so an
+   *  ordinary bar answers it without building a list (I5). */
+  const moveWritesSomething = (entry: Entry): boolean =>
+    hasChildren(entry) ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
 
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
     const rule = interactions?.[capability];
     if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
-    const registered = registeredDefaultsFor?.(entry.kind)?.[capability];
+    const registered = registeredDefaultsFor?.(lookOf(entry))?.[capability];
     if (registered !== undefined) return registered;
-    return gestureIsOffered(capability, entry);
+    return gestureIsOffered();
   };
 
   return {
     can(capability, entry, edge) {
       if (!isOffered(capability, entry)) return false;
-      return mayWriteTheDatesItSets(capability, entry, edge, canWrite);
+      return mayWriteTheDatesItSets(capability, entry, edge, canWrite, moveWritesSomething);
     },
     canWrite,
+    entriesMovedBy,
   };
 }

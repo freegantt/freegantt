@@ -12,7 +12,24 @@ import {
 } from '../model/index.js';
 import type { ChangeSet, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
-import type { EntryEdits, StoredEdit } from './edit-extension.js';
+import type { EntryEdit, EntryEdits, ProposedEdit } from './edit-extension.js';
+
+/** A `ProposedEdit` for `stageUpdate`'s own test-fixture door (its doc comment names this file):
+ *  fills the required brand/`props`/`proposedKeys` a raw patch no longer carries, inferring
+ *  `proposedKeys` from the patch's own keys when the caller does not state one explicitly — the
+ *  same rule `entries.update()` itself follows for a plain patch. */
+function edit(patch: Record<string, unknown> = {}): ProposedEdit {
+  const { props, proposedKeys, ...envelope } = patch as {
+    props?: Record<string, unknown>;
+    proposedKeys?: Set<string>;
+  } & Record<string, unknown>;
+  return {
+    __brand: 'ProposedEdit',
+    props: props ?? {},
+    proposedKeys: proposedKeys ?? new Set(Object.keys(envelope)),
+    ...envelope,
+  };
+}
 
 function dataset(entries: { id: string; parentId?: string }[] = []): DatasetState {
   return new DatasetState({
@@ -40,8 +57,8 @@ describe('runTransaction', () => {
     runTransaction(
       state,
       (token) => {
-        state.entries.stageUpdate(token, entryId('t1'), { name: 'Roofing' });
-        state.entries.stageUpdate(token, entryId('t2'), { name: 'Framing' });
+        state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'Roofing' }));
+        state.entries.stageUpdate(token, entryId('t2'), edit({ name: 'Framing' }));
       },
       'user',
     );
@@ -59,7 +76,7 @@ describe('runTransaction', () => {
 
     runTransaction(
       state,
-      (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'Roofing' }),
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'Roofing' })),
       'user',
     );
 
@@ -78,8 +95,8 @@ describe('runTransaction', () => {
     runTransaction(
       state,
       (token) => {
-        state.entries.stageUpdate(token, entryId('t1'), { name: 'Roofing' });
-        state.entries.stageUpdate(token, entryId('t1'), { name: 't1' });
+        state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'Roofing' }));
+        state.entries.stageUpdate(token, entryId('t1'), edit({ name: 't1' }));
       },
       'user',
     );
@@ -102,8 +119,8 @@ describe('runTransaction', () => {
           name: 't9',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('t9-seg'), start: 0 as never, end: 1 as never }],
+          props: {},
         });
         state.entries.stageRemove(token, entryId('t9'));
       },
@@ -130,8 +147,8 @@ describe('runTransaction', () => {
           name: 'reborn',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('t1-reborn-seg'), start: 0 as never, end: 1 as never }],
+          props: {},
         });
       },
       'user',
@@ -174,10 +191,10 @@ describe('runTransaction', () => {
     runTransaction(
       state,
       (token) => {
-        state.entries.stageUpdate(token, entryId('t1'), { name: 'a' });
+        state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' }));
         runTransaction(
           state,
-          (innerToken) => state.entries.stageUpdate(innerToken, entryId('t2'), { name: 'b' }),
+          (innerToken) => state.entries.stageUpdate(innerToken, entryId('t2'), edit({ name: 'b' })),
           'user',
         );
       },
@@ -202,8 +219,8 @@ describe('runTransaction', () => {
           name: 'child',
           start: 0 as never,
           end: 1 as never,
-          kind: 'span',
           segments: [{ id: segmentId('child-seg'), start: 0 as never, end: 1 as never }],
+          props: {},
         });
         sizeDuring = state.entries.size;
         childDuring = state.entries.childrenOf(entryId('root')).map((e) => e.id);
@@ -238,8 +255,8 @@ describe('runTransaction', () => {
       runTransaction(
         state,
         (token) => {
-          state.entries.stageUpdate(token, entryId('t1'), { name: 'a' });
-          state.entries.stageUpdate(token, entryId('t2'), { name: 'b' });
+          state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' }));
+          state.entries.stageUpdate(token, entryId('t2'), edit({ name: 'b' }));
           throw new Error('boom');
         },
         'user',
@@ -260,7 +277,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationDuringNotificationError);
@@ -274,14 +291,18 @@ describe('runTransaction', () => {
       ],
       timeZone: 'UTC',
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([[entryId('t2'), { name: 'cascaded' }]]),
+        new Map<ReturnType<typeof entryId>, EntryEdit>([[entryId('t2'), { name: 'cascaded' }]]),
     });
     let captured: readonly unknown[] = [];
     state.on('change', ({ changeSet }) => {
       captured = changeSet.updated;
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
     expect(captured).toEqual([
       { store: 'entries', id: entryId('t1'), field: 'name', from: 't1', to: 'a' },
@@ -296,7 +317,11 @@ describe('runTransaction', () => {
       captured = changeSet.updated;
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
     expect(captured).toEqual([{ store: 'entries', id: entryId('t1'), field: 'name', from: 't1', to: 'a' }]);
   });
@@ -306,19 +331,19 @@ describe('runTransaction', () => {
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
       timeZone: 'UTC',
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([[entryId('t1'), { name: 'clobbered' }]]),
+        new Map<ReturnType<typeof entryId>, EntryEdit>([[entryId('t1'), { name: 'clobbered' }]]),
     });
 
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(/I4/);
   });
 
-  // #197: `proposedKeys` is bookkeeping on a `StoredEdit`, not a Field. The body edit always carries
+  // #197: `proposedKeys` is bookkeeping on a `ProposedEdit`, not a Field. The body edit always carries
   // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
   // extender composed with `mergeEntryEdits` now does. The extender states no keys of its own since
   // #209 C3: it writes `{ cost: 500 }`, the same object `entries.update()` takes, and core derives
@@ -332,12 +357,16 @@ describe('runTransaction', () => {
       editExtender: (): EntryEdits => new Map([[entryId('t1'), { cost: 500 }]]),
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
-    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500 });
+    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500 });
   });
 
-  it('I4 still fires when body and extender propose the same meta-sourced Field', () => {
+  it('I4 still fires when body and extender propose the same props-addressed Field', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
       timeZone: 'UTC',
@@ -350,19 +379,22 @@ describe('runTransaction', () => {
       runTransaction(
         state,
         (token) =>
-          state.entries.stageUpdate(token, entryId('t1'), {
-            meta: { cost: 1 },
-            proposedKeys: new Set(['cost']),
-          }),
+          state.entries.stageUpdate(
+            token,
+            entryId('t1'),
+            edit({
+              props: { cost: 1 },
+              proposedKeys: new Set(['cost']),
+            }),
+          ),
         'user',
       ),
     ).toThrow(/I4/);
   });
 
-  // #209: the raw loop in `fieldsWrittenBy` used to add the `meta` container key even when an edit
-  // already stated `proposedKeys`, so two different meta-sourced Fields intersected on "meta" and I4
+  // #209: two different props-addressed Fields used to intersect on a shared container key, and I4
   // refused a transaction that writes no Field twice.
-  it('I4 does not fire when the body and the extender write two different meta-sourced Fields', () => {
+  it('I4 does not fire when the body and the extender write two different props-addressed Fields', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
       timeZone: 'UTC',
@@ -378,15 +410,19 @@ describe('runTransaction', () => {
       runTransaction(
         state,
         (token) =>
-          state.entries.stageUpdate(token, entryId('t1'), {
-            meta: { risk: 1 },
-            proposedKeys: new Set(['risk']),
-          }),
+          state.entries.stageUpdate(
+            token,
+            entryId('t1'),
+            edit({
+              props: { risk: 1 },
+              proposedKeys: new Set(['risk']),
+            }),
+          ),
         'user',
       ),
     ).not.toThrow();
 
-    expect(state.entries.get(entryId('t1'))?.meta).toEqual({ cost: 500, risk: 1 });
+    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500, risk: 1 });
   });
 
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
@@ -396,7 +432,11 @@ describe('runTransaction', () => {
       sawFrozen = Object.isFrozen(changeSet) && Object.isFrozen(changeSet.updated);
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
     expect(sawFrozen).toBe(true);
   });
@@ -418,8 +458,8 @@ describe('runTransaction', () => {
     runTransaction(
       state,
       (token) => {
-        state.entries.stageUpdate(token, entryId('t1'), { name: 'a' });
-        state.entries.stageUpdate(token, entryId('t2'), { name: 'b' });
+        state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' }));
+        state.entries.stageUpdate(token, entryId('t2'), edit({ name: 'b' }));
       },
       'user',
     );
@@ -438,7 +478,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -458,7 +498,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -485,7 +525,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -509,7 +549,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -532,7 +572,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -550,7 +590,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow('handler blew up');
@@ -559,7 +599,11 @@ describe('runTransaction', () => {
     expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
 
     state.off('beforeChange', explode);
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'b' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'b' })),
+      'user',
+    );
     expect(state.entries.get(entryId('t1'))?.name).toBe('b');
   });
 
@@ -575,7 +619,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationCancelledError);
@@ -596,7 +640,11 @@ describe('runTransaction', () => {
       seenFields = fieldRowsOf(changeSet).map((row) => row.field);
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
     expect(seenFields).toEqual(['name', 'name']);
   });
@@ -628,7 +676,7 @@ describe('runTransaction', () => {
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(MutationDuringNotificationError);
@@ -641,8 +689,16 @@ describe('runTransaction', () => {
       seen.push(changeSet.id);
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'b' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'b' })),
+      'user',
+    );
 
     expect(seen.length).toBe(2);
   });
@@ -655,19 +711,19 @@ describe('runTransaction', () => {
       name: `c${i}`,
       start: '2026-01-01',
       end: '2026-01-02',
-      meta: { cost: 1 },
+      props: { cost: 1 },
     }));
     const state = new DatasetState({
       entries: [
-        { id: 'root', kind: 'group', name: 'root' },
-        { id: 'other', kind: 'group', name: 'other' },
+        { id: 'root', name: 'root' },
+        { id: 'other', name: 'other' },
         {
           id: 'kept',
           parentId: 'other',
           name: 'kept',
           start: '2026-01-01',
           end: '2026-01-02',
-          meta: { cost: 7 },
+          props: { cost: 7 },
         },
         ...leaves,
       ],
@@ -712,14 +768,13 @@ describe('runTransaction', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     const parent = state.entries.get('p1')!;
-    expect(parent.kind).toBe('group');
     expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
 });
 
 // #212 R2 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
-// `StoredEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
+// `ProposedEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
 // onto `start`/`end`.
 describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-plan review)', () => {
   it("pairs a plugin's direct start/end write onto the Entry's one Segment, the same as entries.update()", () => {
@@ -727,7 +782,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' }],
       timeZone: 'UTC',
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
+        new Map<ReturnType<typeof entryId>, EntryEdit>([
           [
             entryId('t1'),
             {
@@ -738,7 +793,11 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
         ]),
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
 
     const entry = state.entries.get(entryId('t1'))!;
     expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
@@ -765,7 +824,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
         ],
         timeZone: 'UTC',
         editExtender: (): EntryEdits =>
-          new Map<ReturnType<typeof entryId>, StoredEdit>([
+          new Map<ReturnType<typeof entryId>, EntryEdit>([
             [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
           ]),
       });
@@ -773,7 +832,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       expect(() =>
         runTransaction(
           state,
-          (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+          (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
           'user',
         ),
       ).toThrow(SegmentsOutOfSyncError);
@@ -796,7 +855,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       ],
       timeZone: 'UTC',
       editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, StoredEdit>([
+        new Map<ReturnType<typeof entryId>, EntryEdit>([
           [
             entryId('t1'),
             { start: toInstant('UTC', '2026-01-03'), end: toEndInstant('UTC', '2026-01-04', 'inclusive') },
@@ -807,7 +866,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
     expect(() =>
       runTransaction(
         state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }),
+        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
         'user',
       ),
     ).toThrow(SegmentsOutOfSyncError);
@@ -821,7 +880,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
         entries: [],
         timeZone: 'UTC',
         editExtender: (): EntryEdits =>
-          new Map<ReturnType<typeof entryId>, StoredEdit>([
+          new Map<ReturnType<typeof entryId>, EntryEdit>([
             [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
           ]),
       });
@@ -837,7 +896,6 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
             // reconciliation-target bug this test is about.
             start: toInstant('UTC', '2026-01-01'),
             end: toInstant('UTC', '2026-03-01'),
-            kind: 'span',
             segments: [
               {
                 id: segmentId('sg1'),
@@ -845,6 +903,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
                 end: toInstant('UTC', '2026-03-01'),
               },
             ],
+            props: {},
           }),
         'user',
       );
@@ -891,25 +950,29 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       runTransaction(
         state,
         (token) =>
-          state.entries.stageUpdate(token, entryId('t1'), {
-            segments: [
-              {
-                id: segmentId('sg1'),
-                start: toInstant('UTC', '2026-01-01'),
-                end: toInstant('UTC', '2026-01-04'),
-              },
-              {
-                id: segmentId('sg2'),
-                start: toInstant('UTC', '2026-01-04'),
-                end: toInstant('UTC', '2026-01-07'),
-              },
-              {
-                id: segmentId('sg3'),
-                start: toInstant('UTC', '2026-01-07'),
-                end: toInstant('UTC', '2026-01-10'),
-              },
-            ],
-          }),
+          state.entries.stageUpdate(
+            token,
+            entryId('t1'),
+            edit({
+              segments: [
+                {
+                  id: segmentId('sg1'),
+                  start: toInstant('UTC', '2026-01-01'),
+                  end: toInstant('UTC', '2026-01-04'),
+                },
+                {
+                  id: segmentId('sg2'),
+                  start: toInstant('UTC', '2026-01-04'),
+                  end: toInstant('UTC', '2026-01-07'),
+                },
+                {
+                  id: segmentId('sg3'),
+                  start: toInstant('UTC', '2026-01-07'),
+                  end: toInstant('UTC', '2026-01-10'),
+                },
+              ],
+            }),
+          ),
         'user',
       );
 
@@ -953,7 +1016,7 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
 
 // #209 C3: the extension hook writes what `update()` takes. Everything a plugin author used to have
 // to learn — a storage-shaped `Instant`, the end rule, `proposedKeys` — is core's job now, done in
-// one place (`DatasetState.extraEditsFor` -> `toStoredEdits` -> `toStoredEdit`), the same road every other
+// one place (`DatasetState.extraEditsFor` -> `toEditsReading` -> `toEditReading`), the same road every other
 // write takes.
 describe('the extension hook writes the loose shape (#209)', () => {
   function datasetCascading(edit: Record<string, unknown>, timeZone = 'UTC'): DatasetState {
@@ -970,12 +1033,16 @@ describe('the extension hook writes the loose shape (#209)', () => {
   }
 
   function renameT1(state: DatasetState): void {
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
+      'user',
+    );
   }
 
   it('reads a loose date in the dataset’s own zone, so a plugin never calls time/', () => {
     // Both dates, because the cascade moves the whole span — a `start` past the stored `end` is an
-    // inverted span, and `toStoredEdit` refuses one for a plugin exactly as it does for `update()`.
+    // inverted span, and `toEditReading` refuses one for a plugin exactly as it does for `update()`.
     const state = datasetCascading({ start: '2026-02-01', end: '2026-02-03' }, 'America/Denver');
     renameT1(state);
     expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01'));
@@ -987,7 +1054,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
     expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06'));
   });
 
-  it('derives the proposed keys, so a meta-sourced Field write is still recognized', () => {
+  it('derives the proposed keys, so a props-addressed Field write is still recognized', () => {
     const state = datasetCascading({ cost: 500 });
     let rows: readonly { field: string }[] = [];
     state.on('change', ({ changeSet }) => {
@@ -1005,7 +1072,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
     expect(() => renameT1(state)).toThrow(UnknownFieldError);
   });
 
-  // The two shapes stay apart for good: `proposedKeys` is core's bookkeeping on a `StoredEdit`, and
+  // The two shapes stay apart for good: `proposedKeys` is core's bookkeeping on a `ProposedEdit`, and
   // it is not a Field anybody may write — not through `update()`, and not through the hook.
   it('proposedKeys is not writable from outside', () => {
     const state = dataset([{ id: 't1' }]);

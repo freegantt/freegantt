@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Entry, FieldKey, RollUpContext } from '../../model/index.js';
+import type { Entry, FieldKey, Instant, RollUpContext } from '../../model/index.js';
 import { entryId, segmentId } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { createFieldContext, createRollUpContext } from './field-access.js';
@@ -9,11 +9,10 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
   return {
     id: entryId(id),
     name: id,
-    kind: 'span',
-    start: 0 as Entry['start'],
-    end: duration as Entry['end'],
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: duration as Entry['end'] }],
-    meta: values,
+    start: 0 as Instant,
+    end: duration as Instant,
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: duration as Instant }],
+    props: values,
   };
 }
 
@@ -30,10 +29,10 @@ function ctx(field: FieldKey): RollUpContext {
 const parent: Entry = {
   id: entryId('p'),
   name: 'p',
-  kind: 'group',
-  start: 0 as Entry['start'],
-  end: 0 as Entry['end'],
-  segments: [{ id: segmentId('p-seg'), start: 0 as Entry['start'], end: 0 as Entry['end'] }],
+  start: 0 as Instant,
+  end: 0 as Instant,
+  segments: [{ id: segmentId('p-seg'), start: 0 as Instant, end: 0 as Instant }],
+  props: {},
 };
 
 describe('shipped Aggregators (D-S4-3)', () => {

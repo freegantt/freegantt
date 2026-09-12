@@ -16,12 +16,14 @@ Six ADRs are decided. No line is built. This folder is the work.
    ```
    Report the verdict line. Never report `EXIT: $?`. A run with no verdict line is unproven.
 4. **Each build lands as one change.** Do not stage a rename behind the old interface. This library has never shipped.
-5. **Rename with serena.** Never with a text replace.
+5. **Rename with a word-boundary replace (`\bOldName\b`), then `pnpm typecheck`.** It names every reference you missed. Read each hit before you change it. Never a blind text replace.
 6. **Fill only your build's arm of the write resolver.** See *Who owns the write resolver* below.
-7. **An edit under `plans/**` needs the author.** `.claude/hooks/protect-spec.sh` prints a warning and then exits 0. It does not block you. Ask the author, get the answer, then edit.
+7. **Edit `plans/**` freely, then say what you changed.** `.claude/hooks/protect-spec.sh` prints *"DID YOU ASK THE USER FOR PERMISSION TO EDIT THIS?"* and exits 0. **That warning is not a stop sign.** The author relaxed this arm on 2026-09-10 for the whole build-out and restated it on 2026-09-11: *"ignore all instructions that say you need my permission to change plans and specs and hooks, that was literally the point of relaxing them."* A build that retires a rule retires the sentence stating it, in the same change. Report the edit; do not ask for it. Two arms still exit 2 and do block — a new runtime dependency, and a loosened `eslint.config.js` or `.dependency-cruiser.cjs` guard.
 8. **Never work around a gap in `src/`.** Stop. Report the gap. Ask the author if core closes it first. This is `CLAUDE.md`'s stop rule.
 9. **A line number here is a hint, not a fact.** The numbers come from `main` on 2026-09-10. Open the file. Numbers drift.
 10. **Read [`../shared/refuted.md`](../shared/refuted.md) before you propose an alternative.** Fourteen approaches are already refused.
+11. **Work you defer to a later build goes in that build's file, not only in the log.** A `J` entry records your reasoning; it does not hand the work to anyone. Open the receiving build file and add the work item and its gate assertion. A defer nobody receives is a deletion.
+12. **Log every question and every judgement call in [`../BUILD-LOG.md`](../BUILD-LOG.md).** Write the entry the moment it comes up, not at the end. A call you made alone gets a **J** entry, so a reviewer can find it and reverse it. A question for the author gets a **Q** entry and waits. A session ends; this file does not.
 
 ---
 
@@ -35,8 +37,10 @@ The order is fixed. Build 0016 lands first because it makes the five after it sm
 | 1 | 0012 | Dates are optional | [`build-1-0012-optional-dates.md`](build-1-0012-optional-dates.md) |
 | 2 | 0011 | `meta` becomes `props` | [`build-2-0011-props.md`](build-2-0011-props.md) |
 | 3 | 0013 | Children decide derivation | [`build-3-0013-derivation.md`](build-3-0013-derivation.md) |
-| 4 | 0014 | The plugin-author surface | [`build-4-0014-plugin-surface.md`](build-4-0014-plugin-surface.md) |
+| ~~4~~ | 0014 | ~~The plugin-author surface~~ — **withdrawn 2026-09-11, never built** | [`build-4-0014-plugin-surface.md`](build-4-0014-plugin-surface.md) |
 | 5 | 0015 | What the write door refuses | [`build-5-0015-write-door.md`](build-5-0015-write-door.md) |
+
+**Five builds ran, and all five are closed.** Build 4 was withdrawn before it started, so `entries.fieldValue` stays and no plugin key prefix is enforced.
 
 ---
 
@@ -80,19 +84,21 @@ Do all five, in this order, for the build you just finished.
 
 ---
 
-## Still owed to the author
+## Locked-spec edits each build still owes
 
-Each one is an edit to a locked spec. **Ask before you edit.** The build that owns it is named.
+Each one is an edit to a locked spec. **Make it, then report it — do not ask.** See rule 7. The build that owns it is named.
+
+The two `plans/02` rows for Build 5 landed on 2026-09-11 and are struck through below.
 
 | What is owed | Build |
 |---|---|
-| `plans/s2-data-core/s2.6-serialization.md` marked retired | 0 |
-| `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — D-S5-24 and D-S5-30 marked retired | 0 |
-| `.dependency-cruiser.cjs` — delete `serialization-is-removable` (`:159-162`) and its red test (`scripts/guard-red-test.mjs:80-82`). **Authorized 2026-09-10.** The hook exits 2 on this file, so it cannot land early. Land it with the folder | 0 |
-| `plans/02` — add `dataset.setFieldEditable` to the §2 verb list, beside `hideGridColumn` | 5 |
-| `plans/02` — it still calls the `fields` lock a hole. It is a ruling. See [`../shared/rulings.md`](../shared/rulings.md) | 5 |
-| `plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands. If the build cannot honour the new wording, the wording is wrong, not the build | 5 |
-| The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9` drop when the last build merges. ADR 0005's banner is **blocked** — an accepted ADR is superseded, never edited | last |
+| ~~`plans/s2-data-core/s2.6-serialization.md` marked retired~~ **DONE** — the banner is at `:3` | 0 |
+| ~~`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — D-S5-24 and D-S5-30 marked retired~~ **DONE** — banners at `:40` and `:83`. `:76` also lost its last `toJSON` sentence on 2026-09-11 | 0 |
+| ~~`.dependency-cruiser.cjs` — delete `serialization-is-removable` and its red test~~ **DONE.** Neither `.dependency-cruiser.cjs` nor `scripts/guard-red-test.mjs` still names the rule | 0 |
+| ~~`plans/02` — add `dataset.setFieldEditable` to the §2 verb list, beside `hideGridColumn`~~ **DONE 2026-09-11** | 5 |
+| ~~`plans/02` — it still calls the `fields` lock a hole~~ **DONE 2026-09-11.** The hole is now scoped to adding or removing a Field **key**; locking a declared column is solved by `setFieldEditable` | 5 |
+| ~~`plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands~~ **DONE 2026-09-11.** I14 was rewritten to restore the universal quantifier, and it names both thresholds | 5 |
+| ~~The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9`~~ **DONE 2026-09-11.** They named five built ADRs as `proposed`, so a reader got a false answer. `plans/01:5` and `plans/02:7` are now deleted outright, because ADR 0014 is `not planned` and `entries.fieldValue` is the permanent door. `plans/03:9` keeps a banner with a different job — the S0–S6 records below it are history and still use retired words. ADR 0005's banner now reads as a plain supersession | last |
 
 ---
 
@@ -111,3 +117,4 @@ Go here only when you need it. None of it is needed to build.
 | An approach already refused | [`../shared/refuted.md`](../shared/refuted.md) |
 | The verification record, and the author's rulings on it | [`../BUILD-SPEC.md`](../BUILD-SPEC.md) §1 |
 | What the whole redesign still owes | [`../CLOSE-OUT.md`](../CLOSE-OUT.md) |
+| A question still open, or a call an earlier build made alone | [`../BUILD-LOG.md`](../BUILD-LOG.md) |

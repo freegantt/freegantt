@@ -71,7 +71,7 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'look-claimed-twice' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean);
@@ -145,10 +145,10 @@ export interface ColumnCellRendererContext {
 }
 
 // @public
-export type Command<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type Command<TProps = unknown> = CommandOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public (undocumented)
-export type CommandContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type CommandContext<TProps = unknown> = CommandContextOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
 export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
@@ -173,7 +173,7 @@ export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
 }
 
 // @public (undocumented)
-export type CommandRegistry<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = CommandRegistryOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type CommandRegistry<TProps = unknown> = CommandRegistryOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
@@ -188,6 +188,13 @@ export interface CommandTarget extends ActedOn {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
+}
+
+// @public
+export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
+    constructor(key: string, operation: string);
+    // (undocumented)
+    readonly key: string;
 }
 
 // @public
@@ -209,13 +216,13 @@ export interface ContextMenuOptions {
 }
 
 // @public
-export type CoreFieldKey = keyof Omit<Entry, 'id'>;
+export type CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>;
 
 // @public
 export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : unknown;
 
 // @public
-export interface CoreFieldValues extends Omit<Entry, 'id'> {
+export interface CoreFieldValues extends Omit<Entry, 'id' | 'props'> {
     duration: Duration;
 }
 
@@ -249,8 +256,8 @@ export interface CustomRowSource {
 }
 
 // @public (undocumented)
-export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
-    constructor(options: DatasetOptions<TMeta, TFields>);
+export class Dataset<TProps = unknown> {
+    constructor(options: DatasetOptions<TProps>);
     get canRedo(): boolean;
     get canUndo(): boolean;
     get datasetRevision(): number;
@@ -258,47 +265,27 @@ export class Dataset<TMeta = unknown, TFields extends Record<string, unknown> = 
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
     // (undocumented)
-    get entries(): EntryStore<TMeta, TFields>;
+    get entries(): EntryStore<TProps>;
     field(key: FieldKey): Field | undefined;
     get fields(): {
         readonly all: readonly Field[];
     };
-    static fromJSON<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>>(doc: DatasetDocument<TMeta>, options?: Pick<DatasetOptions<TMeta, TFields>, 'fields' | 'fieldTypes' | 'aggregators' | 'plugins'>): Dataset<TMeta, TFields>;
-    get hierarchy(): DatasetHierarchy;
-    set hierarchy(value: DatasetHierarchy);
-    isRollUpKind(kind: EntryKind): boolean;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    get plugins(): readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
+    get plugins(): readonly DatasetPluginOf<Dataset<TProps>>[];
+    pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
+    // (undocumented)
+    pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
     redo(): void;
     replay(changeSet: ChangeSet): void;
-    // (undocumented)
-    get rollUpKinds(): readonly EntryKind[];
-    set rollUpKinds(value: RollUpKinds);
+    setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void;
     get time(): ZonedTime;
     // (undocumented)
     get timeZone(): string;
-    toJSON(): DatasetDocument<TMeta>;
     transaction<T>(body: () => T): T;
     undo(): void;
-}
-
-// @public
-export interface DatasetDocument<TMeta = unknown> {
-    // (undocumented)
-    dateOnlyEnd: DateOnlyEndRule;
-    // (undocumented)
-    entries: readonly EntryDocument<TMeta>[];
-    fields?: readonly SerializedField[];
-    plugins?: PluginDocument;
-    // (undocumented)
-    rollUpKinds: readonly EntryKind[];
-    // (undocumented)
-    schema: 1 | 2 | 3 | 4;
-    // (undocumented)
-    timeZone: string;
 }
 
 // @public
@@ -338,33 +325,25 @@ export interface DatasetFieldRegistrations {
     registerType(name: FieldTypeName, type: FieldType): void;
 }
 
-// @public
-export interface DatasetHierarchy {
-    // (undocumented)
-    readonly autoGroup: boolean;
-}
-
 // @public (undocumented)
-export interface DatasetOptions<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly EntryInput<TMeta>[];
+    entries: readonly EntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
-    hierarchy?: DatasetHierarchy;
     history?: {
         capacity?: number;
     };
-    plugins?: readonly DatasetPluginOf<Dataset<TMeta, TFields>>[];
-    rollUpKinds?: RollUpKinds;
+    plugins?: readonly DatasetPluginOf<Dataset<TProps>>[];
     timeZone?: string;
 }
 
 // @public (undocumented)
-export type DatasetPlugin<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = DatasetPluginOf<Dataset<TMeta, TFields>>;
+export type DatasetPlugin<TProps = unknown> = DatasetPluginOf<Dataset<TProps>>;
 
 // @public (undocumented)
-export type DatasetPluginContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = DatasetPluginContextOf<Dataset<TMeta, TFields>>;
+export type DatasetPluginContext<TProps = unknown> = DatasetPluginContextOf<Dataset<TProps>>;
 
 // @public
 export interface DatasetPluginContextOf<TDataset> {
@@ -467,6 +446,15 @@ export type DecorationLayer = 'underBars' | 'overBars';
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
 
 // @public
+export class DerivedFieldNotWritableError extends FreeGanttError {
+    constructor(key: string, entryId: string, operation: string);
+    // (undocumented)
+    readonly entryId: string;
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
 export function diffMs(a: Instant, b: Instant): number;
 
 // @public
@@ -519,17 +507,19 @@ export class DuplicateFieldKeyError extends FreeGanttError {
 }
 
 // @public
-export class DuplicateFieldSourceError extends FreeGanttError {
-    constructor(metaKey: string);
-    // (undocumented)
-    readonly metaKey: string;
-}
-
-// @public
 export class DuplicatePluginIdError extends FreeGanttError {
     constructor(pluginId: PluginId);
     // (undocumented)
     readonly pluginId: PluginId;
+}
+
+// @public
+export class DuplicatePropsKeyError extends FreeGanttError {
+    constructor(key: string, entryId: string);
+    // (undocumented)
+    readonly entryId: string;
+    // (undocumented)
+    readonly key: string;
 }
 
 // @public
@@ -563,7 +553,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 export interface EditRequest {
     entries: ReadonlyMap<EntryId, Entry>;
     entryAfterEdits(id: EntryId): Entry | undefined;
-    proposed: StoredEdits;
+    proposed: ProposedEdits;
 }
 
 // @public
@@ -619,43 +609,28 @@ export interface EntriesRowSource extends RowSourceCommon {
 }
 
 // @public (undocumented)
-export interface Entry<TMeta = unknown> {
-    end: Instant;
+export interface Entry<TProps = Record<string, unknown>> {
+    end?: Instant;
     // (undocumented)
     id: EntryId;
-    kind: EntryKind;
-    meta?: TMeta;
-    // (undocumented)
     name: string;
     parentId?: EntryId;
+    props: Readonly<Partial<TProps>>;
     segments: readonly Segment[];
-    // (undocumented)
-    start: Instant;
+    start?: Instant;
 }
 
+// Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts
+//
 // @public
-export interface EntryDocument<TMeta = unknown> {
-    // (undocumented)
-    end: string;
-    // (undocumented)
-    id: string;
-    kind?: EntryKind;
-    meta?: TMeta;
-    // (undocumented)
-    name: string;
-    // (undocumented)
-    parentId?: string;
-    segments?: readonly {
-        id: string;
-        start: string;
-        end: string;
-    }[];
-    // (undocumented)
-    start: string;
-}
-
-// @public
-export type EntryEdit<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
+export type EntryEdit<TProps = Record<string, unknown>> = {
+    [K in keyof EntryEnvelope<TProps>]?: K extends RemovableEntryKey ? EntryEnvelope<TProps>[K] | undefined : EntryEnvelope<TProps>[K];
+} & {
+    [K in keyof TProps]?: TProps[K] | undefined;
+} & {
+    readonly props?: never;
+};
 
 // @public
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
@@ -675,7 +650,7 @@ export interface EntryFieldEdit {
 // @public
 export interface EntryGestureEvent extends ProposedSpan {
     // (undocumented)
-    readonly entries: readonly ProposedSpan[];
+    readonly entries: readonly ProposedDates[];
 }
 
 // @public (undocumented)
@@ -693,21 +668,19 @@ export function entryIdFromDataset(value: string | undefined): EntryId | undefin
 export function entryIdOfItem(id: ItemId): EntryId;
 
 // @public
-export interface EntryInput<TMeta = unknown> {
+export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput;
     // (undocumented)
     id: string;
-    kind?: EntryKind;
-    meta?: TMeta;
-    // (undocumented)
     name: string;
     parentId?: string;
+    props?: Partial<TProps>;
     segments?: readonly SegmentInput[];
     start?: InstantInput;
 }
 
 // @public
-export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
+export type EntryLook = 'parent' | 'leaf' | (string & {});
 
 // @public (undocumented)
 export type EntryMove = EntryGestureEvent;
@@ -728,26 +701,25 @@ export interface EntryResize extends EntryGestureEvent {
 }
 
 // @public
-export interface EntryStore<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> extends EntryStoreView<TMeta, TFields> {
-    // (undocumented)
-    add(input: EntryInput<TMeta>): Entry<TMeta>;
+export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
+    add(input: EntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
     removeSegments(ids: readonly (SegmentId | string)[]): void;
     // (undocumented)
-    update(id: EntryId | string, edit: EntryEdit<TMeta, TFields>): Entry<TMeta>;
+    update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }
 
 // @public
-export interface EntryStoreView<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+export interface EntryStoreView<TProps = Record<string, unknown>> {
     // (undocumented)
-    readonly all: readonly Entry<TMeta>[];
-    childrenOf(id: EntryId | string): readonly Entry<TMeta>[];
+    readonly all: readonly Entry<TProps>[];
+    childrenOf(id: EntryId | string): readonly Entry<TProps>[];
     entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
     entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
-    fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TFields, K> | undefined;
+    fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TProps, K> | undefined;
     // (undocumented)
-    get(id: EntryId | string): Entry<TMeta> | undefined;
+    get(id: EntryId | string): Entry<TProps> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
     segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
@@ -795,33 +767,47 @@ export type ErrorSeverity = 'error' | 'warning' | 'info';
 export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 
 // @public
-export interface Field<TValue = unknown> {
-    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
-    // (undocumented)
-    compare?(a: TValue | undefined, b: TValue | undefined): number;
-    editable?: boolean;
-    // (undocumented)
-    equals?(a: TValue | undefined, b: TValue | undefined): boolean;
-    formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
-    // (undocumented)
+export type Field<TValue = unknown> = {
     key: FieldKey;
-    parseValue?(text: string, ctx: FieldContext): TValue | undefined;
-    rollUp?: AggregatorName;
-    source?: FieldSource;
-    // (undocumented)
     type?: FieldTypeName;
-}
+    rollUp?: AggregatorName;
+    editable?: FieldEditable | boolean;
+    distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
+    equals?(a: TValue | undefined, b: TValue | undefined): boolean;
+    compare?(a: TValue | undefined, b: TValue | undefined): number;
+    formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+    parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+} | {
+    key: FieldKey;
+    type?: FieldTypeName;
+    rollUp?: never;
+    editable?: never;
+    compute(entry: Entry, ctx: FieldContext): TValue | undefined;
+    compare?(a: TValue | undefined, b: TValue | undefined): number;
+    formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    equals?: never;
+    parseValue?: never;
+    inputType?: never;
+    distribute?: never;
+};
 
 // @public
 export interface FieldContext {
-    // (undocumented)
-    durationOf(entry: Entry): Duration;
+    durationOf(entry: Entry): Duration | undefined;
     // (undocumented)
     read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
     // (undocumented)
     readonly timeZone: string;
 }
+
+// @public
+export type FieldDistributor<TValue = unknown> = (value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext) => EntryEdits | undefined;
+
+// @public
+export type FieldEditable = 'never' | 'api' | 'anywhere';
 
 // @public
 export type FieldKey = CoreFieldKey | (string & {});
@@ -834,22 +820,35 @@ export class FieldNotColumnableError extends FreeGanttError {
 }
 
 // @public
+export class FieldNotEditableError extends FreeGanttError {
+    constructor(field: FieldKey, operation: string);
+    // (undocumented)
+    readonly field: FieldKey;
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public
 export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[];
 
 // @public
-export type FieldSource = {
-    from: 'entry';
-    field: CoreFieldKey;
-} | {
-    from: 'meta';
-    key?: string;
-} | {
-    from: 'compute';
-    read(entry: Entry, ctx: FieldContext): unknown;
-};
-
-// @public
-export type FieldType<TValue = unknown> = Omit<Field<TValue>, 'key' | 'source' | 'type'>;
+export interface FieldType<TValue = unknown> {
+    // (undocumented)
+    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    // (undocumented)
+    compare?(a: TValue | undefined, b: TValue | undefined): number;
+    distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
+    editable?: FieldEditable | boolean;
+    // (undocumented)
+    equals?(a: TValue | undefined, b: TValue | undefined): boolean;
+    // (undocumented)
+    formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+    // (undocumented)
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    // (undocumented)
+    parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+    rollUp?: AggregatorName;
+}
 
 // @public (undocumented)
 export type FieldTypeName = string & {};
@@ -869,7 +868,7 @@ export interface FieldUpdated {
 }
 
 // @public
-export type FieldValue<TFields, K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : K extends keyof TFields ? TFields[K] : unknown;
+export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : K extends keyof TProps ? TProps[K] : unknown;
 
 // @public (undocumented)
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
@@ -903,11 +902,11 @@ export interface FrameBar {
     height: number;
     // (undocumented)
     id: ItemId;
-    // (undocumented)
-    kind: EntryKind;
     label: string;
     // (undocumented)
     lane: number;
+    // (undocumented)
+    look: EntryLook;
     minimumSpan: boolean;
     // (undocumented)
     rowId: RowId;
@@ -973,15 +972,15 @@ export class FreeGanttError extends Error {
 }
 
 // @public (undocumented)
-export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
-    constructor(options: GanttOptions<TMeta, TFields>);
+export class Gantt<TProps = unknown> {
+    constructor(options: GanttOptions<TProps>);
     // (undocumented)
     get a11yLabel(): string;
     set a11yLabel(value: string);
     get barLabels(): BarLabels;
     set barLabels(value: BarLabels);
-    get barRenderer(): BarRenderer | RendererByKind | undefined;
-    set barRenderer(renderer: BarRenderer | RendererByKind | undefined);
+    get barRenderer(): BarRenderer | RendererByLook | undefined;
+    set barRenderer(renderer: BarRenderer | RendererByLook | undefined);
     // (undocumented)
     get canZoomIn(): boolean;
     // (undocumented)
@@ -996,8 +995,8 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
-    get commands(): CommandRegistry<TMeta, TFields>;
-    get dataset(): Dataset<TMeta, TFields>;
+    get commands(): CommandRegistry<TProps>;
+    get dataset(): Dataset<TProps>;
     get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
@@ -1015,12 +1014,12 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
-    hasPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): boolean;
+    hasPlugin(plugin: GanttPlugin<TProps> | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
-    installPlugin(plugin: GanttPlugin<TMeta, TFields>): void;
+    installPlugin(plugin: GanttPlugin<TProps>): void;
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -1035,8 +1034,8 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
-    get plugins(): readonly GanttPlugin<TMeta, TFields>[];
-    set plugins(next: readonly GanttPlugin<TMeta, TFields>[]);
+    get plugins(): readonly GanttPlugin<TProps>[];
+    set plugins(next: readonly GanttPlugin<TProps>[]);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -1068,7 +1067,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
-    uninstallPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): void;
+    uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void;
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -1137,17 +1136,17 @@ export interface GanttEvents {
 }
 
 // @public (undocumented)
-export type GanttOptions<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = GanttOptionsBase<TMeta, TFields> & GanttScaleOptions;
+export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
 // @public (undocumented)
-export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+export interface GanttOptionsBase<TProps = unknown> {
     a11yLabel?: string;
     barLabels?: BarLabels;
-    barRenderer?: BarRenderer | RendererByKind;
+    barRenderer?: BarRenderer | RendererByLook;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
-    dataset: Dataset<TMeta, TFields>;
+    dataset: Dataset<TProps>;
     dateLines?: readonly DateLineInput[];
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: GridWidth;
@@ -1155,7 +1154,7 @@ export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
-    plugins?: readonly GanttPlugin<TMeta, TFields>[];
+    plugins?: readonly GanttPlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selectedSegmentIds?: readonly (SegmentId | string)[];
@@ -1169,7 +1168,7 @@ export interface GanttOptionsBase<TMeta = unknown, TFields extends Record<string
 }
 
 // @public
-export type GanttPlugin<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = GanttPluginOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type GanttPlugin<TProps = unknown> = GanttPluginOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
 export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
@@ -1305,15 +1304,6 @@ export interface Interactions {
 }
 
 // @public
-export class InvalidFieldSourceError extends FreeGanttError {
-    constructor(key: string, received: unknown);
-    // (undocumented)
-    readonly key: string;
-    // (undocumented)
-    readonly received: unknown;
-}
-
-// @public
 export class InvalidInstantError extends FreeGanttError {
     constructor(message: string, value?: unknown);
     // (undocumented)
@@ -1375,9 +1365,9 @@ export interface Item {
     // (undocumented)
     id: ItemId;
     // (undocumented)
-    kind: EntryKind;
-    // (undocumented)
     label: string;
+    // (undocumented)
+    look: EntryLook;
     segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
@@ -1398,7 +1388,7 @@ export function itemIdFromDataset(value: string | undefined): ItemId | undefined
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
 // @public (undocumented)
-export type KeyBinding<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
 export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
@@ -1437,6 +1427,9 @@ export interface KeyEventLike {
 export type KindDefaults = {
     [K in keyof Interactions]?: boolean;
 };
+
+// @public
+export type LookClaim = (entry: Entry) => boolean;
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
@@ -1548,7 +1541,7 @@ export interface PlainParts {
 export type PlannedRowKind = 'entry' | 'header';
 
 // @public (undocumented)
-export type PluginContext<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> = PluginContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
 export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = PluginContextParts<TGantt, TDataset> & {
@@ -1568,10 +1561,11 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         canWrite(entry: Entry, field: FieldKey): WriteVerdict;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
-        registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+        registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
     };
     layout: {
-        registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
+        registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
+        registerLookClaim(look: EntryLook, claim: LookClaim): Disposer;
     };
     raiseError(report: PluginErrorReport): void;
     // (undocumented)
@@ -1593,9 +1587,6 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         registerGridColumn(column: GridColumnInput): Disposer;
     };
 }
-
-// @public
-export type PluginDocument = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 // @public
 export type PluginErrorReport = Omit<ErrorReportInput, 'by'>;
@@ -1692,14 +1683,40 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
 
 // @public
-export interface ProposedSpan {
+export interface ProposedDates {
     // (undocumented)
-    readonly end: Instant;
+    readonly end?: Instant;
     // (undocumented)
     readonly entry: EntryId;
     // (undocumented)
+    readonly start?: Instant;
+}
+
+// @public
+export type ProposedEdit<TProps = Record<string, unknown>> = {
+    readonly __brand: 'ProposedEdit';
+    readonly props: Readonly<Partial<TProps>>;
+    readonly proposedKeys: ReadonlySet<string>;
+} & Partial<Omit<Entry, 'id' | 'start' | 'end' | 'props'>> & {
+    start?: Instant | undefined;
+    end?: Instant | undefined;
+};
+
+// @public
+export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
+
+// @public
+export interface ProposedSpan extends ProposedDates {
+    // (undocumented)
+    readonly end: Instant;
+    // (undocumented)
     readonly start: Instant;
 }
+
+// @public
+export type PropsEdit<TProps> = {
+    [K in keyof TProps]?: TProps[K] | undefined;
+};
 
 // @public
 export interface RangeBand {
@@ -1742,13 +1759,20 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
 }
 
 // @public
-export type RendererByKind = Readonly<Record<string, BarRenderer>>;
+export type RendererByLook = Readonly<Record<string, BarRenderer>>;
 
 // @public
-export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByKind : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
+export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByLook : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
 
 // @public
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
+
+// @public
+export class ReservedFieldKeyError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
 
 // @public
 export interface ResolvedBarLabel {
@@ -1814,9 +1838,6 @@ export interface RollUpContext extends FieldContext {
     numericValues(children: readonly Entry[]): readonly number[];
     values(children: readonly Entry[]): readonly unknown[];
 }
-
-// @public
-export type RollUpKinds = readonly EntryKind[] | 'none';
 
 // @public (undocumented)
 export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
@@ -1929,22 +1950,6 @@ export interface SelectionChange {
     readonly to: readonly SegmentId[];
 }
 
-// @public
-export type SerializedField = {
-    key: FieldKey;
-    type?: FieldTypeName;
-    source: {
-        from: 'entry';
-        field: CoreFieldKey;
-    } | {
-        from: 'meta';
-        key: string;
-    };
-    rollUp?: AggregatorName;
-    editable?: boolean;
-    column?: Omit<GridColumnBase, 'field' | 'hidden' | 'cellRenderer'> & GridColumnSizing;
-};
-
 // @public (undocumented)
 export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
@@ -1958,14 +1963,6 @@ export interface Size {
 
 // @public
 export type SnapSetting = TickStep | 'tick' | 'none';
-
-// @public
-export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
-    readonly proposedKeys?: ReadonlySet<string>;
-};
-
-// @public
-export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
 
 // @public (undocumented)
 export type StoreName = 'entries' | PluginStoreName;
@@ -2152,15 +2149,6 @@ export class UnreadableCellValueError extends FreeGanttError {
 }
 
 // @public
-export class UnsupportedSchemaError extends FreeGanttError {
-    constructor(schema: number, supported: readonly number[]);
-    // (undocumented)
-    readonly schema: number;
-    // (undocumented)
-    readonly supported: readonly number[];
-}
-
-// @public
 export class UnsupportedUnitError extends FreeGanttError {
     constructor(unit: string, operation: string);
     // (undocumented)
@@ -2206,21 +2194,20 @@ export interface ViewPresetHeader extends TickStep {
 export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
-export function wholeEntryItem(entry: Entry): Item;
+export function wholeEntryItem(entry: Entry, look: EntryLook): Item;
 
+// Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
+//
 // @public
-export type WriteRefusalReason = Extract<BuiltInErrorCode, 'derived-value'>;
+export type WriteRefusalReason = FieldWriteRefusalReason;
 
 // @public
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
 
+// Warning: (ae-forgotten-export) The symbol "FieldWriteVerdict" needs to be exported by the entry point index.d.ts
+//
 // @public
-export type WriteVerdict = {
-    readonly ok: true;
-} | {
-    readonly ok: false;
-    readonly reason?: WriteRefusalReason;
-};
+export type WriteVerdict = FieldWriteVerdict;
 
 // @public
 export interface ZonedTime {

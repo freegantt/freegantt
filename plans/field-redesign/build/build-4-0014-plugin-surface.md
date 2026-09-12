@@ -1,12 +1,14 @@
-# Build 4 — ADR 0014, the plugin-author surface
+# Build 4 — ADR 0014, the plugin-author surface — **WITHDRAWN**
 
-**The one question it answers.** Where do a plugin's values live, and what are the read doors called?
+> **Do not build this. Do not tick these boxes.** The author withdrew ADR 0014 on 2026-09-11, before this build started, and marked it `not planned`. No line of it ever reached `src/`.
+>
+> **What that means for the code.** `entries.fieldValue` is the by-key door for good. `durationOf` stays. A cell renderer keeps the pair it has. No registry check enforces a plugin key prefix — a prefix is a convention a plugin follows, and `scheduling:progress` (ADR 0008) is the example. Every `fieldValue` in `src/`, `harness/` and `e2e/` is correct, and none of it is debt.
+>
+> **The page stays** so a later reader can see what was considered and dropped. Read it as history. The one question below was never answered, and the work list below was never run.
 
-**Read first.** [`docs/adr/0014`](../../../docs/adr/0014-the-plugin-author-surface.md). Then [`README.md`](README.md) in this folder.
+**The one question it would have answered.** Where do a plugin's values live, and what are the read doors called?
 
-**Lands after.** Build 2, for `props`. Nothing else. This build blocks nothing, and nothing blocks it.
-
-**Tick each box as you finish it.** Do not batch the ticks.
+**Read first.** [`docs/adr/0014`](../../../docs/adr/0014-the-plugin-author-surface.md), whose status line carries the withdrawal.
 
 ---
 
@@ -39,9 +41,9 @@ gridColumns: [
 
 ## Work
 
-- [ ] Rename the renderer payload `value` → `text` **first**, on both context types, with **serena**.
-- [ ] Then rename `fieldValue` → `value` on both context types, with **serena**.
-- [ ] Rename `entries.fieldValue` → `entries.read` with **serena**. Keep the signature and the return type.
+- [ ] Rename the renderer payload `value` → `text` **first**, on both context types.
+- [ ] Then rename `fieldValue` → `value` on both context types.
+- [ ] Rename `entries.fieldValue` → `entries.read`. Keep the signature and the return type.
 - [ ] Rename `#fieldValueForCell` → `#cellValueFor`.
 - [ ] Delete `FieldContext.durationOf`.
 - [ ] Point the `duration` core Field's `compute` arm at the guarded helper from Build 1.
@@ -63,7 +65,7 @@ gridColumns: [
 ## Do not
 
 - **Do not do the two renames out of order.** `value` → `text` goes first. Reverse the order and the names collide mid-rename.
-- **Do not text-replace.** Use serena. It follows the symbol.
+- **Do not blind text-replace.** Match whole identifiers (`\bOldName\b`), then run `pnpm typecheck`. Read each hit: a rename must not reach a same-named string in a comment or a doc. It must reach `harness/` and `e2e/`, HTML included.
 - **Do not let the `duration` compute arm call `ctx.read(entry, 'duration')`.** That is a cycle.
 - **Do not keep two units.** Millisecond is the one unit. The inline editor's whole-day approximation goes.
 - **Do not ship a bare alias for a prefixed key.** App code writes the prefixed key. There is no plugin-only write door.

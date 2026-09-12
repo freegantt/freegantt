@@ -328,7 +328,7 @@ export class UnknownFieldError extends FreeGanttError {
   constructor(field: FieldKey, operation: string) {
     super(
       'unknown-field',
-      `${operation}: there is no field called "${field}". Declare it in the Dataset's "fields" list, or put the value in "meta" if it needs no field.`,
+      `${operation}: there is no field called "${field}". Declare it in the Dataset's "fields" list, or put the value in "props" if it needs no field.`,
     );
     this.name = 'UnknownFieldError';
     this.field = field;
@@ -350,6 +350,42 @@ export class DuplicateFieldKeyError extends FreeGanttError {
     );
     this.name = 'DuplicateFieldKeyError';
     this.key = key;
+  }
+}
+
+/** `code: 'reserved-field-key'` — a declaration names `key: 'props'` (ADR 0011). `props` is the one
+ *  reserved key: it is the whole bag a `props`-addressed Field lives inside, so a Field claiming
+ *  that name for itself would collide with the address every other declared Field already uses. */
+export class ReservedFieldKeyError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super(
+      'reserved-field-key',
+      `fields: "${key}" is reserved — it names the whole props bag, not a Field inside it. Choose a different key.`,
+    );
+    this.name = 'ReservedFieldKeyError';
+    this.key = key;
+  }
+}
+
+/** `code: 'duplicate-props-key'` — a constructor entry (or `entries.add()`) names one declared Field
+ *  key twice: once flat, at the top level, and once again inside `props` (ADR 0011, Q15). The two
+ *  spellings would silently disagree about which value wins, so this throws instead of picking one —
+ *  an undeclared key never reaches here, because ingest carries it without a second opinion to
+ *  conflict with. */
+export class DuplicatePropsKeyError extends FreeGanttError {
+  readonly key: string;
+  readonly entryId: string;
+
+  constructor(key: string, entryId: string) {
+    super(
+      'duplicate-props-key',
+      `entries: "${entryId}" names "${key}" at the top level and inside "props". Write it in one place, not both.`,
+    );
+    this.name = 'DuplicatePropsKeyError';
+    this.key = key;
+    this.entryId = entryId;
   }
 }
 
@@ -376,46 +412,65 @@ export class IllegalCoreFieldOverrideError extends FreeGanttError {
   }
 }
 
-/** `code: 'invalid-field-source'` — a `Field.source` that names no known source (#196). TypeScript
- *  refuses the shape, so this reaches a JS caller: `source: 'meta'` where `{ from: 'meta' }` was
- *  meant, or a `from` outside `'entry' | 'meta' | 'compute'`. `ctx.fields.register(field)` is public
- *  surface (D-S5-21), so a plugin author writing plain JS is a supported caller and gets a
- *  `FreeGanttError` like every other library fault, not a bare `TypeError`.
- *
- *  The message says what the caller wrote, inline: `model/` may declare no helper function of its
- *  own (types-only carve-out), and this is the one thing the reader needs to see the typo. */
-export class InvalidFieldSourceError extends FreeGanttError {
+/** `code: 'computed-field-cannot-be-written'` — a `compute` Field declared `rollUp` or `editable`
+ *  (thrown at registration), or an `entries.update()`/`add()` named one at the write door (thrown
+ *  there by ADR 0015). One name for one concept: a `compute` Field runs on every read and owns no
+ *  home to write into, whichever door found that out. The message says `compute`, never *derived* —
+ *  that word covers a rolled-up value too, and a derived parent cell is `DerivedFieldNotWritableError`
+ *  (ADR 0013) instead. */
+export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
   readonly key: string;
-  readonly received: unknown;
 
-  constructor(key: string, received: unknown) {
+  constructor(key: string, operation: string) {
     super(
-      'invalid-field-source',
-      `fields: the source of "${key}" is ` +
-        (typeof received === 'object' && received !== null
-          ? `{ from: ${String((received as { from?: unknown }).from)} }`
-          : typeof received === 'string'
-            ? `the string "${received}"`
-            : String(received)) +
-        `. Write { from: 'entry' }, { from: 'meta', key } or { from: 'compute', read }.`,
+      'computed-field-cannot-be-written',
+      `${operation}: "${key}" is a compute field, so it has no stored home to write into. A compute field never carries "rollUp" or "editable" — drop "compute" from its declaration if it should be a stored field instead.`,
     );
-    this.name = 'InvalidFieldSourceError';
+    this.name = 'ComputedFieldCannotBeWrittenError';
     this.key = key;
-    this.received = received;
   }
 }
 
-/** `code: 'duplicate-field-source'` — two Fields resolve to the same `{ from: 'meta', key }` (D-S4-5). */
-export class DuplicateFieldSourceError extends FreeGanttError {
-  readonly metaKey: string;
+/** `code: 'field-not-editable'` — `entries.update()` named a Field whose `editable` is `'never'`
+ *  (ADR 0015). The same key gates the grid at a second threshold: `'api'` keeps the cell dead and
+ *  still lets `update()` through, so only the lock reaches this door.
+ *
+ *  A lock names what a *caller* may write, never what the library may. Construction, `entries.add()`
+ *  and History replay all still write a locked Field, so this error belongs to the change door
+ *  alone. */
+export class FieldNotEditableError extends FreeGanttError {
+  readonly field: FieldKey;
+  readonly operation: string;
 
-  constructor(metaKey: string) {
+  constructor(field: FieldKey, operation: string) {
     super(
-      'duplicate-field-source',
-      `fields: two fields both read the meta key "${metaKey}". Point one of them at a different meta key — each slot in the document belongs to one field.`,
+      'field-not-editable',
+      `${operation}: "${field}" is declared editable: 'never', so its value cannot change. Call dataset.setFieldEditable("${field}", 'api') to open it to this door, or 'anywhere' to open the grid too.`,
     );
-    this.name = 'DuplicateFieldSourceError';
-    this.metaKey = metaKey;
+    this.name = 'FieldNotEditableError';
+    this.field = field;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'derived-field-not-writable'` — `entries.update()` named a Field on an Entry that has
+ *  children, and that Field rolls up (ADR 0013). Nothing but the Rollup writes a rolling-up parent's
+ *  cell: a write here would commit and the next Rollup would overwrite it in silence, so the library
+ *  refuses instead. A `compute` Field has no stored home at all and is
+ *  `ComputedFieldCannotBeWrittenError`; this is for a Field that *does* have one, just not on this
+ *  Entry right now. */
+export class DerivedFieldNotWritableError extends FreeGanttError {
+  readonly key: string;
+  readonly entryId: string;
+
+  constructor(key: string, entryId: string, operation: string) {
+    super(
+      'derived-field-not-writable',
+      `${operation}: "${entryId}" has children, so "${key}" rolls up from them and cannot be written directly. Write the children instead, or remove them to make "${entryId}" a normal entry again.`,
+    );
+    this.name = 'DerivedFieldNotWritableError';
+    this.key = key;
+    this.entryId = entryId;
   }
 }
 
@@ -742,23 +797,5 @@ export class UnknownCommandError extends FreeGanttError {
     );
     this.name = 'UnknownCommandError';
     this.commandId = commandId;
-  }
-}
-
-/** `code: 'unsupported-schema'` — `fromJSON` given a `schema` this build has no reader for
- *  (D-S2-12, `plans/s2-data-core/s2.6-serialization.md` §1.3). Names the version it found and the
- *  versions it reads, so a caller can tell a future document from a corrupt one. */
-export class UnsupportedSchemaError extends FreeGanttError {
-  readonly schema: number;
-  readonly supported: readonly number[];
-
-  constructor(schema: number, supported: readonly number[]) {
-    super(
-      'unsupported-schema',
-      `fromJSON: this document says schema ${schema}, and this build reads ${supported.join(', ')}. Upgrade the library, or export the document again from the build that wrote it.`,
-    );
-    this.name = 'UnsupportedSchemaError';
-    this.schema = schema;
-    this.supported = supported;
   }
 }

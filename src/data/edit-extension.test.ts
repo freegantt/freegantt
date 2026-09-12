@@ -3,26 +3,30 @@ import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, EntryEdit, EntryId } from '../model/index.js';
+import type { Entry, EntryEdit, EntryId, Instant } from '../model/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
-import type { EditExtender, EntryEdits, StoredEdit, StoredEdits } from './edit-extension.js';
+import type { EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
 
 function entry(id: string): Entry {
   return {
     id: entryId(id),
     name: id,
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
-    kind: 'span',
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+    start: 0 as Instant,
+    end: 1 as Instant,
+    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
+    props: {},
   };
+}
+
+function proposedEdit(patch: Record<string, unknown>): ProposedEdit {
+  return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(Object.keys(patch)), ...patch };
 }
 
 describe('identityExtender', () => {
   it('returns an empty EntryEdits map — no cascade, ever', () => {
     const t1 = entry('t1');
-    const proposed = new Map<EntryId, StoredEdit>([[t1.id, { name: 'Framing' }]]);
+    const proposed = new Map<EntryId, ProposedEdit>([[t1.id, proposedEdit({ name: 'Framing' })]]);
     const entries = new Map([[t1.id, t1]]);
     const result = identityExtender({ entries, proposed, entryAfterEdits: (id) => entries.get(id) });
     expect(result.size).toBe(0);
@@ -35,7 +39,7 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, Entry>();
   const request = {
     entries: requestEntries,
-    proposed: new Map() as StoredEdits,
+    proposed: new Map() as ProposedEdits,
     entryAfterEdits: (id: EntryId) => requestEntries.get(id),
   };
 
@@ -93,20 +97,20 @@ describe('composing two extenders that write one Entry (#197)', () => {
     });
   }
 
-  /** Writes a `meta`-sourced Field by its own name — the author states no `proposedKeys` any more. */
+  /** Writes a props-addressed Field by its own name — the author states no `proposedKeys` any more. */
   const proposesCost: EditExtender = () => new Map([[target, { cost: 500 }]]);
 
   /** Moves the same entry, the way an S7 cascade does — loose dates, read by core. */
   const movesTarget: EditExtender = () => new Map([[target, { start: '2026-01-05', end: '2026-01-07' }]]);
 
-  function composed(inner: EditExtender, outer: EditExtender): { loose: EntryEdits; stored: StoredEdits } {
+  function composed(inner: EditExtender, outer: EditExtender): { loose: EntryEdits; stored: ProposedEdits } {
     const state = datasetWithTarget();
     state.setExtender(() => inner);
     state.setExtender((next) => (call) => mergeEntryEdits(next(call), outer(call)));
     const entries = new Map([[target, state.entries.get(target)!]]);
     const request = {
       entries,
-      proposed: new Map() as StoredEdits,
+      proposed: new Map() as ProposedEdits,
       entryAfterEdits: (id: EntryId) => entries.get(id),
     };
     return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
@@ -121,13 +125,13 @@ describe('composing two extenders that write one Entry (#197)', () => {
     }
   });
 
-  it('core derives every proposed key from the composed edit, so the meta-sourced Field is recognized', () => {
+  it('core derives every proposed key from the composed edit, so the props-addressed Field is recognized', () => {
     for (const { stored } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
       const keys = [...proposedKeysOf(stored.get(target))].sort();
-      // `segments` rides along because `toStoredEdit` pairs the lone Segment onto an envelope-only write
+      // `segments` rides along because `toEditReading` pairs the lone Segment onto an envelope-only write
       // and states what it added. That fold is #232's subject, not this law's.
       expect(keys).toEqual(['cost', 'end', 'segments', 'start']);
-      expect(stored.get(target)?.meta).toEqual({ cost: 500 });
+      expect(stored.get(target)?.props).toEqual({ cost: 500 });
     }
   });
 
@@ -145,10 +149,9 @@ describe('composing two extenders that write one Entry (#197)', () => {
 // back to the raw keys only when `proposedKeys` is absent. The third merge then carried `[]` as the
 // base's stated keys, `diffEdit` took its authored branch, and only the last plugin got a row.
 //
-// The fixture writes `name`, `kind` and `parentId` — non-date Fields on purpose. Date Fields
-// (`start`/`end`) on one Entry hit the envelope-companion collision in `toStoredEdit` (#232), which is a
-// different defect. A `meta` write as the last plugin would mask this one through `diffEdit`'s
-// `authored.has('meta')` escape, so none of the three uses `meta` either.
+// The fixture writes `name`, `tag` (a consumer prop) and `parentId` — non-date Fields on purpose.
+// Date Fields (`start`/`end`) on one Entry hit the envelope-companion collision in `toEditReading`
+// (#232), which is a different defect.
 describe('composing three extenders that write one Entry (#238)', () => {
   const target = entryId('t2');
 
@@ -164,20 +167,25 @@ describe('composing three extenders that write one Entry (#238)', () => {
         { id: 't2', name: 't2', start: 0, end: 10 },
       ],
       timeZone: 'UTC',
+      fields: [{ key: 'tag' }],
     });
     state.setExtender(writes({ name: 'A' }));
-    state.setExtender(writes({ kind: 'milestone' }));
+    state.setExtender(writes({ tag: 'milestone' }));
     state.setExtender(writes({ parentId: entryId('t1') }));
     return state;
   }
 
   it('lands every plugin write in the store, not the last one alone', () => {
     const state = datasetWithThreePlugins();
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), proposedEdit({ name: 'a' })),
+      'user',
+    );
 
     const committed = state.entries.get(target);
     expect(committed?.name).toBe('A');
-    expect(committed?.kind).toBe('milestone');
+    expect((committed?.props as { tag?: string } | undefined)?.tag).toBe('milestone');
     expect(committed?.parentId).toBe(entryId('t1'));
   });
 
@@ -188,12 +196,16 @@ describe('composing three extenders that write one Entry (#238)', () => {
       captured = changeSet.updated as readonly { id: EntryId; field: string }[];
     });
 
-    runTransaction(state, (token) => state.entries.stageUpdate(token, entryId('t1'), { name: 'a' }), 'user');
+    runTransaction(
+      state,
+      (token) => state.entries.stageUpdate(token, entryId('t1'), proposedEdit({ name: 'a' })),
+      'user',
+    );
 
     const onTarget = captured
       .filter((row) => row.id === target)
       .map((row) => row.field)
       .sort();
-    expect(onTarget).toEqual(['kind', 'name', 'parentId']);
+    expect(onTarget).toEqual(['name', 'parentId', 'tag']);
   });
 });

@@ -3,8 +3,12 @@
 import type { EntryId, SegmentId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
 
-/** Open classification — see plans/01 §2.5. Shipped kinds ship; consumers add their own. */
-export type EntryKind = 'span' | 'group' | 'milestone' | (string & {});
+/** What one Item's look is: structure (a parent or a leaf), or a plugin-owned look — stamped as
+ * `data-kind` on the painted element (`02` §4). Not a stored Entry classification (ADR 0013):
+ * structure decides the default, and a plugin registers its own producer under its own look name.
+ * This is the type that replaced the retired `EntryKind`, and it lives here for the same reason that
+ * one did — it names a value on the public surface, so a consumer has to be able to name it too. */
+export type EntryLook = 'parent' | 'leaf' | (string & {});
 
 /** One dated stretch of an Entry, and the unit the Selection holds (#212, ADR 0010). Interrupted
  * work stores several; an Entry that never mentioned one stores a single Segment over its own span,
@@ -21,22 +25,52 @@ export interface SegmentInput extends TimeSpanInput {
   id?: string;
 }
 
-export interface Entry<TMeta = unknown> {
+export interface Entry<TProps = Record<string, unknown>> {
   id: EntryId;
   /** Hierarchy; roots have none. */
   parentId?: EntryId;
-  /** Authored, never derived — see plans/01 §2.5. */
-  kind: EntryKind;
+  /** No stored classification (ADR 0013). An Entry derives when it has children — `childrenOf`
+   *  answers that; there is nothing to read off the Entry itself. */
   name: string;
-  start: Instant;
-  /** Exclusive — see plans/01 §5. */
-  end: Instant;
-  /** Every stretch this Entry draws, never empty (#212). Interrupted work stores several bars on one
-   * row; everything else stores the single Segment ingest filled in over `[start, end)`. `start` and
-   * `end` stay the envelope over all of them. */
+  /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
+   * Segment and draws a bar. */
+  start?: Instant;
+  /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012); see `start`. */
+  end?: Instant;
+  /** Every stretch this Entry draws. Empty when the Entry does not span (ADR 0012, revises #212's
+   * "never empty"). A spanning Entry stores at least one Segment: interrupted work stores several
+   * bars on one row; everything else stores the single Segment ingest filled in over `[start, end)`.
+   * `start` and `end` stay the envelope over all of them. */
   segments: readonly Segment[];
-  /** Consumer-owned, typed via generic. */
-  meta?: TMeta;
+  /** Consumer-owned. A Field key is the whole address (ADR 0011): `{ key: 'cost' }` reads and writes
+   *  `entry.props.cost`, and nothing declares a `source`. Always present — ingest fills `{}`, the
+   *  same rule `segments` already follows, so no reader carries a "no props" branch. `Partial<TProps>`
+   *  because a required key on `TProps` is still one a stored record may lack: `add({ id, name })`
+   *  reaches that state on its own, with no write to refuse it. */
+  props: Readonly<Partial<TProps>>;
+}
+
+/**
+ * The span invariant, and the one place it is written (ADR 0012, Q5 in the field-redesign
+ * BUILD-LOG). An Entry spans time when it holds **both** `start` and `end`. An Entry with one date,
+ * or with no date, appears in the grid and draws no bar.
+ *
+ * Call it as a question about the record: `if (!spansTime(entry)) return;`. It narrows, so the
+ * caller reads `entry.start` and `entry.end` as `Instant` after it, with no cast.
+ *
+ * It is generic over the two dates rather than over `Entry`, because three kinds of record carry
+ * them and ask the same question: a stored `Entry`, a `ProposedEdit` mid-gesture, and the date pair
+ * ingest reads before it builds either.
+ *
+ * This is the one runtime function `model/` holds beyond the id/brand helpers and the error base
+ * (plans/01 §1.1). The author widened that carve-out for it on 2026-09-11: it is a total function
+ * over its argument, with no state and no dependency. Before it, the rule was restated as guard
+ * arithmetic at about ten sites, plus six casts that asserted it without testing it.
+ */
+export function spansTime<T extends { start?: Instant | undefined; end?: Instant | undefined }>(
+  dated: T,
+): dated is T & TimeSpan {
+  return dated.start !== undefined && dated.end !== undefined;
 }
 
 /**
@@ -48,45 +82,72 @@ export interface Entry<TMeta = unknown> {
  * `Dataset` reads this into `Entry` once, at construction, in the Dataset's own zone — see
  * `DateOnlyEndRule` for how a date-only `end` is read.
  */
-export interface EntryInput<TMeta = unknown> {
+export interface EntryInput<TProps = Record<string, unknown>> {
   id: string;
   /** Hierarchy; roots have none. */
   parentId?: string;
-  /** Authored, never derived — see plans/01 §2.5. Default 'span'. */
-  kind?: EntryKind;
+  /** No stored classification (ADR 0013). An Entry derives when it has children — gaining one
+   *  promotes it, losing the last one demotes it, and nothing here says which. */
   name: string;
-  /** Required for a `kind` whose span is authored. Omit both `start` and `end` for a
-   * `rollUpKinds` kind (default `'group'`) to let the Rollup fill them in — the store
-   * writes a zero-length span at the dataset's reference date until the rollup runs (`01` §2.5,
-   * S2.3 §1.5). Omitting one but not the other, or omitting both on a non-deriving kind, is an
-   * `InvalidInstantError`: the field is required and `undefined` names no instant. */
+  /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
+   * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment
+   * and draws no bar otherwise. One date with no other is legal and stores as written. An unreadable
+   * date is still an `InvalidInstantError`. */
   start?: InstantInput;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput;
   /** Interrupted work — renders as multiple bars on one row. Omit it and ingest fills one Segment
    * over `[start, end)`, so a stored `Entry` always has at least one. */
   segments?: readonly SegmentInput[];
-  /** Consumer-owned, typed via generic. */
-  meta?: TMeta;
+  /** Passenger data, and a bag a consumer already holds (ADR 0011, Q15). A declared Field key belongs
+   *  at the top level instead — `entries.add({ id, name, owner: 'Ali' })` — and naming one both here
+   *  and at the top throws. An unknown top-level key, or a key here that names a core key, warns and
+   *  is ignored rather than thrown: this Entry may come from an API this consumer does not own. */
+  props?: Partial<TProps>;
 }
+
+/** The whole envelope `EntryInput` carries, minus `id` (an edit names its Entry at the call) and
+ *  `props` (declared consumer keys sit flat on `EntryEdit`, never nested — decision 11). */
+type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
+
+/** Every key a *stored* `Entry` may lack, restricted to the ones `EntryEnvelope` also carries —
+ *  derived from `Entry` rather than hand-listed, so the moment `Entry.end` stops being optional, or a
+ *  new optional key joins `Entry`, this (and `EntryEdit` below) follow with no edit to either. */
+// The idiomatic "is K optional" test: an empty object type accepts a Pick that dropped a required
+// key, never one that kept it.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+type OptionalKeysOf<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];
+type RemovableEntryKey = OptionalKeysOf<Entry> & keyof EntryEnvelope<unknown>;
+
+/** A patch of `props`: every key optional, and every key removable by an explicit `undefined`. There
+ *  is no protected key, because `props` is `Partial<TProps>` at every storage door — a key `TProps`
+ *  marks required is still a key the stored record may not hold. `Partial<TProps>` cannot be this
+ *  type: under `exactOptionalPropertyTypes` a `Partial` property accepts an absent key and refuses an
+ *  explicit `undefined` (`TS2375`), which deletes the remove verb. */
+export type PropsEdit<TProps> = { [K in keyof TProps]?: TProps[K] | undefined };
 
 /** What a consumer may change. Input-shaped, so dates stay loose the way `EntryInput`'s are: the store
  * reads them through `time/`'s `toInstant`/`toEndInstant` in the dataset's zone, exactly as
- * construction does. `id` is not editable — an id is identity. Declared Field keys (`cost`) are
- * legal beside core keys (D-S4-2); the registry rejects an unregistered name at the call.
+ * construction does. `id` is not editable — an id is identity.
  *
- * `TFields` is the TypeScript map of those declared keys (`Dataset<TMeta, { cost: number }>`). The
- * default stays open (`Record<string, unknown>`) so a Dataset that omitted the second generic still
- * type-checks `update({ cost: 500 })`; pass `{ cost: number }` to get a type error on `'nope'` and
- * autocomplete for `cost`. */
-export type EntryEdit<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = Partial<Omit<EntryInput<TMeta>, 'id'>> & Partial<TFields>;
+ * A Field key is the whole address (ADR 0011): `update(id, { start, cost })` writes one date and one
+ * declared consumer value, flat — there is no `props` key here, and naming one throws
+ * (`props?: never` below is what makes `{ props: { owner: 'Sam' } }` fail to compile, the same brand
+ * that keeps a `ProposedEdit` from masquerading as this type).
+ *
+ * An edit may remove exactly what a stored Entry may lack: `name` and `segments` are required on
+ * `Entry`, so `{ name: undefined }` does not compile, while `{ parentId: undefined }` and (after ADR
+ * 0012) `{ start: undefined }` do. Every declared consumer key is removable without exception, because
+ * `props` is `Partial<TProps>` everywhere already. */
+export type EntryEdit<TProps = Record<string, unknown>> = {
+  [K in keyof EntryEnvelope<TProps>]?: K extends RemovableEntryKey
+    ? EntryEnvelope<TProps>[K] | undefined
+    : EntryEnvelope<TProps>[K];
+} & { [K in keyof TProps]?: TProps[K] | undefined } & { readonly props?: never };
 
 /** The **read** shape: an edit core has already read, with every date an `Instant` rather than a loose
- *  `InstantInput`. `EntryEdit` above is the **write** shape (`plans/02`, one write shape). Nobody
- *  outside core builds a `StoredEdit`, and two callers read one differently (`plans/02`, two callers
+ *  `InstantInput`, and every declared consumer key merged into a complete `props` (ADR 0011). Nobody
+ *  outside core builds a `ProposedEdit`, and two callers read one differently (`plans/02`, two callers
  *  two surfaces):
  *
  *  - An **app author** never meets it at all. They write an `EntryEdit` to `entries.update()`.
@@ -94,29 +155,42 @@ export type EntryEdit<
  *    `moveEntryTo` builds one of those for them (D-S5-50).
  *
  *  Core builds these on the way in — the extension hook's writes included, at one door
- *  (`DatasetState.extraEditsFor` → `toStoredEdits`) — and `diffEdit` compares one against `entries`.
+ *  (`DatasetState.extraEditsFor` → `toEditsReading`) — and `diffEdit` compares one against `entries`.
  *
- *  Every `StoredEdit` is a legal `EntryEdit` — an `Instant` is an `InstantInput` — and the reverse is
- *  not. That asymmetry is the enforcement: a missing normalization is a compile error rather than a
- *  wrong write, and no `as` belongs on the hook boundary. This type sits in `model/` (moved from
- *  `data/edit-extension.ts` in S3.3, D-S3-4) so `layout/gesture-draft.ts` can build one without
- *  reaching into `data/`. It is public surface (#209 ruling): a plugin author who factors a helper
- *  over `request.proposed` has to name it.
+ *  **Decision 22 (ADR 0011), closed 2026-09-10: the whole type is branded, and it is *not* assignable
+ *  to `EntryEdit`.** Before this ADR the asymmetry ran the other way — every `StoredEdit` was a legal
+ *  `EntryEdit`. It stopped holding at `props`: a complete record and a patch are structurally the same
+ *  shape, so a plugin author reading `request.proposed` off `EditRequest` could spread its `props`
+ *  into a returned edit (`{ props: { ...request.proposed.get(id)?.props, risk: 'high' } }`) and turn
+ *  every stored key into a proposed one by accident. `EntryEdit`'s own `props?: never` refuses that
+ *  literal outright; the brand here refuses the object itself. A plugin author who wants one key off
+ *  `proposed` writes one unwrap, never a spread.
  *
  *  `proposedKeys` carries the Field keys the caller proposed. It is part of the edit, not a side
  *  channel — spread keeps it, and overlay never copies it onto an Entry. */
-export type StoredEdit = Partial<Omit<Entry, 'id'>> & {
-  readonly proposedKeys?: ReadonlySet<string>;
-};
+export type ProposedEdit<TProps = Record<string, unknown>> = {
+  readonly __brand: 'ProposedEdit';
+  /** Always present and complete: `toEditReading` merges the patch onto the Entry's own `props`
+   *  record on the read side. */
+  readonly props: Readonly<Partial<TProps>>;
+  /** Never optional here: every `ProposedEdit` is built through `toEditReading`, which always seeds
+   *  this set (`withProposedKeys`). */
+  readonly proposedKeys: ReadonlySet<string>;
+} & Partial<Omit<Entry, 'id' | 'start' | 'end' | 'props'>> & {
+    // Same widening as `EntryEdit`, for the same reason: `stored.start = undefined` has to be legal
+    // once `toEditReading` reads an explicit clear off the wire (ADR 0012).
+    start?: Instant | undefined;
+    end?: Instant | undefined;
+  };
 
-/** A map of `StoredEdit`s, keyed by the `EntryId` each one targets — what `EditRequest.proposed`
+/** A map of `ProposedEdit`s, keyed by the `EntryId` each one targets — what `EditRequest.proposed`
  *  carries, and what `entries.pendingEdits()` and a Draft (`layout/gesture-draft.ts`) hold. */
-export type StoredEdits = ReadonlyMap<EntryId, StoredEdit>;
+export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
 
 /** What a plugin author writes: one `EntryEdit` per Entry, keyed by `EntryId` — exactly the object
  *  `dataset.entries.update(id, edit)` takes, loose dates included (#209). An `EditExtender` returns
- *  one, and `mergeEntryEdits` composes two. Core reads it into `StoredEdits` at the hook boundary,
- *  through the same `toStoredEdit` every other write goes through, so an extender never normalizes a date
+ *  one, and `mergeEntryEdits` composes two. Core reads it into `ProposedEdits` at the hook boundary,
+ *  through the same `toEditReading` every other write goes through, so an extender never normalizes a date
  *  and never states its own proposed keys. */
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
@@ -131,7 +205,7 @@ export interface EditRequest {
   /** What the caller asked to change — storage-shaped and complete, the same as `entries` above
    *  (`plans/02`, "core fills zone math"): a cascade compares it against `entries` with no
    *  normalizing step of its own. */
-  proposed: StoredEdits;
+  proposed: ProposedEdits;
   /** `id` as this transaction's own body edits leave it: committed state overlaid with `proposed`
    *  (and, at commit, this transaction's own adds). `undefined` when `id` names no entry there either.
    *  `entries.get(id)` is the wrong read for judging an in-flight edit against current shape — it

@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt — Writing a plugin</title>
+    <link rel="stylesheet" href="./doc.css" />
+    <link rel="stylesheet" href="../harness-nav.css" />
+    <link rel="stylesheet" href="./docs-nav.css" />
+    <style>
+      .d .bx.oval {
+        rx: 18;
+      }
+      .d .bx.opt {
+        fill: var(--stub-bg);
+        stroke: var(--stub-line);
+        stroke-dasharray: 4 3;
+      }
+      .d .diamond {
+        fill: var(--panel-2);
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-docs-nav" aria-label="Harness docs"></nav>
+        <script type="module" src="../harness-nav.ts"></script>
+        <script type="module" src="./docs-nav.ts"></script>
+        <h1>Writing a plugin</h1>
+        <p class="tagline">
+          How a plugin author writes one plugin, installs it once, and fills the public seams. The
+          worked example is a milestone variant: a diamond core does not ship. It takes four lines and
+          no id list.
+        </p>
+        <div class="updated"><span class="k">updated</span> 2026-09-11 — ADRs 0011–0020</div>
+        <div class="meta">
+          <span>audience: plugin author</span>
+          <span>one contract: <code>definePlugin</code></span>
+          <span>worked example: a milestone variant</span>
+        </div>
+        <nav aria-label="Sections on this page">
+          <a href="#s1"><b>1</b>One plugin, one install</a>
+          <a href="#s2"><b>2</b>The Entry answers</a>
+          <a href="#s3"><b>3</b>The process</a>
+          <a href="#s4"><b>4</b>Write a variant</a>
+          <a href="#s5"><b>5</b>Gantt seams</a>
+          <a href="#s6"><b>6</b>Dataset seams</a>
+          <a href="#s7"><b>7</b>Gate, dispose, install</a>
+        </nav>
+      </header>
+      <main>
+        <div class="note">
+          <strong>Draft — this page publishes ADRs 0017–0020, and none of them is accepted yet.</strong>
+          It is here to be read and argued with, not to be copied.
+          <strong>It is ahead of <code>src/</code>.</strong> The library ships
+          <code>entries.fieldValue(id, key)</code> where this page writes <code>entry.read(key)</code>,
+          and the four seams one variant replaces are still the installed API. No sample on this page
+          is typechecked against the built package. The samples that are typechecked live in
+          <a href="../../docs/06-plugin-authoring.md"><code>docs/06-plugin-authoring.md</code></a>,
+          and that guide describes HEAD.
+          Four things change from the page it replaces. One plugin has a <code>data</code> half and a
+          <code>view</code> half, and installs once. An Entry answers questions about itself, so a rule
+          reads <code>entry.hasChildren</code>. A variant is one object, matched by a rule, and nothing
+          stores one. A plugin may say what the tree is.
+          <a href="./plugins.html">Plugin lifecycle</a> is the install machinery, not this page.
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════ 1 -->
+        <section id="s1">
+          <h2><span class="num">1</span>One plugin, one install site</h2>
+          <p class="lede">
+            A feature is usually one thought — <em>this value is true, and the row draws as a
+            milestone</em>. It was two plugins, two contracts and two install sites. It is now one
+            plugin with two halves.
+          </p>
+          <p class="src"><b>derived from</b> ADR 0019, ADR 0017, plans/01 §10</p>
+
+          <pre><code>import { definePlugin } from 'freegantt';
+
+export const phases = definePlugin({
+  id: 'demo.phases',
+  requires: ['demo.calendar'],
+
+  // What is the data? Runs once, as the Dataset constructs. Never touches the DOM.
+  data(ctx) {
+    ctx.fields.register({ key: 'demo:phaseId' });
+  },
+
+  // What does it variant like? Runs once per bound Gantt, with that Gantt's own context.
+  view(ctx) {
+    ctx.addVariant({ name: 'phase', when: { 'demo:phaseId': true }, paint: phaseBar });
+  },
+});</code></pre>
+
+          <table>
+            <tr>
+              <th class="mono">question</th>
+              <th><code>data(ctx)</code></th>
+              <th><code>view(ctx)</code></th>
+            </tr>
+            <tr>
+              <td>runs</td>
+              <td>once, while the Dataset constructs</td>
+              <td>once per bound Gantt, each with its own <code>ctx</code></td>
+            </tr>
+            <tr>
+              <td>may touch the DOM</td>
+              <td>no — it is core-layer code</td>
+              <td>yes</td>
+            </tr>
+            <tr>
+              <td>what it fills</td>
+              <td>Fields, field types, aggregators, the hierarchy, the edit extender, its own store</td>
+              <td>variants, renderers, decorations, columns, commands, keybindings</td>
+            </tr>
+            <tr>
+              <td>can you add it later?</td>
+              <td>
+                no — a Field must exist before the first Rollup, so a different plugin set is a new
+                Dataset
+              </td>
+              <td>
+                yes, when the plugin has no <code>data</code> half — chrome installs live on the
+                Gantt
+              </td>
+            </tr>
+            <tr>
+              <td>order</td>
+              <td>
+                <code>requires</code> — <code>[a, b]</code> and <code>[b, a]</code> install the same
+                way
+              </td>
+              <td>the order the <code>data</code> halves resolved to</td>
+            </tr>
+          </table>
+
+          <p>
+            <strong>Where it installs is where its state lives.</strong> A plugin with a
+            <code>data</code> half installs on the <code>Dataset</code>, because a Field and a store
+            belong to the data, not to one view of it. Every Gantt bound to that Dataset then runs
+            its <code>view</code> half once. Two Gantts on one Dataset get two contexts and two sets
+            of registrations, which is what keeps them independent (I2). A plugin with no
+            <code>data</code> half still installs on the Gantt.
+          </p>
+          <p>
+            <code>requires</code> now covers the whole plugin, not half of it. That is the pair the
+            old split could not even state.
+          </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 2 -->
+        <section id="s2">
+          <h2><span class="num">2</span>The Entry answers questions about itself</h2>
+          <p class="lede">
+            Every seam that receives an Entry receives one that answers. You write
+            <code>entry.hasChildren</code>, not <code>dataset.entries.childrenOf(entry.id).length &gt; 0</code>.
+          </p>
+          <p class="src"><b>derived from</b> ADR 0017</p>
+
+          <pre><code>interface Entry&lt;TProps&gt; {
+  readonly id: EntryId;
+  readonly name: string;
+  readonly start?: Instant;
+  readonly end?: Instant;
+  readonly segments: readonly Segment[];
+
+  read&lt;K extends FieldKey&gt;(field: K): FieldValue&lt;TProps, K&gt; | undefined;
+
+  readonly hasChildren: boolean;     // one value, so it is a getter
+  readonly depth: number;
+  children(): readonly Entry&lt;TProps&gt;[];
+  parent(): Entry&lt;TProps&gt; | undefined;
+  descendants(): readonly Entry&lt;TProps&gt;[];
+
+  toInput(): EntryInput&lt;TProps&gt;;
+}</code></pre>
+
+          <p>
+            <strong>A getter answers one value. A method returns a collection.</strong> That is the
+            whole rule, and it is a cost rule:
+            <code>hasChildren</code> is one index lookup on the hover path, and
+            <code>descendants()</code> is a walk. The shape tells you which you are paying for.
+          </p>
+          <p>
+            <strong>It reads. It never writes.</strong> There is no <code>entry.update()</code>.
+            Writes go through <code>dataset.entries.update()</code>, the one write door, so every
+            change is still one transaction and one <code>ChangeSet</code>.
+          </p>
+
+          <h3>Two types, one row</h3>
+          <p>
+            A seam that asks a question about <em>now</em> receives an <code>Entry</code>. A seam
+            that describes a <em>change</em> carries the stored values, and those never move on
+            their own.
+          </p>
+          <table>
+            <tr>
+              <th>seam</th>
+              <th>gets</th>
+              <th>why</th>
+            </tr>
+            <tr>
+              <td class="mono">when, items, paint, can</td>
+              <td><code>Entry</code></td>
+              <td>a variant rule asks about the row as it is right now</td>
+            </tr>
+            <tr>
+              <td class="mono">Aggregator, FieldDistributor</td>
+              <td><code>Entry</code></td>
+              <td>the Rollup already walks children; it should not be handed them twice</td>
+            </tr>
+            <tr>
+              <td class="mono">compute Field, command <code>when</code></td>
+              <td><code>Entry</code></td>
+              <td>both ask a live question and neither writes</td>
+            </tr>
+            <tr>
+              <td class="mono">EditRequest.entries</td>
+              <td><code>StoredEntry</code></td>
+              <td>
+                the pre-transaction state, on purpose — a cascade reads it to compute a delta
+                (D-S5-45)
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">entryAfterEdits(id)</td>
+              <td><code>StoredEntry</code></td>
+              <td>
+                the post-body state — a <em>different</em> answer from the line above, which one
+                live object could not hold
+              </td>
+            </tr>
+            <tr>
+              <td class="mono">ChangeSet <code>{ from, to }</code></td>
+              <td><code>StoredEntry</code></td>
+              <td>a recorded change must not move after it is recorded</td>
+            </tr>
+          </table>
+
+          <div class="note">
+            <strong>Open: the two names.</strong> This page writes <code>Entry</code> for the live
+            one and <code>StoredEntry</code> for the values. The bare word goes to the live one
+            because that is the surface most people read. The alternative is the reverse, with
+            <code>LiveEntry</code> for the handle. Nothing else on this page depends on the answer.
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 3 -->
+        <section id="s3">
+          <h2><span class="num">3</span>The process</h2>
+          <p class="lede">
+            Write a factory. Call <code>definePlugin</code>. Install it once. Each half runs with
+            its gate open, and the gate closes when the half returns.
+          </p>
+          <p class="src">
+            <b>derived from</b> ADR 0019, extensions/plugin-runtime.ts,
+            extensions/install-dataset-plugins.ts
+          </p>
+
+          <figure>
+            <div class="scroller">
+              <svg
+                class="d"
+                viewBox="0 0 960 540"
+                role="img"
+                aria-labelledby="pa-flow-title pa-flow-desc"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                <title id="pa-flow-title">From a factory to a live plugin</title>
+                <desc id="pa-flow-desc">
+                  Flowchart: write a factory, call definePlugin, install once on the Dataset, then
+                  the data half runs as the Dataset constructs and the view half runs once per
+                  bound Gantt.
+                </desc>
+                <defs>
+                  <marker
+                    id="pa-flow-arrow"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                  </marker>
+                </defs>
+
+                <line
+                  class="edge"
+                  x1="480"
+                  y1="56"
+                  x2="480"
+                  y2="80"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <line
+                  class="edge"
+                  x1="480"
+                  y1="128"
+                  x2="480"
+                  y2="152"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <line
+                  class="edge"
+                  x1="480"
+                  y1="208"
+                  x2="480"
+                  y2="232"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <path
+                  class="edge"
+                  d="M480,280 V300 H230 V314"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <path
+                  class="edge"
+                  d="M480,280 V300 H730 V314"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <path
+                  class="edge"
+                  d="M230,396 V418 H480 V434"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+                <path
+                  class="edge"
+                  d="M730,396 V418 H480 V434"
+                  marker-end="url(#pa-flow-arrow)"
+                  style="color: var(--sub)"
+                />
+
+                <rect class="bx oval" x="400" y="20" width="160" height="36" />
+                <text class="t" x="480" y="42" text-anchor="middle">Start</text>
+
+                <rect class="bx pure" x="340" y="80" width="280" height="48" />
+                <text class="t" x="480" y="100" text-anchor="middle">Write a factory</text>
+                <text class="s" x="480" y="116" text-anchor="middle">phases(config)</text>
+
+                <rect class="bx api" x="300" y="152" width="360" height="56" />
+                <text class="t" x="480" y="176" text-anchor="middle">definePlugin({ id, requires, data, view })</text>
+                <text class="s" x="480" y="194" text-anchor="middle">one object · one id · one requires</text>
+
+                <rect class="bx" x="330" y="232" width="300" height="48" />
+                <text class="t" x="480" y="252" text-anchor="middle">Install once</text>
+                <text class="s" x="480" y="268" text-anchor="middle">new Dataset({ plugins })</text>
+
+                <rect class="bx pure" x="60" y="318" width="340" height="78" />
+                <text class="t" x="230" y="344" text-anchor="middle">data(ctx) — gate open</text>
+                <text class="s" x="230" y="364" text-anchor="middle">fields · hierarchy · edits · store</text>
+                <text class="xs" x="230" y="382" text-anchor="middle">once, while the Dataset constructs</text>
+
+                <rect class="bx dom" x="560" y="318" width="340" height="78" />
+                <text class="t" x="730" y="344" text-anchor="middle">view(ctx) — gate open</text>
+                <text class="s" x="730" y="364" text-anchor="middle">variants · renderers · commands · keys</text>
+                <text class="xs" x="730" y="382" text-anchor="middle">once per bound Gantt</text>
+
+                <rect class="bx oval" x="400" y="434" width="160" height="36" />
+                <text class="t" x="480" y="456" text-anchor="middle">Live</text>
+
+                <line x1="40" y1="496" x2="920" y2="496" stroke="var(--line)" stroke-width="0.8" />
+                <text class="xs" x="40" y="516">LEGEND</text>
+                <rect class="bx api" x="120" y="504" width="16" height="16" />
+                <text class="s" x="144" y="516">one install site</text>
+                <rect class="bx pure" x="380" y="504" width="16" height="16" />
+                <text class="s" x="404" y="516">DOM-free</text>
+                <rect class="bx dom" x="660" y="504" width="16" height="16" />
+                <text class="s" x="684" y="516">may touch the DOM</text>
+              </svg>
+            </div>
+            <figcaption>
+              Diagram 1 — one plugin, one install, two halves. A plugin with no <code>data</code>
+              half skips the left box and installs on the Gantt instead. Each half has its own gate:
+              a <code>register*</code> call is legal only while that half is on the stack.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 4 -->
+        <section id="s4">
+          <h2><span class="num">4</span>Write a variant</h2>
+          <p class="lede">
+            A variant is one object, and it answers from a rule. Nothing stores a variant. Core ships no
+            diamond, so a milestone is the smallest real example — and it needs no plugin at all.
+          </p>
+          <p class="src"><b>derived from</b> ADR 0018, ADR 0017</p>
+
+          <h3>An app author, with no plugin</h3>
+          <pre><code>const dataset = new Dataset({ fields: [{ key: 'milestone' }] });
+
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  variants: [
+    {
+      name: 'milestone',
+      when: { milestone: true },
+      paint: () =&gt; ({ class: { 'demo-milestone': true } }),
+      can: { resize: false },
+    },
+  ],
+});
+
+dataset.entries.update('launch', { milestone: true });</code></pre>
+          <p>
+            That is the whole feature. The row wears the variant because of a value the app owns, in
+            the app's own word. The write is an ordinary Field write, so it is in a
+            <code>ChangeSet</code>, it undoes, the write door gates it, and
+            <code>gridColumns: ['milestone']</code> shows it. No id set, and no list that freezes at
+            install.
+          </p>
+          <p>
+            Core never learns what a milestone is. A shift roster writes
+            <code>{ handover: true }</code> and a factory writes <code>{ changeover: true }</code>,
+            and core reads none of those words.
+          </p>
+
+          <h3>A plugin that does not know the ids</h3>
+          <pre><code>export const milestones = definePlugin({
+  id: 'demo.milestones',
+  view(ctx) {
+    // Which entries wear it? A rule, not a list — a row added tomorrow gets it too.
+    ctx.addVariant({
+      name: 'milestone',
+      when: (entry) =&gt; !entry.hasChildren &amp;&amp; entry.read('duration') === 0,
+      paint: () =&gt; ({ class: { 'demo-milestone': true } }),
+      can: { resize: false },
+    });
+  },
+});</code></pre>
+          <p>
+            <code>when</code> takes the §2 Entry, which is the only reason that predicate compiles.
+            It also takes the shorthand the app author used above — a Field match core can index,
+            which never runs a function per row.
+          </p>
+
+          <h3>The one object</h3>
+          <pre><code>interface EntryVariant {
+  name: string;          // this variant's identity: the `data-variant` you style, and the registry key
+  when?: VariantRule;       // a predicate or a field match; omit it on a last-resort variant
+  items?: ItemProducer;  // default: one Item over the Entry's whole span
+  paint?: BarRenderer;
+  can?: Interactions;    // per variant, one level under the consumer's own
+}</code></pre>
+          <p>
+            Every key is optional except the name. <code>items</code> defaults to the line both old
+            examples hand-wrote, so a variant that draws an ordinary bar in a new colour is a name and
+            a <code>paint</code>. There is no half to forget: a claim with no producer is not a
+            shape you can write any more.
+          </p>
+          <p>
+            The name is an identity, not a value you store. It is the
+            <code>data-variant</code> on the painted element, so a stylesheet can select on it, and it
+            is the key the registry and the double-claim report use.
+          </p>
+
+          <h3>How an Entry gets its variant</h3>
+          <figure>
+            <div class="scroller">
+              <svg
+                class="d"
+                viewBox="0 0 960 380"
+                role="img"
+                aria-labelledby="pa-variant-title pa-variant-desc"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                <title id="pa-variant-title">Core asks each variant in order, and the first yes wins</title>
+                <desc id="pa-variant-desc">
+                  Core asks each registered variant in turn whether it matches the Entry. Your variants are
+                  asked first, then core's own parent variant, then core's leaf variant, which carries no
+                  rule and always answers. The variant that answers carries the items, the paint and the
+                  capabilities.
+                </desc>
+                <defs>
+                  <marker
+                    id="pa-variant-arrow"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+                  </marker>
+                </defs>
+
+                <path class="edge" d="M190,186 H215 V51 H240" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,82 V102" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,164 V184" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,246 V266" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,51 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,133 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,215 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,297 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+
+                <rect class="bx api" x="30" y="150" width="160" height="72" />
+                <text class="t" x="110" y="178" text-anchor="middle">Entry</text>
+                <text class="s" x="110" y="196" text-anchor="middle">entry.hasChildren</text>
+                <text class="xs" x="110" y="212" text-anchor="middle">entry.read('milestone')</text>
+
+                <rect class="bx pure" x="240" y="20" width="330" height="62" />
+                <text class="t" x="405" y="44" text-anchor="middle">your variant · when: (entry) =&gt; …</text>
+                <text class="s" x="405" y="64" text-anchor="middle">registered first, asked first</text>
+
+                <rect class="bx pure" x="240" y="102" width="330" height="62" />
+                <text class="t" x="405" y="126" text-anchor="middle">your variant · when: { milestone: true }</text>
+                <text class="s" x="405" y="146" text-anchor="middle">a Field match — core indexes it</text>
+
+                <rect class="bx pure" x="240" y="184" width="330" height="62" />
+                <text class="t" x="405" y="208" text-anchor="middle">core · parent</text>
+                <text class="s" x="405" y="228" text-anchor="middle">when: (entry) =&gt; entry.hasChildren</text>
+
+                <rect class="bx pure" x="240" y="266" width="330" height="62" />
+                <text class="t" x="405" y="290" text-anchor="middle">core · leaf</text>
+                <text class="s" x="405" y="310" text-anchor="middle">no when — it always answers</text>
+
+                <text class="xs" x="415" y="97">no</text>
+                <text class="xs" x="415" y="179">no</text>
+                <text class="xs" x="415" y="261">no</text>
+                <text class="xs" x="578" y="42">yes</text>
+
+                <rect class="bx dom" x="640" y="150" width="290" height="72" />
+                <text class="t" x="785" y="178" text-anchor="middle">one variant</text>
+                <text class="s" x="785" y="196" text-anchor="middle">items · paint · can</text>
+                <text class="xs" x="785" y="212" text-anchor="middle">core never branches on the name</text>
+
+                <line x1="40" y1="352" x2="920" y2="352" stroke="var(--line)" stroke-width="0.8" />
+                <text class="xs" x="40" y="368">LEGEND</text>
+                <rect class="bx api" x="120" y="358" width="16" height="16" />
+                <text class="s" x="144" y="370">data — the app wrote it, and it undoes</text>
+                <rect class="bx pure" x="470" y="358" width="16" height="16" />
+                <text class="s" x="494" y="370">a rule — computed, never stored</text>
+                <rect class="bx dom" x="760" y="358" width="16" height="16" />
+                <text class="s" x="784" y="370">what the Gantt shows</text>
+              </svg>
+            </div>
+            <figcaption>
+              Diagram 2 — one ordered list, and the first yes wins. Every box in the middle column is
+              a function of the row. Nothing in it is stored, so no row can wear a variant its own data
+              does not earn.
+            </figcaption>
+          </figure>
+
+          <p>
+            <strong>Core's two variants are ordinary variants.</strong> They are registered last, and they
+            carry no privilege. <code>'parent'</code> and <code>'leaf'</code> are not reserved words,
+            because nothing can store a variant name in the first place. Delete the stored value and
+            the whole reservation goes with it.
+          </p>
+          <p>
+            <strong>A variant never decides what a row derives.</strong> Children do, and only children.
+            A parent that wears your <code>'milestone'</code> variant still rolls up like a parent. That
+            is ADR 0013, and this design does not spend it.
+          </p>
+          <p>
+            You have two honest ways to make a childless row paint as a summary. Register a variant that
+            paints that way — it changes the paint and claims nothing about the data. Or give the row
+            children with the hierarchy source in §6, in which case it really is a parent and it
+            rolls up like one.
+          </p>
+          <p>
+            Two variants can both answer yes. The first registered wins, and the library raises a
+            <code>'variant-claimed-twice'</code> report naming both plugins. Core does not pick a
+            winner on merit — it picks the one you installed first, and it tells you.
+          </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 5 -->
+        <section id="s5">
+          <h2><span class="num">5</span>Gantt seams</h2>
+          <p class="lede">
+            What the <code>view</code> half can fill. The variant is one row of this table now, not
+            four.
+          </p>
+          <p class="src"><b>derived from</b> ADR 0018, view/plugin-ports.ts, plans/02 §4.4</p>
+
+          <table>
+            <tr>
+              <th>seam</th>
+              <th>call</th>
+              <th>two registrations on the same key</th>
+            </tr>
+            <tr>
+              <td>variant</td>
+              <td class="mono">ctx.addVariant(variant)</td>
+              <td>
+                first rule to answer wins and the second is reported; a stored value beats every
+                rule
+              </td>
+            </tr>
+            <tr>
+              <td>decoration</td>
+              <td class="mono">ctx.view.registerDecoration(layer, provider)</td>
+              <td>additive — every provider paints, in registration order</td>
+            </tr>
+            <tr>
+              <td>grid column</td>
+              <td class="mono">ctx.view.registerGridColumn(column)</td>
+              <td>
+                additive; a duplicate <code>field</code> the consumer already named is dropped —
+                config beats a plugin
+              </td>
+            </tr>
+            <tr>
+              <td>command</td>
+              <td class="mono">ctx.commands.register(command)</td>
+              <td>newest wins on <code>command.id</code>; dispose restores the one before</td>
+            </tr>
+            <tr>
+              <td>keybinding</td>
+              <td class="mono">ctx.interaction.registerKeybinding(binding)</td>
+              <td>newest-first on <code>binding.chord</code>; falls back on dispose</td>
+            </tr>
+          </table>
+
+          <p>
+            <strong>Four calls retire.</strong> <code>registerLookClaim</code>,
+            <code>registerItemProducer</code>, <code>registerLookDefaults</code> and the
+            <code>barRenderer: RendererByLook</code> option are all keys on the one
+            <code>EntryVariant</code> object now. <code>KindDefaults</code> retires with them: it was
+            boolean-only because a registering plugin never saw an Entry, and §2 hands it one, so
+            <code>can</code> takes the same predicates <code>interactions</code> takes.
+          </p>
+          <p>
+            The <code>view</code> half declares no Field. It <em>shows</em> one with
+            <code>registerGridColumn</code>; the <code>data</code> half declares it. A consumer's own
+            <code>barRenderer</code> or <code>cellRenderer</code> always beats a plugin's paint: if
+            the page wants the plugin's, it omits its own.
+          </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 6 -->
+        <section id="s6">
+          <h2><span class="num">6</span>Dataset seams</h2>
+          <p class="lede">
+            What the <code>data</code> half can fill: Fields, a store, extra writes on an edit, and
+            the tree itself. It stays DOM-free.
+          </p>
+          <p class="src">
+            <b>derived from</b> ADR 0020, ADR 0011, ADR 0015, ADR 0016, api/dataset-plugin.ts
+          </p>
+
+          <h3>A Field the plugin owns</h3>
+          <p>
+            Plugin Field values share <code>props</code> with the consumer, so a plugin key should
+            name its plugin. Core does not enforce that — <code>ctx.fields.register</code> takes the
+            key you give it. The convention is a prefix, exported as a const, and the app names that
+            const.
+          </p>
+          <pre><code>export const DEMO_NOTE = 'demo:note';
+
+export const noteField = definePlugin({
+  id: 'demo.note',
+  data(ctx) {
+    ctx.fields.register({ key: DEMO_NOTE });
+  },
+});</code></pre>
+          <pre><code>const dataset = new Dataset({ entries, plugins: [noteField] });
+dataset.entries.update('t1', { [DEMO_NOTE]: 'cutover' });
+
+dataset.entries.get('t1')?.read(DEMO_NOTE);   // through the Entry
+gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
+          <p>
+            <strong>One question, one call site.</strong> A Field read is
+            <code>entry.read(key)</code>, and that is the same call an app author writes and a
+            plugin writes. <code>entries.fieldValue(id, key)</code> and
+            <code>ctx.read(entry, key)</code> both retire — they were the same question with two
+            doors. <code>entry.props.k</code> is storage, not a resolver: it misses a
+            <code>compute</code> Field and it does not know the Field's type. Duration is the
+            shipped <code>compute</code> Field, so <code>entry.read('duration')</code> is how you
+            get it.
+          </p>
+
+          <h3>A store that is not a Field</h3>
+          <p>
+            Dependencies, lock flags, baselines and caches are not per-Entry Fields. They live in a
+            <code>PluginStore</code> the plugin reserves. Another plugin may read that store, and may
+            not write it.
+          </p>
+          <pre><code>data(ctx) {
+  const store = ctx.store.reserve&lt;{ locked: true }&gt;();
+  store.set('t2', { locked: true });
+  const other = ctx.store.read&lt;{ locked: true }&gt;('demo.lockEntries');
+}</code></pre>
+          <p>
+            The consumer reads the same rows with
+            <code>dataset.pluginStore('demo.lockEntries')</code>. A plugin that owns data a consumer
+            must keep publishes its own reader. It does not get a hook into a library save format —
+            there is none.
+          </p>
+
+          <h3>Extra writes on an edit</h3>
+          <p>
+            The extender composes: you receive the current occupant and return the one that replaces
+            it. Call <code>next</code> when you want its writes, and skip it when you do not. The
+            runtime owns merging and branding. Non-overlapping keys on one Entry combine. The same
+            Field on the same Entry is a collision: neither value applies, and one warning names both
+            plugins and the Field. Do not throw. Do not call <code>mergeEntryEdits</code>.
+          </p>
+          <pre><code>data(ctx) {
+  // What else does this edit write?
+  ctx.edits.setExtender((next) =&gt; (request) =&gt; {
+    const moved = request.proposed.get('t1');
+    if (moved === undefined) return next(request);
+    return new Map([['t2', { start: moved.start }]]);
+  });
+}</code></pre>
+          <p>
+            Returned extras are the same object <code>entries.update()</code> takes — flat Field
+            keys, no <code>props:</code> wrapper. They are not a <code>ProposedEdit</code>. Spreading
+            <code>request.proposed</code> into a returned edit is a type error.
+          </p>
+          <p>
+            <code>request.entries</code> is the pre-transaction state and
+            <code>request.entryAfterEdits(id)</code> is the post-body state. They are deliberately
+            different answers, which is why both carry <code>StoredEntry</code> and not the live
+            Entry of §2.
+          </p>
+
+          <h3>The hierarchy — expert</h3>
+          <p>
+            An app can have a tree core cannot see: a WBS in another system, a parent named by a
+            <code>props</code> key, a level it wants skipped. A <code>data</code> half may say what
+            the parent of an Entry is. It composes the same way the extender does.
+          </p>
+          <pre><code>data(ctx) {
+  // Which Entry is the parent of this one?
+  ctx.setHierarchySource((next) =&gt; (entry) =&gt; entry.props.phaseId ?? next(entry));
+}</code></pre>
+          <p>
+            One Entry in, one parent id out. Core's own source is
+            <code>(entry) =&gt; entry.parentId</code>, with no special claim on the seam. An Entry a
+            source gives children to <em>is</em> a parent: it derives, it rolls up, and core's own
+            <code>parent</code> variant in §4 paints it as a summary.
+          </p>
+          <p>
+            <strong>You change the tree, and the Rollup follows.</strong> There is no second knob.
+            Which values a parent takes from its children is the Aggregator, and how one spreads back
+            down is the <code>FieldDistributor</code> — both already pluggable, both by registered
+            name. The only part with no seam was <em>which Entries roll into which</em>, and that is
+            the tree. One seam means the two can never disagree.
+          </p>
+          <p>
+            The source takes a <code>StoredEntry</code>, never the live Entry. The live one answers
+            <code>children()</code>, <code>parent()</code> and <code>depth</code> — every one of
+            those answers is built from this source, so a source that received one would ask the
+            question it exists to answer.
+          </p>
+          <p>
+            Core keeps four things. It inverts the answer, so nothing can produce two parents for one
+            Entry. It refuses a cycle with <code>ParentCycleError</code> and reads that Entry as a
+            root. It treats an unknown parent id as a root and reports it once per revision. And
+            <code>parentId</code> is still stored and <code>update()</code> still writes it — a
+            source that ignores the field is a plugin taking the tree over on purpose.
+          </p>
+          <p>
+            Grouping does not come here. <code>{ source: 'group', groupBy }</code> is a row source,
+            and it stays one: a group header holds no values and rolls nothing up. A hierarchy source
+            answers with an <code>EntryId</code>, so it can only ever name an Entry that exists. It
+            cannot invent a row.
+          </p>
+
+          <h3><code>requires</code></h3>
+          <p>
+            A plugin may name plugin ids that must install first. Order follows
+            <code>requires</code>, not array position. A missing id throws
+            <code>MissingPluginError</code>. A cycle throws
+            <code>PluginRequirementCycleError</code>. It now covers the whole plugin, both halves.
+          </p>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ 7 -->
+        <section id="s7">
+          <h2><span class="num">7</span>Gate, dispose, install</h2>
+          <p class="lede">
+            Every <code>register*</code> is legal only while that half is on the stack. After
+            <code>data(ctx)</code> or <code>view(ctx)</code> returns, the same call throws
+            <code>RegistrationClosedError</code>.
+          </p>
+          <p class="src">
+            <b>derived from</b> extensions/plugin-runtime.ts, view/plugin-ports.ts, plans/02 §4.4
+          </p>
+
+          <p>
+            <code>ctx.disposables</code> already retracts every gated registration. A plugin that
+            owns no timer, socket or outside subscription returns nothing. The milestone plugin in §4
+            is that case. A returned <code>Disposer</code> runs after the registrations have already
+            come off. The two halves dispose independently: unbinding one Gantt retracts that Gantt's
+            <code>view</code> registrations and leaves the <code>data</code> half running for every
+            other Gantt on that Dataset.
+          </p>
+          <p>
+            Two calls stay open after the gate closes, on purpose.
+            <code>ctx.interaction.registerKeyHandler</code> is how a popup binds Escape for as long
+            as it is open, not once at install. <code>ctx.view.onDomEvent</code> is the same
+            lifetime. Reads such as <code>ctx.interaction.canWrite</code> are not registrations and
+            stay available.
+          </p>
+          <p>
+            The install diff, the rollback on a throw, and the <code>requires</code> walk are on
+            <a href="./plugins.html">Plugin lifecycle</a>. This page stops at the call a plugin
+            author writes.
+          </p>
+
+          <h3>Errors an author will meet</h3>
+          <table>
+            <tr>
+              <th>error</th>
+              <th>when</th>
+            </tr>
+            <tr>
+              <td class="mono">DuplicatePluginIdError</td>
+              <td>two plugins in one install share an <code>id</code></td>
+            </tr>
+            <tr>
+              <td class="mono">MissingPluginError</td>
+              <td>a plugin <code>requires</code> an id that is not installed</td>
+            </tr>
+            <tr>
+              <td class="mono">PluginRequirementCycleError</td>
+              <td>plugins require each other in a cycle</td>
+            </tr>
+            <tr>
+              <td class="mono">RegistrationClosedError</td>
+              <td>a gated <code>register*</code> runs after its half returned</td>
+            </tr>
+            <tr>
+              <td class="mono">PluginSetupError</td>
+              <td>a half threw; the batch just added is unwound, the previous set stands</td>
+            </tr>
+            <tr>
+              <td class="mono">RendererAlreadyRegisteredError</td>
+              <td>two plugins claim the same exclusive renderer slot</td>
+            </tr>
+            <tr>
+              <td class="mono">DuplicateFieldKeyError</td>
+              <td>two plugins declare the same Field key, type name, or aggregator name</td>
+            </tr>
+            <tr>
+              <td class="mono">ParentCycleError</td>
+              <td>a hierarchy source answers with a cycle, or a <code>parentId</code> write makes one</td>
+            </tr>
+          </table>
+        </section>
+
+        <nav class="harness-docs-pager" aria-label="Other docs pages"></nav>
+      </main>
+    </div>
+
+    <footer class="wrap">
+      This page is a draft of ADRs 0017–0020 and none of them is accepted. A running variant plugin is
+      on <a href="../plugins.html">the Plugins harness page</a>, and it still uses the old four-seam
+      shape. Install internals are <a href="./plugins.html">Plugin lifecycle</a>. The typechecked
+      HEAD examples are in
+      <a href="../../docs/06-plugin-authoring.md"><code>docs/06-plugin-authoring.md</code></a>.
+      Decisions: ADR 0011, ADR 0013, ADR 0016, and the drafts 0017–0020.
+    </footer>
+  </body>
+</html>

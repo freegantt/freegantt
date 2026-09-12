@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
-import type { Entry, Instant, StoredEdit, StoredEdits } from '../model/index.js';
+import type { Entry, Instant, ProposedEdit, ProposedEdits } from '../model/index.js';
 import { entryId, itemId, segmentId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
@@ -16,18 +16,25 @@ function entry(id: string, start: string, end: string): Entry {
   const endInstant = instant(end);
   return {
     id: entryId(id),
-    kind: 'span',
     name: id,
     start: startInstant,
     end: endInstant,
     segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+    props: {},
   };
 }
 
 /** The edit a one-Segment entry produces: its lone Segment always moves or resizes with it, so the
  *  edit always carries a `segments` array of one alongside `start`/`end` (#212). */
-function singleSegmentEdit(id: string, start: Instant, end: Instant): StoredEdit {
-  return { segments: [{ id: segmentId(`${id}-1`), start, end }], start, end };
+function singleSegmentEdit(id: string, start: Instant, end: Instant): ProposedEdit {
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments: [{ id: segmentId(`${id}-1`), start, end }],
+    start,
+    end,
+  };
 }
 
 describe('draftForMove', () => {
@@ -84,7 +91,7 @@ describe('draftForMove', () => {
     // 24 — so the wall-clock hour survives the transition instead of drifting with it.
     const a = entry('a', '2026-03-07T17:00:00Z', '2026-03-07T19:00:00Z'); // 12:00-14:00 EST
     const target = instant('2026-03-08T16:00:00Z'); // 12:00 EDT
-    const dxPx = scale.xForInstant(target) - scale.xForInstant(a.start);
+    const dxPx = scale.xForInstant(target) - scale.xForInstant(a.start!);
     const draft = draftForMove({
       zone: ZONE,
       scale,
@@ -191,6 +198,9 @@ describe('draftForResize', () => {
       edge: 'end',
     });
     expect(grown.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [{ ...segmented.segments[0], end: instant('2026-06-17T00:30:00Z') }, segmented.segments[1]],
       start: instant('2026-06-15T14:00:00Z'),
       end: instant('2026-06-17T00:30:00Z'),
@@ -205,6 +215,9 @@ describe('draftForResize', () => {
       edge: 'start',
     });
     expect(pulled.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [segmented.segments[0], { ...segmented.segments[1], start: instant('2026-06-15T13:30:00Z') }],
       start: instant('2026-06-15T13:30:00Z'),
       end: instant('2026-06-17T00:00:00Z'),
@@ -236,6 +249,9 @@ describe('draftForResize', () => {
       edge: 'end',
     });
     expect(draft.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [segmented.segments[0], { ...segmented.segments[1], end: instant('2026-06-16T09:00:00Z') }],
       start: instant('2026-06-15T14:00:00Z'),
       end: instant('2026-06-16T09:00:00Z'),
@@ -270,34 +286,44 @@ describe('draftForResize', () => {
   });
 });
 
+function envelopeEdit(start: Instant | undefined, end: Instant | undefined): ProposedEdit {
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['start', 'end']),
+    start,
+    end,
+  };
+}
+
 describe('previewOffsets', () => {
   const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
   const b = entry('b', '2026-06-16T09:00:00Z', '2026-06-16T12:00:00Z');
 
   it('reports dx/dWidth for a proposed edit, diffed against the committed entry', () => {
     const proposed = new Map([
-      [a.id, { start: instant('2026-06-15T15:00:00Z'), end: instant('2026-06-15T17:00:00Z') }],
+      [a.id, envelopeEdit(instant('2026-06-15T15:00:00Z'), instant('2026-06-15T17:00:00Z'))],
     ]);
     const [preview] = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(preview).toEqual({ itemId: itemId(a.id), dx: 60, dWidth: 0, extra: false });
   });
 
   it('reports a width delta when the edit changes duration', () => {
-    const proposed = new Map([[a.id, { start: a.start, end: instant('2026-06-15T18:00:00Z') }]]);
+    const proposed = new Map([[a.id, envelopeEdit(a.start, instant('2026-06-15T18:00:00Z'))]]);
     const [preview] = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(preview).toEqual({ itemId: itemId(a.id), dx: 0, dWidth: 120, extra: false });
   });
 
   it('marks entries from the extra map as extra: true', () => {
     const extra = new Map([
-      [b.id, { start: instant('2026-06-16T10:00:00Z'), end: instant('2026-06-16T13:00:00Z') }],
+      [b.id, envelopeEdit(instant('2026-06-16T10:00:00Z'), instant('2026-06-16T13:00:00Z'))],
     ]);
     const [preview] = previewOffsets({ proposed: new Map(), extra, entries: [b], scale });
     expect(preview).toEqual({ itemId: itemId(b.id), dx: 60, dWidth: 0, extra: true });
   });
 
   it('skips an id with no matching original entry', () => {
-    const proposed = new Map([[entryId('missing'), { start: a.start, end: a.end }]]);
+    const proposed = new Map([[entryId('missing'), envelopeEdit(a.start, a.end)]]);
     const previews = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(previews).toEqual([]);
   });
@@ -561,6 +587,9 @@ describe('draftForMove/draftForResize — the Selection picks the Segments (#211
       selectedSegmentIds: new Set([segmentId('seg-0')]),
     });
     expect(draft.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [
         { ...segmented.segments[0], end: instant('2026-06-16T00:30:00Z') },
         segmented.segments[1],
@@ -711,10 +740,13 @@ describe('previewOffsets — segments (S4.10)', () => {
         },
       ],
     };
-    const proposed: StoredEdits = new Map([
+    const proposed: ProposedEdits = new Map([
       [
         segmented.id,
         {
+          __brand: 'ProposedEdit',
+          props: {},
+          proposedKeys: new Set(['segments', 'start', 'end']),
           segments: [
             segmented.segments[0]!,
             {

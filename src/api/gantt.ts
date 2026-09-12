@@ -26,19 +26,21 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByKind,
+  RendererByLook,
 } from '../layout/index.js';
 import type {
   Entry,
+  EntryEdit,
   EntryId,
   FieldKey,
   GridColumnInput,
   Instant,
   InstantInput,
   PluginId,
+  ProposedEdit,
   RowId,
   SegmentId,
-  StoredEdits,
+  ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
@@ -65,17 +67,26 @@ export interface DateLineInput {
   className?: string;
 }
 
-export interface GanttOptionsBase<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> {
+/** Unwraps a storage-shaped `ProposedEdit` (a resolved gesture draft) back into the flat `EntryEdit`
+ *  shape `entries.update()` takes — the one legal way to feed an already-resolved edit through the
+ *  public write door now that `ProposedEdit` is branded and no longer assignable to `EntryEdit` (ADR
+ *  0011, decision 22). Every declared `props` key flattens back onto the top level, the same shape a
+ *  caller would have authored by hand; `__brand`/`proposedKeys` drop, and `entries.update()` derives
+ *  its own `proposedKeys` fresh from the keys this produces — an `Instant` is a valid `InstantInput`
+ *  and a `Segment` a valid `SegmentInput`, so re-normalizing an already-resolved edit is a no-op. */
+function entryEditFromProposedEdit<TProps>(edit: ProposedEdit<TProps>): EntryEdit<TProps> {
+  const { __brand: _brand, props, proposedKeys: _proposedKeys, ...envelope } = edit;
+  return { ...envelope, ...props };
+}
+
+export interface GanttOptionsBase<TProps = unknown> {
   /** Element or CSS selector (plans/02 §2) — resolved by GanttShell; a selector matching nothing
    * throws (#38). */
   container: HTMLElement | string;
-  /** The Dataset this Gantt reads and writes, for its whole life. It binds `TMeta`/`TFields`:
+  /** The Dataset this Gantt reads and writes, for its whole life. It binds `TProps`:
    *  a Gantt built on a `Dataset<{ team: string }, { cost: number }>` hands that same typed
    *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
-  dataset: Dataset<TMeta, TFields>;
+  dataset: Dataset<TProps>;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
    * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
    * both, or neither. */
@@ -140,7 +151,7 @@ export interface GanttOptionsBase<
   /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
    *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
    *  branching. `undefined` returned from either form keeps the library's own bar output. */
-  barRenderer?: BarRenderer | RendererByKind;
+  barRenderer?: BarRenderer | RendererByLook;
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
   cellRenderer?: CellRenderer;
@@ -154,7 +165,7 @@ export interface GanttOptionsBase<
    *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
    *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
    *  add or drop one plugin without restating the set (D-S5-36). */
-  plugins?: readonly GanttPlugin<TMeta, TFields>[];
+  plugins?: readonly GanttPlugin<TProps>[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -179,58 +190,37 @@ export type GanttScaleOptions =
       fit?: TimeScaleFit;
     };
 
-export type GanttOptions<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = GanttOptionsBase<TMeta, TFields> & GanttScaleOptions;
+export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
 /** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
  *  header for why the generic form lives there and the binding happens here. This is the type a
  *  plugin author actually sees: `api/index.ts` re-exports these bound names alongside the generic
  *  `GanttPluginOf`/`PluginContextOf` shapes. */
-export type GanttPlugin<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = GanttPluginOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
-export type PluginContext<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = PluginContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type GanttPlugin<TProps = unknown> = GanttPluginOf<Gantt<TProps>, Dataset<TProps>>;
+export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
  *  This is the shape a plugin author, or a `gantt.commands`/`gantt.commands.run(id)` caller, actually
  *  sees; `api/index.ts` re-exports these bound names alongside the generic `*Of` shapes. */
-export type Command<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = CommandOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
-export type CommandContext<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = CommandContextOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
-export type CommandRegistry<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = CommandRegistryOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
-export type KeyBinding<
-  TMeta = unknown,
-  TFields extends Record<string, unknown> = Record<string, unknown>,
-> = KeyBindingOf<Gantt<TMeta, TFields>, Dataset<TMeta, TFields>>;
+export type Command<TProps = unknown> = CommandOf<Gantt<TProps>, Dataset<TProps>>;
+export type CommandContext<TProps = unknown> = CommandContextOf<Gantt<TProps>, Dataset<TProps>>;
+export type CommandRegistry<TProps = unknown> = CommandRegistryOf<Gantt<TProps>, Dataset<TProps>>;
+export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;
 export type { ActedOn, CommandTarget };
 // `dateLines`'s resolved read type (S4-1) — passed through so a caller who names `DateLine`
 // explicitly imports it beside `DateLineInput`, its loose counterpart above.
 export type { DateLine };
 
-export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Record<string, unknown>> {
+export class Gantt<TProps = unknown> {
   #shell: GanttShell;
-  #dataset: Dataset<TMeta, TFields>;
+  #dataset: Dataset<TProps>;
   #destroyed = false;
   /** `rowSource`'s resolve cache (#248 S4-2), keyed on the authored object the setter last stored —
    *  not on the resolved value, which is rebuilt fresh and would never compare `===` to itself. */
   #rowSourceCache?: { authored: RowSource; resolved: ResolvedRowSource };
 
-  constructor(options: GanttOptions<TMeta, TFields>) {
+  constructor(options: GanttOptions<TProps>) {
     this.#dataset = options.dataset;
     // The same Dataset, read at the erased width `view/` and `interaction/` work in — see
     // `commitEntryEdits` below, its one reader.
@@ -259,11 +249,19 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         'cellRenderer',
         'headerRenderer',
         'tooltipRenderer',
+        'zoomPresets',
       ]),
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
+      // N7: a constructor-supplied plugin/selection reaches frame 1 only if `GanttShell` installs
+      // it before its own first paint — see that constructor's own comment just ahead of
+      // `#frames.flush()`. `this` is captured, not read, so `ctx.gantt` is real by the time any
+      // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
+      // `buildPluginContext` already carries).
+      ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
+      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
@@ -283,28 +281,30 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.
         // `store`, not `options.dataset`: a gesture draft is built in `view/`, which is permanently
-        // monomorphic and carries `meta: unknown` (`api/dataset.ts`'s class note). So this write is
+        // monomorphic and carries `props: unknown` (`api/dataset.ts`'s class note). So this write is
         // core writing back its own erased shape, and it says so by widening the Dataset once rather
-        // than casting every edit into the caller's declared `TMeta`/`TFields`.
-        commitEntryEdits: (edits: StoredEdits) =>
+        // than casting every edit into the caller's declared `TProps`.
+        commitEntryEdits: (edits: ProposedEdits) =>
           attemptMutation(() => {
             store.transaction(() => {
-              for (const [id, edit] of edits) store.entries.update(id, edit);
+              for (const [id, edit] of edits) store.entries.update(id, entryEditFromProposedEdit(edit));
             });
           }),
         // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
         // `api/Dataset` and `gantt` is `this`. See `api/plugin.ts`'s file header for why `view/` may
-        // name neither. `this` is captured, not read: by the time a plugin's `setup()` runs, `#shell`
-        // below is assigned — the `plugins` assignment after this call. `zoomPresets`/`selection`
-        // already rely on that same ordering. Every other member arrives already grouped from
+        // name neither. `this` is captured, not read (N7): a plugin's `setup()` runs *inside* the
+        // `new GanttShell(...)` call above, before this constructor reaches its own closing brace,
+        // so `#shell` is not yet assigned — but `ctx.gantt` only needs `this` to exist, not `#shell`
+        // to be set, and nothing a plugin's `setup()` runs synchronously reads `#shell` (only
+        // event handlers registered for later do). Every other member arrives already grouped from
         // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
         // edit there, and a member in the wrong group no longer compiles.
-        buildPluginContext: (parts): PluginContext<TMeta, TFields> => ({
+        buildPluginContext: (parts): PluginContext<TProps> => ({
           dataset: options.dataset,
           gantt: this,
           ...parts,
         }),
-        buildCommandContext: (parts): CommandContext<TMeta, TFields> => ({
+        buildCommandContext: (parts): CommandContext<TProps> => ({
           dataset: options.dataset,
           gantt: this,
           ...parts,
@@ -312,9 +312,6 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
         now,
       },
     });
-    if (options.zoomPresets !== undefined) this.#shell.zoomPresets = options.zoomPresets;
-    if (options.selectedSegmentIds !== undefined) this.#shell.selection = options.selectedSegmentIds;
-    if (options.plugins !== undefined) this.#shell.plugins = options.plugins;
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
@@ -345,7 +342,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** The Dataset this Gantt was built on (#226). Call: `gantt.dataset.canUndo`, or
-   *  `gantt.dataset.on('change', …)`. It carries the consumer's own `TMeta`/`TFields`, so a helper
+   *  `gantt.dataset.on('change', …)`. It carries the consumer's own `TProps`, so a helper
    *  that needs both objects takes the Gantt alone — `mountGanttToolbar({ gantt, container })` —
    *  instead of taking the pair and trusting the caller to keep it matched.
    *
@@ -354,7 +351,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  plugin and command context. Swapping it is a new capability — teardown and rebind of all of
    *  that — not a getter's mirror, so it stays out until something asks for it. Build a second
    *  Gantt instead. */
-  get dataset(): Dataset<TMeta, TFields> {
+  get dataset(): Dataset<TProps> {
     return this.#dataset;
   }
 
@@ -432,14 +429,14 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
     this.#shell.barLabels = value;
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByKind`
+  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByLook`
    *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
    *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
-  get barRenderer(): BarRenderer | RendererByKind | undefined {
+  get barRenderer(): BarRenderer | RendererByLook | undefined {
     return this.#shell.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
     this.#shell.barRenderer = renderer;
   }
 
@@ -748,11 +745,11 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
   }
 
   /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */
-  get plugins(): readonly GanttPlugin<TMeta, TFields>[] {
+  get plugins(): readonly GanttPlugin<TProps>[] {
     return this.#shell.plugins;
   }
 
-  set plugins(next: readonly GanttPlugin<TMeta, TFields>[]) {
+  set plugins(next: readonly GanttPlugin<TProps>[]) {
     this.#shell.plugins = next;
   }
 
@@ -760,14 +757,14 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
    *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
-  installPlugin(plugin: GanttPlugin<TMeta, TFields>): void {
+  installPlugin(plugin: GanttPlugin<TProps>): void {
     this.#shell.installPlugin(plugin);
   }
 
   /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
-  hasPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): boolean {
+  hasPlugin(plugin: GanttPlugin<TProps> | PluginId): boolean {
     const id = typeof plugin === 'string' ? plugin : plugin.id;
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
@@ -776,7 +773,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
    *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
-  uninstallPlugin(plugin: GanttPlugin<TMeta, TFields> | PluginId): void {
+  uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 
@@ -785,7 +782,7 @@ export class Gantt<TMeta = unknown, TFields extends Record<string, unknown> = Re
    *  before any plugin, so a plugin's own registration always wins for a shared id (D-S5-7).
    *  `run(id)` silently no-ops when the command's `when` declines, the same posture as a disabled
    *  menu item. Read-only — `register` lives on the registry itself. */
-  get commands(): CommandRegistry<TMeta, TFields> {
+  get commands(): CommandRegistry<TProps> {
     return this.#shell.commands;
   }
 
