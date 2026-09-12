@@ -41,20 +41,6 @@ if [[ -z "$file_path" ]]; then
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# TEMPORARY — RELAXED FOR THE FIELD REDESIGN BUILD-OUT. Authorized by the
-# author on 2026-09-10. Every one of the six builds (ADRs 0016, 0012, 0011,
-# 0013, 0014, 0015) retires spec text as it lands, so the checkpoint question
-# fires on work the author has already approved.
-#
-# REMOVE THIS BLOCK WHEN THE REDESIGN MERGES. Tracked as an owed item in
-# plans/field-redesign/CLOSE-OUT.md. The package.json and guard-loosening
-# gates below are untouched and still exit 2.
-# ---------------------------------------------------------------------------
-case "$file_path" in
-  plans/* | */plans/*) exit 0 ;;
-esac
-
 case "$file_path" in
   plans/* | */plans/*)
     # Narrow exception: an edit that only flips markdown checkbox state

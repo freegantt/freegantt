@@ -37,8 +37,10 @@ The order is fixed. Build 0016 lands first because it makes the five after it sm
 | 1 | 0012 | Dates are optional | [`build-1-0012-optional-dates.md`](build-1-0012-optional-dates.md) |
 | 2 | 0011 | `meta` becomes `props` | [`build-2-0011-props.md`](build-2-0011-props.md) |
 | 3 | 0013 | Children decide derivation | [`build-3-0013-derivation.md`](build-3-0013-derivation.md) |
-| 4 | 0014 | The plugin-author surface | [`build-4-0014-plugin-surface.md`](build-4-0014-plugin-surface.md) |
+| ~~4~~ | 0014 | ~~The plugin-author surface~~ — **withdrawn 2026-09-11, never built** | [`build-4-0014-plugin-surface.md`](build-4-0014-plugin-surface.md) |
 | 5 | 0015 | What the write door refuses | [`build-5-0015-write-door.md`](build-5-0015-write-door.md) |
+
+**Five builds ran, and all five are closed.** Build 4 was withdrawn before it started, so `entries.fieldValue` stays and no plugin key prefix is enforced.
 
 ---
 
@@ -90,13 +92,13 @@ The two `plans/02` rows for Build 5 landed on 2026-09-11 and are struck through 
 
 | What is owed | Build |
 |---|---|
-| `plans/s2-data-core/s2.6-serialization.md` marked retired | 0 |
-| `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — D-S5-24 and D-S5-30 marked retired | 0 |
-| `.dependency-cruiser.cjs` — delete `serialization-is-removable` (`:159-162`) and its red test (`scripts/guard-red-test.mjs:80-82`). **Authorized 2026-09-10.** The hook exits 2 on this file, so it cannot land early. Land it with the folder | 0 |
+| ~~`plans/s2-data-core/s2.6-serialization.md` marked retired~~ **DONE** — the banner is at `:3` | 0 |
+| ~~`plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — D-S5-24 and D-S5-30 marked retired~~ **DONE** — banners at `:40` and `:83`. `:76` also lost its last `toJSON` sentence on 2026-09-11 | 0 |
+| ~~`.dependency-cruiser.cjs` — delete `serialization-is-removable` and its red test~~ **DONE.** Neither `.dependency-cruiser.cjs` nor `scripts/guard-red-test.mjs` still names the rule | 0 |
 | ~~`plans/02` — add `dataset.setFieldEditable` to the §2 verb list, beside `hideGridColumn`~~ **DONE 2026-09-11** | 5 |
 | ~~`plans/02` — it still calls the `fields` lock a hole~~ **DONE 2026-09-11.** The hole is now scoped to adding or removing a Field **key**; locking a declared column is solved by `setFieldEditable` | 5 |
-| `plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands. If the build cannot honour the new wording, the wording is wrong, not the build | 5 |
-| ~~The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9`~~ **DONE 2026-09-11.** They named five built ADRs as `proposed`, so a reader got a false answer. `plans/01`'s banner is deleted. The other two now name ADR 0014's `entries.read` alone, and drop when Build 4 merges. ADR 0005's banner is **blocked** — an accepted ADR is superseded, never edited | last |
+| ~~`plans/01` I14 (`:917`) and `plans/02` §4.2 — reread both when 0015 lands~~ **DONE 2026-09-11.** I14 was rewritten to restore the universal quantifier, and it names both thresholds | 5 |
+| ~~The ahead-of-`src/` banners in `plans/01:5`, `plans/02:7` and `plans/03:9`~~ **DONE 2026-09-11.** They named five built ADRs as `proposed`, so a reader got a false answer. `plans/01:5` and `plans/02:7` are now deleted outright, because ADR 0014 is `not planned` and `entries.fieldValue` is the permanent door. `plans/03:9` keeps a banner with a different job — the S0–S6 records below it are history and still use retired words. ADR 0005's banner now reads as a plain supersession | last |
 
 ---
 
