@@ -91,7 +91,7 @@ Two survive, and neither mentions serialization:
 
 - **No ADR spends a schema number.** [`shared/rulings.md`](../../plans/field-redesign/shared/rulings.md) §3 — the counter, the release gate, and the one-reader ruling of 2026-09-10 — dissolves entirely. So does its restart-at-1 rule.
 - **[ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) keeps half its head decision.** *"Nothing but the Rollup writes a rolling-up parent's cell"* stands, and it is the half that carries the weight. *"A derived value never reaches the Document"* has no Document to reach. `reportCorrectedRollUps` deletes outright, with no ordering to respect between 0011 and 0013.
-- **[ADR 0014](0014-the-plugin-author-surface.md)'s prefix keeps its reason and loses its price.** Plugin keys stay prefixed, because two writers still share one bag at runtime. *"The price of deciding late"* — a Document rewrite at schema 8 — is now no price at all.
+- **[ADR 0014](README.md#the-gap-at-0014)'s prefix keeps its reason and loses its price.** Plugin keys stay prefixed, because two writers still share one bag at runtime. *"The price of deciding late"* — a Document rewrite at schema 8 — is now no price at all.
 - **[ADR 0015](0015-what-the-write-door-refuses.md) stops serializing `editable`.** Decision 19's *"the lock serializes as `never`"* has nowhere to serialize to. The lock itself stands.
 - **[ADR 0012](0012-dates-are-optional-on-every-kind.md) is untouched** except that it stops writing schema 5.
 
@@ -134,5 +134,5 @@ View state — column widths, collapsed rows, scroll position — is not a Docum
 
 | Issue | What changes |
 |---|---|
-| [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) | Its hazard is a `fromJSON` hazard — a plugin registering over values whose writer nobody recorded. **The `fromJSON` half closes.** The live-install half stays, and [ADR 0014](0014-the-plugin-author-surface.md) still owns it |
+| [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) | Its hazard is a `fromJSON` hazard — a plugin registering over values whose writer nobody recorded. **The `fromJSON` half closes.** The live-install half stays, and [ADR 0019](0019-one-plugin-one-install-site.md) owns it since 2026-09-11 |
 | [#212](https://github.com/Pawel-IT/FreeGantt/issues/212) | Schema 4 exists to carry Segment ids. The store keeps them; nothing writes them out |

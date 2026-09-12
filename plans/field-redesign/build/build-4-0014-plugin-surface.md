@@ -8,7 +8,7 @@
 
 **The one question it would have answered.** Where do a plugin's values live, and what are the read doors called?
 
-**Read first.** [`docs/adr/0014`](../../../docs/adr/0014-the-plugin-author-surface.md), whose status line carries the withdrawal.
+**Read first.** the withdrawal note in [`docs/adr/README.md`](../../../docs/adr/README.md#the-gap-at-0014). The ADR file was deleted on 2026-09-11.
 
 ---
 
