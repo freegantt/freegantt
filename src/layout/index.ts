@@ -22,6 +22,7 @@ export type {
   FieldMatch,
   ReportDoubleClaim,
   ReportUnknownFieldMatch,
+  ResolvedVariant,
   UnknownFieldMatch,
   VariantClaimant,
   VariantPredicate,

@@ -23,6 +23,7 @@ import type {
   ViewportHandle,
   ViewPreset,
   EntryVariant,
+  ResolvedVariant,
   VariantClaimant,
   VariantRegistry,
   ReportDoubleClaim,
@@ -1147,13 +1148,16 @@ export class GanttShell {
     this.#frames.request();
   }
 
-  /** The variant this Gantt resolved for one row (ADR 0018). A command context names it, so a
-   *  command's `when` reads `({ variant }) => variant === MY_VARIANT` instead of holding a list of the
-   *  ids its own plugin owns. `interaction/` and `render/` read the same answer.
+  /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3). One door answers
+   *  `items`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
+   *  `plans/row-redesign/BUILD-LOG.md`). `render/` and `interaction/` read the same answer.
+   *  `CommandContext.variant` and the two callers that want the name alone read `.name`.
    *
-   *  A variant is per Gantt, so a row cannot answer this itself (I2, ADR 0017). */
-  variantOf(entry: Entry): string {
-    return this.#registrations.variants.resolveFor(entry).name;
+   *  Not `entry.variant`. An Entry belongs to a Dataset. A variant resolves per Gantt. I2 lets two
+   *  Gantts on one Dataset paint the same row differently. `entry.variant` would have to pick one
+   *  answer, and would be wrong on the other Gantt (ADR 0017 is about the row, not this door). */
+  variantFor(entry: Entry): ResolvedVariant {
+    return this.#registrations.variants.resolveFor(entry);
   }
 
   /** Drops whatever the consumer's list held before, then adds the new one. Registration order
@@ -1323,7 +1327,7 @@ export class GanttShell {
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
-      ...(entry !== undefined ? { entry, variant: this.variantOf(entry) } : {}),
+      ...(entry !== undefined ? { entry, variant: this.variantFor(entry).name } : {}),
       ...(target !== undefined ? { target } : {}),
     }) as CommandContext<unknown>;
   }
@@ -1508,7 +1512,7 @@ export class GanttShell {
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
       canWrite: (entry, field) => this.#capabilities.canWrite(entry, field),
-      variantOf: (entry) => this.variantOf(entry),
+      variantFor: (entry) => this.variantFor(entry),
       proposeEntryEdit: (payload) => this.#events.emit('beforeEntryEdit', payload),
       announceEntryEdit: (payload) => {
         this.#events.emit('entryEdit', payload);

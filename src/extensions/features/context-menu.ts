@@ -129,7 +129,7 @@ export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
-          ...(entry !== undefined ? { entry, variant: ctx.view.variantOf(entry) } : {}),
+          ...(entry !== undefined ? { entry, variant: ctx.view.variantFor(entry).name } : {}),
           ...(target !== undefined ? { target: commandTargetOf(target, actedOn) } : {}),
         };
         const available = ctx.commands.available(commandCtx);

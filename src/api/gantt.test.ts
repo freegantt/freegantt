@@ -2207,6 +2207,52 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
+  describe('gantt.variantFor(entry) (ADR 0022 §3, Q4)', () => {
+    function pointDataset(): Dataset {
+      const zero = instant(Date.UTC(2026, 0, 1));
+      return new Dataset({
+        timeZone: 'UTC',
+        entries: [{ id: 'm', name: 'M', start: zero, end: zero }],
+      });
+    }
+
+    it('answers the whole variant, not a name a caller looks up again', () => {
+      const container = document.createElement('div');
+      const dataset = pointDataset();
+      const gantt = new Gantt({ container, dataset, variants: [diamond()] });
+      const entry = dataset.entries.get('m')!;
+
+      const variant = gantt.variantFor(entry);
+
+      expect(variant.name).toBe('diamond');
+      expect(variant.items).toEqual(expect.any(Function));
+
+      gantt.destroy();
+    });
+
+    it('is per Gantt, not per Entry: two Gantts on one Dataset, with different variants, answer differently for one row (I2)', () => {
+      const dataset = pointDataset();
+      const entry = dataset.entries.get('m')!;
+
+      const ganttA = new Gantt({
+        container: document.createElement('div'),
+        dataset,
+        variants: [diamond()],
+      });
+      const ganttB = new Gantt({
+        container: document.createElement('div'),
+        dataset,
+        variants: [{ name: 'checkpoint', when: (candidate) => candidate.id === entry.id }],
+      });
+
+      expect(ganttA.variantFor(entry).name).toBe('diamond');
+      expect(ganttB.variantFor(entry).name).toBe('checkpoint');
+
+      ganttA.destroy();
+      ganttB.destroy();
+    });
+  });
+
   describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
     function pointDataset(): Dataset {
       return new Dataset({

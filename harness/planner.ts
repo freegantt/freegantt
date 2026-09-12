@@ -7,6 +7,7 @@ import {
   inlineEditing,
   formatDate,
   formatEndInclusive,
+  diamond,
 } from 'freegantt';
 import type {
   BarRendererContext,
@@ -183,34 +184,14 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   return description;
 }
 
-/** A checkpoint (DESIGN-FACTS §2.5): a diamond glyph, filled when the checkpoint is done and hollow —
- *  the pane's background behind a 1.5px stroke — while it is not. Which one is a fact about this
- *  page's data, so the page answers it. ADR 0013 retired core's diamond, so this page owns the shape
- *  too: `.demo-checkpoint` in `planner.html` draws it, and this renderer names the fill and the
- *  stroke. The label rides in the row ink beside it, not in the fill's own ink: there is no fill to
- *  read a label against. */
-function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescription | undefined {
-  const done = progressOf(entry.id) === 100;
-  const description: ElementDescription = {
-    class: { 'demo-checkpoint': true },
-    style: done
-      ? { '--fg-bar-fill': 'var(--fg-row-label-color)' }
-      : {
-          '--fg-bar-fill': 'var(--fg-pane-bg)',
-          '--demo-checkpoint-stroke': '1.5px solid var(--fg-row-label-color)',
-        },
-  };
-  if (label !== undefined) description.children = [barLabel(label, 'demo-checkpoint-label')];
-  return description;
-}
-
-// ADR 0018: one variant, one rule. A checkpoint states its own rule against the Field the fixture
-// writes. Nothing here stores a variant, and nothing keeps a list of the rows it owns.
+// ADR 0022: a checkpoint is a zero-duration row, and `diamond()` is core's own shipped glyph for
+// one — this page states only which rows wear it. Its box holds its own size at every zoom, and its
+// own `css` cancels `.fg-bar`'s background and state ring, so this page owns no glyph shape.
 //
-// A phase needs no entry at all. Core's own `parent` variant already claims a row with children and
+// A phase needs no entry at all. Core's own `summary` variant already claims a row with children and
 // paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
 const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
-  { name: 'checkpoint', when: { checkpoint: true }, paint: checkpointDiamond },
+  diamond({ when: { checkpoint: true } }),
 ];
 
 const gantt = new Gantt({

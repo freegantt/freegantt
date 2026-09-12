@@ -1,5 +1,5 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, contextMenu } from 'freegantt';
+import { Gantt, Dataset, contextMenu, diamond } from 'freegantt';
 import type { CellRenderer, ChromePlugin, EntryVariant } from 'freegantt';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
@@ -107,18 +107,18 @@ popupBtn.addEventListener('click', () => {
 // `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
 // the whole point of a declared Field is that a consumer reads it by name, not by storage key.
 
-// ADR 0018: core ships no diamond and no `'milestone'` variant, so this page states one itself —
-// four lines of config and no plugin at all. `demo-milestone`'s own class draws the diamond shape
-// (`harness-chrome.css`), and the `--fg-bar-fill` custom property it reads recolors it.
-// `buffer` and `risk` are named here too, because a consumer's own variant wins over a plugin's of
-// the same name whatever order the plugins installed in (D-S5-11). Uncheck this toggle to see both
-// plugin variants take over instead — same pixels, two different sources, and neither plugin
-// refuses the other (review P2).
+// ADR 0022: `diamond()` is core's own shipped glyph, so this page states only which rows wear one.
+// The recolour is an override on the factory: it reads the diamond's own paint and adds one token,
+// rather than this page re-deriving the glyph's class (J8). `buffer` and `risk` stay hand-written:
+// core ships neither look, and naming them here too demonstrates that a consumer's own variant wins
+// over a plugin's of the same name whatever order the plugins installed in (D-S5-11). Uncheck this
+// toggle to see both plugin variants take over instead — same pixels, two different sources, and
+// neither plugin refuses the other (review P2).
+const milestoneDiamond = diamond({ when: { milestone: true } });
 const demoVariants: readonly EntryVariant[] = [
   {
-    name: 'milestone',
-    when: { milestone: true },
-    paint: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+    ...milestoneDiamond,
+    paint: (ctx) => ({ ...milestoneDiamond.paint?.(ctx), style: { '--fg-bar-fill': '#7b2cbf' } }),
   },
   { name: 'buffer', when: { buffer: true }, paint: () => ({ class: { 'demo-buffer-bar': true } }) },
   { name: 'risk', when: { risk: true }, paint: () => ({ class: { 'demo-risk-bar': true } }) },

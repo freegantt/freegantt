@@ -1128,6 +1128,7 @@ export class Gantt<TProps = unknown> {
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
     uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void;
+    variantFor(entry: Entry<TProps>): ResolvedVariant;
     get variants(): readonly EntryVariant<TProps>[];
     set variants(next: readonly EntryVariant<TProps>[]);
     get viewportGestures(): ViewportGestures;
@@ -1637,7 +1638,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
-        variantOf(entry: Entry): string;
+        variantFor(entry: Entry): ResolvedVariant;
         resolvedColumns(): readonly GridColumn[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
@@ -1885,6 +1886,14 @@ export interface ResolvedGroupRowSource extends GroupRowSource {
 
 // @public
 export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
+
+// Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported by the entry point index.d.ts
+//
+// @public
+export interface ResolvedVariant extends DrawnVariant {
+    readonly can: Interactions | undefined;
+    readonly paint: BarRenderer | undefined;
+}
 
 // @public
 export class RevealTargetNotFoundError extends FreeGanttError {

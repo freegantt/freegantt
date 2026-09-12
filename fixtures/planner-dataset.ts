@@ -139,9 +139,9 @@ function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerEntryProp
     name,
     parentId: phase.id,
     start: dayOffset(startDay),
-    // A checkpoint is one instant. Core stores a half-open span, so its end is the next day and the
-    // milestone renderer floors the painted width around the instant itself.
-    end: dayOffset(startDay + (isCheckpoint ? 1 : durationDays)),
+    // A checkpoint is one instant: `end === start`, zero duration (ADR 0022). `diamond()`'s box
+    // holds its own size, so the true zero-width span is honest data, not a rendering problem.
+    end: dayOffset(startDay + (isCheckpoint ? 0 : durationDays)),
     props: meta,
   };
 }
