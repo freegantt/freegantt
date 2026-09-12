@@ -3,17 +3,18 @@
 // `bufferKind()`'s peer. Two plugins each define their own variant, and both install: two rules that
 // claim different rows are neighbours rather than rivals.
 
-import type { EntryEdit, GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
+import type { EntryEdit } from 'freegantt';
 
 const RISK_VARIANT = 'risk';
 
 /** A consumer-defined `'risk'` variant, over the same two doors — and the proof that a second
  *  variant-defining plugin is an ordinary install, not a collision. Like `bufferKind()`, its rule
  *  reads the row, so it keeps no list of the ids it owns. */
-export function riskKind(): GanttPlugin {
-  return {
+export function riskKind() {
+  return definePlugin({
     id: 'demo.riskKind',
-    setup(ctx) {
+    view(ctx) {
       ctx.variants.add({
         // Which rows are mine? The ones the page marked as risk.
         name: RISK_VARIANT,
@@ -39,5 +40,5 @@ export function riskKind(): GanttPlugin {
 
       // No disposer: `ctx.disposables` already retracts both registrations (review P4).
     },
-  };
+  });
 }

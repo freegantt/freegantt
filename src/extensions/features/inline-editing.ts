@@ -1,4 +1,4 @@
-// extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `GanttPlugin`,
+// extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `ChromePlugin`,
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports, same as
 // `tooltips()`/`contextMenu()`. Every import below names its own narrow source file, never the
 // `api/index.js` barrel. That barrel re-exports `inlineEditing` itself. Importing it back would
@@ -32,7 +32,7 @@
 // states (#169). `inlineEditing()` below is then wiring: it resolves the target, applies the policy,
 // asks the veto question, and delegates.
 
-import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
+import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
 import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
 import type {
@@ -628,10 +628,10 @@ export class CellEditing {
 
 /** D-S5-19/D-S5-20: a cost cell edits in place, in one transaction, and a consumer replaces the whole
  *  editor through `beforeEntryEdit` (`[S5-A5]`). Call: `new Gantt({ plugins: [inlineEditing()] })`. */
-export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
+export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin {
   return {
     id: 'freegantt.inlineEditing',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       const ports: CellEditorPorts = {
         mountLayer: ctx.view.rowLayer,
         dom: ctx.view.dom,

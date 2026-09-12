@@ -1,19 +1,18 @@
-// api/ — the public Dataset-plugin contract (S5.10, D-S5-23/24/30/31). `DatasetPluginOf`/
-// `DatasetPluginContextOf` stay generic over `TDataset` here, so this file never imports `./dataset.js`
-// for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the generic shape,
-// and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a runtime one.
-// `api/dataset.ts` binds the type argument once — `export type DatasetPlugin = DatasetPluginOf<Dataset>`
-// — and `api/index.ts` re-exports both. `api/plugin.ts` and `api/command.ts` use the same pairing.
+// api/ — what a plugin's `data` half sees (S5.10, D-S5-23/24/30/31, ADR 0019).
+// `DatasetPluginContextOf` stays generic over `TDataset` here, so this file never imports
+// `./dataset.js` for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the
+// generic shape, and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a
+// runtime one. `api/dataset.ts` binds the type argument once — `export type DatasetPluginContext =
+// DatasetPluginContextOf<Dataset>`. `api/plugin.ts` and `api/command.ts` use the same pairing.
 //
-// A Gantt plugin and a Dataset plugin are different contracts on purpose. A Gantt plugin sees panes,
-// the overlay and gestures; a Dataset plugin sees only what a document holds, so it stays DOM-free and
-// runs wherever a Dataset runs.
+// The two halves see different worlds on purpose. A `view` half sees panes, the overlay and gestures;
+// a `data` half sees only what the Dataset holds, so it stays DOM-free and runs wherever a Dataset
+// runs. `api/plugin.ts` holds the plugin shapes that carry both halves.
 
 import type {
   Aggregator,
   AggregatorName,
   DatasetEventMap,
-  Disposer,
   ExtenderWrapper,
   Field,
   FieldType,
@@ -48,7 +47,7 @@ export interface DatasetEvents {
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
 
-/** Field declarations a plugin adds to the Dataset it installs into (D-S5-21). Legal while `setup()`
+/** Field declarations a plugin adds to the Dataset it installs into (D-S5-21). Legal while `data()`
  *  runs and not after — a later call throws `RegistrationClosedError` (D-S5-4). */
 export interface DatasetFieldRegistrations {
   register(field: Field): void;
@@ -72,7 +71,7 @@ export interface DatasetStoreAccess {
   read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
 }
 
-/** What a Dataset plugin's `setup()` receives, once, while the Dataset constructs. */
+/** What a plugin's `data()` half receives, once, while the Dataset constructs. */
 export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;
   events: DatasetEvents;
@@ -80,25 +79,4 @@ export interface DatasetPluginContextOf<TDataset> {
   edits: DatasetEditHook;
   store: DatasetStoreAccess;
   disposables: DisposableStore;
-}
-
-/**
- * A plugin installed through `DatasetOptions.plugins`.
- *
- * ```ts
- * const dataset = new Dataset({ entries, plugins: [lockEntries(['t2'])] });
- * ```
- *
- * `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
- * must exist before the first Rollup (D-S5-4), so adding one later would mean re-rolling the whole
- * dataset under a Field its earlier Rollups never summed. A consumer that wants a different plugin
- * set builds a Dataset with it.
- */
-export interface DatasetPluginOf<TDataset> {
-  id: PluginId;
-  /** Plugin ids that must also be installed. Does not imply an order in the array: installation resolves
-   *  setup order from `requires` alone, so `[a, b]` and `[b, a]` install identically (D-S5-31). A
-   *  required id nobody installs throws `MissingPluginError`. */
-  requires?: readonly PluginId[];
-  setup(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
 }

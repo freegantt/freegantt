@@ -751,14 +751,28 @@ export class RegistrationClosedError extends FreeGanttError {
 export class PluginSetupError extends FreeGanttError {
   readonly pluginId: PluginId;
 
-  constructor(pluginId: PluginId, cause: unknown) {
+  constructor(pluginId: PluginId, cause: unknown, message?: string) {
     super(
       'plugin-setup-failed',
-      `plugins: the setup of "${pluginId}" threw, so no plugin in this batch is installed. Read the "cause" of this error.`,
+      message ??
+        `plugins: the setup of "${pluginId}" threw, so no plugin in this batch is installed. Read the "cause" of this error.`,
       { cause },
     );
     this.name = 'PluginSetupError';
     this.pluginId = pluginId;
+  }
+
+  /** ADR 0019, `Q4`: a plugin with a `data` half was handed to a `Gantt`. It arrived too late to
+   *  declare a Field, so it fails loudly and says where it goes instead. Same error, same `code` —
+   *  a misplaced plugin is a setup that did not happen, and it needs no type of its own. */
+  static wrongInstallSite(pluginId: PluginId): PluginSetupError {
+    return new PluginSetupError(
+      pluginId,
+      undefined,
+      `plugins: "${pluginId}" has a "data" half, so it installs on the Dataset, not on the Gantt. ` +
+        `Write new Dataset({ entries, plugins: [${pluginId}] }) and leave it off GanttOptions.plugins. ` +
+        'A Field must exist before the first Rollup, and a Gantt mounts after that.',
+    );
   }
 }
 

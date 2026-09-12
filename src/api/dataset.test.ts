@@ -14,7 +14,7 @@ import {
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -587,10 +587,10 @@ describe('Dataset plugins (S5.10)', () => {
 
   /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
    *  touches it — the same shape harness/plugins/lock-entries.ts ships (D-S5-24's refusal note). */
-  function lockEntries(ids: readonly string[]): DatasetPlugin {
+  function lockEntries(ids: readonly string[]): DataPlugin {
     return {
       id: 'demo.lock',
-      setup(ctx) {
+      data(ctx) {
         const store = ctx.store.reserve<LockRow>();
         for (const id of ids) store.set(entryId(id), { locked: true });
         ctx.events.on('beforeChange', ({ changeSet }) =>
@@ -629,9 +629,9 @@ describe('Dataset plugins (S5.10)', () => {
 
   it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
     let registerLate = (): void => undefined;
-    const late: DatasetPlugin = {
+    const late: DataPlugin = {
       id: 'demo.late',
-      setup(ctx) {
+      data(ctx) {
         registerLate = () => ctx.fields.register({ key: 'cost' });
       },
     };
@@ -640,9 +640,9 @@ describe('Dataset plugins (S5.10)', () => {
   });
 
   it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4)', () => {
-    const declaresCost: DatasetPlugin = {
+    const declaresCost: DataPlugin = {
       id: 'demo.cost',
-      setup(ctx) {
+      data(ctx) {
         ctx.fields.registerType('money', { rollUp: 'sum' });
         ctx.fields.register({ key: 'cost', type: 'money' });
       },
@@ -661,17 +661,17 @@ describe('Dataset plugins (S5.10)', () => {
 
   it('sets up in requires order, whichever order the array writes (D-S5-31)', () => {
     const order: string[] = [];
-    const base: DatasetPlugin = {
+    const base: DataPlugin = {
       id: 'demo.base',
-      setup(ctx) {
+      data(ctx) {
         order.push('base');
         ctx.store.reserve<{ note: string }>().set(entryId('t1'), { note: 'from base' });
       },
     };
-    const reader: DatasetPlugin = {
+    const reader: DataPlugin = {
       id: 'demo.reader',
       requires: ['demo.base'],
-      setup(ctx) {
+      data(ctx) {
         order.push('reader');
         // The store its prerequisite reserved is already there to read (D-S5-30).
         seen = ctx.store.read<{ note: string }>('demo.base')?.get(entryId('t1'))?.note;
@@ -685,17 +685,17 @@ describe('Dataset plugins (S5.10)', () => {
   });
 
   it('throws MissingPluginError naming both ids when a prerequisite is absent', () => {
-    const orphan: DatasetPlugin = { id: 'demo.reader', requires: ['demo.base'], setup: () => undefined };
+    const orphan: DataPlugin = { id: 'demo.reader', requires: ['demo.base'], data: () => undefined };
     expect(() => new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [orphan] })).toThrow(
       MissingPluginError,
     );
   });
 
   it('composes the extension hook in that same order, rather than evicting it (D-S5-23)', () => {
-    const cascadesTo = (id: string, to: string): DatasetPlugin => ({
+    const cascadesTo = (id: string, to: string): DataPlugin => ({
       id,
       ...(id === 'demo.second' ? { requires: ['demo.first'] } : {}),
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           (next) => (request) => mergeEntryEdits(next(request), new Map([[entryId(to), { name: to }]])),
         );
@@ -716,9 +716,9 @@ describe('Dataset plugins (S5.10)', () => {
   // #197: composing with a `Map` spread stayed green only because each wrapper wrote a different
   // Entry. Two extenders on one Entry lost the earlier write, and the Rollup then read a stale child.
   it('a second extender writing the same child still leaves the first write for the Rollup (#197)', () => {
-    const proposesCost: DatasetPlugin = {
+    const proposesCost: DataPlugin = {
       id: 'demo.cost',
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           // #209 C3: the plugin writes the Field by name, the same object `entries.update()` takes.
           // Core derives `proposedKeys` from the composed result, so this plugin cannot get it wrong.
@@ -726,10 +726,10 @@ describe('Dataset plugins (S5.10)', () => {
         );
       },
     };
-    const movesLeaf: DatasetPlugin = {
+    const movesLeaf: DataPlugin = {
       id: 'demo.move',
       requires: ['demo.cost'],
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           (next) => (request) =>
             mergeEntryEdits(
@@ -771,9 +771,9 @@ describe('Dataset plugins (S5.10)', () => {
 
   it('releases every plugin on destroy()', () => {
     const released: string[] = [];
-    const noisy: DatasetPlugin = {
+    const noisy: DataPlugin = {
       id: 'demo.noisy',
-      setup: () => () => released.push('demo.noisy'),
+      data: () => () => released.push('demo.noisy'),
     };
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
     dataset.destroy();
@@ -783,9 +783,9 @@ describe('Dataset plugins (S5.10)', () => {
 
 describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
-  const declaresRisk: DatasetPlugin = {
+  const declaresRisk: DataPlugin = {
     id: 'demo.risk',
-    setup(ctx) {
+    data(ctx) {
       ctx.fields.register({ key: 'risk', rollUp: 'none' });
     },
   };

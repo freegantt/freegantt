@@ -16,7 +16,7 @@ import type {
   GridColumnInput,
   RowSource,
   DatasetEventMap,
-  GanttPlugin,
+  ChromePlugin,
   EntryVariant,
   CellRenderer,
   HeaderRenderer,
@@ -496,10 +496,10 @@ weekendToggle.addEventListener('change', () => {
 // picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
-function entryContextActions(): GanttPlugin {
+function entryContextActions(): ChromePlugin {
   return {
     id: 'harness.entryContextActions',
-    setup(ctx) {
+    view(ctx) {
       ctx.commands.register({
         id: 'demo.lockEntry',
         label: 'Lock',
