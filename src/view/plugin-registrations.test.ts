@@ -16,13 +16,13 @@ const PLUGIN: PluginId = 'demo.plugin';
 
 interface Harness {
   registrations: PluginRegistrations;
-  counts: { frames: number; items: number; capabilities: number };
+  counts: { frames: number; items: number; capabilities: number; variantStyles: number };
   /** Every Grid column `ColumnChrome` was asked for, in order — that seam is a delegation. */
   columns: GridColumnInput[];
 }
 
 function harness(): Harness {
-  const counts = { frames: 0, items: 0, capabilities: 0 };
+  const counts = { frames: 0, items: 0, capabilities: 0, variantStyles: 0 };
   const columns: GridColumnInput[] = [];
   const ports: PluginRegistrationPorts = {
     requestFrame: () => {
@@ -33,6 +33,9 @@ function harness(): Harness {
     },
     refreshCapabilities: () => {
       counts.capabilities += 1;
+    },
+    refreshVariantStyles: () => {
+      counts.variantStyles += 1;
     },
     registerGridColumn: (column): Disposer => {
       columns.push(column);
@@ -71,15 +74,16 @@ describe('PluginRegistrations — what each seam invalidates', () => {
   });
 
   // ADR 0018: one variant answers four questions, so one registration invalidates all three passes
-  // — the Items every row produces, every capability, and the frame.
-  it('a variant re-produces every row, re-resolves every capability and repaints, on both edges', () => {
+  // — the Items every row produces, every capability, and the frame. ADR 0022 §5 adds a fifth: a
+  // variant's own `css` reaches the document on this same edge.
+  it('a variant re-produces every row, re-resolves every capability, rewrites its own css and repaints, on both edges', () => {
     const { registrations, counts } = harness();
 
     const dispose = registrations.registerVariant({ name: 'buffer', when: () => true }, PLUGIN);
-    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 1 });
+    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 1, variantStyles: 1 });
 
     dispose();
-    expect(counts).toMatchObject({ items: 2, frames: 2, capabilities: 2 });
+    expect(counts).toMatchObject({ items: 2, frames: 2, capabilities: 2, variantStyles: 2 });
   });
 
   it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {

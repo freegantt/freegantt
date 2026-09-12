@@ -1,5 +1,7 @@
 // view/ — the base stylesheet (plans/s1.10-theming-and-a11y/README.md D-S1.10-6, D-S1.10-8, D-S1.10-9).
-// `ensureBaseStyles` is the only place the library writes a stylesheet. Idempotent per document via a
+// `ensureBaseStyles` writes the structural rules every Gantt shares, and it is the only place the
+// library writes *this* stylesheet — `variant-styles.ts` writes a second one, per Gantt, for the
+// rules an installed variant's own `css` carries (ADR 0022 §5). Idempotent per document via a
 // `<style data-freegantt-styles>` marker: the DOCUMENT holds the state, not a module variable, so two
 // Gantt instances in one document share one injected sheet without this being I2's kind of module-level
 // singleton (I2 governs shared *mutable state* — configuration, subscriptions, caches that would let two
@@ -327,17 +329,6 @@ ${DARK_COLOR_TOKENS}
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
 .fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, 4px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
-/* DESIGN-FACTS §2.4: a group bar is a solid rail 10px high in the row's own label ink, with a 4px
-   downward cap at each end — not an outline box at full bar height, which shouted over every span
-   bar under it. The box keeps the full bar height because that is the hit target; only the glyph
-   inside it is ink, so both pieces read --fg-group-bar-ink and a state can swap that one value.
-   --fg-group-bar-height is an undeclared knob with a default, the shape --fg-bar-radius takes. */
-.fg-bar-summary { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
-.fg-bar-summary::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
-/* One 8x4 cap per end, hung off the rail's bottom edge. The wedge of a conic gradient whose apex
-   sits at the tile's bottom centre is the same downward triangle the design draws with a border
-   trick — and a border trick needs an element of its own, which a rail with two ends does not have. */
-.fg-bar-summary::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
 /* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
    min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
@@ -358,16 +349,6 @@ ${DARK_COLOR_TOKENS}
    an outline flush against the fill would nearly vanish into it. The offset moves the ring onto the
    pane beside the bar, where it reads against a different colour. */
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
-/* A group bar's box is its hit target, not its ink: the shared outline and the shared inset ring
-   would both frame a full-height rectangle of empty pane around a 10px rail. So the state paints on
-   the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no outer
-   border at all — and hovered rings the rail alone. Both need the box's own state paint cancelled
-   first, and they sit after the shared rules so equal specificity resolves this way. The layer
-   does not change this: the normal cascade still applies inside one layer, so document order
-   still decides here. */
-.fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
-.fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
-.fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }

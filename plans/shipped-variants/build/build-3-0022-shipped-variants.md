@@ -59,7 +59,7 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 - [x] `produceLeafItems` takes the name instead of hardcoding `LEAF_VARIANT_NAME`.
 - [x] A test proves it: a variant that carries a producer stamps its own name, not the producer's.
       `bar({ name: 'phase' })` draws Items with `variant: 'phase'`.
-- [ ] Update `etc/freegantt.api.md` with `api-extractor run --local`, and say so in the PR.
+- [x] Update `etc/freegantt.api.md` with `api-extractor run --local`, and say so in the PR.
 
 ## Unit C — an Item may state a fixed painted width
 
@@ -84,23 +84,23 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 
 **Decided: Q1, J3.**
 
-- [ ] `bar(overrides?: Partial<EntryVariant>): EntryVariant`. It carries `produceLeafItems`, which is
+- [x] `bar(overrides?: Partial<EntryVariant>): EntryVariant`. It carries `produceLeafItems`, which is
       why it is worth exporting. An author who hand-writes `{ name, when }` gets `wholeEntryItem`
       instead, and their Segments vanish.
-- [ ] `summary(overrides?): EntryVariant`. Default `when` is `(entry) => entry.hasChildren`. Default
+- [x] `summary(overrides?): EntryVariant`. Default `when` is `(entry) => entry.hasChildren`. Default
       `paint` answers the frozen `SUMMARY_BAR`.
-- [ ] `diamond(overrides?): EntryVariant`. Default `when` is
+- [x] `diamond(overrides?): EntryVariant`. Default `when` is
       `(entry) => entry.duration()?.value === 0`. Default `items` is `fixedWidthItem(…)` from unit C.
       Its default box is one constant, declared beside `diamond()` in the same file — never in
       `src/layout/frame.ts`, which holds the two numbers `barSpan` and `frame-settings.ts` share.
-- [ ] Every key overrides, `paint` included. The argument is an object and never a positional rule:
+- [x] Every key overrides, `paint` included. The argument is an object and never a positional rule:
       a `FieldMatch` is `{ [key: string]: unknown }`, so `diamond({ when })` could not be told from a
       match on a field named `when`.
-- [ ] `CORE_VARIANTS` seeds from `bar()` and `summary()`. **`J37`'s order is load-bearing.** The floor
+- [x] `CORE_VARIANTS` seeds from `bar()` and `summary()`. **`J37`'s order is load-bearing.** The floor
       registers first, or no row is ever a summary. Keep the comment that says so.
-- [ ] `diamond()` is **not** in `CORE_VARIANTS`. No row wears it until a rule claims it.
-- [ ] Export all three from `src/api/index.ts`.
-- [ ] Tests: each factory answers a complete variant; each key overrides; `CORE_VARIANTS` still
+- [x] `diamond()` is **not** in `CORE_VARIANTS`. No row wears it until a rule claims it.
+- [x] Export all three from `src/api/index.ts`.
+- [x] Tests: each factory answers a complete variant; each key overrides; `CORE_VARIANTS` still
       resolves a summary for a row with children.
 
 ## Unit E — a variant carries its own CSS
@@ -117,65 +117,77 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 
 ### E2 — the key
 
-- [ ] `EntryVariant.css?: string` (`src/layout/items/variants.ts`). The doc comment answers the fifth
+- [x] `EntryVariant.css?: string` (`src/layout/items/variants.ts`). The doc comment answers the fifth
       question the file already asks of a variant: what rules its look needs.
-- [ ] `layout/` stays DOM-free. A CSS string is data, and `view/` does the writing.
-- [ ] Say in the doc comment that the text goes in verbatim. The person who authors a variant already
+- [x] `layout/` stays DOM-free. A CSS string is data, and `view/` does the writing.
+- [x] Say in the doc comment that the text goes in verbatim. The person who authors a variant already
       runs code on the page, so this opens nothing that was closed.
 
 ### E3 — the injection
 
-- [ ] New `src/view/variant-styles.ts`. One `<style data-freegantt-variant-styles>` per Gantt, in
+- [x] New `src/view/variant-styles.ts`. One `<style data-freegantt-variant-styles>` per Gantt, in
       `container.ownerDocument.head`.
-- [ ] Content is every installed variant's `css`, wrapped once in `@layer freegantt { … }`.
-- [ ] **The base sheet is written first, always.** `ensureBaseStyles` runs at
+- [x] Content is every installed variant's `css`, wrapped once in `@layer freegantt { … }`.
+- [x] **The base sheet is written first, always.** `ensureBaseStyles` runs at
       `src/view/gantt-shell.ts:524`. A variant's rules must land after it, or they cannot cancel
       `.fg-bar`'s own background and state ring at equal specificity.
-- [ ] Emit in registration-ladder order: core, then every plugin, then the consumer.
-- [ ] Rebuild when registrations change — construction, `gantt.variants = […]`, a plugin install or
+- [x] Emit in registration-ladder order: core, then every plugin, then the consumer.
+- [x] Rebuild when registrations change — construction, `gantt.variants = […]`, a plugin install or
       dispose.
-- [ ] Remove the node in `destroy()` (`src/view/gantt-shell.ts:2090`).
-- [ ] One node per Gantt, never one refcounted per document (I2). Q6 holds the reasoning.
-- [ ] `src/view/styles.ts:2` says `ensureBaseStyles` is "the only place the library writes a
+- [x] Remove the node in `destroy()` (`src/view/gantt-shell.ts:2090`).
+- [x] One node per Gantt, never one refcounted per document (I2). Q6 holds the reasoning.
+- [x] `src/view/styles.ts:2` says `ensureBaseStyles` is "the only place the library writes a
       stylesheet". Rewrite that sentence.
 
 ### E4 — `summary()` takes its own rules back
 
-- [ ] Move the six `.fg-bar-summary` rules out of `BASE_STYLESHEET` and into `summary()`.
+- [x] Move the six `.fg-bar-summary` rules out of `BASE_STYLESHEET` and into `summary()`.
       They sit at `src/view/styles.ts:327`, `:328`, `:332`, `:358`, `:359`, `:360`.
-- [ ] `bar()` carries no `css`. Its look **is** `.fg-bar`, the element class every look wears.
+- [x] `bar()` carries no `css`. Its look **is** `.fg-bar`, the element class every look wears.
       That is structure, not a look. Leave it in the base sheet.
-- [ ] `src/view/styles.test.ts`'s `.fg-bar-summary` assertions move to a variants test. They assert
-      the same rules, read off the variant's own node.
+- [x] `src/view/styles.test.ts`'s `.fg-bar-summary` assertions move to a variants test. They assert
+      the same rules, read off the variant's own node. (There were none in `styles.test.ts` to move —
+      `getComputedStyle` cannot resolve a layered rule in happy-dom (J14), so the base sheet's own
+      `.fg-bar-summary` rules had no computed-style assertion to begin with. `variants.test.ts`'s new
+      `describe('core's three shipped factories')` asserts the CSS text instead.)
 
 ### E5 — `diamond()`'s look
 
-- [ ] `diamond()`'s `paint` answers its class and nothing else. Follow `SUMMARY_BAR`'s shape
+- [x] `diamond()`'s `paint` answers its class and nothing else. Follow `SUMMARY_BAR`'s shape
       (`src/layout/items/variants.ts:191`): one frozen object, so the hover path allocates nothing.
-- [ ] `diamond()`'s `css` holds the glyph: the box is the hit target, a `::before` is the ink, and
+- [x] `diamond()`'s `css` holds the glyph: the box is the hit target, a `::before` is the ink, and
       the box's own state paint is cancelled so the glyph wears it.
-- [ ] **The CSS restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it
+- [x] **The CSS restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it
       follows the box `box.widthPx` set. A literal `13px` would leave a 20px hit box around a 13px
       glyph the moment an author writes `diamond({ items: fixedWidthItem(20) })`.
-- [ ] Check the label. A fixed 13px box holds no label, so `barLabels: 'fitBar'` must place it outside
-      through the library's own path. **If it does not, that is a gap — report it.**
+- [x] Check the label. A fixed 13px box holds no label, so `barLabels: 'fitBar'` must place it outside
+      through the library's own path. **If it does not, that is a gap — report it.** Checked: no gap.
+      `resolveBarLabelPlacement` reads only `bar.x`/`bar.width`, and `barSpan` already sets those from
+      `box` ahead of the span-and-floor path (Unit C) — no code branch treats a fixed box specially, so
+      the same `fitBar` arithmetic every narrow bar uses applies unconditionally. Pinned by a new test,
+      `src/render/dom/index.test.ts`'s `'a fixed-width Item's label finds no room in its own box, so
+      fitBar moves it outside (ADR 0022, E5)'`.
 
 ### E6 — the tests
 
-- [ ] A Gantt with no `diamond()` installed has no diamond CSS in the document. That is #286's whole
-      claim, and it is now assertable.
-- [ ] `gantt.variants = […]` installs a variant's rules, and assigning a list without it removes them.
-- [ ] Two Gantts with different `variants` each carry their own node (I2).
-- [ ] A variant's rule beats the base sheet at equal specificity, and an unlayered consumer rule beats
-      the variant's. Both directions, because the layer is what makes the second one true.
+- [x] A Gantt with no `diamond()` installed has no diamond CSS in the document. That is #286's whole
+      claim, and it is now assertable. `src/api/gantt.test.ts`'s new `describe('a variant's own css
+      (ADR 0022 §5, Q6)')`.
+- [x] `gantt.variants = […]` installs a variant's rules, and assigning a list without it removes them.
+      Same `describe` block, `src/api/gantt.test.ts`.
+- [x] Two Gantts with different `variants` each carry their own node (I2). Same `describe` block.
+- [x] A variant's rule beats the base sheet at equal specificity, and an unlayered consumer rule beats
+      the variant's. Both directions, because the layer is what makes the second one true. A real-
+      cascade claim — happy-dom does not parse `@layer` (J14) — so this one is `e2e/variant-styles.spec.ts`,
+      new, run against `/` through `window.__gantt.variants = […]`. No harness source file touched.
 
 ### E7 — close #286
 
-- [ ] Close [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) with a comment naming the
+- [x] Close [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) with a comment naming the
       mechanism that landed: its first candidate, per Gantt rather than per document.
-- [ ] Its rejected fourth option stays rejected. A `css` fragment is not an inline `style`: every
+- [x] Its rejected fourth option stays rejected. A `css` fragment is not an inline `style`: every
       declaration in it is overridable from an ordinary consumer rule.
-- [ ] Apply the labels with the label-issues skill.
+- [x] Apply the labels with the label-issues skill.
 
 ## Unit F — `gantt.variantFor(entry)`
 

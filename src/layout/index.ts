@@ -15,7 +15,7 @@ export { pickDefined } from './pick-defined.js';
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
 export { wholeEntryItem, fixedWidthItem } from './items/item.js';
 export type { Item, ItemProducer, VariantItems } from './items/item.js';
-export { createVariantRegistry } from './items/variants.js';
+export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 export type {
   DoubleVariantClaim,
   EntryVariant,

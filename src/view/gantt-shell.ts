@@ -69,6 +69,8 @@ import { panToTodayLine } from './today-landing.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
 import { ensureBaseStyles } from './styles.js';
+import { attachVariantStyles } from './variant-styles.js';
+import type { VariantStyles } from './variant-styles.js';
 import { LiveRegion } from './live-region.js';
 import type { InteractionState, RenderBackend } from '../render/backend.js';
 import {
@@ -454,6 +456,10 @@ export class GanttShell {
   /** #170: the five seams a plugin registers into, each carrying the refresh it owes. Renderers,
    *  decorations, Item producers, per-kind capability defaults and Grid columns. */
   #registrations!: PluginRegistrations;
+  /** ADR 0022 §5: the second stylesheet a Gantt writes, one node for its own installed variants'
+   *  `css`. Built right after `#registrations`, and refreshed on every edge that changes what a
+   *  variant registers — construction, `gantt.variants = […]`, a plugin install or dispose. */
+  #variantStyles!: VariantStyles;
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
@@ -599,6 +605,10 @@ export class GanttShell {
           reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
         }),
     );
+    // ADR 0022 §5: right after the registry it reads, and after `ensureBaseStyles` (above). A
+    // variant's own rule must land after the base sheet. Only then can it cancel `.fg-bar`'s
+    // background and state ring at equal specificity. Starts empty; `#installConsumerVariants` fills it.
+    this.#variantStyles = attachVariantStyles(this.#container.ownerDocument, this.#registrations.variants);
     // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
     // synchronously, and that onChange IS this shell's first render. A consumer variant installed
     // after it would paint nothing until something else invalidated the frame.
@@ -1147,13 +1157,17 @@ export class GanttShell {
   }
 
   /** Drops whatever the consumer's list held before, then adds the new one. Registration order
-   *  inside the list is the author's own, and the newest of two overlapping rules wins. */
+   *  inside the list is the author's own, and the newest of two overlapping rules wins.
+   *
+   *  ADR 0022 §5: also rewrites `#variantStyles`. That is the other thing a variant registration
+   *  changes, so a consumer's own `css` reaches the document on the same edge every other seam does. */
   #installConsumerVariants(next: readonly EntryVariant[]): void {
     for (const retract of this.#consumerVariantDisposers) retract();
     this.#variants = next;
     this.#consumerVariantDisposers = next.map((variant) =>
       this.#registrations.variants.addConsumerVariant(variant),
     );
+    this.#variantStyles.refresh();
   }
 
   /** Who paints this bar: the resolved variant's own `paint`, or the catch-all renderers when it
@@ -1525,6 +1539,7 @@ export class GanttShell {
       requestFrame: () => this.#frames.request(),
       invalidateItems: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
+      refreshVariantStyles: () => this.#variantStyles.refresh(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
     };
   }
@@ -2111,6 +2126,7 @@ export class GanttShell {
     this.#viewportHandle.unbind();
     this.#backend.destroy();
     this.#paneLayout.destroy();
+    this.#variantStyles.destroy();
     this.#destroyed = true;
   }
 }
