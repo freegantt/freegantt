@@ -178,9 +178,13 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 
 **Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
 
+**What is fixed is the Field *set*, not every attribute on it (ADR 0015).** `dataset.setFieldEditable(key, editable)` changes one declared Field's `editable` after setup, and it is the only attribute that may change. It adds no key and removes none, so the Rollup reason below does not apply to it: `editable` is a write-door threshold, and no aggregate depends on it. An unknown key is refused.
+
 **The reason is the Rollup, and it reaches undo.** A Field arriving mid-life makes every rolling-up parent owe a new aggregate at once. That is a whole-dataset Rollup pass, outside any user action, writing stored values that enter undo — and a declaration is a **config assignment**, which `ChangeSet` has no row shape for. Undo would then restore values the still-declared Field re-derives on the next commit. `rollUpKinds` is deleted (ADR 0013), so that flip is gone. A live `fields` would still be this problem.
 
 **A late install rebuilds the `Dataset`:** `new Dataset({ entries: dataset.entries.all, fields, fieldTypes, aggregators, plugins })`. **State the price whenever this path is offered** — a new `Dataset` identity, so every subscriber rebinds and the undo History is lost. That price suits a *turn scheduling on* toggle. It does not suit an *add a column the consumer never declared* feature, and that gap is a known hole rather than a solved case.
+
+**The hole is narrower than it was (ADR 0015).** It covers adding or removing a Field key, and nothing else. *Lock a column the consumer already declared* was the case most often mistaken for this hole, and it is now solved outright: `dataset.setFieldEditable('start', 'never')` keeps the Dataset identity, the subscribers and the undo History. Reach for the rebuild only when the Field **set** has to change.
 
 **A Gantt plugin is not affected.** `gantt.installPlugin()` (D-S5-36, below) stays live. A view plugin declares no Field and rolls nothing up: `ctx.view.registerGridColumn` names a Field the `Dataset` already declares, and an undeclared key throws `UnknownFieldError` exactly as `gantt.gridColumns` does. **A live column, over a fixed Field set.**
 
@@ -200,7 +204,10 @@ gantt.setCapabilityRule('resize', false);   // this one gesture; every other rul
 gantt.clearCapabilityRule('resize');        // the structure table answers that gesture again
 gantt.hideGridColumn('cost');               // D-S5-34 — the widths and the order stay as the user set them
 gantt.installPlugin(tooltips());            // D-S5-36 — the installed set is not restated
+dataset.setFieldEditable('start', 'never'); // ADR 0015 — every other Field keeps the editable it had
 ```
+
+The last one is the `Dataset`'s verb, not the `Gantt`'s, because a Field belongs to the `Dataset`. It reads the same way: one key changes, the rest stand. There is no matching assignment form to fall back on — `dataset.fields` is read-only — so here the verb is the whole surface rather than a shorthand over one.
 
 **A verb does not merge into the value, and it never mutates it.** It reads the current value, computes the next one, and assigns that copy. So the paragraph above still holds in full: the object a consumer handed over is never written to, and the property still compares by identity. A merging setter was considered for `interactions` and rejected for the same reason — it would make assignment mean two things, and it would leave no way to *remove* a key.
 
