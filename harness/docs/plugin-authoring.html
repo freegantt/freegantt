@@ -33,20 +33,20 @@
         <h1>Writing a plugin</h1>
         <p class="tagline">
           How a plugin author writes one plugin, installs it once, and fills the public seams. The
-          worked example is a milestone look: a diamond core does not ship. It takes four lines and
+          worked example is a milestone variant: a diamond core does not ship. It takes four lines and
           no id list.
         </p>
         <div class="updated"><span class="k">updated</span> 2026-09-11 — ADRs 0011–0020</div>
         <div class="meta">
           <span>audience: plugin author</span>
           <span>one contract: <code>definePlugin</code></span>
-          <span>worked example: a milestone look</span>
+          <span>worked example: a milestone variant</span>
         </div>
         <nav aria-label="Sections on this page">
           <a href="#s1"><b>1</b>One plugin, one install</a>
           <a href="#s2"><b>2</b>The Entry answers</a>
           <a href="#s3"><b>3</b>The process</a>
-          <a href="#s4"><b>4</b>Write a look</a>
+          <a href="#s4"><b>4</b>Write a variant</a>
           <a href="#s5"><b>5</b>Gantt seams</a>
           <a href="#s6"><b>6</b>Dataset seams</a>
           <a href="#s7"><b>7</b>Gate, dispose, install</a>
@@ -58,7 +58,7 @@
           It is here to be read and argued with, not to be copied. Four things change from the page
           it replaces. One plugin has a <code>data</code> half and a <code>view</code> half, and
           installs once. An Entry answers questions about itself, so a rule reads
-          <code>entry.hasChildren</code>. A look is one object, and an app can store one with
+          <code>entry.hasChildren</code>. A variant is one object, and an app can store one with
           <code>update()</code>. A plugin may say what the tree is. Two type names are still open —
           see §2.
           <a href="./plugins.html">Plugin lifecycle</a> is the install machinery, not this page.
@@ -85,9 +85,9 @@ export const phases = definePlugin({
     ctx.fields.register({ key: 'demo:phaseId' });
   },
 
-  // What does it look like? Runs once per bound Gantt, with that Gantt's own context.
+  // What does it variant like? Runs once per bound Gantt, with that Gantt's own context.
   view(ctx) {
-    ctx.addLook({ name: 'phase', when: { 'demo:phaseId': true }, paint: phaseBar });
+    ctx.addVariant({ name: 'phase', when: { 'demo:phaseId': true }, paint: phaseBar });
   },
 });</code></pre>
 
@@ -110,7 +110,7 @@ export const phases = definePlugin({
             <tr>
               <td>what it fills</td>
               <td>Fields, field types, aggregators, the hierarchy, the edit extender, its own store</td>
-              <td>looks, renderers, decorations, columns, commands, keybindings</td>
+              <td>variants, renderers, decorations, columns, commands, keybindings</td>
             </tr>
             <tr>
               <td>can you add it later?</td>
@@ -201,7 +201,7 @@ export const phases = definePlugin({
             <tr>
               <td class="mono">when, items, paint, can</td>
               <td><code>Entry</code></td>
-              <td>a look rule asks about the row as it is right now</td>
+              <td>a variant rule asks about the row as it is right now</td>
             </tr>
             <tr>
               <td class="mono">Aggregator, FieldDistributor</td>
@@ -359,7 +359,7 @@ export const phases = definePlugin({
 
                 <rect class="bx dom" x="560" y="318" width="340" height="78" />
                 <text class="t" x="730" y="344" text-anchor="middle">view(ctx) — gate open</text>
-                <text class="s" x="730" y="364" text-anchor="middle">looks · renderers · commands · keys</text>
+                <text class="s" x="730" y="364" text-anchor="middle">variants · renderers · commands · keys</text>
                 <text class="xs" x="730" y="382" text-anchor="middle">once per bound Gantt</text>
 
                 <rect class="bx oval" x="400" y="434" width="160" height="36" />
@@ -385,9 +385,9 @@ export const phases = definePlugin({
 
         <!-- ══════════════════════════════════════════════════════════ 4 -->
         <section id="s4">
-          <h2><span class="num">4</span>Write a look</h2>
+          <h2><span class="num">4</span>Write a variant</h2>
           <p class="lede">
-            A look is one object, and it answers from a rule. Nothing stores a look. Core ships no
+            A variant is one object, and it answers from a rule. Nothing stores a variant. Core ships no
             diamond, so a milestone is the smallest real example — and it needs no plugin at all.
           </p>
           <p class="src"><b>derived from</b> ADR 0018, ADR 0017</p>
@@ -398,7 +398,7 @@ export const phases = definePlugin({
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
-  looks: [
+  variants: [
     {
       name: 'milestone',
       when: { milestone: true },
@@ -410,7 +410,7 @@ const gantt = new Gantt({
 
 dataset.entries.update('launch', { milestone: true });</code></pre>
           <p>
-            That is the whole feature. The row wears the look because of a value the app owns, in
+            That is the whole feature. The row wears the variant because of a value the app owns, in
             the app's own word. The write is an ordinary Field write, so it is in a
             <code>ChangeSet</code>, it undoes, the write door gates it, and
             <code>gridColumns: ['milestone']</code> shows it. No id set, and no list that freezes at
@@ -427,7 +427,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
   id: 'demo.milestones',
   view(ctx) {
     // Which entries wear it? A rule, not a list — a row added tomorrow gets it too.
-    ctx.addLook({
+    ctx.addVariant({
       name: 'milestone',
       when: (entry) =&gt; !entry.hasChildren &amp;&amp; entry.read('duration') === 0,
       paint: () =&gt; ({ class: { 'demo-milestone': true } }),
@@ -442,45 +442,45 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
           </p>
 
           <h3>The one object</h3>
-          <pre><code>interface Look {
-  name: string;          // this look's identity: the `data-kind` you style, and the registry key
-  when?: LookRule;       // a predicate or a field match; omit it on a last-resort look
+          <pre><code>interface EntryVariant {
+  name: string;          // this variant's identity: the `data-variant` you style, and the registry key
+  when?: VariantRule;       // a predicate or a field match; omit it on a last-resort variant
   items?: ItemProducer;  // default: one Item over the Entry's whole span
   paint?: BarRenderer;
-  can?: Interactions;    // per look, one level under the consumer's own
+  can?: Interactions;    // per variant, one level under the consumer's own
 }</code></pre>
           <p>
             Every key is optional except the name. <code>items</code> defaults to the line both old
-            examples hand-wrote, so a look that draws an ordinary bar in a new colour is a name and
+            examples hand-wrote, so a variant that draws an ordinary bar in a new colour is a name and
             a <code>paint</code>. There is no half to forget: a claim with no producer is not a
             shape you can write any more.
           </p>
           <p>
             The name is an identity, not a value you store. It is the
-            <code>data-kind</code> on the painted element, so a stylesheet can select on it, and it
+            <code>data-variant</code> on the painted element, so a stylesheet can select on it, and it
             is the key the registry and the double-claim report use.
           </p>
 
-          <h3>How an Entry gets its look</h3>
+          <h3>How an Entry gets its variant</h3>
           <figure>
             <div class="scroller">
               <svg
                 class="d"
                 viewBox="0 0 960 380"
                 role="img"
-                aria-labelledby="pa-look-title pa-look-desc"
+                aria-labelledby="pa-variant-title pa-variant-desc"
                 preserveAspectRatio="xMidYMid meet"
               >
-                <title id="pa-look-title">Core asks each look in order, and the first yes wins</title>
-                <desc id="pa-look-desc">
-                  Core asks each registered look in turn whether it matches the Entry. Your looks are
-                  asked first, then core's own parent look, then core's leaf look, which carries no
-                  rule and always answers. The look that answers carries the items, the paint and the
+                <title id="pa-variant-title">Core asks each variant in order, and the first yes wins</title>
+                <desc id="pa-variant-desc">
+                  Core asks each registered variant in turn whether it matches the Entry. Your variants are
+                  asked first, then core's own parent variant, then core's leaf variant, which carries no
+                  rule and always answers. The variant that answers carries the items, the paint and the
                   capabilities.
                 </desc>
                 <defs>
                   <marker
-                    id="pa-look-arrow"
+                    id="pa-variant-arrow"
                     viewBox="0 0 10 10"
                     refX="9"
                     refY="5"
@@ -492,14 +492,14 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
                   </marker>
                 </defs>
 
-                <path class="edge" d="M190,186 H215 V51 H240" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M405,82 V102" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M405,164 V184" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M405,246 V266" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M570,51 H600 V186 H640" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M570,133 H600 V186 H640" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M570,215 H600 V186 H640" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
-                <path class="edge" d="M570,297 H600 V186 H640" marker-end="url(#pa-look-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M190,186 H215 V51 H240" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,82 V102" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,164 V184" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M405,246 V266" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,51 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,133 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,215 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
+                <path class="edge" d="M570,297 H600 V186 H640" marker-end="url(#pa-variant-arrow)" style="color: var(--sub)" />
 
                 <rect class="bx api" x="30" y="150" width="160" height="72" />
                 <text class="t" x="110" y="178" text-anchor="middle">Entry</text>
@@ -507,11 +507,11 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
                 <text class="xs" x="110" y="212" text-anchor="middle">entry.read('milestone')</text>
 
                 <rect class="bx pure" x="240" y="20" width="330" height="62" />
-                <text class="t" x="405" y="44" text-anchor="middle">your look · when: (entry) =&gt; …</text>
+                <text class="t" x="405" y="44" text-anchor="middle">your variant · when: (entry) =&gt; …</text>
                 <text class="s" x="405" y="64" text-anchor="middle">registered first, asked first</text>
 
                 <rect class="bx pure" x="240" y="102" width="330" height="62" />
-                <text class="t" x="405" y="126" text-anchor="middle">your look · when: { milestone: true }</text>
+                <text class="t" x="405" y="126" text-anchor="middle">your variant · when: { milestone: true }</text>
                 <text class="s" x="405" y="146" text-anchor="middle">a Field match — core indexes it</text>
 
                 <rect class="bx pure" x="240" y="184" width="330" height="62" />
@@ -528,7 +528,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
                 <text class="xs" x="578" y="42">yes</text>
 
                 <rect class="bx dom" x="640" y="150" width="290" height="72" />
-                <text class="t" x="785" y="178" text-anchor="middle">one look</text>
+                <text class="t" x="785" y="178" text-anchor="middle">one variant</text>
                 <text class="s" x="785" y="196" text-anchor="middle">items · paint · can</text>
                 <text class="xs" x="785" y="212" text-anchor="middle">core never branches on the name</text>
 
@@ -544,31 +544,31 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             </div>
             <figcaption>
               Diagram 2 — one ordered list, and the first yes wins. Every box in the middle column is
-              a function of the row. Nothing in it is stored, so no row can wear a look its own data
+              a function of the row. Nothing in it is stored, so no row can wear a variant its own data
               does not earn.
             </figcaption>
           </figure>
 
           <p>
-            <strong>Core's two looks are ordinary looks.</strong> They are registered last, and they
+            <strong>Core's two variants are ordinary variants.</strong> They are registered last, and they
             carry no privilege. <code>'parent'</code> and <code>'leaf'</code> are not reserved words,
-            because nothing can store a look name in the first place. Delete the stored value and
+            because nothing can store a variant name in the first place. Delete the stored value and
             the whole reservation goes with it.
           </p>
           <p>
-            <strong>A look never decides what a row derives.</strong> Children do, and only children.
-            A parent that wears your <code>'milestone'</code> look still rolls up like a parent. That
+            <strong>A variant never decides what a row derives.</strong> Children do, and only children.
+            A parent that wears your <code>'milestone'</code> variant still rolls up like a parent. That
             is ADR 0013, and this design does not spend it.
           </p>
           <p>
-            You have two honest ways to make a childless row paint as a summary. Register a look that
+            You have two honest ways to make a childless row paint as a summary. Register a variant that
             paints that way — it changes the paint and claims nothing about the data. Or give the row
             children with the hierarchy source in §6, in which case it really is a parent and it
             rolls up like one.
           </p>
           <p>
-            Two looks can both answer yes. The first registered wins, and the library raises a
-            <code>'look-claimed-twice'</code> report naming both plugins. Core does not pick a
+            Two variants can both answer yes. The first registered wins, and the library raises a
+            <code>'variant-claimed-twice'</code> report naming both plugins. Core does not pick a
             winner on merit — it picks the one you installed first, and it tells you.
           </p>
         </section>
@@ -577,7 +577,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
         <section id="s5">
           <h2><span class="num">5</span>Gantt seams</h2>
           <p class="lede">
-            What the <code>view</code> half can fill. The look is one row of this table now, not
+            What the <code>view</code> half can fill. The variant is one row of this table now, not
             four.
           </p>
           <p class="src"><b>derived from</b> ADR 0018, view/plugin-ports.ts, plans/02 §4.4</p>
@@ -589,8 +589,8 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
               <th>two registrations on the same key</th>
             </tr>
             <tr>
-              <td>look</td>
-              <td class="mono">ctx.addLook(look)</td>
+              <td>variant</td>
+              <td class="mono">ctx.addVariant(variant)</td>
               <td>
                 first rule to answer wins and the second is reported; a stored value beats every
                 rule
@@ -625,7 +625,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             <strong>Four calls retire.</strong> <code>registerLookClaim</code>,
             <code>registerItemProducer</code>, <code>registerLookDefaults</code> and the
             <code>barRenderer: RendererByLook</code> option are all keys on the one
-            <code>Look</code> object now. <code>KindDefaults</code> retires with them: it was
+            <code>EntryVariant</code> object now. <code>KindDefaults</code> retires with them: it was
             boolean-only because a registering plugin never saw an Entry, and §2 hands it one, so
             <code>can</code> takes the same predicates <code>interactions</code> takes.
           </p>
@@ -739,7 +739,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             One Entry in, one parent id out. Core's own source is
             <code>(entry) =&gt; entry.parentId</code>, with no special claim on the seam. An Entry a
             source gives children to <em>is</em> a parent: it derives, it rolls up, and core's own
-            <code>parent</code> look in §4 paints it as a summary.
+            <code>parent</code> variant in §4 paints it as a summary.
           </p>
           <p>
             <strong>You change the tree, and the Rollup follows.</strong> There is no second knob.
@@ -856,7 +856,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
     </div>
 
     <footer class="wrap">
-      This page is a draft of ADRs 0017–0020 and none of them is accepted. A running look plugin is
+      This page is a draft of ADRs 0017–0020 and none of them is accepted. A running variant plugin is
       on <a href="../plugins.html">the Plugins harness page</a>, and it still uses the old four-seam
       shape. Install internals are <a href="./plugins.html">Plugin lifecycle</a>. The typechecked
       HEAD examples are in

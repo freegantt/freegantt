@@ -1,16 +1,16 @@
 ---
-status: proposed — draft, not a decision. Opened 2026-09-11, out of a design session on the plugin look surface. The working material is in `plans/row-redesign/`.
+status: proposed — draft, not a decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: one seam, not two — a plugin states the parent of an Entry, and the Rollup follows (2026-09-11, from the author's "from the data side it should be able to change how our rollup and parents/children work"). The source reads a stored Entry, never a handle. Grouping stays a row source and does not come here.
 open: the seam's name (`setHierarchySource` is the draft's word). The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
 ---
 
 # A plugin may own the hierarchy
 
-**Lands after [0017](0017-the-entry-answers-questions-about-itself.md), [0018](0018-a-look-is-a-rule-not-an-id-list.md) and [0019](0019-one-plugin-one-install-site.md).** 0017 gives every reader one door onto the tree. This ADR is what makes that door worth having.
+**Lands after [0017](0017-the-entry-answers-questions-about-itself.md), [0018](0018-a-variant-is-a-rule-not-an-id-list.md) and [0019](0019-one-plugin-one-install-site.md).** 0017 gives every reader one door onto the tree. This ADR is what makes that door worth having.
 
 ## Context
 
-[ADR 0018](0018-a-look-is-a-rule-not-an-id-list.md) resolves a look from a rule and stores nothing. So a look can never make a row claim to be a parent: a rule paints the row, and children alone decide what it derives. A row that paints as a summary and rolls nothing up would say one thing while the data says another.
+[ADR 0018](0018-a-variant-is-a-rule-not-an-id-list.md) resolves a variant from a rule and stores nothing. So a variant can never make a row claim to be a parent: a rule paints the row, and children alone decide what it derives. A row that paints as a summary and rolls nothing up would say one thing while the data says another.
 
 That ruling leaves a real need with no door. An app can have a hierarchy core cannot see: a WBS in another system, a parent named by a `props` key, a level the app wants skipped. Today the only tree core knows is `parentId`.
 
@@ -95,4 +95,4 @@ The line is the author's: layout is not coupled to data, and this seam does not 
 
 **This is an expert door.** An app author never meets it. It sits on the Dataset half of `definePlugin` ([0019](0019-one-plugin-one-install-site.md)), beside `setExtender`, and the two read the same way.
 
-**A childless Entry can be made to paint as a summary two ways** — a look of its own under ADR 0018, or this. The first changes the paint and claims nothing. The second changes the data's own answer, so the Rollup follows. That difference is exactly what 0018 protects when it refuses to store a look.
+**A childless Entry can be made to paint as a summary two ways** — a variant of its own under ADR 0018, or this. The first changes the paint and claims nothing. The second changes the data's own answer, so the Rollup follows. That difference is exactly what 0018 protects when it refuses to store a variant.

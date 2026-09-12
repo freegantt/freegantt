@@ -1,12 +1,12 @@
 ---
-status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin look surface. Revised the same day, after a review from the field-redesign build raised seven problems (P1–P7). All seven were verified at HEAD before this revision. The working material is in `plans/row-redesign/`.
+status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Revised the same day, after a review from the field-redesign build raised seven problems (P1–P7). All seven were verified at HEAD before this revision. The working material is in `plans/row-redesign/`.
 decided: `Entry` and `StoredEntry` are **two types**, and no derived type reads `keyof` `Entry` (P1, P3). A read seam receives an `Entry`; the edit pipeline carries `StoredEntry` values (P2, P4). The names were ruled on 2026-09-11 — see *The names*. `EntryStoreView.childrenOf` and `EntryStoreView.fieldValue` are deleted — one question, one call site. A removed id carries no flag; existence stays `entries.has(id)`. Any earlier ADR may change where the change buys a cleaner API.
 open: whether the renderer contexts become generic over `TProps`.
 ---
 
 # The Entry answers questions about itself
 
-**This is the first of four ADRs that give one row one object.** [0018](0018-a-look-is-a-rule-not-an-id-list.md) makes the look a rule. [0019](0019-one-plugin-one-install-site.md) gives a plugin one install site. [0020](0020-a-plugin-may-own-the-hierarchy.md) lets a plugin say what the tree is. This one comes first, because all three of the others read questions off the row.
+**This is the first of four ADRs that give one row one object.** [0018](0018-a-variant-is-a-rule-not-an-id-list.md) makes the variant a rule. [0019](0019-one-plugin-one-install-site.md) gives a plugin one install site. [0020](0020-a-plugin-may-own-the-hierarchy.md) lets a plugin say what the tree is. This one comes first, because all three of the others read questions off the row.
 
 ## Context
 
@@ -14,7 +14,7 @@ One row has three names, and it lives in three places.
 
 - `Entry` is the stored values. It holds ids, dates, Segments and `props` (`model/entry.ts`).
 - Tree shape and Field values are questions on the `Dataset` — `entries.childrenOf(id)`, `entries.fieldValue(id, key)` (`model/dataset.ts`).
-- The look is a registration on the `Gantt` — `registerLookClaim`, `registerItemProducer` (`view/plugin-ports.ts`).
+- The variant is a registration on the `Gantt` — `registerLookClaim`, `registerItemProducer` (`view/plugin-ports.ts`).
 
 Nothing joins the three. So every seam that needs two of them re-derives the join. **Core does this as often as a plugin does, and so does a consumer.** Seven sites show it, all read at HEAD on 2026-09-11. A line number is a hint — open the file.
 
@@ -77,7 +77,7 @@ entry.children().every((c) => …)       // a compute Field may now depend on th
 
 | Receives an **`Entry`**                                           | Carries a **`StoredEntry`**                                           |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
-| the look rule and the Item producer (`LookClaim`, `ItemProducer`) | `ProposedEdit` / `ProposedEdits`                                      |
+| the variant rule and the Item producer (`LookClaim`, `ItemProducer`) | `ProposedEdit` / `ProposedEdits`                                      |
 | capability resolution and every `Interactions` predicate          | `EditRequest.entries` — the pre-transaction snapshot (D-S5-45)        |
 | every renderer context that names an entry                        | `EditRequest.entryAfterEdits(id)` — the post-body state (D-S5-45)     |
 | `Aggregator`, `FieldDistributor`, `RollUpContext`                 | `entryAfterEdit` and its five callers (`field-access.ts:242`)         |
@@ -89,7 +89,7 @@ entry.children().every((c) => …)       // a compute Field may now depend on th
 
 Ruled 2026-09-11, after the five checks in the naming skill.
 
-**`Entry` names the live one.** The bare word goes to the surface most people read: every look rule, item producer, Aggregator, capability rule and renderer context. It is what makes the author's own sentence compile — `(entry) => entry.hasChildren`.
+**`Entry` names the live one.** The bare word goes to the surface most people read: every variant rule, item producer, Aggregator, capability rule and renderer context. It is what makes the author's own sentence compile — `(entry) => entry.hasChildren`.
 
 **`StoredEntry` names the values.** "Stored" already has exactly one meaning in this codebase — _it has a home in storage_ — in `CLAUDE.md` and in `data/fields/field-access.ts:1-3`'s "storage-shaped edit". It never means "already committed", which matters because `entryAfterEdits(id)` answers with state no commit has taken.
 
@@ -115,7 +115,7 @@ Three names lost. `EntrySnapshot` fails check 4: `CONTEXT.md:23` gives "Snapshot
 
 **The `Entry` reads. The store writes.** There is no `entry.update()`. `dataset.entries.update(id, edit)` stays the one write door, and [ADR 0015](0015-what-the-write-door-refuses.md) keeps everything it decided.
 
-**The `Entry` answers data questions only.** The look is per Gantt, because two Gantts on one Dataset may install different looks. So `entry.look` is not on the `Entry`. See [0018](0018-a-look-is-a-rule-not-an-id-list.md).
+**The `Entry` answers data questions only.** The variant is per Gantt, because two Gantts on one Dataset may install different variants. So `entry.variant` is not on the `Entry`. See [0018](0018-a-variant-is-a-rule-not-an-id-list.md).
 
 **`StoredEntry` publishes `parentId`. The `Entry` publishes `parent()`.** One fact reaches each surface once. `EntryInput.parentId` stays, because it is input.
 
