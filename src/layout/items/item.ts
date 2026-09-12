@@ -1,0 +1,84 @@
+// layout/ — what one row draws, as plain data (D-S4-19, D-S4-24, D-S4-25). One Item is one bar.
+// This file holds the Item vocabulary alone, so `variants.ts` may name `ItemProducer` and
+// `produce-items.ts` may name both, with no import ring between the three.
+
+import { itemId } from '../../model/index.js';
+import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../../model/index.js';
+
+export interface Item {
+  id: ItemId;
+  entryId: EntryId;
+  /** The variant this Item draws as — the `data-variant` a consumer styles, and the key the paint
+   *  and the capability seams resolve through (ADR 0018). A plain `string`: core never branches on
+   *  the name, and nothing stores one. */
+  variant: string;
+  label: string;
+  start: Instant;
+  end: Instant;
+  /** The one Segment this Item draws (#212, ADR 0010) — set only when the Item stands for a real
+   *  Segment of the Entry, never for an Item that draws the Entry's whole span (`wholeEntryItem`). */
+  segmentId?: SegmentId;
+}
+
+/** What shape one variant draws. `EntryVariant.items` takes one; omit it and the variant draws one
+ *  whole-entry Item, which is the line both shipped examples used to hand-write (ADR 0018). */
+export type ItemProducer = (entry: Entry) => readonly Item[];
+
+/** The two questions item production asks about a variant: which one this row wears, and what that
+ *  one draws. `VariantRegistry` (`variants.ts`) answers them, plus two more the frame pass never
+ *  asks — how a variant looks, and what you can do to it. So this narrower face is what
+ *  `layout/frame.ts` and `produce-items.ts` name, and `layout/` keeps one direction of imports. */
+export interface VariantItems {
+  variantFor(entry: Entry): string;
+  itemsFor(variant: string): ItemProducer | undefined;
+}
+
+/** What a frame pass reads before a Gantt binds its own registry to it. It draws nothing, because
+ *  an unbound pass has no Entry to draw either — `produceItemsForRow` asks `variantFor` only for an
+ *  Entry it already found. One frozen object, never a per-instance one: it holds no state, so two
+ *  Gantts sharing it cannot see each other (I2). */
+export const NO_VARIANTS: VariantItems = Object.freeze({
+  variantFor: () => '',
+  itemsFor: () => undefined,
+});
+
+/** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer builds its
+ *  Items here, so no producer restates it. `segmentId` is the caller's own Segment, not re-derived
+ *  from `segmentIndex` — a caller with no Segment in hand (a whole Entry) simply omits it. */
+export function entryItem(
+  entry: Entry,
+  segmentIndex: number,
+  start: Instant,
+  end: Instant,
+  variant: string,
+  segmentId?: SegmentId,
+): Item {
+  const item: Item = {
+    id: itemId(entry.id, segmentIndex),
+    entryId: entry.id,
+    variant,
+    label: entry.name,
+    start,
+    end,
+  };
+  if (segmentId !== undefined) item.segmentId = segmentId;
+  return item;
+}
+
+/** One Item covering the entry's whole span — what almost every `ItemProducer` returns, and the
+ *  default a variant with no `items` gets (ADR 0018). Public because the alternative is eight
+ *  hand-written lines that must get the Item id convention right from documentation alone. Pure and
+ *  DOM-free, like every other `layout/` function.
+ *
+ *  Load-bearing cast (ADR 0012, Build 1, J2 in BUILD-LOG.md): a non-spanning Entry has no
+ *  `start`/`end` to draw, so `produceItemsForRow` never calls any producer — shipped or a
+ *  plugin's own — for one. `spansTime` is where that rule is written, and `produceItemsForRow`
+ *  is where it runs. The contract, not the type, is why `entry.start`/`entry.end` are read here
+ *  as if they were always present.
+ *
+ *  This is the one cast Q5 left standing. The type fix is a narrower parameter — the Entry this
+ *  takes always spans — and that is a public signature change, so it is owed rather than taken
+ *  (N10 in plans/field-redesign/BUILD-LOG.md). */
+export function wholeEntryItem(entry: Entry, variant: string): Item {
+  return entryItem(entry, 0, entry.start as Instant, entry.end as Instant, variant);
+}

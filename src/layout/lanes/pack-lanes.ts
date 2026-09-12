@@ -4,7 +4,7 @@
 
 import type { ItemId, Instant } from '../../model/index.js';
 import { diffMs } from '../../time/index.js';
-import type { Item } from '../items/produce-items.js';
+import type { Item } from '../items/item.js';
 
 /** Fallback for `--fg-lane-gap` when the stylesheet token is unset. */
 export const DEFAULT_LANE_GAP_PX = 2;
