@@ -20,7 +20,10 @@ export type FieldKey = CoreFieldKey | (string & {});
  *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
  *  `entries.get(id)?.props`. */
 export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
-  /** `end - start`, computed on read (`CORE_FIELDS`) — the one core Field with no `Entry` key. */
+  /** This row's duration under the Dataset's `measureDuration`, computed on read (`CORE_FIELDS`) —
+   *  the one core Field with no `Entry` key. `measureEntryDuration` (`data/fields/field-access.ts`)
+   *  is the one computation all three doors reach: `'span'` measures `end - start`, and
+   *  `'segments'` sums the Segments and counts no gap (ADR 0017). */
   duration: Duration;
 }
 

@@ -471,7 +471,7 @@ export type DecorationProvider = (ctx: DecorationContext) => readonly Decoration
 // @public
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(plugin: TPlugin): TPlugin;
 
-// @public (undocumented)
+// @public
 export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(plugin: TPlugin): TPlugin;
 
 // @public
@@ -2015,7 +2015,7 @@ export interface Size {
 // @public
 export type SnapSetting = TickStep | 'tick' | 'none';
 
-// @public (undocumented)
+// @public
 export interface StoredEntry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)

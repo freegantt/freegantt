@@ -765,14 +765,18 @@ export class PluginSetupError extends FreeGanttError {
 
   /** ADR 0019, `Q4`: a plugin with a `data` half was handed to a `Gantt`. It arrived too late to
    *  declare a Field, so it fails loudly and says where it goes instead. Same error, same `code` —
-   *  a misplaced plugin is a setup that did not happen, and it needs no type of its own. */
+   *  a misplaced plugin is a setup that did not happen, and it needs no type of its own.
+   *
+   *  The message quotes the id and shows the **site**, never a call (`F26`). A `PluginId` is a dotted
+   *  string, so `plugins: [acme.locks]` reads as a property access on an object named `acme` — it is
+   *  not pasteable, and the library cannot know the name of the variable the author holds. */
   static wrongInstallSite(pluginId: PluginId): PluginSetupError {
     return new PluginSetupError(
       pluginId,
       undefined,
-      `plugins: "${pluginId}" has a "data" half, so it installs on the Dataset, not on the Gantt. ` +
-        `Write new Dataset({ entries, plugins: [${pluginId}] }) and leave it off GanttOptions.plugins. ` +
-        'A Field must exist before the first Rollup, and a Gantt mounts after that.',
+      `plugins: the plugin with id "${pluginId}" has a "data" half, so it installs on the Dataset, ` +
+        'not on the Gantt. Pass it to new Dataset({ entries, plugins: […] }) instead of ' +
+        'GanttOptions.plugins. A Field must exist before the first Rollup, and a Gantt mounts after that.',
     );
   }
 }

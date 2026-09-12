@@ -42,6 +42,15 @@ import type { ChromePlugin, DataPlugin } from './gantt.js';
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(
   plugin: TPlugin,
 ): TPlugin;
+/**
+ * The arm a plugin with a `data` half resolves to — see the first signature above for the whole
+ * contract, the example and `TProps`.
+ *
+ * This arm installs on the **Dataset**: `new Dataset({ entries, plugins: [acmeLocks()] })`. A Field
+ * must exist before the first Rollup walks (D-S5-4), so `GanttOptions.plugins` refuses it, in the
+ * editor rather than at mount. It may fill `view` as well, and every Gantt bound to that Dataset
+ * then runs `view` once with its own context.
+ */
 export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(
   plugin: TPlugin,
 ): TPlugin;
