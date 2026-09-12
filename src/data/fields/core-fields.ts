@@ -1,7 +1,7 @@
 // data/ — core Fields are ordinary declarations (D-S4-4). A core key reads and writes the Entry
 // directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
-import type { Duration, StoredEntry, Field, FieldKey, Instant } from '../../model/index.js';
+import type { Duration, Entry, StoredEntry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
@@ -34,7 +34,7 @@ function formatStart(value: unknown, ctx: { timeZone: string; locale: Intl.Local
 function formatEnd(
   value: unknown,
   ctx: { timeZone: string; locale: Intl.LocalesArgument },
-  entry: StoredEntry,
+  entry: Entry,
 ): string {
   if (value === undefined || value === null) return '';
   // End with no start (ADR 0012) shows the stored end as a plain instant — no inclusive-display

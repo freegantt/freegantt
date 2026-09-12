@@ -9,7 +9,6 @@ import type {
   DatasetEventMap,
   StoredEntry,
   EntryId,
-  FieldContext,
   FieldUpdated,
   SegmentId,
   StoreRowUpdated,
@@ -21,6 +20,7 @@ import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
+import type { FieldAccess } from './fields/field-access.js';
 import { rollUpFields } from './rollup.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { isDevMode } from './dev-mode.js';
@@ -90,7 +90,7 @@ export interface TransactionData {
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  readonly fieldAccess: FieldAccess;
   bumpDatasetRevision(): void;
   /** The commit path's real counter (ADR 0012) — see `CommitChangeSetInput.mintSegmentId`, the
    *  structurally-narrower shape `buildCommitChangeSet` actually reads. */
@@ -129,7 +129,7 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldContext, () =>
+  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldAccess, () =>
     data.mintSegmentId(),
   );
   writeConstructionUpdates(data, updated);

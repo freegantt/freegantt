@@ -21,7 +21,7 @@ import type {
 } from '../../api/gantt.js';
 import { resolveActedOn } from '../../api/command.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { StoredEntry } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
 import { buildMenu, menuItemUnder, menuItemsIn, resolveMenuEntries } from './menu-view.js';
 import type { MenuEntry } from './menu-view.js';
@@ -31,7 +31,7 @@ export type { MenuItem, MenuEntry } from './menu-view.js';
 export interface ContextMenuOptions {
   /** Returns the final entry list; `defaults` is `commands.available(ctx)` mapped to items, in
    *  registration order. Append, remove, reorder or replace — the returned array is what renders. */
-  items?(ctx: { entry?: StoredEntry; defaults: readonly MenuEntry[] }): readonly MenuEntry[];
+  items?(ctx: { entry?: Entry; defaults: readonly MenuEntry[] }): readonly MenuEntry[];
 }
 
 /** The resolved DOM target as a `CommandContext.target`. Both name the same five `TargetKind` words

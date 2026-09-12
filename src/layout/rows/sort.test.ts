@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId, segmentId, UnknownFieldError } from '../../model/index.js';
-import type { Duration, StoredEntry, Instant } from '../../model/index.js';
+import type { Duration, Entry, Instant } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import { resolveEntriesSource } from './entries-source.js';
 import { applySort } from './sort.js';
@@ -12,10 +12,10 @@ function instant(n: number): Instant {
 function entry(
   id: string,
   opts?: { parentId?: string; start?: number; end?: number; cost?: number },
-): StoredEntry {
+): Entry {
   const start = instant(opts?.start ?? 0);
   const end = instant(opts?.end ?? (opts?.start ?? 0) + 1);
-  const row: StoredEntry = {
+  const row: Entry = {
     id: entryId(id),
     name: id,
     start,
@@ -27,12 +27,12 @@ function entry(
   return row;
 }
 
-function durationOf(row: StoredEntry): Duration {
+function durationOf(row: Entry): Duration {
   return { value: Number(row.end) - Number(row.start), unit: 'millisecond' };
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: StoredEntry) => (row.props as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
   return [
     {
       key: 'name',
@@ -123,7 +123,7 @@ describe('applySort (S4.9)', () => {
   });
 
   it('a row with neither date sorts last on asc and on desc, not direction * order (ADR 0012 Gate)', () => {
-    const dateless: StoredEntry = { id: entryId('none'), name: 'none', segments: [], props: {} };
+    const dateless: Entry = { id: entryId('none'), name: 'none', segments: [], props: {} };
     const entries = [entry('a', { start: 1 }), dateless, entry('b', { start: 2 })];
     const built = resolveEntriesSource(entries, { source: 'entries' });
 

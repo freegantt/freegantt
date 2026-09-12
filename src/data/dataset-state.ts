@@ -11,7 +11,7 @@ import type {
   DatasetEventMap,
   EntryInput,
   Field,
-  FieldContext,
+  DurationMeasure,
   FieldKey,
   FieldType,
   Instant,
@@ -35,7 +35,8 @@ import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
-import { createFieldContext } from './fields/field-access.js';
+import { createFieldAccess, readingChildrenFrom } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';
 
@@ -51,6 +52,8 @@ export interface DatasetStateOptions {
   history?: HistoryOptions;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
+  /** How core measures a duration (ADR 0017, Q6/J12). Defaults to `'span'`. */
+  measureDuration?: DurationMeasure;
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
@@ -102,7 +105,9 @@ export class DatasetState implements Dataset {
   notifying = false;
   readonly #entryContext: EntryReadContext;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  /** `data/`'s own ambient read scope (ADR 0017, J16) — the zone, the registry, the duration
+   *  policy and the tree. A consumer receives `ambientFieldContext(access)`, which is the zone. */
+  readonly fieldAccess: FieldAccess;
   readonly computedCache = new ComputedFieldCache();
   /** Bumped on every committed changeset — the computed-field cache key (D-S4-10). */
   #datasetRevision = 0;
@@ -130,10 +135,12 @@ export class DatasetState implements Dataset {
       fieldTypes: options.fieldTypes ?? {},
       aggregators: options.aggregators ?? {},
     });
-    this.fieldContext = createFieldContext(this.fields, this.timeZone, () => ({
-      cache: this.computedCache,
-      datasetRevision: this.#datasetRevision,
-    }));
+    this.fieldAccess = createFieldAccess({
+      fields: this.fields,
+      timeZone: this.timeZone,
+      measureDuration: options.measureDuration ?? 'span',
+      memo: () => ({ cache: this.computedCache, datasetRevision: this.#datasetRevision }),
+    });
     this.#reservedSegmentIds = authoredSegmentIdsOf(options.entries);
     this.#entryContext = {
       timeZone: this.timeZone,
@@ -144,7 +151,7 @@ export class DatasetState implements Dataset {
       toEntries(options.entries, this.#entryContext, this.fields),
       this.#entryContext,
       this.fields,
-      this.fieldContext,
+      this.fieldAccess,
       this,
     );
     this.#entryStoreReady = true;

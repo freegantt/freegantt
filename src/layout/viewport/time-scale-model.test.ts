@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import { dayPreset, instant, MS } from '../../time/index.js';
 import { entryId, segmentId, UnknownPresetError } from '../../model/index.js';
-import type { StoredEntry } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 
-function entry(id: string, start: string, end: string): StoredEntry {
+function entry(id: string, start: string, end: string): Entry {
   const startInstant = instant(start);
   const endInstant = instant(end);
   return {
@@ -17,7 +17,7 @@ function entry(id: string, start: string, end: string): StoredEntry {
   };
 }
 
-const entries: StoredEntry[] = [
+const entries: Entry[] = [
   entry('t1', '2026-09-01T00:00:00Z', '2026-09-03T00:00:00Z'),
   entry('t2', '2026-09-02T00:00:00Z', '2026-09-06T00:00:00Z'),
 ];
@@ -40,7 +40,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('a one-date Entry still widens fitDataset, start and end folded in independently (ADR 0012 Gate)', () => {
-    const startOnly: StoredEntry = {
+    const startOnly: Entry = {
       id: entryId('t3'),
       name: 't3',
       start: instant('2026-09-08T00:00:00Z'),

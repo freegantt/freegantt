@@ -8,7 +8,7 @@ import type {
   SelectionForGestures,
 } from '../view/index.js';
 import { entryId, entryIdOfItem, itemId, rowId, segmentId, segmentIndexOfItem } from '../model/index.js';
-import type { StoredEntry, EntryEdits, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -31,7 +31,7 @@ function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
-function entryFor(id: EntryId): StoredEntry {
+function entryFor(id: EntryId): Entry {
   const start = toInstant(0);
   const end = toInstant(1);
   return { id, name: id, start, end, segments: [{ id: segmentOf(id), start, end }], props: {} };
@@ -53,10 +53,10 @@ function move(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEve
  *  would otherwise resolve for real (D-GH-1). Not `EntryGestureContext` members themselves: they
  *  build the fake `session` this file's `ctx.session` returns. */
 interface SessionOverrides {
-  entriesForGesture?: (grabbed: EntryId, capability: 'move' | 'resize') => StoredEntry[];
+  entriesForGesture?: (grabbed: EntryId, capability: 'move' | 'resize') => Entry[];
   draftFor?: (
     gesture: EntryGesture,
-    entries: StoredEntry[],
+    entries: Entry[],
     dxPx: number,
     options?: DraftOptions,
   ) => EntryEdits;
@@ -761,7 +761,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     mockPointerCapture(pane);
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const seenEntries: StoredEntry[][] = [];
+    const seenEntries: Entry[][] = [];
     const { ctx } = makeContext({
       can: () => true,
       entriesForGesture: (grabbed) => [entryFor(grabbed), entryFor(grabbed === A ? B : A)],
@@ -883,7 +883,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     mockPointerCapture(pane);
     const middle = itemId(A, 1);
     const grabbedIds: EntryId[] = [];
-    const segmented: StoredEntry = {
+    const segmented: Entry = {
       ...entryFor(A),
       segments: [
         { id: segmentId('seg-1'), start: toInstant(0), end: toInstant(1) },

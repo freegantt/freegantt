@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityInputs, Interactions, KindDefaults } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import type { StoredEntry, Field, FieldKey, Instant } from '../model/index.js';
+import type { Entry, Field, FieldKey, Instant } from '../model/index.js';
 import type { EntryLook } from '../layout/index.js';
 import { entryId, segmentId } from '../model/index.js';
 
-function entry(overrides: Partial<StoredEntry> = {}): StoredEntry {
+function entry(overrides: Partial<Entry> = {}): Entry {
   const start = 0 as Instant;
   const end = 1 as Instant;
   return {
@@ -24,12 +24,12 @@ function entry(overrides: Partial<StoredEntry> = {}): StoredEntry {
 // derives `hasChildren` from `dataset.entries.childrenOf` and `lookOf` from `resolveLook`
 // (`layout/items/produce-items.ts`). This file has no Dataset to ask, so it marks the one fact each
 // test cares about on the Entry's own `props` and reads the mark straight back.
-const isMarkedParent = (entry: StoredEntry): boolean => entry.props['isParent'] === true;
+const isMarkedParent = (entry: Entry): boolean => entry.props['isParent'] === true;
 /** ADR 0013: what a parent bar's own drag would write. A test that cares hands over its own subtree;
  *  every other test here marks a parent with no children to find, which is what an empty list says. */
-const markedChildren = (entry: StoredEntry): readonly StoredEntry[] =>
-  (entry.props['children'] as readonly StoredEntry[] | undefined) ?? [];
-const markedLook = (entry: StoredEntry): EntryLook =>
+const markedChildren = (entry: Entry): readonly Entry[] =>
+  (entry.props['children'] as readonly Entry[] | undefined) ?? [];
+const markedLook = (entry: Entry): EntryLook =>
   (entry.props['look'] as EntryLook | undefined) ?? 'leaf';
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
@@ -81,7 +81,7 @@ describe('resolveCapabilities — gestures', () => {
 
   it('refuses a parent move when nothing below it holds a date — there is nothing to translate', () => {
     const caps = capabilities();
-    const dateless: StoredEntry = { id: entryId('c1'), name: 'c1', segments: [], props: {} };
+    const dateless: Entry = { id: entryId('c1'), name: 'c1', segments: [], props: {} };
     const parent = entry({ props: { isParent: true, children: [dateless] } });
     expect(caps.can('move', parent)).toBe(false);
     expect(caps.entriesMovedBy(parent)).toEqual([]);
@@ -348,9 +348,9 @@ describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
 });
 
 describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", () => {
-  const dated = (id: string): StoredEntry => entry({ id: entryId(id), name: id });
+  const dated = (id: string): Entry => entry({ id: entryId(id), name: id });
   /** One date and no Segment (ADR 0012): the row shows in the grid and draws no bar. */
-  const startOnly = (id: string): StoredEntry => ({
+  const startOnly = (id: string): Entry => ({
     id: entryId(id),
     name: id,
     start: 0 as Instant,

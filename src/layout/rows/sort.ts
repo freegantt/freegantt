@@ -1,13 +1,13 @@
 // layout/ — row-source sort. Reads stored values through bound FieldCompare (D-S4-28, D-S4-29).
 
 import { UnknownFieldError } from '../../model/index.js';
-import type { StoredEntry, FieldContext, RowId } from '../../model/index.js';
+import type { Entry, FieldContext, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSort, UnindexedRow } from './row-source.js';
 
 export type { RowSort } from './row-source.js';
 
-type EntryComparer = (left: StoredEntry, right: StoredEntry) => number;
+type EntryComparer = (left: Entry, right: Entry) => number;
 
 function comparerFor(
   sort: RowSort,
@@ -46,7 +46,7 @@ function siblingsByParentRow(rows: readonly UnindexedRow[]): Map<RowId | undefin
 
 function sortSiblings(
   siblings: readonly UnindexedRow[],
-  entriesById: ReadonlyMap<StoredEntry['id'], StoredEntry>,
+  entriesById: ReadonlyMap<Entry['id'], Entry>,
   compare: EntryComparer,
 ): UnindexedRow[] {
   return [...siblings].sort((left, right) => {
@@ -60,7 +60,7 @@ function sortSiblings(
 function emitSorted(
   parentId: RowId | undefined,
   childrenOf: ReadonlyMap<RowId | undefined, readonly UnindexedRow[]>,
-  entriesById: ReadonlyMap<StoredEntry['id'], StoredEntry>,
+  entriesById: ReadonlyMap<Entry['id'], Entry>,
   compare: EntryComparer,
 ): UnindexedRow[] {
   const siblings = childrenOf.get(parentId) ?? [];
@@ -76,7 +76,7 @@ function emitSorted(
 /** Reorders sibling rows that share a `parentRowId`. Tree, group, and flat lists use this one walk. */
 export function applySort(
   rows: readonly UnindexedRow[],
-  entries: readonly StoredEntry[],
+  entries: readonly Entry[],
   sort: RowSort | undefined,
   fieldCompares: readonly FieldCompare[],
   fields?: FieldContext,

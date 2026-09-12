@@ -10,7 +10,7 @@
 
 import type {
   Disposer,
-  StoredEntry,
+  Entry,
   EntryId,
   FieldKey,
   KeyChord,
@@ -136,7 +136,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  right-click landed in — the Entry whose Fields that row's cells show. A row that owns several
    *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
    *  landed on no Entry at all. */
-  entry?: StoredEntry;
+  entry?: Entry | undefined;
   target?: CommandTarget;
 }
 

@@ -34,7 +34,7 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
  *  import `layout/`. */
 export interface ColumnCellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row. */
-  entry?: StoredEntry;
+  entry?: Entry | undefined;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
   /** The same Field value before formatting — what `dataset.entries.fieldValue(id, field)` answers
@@ -157,7 +157,7 @@ export type Field<TValue = unknown> =
        *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
        *  cell — a formatter that needs the Entry declares this third parameter instead; every other
        *  formatter still assigns with two, or one (#240). */
-      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
       /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
        *  back into a stored value. `undefined` means the text names no value — the editor stays open in
        *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
@@ -197,7 +197,7 @@ export type Field<TValue = unknown> =
        *  Named `compute`, not `get`: `get` already names three unrelated jobs in this codebase. */
       compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
       compare?(a: TValue | undefined, b: TValue | undefined): number;
-      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
       column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
       // Declared `never` (never abbreviated away, unlike the ADR's shorthand comment) so a caller
       // holding a bare `Field` can read `field.equals`/`.parseValue`/`.inputType` without narrowing
@@ -230,7 +230,7 @@ export interface FieldType<TValue = unknown> {
   ): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
-  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
+  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
   parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
   column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;

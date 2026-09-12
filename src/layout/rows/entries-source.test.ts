@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId, segmentId } from '../../model/index.js';
-import type { StoredEntry, Instant } from '../../model/index.js';
+import type { Entry, Instant } from '../../model/index.js';
 import { resolveEntriesSource } from './entries-source.js';
 import { resolveRows } from './resolve-rows.js';
 
@@ -8,10 +8,10 @@ function instant(n: number): Instant {
   return n as Instant;
 }
 
-function entry(id: string, parentId?: string, team?: string): StoredEntry {
+function entry(id: string, parentId?: string, team?: string): Entry {
   const start = instant(0);
   const end = instant(1);
-  const row: StoredEntry = {
+  const row: Entry = {
     id: entryId(id),
     name: id,
     start,

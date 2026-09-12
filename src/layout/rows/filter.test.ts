@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId, segmentId } from '../../model/index.js';
-import type { CoreFieldValue, StoredEntry, FieldContext, FieldKey, Instant } from '../../model/index.js';
+import type { CoreFieldValue, Entry, FieldContext, FieldKey, Instant } from '../../model/index.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
 
@@ -11,10 +11,10 @@ function instant(n: number): Instant {
 function entry(
   id: string,
   opts?: { parentId?: string; team?: string; start?: number; cost?: number },
-): StoredEntry {
+): Entry {
   const start = instant(opts?.start ?? 0);
   const end = instant((opts?.start ?? 0) + 1);
-  const row: StoredEntry = {
+  const row: Entry = {
     id: entryId(id),
     name: id,
     start,
@@ -71,7 +71,7 @@ describe('applyFilter (S4.9)', () => {
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
     const fields: FieldContext = {
       timeZone: 'UTC',
-      read<K extends FieldKey>(row: StoredEntry, key: K): CoreFieldValue<K> | undefined {
+      read<K extends FieldKey>(row: Entry, key: K): CoreFieldValue<K> | undefined {
         if (key !== 'team') return undefined;
         return (row.props as { team?: string } | undefined)?.team as CoreFieldValue<K> | undefined;
       },

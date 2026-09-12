@@ -11,7 +11,7 @@
 import { itemId, spansTime } from '../../model/index.js';
 import type {
   Disposer,
-  StoredEntry,
+  Entry,
   EntryId,
   EntryLook,
   ItemId,
@@ -41,7 +41,7 @@ export interface Item {
   segmentId?: SegmentId;
 }
 
-export type ItemProducer = (entry: StoredEntry) => readonly Item[];
+export type ItemProducer = (entry: Entry) => readonly Item[];
 
 /** Which entries wear one plugin's look (Q10, ADR 0013). A plugin registers one beside the producer
  *  it already registers:
@@ -57,7 +57,7 @@ export type ItemProducer = (entry: StoredEntry) => readonly Item[];
  *
  *  A look with a producer and no claim draws nothing, because nothing ever wears it. The two
  *  registrations are a pair. */
-export type LookClaim = (entry: StoredEntry) => boolean;
+export type LookClaim = (entry: Entry) => boolean;
 
 /** Two plugins claimed one Entry. The first registered claim paints; the second is reported and
  *  ignored. The library never arbitrates between plugins — the consumer chose which ones to
@@ -87,7 +87,7 @@ export type ReportDoubleClaim = (collision: DoubleLookClaim) => void;
  *  builds its Items here, so no producer restates it. `segmentId` is the caller's own Segment, not
  *  re-derived from `segmentIndex` — a caller with no Segment in hand (a whole Entry) simply omits it. */
 function entryItem(
-  entry: StoredEntry,
+  entry: Entry,
   segmentIndex: number,
   start: Instant,
   end: Instant,
@@ -121,7 +121,7 @@ function entryItem(
  *  This is the one cast Q5 left standing. The type fix is a narrower parameter — the Entry this
  *  takes always spans — and that is a public signature change, so it is owed rather than taken
  *  (N10 in plans/field-redesign/BUILD-LOG.md). */
-export function wholeEntryItem(entry: StoredEntry, look: EntryLook): Item {
+export function wholeEntryItem(entry: Entry, look: EntryLook): Item {
   return entryItem(entry, 0, entry.start as Instant, entry.end as Instant, look);
 }
 
@@ -130,7 +130,7 @@ export interface ItemProducerRegistry {
   producerFor(look: EntryLook): ItemProducer | undefined;
   /** The look this Entry wears, or `undefined` when no plugin claims it — in which case structure
    *  answers (`resolveLook`). The first registered claim to answer yes wins. */
-  claimedLookFor(entry: StoredEntry): EntryLook | undefined;
+  claimedLookFor(entry: Entry): EntryLook | undefined;
   /** `ctx.layout.registerLookClaim(look, claim)` — which entries wear `look` (Q10). Newest
    *  registration on a look wins, and disposal restores the one before it, the same as every other
    *  `register*` seam. */
@@ -144,7 +144,7 @@ export interface ItemProducerRegistry {
   register(look: EntryLook, producer: ItemProducer): Disposer;
 }
 
-function produceLeafItems(entry: StoredEntry): readonly Item[] {
+function produceLeafItems(entry: Entry): readonly Item[] {
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
     return segments.map((segment, index) =>
@@ -158,7 +158,7 @@ function produceLeafItems(entry: StoredEntry): readonly Item[] {
 }
 
 // render/ draws the bracket off data-kind (D-S4-24).
-function produceParentItems(entry: StoredEntry): readonly Item[] {
+function produceParentItems(entry: Entry): readonly Item[] {
   return [wholeEntryItem(entry, 'parent')];
 }
 
@@ -229,12 +229,8 @@ function claimant(look: EntryLook, pluginId: PluginId | undefined): LookClaimant
  *
  *  A claimed look with no producer draws nothing. The claim still stands, so `resolveCapabilities`
  *  and the `bar` renderer seam still key on it: the plugin said this Entry is its own. */
-export function resolveItems(
-  entry: StoredEntry,
-  registry: ItemProducerRegistry,
-  hasChildren: boolean,
-): readonly Item[] {
-  return registry.producerFor(resolveLook(entry, registry, hasChildren))?.(entry) ?? [];
+export function resolveItems(entry: Entry, registry: ItemProducerRegistry): readonly Item[] {
+  return registry.producerFor(resolveLook(entry, registry))?.(entry) ?? [];
 }
 
 /** The look one Entry wears — a plugin's claim first, then structure (ADR 0013: "a plugin that
@@ -245,23 +241,17 @@ export function resolveItems(
  *  `resolveCapabilities` -> `lookOf`), so it asks predicates and allocates nothing. Until Q10 it
  *  ran every candidate producer and counted the Items each one built, against the zero-allocation
  *  rule its own comment claimed to keep. */
-export function resolveLook(
-  entry: StoredEntry,
-  registry: ItemProducerRegistry,
-  hasChildren: boolean,
-): EntryLook {
-  return registry.claimedLookFor(entry) ?? (hasChildren ? 'parent' : 'leaf');
+export function resolveLook(entry: Entry, registry: ItemProducerRegistry): EntryLook {
+  return registry.claimedLookFor(entry) ?? (entry.hasChildren ? 'parent' : 'leaf');
 }
 
-/** Call: `produceItemsForRow(planned, entryById, registry, hasChildren)`. The registry is required —
- *  one per Gantt (I2), never a fresh one per row. `hasChildren` answers structure for one Entry id —
- *  `(id) => entryById.get(id) !== undefined && childCountByParent(...).get(id) > 0` at the call site,
- *  never re-derived here. */
+/** Call: `produceItemsForRow(planned, entryById, registry)`. The registry is required — one per
+ *  Gantt (I2), never a fresh one per row. Structure comes off the row itself (`entry.hasChildren`,
+ *  ADR 0017), so nothing threads a second answer beside it. */
 export function produceItemsForRow(
   row: PlannedRow,
-  entryById: ReadonlyMap<EntryId, StoredEntry>,
+  entryById: ReadonlyMap<EntryId, Entry>,
   registry: ItemProducerRegistry,
-  hasChildren: (id: EntryId) => boolean,
 ): readonly Item[] {
   if (isPlannedHeaderRow(row)) return [];
   const items: Item[] = [];
@@ -273,7 +263,7 @@ export function produceItemsForRow(
     // and the two producers above may read `entry.start`/`entry.end` as always present (J2,
     // BUILD-LOG.md).
     if (!spansTime(entry)) continue;
-    items.push(...resolveItems(entry, registry, hasChildren(id)));
+    items.push(...resolveItems(entry, registry));
   }
   return items;
 }

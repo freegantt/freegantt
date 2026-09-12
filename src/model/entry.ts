@@ -10,7 +10,7 @@
 import type { Duration } from './time.js';
 import type { Instant } from './time.js';
 import type { EntryId } from './ids.js';
-import type { FieldKey, FieldValue } from './field.js';
+import type { FieldKey, FieldValue } from './field-key.js';
 import type { EntryInput, Segment } from './stored-entry.js';
 
 /**

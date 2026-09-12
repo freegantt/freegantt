@@ -4,7 +4,7 @@ import { createItemProducerRegistry } from './items/produce-items.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import { entryId, rowId, segmentId } from '../model/index.js';
-import type { StoredEntry } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 
 function packPlan(entries = sampleEntries): readonly PlannedRow[] {
@@ -101,7 +101,7 @@ describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', ()
   const registry = createItemProducerRegistry();
   const laneGap = 2;
 
-  function memoryFor(entries: readonly StoredEntry[]): { memory: FrameMemory; rowKey: string } {
+  function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {
     const plan = packPlan(entries);
     const memory = new FrameMemory();
     memory.sync({ plan, rowHeight: 32, laneGap, entries, registry, datasetRevision: 0 });

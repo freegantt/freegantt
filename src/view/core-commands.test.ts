@@ -4,7 +4,7 @@ import type { CoreCommandPorts } from './core-commands.js';
 import { CommandRegistry } from '../extensions/commands.js';
 import type { CommandContext } from '../extensions/commands.js';
 import { entryId } from '../model/index.js';
-import type { StoredEntry } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 
 function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> } {
   return {
@@ -39,7 +39,7 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
   };
 }
 
-function makeRegistry(entry?: StoredEntry): {
+function makeRegistry(entry?: Entry): {
   registry: CommandRegistry<unknown>;
   ctx: CommandContext<unknown>;
 } {
@@ -98,7 +98,7 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
       name: 'Row',
       start: 0,
       end: 1,
-    } as unknown as StoredEntry;
+    } as unknown as Entry;
     const { registry: withEntry } = makeRegistry(entry);
     registerCoreCommands(withEntry, ports);
     withEntry.run('freegantt.collapseRow');

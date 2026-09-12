@@ -84,7 +84,7 @@ import {
 } from '../model/index.js';
 import type {
   Dataset,
-  StoredEntry,
+  Entry,
   EntryId,
   FieldKey,
   GridColumnInput,
@@ -121,7 +121,7 @@ import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
 import { SegmentSelection } from './segment-selection.js';
 import type { SegmentSelectionPorts } from './segment-selection.js';
-import { createFieldContext } from '../data/fields/field-access.js';
+
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
 
@@ -224,7 +224,7 @@ export interface GanttShellWiring {
    *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
   buildCommandContext?: (parts: {
-    entry?: StoredEntry;
+    entry?: Entry;
     target?:
       | {
           kind: 'header';
@@ -428,7 +428,7 @@ export class GanttShell {
   #lastBarById = new Map<ItemId, FrameBar>();
   /** The committed Entries keyed by id, and the `datasetRevision` they were built from.
    *  `#committedEntriesById` below is the only reader and the only writer. */
-  #entriesById: ReadonlyMap<EntryId, StoredEntry> = new Map();
+  #entriesById: ReadonlyMap<EntryId, Entry> = new Map();
   #entriesByIdRevision: number | undefined;
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
@@ -1138,15 +1138,8 @@ export class GanttShell {
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities({
       interactions: this.#interactions,
-      hasChildren: (entry) => this.#options.dataset.entries.childrenOf(entry.id).length > 0,
-      descendantsOf: (entry) => descendantsOf(entry.id, (id) => this.#options.dataset.entries.childrenOf(id)),
       fieldFor: (key) => this.#options.dataset.field(key),
-      lookOf: (entry) =>
-        resolveLook(
-          entry,
-          this.#registrations.itemProducers,
-          this.#options.dataset.entries.childrenOf(entry.id).length > 0,
-        ),
+      lookOf: (entry) => resolveLook(entry, this.#registrations.itemProducers),
       registeredDefaultsFor: (look) => this.#registrations.lookDefaultsFor(look),
     });
   }
@@ -1543,7 +1536,7 @@ export class GanttShell {
    *  copied every Entry in the Dataset sixty times a second (I5). A drag commits once, at the end,
    *  so a drag now rebuilds this at most once. One revision is the whole cache key, because
    *  `EditRequest.entries` is committed-only by contract (D-S5-45). */
-  #committedEntriesById(): ReadonlyMap<EntryId, StoredEntry> {
+  #committedEntriesById(): ReadonlyMap<EntryId, Entry> {
     const revision = this.#options.dataset.datasetRevision;
     if (revision !== this.#entriesByIdRevision) {
       this.#entriesById = new Map(this.#options.dataset.entries.all.map((entry) => [entry.id, entry]));
@@ -1602,17 +1595,16 @@ export class GanttShell {
     this.#backend.applyState(this.#interactionState);
   }
 
-  #entryFor(item: ItemId): StoredEntry | undefined {
+  #entryFor(item: ItemId): Entry | undefined {
     return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
-  /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
-   *  a core, `props`-addressed or `compute` Field alike (ADR 0011). It shares the memo
+  /** Review H3: `CellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
+   *  core, `props`-addressed or `compute` Field alike (ADR 0011, ADR 0017). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
-  #fieldValueForCell(entry: StoredEntry | undefined, key: FieldKey): unknown {
-    if (entry === undefined) return undefined;
-    return this.#options.dataset.entries.fieldValue(entry.id, key);
+  #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
+    return entry?.read(key);
   }
 
   get theme(): Theme {
@@ -1871,10 +1863,7 @@ export class GanttShell {
     // rebind paint twice.
     this.#frameSettings.set({
       fieldCompares: bound.fieldCompares,
-      fieldContext: createFieldContext(
-        { get: (key) => this.#options.dataset.field(key) },
-        this.#options.dataset.timeZone,
-      ),
+      fieldContext: { timeZone: this.#options.dataset.timeZone },
     });
     // #139/#157: the columns just changed, so the width they dictate changed with them.
     this.#gridPaneWidth.resizeToColumns();
