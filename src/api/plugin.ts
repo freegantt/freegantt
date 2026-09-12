@@ -1,6 +1,6 @@
 // api/ — what a plugin is (ADR 0019). One plugin type, two halves, one install site.
 //
-// The `view` half's context arrives as a plain type argument, never as an import: naming
+// The `view` half's context arrives as a plain type argument, never as an import. Naming
 // `api/plugin-context.ts` here would pull `view/` in, and `view/` reaches back to `api/command.ts`
 // and `api/dataset.ts`. Dependency-cruiser's `no-circular` rule treats a type-only edge the same as
 // a runtime one, so that import would close a ring. `api/gantt.ts` is the one file that sees both
@@ -61,5 +61,4 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
 /** One installed plugin, either arm. `DatasetOptions.plugins` takes this; `GanttOptions.plugins`
  *  takes `ChromePluginOf` alone. */
 export type PluginOf<TViewContext = unknown, TDataset = unknown> =
-  | ChromePluginOf<TViewContext>
-  | DataPluginOf<TViewContext, TDataset>;
+  ChromePluginOf<TViewContext> | DataPluginOf<TViewContext, TDataset>;

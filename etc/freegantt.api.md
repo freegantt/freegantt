@@ -115,6 +115,16 @@ export type ChangeSetId = string & {
 // @public
 export function changeSetId(counter: number): ChangeSetId;
 
+// @public (undocumented)
+export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps>>;
+
+// @public
+export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
+    // (undocumented)
+    data?: never;
+    view(ctx: TViewContext): Disposer | void;
+}
+
 // @public
 export interface ClientPoint {
     // (undocumented)
@@ -213,7 +223,7 @@ export class ContainerNotFoundError extends FreeGanttError {
 }
 
 // @public
-export function contextMenu(options?: ContextMenuOptions): GanttPlugin;
+export function contextMenu(options?: ContextMenuOptions): ChromePlugin;
 
 // @public (undocumented)
 export interface ContextMenuOptions {
@@ -264,6 +274,15 @@ export interface CustomRowSource {
 }
 
 // @public (undocumented)
+export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
+
+// @public
+export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
+    data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+    view?(ctx: TViewContext): Disposer | void;
+}
+
+// @public (undocumented)
 export class Dataset<TProps = unknown> {
     constructor(options: DatasetOptions<TProps>);
     get canRedo(): boolean;
@@ -282,7 +301,7 @@ export class Dataset<TProps = unknown> {
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     // (undocumented)
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    get plugins(): readonly DatasetPluginOf<Dataset<TProps>>[];
+    get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[];
     pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
     // (undocumented)
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
@@ -344,12 +363,9 @@ export interface DatasetOptions<TProps = unknown> {
         capacity?: number;
     };
     measureDuration?: DurationMeasure;
-    plugins?: readonly DatasetPluginOf<Dataset<TProps>>[];
+    plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
     timeZone?: string;
 }
-
-// @public (undocumented)
-export type DatasetPlugin<TProps = unknown> = DatasetPluginOf<Dataset<TProps>>;
 
 // @public (undocumented)
 export type DatasetPluginContext<TProps = unknown> = DatasetPluginContextOf<Dataset<TProps>>;
@@ -368,15 +384,6 @@ export interface DatasetPluginContextOf<TDataset> {
     fields: DatasetFieldRegistrations;
     // (undocumented)
     store: DatasetStoreAccess;
-}
-
-// @public
-export interface DatasetPluginOf<TDataset> {
-    // (undocumented)
-    id: PluginId;
-    requires?: readonly PluginId[];
-    // (undocumented)
-    setup(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
 }
 
 // @public
@@ -453,6 +460,12 @@ export type DecorationLayer = 'underBars' | 'overBars';
 
 // @public (undocumented)
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
+
+// @public
+export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(plugin: TPlugin): TPlugin;
+
+// @public (undocumented)
+export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(plugin: TPlugin): TPlugin;
 
 // @public
 export class DerivedFieldNotWritableError extends FreeGanttError {
@@ -1044,12 +1057,12 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
-    hasPlugin(plugin: GanttPlugin<TProps> | PluginId): boolean;
+    hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
-    installPlugin(plugin: GanttPlugin<TProps>): void;
+    installPlugin(plugin: ChromePlugin<TProps>): void;
     get interactions(): Interactions;
     set interactions(next: Interactions);
     // (undocumented)
@@ -1064,8 +1077,8 @@ export class Gantt<TProps = unknown> {
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
-    get plugins(): readonly GanttPlugin<TProps>[];
-    set plugins(next: readonly GanttPlugin<TProps>[]);
+    get plugins(): readonly ChromePlugin<TProps>[];
+    set plugins(next: readonly ChromePlugin<TProps>[]);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -1097,7 +1110,7 @@ export class Gantt<TProps = unknown> {
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
-    uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void;
+    uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void;
     get variants(): readonly EntryVariant<TProps>[];
     set variants(next: readonly EntryVariant<TProps>[]);
     get viewportGestures(): ViewportGestures;
@@ -1186,7 +1199,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
-    plugins?: readonly GanttPlugin<TProps>[];
+    plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollModel;
     selectedSegmentIds?: readonly (SegmentId | string)[];
@@ -1198,16 +1211,6 @@ export interface GanttOptionsBase<TProps = unknown> {
     variants?: readonly EntryVariant<TProps>[];
     viewportGestures?: ViewportGestures;
     zoomPresets?: readonly PresetRef[];
-}
-
-// @public
-export type GanttPlugin<TProps = unknown> = GanttPluginOf<Gantt<TProps>, Dataset<TProps>>;
-
-// @public
-export interface GanttPluginOf<TGantt = unknown, TDataset = Dataset> {
-    // (undocumented)
-    id: PluginId;
-    setup(ctx: PluginContextOf<TGantt, TDataset>): Disposer | void;
 }
 
 // @public
@@ -1306,7 +1309,7 @@ export class IllegalCoreFieldOverrideError extends FreeGanttError {
 }
 
 // @public
-export function inlineEditing(options?: InlineEditingOptions): GanttPlugin;
+export function inlineEditing(options?: InlineEditingOptions): ChromePlugin;
 
 // @public (undocumented)
 export interface InlineEditingOptions {
@@ -1564,10 +1567,14 @@ export interface PlainParts {
 export type PlannedRowKind = 'entry' | 'header';
 
 // @public (undocumented)
+type Plugin_2<TProps = unknown> = PluginOf<PluginContext<TProps>, Dataset<TProps>>;
+export { Plugin_2 as Plugin }
+
+// @public
 export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
 
 // @public
-export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = PluginContextParts<TGantt, TDataset> & {
+export type PluginContextOf<TGantt = unknown, TDataset = unknown> = PluginContextParts<TGantt, TDataset> & {
     dataset: TDataset;
     gantt: TGantt;
 };
@@ -1617,11 +1624,21 @@ export type PluginErrorReport = Omit<ErrorReportInput, 'by'>;
 export type PluginId = string;
 
 // @public
+export interface PluginIdentity {
+    // (undocumented)
+    id: PluginId;
+    requires?: readonly PluginId[];
+}
+
+// @public
 export class PluginNotInstalledError extends FreeGanttError {
     constructor(pluginId: PluginId);
     // (undocumented)
     readonly pluginId: PluginId;
 }
+
+// @public
+export type PluginOf<TViewContext = unknown, TDataset = unknown> = ChromePluginOf<TViewContext> | DataPluginOf<TViewContext, TDataset>;
 
 // @public
 export class PluginRequirementCycleError extends FreeGanttError {
@@ -1632,9 +1649,10 @@ export class PluginRequirementCycleError extends FreeGanttError {
 
 // @public
 export class PluginSetupError extends FreeGanttError {
-    constructor(pluginId: PluginId, cause: unknown);
+    constructor(pluginId: PluginId, cause: unknown, message?: string);
     // (undocumented)
     readonly pluginId: PluginId;
+    static wrongInstallSite(pluginId: PluginId): PluginSetupError;
 }
 
 // @public
@@ -2116,7 +2134,7 @@ export interface TooltipRendererContext {
 }
 
 // @public
-export function tooltips(options?: TooltipsOptions): GanttPlugin;
+export function tooltips(options?: TooltipsOptions): ChromePlugin;
 
 // @public (undocumented)
 export interface TooltipsOptions {
