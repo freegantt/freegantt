@@ -71,24 +71,80 @@ The goal is one mechanical pass with no new type in the tree. After this unit, `
 **Do not** add `entry.variant`. A variant is per Gantt. This is refuted item 5 in [`row-redesign/README.md`](../README.md).
 **Do not** add a `removed` flag. Existence stays `entries.has(id)`.
 
-> **Handoff — where Build 1 stands at `0f29910`.** Units A and B are complete. Units C, D and E are
-> complete for every library file except the three named below; they are one type change and cannot
-> compile apart, which is why they land together.
->
-> **What remains, in order:**
->
-> 1. `src/extensions/features/inline-editing.ts` — delete `fieldContextFor()` (`:109-126`), move its
->    seven `entries.fieldValue` reads onto `entry.read(key)`, and give `parseValue` its third
->    argument at `:749`.
-> 2. `src/view/gesture-pipeline.ts:533-542` — `committedEntriesById()` must hand back
->    `ReadonlyMap<EntryId, StoredEntry>`, not live rows. The edit pipeline carries stored values
->    (ADR 0017, P4), so the supplier in `gantt-shell.ts` reads `allStored`, not `all`.
-> 3. `src/api/gantt.ts:646` — one `Entry` reaching a `StoredEntry` parameter.
-> 4. Then the test files, the fixtures, `harness/` and `e2e/`. `harness/main.ts:204,212` and
->    `harness/hierarchy.ts:101,112` use `fields?.read(entry, 'team')` on a `RowFilter`'s second
->    argument; both become `entry.read('team')`, and `RowFilter`'s `fields?: FieldContext` argument
->    should go with them.
-> 5. The tests Build 1 owes, the gate greps, the locked-spec edits and the ADR frontmatter flip.
+## Handoff — read this first
+
+**Where Build 1 stands at `b1c30be` on `row-redesign`.** Units A–E are **done in `src/` and in
+`harness/`, `fixtures/` and `e2e/`**. What remains is the **test suite**, then the tests this build
+owes, the gate greps, the locked-spec edits and the ADR flip.
+
+### The gate, right now
+
+| Check | State |
+|---|---|
+| `pnpm typecheck` | **RED — 204 errors, every one in a `*.test.ts` file.** No library file, harness file, fixture or e2e spec is red. |
+| `pnpm test:node` / `test:dom` | **not run.** They cannot pass while `typecheck` is red. |
+| `pnpm verify:full` | **not run.** |
+| `pnpm boundaries` | not re-run since the `model/` file split. Run it early — `no-circular` is the rule that bit once already (see trap 1). |
+
+Every commit since `75914a0` used `--no-verify`, deliberately, so the work survives. **The branch has
+never been green since Unit A.**
+
+### The box I stopped on
+
+Unit C, D and E are ticked. The open boxes are **Tests this build adds**, **Gate** and **Locked-spec
+edits**, plus the two `Q2` boxes under *What this build does not do* (those two are correct as they
+stand — `harness/planner.ts:104,114,116` were left alone on purpose).
+
+### What is left, in order
+
+1. **Fix the 204 test-file type errors.** Biggest files first: `view/capability.test.ts` (29),
+   `view/gantt-shell.test.ts` (17), `layout/items/produce-items.test.ts` (15),
+   `view/gesture-pipeline.test.ts` (11), `layout/rows/filter.test.ts` (11),
+   `data/fields/field-access.test.ts` (11), `data/fields/aggregators.test.ts` (11),
+   `data/fields/field-types.test.ts` (10), `layout/rows/resolve-rows.test.ts` (9).
+   They fall into four shapes, and each has one answer:
+   - a test fabricates a plain object where an `Entry` is now wanted → give it the **test double**
+     the box under Unit B describes. `layout/` may not import `data/`, so the double belongs in
+     `layout/`'s own test helper: stored values plus a child list, closed over and returned as an
+     `Entry`. **This double is not written yet** — it is the single largest remaining piece.
+   - an Aggregator test calls `aggregator(children, parent, ctx)` → the signature is
+     `(parent, ctx)`, and the children come off `ctx.children()`.
+   - a `FieldContext` literal carries `read`/`durationOf` → it is `{ timeZone }` now; the pass
+     answers through `ComputeContext`.
+   - a `RowFilter` test passes a second `fields` argument → it takes the row alone.
+2. **Write the tests under *Tests this build adds*.** None of them exists yet.
+3. **Run the Gate greps**, then `pnpm verify:full` with the redirect.
+4. **Make the locked-spec edits.** None is done.
+5. **Flip ADR 0017's frontmatter** `status: proposed` → `accepted`, with the verdict line.
+
+### Traps this file did not warn about
+
+1. **`model/entry.ts` was split into three files.** The live `Entry` names `FieldKey`, and `field.ts`
+   names `StoredEntry`, so declaring both in one file makes an import ring and
+   `.dependency-cruiser.cjs`'s `no-circular` reads type-only imports. The layout now is
+   `stored-entry.ts` → `field-key.ts` → `entry.ts` → `field.ts`. See `J15`.
+2. **`FieldContext` could not carry the registry or the tree.** `data/` reads Fields through its own
+   `FieldAccess` instead, and `createFieldContext` is gone. See `J16`. Every `data/` signature that
+   said `ctx: FieldContext` now says `access: FieldAccess`.
+3. **`entries.storedValues` is new, and it closes a real API gap.** The drag preview builds
+   `EditRequest.entries` and must not read live rows. See `J20`. It also deleted
+   `gantt-shell.ts`'s hand-rolled `#entriesById` memo.
+4. **`EntryInput`'s optional keys now admit an explicit `undefined`.** Without it, a live `Entry` is
+   not assignable to `EntryInput` under `exactOptionalPropertyTypes`, and the type's own doc has
+   always claimed it is. This is what makes `entries.add({ ...entry.toInput() })` compile.
+5. **`formatValue` takes the live `Entry` now**, beside `parseValue`. See `J18`. Its one caller
+   holds a live row after Unit C, and a Field whose two halves saw two row types would be a trap.
+6. **A bulk regex over the test files is how 442 errors became 204**, and it mangled two prose
+   strings on the way (`field-registry.test.ts:50`, fixed). If you run another, read the diff.
+7. **The store keeps `storedEntry`, `storedChildrenOf` and `allStored`.** They are `data/`-internal
+   and are not on `EntryStoreView`. See `J17`. Do not confuse them with the deleted public doors.
+
+### `J` and `Q` entries this build filed
+
+`J15` (the `model/` split), `J16` (`FieldAccess`), `J17` (the store's stored-side readers), `J18`
+(`formatValue` takes the row), `J19` (the positional `hasChildren` is gone), `J20`
+(`entries.storedValues`). No new `Q`. `Q2` stays deferred and its evidence is untouched.
+
 
 ---
 
