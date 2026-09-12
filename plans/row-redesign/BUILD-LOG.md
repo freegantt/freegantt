@@ -1190,3 +1190,106 @@ that next touches that page, so this one does not carry an unreviewed rewrite of
 
 **To reverse:** put the `ChromePlugin` annotation back on `entryContextActions` and drop the
 `definePlugin` call.
+
+---
+
+## J51 — the hierarchy source answers a loose id, and core brands it once
+
+**Build 4, Unit A. Done in the code.**
+
+ADR 0020 writes the seam as `(entry: StoredEntry<TProps>) => EntryId | undefined`. `EntryId` is a
+brand, so a plugin reading a `props` key would have to call `entryId(...)` on every answer — and
+`CLAUDE.md`'s API rule says input is loose on every way in. A source's answer is a way in.
+
+**The call.** `HierarchySource` answers `EntryId | string | undefined`, the same loose-id spelling
+`entries.get(id: EntryId | string)` already uses. `data/hierarchy-source.ts`'s `parentIdFrom(source,
+entry)` is the one place the answer is branded, so every reader downstream still holds an `EntryId`.
+
+**To reverse:** narrow the return to `EntryId | undefined` and delete `parentIdFrom`.
+
+---
+
+## J52 — `setSource` takes the `props` shape, so a plugin reads a consumer key with no cast
+
+**Build 4, Unit A. Done in the code.**
+
+`ctx.edits.setExtender` is not generic, and the ADR's own example — `entry.props.phaseId ?? next(entry)`
+— does not compile against `StoredEntry<Record<string, unknown>>`: `props.phaseId` is `unknown`. The
+sample would have shipped with a cast in it, which is the evidence `Q2` (#284) exists to keep visible.
+
+**The call.** `DatasetHierarchy.setSource<TProps = Record<string, unknown>>(wrap:
+HierarchySourceWrapper<TProps>)`. One type parameter with a default, so an unannotated call still
+reads the way the ADR writes it, and `ctx.hierarchy.setSource<PhaseProps>(…)` types `entry.props`
+with no cast. `api/dataset.ts` casts once on the way into `data/`, under the same "trusted, unchecked
+TProps cast" note the class already carries — `data/` holds one erased tree per Dataset.
+
+**This does not reopen `Q2`.** That question is about the **renderer** contexts, and the route it
+names is an ambient interface merge. This is a type parameter on one plugin-author method, which
+neither `layout/` nor `view/` sees.
+
+**To reverse:** drop the type parameter and let a plugin author cast `entry.props`.
+
+---
+
+## J53 — `collectTouchedIds` reads the former parent for every edit, and the `'parentId' in edit` check is gone
+
+**Build 4, Unit C. Done in the code. This closes a real hole, and it is the one box in the build file
+this build did not carry out as written.**
+
+The build file says to keep `'parentId' in edit` as a write-shape check, and to *say what happens*
+when a plugin's source reads a `props` key and the row moves with no `parentId` write. What happens
+is a stale aggregate: the former parent never rolls up again. That is the exact bug Unit C exists to
+fix, arriving through the other door.
+
+**The call.** `collectTouchedIds` asks the source for the former parent of **every** proposed id,
+not only the ones whose edit named `parentId`. The check is not "turned into a tree read" — it is
+gone, and the invalidation no longer depends on the write shape at all. When the tree did not move,
+the former parent is the current parent and was already a candidate, so this costs nothing extra.
+Cost stays O(edits) source calls, inside a pass that already copies the dataset once.
+
+**A probe proved it load-bearing.** Restoring the `'parentId' in edit` form turns two cases in
+`src/api/hierarchy-source.test.ts` red, and both are moves written as a `phaseId` edit.
+
+**The same hole is closed in the write set.** `WriteSet.stagedParents` was filled from
+`edit.parentId`; it is now filled from the source's answer about the staged row, so `#hasChildren`
+does not answer a stale `false` for a parent a `props` edit just gave a child.
+
+**To reverse:** put the `'parentId' in edit` branch back, and file the props-key case as a known gap.
+
+---
+
+## J54 — a refused hierarchy answer is a Fault, never a throw, and `ParentCycleError` keeps its own job
+
+**Build 4, Unit B. Done in the code.**
+
+ADR 0020 says a cyclic answer raises a Fault with `by: 'plugin'` and the Entry reads as a root. Two
+things had to be decided to write that.
+
+**Which Entry is the root.** Every member of a cycle would lose its place. The Entry whose answer
+*closes* the loop reads as a root instead, so one link is dropped and the rest of the chain keeps its
+shape. Which link that is follows the Entries' own order, so it is deterministic.
+
+**`by: 'plugin'` is a literal, not a plugin id.** Core composes sources and does not record which one
+answered, and `ErrorReporter` is `'core' | 'consumer' | PluginId`. `'plugin'` is what the ADR writes,
+and it is honest: core's own source reads a `parentId` that `entries.update` already checked, so a
+refused answer can only have come from a plugin. Two new codes ship — `unknown-parent` and
+`hierarchy-cycle`.
+
+**`ParentCycleError` stays where it is.** It guards a `parentId` **write** (`#assertParentValid`), and
+`parentId` is still stored and still written (Unit B). The walk guard is a second, different job: it
+guards a claim, and a claim gets a Fault because refusing to draw would be worse than drawing a
+broken tree flat.
+
+**To reverse:** make `checkHierarchySource` throw, and delete the two codes.
+
+---
+
+## J55 — `childCountByParent` is deleted, because nothing called it
+
+**Build 4, Unit B.**
+
+`entry-tree.ts`'s four walks take the source. One of the four — `childCountByParent` — has no caller
+anywhere in `src/`, `harness/` or `e2e/`. Threading a source through a function nobody calls would
+have shipped one more unused export (the I11 defect B8 lands to catch).
+
+**To reverse:** restore it, taking a `HierarchySource` beside `childIdsByParent`.
