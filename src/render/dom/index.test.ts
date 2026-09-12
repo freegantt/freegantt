@@ -59,7 +59,7 @@ function segmentsOf(entry: Entry, count: number) {
  *  file names its Entry lookup explicitly, even a test that never asks it a question. */
 function paintingBackend(
   entries: readonly Entry[] = [],
-  resolveBarRenderer: (variant: string) => ResolvedRenderer<BarRenderer> | undefined = () => undefined,
+  resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined = () => undefined,
 ) {
   return createDomBackend({
     entryById: (id) => entries.find((entry) => entry.id === id),
@@ -1996,8 +1996,8 @@ describe('render/dom backend', () => {
     // The same ladder `GanttShell` wires: no consumer renderer, so the resolved variant's own
     // `paint` answers. Core's `parent` names a class and no content, so the bar keeps its own
     // label (`J34`).
-    const backend = paintingBackend([leaf, parent, child], (variant) => {
-      const paint = variantRegistry.paintFor(variant);
+    const backend = paintingBackend([leaf, parent, child], (entry) => {
+      const paint = variantRegistry.resolveFor(entry).paint;
       return paint === undefined ? undefined : { renderer: paint };
     });
     const { grid, timeline } = mountSurfaces();

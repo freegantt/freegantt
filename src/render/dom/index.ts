@@ -86,7 +86,7 @@ export interface DomBackendOptions {
    *  below already takes — a closure over `FrameSettings`, not a value snapshotted at construction.
    *  Omitted — a test backend built with no options — falls back to `'fitBar'`. */
   readBarLabels?: () => BarLabels;
-  resolveBarRenderer: (variant: string) => ResolvedRenderer<BarRenderer> | undefined;
+  resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
 }
@@ -1154,17 +1154,17 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           barLabelGapPx,
           contentWidthPx,
         );
-        const resolved = resolveBarRenderer(bar.variant);
+        // The row, never `bar.variant`: which paint this bar wears is the rule that claimed this
+        // row, and two rules may share one name (`F3`).
+        const entry = entryById(bar.entryId);
+        const resolved = entry === undefined ? undefined : resolveBarRenderer(entry);
         let content: ElementDescription | undefined;
-        if (resolved !== undefined) {
-          const entry = entryById(bar.entryId);
-          if (entry !== undefined) {
-            const context: BarRendererContext = { entry, item: bar };
-            if (resolvedPlacement !== undefined) {
-              context.label = { text: bar.label, placement: resolvedPlacement };
-            }
-            content = callRenderer('bar', resolved, context, raiseError);
+        if (resolved !== undefined && entry !== undefined) {
+          const context: BarRendererContext = { entry, item: bar };
+          if (resolvedPlacement !== undefined) {
+            context.label = { text: bar.label, placement: resolvedPlacement };
           }
+          content = callRenderer('bar', resolved, context, raiseError);
         }
         // A `barRenderer` result owns this bar's content, so the library injects no label child and
         // stamps no `data-label` for it — the S5.4 seam (D-S5-11). The renderer's own label rides in

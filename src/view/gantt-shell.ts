@@ -616,8 +616,8 @@ export class GanttShell {
         // covers. Then `barRenderer`, the catch-all for every bar no variant paints — which is what
         // the retired map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's
         // own `barRenderer` beats a plugin's whole-point `bar` renderer.
-        resolveBarRenderer: (variant) =>
-          this.#paintFor(variant) ??
+        resolveBarRenderer: (entry) =>
+          this.#paintFor(entry) ??
           this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
@@ -1139,7 +1139,7 @@ export class GanttShell {
    *
    *  A variant is per Gantt, so a row cannot answer this itself (I2, ADR 0017). */
   variantOf(entry: Entry): string {
-    return this.#registrations.variants.variantFor(entry);
+    return this.#registrations.variants.resolveFor(entry).name;
   }
 
   /** Drops whatever the consumer's list held before, then adds the new one. Registration order
@@ -1152,11 +1152,14 @@ export class GanttShell {
     );
   }
 
-  /** How one variant looks — `EntryVariant.paint`, wrapped as the `ResolvedRenderer` the backend
-   *  reads. No `pluginId`: a variant's paint is named by the variant, and the double-claim
-   *  diagnostic is what names a plugin. */
-  #paintFor(variant: string): ResolvedRenderer<BarRenderer> | undefined {
-    const paint = this.#registrations.variants.paintFor(variant);
+  /** How one row's variant looks — the `paint` of the rule that won, wrapped as the
+   *  `ResolvedRenderer` the backend reads. No `pluginId`: a variant's paint is named by the variant,
+   *  and the double-claim diagnostic is what names a plugin.
+   *
+   *  It takes the row, never the variant's name. Two registrations may share one name. A lookup by
+   *  name can then answer with the paint of a rule that did not claim this row (`F3`). */
+  #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
+    const paint = this.#registrations.variants.resolveFor(entry).paint;
     return paint === undefined ? undefined : { renderer: paint };
   }
 
@@ -1217,7 +1220,7 @@ export class GanttShell {
     return resolveCapabilities({
       interactions: this.#interactions,
       fieldFor: (key) => this.#options.dataset.field(key),
-      variantInteractionsFor: (entry) => this.#registrations.variants.interactionsFor(this.variantOf(entry)),
+      variantInteractionsFor: (entry) => this.#registrations.variants.resolveFor(entry).can,
     });
   }
 

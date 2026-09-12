@@ -1408,3 +1408,42 @@ are declared, so a check at registration would report a key that later becomes r
 Fault pass that F4 and F5 already touch.
 
 **To reverse:** make `fieldFor` optional again, restore `fieldFor?.(key)`, and read the row first.
+
+---
+
+## J60 — a variant resolves to the registration that won, and a last resort never outranks a claim
+
+**Review fixes, F3 and P2-3. One resolution, because the two are halves of one seam.**
+
+**F3: the round trip through the name is gone.** `variantFor(entry)` answered with a string, and
+`itemsFor`/`paintFor`/`interactionsFor` looked that string up again. The second lookup answered with
+the newest registration of that name, which need not be the one whose rule claimed the row. Two
+consumer rules named `'x'` split the rows between them, and the first rule's row wore the second
+rule's paint. `items` was the worse half: the whole-entry default is baked in at registration, so a
+plugin re-skinning core's `leaf` replaced core's per-Segment producer on every leaf row.
+
+The registry now answers `resolveFor(entry): ResolvedVariant` — name, `items`, `paint` and `can`,
+off the one registration the walk stopped at. `VariantItems` (`item.ts`) answers the narrower
+`DrawnVariant` (name and `items`), because `paint` names `BarRenderer` and `item.ts` importing
+`renderer.ts` closes an import ring through `frame.ts`. `render/dom`'s `resolveBarRenderer` takes the
+`Entry` rather than the variant name, which also deletes the `interactionsFor(variantOf(entry))`
+double walk in `gantt-shell.ts`.
+
+**P2-3: sorting the floors last, not refusing them.** A registration with no `when` answers yes for
+every row at its own rank. A plugin's rank is above core's, so the documented re-skin —
+`ctx.variants.add({ name: 'leaf', paint })` — hid core's `parent`, and every summary rail in the
+Gantt stopped drawing.
+
+**The call: a rule with no `when` is a last resort, and a last resort never outranks a rule that
+states a claim.** The walk asks every claiming rule first, newest rank first, then the floors in the
+same order, with core's `leaf` last of all. So the documented re-skin re-skins the floor and leaves
+core's `parent` standing, and a variant that means "every row, whatever else claims it" says
+`when: () => true` and gets it.
+
+**Refusing it was written first, and dropped.** A `VariantClaimsEveryRowError` thrown at registration
+above `CORE_RANK` fixed the same hole, but it retired the re-skin the file documents, it refuses an
+ordinary registration where the library's posture is to keep drawing, and its class plus message put
+the core bundle 89 B over the 78 kB `size-limit` budget. Ordering costs nothing and keeps both cases.
+
+**To reverse:** drop `statesAClaim` from the `walkOrder` comparator, and put `paint`/`can` back
+behind a name lookup.
