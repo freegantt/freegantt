@@ -86,8 +86,7 @@ no JS reads it.
 | `--fg-splitter-width` | `4px` | `pixel-property.ts` |
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12 — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
-| `--fg-diamond-size` | `15px` | `.fg-bar-diamond::before` width/height + `pixel-property.ts` into `LayoutInput.diamondSizePx` — moves a milestone bar's own painted-span floor (`size × √2`) along with the glyph |
-| `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every kind's own painted-span floor, `max`'d against a milestone's diamond floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched |
+| `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.minimumSpan` / `data-span="minimum"` mark a bar this floor touched |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row/lane band |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
@@ -116,9 +115,8 @@ no JS reads it.
 | `--fg-row-unmatched-label-color` | `#79828F` | `#6D7889` | `.fg-row-label`/`.fg-row-cell` text on a row `data-matched='false'` marks — a grouping row whose value no `groupBy` bucket claimed |
 | `--fg-bar-fill` | `oklch(0.52 0.14 248)` | `oklch(0.74 0.13 248)` | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text, and `.fg-bar-diamond .fg-bar-label` (undoes the diamond glyph's own `color: transparent`) |
+| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text |
 | `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` (J1) |
-| `--fg-diamond-stroke` | `none` | — (not theme-dependent) | `.fg-bar-diamond::before`'s own `border` shorthand — a hollow diamond is `--fg-bar-fill` at the pane's background plus a stroke here, which is how a consumer paints "not done yet" on a checkpoint. `box-sizing: border-box`, so a stroke never grows the glyph past `--fg-diamond-size` |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
@@ -144,8 +142,8 @@ I2-safe place a `registerThemePreset`-shaped seam can live.
 
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
-`color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. The
-diamond glyph paints from `--fg-bar-fill-painted` too, so one token dims a span bar and a checkpoint
+`color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. A
+consumer's own glyph reads `--fg-bar-fill-painted` too, so one token dims a span bar and a glyph
 the same way. A summary rail is the exception: it paints from `--fg-group-bar-ink`, the row ink, and
 this token does not reach it. The mix rule lives on `.fg-bar` itself, not on `.fg-container` — a `barRenderer`
 that overrides `--fg-bar-fill` on one bar element sees its own override in the mix, because the read
