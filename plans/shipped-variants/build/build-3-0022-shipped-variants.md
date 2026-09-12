@@ -269,19 +269,25 @@ carry `status:` amendments, and ADR 0013 carries a banner. Do not redo these.
 
 ## Unit I — the tests and the budget
 
-- [ ] An e2e covering a variant's paint asserts a computed property or a measured box.
+- [x] An e2e covering a variant's paint asserts a computed property or a measured box.
       `toBeVisible()` is exactly what let this ship (`e2e/planner.spec.ts:67`).
-- [ ] Write the two assertions that would have gone red:
+- [x] Write the two assertions that would have gone red:
       - the checkpoint's computed `background-color` is transparent;
       - the checkpoint's box width does not change when the zoom does.
-- [ ] The second one needs a zoom step. `harness/planner-toolbar.ts` drives zoom already.
-- [ ] **Measure the budget before you move it.** #289 asked for +1 KB, and unit E changes the sum in
+- [x] The second one needs a zoom step. `harness/planner-toolbar.ts` drives zoom already. New test
+      `'the checkpoint diamond paints transparent and holds its box width across a zoom step'`
+      (`e2e/planner.spec.ts`) drives the toolbar's own "Zoom in" button and measured 13px at the
+      default zoom and 13px again one step in.
+- [x] **Measure the budget before you move it.** #289 asked for +1 KB, and unit E changes the sum in
       both directions: `diamond()`'s CSS leaves the always-shipped path, and `summary()`'s moves from
       the base sheet into a seeded factory. Run `pnpm size-limit`, read the number, then set
-      `.size-limit.json` from what it says. Say the measured figure in the PR.
-- [ ] Update `etc/freegantt.api.md` with `api-extractor run --local`. Say in the PR that the report
+      `.size-limit.json` from what it says. Say the measured figure in the PR. Measured: 78.27 kB
+      (core, cap 79 kB) and 81.47 kB (core + tooltips/contextMenu/inlineEditing, cap 82 kB) — both
+      fit comfortably, so the cap is unchanged (J25).
+- [x] Update `etc/freegantt.api.md` with `api-extractor run --local`. Say in the PR that the report
       diff is intended, and name the additions: the three factories, `fixedWidthItem`, `Item.box`,
-      `FrameBar.span`, `ResolvedVariant` and `variantFor`.
+      `FrameBar.span`, `ResolvedVariant` and `variantFor`. Ran it: no diff. Every named addition
+      already landed in units D–G, so the report was already current.
 
 ---
 

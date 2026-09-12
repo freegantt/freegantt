@@ -108,18 +108,15 @@ popupBtn.addEventListener('click', () => {
 // the whole point of a declared Field is that a consumer reads it by name, not by storage key.
 
 // ADR 0022: `diamond()` is core's own shipped glyph, so this page states only which rows wear one.
-// The recolour is an override on the factory: it reads the diamond's own paint and adds one token,
-// rather than this page re-deriving the glyph's class (J8). `buffer` and `risk` stay hand-written:
-// core ships neither look, and naming them here too demonstrates that a consumer's own variant wins
-// over a plugin's of the same name whatever order the plugins installed in (D-S5-11). Uncheck this
-// toggle to see both plugin variants take over instead — same pixels, two different sources, and
-// neither plugin refuses the other (review P2).
-const milestoneDiamond = diamond({ when: { milestone: true } });
+// The purple fill is an ordinary rule in this page's own `<style>` block
+// (`.fg-bar-diamond { --fg-bar-fill: … }`), no JavaScript in between (refuted item 8) — `.fg-bar`
+// already reads that token into `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints
+// from it. `buffer` and `risk` stay hand-written: core ships neither look, and naming them here too
+// demonstrates that a consumer's own variant wins over a plugin's of the same name whatever order
+// the plugins installed in (D-S5-11). Uncheck this toggle to see both plugin variants take over
+// instead — same pixels, two different sources, and neither plugin refuses the other (review P2).
 const demoVariants: readonly EntryVariant[] = [
-  {
-    ...milestoneDiamond,
-    paint: (ctx) => ({ ...milestoneDiamond.paint?.(ctx), style: { '--fg-bar-fill': '#7b2cbf' } }),
-  },
+  diamond({ when: { milestone: true } }),
   { name: 'buffer', when: { buffer: true }, paint: () => ({ class: { 'demo-buffer-bar': true } }) },
   { name: 'risk', when: { risk: true }, paint: () => ({ class: { 'demo-risk-bar': true } }) },
 ];
