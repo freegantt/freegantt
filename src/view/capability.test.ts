@@ -349,7 +349,9 @@ describe("a variant's own `can` (ADR 0018)", () => {
 
   it('a variant `can` predicate that answers undefined falls through to the library rule', () => {
     const caps = capabilities({
-      variantInteractionsFor: variantAllows('buffer', { resize: (row) => (row.hasChildren ? false : undefined) }),
+      variantInteractionsFor: variantAllows('buffer', {
+        resize: (row) => (row.hasChildren ? false : undefined),
+      }),
     });
     // No opinion for a childless row, so the library rule answers, and it says yes.
     expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(true);
@@ -357,7 +359,9 @@ describe("a variant's own `can` (ADR 0018)", () => {
 
   it('a variant `can` predicate that answers false refuses, and the library rule never runs', () => {
     const caps = capabilities({
-      variantInteractionsFor: variantAllows('buffer', { resize: (row) => (row.hasChildren ? undefined : false) }),
+      variantInteractionsFor: variantAllows('buffer', {
+        resize: (row) => (row.hasChildren ? undefined : false),
+      }),
     });
     expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(false);
     // The same predicate answers nothing for a row of another variant.

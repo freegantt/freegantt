@@ -17,7 +17,13 @@ import {
   createVariantRegistry,
 } from '../layout/index.js';
 import type { DateLine, RowSource, TimeScale, ViewPreset } from '../layout/index.js';
-import { instant } from '../time/index.js';
+import type { Instant } from '../model/index.js';
+
+/** `view/` may not import `time/` (`view-boundary`), and a date line only needs a stamp to compare.
+ *  Every other `view/` test builds one the same way. */
+function instant(iso: string): Instant {
+  return Date.parse(iso) as Instant;
+}
 
 /** Records the ports in call order, so a test asserts the whole answer and not one half of it. */
 function recordingPorts(pixels: Record<string, number> = {}): {

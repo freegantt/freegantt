@@ -71,10 +71,10 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'look-claimed-twice' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'variant-claimed-twice' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
 // @public (undocumented)
 export type CellRenderer = (ctx: CellRendererContext) => ElementDescription | undefined;
@@ -157,6 +157,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
     gantt: TGantt;
     // (undocumented)
     target?: CommandTarget;
+    variant?: string | undefined;
 }
 
 // @public
@@ -700,9 +701,6 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     start?: InstantInput | undefined;
 }
 
-// @public
-export type EntryLook = 'parent' | 'leaf' | (string & {});
-
 // @public (undocumented)
 export type EntryMove = EntryGestureEvent;
 
@@ -745,6 +743,15 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
     // (undocumented)
     readonly size: number;
     readonly storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>;
+}
+
+// @public
+export interface EntryVariant<TProps = Record<string, unknown>> {
+    can?: Interactions;
+    items?: ItemProducer;
+    name: string;
+    paint?: BarRenderer;
+    when?: VariantRule<TProps>;
 }
 
 // @public
@@ -828,6 +835,13 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
 
 // @public
 export type FieldKey = CoreFieldKey | (string & {});
+
+// @public
+export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValues> & {
+    [K in keyof TProps]?: TProps[K];
+} & {
+    [key: string]: unknown;
+};
 
 // @public
 export class FieldNotColumnableError extends FreeGanttError {
@@ -922,13 +936,12 @@ export interface FrameBar {
     label: string;
     // (undocumented)
     lane: number;
-    // (undocumented)
-    look: EntryLook;
     minimumSpan: boolean;
     // (undocumented)
     rowId: RowId;
     segmentId?: SegmentId;
     segmentIds: readonly SegmentId[];
+    variant: string;
     // (undocumented)
     width: number;
     // (undocumented)
@@ -996,8 +1009,8 @@ export class Gantt<TProps = unknown> {
     set a11yLabel(value: string);
     get barLabels(): BarLabels;
     set barLabels(value: BarLabels);
-    get barRenderer(): BarRenderer | RendererByLook | undefined;
-    set barRenderer(renderer: BarRenderer | RendererByLook | undefined);
+    get barRenderer(): BarRenderer | undefined;
+    set barRenderer(renderer: BarRenderer | undefined);
     // (undocumented)
     get canZoomIn(): boolean;
     // (undocumented)
@@ -1085,6 +1098,8 @@ export class Gantt<TProps = unknown> {
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
     uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void;
+    get variants(): readonly EntryVariant<TProps>[];
+    set variants(next: readonly EntryVariant<TProps>[]);
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
     // (undocumented)
@@ -1159,7 +1174,7 @@ export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttSca
 export interface GanttOptionsBase<TProps = unknown> {
     a11yLabel?: string;
     barLabels?: BarLabels;
-    barRenderer?: BarRenderer | RendererByLook;
+    barRenderer?: BarRenderer;
     cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
@@ -1180,6 +1195,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     todayLine?: boolean | InstantInput;
     todayLineMarginTicks?: number;
     tooltipRenderer?: TooltipRenderer;
+    variants?: readonly EntryVariant<TProps>[];
     viewportGestures?: ViewportGestures;
     zoomPresets?: readonly PresetRef[];
 }
@@ -1382,11 +1398,10 @@ export interface Item {
     id: ItemId;
     // (undocumented)
     label: string;
-    // (undocumented)
-    look: EntryLook;
     segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
+    variant: string;
 }
 
 // @public (undocumented)
@@ -1400,7 +1415,7 @@ export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
 // @public
 export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
 
-// @public (undocumented)
+// @public
 export type ItemProducer = (entry: Entry) => readonly Item[];
 
 // @public (undocumented)
@@ -1438,14 +1453,6 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
-
-// @public
-export type KindDefaults = {
-    [K in keyof Interactions]?: boolean;
-};
-
-// @public
-export type LookClaim = (entry: Entry) => boolean;
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
@@ -1577,13 +1584,11 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         canWrite(entry: Entry, field: FieldKey): WriteVerdict;
         proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
         announceEntryEdit(payload: EntryFieldEdit): void;
-        registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
-    };
-    layout: {
-        registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
-        registerLookClaim(look: EntryLook, claim: LookClaim): Disposer;
     };
     raiseError(report: PluginErrorReport): void;
+    variants: {
+        add(variant: EntryVariant): Disposer;
+    };
     // (undocumented)
     view: {
         overlay: MountLayer;
@@ -1598,6 +1603,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
         resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+        variantOf(entry: Entry): string;
         resolvedColumns(): readonly GridColumn[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
@@ -1775,10 +1781,7 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
 }
 
 // @public
-export type RendererByLook = Readonly<Record<string, BarRenderer>>;
-
-// @public
-export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer | RendererByLook : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
+export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
 
 // @public
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
@@ -2188,6 +2191,12 @@ export class UnsupportedUnitError extends FreeGanttError {
 export type UpdatedRow = FieldUpdated | StoreRowUpdated;
 
 // @public
+export type VariantPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
+
+// @public
+export type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | VariantPredicate<TProps>;
+
+// @public
 export interface ViewportGestureFlags {
     keyboardPan?: boolean;
     wheelPan?: boolean;
@@ -2223,7 +2232,7 @@ export interface ViewPresetHeader extends TickStep {
 export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
-export function wholeEntryItem(entry: Entry, look: EntryLook): Item;
+export function wholeEntryItem(entry: Entry, variant: string): Item;
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //

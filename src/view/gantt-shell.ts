@@ -1195,8 +1195,7 @@ export class GanttShell {
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
-   *  interactions`, and `registerLookDefaults`'s own gate all re-derive from here, rather than
-   *  repeating the three-argument call. */
+   *  interactions` and `set variants` all re-derive from here, rather than repeating the call. */
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities({
       interactions: this.#interactions,
