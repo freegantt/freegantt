@@ -464,7 +464,7 @@ The object form overrides this Gantt's presentation and never the data half — 
 { key: 'duration', compute: (e, ctx) => /* Duration | undefined from start/end through time/ */ }
 ```
 
-A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. Aggregators read duration with `ctx.read(entry, 'duration')`. There is no `durationOf`.
+A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. Aggregators read duration with `ctx.read(entry, 'duration')`, which is a shipped `compute` Field over `ctx.durationOf(entry)` (`data/fields/core-fields.ts:105`). ADR 0014 proposed to delete `durationOf`, and that ADR is `not planned`, so the `FieldContext` member stays.
 
 **Editing crosses core and consumer fields freely** — one call, one transaction, one undo step:
 
