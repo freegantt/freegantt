@@ -82,6 +82,6 @@ This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard one l
 
 ## Locked-spec edits this build owes
 
-- [ ] `plans/02` — add `definePlugin`; retire the `GanttPlugin` / `DatasetPlugin` pair.
-- [ ] `docs/06-plugin-authoring.md` — delete the "Two contracts, two hosts" section and its table. A plugin author reads one row, not two. Every sample in this file must compile; `scripts/check-doc-examples.mjs` gates it.
-- [ ] `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — check what it still says about the two contracts.
+- [x] `plans/02` — add `definePlugin`; retire the `GanttPlugin` / `DatasetPlugin` pair.
+- [x] `docs/06-plugin-authoring.md` — delete the "Two contracts, two hosts" section and its table. A plugin author reads one row, not two. Every sample in this file must compile; `scripts/check-doc-examples.mjs` gates it.
+- [x] `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` — check what it still says about the two contracts.
