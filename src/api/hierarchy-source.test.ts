@@ -10,10 +10,11 @@ import type { EntryInput } from './index.js';
 
 interface PhaseProps {
   phaseId?: string;
+  cost?: number;
 }
 
 /** Rows whose tree lives in `props.phaseId`, with no `parentId` written anywhere. */
-const phaseRows: EntryInput[] = [
+const phaseRows: EntryInput<PhaseProps>[] = [
   { id: 'design', name: 'Design', props: { cost: 0 } },
   { id: 'build', name: 'Build', props: { cost: 0 } },
   { id: 'sketch', name: 'Sketch', props: { phaseId: 'design', cost: 10 } },
@@ -32,8 +33,8 @@ const phases = () =>
     },
   });
 
-function phaseDataset(entries: EntryInput[] = phaseRows): Dataset {
-  return new Dataset({
+function phaseDataset(entries: EntryInput<PhaseProps>[] = phaseRows): Dataset<PhaseProps> {
+  return new Dataset<PhaseProps>({
     timeZone: 'UTC',
     entries,
     fields: [{ key: 'cost', rollUp: 'sum' }],
@@ -124,7 +125,9 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       ],
       plugins: [loop()],
     });
-    dataset.on('error', (report) => reports.push(report));
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
 
     // `a` claims `b`, `b` claims `a`. The chain walks from `a`, so `b`'s answer closes it.
     expect(dataset.entries.get('b')?.parent()).toBeUndefined();
@@ -151,7 +154,9 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       ],
       plugins: [ghost()],
     });
-    dataset.on('error', (report) => reports.push(report));
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
 
     expect(dataset.entries.get('a')?.parent()).toBeUndefined();
     expect(dataset.entries.get('a')?.depth).toBe(0);
@@ -171,7 +176,9 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
   it('a write to parentId still lands, and raises no warning, while a source ignores it', () => {
     const reports: ErrorReport[] = [];
     const dataset = phaseDataset();
-    dataset.on('error', (report) => reports.push(report));
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
 
     dataset.entries.update('sketch', { parentId: 'build' });
 
@@ -256,14 +263,14 @@ describe('the cost shape holds with a source installed', () => {
         },
       });
     // One small family inside a large dataset: the answer must cost the family, never the dataset.
-    const rows: EntryInput[] = [{ id: 'design', name: 'Design' }];
+    const rows: EntryInput<PhaseProps>[] = [{ id: 'design', name: 'Design' }];
     for (let index = 0; index < 3; index += 1) {
       rows.push({ id: `child${index}`, name: `Child ${index}`, props: { phaseId: 'design' } });
     }
     for (let index = 0; index < 500; index += 1) {
       rows.push({ id: `root${index}`, name: `Root ${index}` });
     }
-    const dataset = new Dataset({ timeZone: 'UTC', entries: rows, plugins: [counting()] });
+    const dataset = new Dataset<PhaseProps>({ timeZone: 'UTC', entries: rows, plugins: [counting()] });
 
     dataset.transaction(() => {
       dataset.entries.update('root0', { name: 'Renamed' });
