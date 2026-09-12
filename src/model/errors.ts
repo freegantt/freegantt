@@ -131,8 +131,9 @@ export class InvalidPresetError extends FreeGanttError {
 }
 
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6), `entries.fieldValue`, or a mutator (`entries.update`/`remove`, or a `parentId` naming a
- * missing entry — S2.3 §1.3). `operation` names the call that failed, so the message points at what
+ * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry —
+ * S2.3 §1.3). A read never raises it: a row is how a value is read, and `entries.get` answers
+ * `undefined` for an id the Dataset has no entry for (ADR 0017). `operation` names the call that failed, so the message points at what
  * the caller asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
   readonly entryId: EntryId;
@@ -319,7 +320,7 @@ export class InvertedSpanError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
+/** `code: 'unknown-field'` — an edit or `entry.read(key)` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
   readonly field: FieldKey;
