@@ -169,8 +169,9 @@ export const phases = definePlugin({
   readonly segments: readonly Segment[];
 
   read&lt;K extends FieldKey&gt;(field: K): FieldValue&lt;TProps, K&gt; | undefined;
+  duration(): Duration | undefined;  // computes through time/, so it costs
 
-  readonly hasChildren: boolean;     // one value, so it is a getter
+  readonly hasChildren: boolean;     // a cached index read, so it is free
   readonly depth: number;
   children(): readonly Entry&lt;TProps&gt;[];
   parent(): Entry&lt;TProps&gt; | undefined;
@@ -180,10 +181,11 @@ export const phases = definePlugin({
 }</code></pre>
 
           <p>
-            <strong>A getter answers one value. A method returns a collection.</strong> That is the
-            whole rule, and it is a cost rule:
-            <code>hasChildren</code> is one index lookup on the hover path, and
-            <code>descendants()</code> is a walk. The shape tells you which you are paying for.
+            <strong>A member that does no work is a property. A member that computes, walks or
+            allocates carries parentheses.</strong> That is the whole rule, and it is about cost,
+            never about how many values come back: <code>hasChildren</code> is one index lookup on
+            the hover path, <code>descendants()</code> is a walk, and <code>parent()</code> answers
+            one value and still costs. The shape tells you which you are paying for.
           </p>
           <p>
             <strong>It reads. It never writes.</strong> There is no <code>entry.update()</code>.
@@ -209,14 +211,18 @@ export const phases = definePlugin({
               <td>a variant rule asks about the row as it is right now</td>
             </tr>
             <tr>
-              <td class="mono">Aggregator, FieldDistributor</td>
+              <td class="mono">command <code>when</code></td>
               <td><code>Entry</code></td>
-              <td>the Rollup already walks children; it should not be handed them twice</td>
+              <td>it asks a live question and it writes nothing</td>
             </tr>
             <tr>
-              <td class="mono">compute Field, command <code>when</code></td>
-              <td><code>Entry</code></td>
-              <td>both ask a live question and neither writes</td>
+              <td class="mono">Aggregator, FieldDistributor, compute Field</td>
+              <td><code>StoredEntry</code></td>
+              <td>
+                the Rollup hands each one a child it has already given this pass's value to. That
+                row is not in the store, so a live one would read the value the pass just replaced.
+                The child list rides on <code>ctx</code>, so nothing is handed over twice.
+              </td>
             </tr>
             <tr>
               <td class="mono">EditRequest.entries</td>
@@ -242,10 +248,9 @@ export const phases = definePlugin({
           </table>
 
           <div class="note">
-            <strong>Open: the two names.</strong> This page writes <code>Entry</code> for the live
-            one and <code>StoredEntry</code> for the values. The bare word goes to the live one
-            because that is the surface most people read. The alternative is the reverse, with
-            <code>LiveEntry</code> for the handle. Nothing else on this page depends on the answer.
+            <strong>The two names — ruled 2026-09-11.</strong> <code>Entry</code> names the live
+            one, and <code>StoredEntry</code> names the values. The bare word goes to the live one
+            because that is the surface most people read.
           </div>
         </section>
 
@@ -434,7 +439,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
     // Which entries wear it? A rule, not a list — a row added tomorrow gets it too.
     ctx.addVariant({
       name: 'milestone',
-      when: (entry) =&gt; !entry.hasChildren &amp;&amp; entry.read('duration') === 0,
+      when: (entry) =&gt; !entry.hasChildren &amp;&amp; entry.duration()?.value === 0,
       paint: () =&gt; ({ class: { 'demo-milestone': true } }),
       can: { resize: false },
     });
@@ -679,9 +684,10 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             plugin writes. <code>entries.fieldValue(id, key)</code> and
             <code>ctx.read(entry, key)</code> both retire — they were the same question with two
             doors. <code>entry.props.k</code> is storage, not a resolver: it misses a
-            <code>compute</code> Field and it does not know the Field's type. Duration is the
-            shipped <code>compute</code> Field, so <code>entry.read('duration')</code> is how you
-            get it.
+            <code>compute</code> Field and it does not know the Field's type. Duration is a core
+            Field, so it has both doors: <code>entry.duration()</code> is the typed one, and
+            <code>entry.read('duration')</code> answers the same value by key. It carries
+            parentheses because it computes.
           </p>
 
           <h3>A store that is not a Field</h3>

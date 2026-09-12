@@ -1,6 +1,6 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The working material is in `plans/row-redesign/`.
-decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
+decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
 open: which rule wins when two plugins both answer yes. Registration order decides it today. Nobody has ruled on what sets that order across plugins.
 ---
 
@@ -25,7 +25,7 @@ ctx.interaction.registerLookDefaults(BUFFER_KIND, { resize: false });
 
 - **The set freezes at install.** A row added later never gets the variant.
 - **A plugin often does not know the ids.** The page must keep a parallel list and hand it over.
-- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.read('duration') === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
+- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.duration()?.value === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
 
 ## Decision
 
@@ -61,13 +61,13 @@ A plugin ships the same object through `ctx.addVariant(variant)`. One type, two 
 { name: 'leaf' } // no `when` — the last-resort variant, so every row resolves
 ```
 
-**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.read('duration') === 0` compiles at all. That is the whole reason 0017 lands first.
+**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
 
-**A variant is a function of the row, and it runs per layout pass** (`layout/items/produce-items.ts:248`). Core caches nothing new. The one input core's own rules read is `hasChildren`, which `#byParent` already caches per commit (`data/entry-store.ts:155-163`). Nothing about a variant can cache on the Dataset, because variants are per Gantt (I2, refuted item 5).
+**A variant is a function of the row, and it runs per layout pass** (`layout/items/produce-items.ts:248`). Core caches nothing new. The one input core's own rules read is `hasChildren`, which `#byParent` already caches per commit (`data/entry-store.ts:155-163`). Nothing about a variant can cache on the Dataset, because variants are per Gantt (I2, refuted item 5 in [`plans/row-redesign/README.md`](../../plans/row-redesign/README.md)).
 
 **`name` is an identity, not a value.** It has three jobs, and storage is not one of them. `render/dom/index.ts:1186` stamps it onto the painted element, which `CONTEXT.md:517` publishes as a selector a consumer may style. The registry keys on it. A double-claim diagnostic names it.
 
-**`can` takes the same predicates `interactions` takes.** `KindDefaults` is boolean-only today for one stated reason: _"a registering plugin never sees an `entry`"_ (`view/capability.ts:83-90`). [ADR 0017](0017-the-entry-answers-questions-about-itself.md) hands it one. So the mapped boolean type dies and `Interactions` serves both levels. The resolution order is unchanged: consumer `interactions`, then the variant's `can`, then the library rule. The variant level stays view-level, so refuted item 6 still holds — this is not a second door onto `Field.editable`.
+**`can` takes the same predicates `interactions` takes.** `KindDefaults` is boolean-only today for one stated reason: _"a registering plugin never sees an `entry`"_ (`view/capability.ts:83-90`). [ADR 0017](0017-the-entry-answers-questions-about-itself.md) hands it one. So the mapped boolean type dies and `Interactions` serves both levels. The resolution order is unchanged: consumer `interactions`, then the variant's `can`, then the library rule. The variant level stays view-level, so refuted item 6 in [`plans/field-redesign/shared/refuted.md`](../../plans/field-redesign/shared/refuted.md) still holds — this is not a second door onto `Field.editable`.
 
 ## How an app pins one row
 
