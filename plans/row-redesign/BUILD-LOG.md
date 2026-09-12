@@ -1013,3 +1013,155 @@ re-derivation rather than adding one to compensate for `src/`.
 `Q2`/[#284](https://github.com/Pawel-IT/FreeGantt/issues/284), which says do not tidy it — the cast
 is the evidence. `sortByName` as a page-local flag is [#254](https://github.com/Pawel-IT/FreeGantt/issues/254),
 already filed with its own comment at the site.
+
+---
+
+## J42 — `definePlugin` returns the plugin, and the factory around it stays the author's
+
+**Build 3, Unit A.**
+
+ADR 0019's example reads `const scheduling = definePlugin({ … })` and then installs
+`plugins: [scheduling()]`. Those two lines disagree: one makes `scheduling` the plugin, the other
+calls it. A `definePlugin` that returned a zero-argument factory could never carry options, and
+`lockEntries(['t2'])` takes some.
+
+**The call.** `definePlugin(spec)` returns `spec`. An author wraps it in their own factory —
+`export const weekendShading = () => definePlugin({ … })` — which is the shape every harness plugin
+already had. One factory call stays one install's worth of state, so I2 holds exactly as before.
+The ADR's example gained the arrow, and nothing else.
+
+**To reverse:** make `definePlugin` return `() => spec`, and drop every author factory.
+
+---
+
+## J43 — `api/plugin.ts` is a leaf again, and the view half's context moved out
+
+**Build 3, Unit A. A boundary check forced it, and `typecheck` could not see it.**
+
+`DatasetOptions.plugins` must name the plugin union, and the union names the `view` half. But
+`api/plugin.ts` imported `view/`, and `view/` reaches back through `api/command.ts` to
+`api/dataset.ts`. So `api/dataset.ts` importing `api/plugin.ts` closed eight rings at once, and
+`dependency-cruiser` refused all eight.
+
+**The call.** Three files, three questions. `api/plugin.ts` says what a plugin **is**, and imports
+`model/` and `api/dataset-plugin.ts` alone. `api/plugin-context.ts` (the old `api/plugin.ts`) says
+what a `view` half **receives**, and keeps every `view/` re-export. `api/dataset-plugin.ts` says
+what a `data` half receives. `api/plugin.test.ts` followed its file and is now
+`api/plugin-context.test.ts`.
+
+`PluginContextOf`'s second type argument lost its `Dataset` default and now defaults to `unknown`,
+the way `PluginContextParts`'s own two already did. No caller in `src/` or `harness/` read that
+default: both bound arguments arrive through `PluginContext<TProps>` on `api/gantt.ts`.
+
+**To reverse:** fold `api/plugin-context.ts` back into `api/plugin.ts` and give `DatasetOptions` a
+hand-written structural copy of the union.
+
+---
+
+## J44 — a plugin shape takes one context type, not a `TGantt`/`TDataset` pair
+
+**Build 3, Unit A.**
+
+`ChromePluginOf<TViewContext>` and `DataPluginOf<TViewContext, TDataset>` name the context their
+half receives, rather than the two classes that context is built from. That is what lets
+`api/plugin.ts` stay a leaf (`J43`): the shape never needs to know how `PluginContext` is assembled.
+`api/gantt.ts` binds both — `ChromePlugin<TProps> = ChromePluginOf<PluginContext<TProps>>`.
+
+**To reverse:** restate both shapes over `<TGantt, TDataset>` and build the context inside them.
+
+---
+
+## J45 — `DatasetOptions.plugins` leaves the Gantt type unbound
+
+**Build 3, Units A and B.**
+
+`api/dataset.ts` may not name `Gantt`, so `DatasetOptions.plugins` is
+`readonly PluginOf<unknown, Dataset<TProps>>[]`. A Dataset never calls a `view` half, so it never
+needs the Gantt type to type-check what it holds. A fully bound `Plugin<TProps>` — declared on
+`api/gantt.ts`, which sees both classes — assigns into it unchanged, through the same
+method-parameter bivariance `GanttShell.plugins` has always relied on.
+
+An author who annotates a plugin annotates the arm (`ChromePlugin`, `DataPlugin`), and both are
+fully bound. So the loose form is what the option holds, never what an author writes.
+
+**To reverse:** move `DatasetOptions` onto a file that sees `Gantt`.
+
+---
+
+## J46 — `PluginSetupError` gains a named constructor, not a new type
+
+**Build 3, Unit C. `Q4` ruled the error; this is how the message says where to install it.**
+
+`PluginSetupError`'s one message names a `setup` that threw, and a misplaced plugin never got that
+far. `PluginSetupError.wrongInstallSite(id)` builds the same error, same `code`, with a message that
+names the Dataset and shows the call. The constructor gained an optional third `message` argument,
+which is the mechanism behind it; the two-argument form is unchanged and is still what both
+installers raise.
+
+**To reverse:** drop the static and the third argument, and wrap a plain `Error` as the `cause`.
+
+---
+
+## J47 — a Gantt installs the Dataset's plugins beside its own, under one `requires` order
+
+**Build 3, Units A and B.**
+
+One `requires` list covers both halves (ADR 0019), so the Gantt cannot sort its chrome in isolation.
+`GanttShell` now holds two lists and installs their concatenation: the Dataset's plugins first, then
+this Gantt's chrome. `PluginRuntime.install` sorts the whole list through `resolveSetupOrder` before
+it diffs, so a chrome plugin may require a plugin that only has a `data` half.
+
+Three consequences, each deliberate:
+
+- `gantt.plugins` reports this Gantt's own chrome and nothing else, and `uninstallPlugin` refuses a
+  Dataset plugin's id with `PluginNotInstalledError`. A Gantt cannot drop what it did not install.
+- `ShellPlugin.view` became optional. A plugin with only a `data` half joins the list for the
+  `requires` graph and installs as a no-op — no context is built for it.
+- `DuplicatePluginIdError` now covers the two lists together. A chrome plugin may not reuse a
+  Dataset plugin's id.
+
+**To reverse:** install the Dataset's `view` halves through a second `PluginRuntime`, and keep the
+two `requires` graphs apart.
+
+---
+
+## J48 — the `requires` sort moved to `extensions/plugin-order.ts`
+
+**Build 3, Unit A.**
+
+`resolveSetupOrder` and `assertNoDuplicateIds` lived in `extensions/install-dataset-plugins.ts`, and
+`PluginRuntime` now needs both (`J47`). They moved to a file of their own, generic over
+`{ id, requires? }` and nothing else, so the sort never names a half or a context.
+`install-dataset-plugins.test.ts`'s `resolveSetupOrder` block moved to `plugin-order.test.ts` with
+it.
+
+**To reverse:** inline both back into `install-dataset-plugins.ts` and re-export them.
+
+---
+
+## J49 — a chrome-only plugin is legal on the Dataset too
+
+**Build 3, Unit B.**
+
+ADR 0019 states `DatasetOptions.plugins: readonly Plugin[]`, and `Plugin` includes the chrome arm.
+So `new Dataset({ plugins: [weekendShading()] })` type-checks, and every Gantt bound to that Dataset
+gets the shading. `installDatasetPlugins` skips a plugin with no `data` half rather than refusing it.
+
+This is the one door that gives a plugin to every Gantt on a Dataset at once. Installing on one
+`Gantt` gives it to that Gantt alone, which is what Unit B protects.
+
+**To reverse:** narrow `DatasetOptions.plugins` to the `DataPluginOf` arm and throw on a chrome-only
+entry.
+
+---
+
+## Q8 — does the public `Plugin` name want a different word?
+
+**Raised 2026-09-12, Build 3. Not blocking, and the ADR's name shipped.**
+
+`lib.dom` declares a global `Plugin` interface (the legacy `navigator.plugins` entry), so
+`etc/freegantt.api.md` prints ours as `Plugin_2`. An import shadows the global and nothing breaks. A
+reader of the report meets a name with a number on it all the same.
+
+The ADR names the type `Plugin`, so `Plugin` is what shipped. The question is whether a reader is
+better served by a word with no global behind it.
