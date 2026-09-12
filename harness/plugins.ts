@@ -1,9 +1,8 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
-import type { RendererByLook, CellRenderer, GanttPlugin } from '../src/api/index.js';
+import type { CellRenderer, EntryVariant, GanttPlugin } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
-import { milestoneKind } from './plugins/milestone-kind.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -22,8 +21,8 @@ const BUDGET_THRESHOLD = 1000;
 // both into view together, no scrolling needed to see the acceptance box's two renderers at once.
 const MILESTONE_ENTRY_ID = 'entry-39'; // "Launch" — already a single-day span, a natural milestone.
 const OVER_BUDGET_ENTRY_ID = 'entry-38'; // "Go/no-go review" — given a cost above the threshold below.
-const BUFFER_ENTRY_ID = 'entry-37'; // [S5-A3]: recast as bufferKind()'s own kind, below.
-const RISK_ENTRY_ID = 'entry-36'; // Review P2: recast as riskKind()'s own kind, the second one.
+const BUFFER_ENTRY_ID = 'entry-37'; // [S5-A3]: recast as bufferKind()'s own variant, below.
+const RISK_ENTRY_ID = 'entry-36'; // Review P2: recast as riskKind()'s own variant, the second one.
 
 const dataset = new Dataset({
   timeZone: 'UTC',
@@ -34,13 +33,27 @@ const dataset = new Dataset({
       column: { header: 'Cost', align: 'end' },
     },
   },
-  // `consumed`/`accepted` back the two kind plugins' own commands below — a GanttPlugin installs
+  // `consumed`/`accepted` back the two variant plugins' own commands below — a GanttPlugin installs
   // after the Dataset's own registration closes, so it cannot declare a Field of its own; this
   // Dataset must (ADR 0011: an undeclared key is refused at `entries.update()`).
-  fields: [{ key: 'cost', type: 'money' }, { key: 'consumed' }, { key: 'accepted' }],
+  //
+  // ADR 0018: `buffer`/`risk`/`milestone` are this page's own words for three rows. Each plugin's
+  // variant rule reads its own key back, so no plugin holds a list of the ids it owns, and
+  // `update(id, { buffer: true })` would recast a fourth row with no code change.
+  fields: [
+    { key: 'cost', type: 'money' },
+    { key: 'consumed' },
+    { key: 'accepted' },
+    { key: 'buffer' },
+    { key: 'risk' },
+    { key: 'milestone' },
+  ],
   entries: sampleEntries.map((entry) => {
     const input = entry.toInput();
     if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...input, props: { cost: 1500 } };
+    if (entry.id === BUFFER_ENTRY_ID) return { ...input, props: { buffer: true } };
+    if (entry.id === RISK_ENTRY_ID) return { ...input, props: { risk: true } };
+    if (entry.id === MILESTONE_ENTRY_ID) return { ...input, props: { milestone: true } };
     return input;
   }),
 });
@@ -69,7 +82,7 @@ toggleBtn.addEventListener('click', () => {
 });
 
 // S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `weekendShading()`
-// and the two kind plugins, so this page and `main.ts` install one copy each instead of holding two
+// and the two variant plugins, so this page and `main.ts` install one copy each instead of holding two
 // (review H1). Both are written against 'freegantt' alone, like every other file in that directory.
 // #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
 // how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
@@ -77,7 +90,6 @@ toggleBtn.addEventListener('click', () => {
 const demoPopup = popupDemo();
 gantt.installPlugin(selectionShortcuts(writeLog));
 gantt.installPlugin(demoPopup);
-gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 
 const popupBtn = document.querySelector<HTMLButtonElement>('#open-popup-btn')!;
 popupBtn.addEventListener('click', () => {
@@ -95,24 +107,22 @@ popupBtn.addEventListener('click', () => {
 // `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
 // the whole point of a declared Field is that a consumer reads it by name, not by storage key.
 
-// ADR 0013: core ships no diamond and no `'milestone'` kind, so `milestoneKind()` (a plugin that
-// owns `MILESTONE_ENTRY_ID` alone, `harness/plugins/milestone-kind.ts`) makes the `'milestone'` key
-// below real; `demo-milestone`'s own class draws the diamond shape (`harness-chrome.css`), and the
-// `--fg-bar-fill` custom property it reads recolors it.
-// S5.9: `buffer` and `risk` paint the same classes their own plugins register
-// (harness/plugins/buffer-kind.ts, harness/plugins/risk-kind.ts) — named here too because a
-// consumer's own per-kind map wins over a plugin for every kind it names, and falls to the library
-// default for every kind it misses (D-S5-11). Uncheck this toggle to see both plugin registrations
-// take over instead — same pixels, two different sources, and neither plugin refuses the other
-// (review P2).
-const demoBarRenderer: RendererByLook = {
-  milestone: () => ({
-    class: { 'demo-milestone': true },
-    style: { '--fg-bar-fill': '#7b2cbf' },
-  }),
-  buffer: () => ({ class: { 'demo-buffer-bar': true } }),
-  risk: () => ({ class: { 'demo-risk-bar': true } }),
-};
+// ADR 0018: core ships no diamond and no `'milestone'` variant, so this page states one itself —
+// four lines of config and no plugin at all. `demo-milestone`'s own class draws the diamond shape
+// (`harness-chrome.css`), and the `--fg-bar-fill` custom property it reads recolors it.
+// `buffer` and `risk` are named here too, because a consumer's own variant wins over a plugin's of
+// the same name whatever order the plugins installed in (D-S5-11). Uncheck this toggle to see both
+// plugin variants take over instead — same pixels, two different sources, and neither plugin
+// refuses the other (review P2).
+const demoVariants: readonly EntryVariant[] = [
+  {
+    name: 'milestone',
+    when: { milestone: true },
+    paint: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+  },
+  { name: 'buffer', when: { buffer: true }, paint: () => ({ class: { 'demo-buffer-bar': true } }) },
+  { name: 'risk', when: { risk: true }, paint: () => ({ class: { 'demo-risk-bar': true } }) },
+];
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
@@ -121,11 +131,11 @@ const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
 const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
-    gantt.barRenderer = demoBarRenderer;
+    gantt.variants = demoVariants;
     gantt.cellRenderer = demoCellRenderer;
     writeLog('renderers demo: custom milestone diamond + over-budget cost cell on');
   } else {
-    gantt.barRenderer = undefined;
+    gantt.variants = [];
     gantt.cellRenderer = undefined;
     writeLog('renderers demo: back to the library default, no remount (I8)');
   }
@@ -151,8 +161,8 @@ weekendToggle.addEventListener('change', () => {
 
 // S5.9, D-S5-21/D-S5-22, [S5-A3]: bufferKind() is written against the public surface alone
 // ('freegantt', harness/plugins/buffer-kind.ts) — no core edit, no private import. Review P2:
-// riskKind() is a second plugin that defines a second kind, and both install — the `bar` point
-// keys on the kind, so neither refuses the other. contextMenu() installs alongside them so each
+// riskKind() is a second plugin that defines a second variant, and both install — two rules that
+// claim different rows never collide. contextMenu() installs alongside them so each
 // plugin's own menu item is reachable by right-click. Installed from the start; the checkbox
 // removes all three live, one `uninstallPlugin` per plugin, the same verbs every other plugin
 // toggle on this page already uses (I8: no remount).
@@ -162,7 +172,7 @@ weekendToggle.addEventListener('change', () => {
 let kindPlugins: readonly GanttPlugin[] = [];
 
 function installKindPlugins(): void {
-  kindPlugins = [contextMenu(), bufferKind([BUFFER_ENTRY_ID]), riskKind([RISK_ENTRY_ID])];
+  kindPlugins = [contextMenu(), bufferKind(), riskKind()];
   for (const plugin of kindPlugins) gantt.installPlugin(plugin);
 }
 
@@ -186,7 +196,7 @@ kindPluginsToggle.addEventListener('change', () => {
   }
 });
 
-// Review P2: dropping one kind plugin must leave the other painting. This button drops riskKind()
+// Review P2: dropping one variant plugin must leave the other painting. This button drops riskKind()
 // alone, so the page shows the claim rather than only asserting it in a test.
 const dropRiskBtn = document.querySelector<HTMLButtonElement>('#drop-risk-kind-btn')!;
 dropRiskBtn.addEventListener('click', () => {

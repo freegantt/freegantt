@@ -17,11 +17,12 @@ import type {
   RowSource,
   DatasetEventMap,
   GanttPlugin,
-  RendererByLook,
+  EntryVariant,
   CellRenderer,
   HeaderRenderer,
 } from '../src/api/index.js';
-import { demoFieldOptions, demoTreeEntryInputs, MILESTONE_ENTRY_ID } from '../fixtures/demo-dataset.js';
+import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -29,7 +30,6 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
-import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
@@ -417,20 +417,24 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
-// ADR 0013: core ships no diamond and no `'milestone'` kind, so "Requirements review" (`entry-4`)
-// reaches the `'milestone'` key below through `milestoneKind()`, a plugin that owns that one id the
-// same way `bufferKind()`/`riskKind()` do (`plugins.ts`) — installed below, once, at page load.
+// S5.4, D-S5-10/11: `cellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
+// ADR 0018: core ships no diamond and no `'milestone'` variant, so this page states one itself —
+// four lines of config and no plugin at all. The rule reads the `milestone` Field the fixture
+// writes on "Requirements review" (`fixtures/demo-dataset.ts`), so `update(id, { milestone: true })`
+// would pin a second row with no code change here.
 // Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
 // existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
-gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 const BUDGET_THRESHOLD = 5000;
 
-const demoBarRenderer: RendererByLook = {
-  milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
-};
+const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [
+  {
+    name: 'milestone',
+    when: { milestone: true },
+    paint: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+  },
+];
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
@@ -445,11 +449,11 @@ const demoHeaderRenderer: HeaderRenderer = ({ column }) => ({
 const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
-    gantt.barRenderer = demoBarRenderer;
+    gantt.variants = demoVariants;
     gantt.cellRenderer = demoCellRenderer;
     gantt.headerRenderer = demoHeaderRenderer;
   } else {
-    gantt.barRenderer = undefined;
+    gantt.variants = [];
     gantt.cellRenderer = undefined;
     gantt.headerRenderer = undefined;
   }

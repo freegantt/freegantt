@@ -39,7 +39,7 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
   end: shift(entry.end!),
 }));
 
-export type DemoEntryProps = { cost?: number; team?: string };
+export type DemoEntryProps = { cost?: number; team?: string; milestone?: boolean };
 
 /** Nested work tree for the generic demo: Program → workstream → work → a few grandchildren. */
 const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
@@ -155,7 +155,12 @@ export const demoFieldOptions = {
   // #142: `end` keeps its demo intent — `harness/index.html`'s own copy names only "Name, Start or
   // Budget" as editable. `CORE_FIELDS.end` now defaults to editable, so this page states the
   // override itself, the same way `hierarchy-dataset.ts` does.
-  fields: [{ key: 'cost' as const, type: 'money' }, { key: 'team' as const }],
+  fields: [
+    { key: 'cost' as const, type: 'money' },
+    { key: 'team' as const },
+    // ADR 0018: the page's own word for the one row it paints as a milestone.
+    { key: 'milestone' as const },
+  ],
 } as const;
 
 /** Root spans that sit beside Program — not in the nested work tree. */
@@ -177,8 +182,8 @@ const DEMO_ROOT_SPANS: readonly EntryInput<DemoEntryProps>[] = [
 ];
 
 // ADR 0013: `kind` left `Entry`, so "Requirements review" is no longer a stored milestone kind.
-// `main.ts` owns which ids look like a milestone (`milestoneKind()`, `harness/plugins/`), and
-// reads this id rather than re-deriving it from a fixture it does not otherwise touch.
+// ADR 0018: `main.ts` installs one variant whose rule reads the `milestone` Field below, and this
+// fixture is what writes it. The page owns the word; core never learns it.
 export const MILESTONE_ENTRY_ID = 'entry-4';
 
 /** Generic-demo entries: two root spans, then a four-level Program tree. */
@@ -195,6 +200,7 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
       ...(isLeaf ? { cost: (i + 1) * 250 } : {}),
       ...(team !== undefined ? { team } : {}),
     };
+    if (id === MILESTONE_ENTRY_ID) props.milestone = true;
     const next: EntryInput<DemoEntryProps> = { id, name: entry.name };
     if (entry.start !== undefined) next.start = entry.start;
     if (entry.end !== undefined) next.end = entry.end;
