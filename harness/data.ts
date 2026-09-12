@@ -15,15 +15,8 @@
 // restores by handing that same shape to `new Dataset()`.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type {
-  DatasetEventMap,
-  StoredEntry,
-  EntryEdit,
-  EntryEdits,
-  EntryId,
-  RollUpContext,
-} from '../src/api/index.js';
+import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from 'freegantt';
+import type { DatasetEventMap, StoredEntry, EntryEdit, EntryEdits, EntryId, RollUpContext } from 'freegantt';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';

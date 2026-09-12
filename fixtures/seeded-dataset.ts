@@ -9,7 +9,7 @@
 // Dates are UTC-midnight aligned through `Date.UTC`, the same thing `fixtures/sample-dataset.ts`
 // already does; the caller supplies its own `timeZone` to `new Dataset(...)` (entries carry no zone).
 
-import type { EntryInput } from '../src/api/index.js';
+import type { EntryInput } from 'freegantt';
 
 export interface SeededEntryOptions {
   /** How many entries. */

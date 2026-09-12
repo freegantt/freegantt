@@ -5,7 +5,7 @@
 // toolbar over the plain `zoomIn`/`zoomOut`/`panToToday`/`fit`/`locale`/`todayLine` surface.
 
 import './harness-nav.ts';
-import { Gantt, Dataset } from '../src/api/index.js';
+import { Gantt, Dataset } from 'freegantt';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { multiYearEntryInputs } from '../fixtures/multi-year-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';

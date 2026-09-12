@@ -3,7 +3,7 @@
 // exercises the horizontal window as well as the vertical one.
 
 import './harness-nav.ts';
-import { Gantt, Dataset, TimeScaleModel } from '../src/api/index.js';
+import { Gantt, Dataset, TimeScaleModel } from 'freegantt';
 import { seededEntryInputs } from '../fixtures/seeded-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 

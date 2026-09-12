@@ -29,53 +29,53 @@ same as a working public surface.
 
 ### 1. Every consumer import reads the published specifier
 
-- [ ] Switch all 33 imports to `from 'freegantt'`. Find them with:
+- [x] Switch all 33 imports to `from 'freegantt'`. Find them with:
       ```bash
       grep -rn "from '\.\./src/" harness e2e fixtures --include=*.ts
       ```
-- [ ] `fixtures/empty-group-dataset.ts:5` reads `from 'freegantt'` as well. It names `Dataset`, and
+- [x] `fixtures/empty-group-dataset.ts:5` reads `from 'freegantt'` as well. It names `Dataset`, and
       the index already exports it.
-- [ ] Run `pnpm typecheck`. The `paths` entry resolves the alias, so nothing else moves.
+- [x] Run `pnpm typecheck`. The `paths` entry resolves the alias, so nothing else moves.
 - [ ] **If a file needs something `src/api/index.ts` does not export, stop.** That is an API gap.
       Report it and log a **Q** entry. Do not keep the relative path, and do not add the export
       without an answer.
 
 ### 2. The lint rule
 
-- [ ] Add `harness-public-api-only` to `.dependency-cruiser.cjs`, beside `extensions-public-only`.
+- [x] Add `harness-public-api-only` to `.dependency-cruiser.cjs`, beside `extensions-public-only`.
       #287 holds the rule verbatim, comment included. Use it as written.
-- [ ] `tsConfig: { fileName: 'tsconfig.json' }` already sits in the options block, so the cruiser
+- [x] `tsConfig: { fileName: 'tsconfig.json' }` already sits in the options block, so the cruiser
       resolves the alias to `src/api/index.ts` and an aliased import passes the rule.
 
 ### 3. The script sees the other two folders
 
-- [ ] `package.json`'s `boundaries` script becomes:
+- [x] `package.json`'s `boundaries` script becomes:
       `depcruise --config .dependency-cruiser.cjs src harness e2e fixtures`.
-- [ ] `scripts/guard-red-test.mjs`'s `depcruiseFails()` runs the same four paths. It hardcodes
+- [x] `scripts/guard-red-test.mjs`'s `depcruiseFails()` runs the same four paths. It hardcodes
       `['…', 'src', 'harness']` today, and a red test the runner cannot see is no guard.
 
 ### 4. The red test
 
-- [ ] Add a red case to `scripts/guard-red-test.mjs`, in the shape the file already uses:
+- [x] Add a red case to `scripts/guard-red-test.mjs`, in the shape the file already uses:
       a `checkRedTestFile` call that writes one deliberate violation, asserts `depcruise` fails, then
       deletes the file.
-- [ ] The fixture imports a relative path into `src/` from `harness/` — an internal, not the index,
+- [x] The fixture imports a relative path into `src/` from `harness/` — an internal, not the index,
       so the rule and not a typo is what blocks it. `import '../src/layout/items/variants.js';` is
       the case #287 names.
-- [ ] Name the case so the output says what it proves. The other calls set the shape.
+- [x] Name the case so the output says what it proves. The other calls set the shape.
 
 ### 5. Documentation
 
-- [ ] `docs/03-boundaries-and-config.md` gains the new rule, beside the rules it already lists.
-- [ ] `docs/04-hooks-and-ci.md` §4 lists the red-test cases. Add this one.
+- [x] `docs/03-boundaries-and-config.md` gains the new rule, beside the rules it already lists.
+- [x] `docs/04-hooks-and-ci.md` §4 lists the red-test cases. Add this one.
 
 ---
 
 ## Gate
 
-- [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`
-- [ ] Report the verdict line.
-- [ ] Confirm by hand that the guard fires: write the violating import, run `pnpm boundaries`, see it
+- [x] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`
+- [x] Report the verdict line.
+- [x] Confirm by hand that the guard fires: write the violating import, run `pnpm boundaries`, see it
       fail, delete the file. A guard with no failing fixture is presumed broken.
 
 ## Close the issue

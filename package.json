@@ -25,7 +25,7 @@
     "lint": "eslint .",
     "lint:file": "eslint --max-warnings 0 --no-warn-ignored",
     "typecheck": "tsc --noEmit",
-    "boundaries": "depcruise --config .dependency-cruiser.cjs src harness",
+    "boundaries": "depcruise --config .dependency-cruiser.cjs src harness e2e fixtures",
     "test:node": "vitest run --project pure",
     "test:dom": "vitest run --project dom",
     "guards": "vitest run test/guards && node scripts/run-rule-tests.mjs && node scripts/guard-red-test.mjs",

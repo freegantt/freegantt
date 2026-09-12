@@ -14,8 +14,8 @@
 // `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Gantt, PresetRef, SnapSetting, Theme } from '../src/api/index.js';
-import { isTimeUnit } from '../src/api/index.js';
+import type { Gantt, PresetRef, SnapSetting, Theme } from 'freegantt';
+import { isTimeUnit } from 'freegantt';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;

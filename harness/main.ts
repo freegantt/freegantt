@@ -11,7 +11,7 @@ import {
   inlineEditing,
   watchAllErrors,
   definePlugin,
-} from '../src/api/index.js';
+} from 'freegantt';
 import type {
   Entry,
   GridColumnInput,
@@ -20,7 +20,7 @@ import type {
   EntryVariant,
   CellRenderer,
   HeaderRenderer,
-} from '../src/api/index.js';
+} from 'freegantt';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';

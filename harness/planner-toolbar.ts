@@ -10,8 +10,8 @@
 // existing commands and properties into one gesture, see `resetToOpeningState`) and `Paper` (a
 // consumer-set class, never a `gantt.theme` value — see `planner.ts`).
 
-import type { Gantt, ShippedPresetId, TimeSpan } from '../src/api/index.js';
-import { formatDate, formatEndInclusive } from '../src/api/index.js';
+import type { Gantt, ShippedPresetId, TimeSpan } from 'freegantt';
+import { formatDate, formatEndInclusive } from 'freegantt';
 
 export type PlannerThemeChoice = 'light' | 'dark' | 'paper';
 

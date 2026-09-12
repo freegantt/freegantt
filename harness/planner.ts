@@ -7,7 +7,7 @@ import {
   inlineEditing,
   formatDate,
   formatEndInclusive,
-} from '../src/api/index.js';
+} from 'freegantt';
 import type {
   BarRendererContext,
   ColumnCellRendererContext,
@@ -17,7 +17,7 @@ import type {
   Instant,
   EntryVariant,
   ResolvedBarLabel,
-} from '../src/api/index.js';
+} from 'freegantt';
 import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';

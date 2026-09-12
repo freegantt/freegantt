@@ -13,10 +13,14 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function depcruiseFails() {
   try {
-    execFileSync('npx', ['depcruise', '--config', '.dependency-cruiser.cjs', 'src', 'harness'], {
-      cwd: root,
-      stdio: 'pipe',
-    });
+    execFileSync(
+      'npx',
+      ['depcruise', '--config', '.dependency-cruiser.cjs', 'src', 'harness', 'e2e', 'fixtures'],
+      {
+        cwd: root,
+        stdio: 'pipe',
+      },
+    );
     return false;
   } catch {
     return true;
@@ -96,6 +100,14 @@ checkRedTestFile(
   'src/extensions/__dev_mode_leaf_red_test__.ts',
   "// Deliberate boundary violation — extensions/ may reach data/dev-mode.ts only, not data/ generally.\nimport '../data/transaction.js';\nexport {};\n",
   'extensions/ -> data/transaction.js boundary violation (dev-mode.ts leaf stays scoped)',
+);
+
+// #287: harness/, e2e/ and fixtures/ meet the sealed exports map the same way a real consumer does —
+// a relative path into src/ walks past it and can reach an internal no consumer could reach.
+checkRedTestFile(
+  'harness/__boundary_red_test__.ts',
+  "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path.\nimport '../src/layout/items/variants.js';\nexport {};\n",
+  'harness/ -> src/ boundary violation (the sealed exports map, #287)',
 );
 
 console.log('guard-red-test: all boundary and removable-leaf rules correctly blocked their violations.');

@@ -39,8 +39,11 @@ From that one object the config generates:
 | `only-data-imports-reactive-dep` | error | `alien-signals` reached from anywhere but `src/data/reactivity.ts` |
 | `no-deprecated-core` | error | Node builtins in `src/` (the library must run in a browser) |
 | `pure-may-not-reach-dom-layers` | error | The D4 rule stated in the diagram's own vocabulary, for a message that cites D4 |
+| `harness-public-api-only` | error | `harness/`, `e2e/` or `fixtures/` reaching `src/` by a relative path instead of the published `freegantt` specifier (#287) |
 
-The last one is redundant against the generated per-layer rules and exists for the error message: `scheduling/ and render/view/interaction never import each other — they meet only through data/ (D4)` is a better failure than a generic allowlist violation.
+The last one before `harness-public-api-only` is redundant against the generated per-layer rules and exists for the error message: `scheduling/ and render/view/interaction never import each other — they meet only through data/ (D4)` is a better failure than a generic allowlist violation.
+
+`harness-public-api-only` is the one rule in this file scoped outside `src/`: it treats `harness/`, `e2e/` and `fixtures/` as the library's first consumers, so a workaround inside them meets the same sealed `exports` map a real published package meets, and cannot silently reach an internal (CLAUDE.md's stop rule). `pnpm boundaries` scans all four folders; `scripts/guard-red-test.mjs` proves the rule blocks a violation.
 
 ### 1.2 Deep-import discipline
 

@@ -3,7 +3,7 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
+import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from 'freegantt';
 import type {
   DatasetEventMap,
   Entry,
@@ -12,7 +12,7 @@ import type {
   GridColumnInput,
   RowHeightMode,
   RowSource,
-} from '../src/api/index.js';
+} from 'freegantt';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
 import { phaseHierarchy } from './plugins/phase-hierarchy.js';
 import type { PhaseProps } from './plugins/phase-hierarchy.js';

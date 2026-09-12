@@ -3,7 +3,7 @@
 // chart holding far fewer rows than the first — the U3 clamp/pin case happy-dom cannot express.
 
 import './harness-nav.ts';
-import { Gantt, Dataset, ScrollModel, TimeScaleModel } from '../src/api/index.js';
+import { Gantt, Dataset, ScrollModel, TimeScaleModel } from 'freegantt';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 

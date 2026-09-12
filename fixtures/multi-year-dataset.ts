@@ -7,7 +7,7 @@
 // wider gaps and durations so ~60 entries spread across ~3 years instead of clustering into a few
 // months.
 
-import type { EntryInput } from '../src/api/index.js';
+import type { EntryInput } from 'freegantt';
 
 const LCG_MULTIPLIER = 1103515245;
 const LCG_INCREMENT = 12345;
