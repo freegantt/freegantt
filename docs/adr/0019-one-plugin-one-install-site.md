@@ -1,5 +1,5 @@
 ---
-status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
+status: accepted — built and merged on 2026-09-12 (`plans/row-redesign/build/build-3-0019-install-site.md`). Gate: `verify:full PASS — all 16 checks green, test:e2e included (70s).` Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: a chrome-only plugin — one with no `data` half — keeps its own install site on the `Gantt`, and `gantt.plugins` stays live-reconfigurable (2026-09-11). Every plugin with a `data` half installs on the `Dataset`.
 open: nothing. A plugin with a `data` half, handed to a `Gantt`, raises **`PluginSetupError`**, and the message says where to install it (2026-09-11, author's ruling — `Q4`). No new error type ships. **The type refuses it before the runtime does** — `GanttOptions.plugins` takes a chrome-only plugin alone (2026-09-11, review fix) — see *The compiler refuses it first*. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
 ---
@@ -24,16 +24,17 @@ A plugin author picks between two contracts today, and `docs/06-plugin-authoring
 **One plugin type, two halves, one install site.**
 
 ```ts
-const scheduling = definePlugin({
-  id: 'freegantt.scheduling',
-  requires: ['freegantt.calendar'],
-  data(ctx) {
-    /* fields, the edit hook, the store — DOM-free, runs as the Dataset constructs */
-  },
-  view(ctx) {
-    /* variants, renderers, commands, keys — runs as a Gantt mounts */
-  },
-});
+const scheduling = () =>
+  definePlugin({
+    id: 'freegantt.scheduling',
+    requires: ['freegantt.calendar'],
+    data(ctx) {
+      /* fields, the edit hook, the store — DOM-free, runs as the Dataset constructs */
+    },
+    view(ctx) {
+      /* variants, renderers, commands, keys — runs as a Gantt mounts */
+    },
+  });
 
 const dataset = new Dataset({ entries, plugins: [scheduling()] });
 const gantt = new Gantt({ dataset }); // its Fields, variants, bars and menu are already there
@@ -53,7 +54,7 @@ A chrome-only plugin — `weekendShading()` — has no `data` half and keeps ins
 
 A plugin author reads one table row, not two. `docs/06-plugin-authoring.md` loses its "Two contracts, two hosts" section.
 
-**The failure mode needs a name.** A plugin with a `data` half, installed on a `Gantt`, has arrived too late to declare a Field. It must fail loudly and say where to install it. That is the open question in the frontmatter.
+**The failure mode has a name.** A plugin with a `data` half, installed on a `Gantt`, has arrived too late to declare a Field. It fails loudly and says where to install it: `PluginSetupError.wrongInstallSite(id)`, whose message names the Dataset and shows the call (`Q4`).
 
 **A silent partial install is refused, so the open question is narrower than it looks.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove. So the answer is a throw; what is open is only which error and what it says. `PluginSetupError` (`model/`, raised at `extensions/install-dataset-plugins.ts:124`) already names a plugin id and already unwinds the plugins installed before it, so it is the candidate with no new type behind it.
 
@@ -70,7 +71,24 @@ GanttOptions.plugins:   readonly ChromePlugin[];   // a `data` half does not typ
 DatasetOptions.plugins: readonly Plugin[];         // both halves install here
 ```
 
-`definePlugin` keeps the narrower type at the call site, so `new Gantt({ plugins: [scheduling()] })` is a red squiggle in the editor and never a runtime discovery. **`PluginSetupError` stays**, for the caller the compiler never met: plain JavaScript, a plugin list built at runtime, a `Plugin` widened by a helper. A library refuses in both languages it is read in.
+`definePlugin` keeps the narrower type at the call site through two overloads, so `new Gantt({ plugins: [scheduling()] })` is a red squiggle in the editor and never a runtime discovery. **`PluginSetupError` stays**, for the caller the compiler never met: plain JavaScript, a plugin list built at runtime, a `Plugin` widened by a helper. A library refuses in both languages it is read in.
+
+### What shipped, where it differs from the sketch above
+
+The three declarations are real, with two differences a reader should not have to discover:
+
+- A plugin shape takes the `view` half's **context** as its type argument, not the `Gantt` and
+  `Dataset` pair — `ChromePluginOf<TViewContext>`, `DataPluginOf<TViewContext, TDataset>`. That is
+  what keeps `api/plugin.ts` importable from `api/dataset.ts`: naming the context's own file would
+  pull `view/` in, and `view/` reaches back to `api/dataset.ts` (`J43`, `J44`).
+- `DatasetOptions.plugins` is `readonly PluginOf<unknown, Dataset<TProps>>[]`. A Dataset never calls
+  a `view` half, so it needs no Gantt type to hold one, and `api/dataset.ts` may not name `Gantt`
+  (`J45`). The fully bound `Plugin<TProps>`, `ChromePlugin<TProps>` and `DataPlugin<TProps>` are
+  published from `api/gantt.ts`, the one file that sees both classes, and assign here unchanged.
+
+One consequence the sketch did not state: a Gantt sorts the Dataset's own plugins together with its
+own chrome under one `requires` graph, so a chrome plugin may require a plugin whose only half is
+`data` (`J47`). `gantt.plugins` still reports this Gantt's own chrome alone.
 
 ## The hazard this ADR inherits
 

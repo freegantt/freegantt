@@ -76,7 +76,8 @@ This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard one l
 ## Gate
 
 - [x] `grep -rn '\bGanttPlugin\b\|\bDatasetPlugin\b' src/ harness/ | wc -l` → 0. Use the word boundaries: `PluginContextOf` and `DatasetPluginContextOf` survive as the two halves' context types.
-- [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
+- [x] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
+      `verify:full PASS — all 16 checks green, test:e2e included (70s).`
 
 ---
 

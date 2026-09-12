@@ -13,11 +13,14 @@ const entries = [
   { id: 't1', name: 'Design', parentId: 'p1', start: '2026-09-01', end: '2026-09-02', props: { cost: 500 } },
 ];
 
-function newDataset(plugins: readonly DataPlugin[] | readonly ChromePlugin[] = []): Dataset {
-  return new Dataset({ timeZone: 'UTC', entries, plugins: plugins as readonly DataPlugin[] });
+function newDataset(plugins: readonly (ChromePlugin | DataPlugin)[] = []): Dataset {
+  return new Dataset({ timeZone: 'UTC', entries, plugins });
 }
 
-function mount(dataset: Dataset, plugins?: readonly ChromePlugin[]): { gantt: Gantt; container: HTMLElement } {
+function mount(
+  dataset: Dataset,
+  plugins?: readonly ChromePlugin[],
+): { gantt: Gantt; container: HTMLElement } {
   const container = document.createElement('div');
   document.body.append(container);
   const gantt = new Gantt({ dataset, container, ...(plugins ? { plugins } : {}) });
