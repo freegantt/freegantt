@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Branch review — ADR 0021 / 0022 shipped variants (2026-09-12)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  .seam { stroke-dasharray: 4 4; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+<!-- ============ HEADER ============ -->
+<header class="space-y-4">
+  <h1 class="text-3xl font-serif font-bold">Branch review — <span class="mono text-xl align-middle bg-slate-800 text-white px-2 py-1 rounded">pawel-it-sturdy-succotash</span></h1>
+  <p class="text-sm text-slate-600">
+    ADR 0021 (the consumer's stylesheet wins) and ADR 0022 (core ships variants, and a variant answers about itself) ·
+    fixed point <span class="mono">6690aaf...HEAD</span> · 8 commits · 71 files ·
+    <span class="text-emerald-700">+1,305</span> / <span class="text-red-700">−533</span> · 2026-09-12
+  </p>
+  <p class="text-sm text-slate-600">
+    Gate at review time: <span class="mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded">verify:full PASS — all 16 checks green, test:e2e included (77s).</span>
+    Every finding below is inside a green gate. None of them is a broken build.
+  </p>
+  <div class="flex gap-6 text-xs text-slate-500 uppercase tracking-wider">
+    <span><span class="inline-block w-3 h-3 border border-slate-400 bg-white align-middle"></span> module</span>
+    <span><span class="inline-block w-4 border-t-2 border-dashed border-slate-400 align-middle"></span> seam</span>
+    <span><span class="inline-block w-4 border-t-2 border-red-500 align-middle"></span> leak</span>
+    <span><span class="inline-block w-3 h-3 deep align-middle rounded-sm"></span> deep module</span>
+  </div>
+  <div class="grid grid-cols-5 gap-3 text-center text-sm">
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-red-600">4</div><div class="text-xs text-slate-500 uppercase tracking-wider">high</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-amber-600">8</div><div class="text-xs text-slate-500 uppercase tracking-wider">medium</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold">7</div><div class="text-xs text-slate-500 uppercase tracking-wider">low</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-emerald-700">0</div><div class="text-xs text-slate-500 uppercase tracking-wider">gate failures</div></div>
+    <div class="rounded-lg bg-white border border-slate-200 p-3"><div class="text-2xl font-bold text-emerald-700">0</div><div class="text-xs text-slate-500 uppercase tracking-wider">harness workarounds</div></div>
+  </div>
+</header>
+
+<!-- ============ WHAT LANDED ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold">What landed</h2>
+  <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 text-sm">
+    <p>The base sheet ships inside <span class="mono">@layer freegantt</span>, so an unlayered consumer rule wins at any specificity. Core exports three <span class="mono">EntryVariant</span> factories — <span class="mono">bar()</span>, <span class="mono">summary()</span>, <span class="mono">diamond()</span>. An Item may state a painted box the time scale does not size (<span class="mono">Item.box</span>), and <span class="mono">FrameBar.minimumSpan: boolean</span> becomes <span class="mono">FrameBar.span: 'exact' | 'minimum' | 'fixed'</span>. A variant carries its own <span class="mono">css</span>, written to one <span class="mono">&lt;style data-freegantt-variant-styles&gt;</span> node per Gantt. <span class="mono">variantOf(entry): string</span> retires for <span class="mono">gantt.variantFor(entry): ResolvedVariant</span>. Core's <span class="mono">parent</span> variant becomes <span class="mono">summary</span>.</p>
+    <p class="text-slate-600">The build did the hard part. <span class="mono">harness/planner.ts</span> lost <span class="mono">checkpointDiamond</span> and ~40 lines of page CSS and gained one line of config; <span class="mono">harness/main.ts</span> reviewed clean; the boundary seal from build 1 puts <span class="mono">harness/</span>, <span class="mono">e2e/</span> and <span class="mono">fixtures/</span> behind the published specifier. Findings below are about the shape of what shipped, not about whether it works.</p>
+  </div>
+</section>
+
+<!-- ============ THE STYLE PATH ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold">The style path, as built</h2>
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <pre class="mermaid">
+flowchart LR
+  subgraph doc["document.head"]
+    BASE["&lt;style data-freegantt-styles&gt;<br/>@layer freegantt { … }<br/>once per document"]
+    VA["&lt;style data-freegantt-variant-styles&gt;<br/>Gantt A's installedCss()"]
+    VB["&lt;style data-freegantt-variant-styles&gt;<br/>Gantt B's installedCss()"]
+    CONS["consumer sheet<br/>unlayered — always wins"]
+  end
+  BASE --> VA --> VB
+  VA -. "F3: unscoped, so A's rules<br/>paint B's bars too" .-> VB
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class VA,VB leak
+    </pre>
+  </div>
+  <p class="text-sm text-slate-600">Cascade order is right. Scope is the gap: the fragments name <span class="mono">.fg-bar-diamond</span>, not <span class="mono">this Gantt's .fg-bar-diamond</span>.</p>
+</section>
+
+<!-- ============ HIGH ============ -->
+<section class="space-y-6">
+  <h2 class="text-2xl font-serif font-bold">High</h2>
+
+  <article id="F1" class="rounded-xl border border-red-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="mono text-xs bg-red-600 text-white px-2 py-1 rounded">F1</span>
+      <h3 class="font-bold text-lg"><span class="mono">ResolvedVariant</span> does not carry <span class="mono">css</span>, and three published places say it does</h3>
+      <span class="text-xs uppercase tracking-wider bg-red-100 text-red-800 px-2 py-1 rounded">API</span>
+    </div>
+    <p class="mono text-xs text-slate-600">src/layout/items/variants.ts:29–34 · src/api/gantt.ts:517 · src/view/gantt-shell.ts:1152 · docs/adr/0022…md §3 · etc/freegantt.api.md:1890–1896</p>
+    <p><b>Problem.</b> <span class="mono">ResolvedVariant extends DrawnVariant</span> and adds <span class="mono">paint</span> and <span class="mono">can</span>. <span class="mono">DrawnVariant</span> is <span class="mono">{ name, items }</span>. There is no <span class="mono">css</span> member anywhere on the type.</p>
+    <p><b>What the docs promise.</b> ADR 0022 §3 writes the call site as <span class="mono">// { name, items, paint, can, css }</span>. <span class="mono">Gantt.variantFor</span>'s own doc comment says "read <span class="mono">.paint</span>/<span class="mono">.can</span>/<span class="mono">.css</span> off the same answer". <span class="mono">GanttShell.variantFor</span> says "One door answers <span class="mono">items</span>/<span class="mono">paint</span>/<span class="mono">can</span>/<span class="mono">css</span> together."</p>
+    <p><b>Why it matters.</b> ADR 0022's whole argument for retiring <span class="mono">variantOf</span> is that one door answers the whole question. A consumer who follows the published call site gets a type error on the fifth answer. Either add <span class="mono">readonly css: string | undefined</span> to <span class="mono">ResolvedVariant</span> (the registry already holds it on <span class="mono">registration.variant</span>), or correct all three doc sites.</p>
+  </article>
+
+  <article id="F2" class="rounded-xl border border-red-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="mono text-xs bg-red-600 text-white px-2 py-1 rounded">F2</span>
+      <h3 class="font-bold text-lg">The per-Gantt style node does not buy the isolation its I2 justification claims</h3>
+      <span class="text-xs uppercase tracking-wider bg-red-100 text-red-800 px-2 py-1 rounded">Architecture</span>
+    </div>
+    <p class="mono text-xs text-slate-600">src/view/variant-styles.ts:5–12 · src/api/gantt.test.ts:2313–2334 · docs/adr/0022…md §5 "One node per Gantt"</p>
+    <p><b>Problem.</b> <span class="mono">variant-styles.ts:7</span> says: "Two Gantts must be fully independent: a summary rule on one page must not un-paint a diamond on another." The fragments are written verbatim into <span class="mono">doc.head</span> with no container scoping, so two Gantts <i>in one document</i> do see each other's rules. Gantt A installing <span class="mono">diamond({ css: … })</span> restyles Gantt B's <span class="mono">.fg-bar-diamond</span> too, and at equal specificity the later node in <span class="mono">head</span> wins for both.</p>
+    <p><b>What the test proves.</b> <span class="mono">gantt.test.ts:2313</span> ("two Gantts … each carry their own node … (I2)") asserts node identity and node text, then asserts that A's <span class="mono">destroy()</span> leaves B's node connected. That is <i>lifecycle</i> independence, which the design does deliver. It is not <i>cascade</i> independence, which the comment claims.</p>
+    <p><b>Options.</b> Say what the node actually buys (lifecycle ownership, not cascade isolation), or scope each fragment to the Gantt's own container — the shell already stamps <span class="mono">data-fg-theme</span> on it, so a per-instance attribute is one line away.</p>
+  </article>
+
+  <article id="F3" class="rounded-xl border border-red-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="mono text-xs bg-red-600 text-white px-2 py-1 rounded">F3</span>
+      <h3 class="font-bold text-lg"><span class="mono">bar()</span> is an opt-in workaround for a default that could simply be correct</h3>
+      <span class="text-xs uppercase tracking-wider bg-red-100 text-red-800 px-2 py-1 rounded">API</span>
+    </div>
+    <p class="mono text-xs text-slate-600">src/layout/items/variants.ts:440 · variants.ts:398–410 (produceLeafItems) · docs/adr/0022…md §1</p>
+    <p><b>Problem.</b> ADR 0022 §1 states the defect plainly: "An author who hand-writes <span class="mono">{ name: 'x', when: myRule }</span> silently gets <span class="mono">wholeEntryItem</span> instead, and their Segments disappear. <span class="mono">bar()</span> is what prevents that." The fix shipped as an export the author must know to reach for. The registry's default is unchanged at <span class="mono">variants.ts:440</span>: <span class="mono">items: variant.items ?? ((entry, name) =&gt; [wholeEntryItem(entry, name)])</span>.</p>
+    <p><b>The smaller fix.</b> <span class="mono">produceLeafItems</span> is a strict superset of <span class="mono">wholeEntryItem</span> — it falls back to exactly one whole-entry Item when the row has no Segments. Making it the registry default closes the trap for every author, including the one who never finds <span class="mono">bar()</span>.</p>
+    <p><b>The cost, stated.</b> <span class="mono">summary()</span> also relies on the whole-entry default, and a parent with Segments would then draw several rails instead of one. So the move is: default becomes <span class="mono">produceLeafItems</span>, and <span class="mono">summary()</span> states its own single-Item producer. <span class="mono">bar()</span> survives as a convenience rather than as a trapdoor. Worth deciding explicitly, because the current shape leaves a silent data-loss default in the library.</p>
+  </article>
+
+  <article id="F4" class="rounded-xl border border-red-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="mono text-xs bg-red-600 text-white px-2 py-1 rounded">F4</span>
+      <h3 class="font-bold text-lg"><span class="mono">@layer</span> blinds every happy-dom computed-style read, and one test was rewritten for it</h3>
+      <span class="text-xs uppercase tracking-wider bg-red-100 text-red-800 px-2 py-1 rounded">Testing</span>
+    </div>
+    <p class="mono text-xs text-slate-600">src/view/styles.ts:161 · src/view/styles.test.ts:243–259 · src/render/dom/pixel-property.ts:26 · src/view/column-chrome.ts:243</p>
+    <p><b>Probed, not assumed.</b> A throwaway dom test (written, run, deleted) read <span class="mono">getComputedStyle(fgContainer).getPropertyValue('--fg-row-height')</span> after <span class="mono">ensureBaseStyles</span>: <span class="mono">''</span>. The same property from an identical unlayered <span class="mono">&lt;style&gt;</span>: <span class="mono">28px</span>. happy-dom's CSSOM drops the whole layered sheet.</p>
+    <p><b>Consequence.</b> <span class="mono">pixel-property.ts</span> and <span class="mono">column-chrome.ts</span> now take their library-default fallback path in <i>every</i> dom test, unconditionally. The token→layout wiring the base sheet provides is no longer exercised by the unit suite at all. The branch noticed the effect on one test (<span class="mono">styles.test.ts:249</span>, "dark theme paints bar labels…", where a real <span class="mono">getComputedStyle(bar).color === '#16181D'</span> assertion became two text regexes) and logged it as J14, but nothing records the wider blind spot.</p>
+    <p><b>What would settle the scope.</b> A list of dom tests that read a sheet-provided value, and a decision per test: move to e2e, or assert the sheet text. The two tests above pass today only because the default equals the shipped token value.</p>
+  </article>
+</section>
+
+<!-- ============ MEDIUM ============ -->
+<section class="space-y-6">
+  <h2 class="text-2xl font-serif font-bold">Medium</h2>
+
+  <article id="F5" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F5</span><h3 class="font-bold text-lg"><span class="mono">diamond()</span>'s shipped default <span class="mono">when</span> allocates on a path the file declares zero-allocation</h3></div>
+    <p class="mono text-xs text-slate-600">src/layout/items/variants.ts:317 · variants.ts:36–37 · src/data/fields/field-access.ts:179–190</p>
+    <p><span class="mono">when: (entry) =&gt; entry.duration()?.value === 0</span>. <span class="mono">measureEntryDuration</span> returns a fresh <span class="mono">{ value, unit }</span> object on every call. <span class="mono">variants.ts:36</span> says of a <span class="mono">VariantPredicate</span>: "It runs on the hover path, so keep it cheap." I5 budgets zero allocation there. One object per row per resolve is the shipped default for core's own look. A zero-alloc spelling exists (<span class="mono">entry.start !== undefined &amp;&amp; entry.start === entry.end</span>), at the cost of ignoring <span class="mono">measureDuration: 'segments'</span> — so this is a trade to state, not an oversight to paper over.</p>
+  </article>
+
+  <article id="F6" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F6</span><h3 class="font-bold text-lg">A fixed box is never clamped, so <span class="mono">fixedWidthItem(0)</span> reopens the #212 unclickable-bar defect</h3></div>
+    <p class="mono text-xs text-slate-600">src/layout/frame.ts:77–78 · src/layout/items/item.ts:121–126</p>
+    <p><span class="mono">barSpan</span> returns <span class="mono">width: entry.box.widthPx</span> unmodified. The two neighbouring paths both guard: the plain path is <span class="mono">Math.max(0, end - x)</span>, the narrow path floors at <span class="mono">minBarWidthPx</span>. <span class="mono">fixedWidthItem(px)</span> validates nothing, so <span class="mono">fixedWidthItem(0)</span> paints an invisible, ungrabbable bar and <span class="mono">fixedWidthItem(-4)</span> puts a negative width on the element. <span class="mono">DEFAULT_MIN_BAR_WIDTH_PX</span>'s own doc says why 12px exists — "too thin to grab back by its resize handle". A fixed box skipping the floor is the ADR's decision; skipping <span class="mono">Math.max(0, …)</span> looks like an omission.</p>
+  </article>
+
+  <article id="F7" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F7</span><h3 class="font-bold text-lg">The new boundary guard cannot tell the published specifier from a relative path, and the branch's own new e2e takes the relative one</h3></div>
+    <p class="mono text-xs text-slate-600">.dependency-cruiser.cjs:105–119 · e2e/variant-styles.spec.ts:16 · docs/03-boundaries-and-config.md:42 · docs/04-hooks-and-ci.md §4.1</p>
+    <p>The rule is <span class="mono">from ^(harness|e2e|fixtures)/ to ^src/ pathNot ^src/api/index\.ts$</span>. dependency-cruiser sees resolved paths, and the <span class="mono">freegantt</span> alias resolves to <span class="mono">src/api/index.ts</span> — so the exception exists to let the alias through, and it lets a hand-written <span class="mono">'../src/api/index.js'</span> through with it. <span class="mono">e2e/variant-styles.spec.ts:16</span> writes exactly that. Both docs state the rule as "never a relative path", which is stronger than what it enforces. Either an ESLint <span class="mono">no-restricted-imports</span> rule on the literal specifier closes it, or the docs should say what the guard actually catches.</p>
+  </article>
+
+  <article id="F8" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F8</span><h3 class="font-bold text-lg">A design fact the planner page demonstrated was dropped, and the build log does not say so</h3></div>
+    <p class="mono text-xs text-slate-600">harness/planner.ts (deleted <span class="mono">checkpointDiamond</span>, :186–:205 at the fixed point) · harness/planner.html (deleted <span class="mono">.demo-checkpoint-label</span>) · plans/shipped-variants/build/build-3…md unit G</p>
+    <p>The deleted renderer painted a checkpoint <b>filled when done and hollow while it is not</b> (DESIGN-FACTS §2.5), and put its label in row ink 10px off the diamond's point, because "there is no fill to read a label against". <span class="mono">diamond({ when: { checkpoint: true } })</span> has one look, and the label now takes the library's muted outside-label ink.</p>
+    <p>This is reachable over the published surface — <span class="mono">diamond({ when, paint })</span> would restore both — so it is a harness fidelity loss, not an API gap. Unit G's checklist says "Nothing stayed behind", which is true of leftovers; nothing records what <i>went</i> away. ADR 0022's own instruction ("Anything that has to stay behind is an unclosed gap, and gets reported") deserves its mirror: anything that silently stopped being demonstrated gets reported too.</p>
+  </article>
+
+  <article id="F9" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F9</span><h3 class="font-bold text-lg"><span class="mono">e2e/renderer-callbacks.spec.ts</span>'s comment describes code that does not exist</h3></div>
+    <p class="mono text-xs text-slate-600">e2e/renderer-callbacks.spec.ts:14–17 · harness/plugins.ts:119 · harness/plugins.html:93</p>
+    <p>The comment reads: "The page's <span class="mono">milestone</span> variant claims the marked rows and reads <span class="mono">diamond()</span>'s own paint back to add its recolour." The page writes <span class="mono">diamond({ when: { milestone: true } })</span>. There is no <span class="mono">milestone</span> variant (the name stays <span class="mono">diamond</span>), and nothing reads a paint back — the recolour is a plain CSS rule at <span class="mono">plugins.html:93</span>. The test itself is fine; the comment invents a mechanism.</p>
+  </article>
+
+  <article id="F10" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F10</span><h3 class="font-bold text-lg">The harness's milestone demo silently lost its <span class="mono">data-variant</span> hook</h3></div>
+    <p class="mono text-xs text-slate-600">harness/main.ts:436 · harness/plugins.ts:119 · harness/docs/plugin-authoring.html:36, :407 · plans/02-public-api.md §4.1</p>
+    <p>Before: <span class="mono">{ name: 'milestone', when: { milestone: true }, paint }</span> → <span class="mono">data-variant="milestone"</span>. After: <span class="mono">diamond({ when: { milestone: true } })</span> keeps <span class="mono">name: 'diamond'</span>, so both demo pages stamp <span class="mono">data-variant="diamond"</span>. <span class="mono">plans/02</span> §4.1 sells <span class="mono">data-variant</span> as the level-2 styling hook, and <span class="mono">plugin-authoring.html</span> now says "core ships the diamond, but not the name <span class="mono">'milestone'</span>" — describing a page that no longer produces that name. The faithful port is <span class="mono">diamond({ name: 'milestone', when: { milestone: true } })</span>, which also demonstrates that every key overrides.</p>
+  </article>
+
+  <article id="F11" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F11</span><h3 class="font-bold text-lg">Public <span class="mono">ResolvedVariant</span> extends unexported <span class="mono">DrawnVariant</span></h3></div>
+    <p class="mono text-xs text-slate-600">etc/freegantt.api.md:1890 · src/layout/index.ts:19–29 · src/api/index.ts:364</p>
+    <p>The committed API report carries <span class="mono">// Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported</span>. <span class="mono">ResolvedVariant</span>'s two most-read members — <span class="mono">name</span> and <span class="mono">items</span> — therefore do not appear in the report at all, on the headline new public type of this ADR. Four such warnings already sit in the report, so this follows precedent rather than breaking it; the question is whether a type a consumer is told to call <span class="mono">gantt.variantFor</span> for should be the fifth. Exporting <span class="mono">DrawnVariant</span>, or inlining its two members into <span class="mono">ResolvedVariant</span>, both close it.</p>
+  </article>
+
+  <article id="F12" class="rounded-xl border border-amber-200 bg-white p-6 space-y-3">
+    <div class="flex items-center gap-3"><span class="mono text-xs bg-amber-600 text-white px-2 py-1 rounded">F12</span><h3 class="font-bold text-lg"><span class="mono">Item.box</span> and the two new unions are anonymous, against this file's own convention</h3></div>
+    <p class="mono text-xs text-slate-600">src/layout/items/item.ts:35, :121 · src/layout/frame.ts:74, :93–97, :153</p>
+    <p><span class="mono">{ widthPx: number; anchor: 'start' | 'center' | 'end' }</span> is written twice (<span class="mono">item.ts:35</span>, <span class="mono">frame.ts:93–97</span>); the anchor union a third time (<span class="mono">item.ts:121</span>); <span class="mono">'exact' | 'minimum' | 'fixed'</span> twice in <span class="mono">frame.ts</span> alone (<span class="mono">:74</span>, <span class="mono">:153</span>). <span class="mono">FrameBar.flags: BarFlags</span> is the same file's precedent for naming such a type. Names give a consumer something to import when they write their own producer, and stop the copies drifting apart. Call-site test: <span class="mono">function myFlag(): ItemProducer</span> needs to name <span class="mono">BarAnchor</span> today and cannot.</p>
+  </article>
+</section>
+
+<!-- ============ LOW ============ -->
+<section class="space-y-6">
+  <h2 class="text-2xl font-serif font-bold">Low</h2>
+  <div class="rounded-xl border border-slate-200 bg-white p-6">
+    <table class="w-full text-sm"><tbody class="divide-y divide-slate-100">
+      <tr id="F13"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F13</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">src/api/index.ts:375</td>
+        <td class="py-3"><b><span class="mono">bar</span> and <span class="mono">summary</span> as top-level package exports.</b> <span class="mono">import { bar, summary, diamond } from 'freegantt'</span> puts two of the most collision-prone words in an app's module namespace. ADR 0022 §4 weighed <span class="mono">bar()</span> against the <span class="mono">.fg-bar</span> class, and concluded correctly that they never meet in one sentence. It did not weigh the export name against an app's own <span class="mono">bar</span>/<span class="mono">summary</span> identifiers. CLAUDE.md's rule ("a generic word covering more than one concept is a bug, not a style nit") points here. Reported, not proposed — the ADR is accepted.</td></tr>
+      <tr id="F14"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F14</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">src/layout/items/variants.ts</td>
+        <td class="py-3"><b>Five concerns in one 520-line file.</b> Public types, core's three looks, two CSS fragments, the leaf producer, rule compilation, and the registry. <span class="mono">item.ts</span> was already split out of this file "so no import ring between the three" — the shipped looks (<span class="mono">bar</span>/<span class="mono">summary</span>/<span class="mono">diamond</span>, <span class="mono">SUMMARY_BAR</span>/<span class="mono">SUMMARY_CSS</span>/<span class="mono">DIAMOND_BAR</span>/<span class="mono">DIAMOND_CSS</span>/<span class="mono">DIAMOND_WIDTH_PX</span>, <span class="mono">CORE_VARIANTS</span>) are one cohesive thing and read as <span class="mono">items/core-variants.ts</span>. The registry then holds resolution alone.</td></tr>
+      <tr id="F15"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F15</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">src/layout/items/variants.ts:508–518</td>
+        <td class="py-3"><b><span class="mono">installedCss()</span> re-sorts a full copy per call, and its comment points the wrong way.</b> "the constructor loop <b>below</b> seeds it" — the <span class="mono">for (const variant of CORE_VARIANTS)</span> loop is above the returned object, not below. The sorted result could be held the way <span class="mono">walkOrder</span> already holds <span class="mono">ordered</span>, invalidated on the same registration edge.</td></tr>
+      <tr id="F16"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F16</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">src/layout/items/item.ts:122–126 · variants.ts:440</td>
+        <td class="py-3"><b>Two avoidable allocations.</b> <span class="mono">fixedWidthItem</span> builds a fresh <span class="mono">{ widthPx, anchor }</span> per Item, though the box is invariant per producer — hoist and freeze it outside the returned closure, the way <span class="mono">SUMMARY_BAR</span> and <span class="mono">DIAMOND_BAR</span> already are. <span class="mono">variants.ts:440</span> builds a fresh whole-entry closure per registration; one module-level named function (<span class="mono">produceWholeEntryItem</span>) reads better and allocates once.</td></tr>
+      <tr id="F17"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F17</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">.size-limit.json</td>
+        <td class="py-3"><b>The budget was measured and not set.</b> ADR 0022's Consequences say "Measure <span class="mono">pnpm size-limit</span> after both moves, then set <span class="mono">.size-limit.json</span> from the number." Build 3 unit I measured 78.27 kB and 81.47 kB against unchanged caps of 79 KB and 82 KB, and left them. The caps still describe the pre-branch build, so the next KB of drift is invisible.</td></tr>
+      <tr id="F18"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F18</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">src/api/gantt.ts:522</td>
+        <td class="py-3"><b><span class="mono">variantFor</span> drops <span class="mono">TProps</span>.</b> <span class="mono">variantFor(entry: Entry&lt;TProps&gt;): ResolvedVariant</span> sits beside <span class="mono">get variants(): readonly EntryVariant&lt;TProps&gt;[]</span>. The input side keeps the consumer's prop typing; the answer's <span class="mono">paint</span> and <span class="mono">can</span> lose it. Either <span class="mono">ResolvedVariant&lt;TProps&gt;</span>, or a note saying the answer is deliberately untyped.</td></tr>
+      <tr id="F19"><td class="py-3 pr-3 align-top"><span class="mono text-xs bg-slate-600 text-white px-2 py-1 rounded">F19</span></td>
+        <td class="py-3 pr-3 mono text-xs whitespace-nowrap align-top">harness/harness-chrome.css:767–775 · harness/plugins.html:87–95</td>
+        <td class="py-3"><b>The recolour rule and its six-line comment are copy-pasted verbatim into two files, and both say "this page".</b> Only <span class="mono">index.html</span> links <span class="mono">harness-chrome.css</span>, so the duplication follows the harness's existing per-page-stylesheet shape and is not new — but the previous <span class="mono">.demo-milestone</span> duplicate was deleted as part of this build (J21) and immediately replaced with a new one.</td></tr>
+    </tbody></table>
+  </div>
+</section>
+
+<!-- ============ WHAT WAS CHECKED AND FOUND CLEAN ============ -->
+<section class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold">Checked, and clean</h2>
+  <div class="rounded-xl border border-emerald-200 bg-white p-6 space-y-2 text-sm">
+    <ul class="list-disc pl-5 space-y-1">
+      <li><b><span class="mono">harness/main.ts</span>, reviewed in full</b> (CLAUDE.md asks on every commit). No restated library default, no hand-built model standing in for a config key, no leftover glyph code. <span class="mono">gridWidth: 'fitColumns'</span> is the only layout config and it is the published key.</li>
+      <li><b>No harness workaround for a library gap.</b> <span class="mono">planner.ts</span> lost its glyph renderer and its page CSS entirely and kept nothing behind — the acceptance test ADR 0022 set for itself.</li>
+      <li><b>Stylesheet ordering.</b> <span class="mono">ensureBaseStyles</span> at <span class="mono">gantt-shell.ts:531</span>, <span class="mono">attachVariantStyles</span> at <span class="mono">:612</span>, first <span class="mono">refresh()</span> through <span class="mono">#installConsumerVariants</span> at <span class="mono">:616</span>, <span class="mono">destroy()</span> at <span class="mono">:2133</span>. Both plugin edges refresh (<span class="mono">plugin-registrations.ts:123–127</span>, on register and on dispose), with a counting test.</li>
+      <li><b><span class="mono">layout/</span> stays DOM-free</b> with the CSS fragments in it — a string is data, and <span class="mono">view/</span> does the writing. <span class="mono">pnpm boundaries</span> agrees.</li>
+      <li><b>The anchor rules agree with the floor.</b> <span class="mono">'center'</span> reads the span's own midpoint, the same one <span class="mono">barSpan</span> centres a floored bar on. Four unit tests pin it (<span class="mono">frame.test.ts</span>), including both other anchors.</li>
+      <li><b>The e2e that would have gone red now exists.</b> <span class="mono">planner.spec.ts</span> asserts a computed <span class="mono">background-color</span> and a measured box across a real toolbar-driven zoom step, replacing the <span class="mono">toBeVisible()</span> that let the original defect ship.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ PASS 2 ============ -->
+<section id="pass2" class="space-y-4">
+  <h2 class="text-2xl font-serif font-bold">Pass 2 — verdicts</h2>
+  <div class="rounded-xl border border-slate-300 bg-white p-6 text-sm">
+    <p class="text-slate-600">A fresh sub-agent opens every file each finding cites and rules on whether the finding describes that code correctly. Verdicts land here.</p>
+    <p class="mt-3 text-slate-500 italic">Pending.</p>
+  </div>
+</section>
+
+<footer class="text-xs text-slate-400 pt-8 border-t border-slate-200">
+  Branch review, pass 1 · 2026-09-12 · fixed point <span class="mono">6690aaf</span> · gate <span class="mono">verify:full PASS — all 16 checks green, test:e2e included (77s).</span>
+</footer>
+
+</main>
+</body>
+</html>
