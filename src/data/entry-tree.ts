@@ -103,24 +103,3 @@ export function ancestorsOf(
   }
   return result;
 }
-
-/** Every Entry below `id`, deepest included, read one level at a time through `childrenOf` — the
- *  walk `view/capability.ts` needs to answer what a parent bar's drag writes (ADR 0013). Call:
- *  `descendantsOf(parent.id, (id) => store.storedChildrenOf(id))`.
- *
- *  A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
- *  overflow answers no question. */
-export function descendantsOf(
-  id: EntryId,
-  childrenOf: (parent: EntryId) => readonly StoredEntry[],
-): readonly StoredEntry[] {
-  const found: StoredEntry[] = [];
-  const pending: EntryId[] = [id];
-  while (pending.length > 0) {
-    for (const child of childrenOf(pending.pop()!)) {
-      found.push(child);
-      pending.push(child.id);
-    }
-  }
-  return found;
-}
