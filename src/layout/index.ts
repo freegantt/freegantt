@@ -14,7 +14,7 @@ export { pickDefined } from './pick-defined.js';
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
 export { wholeEntryItem, fixedWidthItem } from './items/item.js';
-export type { Item, ItemProducer, VariantItems } from './items/item.js';
+export type { BarAnchor, FixedBarBox, Item, ItemProducer, VariantItems } from './items/item.js';
 export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 export type {
   DoubleVariantClaim,
@@ -73,6 +73,7 @@ export type {
   RangeBand,
   RowStripe,
   BarFlags,
+  BarSpanKind,
   LinkFlags,
   LayoutInput,
 } from './frame.js';

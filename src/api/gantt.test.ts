@@ -2255,7 +2255,13 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   });
 
   describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
-    function pointDataset(): Dataset {
+    // Date-only strings, not an Instant pair: under this Dataset's default `dateOnlyEnd:
+    // 'inclusive'`, `start === end` here ingests as one calendar day, not a zero-duration point
+    // (`diamond()`'s own default `when` does not claim it — F20). Named for what it delivers,
+    // because this `describe` only ever asserts stylesheet text and never which row `diamond()`
+    // claims — the neighbouring `pointDataset()` above, built from `instant(Date.UTC(...))`, is
+    // the one that actually claims a row.
+    function oneDayDataset(): Dataset {
       return new Dataset({
         timeZone: 'UTC',
         entries: [{ id: 'm', name: 'M', start: '2026-01-01', end: '2026-01-01' }],
@@ -2274,7 +2280,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
 
     it('carries no diamond css when nothing installs diamond() — #286’s whole claim', () => {
       const container = document.createElement('div');
-      const gantt = new Gantt({ container, dataset: pointDataset() });
+      const gantt = new Gantt({ container, dataset: oneDayDataset() });
       const node = variantStyleNodeOf(container);
 
       expect(node.textContent).not.toContain('.fg-bar-diamond');
@@ -2284,7 +2290,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
 
     it('carries diamond()’s own rules once an author installs it', () => {
       const container = document.createElement('div');
-      const gantt = new Gantt({ container, dataset: pointDataset(), variants: [diamond()] });
+      const gantt = new Gantt({ container, dataset: oneDayDataset(), variants: [diamond()] });
       const node = variantStyleNodeOf(container);
 
       expect(node.textContent).toContain('.fg-bar-diamond');
@@ -2297,7 +2303,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
 
     it('gantt.variants = […] installs a variant’s own css, and reassigning without it removes it', () => {
       const container = document.createElement('div');
-      const gantt = new Gantt({ container, dataset: pointDataset() });
+      const gantt = new Gantt({ container, dataset: oneDayDataset() });
       const node = variantStyleNodeOf(container);
       expect(node.textContent).not.toContain('.fg-bar-diamond');
 
@@ -2312,11 +2318,11 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
 
     it('two Gantts with different variants each carry their own node, never one shared node (I2)', () => {
       const containerA = document.createElement('div');
-      const ganttA = new Gantt({ container: containerA, dataset: pointDataset(), variants: [diamond()] });
+      const ganttA = new Gantt({ container: containerA, dataset: oneDayDataset(), variants: [diamond()] });
       const nodeA = variantStyleNodeOf(containerA);
 
       const containerB = document.createElement('div');
-      const ganttB = new Gantt({ container: containerB, dataset: pointDataset() });
+      const ganttB = new Gantt({ container: containerB, dataset: oneDayDataset() });
       const nodeB = variantStyleNodeOf(containerB);
 
       expect(nodeA).not.toBe(nodeB);

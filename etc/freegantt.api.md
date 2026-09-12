@@ -44,6 +44,9 @@ export function attemptMutation(body: () => void): boolean;
 // @public
 export function bar(overrides?: Partial<EntryVariant>): EntryVariant;
 
+// @public
+export type BarAnchor = 'start' | 'center' | 'end';
+
 // @public (undocumented)
 export interface BarFlags {
     // (undocumented)
@@ -69,6 +72,9 @@ export interface BarRendererContext {
     item: FrameBar;
     label?: ResolvedBarLabel;
 }
+
+// @public
+export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 
 // @public
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
@@ -932,7 +938,15 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
-export function fixedWidthItem(px: number, anchor?: 'start' | 'center' | 'end'): ItemProducer;
+export interface FixedBarBox {
+    // (undocumented)
+    readonly anchor: BarAnchor;
+    // (undocumented)
+    readonly widthPx: number;
+}
+
+// @public
+export function fixedWidthItem(px: number, anchor?: BarAnchor): ItemProducer;
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -970,7 +984,7 @@ export interface FrameBar {
     rowId: RowId;
     segmentId?: SegmentId;
     segmentIds: readonly SegmentId[];
-    span: 'exact' | 'minimum' | 'fixed';
+    span: BarSpanKind;
     variant: string;
     // (undocumented)
     width: number;
@@ -1417,10 +1431,7 @@ export function isTimeUnit(value: string): value is TimeUnit;
 
 // @public (undocumented)
 export interface Item {
-    box?: {
-        widthPx: number;
-        anchor: 'start' | 'center' | 'end';
-    };
+    readonly box?: FixedBarBox;
     // (undocumented)
     end: Instant;
     // (undocumented)

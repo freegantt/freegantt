@@ -518,7 +518,9 @@ export class Gantt<TProps = unknown> {
    *
    *  Not `entry.variant`. An Entry belongs to a `Dataset`; a variant resolves per Gantt. I2 lets two
    *  Gantts on one Dataset paint the same row differently, so `entry.variant` would have to pick one
-   *  answer and be wrong on the other Gantt. */
+   *  answer and be wrong on the other Gantt.
+   *
+   *  The parameter keeps `TProps`; the answer does not (F18) — `ResolvedVariant`'s own doc says why. */
   variantFor(entry: Entry<TProps>): ResolvedVariant {
     return this.#shell.variantFor(entry);
   }

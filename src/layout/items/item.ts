@@ -5,6 +5,23 @@
 import { itemId } from '../../model/index.js';
 import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../../model/index.js';
 
+/** Which point of the entry's own span a fixed box holds fixed — `'center'` for a marker (a diamond
+ *  points at an instant), `'start'` for a flag (the pole sits on the date and the cloth hangs to the
+ *  right), `'end'` for the mirror. Named so a producer can state it as a type, not repeat the union
+ *  (F12) — `fixedBoxX` (`layout/frame.ts`) is `BarAnchor`'s other reader. */
+export type BarAnchor = 'start' | 'center' | 'end';
+
+/** A painted box the time scale does not size (ADR 0022) — `Item.box`'s own shape, named so
+ *  `layout/frame.ts` and a producer both read one type instead of repeating the object literal
+ *  (F12). `widthPx` is the box's width in content pixels. Frozen and shared across every Item one
+ *  producer call builds (`fixedWidthItem`, F16): nothing in `layout/` or `render/` ever writes
+ *  through an Item's `box` after production, so one immutable instance per producer costs nothing
+ *  and the `readonly` members hold a consumer to that same contract at the type level. */
+export interface FixedBarBox {
+  readonly widthPx: number;
+  readonly anchor: BarAnchor;
+}
+
 export interface Item {
   id: ItemId;
   entryId: EntryId;
@@ -20,19 +37,17 @@ export interface Item {
   segmentId?: SegmentId;
   /** A painted box the time scale does not size, or `undefined` for an ordinary span-and-floor box.
    *  A marker that must hold its size at every zoom — `diamond()`'s glyph is the shipped case —
-   *  states it here. `widthPx` is the box's width in content pixels; `anchor` says which point of
-   *  the entry's own span the box holds fixed — `'center'` for a marker (a diamond points at an
-   *  instant), `'start'` for a flag (the pole sits on the date and the cloth hangs to the right).
-   *  Core picks for nobody: `fixedWidthItem` defaults to `'center'`, and every shipped or authored
-   *  variant states its own choice.
+   *  states it here.
    *
    *  Not centred on the entry's own start — `barSpan` (`layout/frame.ts`) centres a *floored* span
    *  on its own midpoint (ADR 0022 Q7), and `'center'` follows that same rule so the two never
    *  disagree. The two answer the same question only when `start === end`.
    *
    *  `barSpan` honours this ahead of the span-and-floor path, and `render/` stamps
-   *  `data-span="fixed"`. `fixedWidthItem` is the producer that sets it. */
-  box?: { widthPx: number; anchor: 'start' | 'center' | 'end' };
+   *  `data-span="fixed"`. `fixedWidthItem` is the producer that sets it. `readonly` (F16): the box
+   *  a producer hoists is shared across every Item it builds, so a write through one Item's `box`
+   *  would silently reach every other Item that producer ever returns. */
+  readonly box?: FixedBarBox;
 }
 
 /** What shape one variant draws. `EntryVariant.items` takes one; omit it and the variant draws one
@@ -117,11 +132,14 @@ export function wholeEntryItem(entry: Entry, variant: string): Item {
  *  at `px` wide at every zoom instead of sizing it from the entry's span.
  *
  *  Omit `anchor` and it is `'center'` — the spelling already on the surface (`panToDate`'s `align`).
- *  A variant that wants a flag's left-aligned pole passes `'start'`; core picks for nobody. */
-export function fixedWidthItem(px: number, anchor: 'start' | 'center' | 'end' = 'center'): ItemProducer {
-  return (entry, variant) => {
-    const item = wholeEntryItem(entry, variant);
-    item.box = { widthPx: px, anchor };
-    return [item];
-  };
+ *  A variant that wants a flag's left-aligned pole passes `'start'`; core picks for nobody.
+ *
+ *  `box` is built once, here, at registration time — not once per Item inside the returned producer
+ *  (F16). One frozen `FixedBarBox` is safe to share across every Item this producer ever returns,
+ *  because `box` is `readonly` on `Item` and nothing downstream writes through it (`Item.box`'s own
+ *  doc). Freezing it turns an accidental write into a loud failure in strict mode, rather than a
+ *  silent one that would otherwise reach every other Item sharing the same box. */
+export function fixedWidthItem(px: number, anchor: BarAnchor = 'center'): ItemProducer {
+  const box: FixedBarBox = Object.freeze({ widthPx: px, anchor });
+  return (entry, variant) => [{ ...wholeEntryItem(entry, variant), box }];
 }

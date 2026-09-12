@@ -27,6 +27,12 @@ import { wholeEntryItem, entryItem, fixedWidthItem } from './item.js';
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
  *  needs always come from the same registration — never from a second lookup by name, which can
  *  answer with a different rule that happens to share the name (`F3`). */
+/** **Not generic over `TProps` (F18).** `Gantt<TProps>.variants` keeps the consumer's prop typing on
+ *  `when`, but `paint`'s type, `BarRenderer`, takes a plain `Entry` regardless of `TProps` — the same
+ *  gap `GanttOptionsBase.barRenderer` and `EntryVariant.paint` already carry, not one this type
+ *  introduces. A `ResolvedVariant<TProps>` would add a type parameter nothing inside actually reads,
+ *  which is a lie generic (CLAUDE.md). Typing `paint`/`can` over `TProps` needs `BarRenderer` and
+ *  `Interactions` to become generic first — a wider surface change, owed separately. */
 export interface ResolvedVariant extends DrawnVariant {
   /** How it looks, or `undefined` for the library's own bar. */
   readonly paint: BarRenderer | undefined;
@@ -315,17 +321,22 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   };
 }
 
-/** `diamond()` — core's marker, for a row with no duration. Its default `when` is
- *  `(entry) => entry.duration()?.value === 0`, the worked example this file already publishes for
- *  `VariantPredicate` — structure, never a stored word (ADR 0013's "core does not ship a diamond"
- *  is narrowed by this factory, not spent: nothing wears it until a rule claims it).
+/** `diamond()` — core's marker, for a row with no duration. Its default `when` reads `start`/`end`
+ *  directly rather than `entry.duration()`: this runs on the hover path (I5, `VariantPredicate`'s
+ *  own "keep it cheap"), and `entry.duration()` allocates a fresh `{ value, unit }` on every call
+ *  (`measureEntryDuration`) — one object per row per resolve for what is otherwise a plain equality
+ *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
+ *  not ship a diamond" is narrowed by this factory, not spent), but it ignores
+ *  `measureDuration: 'segments'` — a row with `start === end` and Segments that net to zero total
+ *  time still claims here. An author whose rows need the Segments-aware zero passes their own
+ *  `when: (entry) => entry.duration()?.value === 0`.
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
  *  factory's own default rule, or a consumer's own `{ items: fixedWidthItem(...) }`. */
 export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: DIAMOND_VARIANT_NAME,
-    when: (entry: Entry) => entry.duration()?.value === 0,
+    when: (entry: Entry) => entry.start !== undefined && entry.start === entry.end,
     items: fixedWidthItem(DIAMOND_WIDTH_PX),
     paint: () => DIAMOND_BAR,
     css: DIAMOND_CSS,
@@ -442,6 +453,9 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
   /** The walk order, held between registration changes (#188's pattern): `resolveFor` runs on every
    *  hover change, where the budget is zero allocation. */
   let ordered: readonly VariantRegistration[] | undefined;
+  /** `installedCss()`'s own sorted, mapped, filtered copy, held the same way `ordered` is (F15):
+   *  invalidated on the same registration edge, so a call between edges re-sorts nothing. */
+  let installedCssCache: readonly string[] | undefined;
 
   const register = (variant: EntryVariant, rank: number, pluginId: PluginId | undefined): Disposer => {
     const registration: VariantRegistration = {
@@ -465,6 +479,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
     };
     live.push(registration);
     ordered = undefined;
+    installedCssCache = undefined;
     let disposed = false;
     return () => {
       if (disposed) return;
@@ -472,6 +487,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       const index = live.indexOf(registration);
       if (index !== -1) live.splice(index, 1);
       ordered = undefined;
+      installedCssCache = undefined;
     };
   };
 
@@ -519,13 +535,14 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
     addConsumerVariant: (variant) => register(variant, CONSUMER_RANK, undefined),
     installedCss() {
       // Rank ascending, not `walkOrder`'s newest-first: this answers cascade order, not paint
-      // priority. `live`'s own order already puts core first (the constructor loop below seeds it
-      // before any plugin or consumer registers), so the sort only has to settle two registrations
-      // that share a rank.
-      return [...live]
+      // priority. `live`'s own order already puts core first (the `for` loop above this function
+      // seeds it before any plugin or consumer registers), so the sort only has to settle two
+      // registrations that share a rank. Cached the same way `ordered` is (F15): a call between
+      // registration edges re-sorts nothing.
+      return (installedCssCache ??= [...live]
         .sort((a, b) => a.rank - b.rank || a.seq - b.seq)
         .map((registration) => registration.variant.css)
-        .filter((css): css is string => css !== undefined);
+        .filter((css): css is string => css !== undefined));
     },
   };
 }

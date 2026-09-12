@@ -769,7 +769,10 @@ nav.harness-site-nav a[aria-current='page'] {
    reaches the ink with no JavaScript in between (refuted item 8) — `.fg-bar` reads the token into
    `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints from that. This rule is
    unlayered, so it beats the base sheet's `@layer freegantt` default at equal specificity (ADR
-   0021) — the same win an ordinary consumer rule always gets. */
+   0021) — the same win an ordinary consumer rule always gets.
+   `plugins.html` carries the same rule for `plugins.ts`'s own Gantt (F19) — each page states its
+   own colour, and only this sheet links to `index.html`, so the duplication follows the harness's
+   per-page-stylesheet shape rather than restating one page's rule on another. */
 .fg-bar-diamond {
   --fg-bar-fill: #7b2cbf;
 }

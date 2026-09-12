@@ -89,7 +89,10 @@
          here reaches the ink with no JavaScript in between (refuted item 8) — `.fg-bar` reads the
          token into `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints from that. This
          rule is unlayered, so it beats the base sheet's `@layer freegantt` default at equal
-         specificity (ADR 0021). */
+         specificity (ADR 0021) — the same win an ordinary consumer rule always gets.
+         `harness-chrome.css` carries the same rule for `main.ts`'s own Gantt (F19) — each page
+         states its own colour, and only `index.html` links that sheet, so the duplication follows
+         the harness's per-page-stylesheet shape rather than restating one page's rule on another. */
       .fg-bar-diamond {
         --fg-bar-fill: #7b2cbf;
       }

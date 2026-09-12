@@ -184,14 +184,35 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   return description;
 }
 
+/** A checkpoint's own fill: row ink when done, pane background behind a stroke while it is not
+ *  (DESIGN-FACTS §2.5) — `diamond()` supplies the box, its own size at every zoom, and the `css`
+ *  that cancels `.fg-bar`'s background and state ring; this page states only the fill and the
+ *  label, over `diamond()`'s own published `paint` override (ADR 0022). It keeps `diamond()`'s own
+ *  class, `fg-bar-diamond`, because a `paint` override replaces the factory's default answer rather
+ *  than joining it — dropping the class would lose the glyph shape along with the fill. */
+function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescription | undefined {
+  const done = progressOf(entry.id) === 100;
+  const description: ElementDescription = {
+    class: { 'fg-bar-diamond': true },
+    style: done
+      ? { '--fg-bar-fill': 'var(--fg-row-label-color)' }
+      : {
+          '--fg-bar-fill': 'var(--fg-pane-bg)',
+          '--demo-checkpoint-stroke': '1.5px solid var(--fg-row-label-color)',
+        },
+  };
+  if (label !== undefined) description.children = [barLabel(label, 'demo-checkpoint-label')];
+  return description;
+}
+
 // ADR 0022: a checkpoint is a zero-duration row, and `diamond()` is core's own shipped glyph for
-// one — this page states only which rows wear it. Its box holds its own size at every zoom, and its
-// own `css` cancels `.fg-bar`'s background and state ring, so this page owns no glyph shape.
+// one — this page states which rows wear it and, through `paint`, how a done one differs from one
+// that is not (`checkpointDiamond`, above). Its box still holds its own size at every zoom.
 //
 // A phase needs no entry at all. Core's own `summary` variant already claims a row with children and
 // paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
 const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
-  diamond({ when: { checkpoint: true } }),
+  diamond({ when: { checkpoint: true }, paint: checkpointDiamond }),
 ];
 
 const gantt = new Gantt({
