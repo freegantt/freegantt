@@ -49,7 +49,6 @@ import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
-import { DisposableStore } from '../extensions/disposables.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { CommandRegistry } from '../extensions/commands.js';
@@ -84,6 +83,7 @@ import {
 } from '../model/index.js';
 import type {
   Dataset,
+  Disposer,
   Entry,
   EntryId,
   FieldKey,
@@ -414,9 +414,13 @@ export class GanttShell {
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
   /** The consumer's own variants, and the disposers that retract them. Reassigning `variants`
-   *  disposes the whole list and installs the new one (ADR 0018). */
+   *  retracts the whole list and installs the new one (ADR 0018).
+   *
+   *  A plain array, not a `DisposableStore` (`J38`). A store latches on its first `disposeAll()`
+   *  and disposes anything added after it. That is right for a lifetime that ends once, and wrong
+   *  for a list that is replaced live. */
   #variants: readonly EntryVariant[] = [];
-  readonly #consumerVariants = new DisposableStore();
+  #consumerVariantDisposers: Disposer[] = [];
   /** D-S3-24: this Gantt's own snap, or `undefined` while the showing preset decides. It changes no
    *  paint, so it is a plain field and not a frame setting. */
   #snap: SnapSetting | undefined;
@@ -582,6 +586,10 @@ export class GanttShell {
           reportDoubleClaim: this.#reportDoubleClaim(),
         }),
     );
+    // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
+    // synchronously, and that onChange IS this shell's first render. A consumer variant installed
+    // after it would paint nothing until something else invalidated the frame.
+    this.#installConsumerVariants(options.variants ?? []);
     this.#bindColumns();
 
     // Mount before binding (#22). The render target exists by the time the binding's own onChange
@@ -593,8 +601,8 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        // D-S5-11, ADR 0018: the consumer's own `barRenderer` first, then the variant's own
-        // `paint` — the specific answer beats a plugin's whole-point claim — then that claim.
+        // D-S5-11, ADR 0018: the consumer's own `barRenderer` first. Then the variant's own
+        // `paint`, because a specific answer beats a whole-point claim. Then a plugin's claim.
         resolveBarRenderer: (variant) =>
           this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer) ??
           this.#paintFor(variant),
@@ -728,7 +736,6 @@ export class GanttShell {
       commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
     });
     this.#interactions = options.interactions ?? {};
-    this.#installConsumerVariants(options.variants ?? []);
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
@@ -1110,7 +1117,7 @@ export class GanttShell {
   }
 
   /** The variant this Gantt resolved for one row (ADR 0018). A command context names it, so a
-   *  command's `when` reads `({ variant }) => variant === 'buffer'` instead of holding a list of the
+   *  command's `when` reads `({ variant }) => variant === MY_VARIANT` instead of holding a list of the
    *  ids its own plugin owns. `interaction/` and `render/` read the same answer.
    *
    *  A variant is per Gantt, so a row cannot answer this itself (I2, ADR 0017). */
@@ -1121,11 +1128,11 @@ export class GanttShell {
   /** Drops whatever the consumer's list held before, then adds the new one. Registration order
    *  inside the list is the author's own, and the newest of two overlapping rules wins. */
   #installConsumerVariants(next: readonly EntryVariant[]): void {
-    this.#consumerVariants.disposeAll();
+    for (const retract of this.#consumerVariantDisposers) retract();
     this.#variants = next;
-    for (const variant of next) {
-      this.#consumerVariants.add(this.#registrations.variants.addConsumerVariant(variant));
-    }
+    this.#consumerVariantDisposers = next.map((variant) =>
+      this.#registrations.variants.addConsumerVariant(variant),
+    );
   }
 
   /** How one variant looks — `EntryVariant.paint`, wrapped as the `ResolvedRenderer` the backend

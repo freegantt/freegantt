@@ -863,3 +863,86 @@ core's floor, is a deliberate override and stays silent.
 A variant with no `when` claims nothing at all, so the last-resort variant never collides either.
 
 **To reverse:** report every second yes, and accept a warning on every intended override.
+
+---
+
+## J37 — core's `leaf` registers before core's `parent`, and the order inside that list is load-bearing
+
+**Build 2, Units A and B. Done in the code. This was a live bug, not a tidy-up.**
+
+`CORE_VARIANTS` listed `parent` first and `leaf` second. Both sit in core's rank, and the walk is
+newest-first (`Q5`). `leaf` carries no `when`, so it claims every row. Registered second, it answered
+before `parent`'s rule ever ran, and **no row was ever a summary**. Seven tests caught it: a parent
+row drew the leaf producer's per-Segment Items, so `data-segment-id`, `fg-bar-summary` and the golden
+frame snapshot all disagreed with HEAD.
+
+**The call.** The floor registers first. `CORE_VARIANTS` is `[leaf, parent]`, so `parent` is newer
+inside core's rank and wins on a row with children. The general rule this states: **a variant with no
+`when` must register before every rule it is the floor for.** The ADR says core registers first
+against a *plugin*; it never said which of core's own two goes first, and the order is not free.
+
+**To reverse:** swap the two entries back, and no row paints as a summary.
+
+---
+
+## J38 — a consumer's variants install before the first frame, and a live list is not a `DisposableStore`
+
+**Build 2, Unit A. Done in the code. Two bugs in one path, both in `view/gantt-shell.ts`.**
+
+`GanttOptions.variants` painted nothing. A probe (written, run, deleted) showed the registry holding
+core's two alone at the first frame, although `addConsumerVariant` had run.
+
+**Bug one: order.** `#installConsumerVariants` sat below `this.#viewport.bind(...)`. That `bind()`
+fires its own `onChange` synchronously, and that onChange **is** the shell's first render (the
+comment at the call site says so). So the first frame resolved every row before a consumer variant
+existed, and nothing invalidated afterwards. The call moved up, to just after the registry is built.
+
+**Bug two: the store.** `#consumerVariants` was a `DisposableStore`, and `#installConsumerVariants`
+began with `disposeAll()`. A `DisposableStore` latches: after `disposeAll()`, `add()` disposes its
+argument on the spot (`extensions/disposables.ts:15-21`). So the constructor's own first install
+retracted every variant it had just added. That type is right for a lifetime that ends once, and
+wrong for a list that is replaced live.
+
+**The call.** `#consumerVariantDisposers: Disposer[]`. Retract each one, then map the new list. The
+field's own comment names the trap, because the next reader will reach for the store again.
+
+**To reverse:** move the install back below `bind()`, or hand the list a `DisposableStore` again.
+Either one makes `variants: [...]` silently paint nothing.
+
+---
+
+## J39 — `renderer-registry.test.ts` loses the per-variant bar slot, and keeps everything else
+
+**Build 2, Unit B. Done in the code. The Group 2 judgement the handoff asked for.**
+
+`RendererByLook` retires (ADR 0018, *Consequences*), so the `bar` point holds one slot like every
+other point. Each test in that file was read and decided on its own.
+
+**Deleted — seven tests, all of `describe('the bar point keys on the kind (review P2)')`, plus two in
+the first block.** Every one asserts the per-kind map form: `{ buffer: fn }` registering `bar:buffer`,
+two plugins each claiming their own kind, a whole-point claim refusing a per-kind one, a refused map
+registering none of its kinds, `'*'` answering the kinds the exact slots miss, and a consumer map
+resolving kind → `'*'` → default. **That form no longer compiles and the rules behind it are gone on
+purpose.** Their subject moved: which rule covers which row is now
+`src/layout/items/variants.test.ts`'s *"which rule wins"* block, and a variant's own paint is
+`paintFor` in that file's *"what a variant answers about itself"*.
+
+**One deleted test needed a second look, and its guarantee survives.** *"disposing a per-kind
+registration twice frees nothing a later plugin claimed"* is #174's regression guard. The same
+sequence — dispose, let another plugin claim, dispose again — is asserted at the `cell` point by
+*"register returns a Disposer that frees the point for the next claim (#155)"*, which stays. The
+shared registration table is the one mechanism both ran through, so nothing is unguarded.
+
+**Kept — six tests, four of them rewritten from `resolveBar(kind, consumer)` to `resolve('bar', …)`.**
+Config-over-plugin at `bar`, the plugin fallback naming its id, undefined on both sides, the
+`RendererAlreadyRegisteredError` on a second claim of one point, two points not colliding, the
+Disposer's lifetime, and config-over-plugin at `cell`/`header`/`tooltip`. The describe title drops
+`D-S5-12`, which is the decision this ADR retired.
+
+**In `api/gantt.test.ts` the same judgement ran over the integration half.** The two `#146` tests
+stayed, rewritten as two sibling plugins that each add a `buffer` variant with a different `can`:
+they prove the shell rebuilds and repaints on `gantt.plugins = [...]`, which no unit registry can.
+The three-plugin split they used to stage — one plugin holding the claim, two more registering
+defaults for *its* look — is a shape ADR 0018 deleted, so it did not survive the rewrite.
+
+**To reverse:** restore the per-variant `bar` slot, and `RendererByLook` with it.
