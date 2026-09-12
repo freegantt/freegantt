@@ -26,6 +26,7 @@ import type {
   VariantClaimant,
   VariantRegistry,
   ReportDoubleClaim,
+  ReportUnknownFieldMatch,
   ResolvedRenderer,
   BarLabels,
   BarRenderer,
@@ -595,6 +596,7 @@ export class GanttShell {
         createVariantRegistry({
           fieldFor: (key) => this.#options.dataset.field(key),
           reportDoubleClaim: this.#reportDoubleClaim(),
+          reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
         }),
     );
     // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
@@ -1553,6 +1555,26 @@ export class GanttShell {
         `The newest registered rule paints; ${by(ignored)} draws nothing on the entries they share.`;
       this.#raiseError(
         { code: 'variant-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
+  /** Where an `UnknownFieldMatch` is reported (`J59`). A `when` names a key no Field declares, so
+   *  the rule claims no row — a typo, or a plugin key the Dataset never declared. The frame keeps
+   *  drawing; this says what stopped matching.
+   *
+   *  One report per rule and key, not one per row. A rule that names a missing key names it on
+   *  every row of every pass, and the first row is the news. The rule itself holds that set —
+   *  `compileRule` — so nothing allocates on the hover path after the first report. */
+  #reportUnknownFieldMatch(): ReportUnknownFieldMatch {
+    return ({ rule, key }) => {
+      const owner = rule.pluginId === undefined ? '' : ` (${rule.pluginId})`;
+      const message =
+        `The variant rule '${rule.variant}'${owner} matches on field '${key}', and no Field declares it. ` +
+        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-variant-field', message, severity: 'warning', by: 'core', field: key },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };

@@ -3136,6 +3136,36 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     container.remove();
   });
 
+  it('[J59] reports a variant rule that matches on a key no Field declares', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    // A typo in a `when` claims no row, and it must not take the layout pass down. Silence was the
+    // remaining half of `J59`: the rule stopped matching and nothing said why.
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const reports: ErrorReport[] = [];
+    const gantt = new Gantt({ container, dataset });
+    gantt.on('error', (report) => {
+      reports.push(report);
+    });
+    // Assigned after the subscription, not passed to the constructor: a variant in `GanttOptions`
+    // resolves during the constructor's own first paint, the same trap `Q10`'s test above names.
+    gantt.variants = [{ name: 'typo', when: { notAField: true }, paint: () => ({ class: { typo: true } }) }];
+    // One report for the rule and the key, however many rows resolve and however many frames run.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.rowSource = { ...gantt.rowSource };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const missing = reports.filter((report) => report.code === 'unknown-variant-field');
+    expect(missing).toHaveLength(1);
+    expect(missing[0]?.severity).toBe('warning');
+    expect(missing[0]?.field).toBe('notAField');
+    expect(missing[0]?.message).toContain("'typo'");
+    expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
+
+    gantt.destroy();
+    container.remove();
+  });
+
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
   // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
   // write, and the rule reads it back.
