@@ -5,14 +5,7 @@
 // (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type {
-  StoredEntry,
-  EntryId,
-  FieldContext,
-  FieldUpdated,
-  SegmentId,
-  TimeSpan,
-} from '../model/index.js';
+import type { StoredEntry, EntryId, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
 import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
@@ -22,8 +15,10 @@ import {
   editProposesField,
   entryAfterEdit,
   readField,
+  readingChildrenFrom,
   writeOntoEntry,
 } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
@@ -126,7 +121,7 @@ function parentsToRecompute(
 function widenSegmentsToEnvelope(
   parent: StoredEntry,
   registry: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
   parentId: EntryId,
   mintSegmentId: () => SegmentId,
   updated: FieldUpdated[],
@@ -146,7 +141,7 @@ function widenSegmentsToEnvelope(
     // no Segment cannot be selected, so mint the one Segment ingest would have minted had this
     // envelope been authored, over the derived span.
     const minted = [{ id: mintSegmentId(), start: target.start, end: target.end }];
-    const from = readField(parent, segmentsField, ctx);
+    const from = readField(parent, segmentsField, access);
     updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: minted });
     return writeOntoEntry(parent, segmentsField, minted);
   }
@@ -154,7 +149,7 @@ function widenSegmentsToEnvelope(
   const nextSegments = fitSegmentsToEnvelope(parent.segments, target);
   if (nextSegments === parent.segments) return parent;
 
-  const from = readField(parent, segmentsField, ctx);
+  const from = readField(parent, segmentsField, access);
   updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });
   return writeOntoEntry(parent, segmentsField, nextSegments);
 }
@@ -168,14 +163,14 @@ function widenSegmentsToEnvelope(
 function clearDerivedValues(
   parent: StoredEntry,
   registry: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
   parentId: EntryId,
   updated: FieldUpdated[],
 ): StoredEntry {
   let effectiveParent = parent;
 
   for (const field of registry.rollingUpFields()) {
-    const from = readField(effectiveParent, field, ctx);
+    const from = readField(effectiveParent, field, access);
     if (from === undefined) continue;
     updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
     effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
@@ -183,7 +178,7 @@ function clearDerivedValues(
 
   const segmentsField = registry.get('segments');
   if (segmentsField && effectiveParent.segments.length > 0) {
-    const from = readField(effectiveParent, segmentsField, ctx);
+    const from = readField(effectiveParent, segmentsField, access);
     updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: [] });
     effectiveParent = writeOntoEntry(effectiveParent, segmentsField, []);
   }
@@ -225,7 +220,7 @@ export function rollUpFields(
   committed: ReadonlyMap<EntryId, StoredEntry>,
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
   mintSegmentId: () => SegmentId,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
@@ -246,6 +241,13 @@ export function rollUpFields(
   const priorByParent = pending === undefined ? byParent : childIdsByParent(committed);
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
   const computed = new Map<EntryId, StoredEntry>();
+  // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective
+  // children — the store does not hold the value this bottom-up walk just gave a child (ADR 0017).
+  const passAccess = readingChildrenFrom(access, (id) =>
+    (byParent.get(id) ?? [])
+      .map((childId) => effectiveEntry(childId, entries, merged, computed))
+      .filter((child): child is StoredEntry => child !== undefined),
+  );
   const updated: FieldUpdated[] = [];
   const cascadeDropped: FieldUpdated[] = [];
 
@@ -257,7 +259,7 @@ export function rollUpFields(
     if (!childIds || childIds.length === 0) {
       // Demoted: `parentsToRecompute` only visits this id with no children left when it had
       // children before this operation (ADR 0013 — losing the last child demotes).
-      computed.set(parentId, clearDerivedValues(parent, registry, ctx, parentId, updated));
+      computed.set(parentId, clearDerivedValues(parent, registry, access, parentId, updated));
       continue;
     }
 
@@ -283,12 +285,12 @@ export function rollUpFields(
 
       let value: unknown;
       try {
-        value = aggregator(children, effectiveParent, createRollUpContext(ctx, field.key));
+        value = aggregator(effectiveParent, createRollUpContext(passAccess, effectiveParent, children, field.key));
       } catch (cause) {
         throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }
 
-      const from = readField(effectiveParent, field, ctx);
+      const from = readField(effectiveParent, field, access);
 
       if (value === undefined) {
         // ADR 0013, decision 5/6 and #270: an Aggregator with no opinion means *no value* on a
@@ -314,7 +316,7 @@ export function rollUpFields(
     effectiveParent = widenSegmentsToEnvelope(
       effectiveParent,
       registry,
-      ctx,
+      access,
       parentId,
       mintSegmentId,
       updated,

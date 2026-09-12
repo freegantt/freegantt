@@ -4,7 +4,7 @@ import type {
   RowId,
   ItemId,
   EntryId,
-  StoredEntry,
+  Entry,
   Instant,
   Rect,
   TimeUnit,
@@ -218,7 +218,7 @@ export interface GeometryFrame {
 }
 
 export interface LayoutInput {
-  entries: readonly StoredEntry[];
+  entries: readonly Entry[];
   scale: TimeScale;
   /** Governs header ticks — the same preset the bound TimeScaleModel resolved (plans/01 §5.1). */
   preset: ViewPreset;
@@ -272,7 +272,7 @@ export interface LayoutInput {
 function cellsForRow(
   row: PlannedRow,
   columns: readonly ResolvedColumn[] | undefined,
-  entryById: ReadonlyMap<EntryId, StoredEntry>,
+  entryById: ReadonlyMap<EntryId, Entry>,
 ): readonly string[] {
   if (columns === undefined) return [];
   if (isPlannedHeaderRow(row)) {

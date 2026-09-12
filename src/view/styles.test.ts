@@ -3,11 +3,11 @@ import { ensureBaseStyles } from './styles.js';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
 import { entryId, mintedSegmentId, segmentId } from '../model/index.js';
-import type { StoredEntry, Instant } from '../model/index.js';
+import type { Entry, Instant } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 
-function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset'] {
+function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
   let mintedSegmentCounter = 0;
   const context = {
     timeZone,
@@ -40,7 +40,7 @@ function instant(iso: string): Instant {
 }
 
 const timeZone = 'UTC';
-const entries: StoredEntry[] = [
+const entries: Entry[] = [
   {
     id: entryId('t1'),
     name: 'Entry 1',

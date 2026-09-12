@@ -6,7 +6,7 @@ import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
-import type { StoredEntry } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 import { changeSetId, entryId, itemId, rowId, segmentId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
@@ -57,7 +57,7 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
   };
 }
 
-function overlappingEntry(base: StoredEntry, copies: number): StoredEntry {
+function overlappingEntry(base: Entry, copies: number): Entry {
   // Load-bearing non-null assertion (ADR 0012): every fixture entry this file feeds it is
   // authored with both dates.
   const start = base.start!;
@@ -162,7 +162,7 @@ describe('FrameLayout', () => {
         end: entry.end!,
       },
     ]);
-    const entry: StoredEntry = sampleEntries[0]!;
+    const entry: Entry = sampleEntries[0]!;
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [entry], itemProducerRegistry: registry }));
 
@@ -241,7 +241,7 @@ describe('FrameLayout', () => {
     // agree with `entryIdsForRow`, which answers for a hidden row. Reading the planned rows instead
     // would silently narrow one of the pair and not the other.
     const parent = overlappingEntry(sampleEntries[0]!, 2);
-    const child: StoredEntry = { ...overlappingEntry(sampleEntries[1]!, 2), parentId: parent.id };
+    const child: Entry = { ...overlappingEntry(sampleEntries[1]!, 2), parentId: parent.id };
     const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [parent, child], rows: tree }));

@@ -2,7 +2,7 @@
 // live here so a pack row is produced once per dataset revision, whether `heightOfRow` forced it
 // above the viewport or `placeFrame` placed it in the window.
 
-import type { StoredEntry, EntryId, ItemId, SegmentId } from '../model/index.js';
+import type { Entry, EntryId, ItemId, SegmentId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
@@ -28,7 +28,7 @@ export interface FrameMemoryBind {
   readonly plan: readonly PlannedRow[];
   readonly rowHeight: number;
   readonly laneGap: number;
-  readonly entries: readonly StoredEntry[];
+  readonly entries: readonly Entry[];
   readonly registry: ItemProducerRegistry;
   readonly datasetRevision: number;
   /** Test seam: override packed/fixed height for index-space overscan checks. */
@@ -48,10 +48,7 @@ export class FrameMemory {
   };
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
-  #entryById = new Map<EntryId, StoredEntry>();
-  /** ADR 0013: structure, not a stored classification, decides the default look — every id at least
-   *  one held Entry names as its `parentId`. Rebuilt alongside `#entryById` in `sync()`. */
-  #parentIds = new Set<EntryId>();
+  #entryById = new Map<EntryId, Entry>();
   #registry: ItemProducerRegistry = createItemProducerRegistry();
   #rowHeight = 0;
   #cachedRowCount = -1;
@@ -72,10 +69,6 @@ export class FrameMemory {
     this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
     this.#rowHeight = bind.rowHeight;
     this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));
-    this.#parentIds = new Set();
-    for (const entry of bind.entries) {
-      if (entry.parentId !== undefined) this.#parentIds.add(entry.parentId);
-    }
     this.#registry = bind.registry;
     if (bind.heightAt !== undefined) this.#heightAt = bind.heightAt;
     else this.#heightAt = undefined;
@@ -112,7 +105,7 @@ export class FrameMemory {
     if (hit !== undefined) return hit;
     const row = this.#rowById.get(id);
     if (row === undefined) return this.#noRow;
-    const items = produceItemsForRow(row, this.#entryById, this.#registry, (id) => this.#parentIds.has(id));
+    const items = produceItemsForRow(row, this.#entryById, this.#registry);
     const packed: RowMemory = {
       items,
       packing: row.heightMode === 'pack' ? packRow(items) : singleLane(items),

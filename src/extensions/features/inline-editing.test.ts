@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
 import type {
-  StoredEntry,
+  Entry,
   EntryFieldEdit,
   EntryInput,
   ErrorReport,
@@ -1254,7 +1254,7 @@ describe('CellEditing (S5.8, #169)', () => {
       document.body.append(cell);
     }
     document.body.append(layer);
-    const entry = { id: entryId('e1'), name: 'Task One' } as unknown as StoredEntry;
+    const entry = { id: entryId('e1'), name: 'Task One' } as unknown as Entry;
     const reported: PluginErrorReport[] = [];
     const ports: CellEditorPorts = {
       mountLayer: {

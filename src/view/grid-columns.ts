@@ -2,14 +2,14 @@
 
 import type {
   Dataset,
-  StoredEntry,
+  Entry,
   Field,
   FormatContext,
   GridColumn,
   GridColumnInput,
 } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
-import { createFieldContext } from '../data/fields/field-access.js';
+
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
 import { sizingOfColumn } from '../data/fields/column-sizing.js';
 import type { FieldLookup } from '../model/index.js';
@@ -116,9 +116,8 @@ export function resolveColumns(
   lookup: FieldLookup,
   bind: ResolveColumnsBind,
 ): readonly ResolvedColumn[] {
-  const fieldCtx = createFieldContext(lookup, bind.timeZone);
   const locale: Intl.LocalesArgument = bind.locale ?? [];
-  const formatCtx: FormatContext = { ...fieldCtx, locale };
+  const formatCtx: FormatContext = { timeZone: bind.timeZone, locale };
   const defaultWidthPx = bind.defaultColumnWidth ?? DEFAULT_COLUMN_WIDTH_PX;
 
   return gridColumns.flatMap((item) => {
@@ -130,8 +129,8 @@ export function resolveColumns(
     return [
       {
         ...column,
-        format: (entry: StoredEntry) => {
-          const value = formatCtx.read(entry, field.key);
+        format: (entry: Entry) => {
+          const value = entry.read(field.key);
           if (field.formatValue) return field.formatValue(value, formatCtx, entry);
           return stringifyPrimitive(value);
         },
@@ -151,12 +150,11 @@ export function resolveFieldCompares(
   fields: readonly Field[],
   bind: ResolveColumnsBind,
 ): readonly FieldCompare[] {
-  const fieldCtx = createFieldContext(lookup, bind.timeZone);
   const locale: Intl.LocalesArgument = bind.locale ?? [];
   const fallback = defaultCompareStored(locale);
   return fields.map((field) => ({
     key: field.key,
-    readStored: (entry: StoredEntry) => fieldCtx.read(entry, field.key),
+    readStored: (entry: Entry) => entry.read(field.key),
     compareStored: (a, b) => {
       if (field.compare === undefined) return fallback(a, b);
       return field.compare(a, b);

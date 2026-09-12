@@ -8,7 +8,7 @@
 
 import type { TimeScaleFit } from '../layout/index.js';
 import type {
-  StoredEntry,
+  Entry,
   EntryId,
   ErrorReport,
   FieldKey,
@@ -60,7 +60,7 @@ export interface SelectionChange {
  *  no candidate value exists yet at that point — `from` and `to` are both the entry's current stored
  *  value for that field. `entryEdit` fires after the commit, with `to` the value actually written. */
 export interface EntryFieldEdit {
-  readonly entry: StoredEntry;
+  readonly entry: Entry;
   readonly field: FieldKey;
   readonly from: unknown;
   readonly to: unknown;

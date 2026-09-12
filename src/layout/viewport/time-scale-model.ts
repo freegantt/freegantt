@@ -19,7 +19,7 @@ import {
   resolvePreset,
 } from '../../time/index.js';
 import type { PresetRef, TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
-import type { StoredEntry, Instant, TimeSpan } from '../../model/index.js';
+import type { Entry, Instant, TimeSpan } from '../../model/index.js';
 import { BoundValue } from './bound-value.js';
 
 /** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2; renamed from `TimeScaleZoom`,
@@ -50,7 +50,7 @@ export interface TimeScaleModelOptions {
  * live binding pushes `entries.all` on every change. */
 export interface ScaleBinding {
   readonly timeZone: string;
-  readonly entries: readonly StoredEntry[];
+  readonly entries: readonly Entry[];
   /** Measured width (px) of the pane the Gantt renders its timeline into; `0` when unmeasured
    * (detached container, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   readonly paneWidth: number;
@@ -73,13 +73,13 @@ export interface ScaleBindingHandle {
   /** Pushes a re-read `entries.all` snapshot (S2.4, D-S2-20) — the live half of `'fitDataset'`:
    *  an edit inside the bound Dataset's own span is a no-op here (D-S1.5-4's equality check), an
    *  edit outside it re-fits the range. */
-  setEntries(entries: readonly StoredEntry[]): void;
+  setEntries(entries: readonly Entry[]): void;
 }
 
 /** The model's own mutable copy of a binding — what `setPaneWidth` writes and what `#resolve` reads. */
 interface MutableScaleBinding {
   timeZone: string;
-  entries: readonly StoredEntry[];
+  entries: readonly Entry[];
   paneWidth: number;
 }
 

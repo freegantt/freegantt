@@ -1,6 +1,6 @@
 // layout/ — plain-data column types. No registry, no Dataset, no Field value access (D-S4-13).
 
-import type { ColumnAlign, ColumnCellRenderer, StoredEntry, FieldKey } from '../model/index.js';
+import type { ColumnAlign, ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
 
 export type { ColumnAlign } from '../model/index.js';
 
@@ -27,7 +27,7 @@ export interface FrameColumn {
  *  stays unchanged. `cellRenderer` stays optional too: undefined means "fall back to the Gantt-wide
  *  one" (D-S5-17). */
 export interface ResolvedColumn extends FrameColumn {
-  format(entry: StoredEntry): string;
+  format(entry: Entry): string;
   cellRenderer?: ColumnCellRenderer;
   resizable?: boolean;
   movable?: boolean;
@@ -39,7 +39,7 @@ export interface ResolvedColumn extends FrameColumn {
 /** Default sort order for one declared Field. Bound with this Gantt's locale. Not a Grid column. */
 export interface FieldCompare {
   key: FieldKey;
-  readStored(entry: StoredEntry): unknown;
+  readStored(entry: Entry): unknown;
   compareStored(a: unknown, b: unknown): number;
 }
 

@@ -1,32 +1,32 @@
 // layout/ — `{ source: 'entries' }`. Flat list matches S1; tree is depth-first in insertion order.
 
 import { entryId, rowId } from '../../model/index.js';
-import type { StoredEntry, EntryId, RowId } from '../../model/index.js';
+import type { Entry, EntryId, RowId } from '../../model/index.js';
 import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
 import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
-export function entryTreeIndex(entries: readonly StoredEntry[]): {
-  roots: readonly StoredEntry[];
-  childrenOf: ReadonlyMap<EntryId, readonly StoredEntry[]>;
+export function entryTreeIndex(entries: readonly Entry[]): {
+  roots: readonly Entry[];
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>;
 } {
   const known = new Set(entries.map((entry) => entry.id));
-  const childrenOf = new Map<EntryId, StoredEntry[]>();
-  const roots: StoredEntry[] = [];
+  const childRowsOf = new Map<EntryId, Entry[]>();
+  const roots: Entry[] = [];
   for (const entry of entries) {
-    const parent = entry.parentId;
+    const parent = entry.parent()?.id;
     if (parent === undefined || !known.has(parent)) {
       roots.push(entry);
       continue;
     }
-    const siblings = childrenOf.get(parent);
+    const siblings = childRowsOf.get(parent);
     if (siblings) siblings.push(entry);
-    else childrenOf.set(parent, [entry]);
+    else childRowsOf.set(parent, [entry]);
   }
-  return { roots, childrenOf };
+  return { roots, childRowsOf };
 }
 
 function entryRow(
-  entry: StoredEntry,
+  entry: Entry,
   fields: {
     depth: number;
     expandable: boolean;
@@ -47,7 +47,7 @@ function entryRow(
 }
 
 export function resolveEntriesSource(
-  entries: readonly StoredEntry[],
+  entries: readonly Entry[],
   source: EntriesRowSource,
 ): UnindexedRow[] {
   const heightMode = heightModeOf(source);
@@ -55,9 +55,9 @@ export function resolveEntriesSource(
     return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));
   }
 
-  const { roots, childrenOf } = entryTreeIndex(entries);
+  const { roots, childRowsOf } = entryTreeIndex(entries);
   const rows: UnindexedRow[] = [];
-  const stack: { list: readonly StoredEntry[]; index: number; depth: number; parentRowId?: RowId }[] = [
+  const stack: { list: readonly Entry[]; index: number; depth: number; parentRowId?: RowId }[] = [
     { list: roots, index: 0, depth: 0 },
   ];
   while (stack.length > 0) {
@@ -68,7 +68,7 @@ export function resolveEntriesSource(
     }
     const entry = frame.list[frame.index]!;
     frame.index += 1;
-    const children = childrenOf.get(entry.id) ?? [];
+    const children = childRowsOf.get(entry.id) ?? [];
     rows.push(
       entryRow(entry, {
         depth: frame.depth,

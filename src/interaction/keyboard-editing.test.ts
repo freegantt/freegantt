@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
 import { entryId, entryIdOfItem, segmentId } from '../model/index.js';
-import type { StoredEntry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -18,7 +18,7 @@ function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
-function entryFor(id: EntryId): StoredEntry {
+function entryFor(id: EntryId): Entry {
   const start = toInstant(0);
   const end = toInstant(1);
   return { id, name: id, start, end, segments: [{ id: segmentOf(id), start, end }], props: {} };

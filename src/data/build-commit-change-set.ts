@@ -10,7 +10,6 @@ import type {
   EntityRemoved,
   StoredEntry,
   EntryId,
-  FieldContext,
   FieldUpdated,
   SegmentId,
   ProposedEdit,
@@ -34,6 +33,7 @@ import {
   proposedKeysOf,
   withProposedKeys,
 } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import { isDevMode } from './dev-mode.js';
@@ -64,7 +64,7 @@ export interface CommitChangeSetInput {
    *  `TransactionData.extraEditsReadingFor`. */
   extraEditsReadingFor(request: EditRequest): EditsReading;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  readonly fieldAccess: FieldAccess;
   nextChangeSetId(): ChangeSetId;
   /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
    *  spanning for the first time always mints a real `SegmentId` here, because this path always
@@ -80,10 +80,10 @@ export function diffEdits(
   byId: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
   fields: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
 ): FieldUpdated[] {
   const updated: FieldUpdated[] = [];
-  for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, fields, ctx));
+  for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, fields, access));
   return updated;
 }
 
@@ -289,7 +289,7 @@ export function buildCommitChangeSet(
     extenderEdits,
     extenderReading.authoredEnvelopeKeys,
   );
-  const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldContext);
+  const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldAccess);
 
   // An added entity folds in its own extender cascade — an `EditExtender` that rewrites `segments`
   // on an entity this same transaction adds must still land on the entity the changeset publishes
@@ -311,7 +311,7 @@ export function buildCommitChangeSet(
       edits: { body: proposed, merged: mergedBodyAndExtender },
     },
     data.fields,
-    data.fieldContext,
+    data.fieldAccess,
     () => data.mintSegmentId(),
   );
 

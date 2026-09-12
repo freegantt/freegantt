@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DuplicateRowIdError, entryId, rowId, segmentId } from '../../model/index.js';
-import type { StoredEntry, Instant } from '../../model/index.js';
+import type { Entry, Instant } from '../../model/index.js';
 import { resolveCustomSource } from './custom-source.js';
 
 function instant(n: number): Instant {
   return n as Instant;
 }
 
-const entries: readonly StoredEntry[] = [
+const entries: readonly Entry[] = [
   {
     id: entryId('a'),
     name: 'a',
