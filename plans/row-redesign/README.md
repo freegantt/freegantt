@@ -4,6 +4,8 @@ One row has three names. It is a stored value in `model/`, a set of questions on
 
 Opened 2026-09-11, out of a design session on the plugin variant surface.
 
+> **The plan of record is [`build/`](build/README.md).** This folder is the reasoning behind it. An implementer reads `build/README.md` once, then one build file. Open questions and lone calls are in [`BUILD-LOG.md`](BUILD-LOG.md).
+
 ## The four, in landing order
 
 ```mermaid
@@ -24,7 +26,7 @@ flowchart LR
 
 0017 lands first. A variant rule and a plugin half both read questions off the row, and neither can be written until the row answers.
 
-0020 lands last, and it is the one that pays 0017 back. Four sites outside the store read `entry.parentId` to ask what the tree is (`layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77`, `view/tree-collapse.ts:111,153`, `data/rollup.ts:46,52`). A plugin can only own the tree once those four ask one door.
+0020 lands last, and it is the one that pays 0017 back. Four sites outside the store read `entry.parentId` to ask what the tree is. **Three move with 0017** — `layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77` and `view/tree-collapse.ts:111,153` — and they ask `parent()`, `children()` or `hasChildren` instead. **The fourth is 0020's own work.** `data/rollup.ts:46,52` reads a stored map to find the **former** parent of a moved row, so a live `parent()` there misses it and skips a Rollup. That invalidation belongs with the hierarchy source. A plugin can only own the tree once all four ask one door.
 
 ## The evidence
 
@@ -41,8 +43,8 @@ The field-redesign build reviewed the first draft and raised seven problems. **A
 | P3 | `ProposedEdit` derives from `Entry` too | same |
 | P4 | `EditRequest.entries` and `entryAfterEdits` are deliberately different states (D-S5-45); one live object collapses them | same |
 | P5 | `.children` means two things inside an open transaction | 0017 rule 2 — live means the committed index overlaid with the open write set |
-| P6 | `hasChildren` has a cheap path and an expensive one | 0017 rule 4 — a getter answers one value, a collection is a method |
-| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — ADR 0014 is `not planned` since 2026-09-11, so 0017 owns the rename outright |
+| P6 | `hasChildren` has a cheap path and an expensive one | 0017 rule 4 — a member that does no work is a property, a member that computes or walks carries parentheses. **The first draft said "a getter answers one value", and that wording is withdrawn** — the rule is about cost |
+| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — the one ADR that also proposed this rename was withdrawn and deleted on 2026-09-11 ([the gap at 0014](../../docs/adr/README.md#the-gap-at-0014)), so 0017 owns it outright |
 
 ## Rulings — 2026-09-11
 

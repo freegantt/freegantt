@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: a chrome-only plugin — one with no `data` half — keeps its own install site on the `Gantt`, and `gantt.plugins` stays live-reconfigurable (2026-09-11). Every plugin with a `data` half installs on the `Dataset`.
-open: what happens when a plugin with a `data` half is handed to a `Gantt` — a throw, or a silent install of the `view` half alone.
+open: which error a plugin with a `data` half raises when it is handed to a `Gantt`, and what it says. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
 ---
 
 # One plugin, one install site
@@ -54,3 +54,18 @@ A chrome-only plugin — `weekendShading()` — has no `data` half and keeps ins
 A plugin author reads one table row, not two. `docs/06-plugin-authoring.md` loses its "Two contracts, two hosts" section.
 
 **The failure mode needs a name.** A plugin with a `data` half, installed on a `Gantt`, has arrived too late to declare a Field. It must fail loudly and say where to install it. That is the open question in the frontmatter.
+
+**A silent partial install is refused, so the open question is narrower than it looks.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove. So the answer is a throw; what is open is only which error and what it says. `PluginSetupError` (`model/`, raised at `extensions/install-dataset-plugins.ts:124`) already names a plugin id and already unwinds the plugins installed before it, so it is the candidate with no new type behind it.
+
+## The hazard this ADR inherits
+
+**A plugin may install over values it did not write.** Install a plugin on a `Dataset` whose `props` already carries that plugin's key, and the plugin declares the key over values with no recorded writer. Nothing says who wrote them, and nothing repairs them.
+
+This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard at one level down. The issue is **closed**: its `fromJSON` half died with [ADR 0016](0016-the-library-holds-no-save-format.md), which deleted the save format. The live-install half did not die, and [ADR 0016](0016-the-library-holds-no-save-format.md)'s own dependency table assigned it to a draft the author later withdrew ([the gap at 0014](README.md#the-gap-at-0014)). **It has had no owner since 2026-09-11. This ADR takes it**, because install is what this ADR decides.
+
+Two facts bound it, and both already hold:
+
+- **The library never writes an undeclared key** ([ADR 0011](0011-consumer-values-live-in-props.md)). An undeclared key is carried at ingest and never named at `update()`, so the values in question are always the consumer's own.
+- **A duplicate *declaration* is already refused** by the registry. What is unrefused is a *value* the consumer wrote before the plugin existed.
+
+**This ADR does not decide the repair**, and it does not gate its build on one. A prefix is a convention a plugin follows (`scheduling:progress`, [ADR 0008](0008-progress-is-scheduling-not-core.md)), and a convention narrows this hazard without closing it. Naming the owner is the point: the next reader of `definePlugin` finds the hazard here rather than in a deleted file.
