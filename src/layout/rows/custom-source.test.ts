@@ -1,22 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DuplicateRowIdError, entryId, rowId, segmentId } from '../../model/index.js';
-import type { Entry, Instant } from '../../model/index.js';
+import { DuplicateRowIdError, entryId, rowId } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
+import { entryDouble } from '../entry-double.js';
 import { resolveCustomSource } from './custom-source.js';
 
-function instant(n: number): Instant {
-  return n as Instant;
-}
-
-const entries: readonly Entry[] = [
-  {
-    id: entryId('a'),
-    name: 'a',
-    start: instant(0),
-    end: instant(1),
-    segments: [{ id: segmentId('a-1'), start: instant(0), end: instant(1) }],
-    props: {},
-  },
-];
+const entries: readonly Entry[] = [entryDouble({ id: 'a', start: 0, end: 1 })];
 
 describe('resolveCustomSource [S4-A11]', () => {
   it('turns a consumer CustomRow[] into planned rows', () => {

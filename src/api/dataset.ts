@@ -7,6 +7,7 @@ import type {
   ChangeSet,
   DatasetEventMap,
   DateOnlyEndRule,
+  DurationMeasure,
   EditRequest,
   ProposedEdits,
   EntryInput,
@@ -74,6 +75,12 @@ export interface DatasetOptions<TProps = unknown> {
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** How core measures a duration (ADR 0017, Q6/J12). `'span'` is `end - start`, and it counts a gap
+   *  between two Segments; `'segments'` sums the Segments and counts no gap. Defaults to `'span'`.
+   *  `entry.duration()`, `ctx.duration()` and the core `duration` Field all read it. It sits on the
+   *  Dataset and not on a Field: two Fields on one Dataset must not disagree about what a duration
+   *  is. */
+  measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };

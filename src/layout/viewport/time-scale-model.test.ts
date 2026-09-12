@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import { dayPreset, instant, MS } from '../../time/index.js';
-import { entryId, segmentId, UnknownPresetError } from '../../model/index.js';
+import { UnknownPresetError } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
+import { entryDouble } from '../entry-double.js';
 
 function entry(id: string, start: string, end: string): Entry {
-  const startInstant = instant(start);
-  const endInstant = instant(end);
-  return {
-    id: entryId(id),
-    name: id,
-    start: startInstant,
-    end: endInstant,
-    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
-    props: {},
-  };
+  return entryDouble({ id, start: instant(start), end: instant(end) });
 }
 
 const entries: Entry[] = [
@@ -40,13 +32,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('a one-date Entry still widens fitDataset, start and end folded in independently (ADR 0012 Gate)', () => {
-    const startOnly: Entry = {
-      id: entryId('t3'),
-      name: 't3',
-      start: instant('2026-09-08T00:00:00Z'),
-      segments: [],
-      props: {},
-    };
+    const startOnly = entryDouble({ id: 't3', start: instant('2026-09-08T00:00:00Z') });
     const model = new TimeScaleModel();
     bindTimeScale(model, { timeZone: 'UTC', entries: [...entries, startOnly], paneWidth: 800 }, noop);
 

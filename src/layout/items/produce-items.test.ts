@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
-import { entryId, itemId, rowId, segmentId } from '../../model/index.js';
+import { itemId, rowId, segmentId } from '../../model/index.js';
 import type { Entry, EntryId, Instant } from '../../model/index.js';
+import type { EntryDoubleValues } from '../entry-double.js';
+import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { createItemProducerRegistry, produceItemsForRow, wholeEntryItem } from './produce-items.js';
-
-const noChildren = (): boolean => false;
 
 describe('wholeEntryItem (review P3)', () => {
   it('covers the entry span, stamps the look it is told, and owns the Item id convention', () => {
@@ -30,7 +30,7 @@ describe('wholeEntryItem (review P3)', () => {
     const registry = createItemProducerRegistry();
     registry.registerClaim('buffer', () => true);
     registry.register('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren)).toEqual([
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
       wholeEntryItem(t1, 'buffer'),
     ]);
   });
@@ -40,16 +40,8 @@ function asInstant(ms: number): Instant {
   return ms as Instant;
 }
 
-function spanEntry(id: string, extras: Partial<Entry> = {}): Entry {
-  return {
-    id: entryId(id),
-    name: id,
-    start: asInstant(0),
-    end: asInstant(10),
-    segments: [{ id: segmentId(`${id}-1`), start: asInstant(0), end: asInstant(10) }],
-    props: {},
-    ...extras,
-  };
+function spanEntry(id: string, extras: Partial<EntryDoubleValues> = {}): Entry {
+  return entryDouble({ id, start: 0, end: 10, ...extras });
 }
 
 function planned(entryIds: readonly EntryId[], kind: 'entry' | 'header' = 'entry'): PlannedRow {
@@ -80,7 +72,7 @@ describe('produceItemsForRow', () => {
         { id: segmentId('t1-2'), start: asInstant(6), end: asInstant(8) },
       ],
     });
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items.map((item) => item.id)).toEqual([itemId(t1.id, 0), itemId(t1.id, 1), itemId(t1.id, 2)]);
     expect(items.map((item) => item.start)).toEqual([asInstant(0), asInstant(3), asInstant(6)]);
     expect(items.map((item) => item.segmentId)).toEqual(t1.segments.map((segment) => segment.id));
@@ -88,7 +80,7 @@ describe('produceItemsForRow', () => {
 
   it('produces t1:0 for an entry with its one default Segment (#212: an Entry never has none)', () => {
     const t1 = spanEntry('t1');
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe(itemId(t1.id, 0));
     expect(items[0]?.start).toBe(t1.start);
@@ -98,42 +90,36 @@ describe('produceItemsForRow', () => {
 
   it('falls back to the leaf producer for a childless Entry no registered look claims (ADR 0013)', () => {
     const t1 = spanEntry('t1');
-    expect(() =>
-      produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren),
-    ).not.toThrow();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren);
+    expect(() => produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe(itemId(t1.id, 0));
     expect(items[0]?.look).toBe('leaf');
   });
 
   it('falls back to the parent producer for an Entry with children no registered look claims', () => {
-    const t1 = spanEntry('t1');
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, () => true);
+    const [t1] = entryDoubles([
+      { id: 't1', start: 0, end: 10 },
+      { id: 'c1', parentId: 't1', start: 0, end: 10 },
+    ]);
+    const items = produceItemsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.look).toBe('parent');
   });
 
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
-    const t1: Entry = {
-      id: entryId('t1'),
-      name: 't1',
-      start: asInstant(0),
-      segments: [],
-      props: {},
-    };
+    const t1 = entryDouble({ id: 't1', start: 0 });
     expect(t1.end).toBeUndefined();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry, noChildren);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(0);
   });
 
   it('[S4-A8] an entry with no children produces no Item; a child gives it a real span (ADR 0012)', () => {
     const dataset = emptyGroupDataset();
-    const hasChildren = (id: EntryId): boolean => (dataset.entries.get(id)?.children() ?? []).length > 0;
     const empty = dataset.entries.get('g1')!;
     expect(empty.start).toBeUndefined();
     expect(empty.end).toBeUndefined();
-    const emptyItems = produceItemsForRow(planned([empty.id]), entryByIdFor([empty]), registry, hasChildren);
+    const emptyItems = produceItemsForRow(planned([empty.id]), entryByIdFor([empty]), registry);
     expect(emptyItems).toHaveLength(0);
 
     dataset.entries.add({
@@ -144,12 +130,7 @@ describe('produceItemsForRow', () => {
       end: '2026-03-05',
     });
     const filled = dataset.entries.get('g1')!;
-    const filledItems = produceItemsForRow(
-      planned([filled.id]),
-      entryByIdFor([filled]),
-      registry,
-      hasChildren,
-    );
+    const filledItems = produceItemsForRow(planned([filled.id]), entryByIdFor([filled]), registry);
     expect(filledItems).toHaveLength(1);
     expect(filledItems[0]?.start).toBe(filled.start);
     expect(filledItems[0]?.end).toBe(filled.end);
@@ -172,11 +153,11 @@ describe('produceItemsForRow', () => {
         end: entry.end!,
       },
     ]);
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own, noChildren);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
     expect(items).toHaveLength(1);
     expect(items[0]?.label).toBe('buffer:t1');
     const span = spanEntry('t2');
-    const spanItems = produceItemsForRow(planned([span.id]), entryByIdFor([span]), own, noChildren);
+    const spanItems = produceItemsForRow(planned([span.id]), entryByIdFor([span]), own);
     expect(spanItems[0]?.label).toBe('t2');
   });
 
@@ -222,7 +203,7 @@ describe('produceItemsForRow', () => {
       },
     ]);
     disposeFirst();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own, noChildren);
+    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
     expect(items).toHaveLength(1);
     expect(items[0]?.label).toBe('second:t1');
   });
@@ -240,7 +221,7 @@ describe('produceItemsForRow', () => {
       heightMode: 'fixed',
       headerLabel: 'Team',
     };
-    const items = produceItemsForRow(header, entryByIdFor([t1]), registry, noChildren);
+    const items = produceItemsForRow(header, entryByIdFor([t1]), registry);
     expect(items).toEqual([]);
   });
 });
