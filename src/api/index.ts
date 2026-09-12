@@ -270,6 +270,7 @@ export type {
   TimeUnit,
   TimeSpan,
   Duration,
+  DurationMeasure,
   EntryStoreView,
   EntryStore,
 } from '../model/index.js';

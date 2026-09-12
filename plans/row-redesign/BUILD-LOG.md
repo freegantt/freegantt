@@ -592,3 +592,52 @@ row working, so the tests state the new rule rather than reach for a stored copy
 
 **To reverse:** nothing to reverse — a stored copy is what `entries.storedValues` is for, and neither
 test needs one.
+
+---
+
+## J25 — `DurationMeasure` leaves `model/` on the public surface
+
+**Build 1, the gate. Done in the code. This closes an API gap.**
+
+`J23` put `measureDuration` on the public `DatasetOptions`. The union it takes stayed internal, so
+`pnpm api-report` warned `ae-forgotten-export`, and a consumer who wanted to name the type — a
+config object, a wrapper's own option — had no name to write.
+
+**The call.** `src/api/index.ts` exports `DurationMeasure` beside `Duration`. A public option always
+publishes the type it takes.
+
+**To reverse:** drop the export and inline `'span' | 'segments'` at the option.
+
+---
+
+## J26 — a test that reads a passenger key declares it, and proves the passenger through `toInput()`
+
+**Build 1, tests. Done in the code.**
+
+`api/dataset.test.ts`'s *"types props from one TProps generic"* read an undeclared key through
+`read`. `entry.read` refuses a key no Field declares (ADR 0017 rule 5), so the test was asserting a
+door that is gone.
+
+**The call.** The test declares `team` as a Field and reads it through `entry.read`. A second key,
+`note`, stays undeclared and keeps the half of the title that is still true: `TProps` types a
+passenger key, the row carries it, and `entry.toInput().props` is where it reads back. So the test
+now states both rules instead of one deleted one.
+
+**To reverse:** nothing to reverse — an undeclared key has no read door.
+
+---
+
+## J27 — a missing id has one door, and the read door never names one
+
+**Build 1, tests. Done in the code.**
+
+`api/dataset.test.ts` held `describe('entries.fieldValue')` with a *"throws `EntryNotFoundError` for
+a missing id"* case. The door is deleted, and the block was the gate grep's last live hit.
+
+**The call.** The block is `describe('entry.read — the one value door (ADR 0017)')`. The missing-id
+case becomes `entries.get('missing')` answering `undefined` and `entries.has('missing')` answering
+false — the two existence doors ADR 0017 keeps. No error names a missing id any more, because a
+caller that holds no row never reaches a read.
+
+**To reverse:** nothing to reverse — `EntryNotFoundError` still ships, and the write door still
+raises it.
