@@ -1820,8 +1820,10 @@ export class GanttShell {
    *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
    *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
    *  says which one the caller meant. A collapsed ancestor expands so the row exists. A
-   *  still-hidden row (filter) keeps the current y — it does not jump to 0. */
-  reveal(id: EntryId | SegmentId): void {
+   *  still-hidden row (filter) keeps the current y — it does not jump to 0.
+   *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
+   *  reading the brand. */
+  reveal(id: EntryId | SegmentId | string): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
     if (entry !== undefined) {

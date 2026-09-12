@@ -81,7 +81,7 @@
           </p>
           <p class="src"><b>derived from</b> ADR 0019, ADR 0017, plans/01 §10</p>
 
-          <pre><code>import { definePlugin } from 'freegantt';
+          <pre data-check="module"><code>import { definePlugin } from 'freegantt';
 
 export const phases = definePlugin({
   id: 'demo.phases',
@@ -97,7 +97,7 @@ export const phases = definePlugin({
     ctx.variants.add({
       name: 'phase',
       when: (entry) =&gt; entry.read('demo:phaseId') !== undefined,
-      paint: phaseBar,
+      paint: ({ entry }) =&gt; ({ class: { 'demo-phase': true }, text: entry.name }),
     });
   },
 });</code></pre>
@@ -167,7 +167,7 @@ export const phases = definePlugin({
           </p>
           <p class="src"><b>derived from</b> ADR 0017</p>
 
-          <pre><code>interface Entry&lt;TProps&gt; {
+          <pre data-check="type-sketch"><code>interface Entry&lt;TProps&gt; {
   readonly id: EntryId;
   readonly name: string;
   readonly start?: Instant;
@@ -410,9 +410,14 @@ export const phases = definePlugin({
           <p class="src"><b>derived from</b> ADR 0018, ADR 0017</p>
 
           <h3>An app author, with no plugin</h3>
-          <pre><code>const dataset = new Dataset({ fields: [{ key: 'milestone' }] });
+          <pre data-check="module"><code>import { Dataset, Gantt } from 'freegantt';
 
-const gantt = new Gantt({
+const dataset = new Dataset&lt;{ milestone?: boolean }&gt;({
+  entries: [],
+  fields: [{ key: 'milestone' }],
+});
+
+export const gantt = new Gantt({
   container: '#gantt',
   dataset,
   variants: [
@@ -440,7 +445,9 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
           </p>
 
           <h3>A plugin that does not know the ids</h3>
-          <pre><code>export const milestones = definePlugin({
+          <pre data-check="module"><code>import { definePlugin } from 'freegantt';
+
+export const milestones = definePlugin({
   id: 'demo.milestones',
   view(ctx) {
     // Which entries wear it? A rule, not a list — a row added tomorrow gets it too.
@@ -466,7 +473,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
           </p>
 
           <h3>The one object</h3>
-          <pre><code>interface EntryVariant&lt;TProps&gt; {
+          <pre data-check="type-sketch"><code>interface EntryVariant&lt;TProps&gt; {
   name: string;          // this variant's identity: the `data-variant` you style, and the registry key
   when?: VariantRule&lt;TProps&gt;;  // a field match or a predicate; omit it on a last-resort variant
   items?: ItemProducer;  // default: one Item over the Entry's whole span
@@ -683,7 +690,9 @@ the newest rule to answer wins and the other is reported; nothing stores a varia
             key you give it. The convention is a prefix, exported as a const, and the app names that
             const.
           </p>
-          <pre><code>export const DEMO_NOTE = 'demo:note';
+          <pre data-check="module" data-file="note-field.ts"><code>import { definePlugin } from 'freegantt';
+
+export const DEMO_NOTE = 'demo:note';
 
 export const noteField = definePlugin({
   id: 'demo.note',
@@ -691,11 +700,18 @@ export const noteField = definePlugin({
     ctx.fields.register({ key: DEMO_NOTE });
   },
 });</code></pre>
-          <pre><code>const dataset = new Dataset({ entries, plugins: [noteField] });
+          <pre data-check="module"><code>import { Dataset, Gantt } from 'freegantt';
+import { DEMO_NOTE, noteField } from './note-field.js';
+
+const dataset = new Dataset&lt;{ [DEMO_NOTE]?: string }&gt;({ entries: [], plugins: [noteField] });
+const gantt = new Gantt({ container: '#gantt', dataset });
+
 dataset.entries.update('t1', { [DEMO_NOTE]: 'cutover' });
 
 dataset.entries.get('t1')?.read(DEMO_NOTE);   // through the Entry
-gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
+gantt.gridColumns = ['name', DEMO_NOTE];
+
+export { dataset, gantt };</code></pre>
           <p>
             <strong>One question, one call site.</strong> A Field read is
             <code>entry.read(key)</code>, and that is the same call an app author writes and a
@@ -716,7 +732,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             <code>PluginStore</code> the plugin reserves. Another plugin may read that store, and may
             not write it.
           </p>
-          <pre><code>data(ctx) {
+          <pre data-check="plugin-data"><code>data(ctx) {
   const store = ctx.store.reserve&lt;{ locked: true }&gt;();
   store.set('t2', { locked: true });
   const other = ctx.store.read&lt;{ locked: true }&gt;('demo.lockEntries');
@@ -732,16 +748,18 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
           <p>
             The extender composes: you receive the current occupant and return the one that replaces
             it. Call <code>next</code> when you want its writes, and skip it when you do not. The
-            runtime owns merging and branding. Non-overlapping keys on one Entry combine. The same
+            runtime owns merging. An <code>EntryEdits</code> key is an <code>EntryId</code>, so you
+            brand an id you wrote yourself: <code>entryId</code> comes from
+            <code>'freegantt'</code>. Non-overlapping keys on one Entry combine. The same
             Field on the same Entry is a collision: neither value applies, and one warning names both
             plugins and the Field. Do not throw. Do not call <code>mergeEntryEdits</code>.
           </p>
-          <pre><code>data(ctx) {
+          <pre data-check="plugin-data"><code>data(ctx) {
   // What else does this edit write?
   ctx.edits.setExtender((next) =&gt; (request) =&gt; {
-    const moved = request.proposed.get('t1');
+    const moved = request.proposed.get(entryId('t1'));
     if (moved === undefined) return next(request);
-    return new Map([['t2', { start: moved.start }]]);
+    return new Map([[entryId('t2'), { start: moved.start }]]);
   });
 }</code></pre>
           <p>
@@ -762,10 +780,15 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             <code>props</code> key, a level it wants skipped. A <code>data</code> half may say what
             the parent of an Entry is. It composes the same way the extender does.
           </p>
-          <pre><code>data(ctx) {
+          <pre data-check="plugin-data"><code>data(ctx) {
   // Which Entry is the parent of this one?
-  ctx.hierarchy.setSource((next) =&gt; (entry) =&gt; entry.props.phaseId ?? next(entry));
+  ctx.hierarchy.setSource&lt;PhaseProps&gt;((next) =&gt; (entry) =&gt; entry.props.phaseId ?? next(entry));
 }</code></pre>
+          <p>
+            <code>PhaseProps</code> is the app's own props type — name it and
+            <code>entry.props</code> carries the key with no cast. Leave it off and the source still
+            composes; <code>entry.props</code> just answers <code>unknown</code>.
+          </p>
           <p>
             One Entry in, one parent id out. Core's own source is
             <code>(entry) =&gt; entry.parentId</code>, with no special claim on the seam. An Entry a

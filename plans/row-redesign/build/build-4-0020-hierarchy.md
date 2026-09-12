@@ -87,14 +87,14 @@
 
 - [x] The three read sites named in the precondition still read no `.parentId`, and `rollup.ts:46,52` reads the source.
 - [x] The cost test passes with a source installed.
-- [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
+- [x] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line. **`verify:full PASS — all 16 checks green, test:e2e included (71s).`**
 
 ---
 
 ## Locked-spec edits this build owes
 
-- [ ] `CONTEXT.md:47` — the **Hierarchy** entry defines the tree as `parentId`. It needs an edit either way: the tree is what the hierarchy source answers, and `parentId` is core's own source. Build 2 already changed "the parent look" in the same entry.
-- [ ] `CONTEXT.md` — add the **Hierarchy source** as a glossary term: the function that answers which Entry is the parent of another, with core's own being `(entry) => entry.parentId`.
-- [ ] `plans/01` — `data/`'s seam list gains the hierarchy source beside the extension hook.
-- [ ] `plans/02` — the plugin-author surface gains the door.
-- [ ] **Extend `scripts/check-doc-examples.mjs` to `harness/docs/plugin-authoring.html`.** This is the last build, so the page now describes `src/` and its samples can compile. Until this box is ticked, no sample on that page has ever been typechecked. Handed here from the planner brief on 2026-09-11.
+- [x] `CONTEXT.md:47` — the **Hierarchy** entry defines the tree as `parentId`. It needs an edit either way: the tree is what the hierarchy source answers, and `parentId` is core's own source. Build 2 already changed "the parent look" in the same entry.
+- [x] `CONTEXT.md` — add the **Hierarchy source** as a glossary term: the function that answers which Entry is the parent of another, with core's own being `(entry) => entry.parentId`.
+- [x] `plans/01` — `data/`'s seam list gains the hierarchy source beside the extension hook.
+- [x] `plans/02` — the plugin-author surface gains the door.
+- [x] **Extend `scripts/check-doc-examples.mjs` to `harness/docs/plugin-authoring.html`.** This is the last build, so the page now describes `src/` and its samples can compile. Until this box is ticked, no sample on that page has ever been typechecked. Handed here from the planner brief on 2026-09-11.

@@ -45,8 +45,12 @@ Was the authored classification on Entry (`'span' | 'group' | 'milestone'`). An 
 _Avoid_: putting `kind` back on Entry; `'milestone'` in core; `rollUpKinds`; `hierarchy.autoGroup`; a calculated `kind` Field; a stored Variant
 
 **Hierarchy**:
-The tree of Entries via `parentId`. The Dataset option `hierarchy.autoGroup` is deleted (ADR 0013): nothing promotes a stored kind, because there is no stored kind. A child arriving is enough for the parent to derive and to draw core's own `parent` Variant.
-_Avoid_: `autoGroup`; a stored Kind or Variant derived from "has children"
+The tree of Entries, as the Hierarchy source answers it (ADR 0020). Core's own source reads `parentId`, so a Dataset with no plugin installed has the tree that field states. Core inverts the answer: it owns the child index, `depth`, `descendants()` and the Rollup, so nothing can give one Entry two parents. The Dataset option `hierarchy.autoGroup` is deleted (ADR 0013): nothing promotes a stored kind, because there is no stored kind. A child arriving is enough for the parent to derive and to draw core's own `parent` Variant.
+_Avoid_: `autoGroup`; a stored Kind or Variant derived from "has children"; "the tree is `parentId`" (it is what the source answers)
+
+**Hierarchy source**:
+The function that answers which Entry is the parent of another — `(entry: StoredEntry) => EntryId | string | undefined` (ADR 0020). Core's own is `(entry) => entry.parentId`, registered like any other with no special claim on the seam. A data plugin composes onto it through `ctx.hierarchy.setSource`, so a second plugin answers over the first's tree. It reads a `StoredEntry`, never the live `Entry`: the live row's `parent()`, `children()`, `depth` and `descendants()` are all built from this answer. One Entry in, one parent id out — never the whole dataset, which is what keeps a child query O(children + edits). An id no Entry holds reads as a root, and a chain that loops is broken at the link that closes it; both raise a Fault once per revision and neither throws. The Rollup follows the same source, so a plugin that changes the tree has changed the Rollup and the two can never disagree.
+_Avoid_: a second seam for the Rollup; a source that takes the dataset; grouping (`{ source: 'group' }` is a Row source and stays one)
 
 **Dependency**:
 A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Owned by the `entryDependencies()` plugin, not `model/` (ADR 0002; S5.0 grill, issue #111) — it exists only when that plugin is installed and lives in its reserved store, not on `Entry` or in core. The default scheduling plugin reads it through a read-only cross-plugin store view; it does not own it.

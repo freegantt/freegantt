@@ -1293,3 +1293,71 @@ anywhere in `src/`, `harness/` or `e2e/`. Threading a source through a function 
 have shipped one more unused export (the I11 defect B8 lands to catch).
 
 **To reverse:** restore it, taking a `HierarchySource` beside `childIdsByParent`.
+
+---
+
+## J56 — `harness/main.ts`'s API-gap review, and the one gap it closed
+
+**Build 4. `CLAUDE.md`'s per-commit review of the harness.**
+
+**One gap in `src/`, and it was the harness that showed it.** `gantt.reveal(id)` took
+`EntryId | SegmentId`, both of them brands, so `harness/plugins.ts` wrote
+`gantt.reveal(entryId(MILESTONE_ENTRY_ID))` to hand it a string it already had. Every other way into
+the library takes a loose `string` (`entries.get`, `entries.update`, `gantt.collapse`), and `reveal`
+decides which reading an id gets by **asking the store**, never by reading the brand — so the type
+was stricter than the runtime for no reason. It now takes `EntryId | SegmentId | string`, and both
+call sites dropped their branding.
+
+**No gap on `main.ts` itself this round.** Every library call the page makes is one the library
+answers. The tree is still `parentId` there, which core's own source reads, so ADR 0020 changed
+nothing the page had to restate.
+
+**Two known splits are unchanged, and both are already filed.** `filterTeam` and `sortByName` are
+`#254`. The `lockEntries()` / `harness.entryContextActions` pair is `J50`'s, and `J50` states the
+honest close is a harness change that this build did not touch.
+
+**To reverse:** narrow `reveal` back to the two brands and put `entryId(...)` back at both call sites.
+
+---
+
+## J57 — every `<pre>` on `harness/docs/plugin-authoring.html` declares how it is checked
+
+**Build 4, the locked-spec edits. `scripts/check-doc-examples.mjs` now covers the HTML page.**
+
+The page's samples had never been typechecked. Extending the gate to it needed a rule for three
+shapes on one page: whole modules, `data(ctx)` fragments, and library types quoted for the reader.
+
+**The call.** Every `<pre>` carries `data-check`, and a block **without one fails the script**. A
+page where "unchecked" is the silent default goes straight back to where it was. Three modes:
+`module` (compiled as written), `plugin-data` (wrapped in a `definePlugin` call, under a preamble the
+page states in prose beside the fragments that use it), `type-sketch` (skipped, and counted out
+loud). A block may also carry `data-file`, so the page can show two files and the compiler sees two.
+
+**It surfaced eight stale samples on the first run, and every one was real:** a `paint` naming a
+`phaseBar` nothing defined; four blocks calling `Dataset`, `Gantt` or `definePlugin` with no import;
+a `Dataset` written with an untyped `TProps` and then handed a declared key; an extender returning a
+`Map` with unbranded keys; and the hierarchy sample itself, which does not compile without naming the
+props shape (`J52` predicted exactly this).
+
+**To reverse:** delete `extractPageBlocks` and the `data-check` attributes, and the page's samples go
+back to prose.
+
+---
+
+## Q9 — should `EntryEdits` and `ProposedEdits` key on a loose `string`?
+
+**Raised 2026-09-12, Build 4, by the doc-examples gate. Not blocking, and out of ADR 0020's scope.**
+
+`harness/docs/plugin-authoring.html` told a plugin author *"the runtime owns merging and branding"*.
+The first typechecked run of that sample says otherwise: `EntryEdits` is
+`ReadonlyMap<EntryId, EntryEdit>` and `ProposedEdits` is `ReadonlyMap<EntryId, ProposedEdit>`, so an
+author writing `new Map([['t2', …]])` or `request.proposed.get('t1')` does not compile. The runtime
+reads either one fine — a brand is compile-time only.
+
+**Both sides have a case.** `CLAUDE.md` says input is loose on every way in, and an extender's return
+is a way in; the page promised as much. Against: a `ReadonlyMap<EntryId | string, …>` collapses to
+`ReadonlyMap<string, …>` in a reader's eye, and every caller inside `data/` then brands on the way
+out — which moves the cast rather than deleting it.
+
+**Build 4 changed neither.** It corrected the page to say what compiles, and the samples now brand
+with `entryId(...)`. That is the evidence, left visible rather than tidied away.

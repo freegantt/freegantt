@@ -505,27 +505,27 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
 
   const movedId = Object.keys(after).find((id) => after[id] !== before[id]);
   expect(movedId).toBeDefined();
-  const hostId = after[movedId!]!;
+  const newParentId = after[movedId!]!;
 
   const state = await page.evaluate(
-    ({ hostId, movedId }: { hostId: string; movedId: string }) => {
-      const host = window.__dataset.entries.get(hostId);
+    ({ newParentId, movedId }: { newParentId: string; movedId: string }) => {
+      const newParent = window.__dataset.entries.get(newParentId);
       const moved = window.__dataset.entries.get(movedId);
       return {
-        hasChildren: host?.hasChildren,
+        hasChildren: newParent?.hasChildren,
         // It derives: the Rollup gave it its child's span, which it never authored.
-        spans: host?.start !== undefined && host?.end !== undefined,
+        spans: newParent?.start !== undefined && newParent?.end !== undefined,
         childDepth: moved?.depth,
         // No `parentId` was written anywhere — the move is a `phaseId` edit alone.
         storedParentId: String(moved?.toInput().parentId),
       };
     },
-    { hostId, movedId: movedId! },
+    { newParentId, movedId: movedId! },
   );
 
   expect(state.hasChildren).toBe(true);
   expect(state.spans).toBe(true);
-  expect(state.childDepth).toBe((await hostDepth(page, hostId)) + 1);
+  expect(state.childDepth).toBe((await newParentDepth(page, newParentId)) + 1);
   // The stored field still says what it always said: the plugin owns the tree, not the field.
   expect(state.storedParentId).toBe(before[movedId!]);
 
@@ -533,10 +533,10 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
   // The pane mounts the rows it can show, so bring this one into view before asking about its bar.
   await page.evaluate((id: string) => {
     window.__gantt.reveal(id);
-  }, hostId);
-  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${hostId}:"]`)).toHaveCount(1);
+  }, newParentId);
+  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${newParentId}:"]`)).toHaveCount(1);
 });
 
-async function hostDepth(page: import('@playwright/test').Page, id: string): Promise<number> {
-  return page.evaluate((hostId: string) => window.__dataset.entries.get(hostId)?.depth ?? 0, id);
+async function newParentDepth(page: import('@playwright/test').Page, id: string): Promise<number> {
+  return page.evaluate((newParentId: string) => window.__dataset.entries.get(newParentId)?.depth ?? 0, id);
 }
