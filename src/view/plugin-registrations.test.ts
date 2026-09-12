@@ -1,4 +1,4 @@
-// #170: the invalidation matrix for the five plugin registration seams, in one place. Before this
+// #170: the invalidation matrix for the plugin registration seams, in one place. Before this
 // file the answers lived in `buildPluginPorts`, one layer away from the registration itself, and the
 // decoration seam's own lifetime was hand-written in a closure inside `GanttShell`.
 //
@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { PluginRegistrations } from './plugin-registrations.js';
 import type { PluginRegistrationPorts } from './plugin-registrations.js';
-import { createItemProducerRegistry } from '../layout/index.js';
+import { createVariantRegistry } from '../layout/index.js';
 import type { Disposer, GridColumnInput, PluginId } from '../model/index.js';
 
 const PLUGIN: PluginId = 'demo.plugin';
@@ -42,7 +42,7 @@ function harness(): Harness {
     },
   };
   return {
-    registrations: new PluginRegistrations(ports, createItemProducerRegistry()),
+    registrations: new PluginRegistrations(ports, createVariantRegistry()),
     counts,
     columns,
   };
@@ -69,24 +69,16 @@ describe('PluginRegistrations — what each seam invalidates', () => {
     expect(counts.frames).toBe(2);
   });
 
-  it('an Item producer re-produces every row on both edges', () => {
+  // ADR 0018: one variant answers four questions, so one registration invalidates all three passes
+  // — the Items every row produces, every capability, and the frame.
+  it('a variant re-produces every row, re-resolves every capability and repaints, on both edges', () => {
     const { registrations, counts } = harness();
 
-    const dispose = registrations.registerItemProducer('buffer', () => []);
-    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 0 });
+    const dispose = registrations.registerVariant({ name: 'buffer', when: () => true }, PLUGIN);
+    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 1 });
 
     dispose();
-    expect(counts).toMatchObject({ items: 2, frames: 2 });
-  });
-
-  it('kind defaults re-resolve capabilities on both edges, and paint nothing themselves', () => {
-    const { registrations, counts } = harness();
-
-    const dispose = registrations.registerLookDefaults('buffer', {});
-    expect(counts).toMatchObject({ capabilities: 1, frames: 0, items: 0 });
-
-    dispose();
-    expect(counts).toMatchObject({ capabilities: 2, frames: 0 });
+    expect(counts).toMatchObject({ items: 2, frames: 2, capabilities: 2 });
   });
 
   it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {
@@ -102,27 +94,30 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 });
 
 describe('PluginRegistrations — the tables it reads back', () => {
-  it('answers the winning KindDefaults for a kind, and undefined for a kind nobody claimed', () => {
+  it('answers a variant’s own `can`, and undefined for a name nobody registered', () => {
     const { registrations } = harness();
-    const defaults = { move: false };
+    const can = { move: false };
 
-    registrations.registerLookDefaults('buffer', defaults);
+    registrations.registerVariant({ name: 'buffer', when: () => true, can }, PLUGIN);
 
-    expect(registrations.lookDefaultsFor('buffer')).toBe(defaults);
-    expect(registrations.lookDefaultsFor('risk')).toBeUndefined();
+    expect(registrations.variants.interactionsFor('buffer')).toBe(can);
+    expect(registrations.variants.interactionsFor('risk')).toBeUndefined();
   });
 
-  it('a second plugin on one kind wins, and disposing it restores the first (#154)', () => {
+  it('a second plugin on one variant name wins, and disposing it restores the first (#154)', () => {
     const { registrations } = harness();
     const first = { move: false };
     const second = { move: true };
 
-    registrations.registerLookDefaults('buffer', first);
-    const disposeSecond = registrations.registerLookDefaults('buffer', second);
-    expect(registrations.lookDefaultsFor('buffer')).toBe(second);
+    registrations.registerVariant({ name: 'buffer', when: () => true, can: first }, PLUGIN);
+    const disposeSecond = registrations.registerVariant(
+      { name: 'buffer', when: () => true, can: second },
+      'demo.other',
+    );
+    expect(registrations.variants.interactionsFor('buffer')).toBe(second);
 
     disposeSecond();
-    expect(registrations.lookDefaultsFor('buffer')).toBe(first);
+    expect(registrations.variants.interactionsFor('buffer')).toBe(first);
   });
 
   it('every decoration provider paints, in registration order — not only the newest', () => {

@@ -5,15 +5,17 @@ import type { Entry, EntryId, Instant } from '../../model/index.js';
 import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
-import { createItemProducerRegistry, produceItemsForRow, wholeEntryItem } from './produce-items.js';
+import { produceItemsForRow } from './produce-items.js';
+import { wholeEntryItem } from './item.js';
+import { createVariantRegistry } from './variants.js';
 
 describe('wholeEntryItem (review P3)', () => {
-  it('covers the entry span, stamps the look it is told, and owns the Item id convention', () => {
+  it('covers the entry span, stamps the variant it is told, and owns the Item id convention', () => {
     const t1 = spanEntry('t1', { name: 'Load test' });
     expect(wholeEntryItem(t1, 'buffer')).toEqual({
       id: itemId(t1.id, 0),
       entryId: t1.id,
-      look: 'buffer',
+      variant: 'buffer',
       label: 'Load test',
       start: t1.start,
       end: t1.end,
@@ -25,12 +27,11 @@ describe('wholeEntryItem (review P3)', () => {
     expect(wholeEntryItem(t1, 'leaf').segmentId).toBeUndefined();
   });
 
-  it('is what a registered producer returns: `(entry) => [wholeEntryItem(entry, look)]`', () => {
+  it('is what a variant with no `items` of its own draws (ADR 0018)', () => {
     const t1 = spanEntry('t1');
-    const registry = createItemProducerRegistry();
-    registry.registerClaim('buffer', () => true);
-    registry.register('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
+    const own = createVariantRegistry();
+    own.addPluginVariant({ name: 'buffer', when: () => true });
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
       wholeEntryItem(t1, 'buffer'),
     ]);
   });
@@ -61,7 +62,7 @@ function entryByIdFor(entries: readonly Entry[]): ReadonlyMap<EntryId, Entry> {
   return new Map(entries.map((entry) => [entry.id, entry]));
 }
 
-const registry = createItemProducerRegistry();
+const registry = createVariantRegistry();
 
 describe('produceItemsForRow', () => {
   it('produces one Item per Segment with ids t1:0, t1:1, t1:2', () => {
@@ -88,23 +89,23 @@ describe('produceItemsForRow', () => {
     expect(items[0]?.segmentId).toBe(t1.segments[0]?.id);
   });
 
-  it('falls back to the leaf producer for a childless Entry no registered look claims (ADR 0013)', () => {
+  it('draws the leaf variant for a childless Entry no rule claims (ADR 0013)', () => {
     const t1 = spanEntry('t1');
     expect(() => produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
     const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe(itemId(t1.id, 0));
-    expect(items[0]?.look).toBe('leaf');
+    expect(items[0]?.variant).toBe('leaf');
   });
 
-  it('falls back to the parent producer for an Entry with children no registered look claims', () => {
+  it('draws the parent variant for an Entry with children no rule claims', () => {
     const [t1] = entryDoubles([
       { id: 't1', start: 0, end: 10 },
       { id: 'c1', parentId: 't1', start: 0, end: 10 },
     ]);
     const items = produceItemsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
     expect(items).toHaveLength(1);
-    expect(items[0]?.look).toBe('parent');
+    expect(items[0]?.variant).toBe('parent');
   });
 
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
@@ -135,77 +136,6 @@ describe('produceItemsForRow', () => {
     expect(filledItems[0]?.start).toBe(filled.start);
     expect(filledItems[0]?.end).toBe(filled.end);
     expect(filledItems[0]?.start).not.toBe(filledItems[0]?.end);
-  });
-
-  it('[S5.9, D-S5-22] a registered producer draws its own look; the shipped two are unchanged', () => {
-    const own = createItemProducerRegistry();
-    const t1 = spanEntry('t1');
-    // A plugin claims the entries it owns (Q10) — `t1.id` alone, so `t2` below still falls through
-    // to the shipped `'leaf'`. The producer then draws whatever the claim won.
-    own.registerClaim('buffer', (entry) => entry.id === t1.id);
-    own.register('buffer', (entry) => [
-      {
-        id: itemId(entry.id, 0),
-        entryId: entry.id,
-        look: 'buffer',
-        label: `buffer:${entry.name}`,
-        start: entry.start!,
-        end: entry.end!,
-      },
-    ]);
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.label).toBe('buffer:t1');
-    const span = spanEntry('t2');
-    const spanItems = produceItemsForRow(planned([span.id]), entryByIdFor([span]), own);
-    expect(spanItems[0]?.label).toBe('t2');
-  });
-
-  it('register() returns a Disposer that falls back to the built-in producer for that look', () => {
-    const own = createItemProducerRegistry();
-    const originalLeaf = own.producerFor('leaf');
-    const dispose = own.register('leaf', () => []);
-    expect(own.producerFor('leaf')).not.toBe(originalLeaf);
-    dispose();
-    expect(own.producerFor('leaf')).toBe(originalLeaf);
-  });
-
-  it('register() on an unregistered look leaves nothing behind on dispose', () => {
-    const own = createItemProducerRegistry();
-    const dispose = own.register('buffer', () => []);
-    expect(own.producerFor('buffer')).not.toBeUndefined();
-    dispose();
-    expect(own.producerFor('buffer')).toBeUndefined();
-  });
-
-  it('disposing the first of two registrations on one look leaves the second producing', () => {
-    const own = createItemProducerRegistry();
-    const t1 = spanEntry('t1');
-    own.registerClaim('buffer', () => true);
-    const disposeFirst = own.register('buffer', (entry) => [
-      {
-        id: itemId(entry.id, 0),
-        entryId: entry.id,
-        look: 'buffer',
-        label: `first:${entry.name}`,
-        start: entry.start!,
-        end: entry.end!,
-      },
-    ]);
-    own.register('buffer', (entry) => [
-      {
-        id: itemId(entry.id, 0),
-        entryId: entry.id,
-        look: 'buffer',
-        label: `second:${entry.name}`,
-        start: entry.start!,
-        end: entry.end!,
-      },
-    ]);
-    disposeFirst();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.label).toBe('second:t1');
   });
 
   it('a header row (kind: header) produces no Items', () => {

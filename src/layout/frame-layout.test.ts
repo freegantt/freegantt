@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
-import { createItemProducerRegistry } from './items/produce-items.js';
+import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
@@ -40,7 +40,7 @@ const scale = createTimeScale({
 });
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
-const itemProducerRegistry = createItemProducerRegistry();
+const variantRegistry = createVariantRegistry();
 
 function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
   return {
@@ -54,7 +54,7 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
     // rebuilding every read (#243) — an omitted `datasetRevision` now invalidates every call.
     datasetRevision: 0,
     todayLine: false as const,
-    itemProducerRegistry,
+    variants: variantRegistry,
     ...overrides,
   };
 }
@@ -151,32 +151,35 @@ describe('FrameLayout', () => {
     expect(layout.itemIdsForEntry(segmented.id)).toHaveLength(3);
   });
 
-  it('itemIdsForEntry answers a plugin look that draws its own Items (#185)', () => {
+  it('itemIdsForEntry answers a plugin variant that draws its own Items (#185)', () => {
     // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
-    const look = 'twin';
-    const registry = createItemProducerRegistry();
-    registry.registerClaim(look, () => true);
-    registry.register(look, (entry) => [
-      {
-        id: itemId(entry.id, 7),
-        entryId: entry.id,
-        look,
-        label: entry.name,
-        start: entry.start!,
-        end: entry.end!,
-      },
-      {
-        id: itemId(entry.id, 9),
-        entryId: entry.id,
-        look,
-        label: entry.name,
-        start: entry.start!,
-        end: entry.end!,
-      },
-    ]);
+    const variant = 'twin';
+    const registry = createVariantRegistry();
+    registry.addPluginVariant({
+      name: variant,
+      when: () => true,
+      items: (entry) => [
+        {
+          id: itemId(entry.id, 7),
+          entryId: entry.id,
+          variant,
+          label: entry.name,
+          start: entry.start!,
+          end: entry.end!,
+        },
+        {
+          id: itemId(entry.id, 9),
+          entryId: entry.id,
+          variant,
+          label: entry.name,
+          start: entry.start!,
+          end: entry.end!,
+        },
+      ],
+    });
     const entry: Entry = sampleEntries[0]!;
     const layout = new FrameLayout();
-    layout.computeFrame(input({ entries: [entry], itemProducerRegistry: registry }));
+    layout.computeFrame(input({ entries: [entry], variants: registry }));
 
     expect(layout.itemIdsForEntry(entry.id)).toEqual([itemId(entry.id, 7), itemId(entry.id, 9)]);
   });
@@ -198,24 +201,27 @@ describe('FrameLayout', () => {
     );
   });
 
-  it('segmentIdsForItem names every Segment of the Entry for a whole-entry look (#212)', () => {
-    // A whole-entry look (a group, a milestone) draws one bar over the whole Entry, so it drew no
-    // single Segment. It still stands for all of them: a click on it selects the Entry's work.
-    const registry = createItemProducerRegistry();
-    registry.registerClaim('milestone', () => true);
-    registry.register('milestone', (entry) => [
-      {
-        id: itemId(entry.id, 0),
-        entryId: entry.id,
-        look: 'milestone',
-        label: entry.name,
-        start: entry.start!,
-        end: entry.end!,
-      },
-    ]);
+  it('segmentIdsForItem names every Segment of the Entry for a whole-entry variant (#212)', () => {
+    // A whole-entry variant (a parent, a milestone) draws one bar over the whole Entry, so it drew
+    // no single Segment. It still stands for all of them: a click on it selects the Entry's work.
+    const registry = createVariantRegistry();
+    registry.addPluginVariant({
+      name: 'milestone',
+      when: () => true,
+      items: (entry) => [
+        {
+          id: itemId(entry.id, 0),
+          entryId: entry.id,
+          variant: 'milestone',
+          label: entry.name,
+          start: entry.start!,
+          end: entry.end!,
+        },
+      ],
+    });
     const layout = new FrameLayout();
     const wholeSpan = overlappingEntry(sampleEntries[0]!, 2);
-    const frame = layout.computeFrame(input({ entries: [wholeSpan], itemProducerRegistry: registry }));
+    const frame = layout.computeFrame(input({ entries: [wholeSpan], variants: registry }));
 
     expect(frame.bars).toHaveLength(1);
     expect(frame.bars[0]!.segmentId).toBeUndefined();

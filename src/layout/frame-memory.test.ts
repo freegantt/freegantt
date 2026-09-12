@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FrameMemory } from './frame-memory.js';
-import { createItemProducerRegistry } from './items/produce-items.js';
+import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import { entryId, rowId, segmentId } from '../model/index.js';
@@ -22,7 +22,7 @@ function packPlan(entries = sampleEntries): readonly PlannedRow[] {
 }
 
 describe('FrameMemory (A2)', () => {
-  const registry = createItemProducerRegistry();
+  const registry = createVariantRegistry();
   const laneGap = 2;
 
   it('heightOfRow follows packed lane count without a FrameLayout', () => {
@@ -97,7 +97,7 @@ describe('FrameMemory (A2)', () => {
 });
 
 describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', () => {
-  const registry = createItemProducerRegistry();
+  const registry = createVariantRegistry();
   const laneGap = 2;
 
   function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {

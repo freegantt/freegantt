@@ -7,7 +7,7 @@
 // `ContainerDom` to read it back. A rename in `render/dom/dom-contract.ts` keeps this green; a
 // rename at one paint site only does not.
 import { describe, expect, it } from 'vitest';
-import { FrameLayout, createItemProducerRegistry } from '../layout/index.js';
+import { FrameLayout, createVariantRegistry } from '../layout/index.js';
 import type { RowSource, TimeScale, ViewPreset } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { ContainerDom } from './gantt-dom.js';
@@ -79,7 +79,7 @@ function paintOneGantt(
   });
   // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
   const layout = new FrameLayout();
-  const itemProducerRegistry = createItemProducerRegistry();
+  const variantRegistry = createVariantRegistry();
   const paint = (): void => {
     backend.sync(
       layout.computeFrame({
@@ -91,7 +91,7 @@ function paintOneGantt(
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
         columns: [
           { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
           { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
