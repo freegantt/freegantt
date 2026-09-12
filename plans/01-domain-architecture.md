@@ -728,20 +728,47 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ## 10. `extensions/` — the plugin contract
 
-"Everything is extensible" needs one extension contract for each object a plugin installs into.
-FreeGantt ships two: a **Gantt plugin** joins a mounted Gantt, and a **Dataset plugin** joins a
-Dataset while it constructs. Both shipped in S5 (`plans/s5-extensibility-and-editing`).
-
-### 10.1 The Gantt plugin
+"Everything is extensible" needs one plugin type, and one install site per half. A plugin has two
+halves: `view` joins a mounted Gantt, and `data` joins a Dataset while it constructs (ADR 0019). An
+author writes both through `definePlugin`, and the shape they wrote decides where the plugin
+installs. S5 shipped it (`plans/s5-extensibility-and-editing`).
 
 ```ts
-interface GanttPlugin {
+/** Call: `definePlugin({ id: 'demo.phases', data(ctx) { … }, view(ctx) { … } })`. */
+interface PluginIdentity {
   id: PluginId;
-  /** Called once after the Gantt mounts. Returns a Disposer for a resource the plugin owns
-   *  itself, or nothing at all — every register* call below already files its own removal. */
-  setup(ctx: PluginContext): Disposer | void;
+  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
+   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
+   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. One list
+   *  covers both halves. */
+  requires?: readonly PluginId[];
 }
 
+/** Chrome and nothing else. It installs on the `Gantt`, and `gantt.plugins` reconfigures it live. */
+interface ChromePlugin extends PluginIdentity {
+  view(ctx: PluginContext): Disposer | void;
+  /** `never`, so the wrong install site is a red squiggle rather than a runtime discovery. */
+  data?: never;
+}
+
+/** A plugin that owns state — Fields, the edit hook, the hierarchy source, a store — and may paint
+ *  it too. **The install site is where the state lives**: this arm installs on the `Dataset`,
+ *  because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset
+ *  then runs `view` once, each with its own context, so I2 holds by construction. */
+interface DataPlugin extends PluginIdentity {
+  data(ctx: DatasetPluginContext): Disposer | void;
+  view?(ctx: PluginContext): Disposer | void;
+}
+
+type Plugin = ChromePlugin | DataPlugin;
+```
+
+Each half returns a `Disposer` for a resource the plugin owns itself — a socket, a timer, a
+subscription — or nothing at all. Every `register*` call below already files its own removal.
+
+### 10.1 The `view` half's context
+
+```ts
 interface PluginContext {
   dataset: Dataset;                  // the public Dataset: no privileged access, no second surface
   gantt: Gantt;                      // the public façade: live config and public methods
@@ -779,28 +806,17 @@ interface PluginContext {
 }
 ```
 
-A Gantt plugin declares no Field. `registerField` moved off this contract during S5 — a Gantt plugin
-shows a Field through `view.registerGridColumn` alone, and a Dataset plugin declares the Field
-itself (§10.2). `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the
-group a plugin reads it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not
-name (D-S5-5).
+The `view` half declares no Field. `registerField` moved off this context during S5 — it shows a
+Field through `view.registerGridColumn` alone, and the `data` half declares the Field itself (§10.2).
+`PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the group a plugin reads
+it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not name (D-S5-5).
 
-### 10.2 The Dataset plugin
+### 10.2 The `data` half's context
 
-A Dataset plugin sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset
-runs — it never meets a pane, the overlay, or a gesture.
+This half sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset runs — it
+never meets a pane, the overlay, or a gesture.
 
 ```ts
-interface DatasetPlugin {
-  id: PluginId;
-  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
-   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
-   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. */
-  requires?: readonly PluginId[];
-  /** Called once while the Dataset constructs. Returns a Disposer, or nothing. */
-  setup(ctx: DatasetPluginContext): Disposer | void;
-}
-
 interface DatasetPluginContext {
   dataset: Dataset;
   events: DatasetEvents;              // on/off over beforeChange/change; a false return vetoes the ChangeSet
@@ -812,6 +828,9 @@ interface DatasetPluginContext {
   edits: {
     setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
   };
+  hierarchy: {
+    setSource(wrap: HierarchySourceWrapper): void;  // ADR 0020: which Entry is the parent; installs compose the same way
+  };
   store: {
     reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
     read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined; // another plugin's, read-only
@@ -822,10 +841,10 @@ interface DatasetPluginContext {
 
 `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
 must exist before the first Rollup, so a consumer who wants a different plugin set builds a new
-Dataset instead of reconfiguring one live. Every register* call above is legal only while `setup`
-runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
-retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
-owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
+Dataset instead of reconfiguring one live. Every register* call above is legal only while the half
+that owns it runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's
+`ctx.disposables` retracts its own registrations on uninstall, so a plugin returns a Disposer only
+for a resource it owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
 "a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
 keeps them under the plugin's own id for as long as it lives (D-S5-24), and `store.read` lets a later
 plugin — the setup order `requires` fixes — read an earlier plugin's rows.
