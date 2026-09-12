@@ -612,13 +612,15 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        // ADR 0018, `J40`: the resolved variant's own `paint` first, because it names the rows it
-        // covers. Then `barRenderer`, the catch-all for every bar no variant paints — which is what
-        // the retired map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's
-        // own `barRenderer` beats a plugin's whole-point `bar` renderer.
-        resolveBarRenderer: (entry) =>
-          this.#paintFor(entry) ??
-          this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer),
+        // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
+        // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
+        // map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's own
+        // `barRenderer` beats a plugin's whole-point `bar` renderer.
+        //
+        // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**
+        // (`J61`). A consumer who wants to paint a summary row writes a variant that claims it.
+        // Their rule then beats core's by rank, which is what D-S5-11 asks for.
+        resolveBarRenderer: (entry) => this.#paintFor(entry),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
@@ -1152,15 +1154,17 @@ export class GanttShell {
     );
   }
 
-  /** How one row's variant looks — the `paint` of the rule that won, wrapped as the
-   *  `ResolvedRenderer` the backend reads. No `pluginId`: a variant's paint is named by the variant,
-   *  and the double-claim diagnostic is what names a plugin.
+  /** Who paints this bar: the resolved variant's own `paint`, or the catch-all renderers when it
+   *  has none. One ladder, and `resolveBarRenderer` is its only caller.
    *
-   *  It takes the row, never the variant's name. Two registrations may share one name. A lookup by
-   *  name can then answer with the paint of a rule that did not claim this row (`F3`). */
+   *  It reads the row, never the variant's name. Two registrations may share one name. A lookup by
+   *  name can then answer with the paint of a rule that did not claim this row (`F3`). No
+   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-claim
+   *  diagnostic is what names a plugin. */
   #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
     const paint = this.#registrations.variants.resolveFor(entry).paint;
-    return paint === undefined ? undefined : { renderer: paint };
+    if (paint !== undefined) return { renderer: paint };
+    return this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer);
   }
 
   get interactions(): Interactions {

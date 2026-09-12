@@ -1447,3 +1447,34 @@ the core bundle 89 B over the 78 kB `size-limit` budget. Ordering costs nothing 
 
 **To reverse:** drop `statesAClaim` from the `walkOrder` comparator, and put `paint`/`can` back
 behind a name lookup.
+
+---
+
+## J61 — core's own `parent` paint answers before a consumer's `barRenderer`, and that is intended
+
+**Review fixes, F21. The behaviour stands; what was missing was the test and the doc.**
+
+`gantt.barRenderer` is never called for a row with children. `F21` reported that as either a bug
+against D-S5-11 or an untested decision, and asked for one of the two.
+
+**It is J40, already decided on this branch, and the rule is specificity, not rank.** A variant's
+`paint` answers before `barRenderer` **because it names the rows it covers**, and `barRenderer`
+names none. Core's `parent` carries `when: (entry) => entry.hasChildren`, so it is such a rule.
+Ranking `barRenderer` over it was written, run and reverted here: `e2e/planner.spec.ts` and
+`e2e/parent-bar-drag.spec.ts` both went red, because `harness/planner.ts` sets a `barRenderer` and
+expects every phase row to keep `fg-bar-summary`. J40 records the same two specs going red for the
+mirror-image reason.
+
+**D-S5-11 is satisfied by the rank ladder, not by this seam.** A consumer who wants to paint a
+summary row claims it — `variants: [{ name: 'summary', when: (entry) => entry.hasChildren, paint }]`
+— and their rule outranks core's, so their paint answers and `fg-bar-summary` goes. That is one line
+of config, and it is the door ADR 0018 exists to give.
+
+**Pinned, and said out loud.** Two tests in `api/gantt.test.ts`: a `barRenderer` sees the leaf rows
+and not the parent, and a consumer rule claiming the parent paints it. `GanttOptions.barRenderer`'s
+own doc now says "every bar no variant paints", and names the rule that claims a summary row.
+
+**To reverse:** publish the resolved variant's owner (a `fromCore` member on `ResolvedVariant` was
+written and reverted), and have `gantt-shell.ts`'s `#paintFor` prefer the catch-all when the rule
+that won came from core. Expect the two e2e specs above to need the planner's own `parent` variant
+back — the one J40 deleted.
