@@ -1,20 +1,19 @@
 // layout/ — `{ source: 'group', groupBy }`. One header per value, first-seen order (D-S4-21, D-S4-23).
 
 import { entryId, rowId } from '../../model/index.js';
-import type { Entry, FieldContext } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
 import type { GroupRowSource, UnindexedRow } from './row-source.js';
 import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
 export function resolveGroupSource(
   entries: readonly Entry[],
   source: GroupRowSource,
-  fields?: FieldContext,
 ): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   const order: string[] = [];
   const grouped = new Map<string, Entry[]>();
   for (const entry of entries) {
-    const key = source.groupBy(entry, fields);
+    const key = source.groupBy(entry);
     const bucket = grouped.get(key);
     if (bucket) bucket.push(entry);
     else {

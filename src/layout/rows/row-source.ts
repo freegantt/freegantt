@@ -7,7 +7,9 @@ export type RowHeightMode = 'fixed' | 'pack';
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
-export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
+/** Does this row stay? The row answers its own questions — `entry.read('team')`, `entry.hasChildren`
+ *  — so nothing rides beside it (ADR 0017). */
+export type RowFilter = (entry: Entry) => boolean;
 
 export interface RowSort {
   field: FieldKey;
@@ -31,7 +33,8 @@ export interface EntriesRowSource extends RowSourceCommon {
 
 export interface GroupRowSource extends RowSourceCommon {
   source: 'group';
-  groupBy(entry: Entry, fields?: FieldContext): string;
+  /** Which group this row joins. Read the value off the row: `entry.read('team')`. */
+  groupBy(entry: Entry): string;
 }
 
 /** What `{ source: 'custom', resolve }` receives. Entries only — no pixels, no Gantt. */

@@ -471,7 +471,7 @@ test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012
   // `task-alpha-1` draws one Segment (its whole span) and owns `deep-leaf` as a child (fixtures/
   // hierarchy-dataset.ts). Deleting that Segment no longer removes the Entry (ADR 0012): the row
   // stays, and never had a reason to reparent `deep-leaf` in the first place.
-  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(before).toBe('task-alpha-1');
 
   const bar = page.locator('#gantt .fg-bar[data-item-id^="task-alpha-1:"]').first();
@@ -480,6 +480,6 @@ test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012
 
   await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(true);
   await expect(page.locator('#gantt .fg-row[data-entry-id="deep-leaf"]')).toBeVisible();
-  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(after).toBe('task-alpha-1');
 });
