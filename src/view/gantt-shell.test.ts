@@ -11,7 +11,7 @@ import {
   RevealTargetNotFoundError,
   ContainerNotFoundError,
 } from '../model/index.js';
-import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import type { StoredEntry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -42,7 +42,7 @@ function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement
 // D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
 // `referenceDate` is a bare epoch-ms cast, not `time/`'s `instant()` — view/ may not import time/ (I1).
-function fakeDataset(entries: readonly Entry[]): GanttShellOptions['dataset'] {
+function fakeDataset(entries: readonly StoredEntry[]): GanttShellOptions['dataset'] {
   let mintedSegmentCounter = 0;
   const context = {
     timeZone,
@@ -124,7 +124,7 @@ const timeZone = 'UTC';
 const rangeStart = instant('2026-09-01T00:00:00Z');
 const rangeEnd = instant('2026-09-06T00:00:00Z'); // 5 days
 
-const entries: Entry[] = [
+const entries: StoredEntry[] = [
   {
     id: entryId('t1'),
     name: 'Entry 1',
@@ -135,7 +135,7 @@ const entries: Entry[] = [
   },
 ];
 
-function tallEntries(count: number): Entry[] {
+function tallEntries(count: number): StoredEntry[] {
   return Array.from({ length: count }, (_, i) => {
     const start = rangeStart;
     const end = instant('2026-09-03T00:00:00Z');
@@ -179,7 +179,7 @@ describe('GanttShell header band', () => {
     const initialTickCount = containerA.querySelectorAll('.fg-header .fg-tick').length;
 
     const containerB = document.createElement('div');
-    const widerEntries: Entry[] = [
+    const widerEntries: StoredEntry[] = [
       {
         id: entryId('w1'),
         name: 'W1',
@@ -650,7 +650,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     try {
       const container = document.createElement('div');
       const scroll = new ScrollModel();
-      const parent: Entry = {
+      const parent: StoredEntry = {
         id: entryId('p'),
         name: 'p',
         start: rangeStart,
@@ -658,7 +658,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
-      const child: Entry = {
+      const child: StoredEntry = {
         id: entryId('c'),
         name: 'c',
         parentId: entryId('p'),
@@ -694,7 +694,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     try {
       const container = document.createElement('div');
       const scroll = new ScrollModel();
-      const alpha: Entry = {
+      const alpha: StoredEntry = {
         id: entryId('a'),
         name: 'a',
         start: rangeStart,
@@ -735,7 +735,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const parent: Entry = {
+      const parent: StoredEntry = {
         id: entryId('p'),
         name: 'p',
         start: rangeStart,
@@ -743,7 +743,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
-      const first: Entry = {
+      const first: StoredEntry = {
         id: entryId('c1'),
         name: 'c1',
         parentId: entryId('p'),
@@ -752,7 +752,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         segments: [{ id: segmentId('c1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
-      const second: Entry = {
+      const second: StoredEntry = {
         id: entryId('c2'),
         name: 'c2',
         parentId: entryId('p'),
@@ -1048,7 +1048,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
   });
 
   it('clicking one segment paints that bar alone; the handle pair follows it (#185, #211, #212)', () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       id: entryId('seg'),
       name: 'segmented',
       start: rangeStart,
@@ -1117,7 +1117,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
   });
 
   it('selectableSegmentsOf answers every selectable Entry a packed row owns (#185)', () => {
-    const owned: Entry[] = [
+    const owned: StoredEntry[] = [
       {
         id: entryId('one'),
         name: 'one',
@@ -1187,7 +1187,7 @@ describe("GanttShell's committed-entries cache (I5, #246 S2-3)", () => {
     });
     const container = document.createElement('div');
     let ctx: EntryGestureContext | undefined;
-    const seenMaps: ReadonlyMap<EntryId, Entry>[] = [];
+    const seenMaps: ReadonlyMap<EntryId, StoredEntry>[] = [];
     const shell = new GanttShell({
       container,
       dataset,

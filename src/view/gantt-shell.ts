@@ -84,7 +84,7 @@ import {
 } from '../model/index.js';
 import type {
   Dataset,
-  Entry,
+  StoredEntry,
   EntryId,
   FieldKey,
   GridColumnInput,
@@ -224,7 +224,7 @@ export interface GanttShellWiring {
    *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
   buildCommandContext?: (parts: {
-    entry?: Entry;
+    entry?: StoredEntry;
     target?:
       | {
           kind: 'header';
@@ -428,7 +428,7 @@ export class GanttShell {
   #lastBarById = new Map<ItemId, FrameBar>();
   /** The committed Entries keyed by id, and the `datasetRevision` they were built from.
    *  `#committedEntriesById` below is the only reader and the only writer. */
-  #entriesById: ReadonlyMap<EntryId, Entry> = new Map();
+  #entriesById: ReadonlyMap<EntryId, StoredEntry> = new Map();
   #entriesByIdRevision: number | undefined;
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
@@ -1543,7 +1543,7 @@ export class GanttShell {
    *  copied every Entry in the Dataset sixty times a second (I5). A drag commits once, at the end,
    *  so a drag now rebuilds this at most once. One revision is the whole cache key, because
    *  `EditRequest.entries` is committed-only by contract (D-S5-45). */
-  #committedEntriesById(): ReadonlyMap<EntryId, Entry> {
+  #committedEntriesById(): ReadonlyMap<EntryId, StoredEntry> {
     const revision = this.#options.dataset.datasetRevision;
     if (revision !== this.#entriesByIdRevision) {
       this.#entriesById = new Map(this.#options.dataset.entries.all.map((entry) => [entry.id, entry]));
@@ -1602,7 +1602,7 @@ export class GanttShell {
     this.#backend.applyState(this.#interactionState);
   }
 
-  #entryFor(item: ItemId): Entry | undefined {
+  #entryFor(item: ItemId): StoredEntry | undefined {
     return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
@@ -1610,7 +1610,7 @@ export class GanttShell {
    *  a core, `props`-addressed or `compute` Field alike (ADR 0011). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
-  #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
+  #fieldValueForCell(entry: StoredEntry | undefined, key: FieldKey): unknown {
     if (entry === undefined) return undefined;
     return this.#options.dataset.entries.fieldValue(entry.id, key);
   }

@@ -6,9 +6,9 @@ import { TimeScaleModel } from './time-scale-model.js';
 import { ScrollModel } from './scroll-model.js';
 import { diffMs, instant } from '../../time/index.js';
 import { entryId, segmentId } from '../../model/index.js';
-import type { Entry } from '../../model/index.js';
+import type { StoredEntry } from '../../model/index.js';
 
-function entry(id: string, start: string, end: string): Entry {
+function entry(id: string, start: string, end: string): StoredEntry {
   const startInstant = instant(start);
   const endInstant = instant(end);
   return {

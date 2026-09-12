@@ -2,7 +2,7 @@
 // Skip holes (`undefined`, non-numeric for sum/min/max, zero-duration children for the weighted
 // mean) and never throw. Every child skipped → `undefined` (keep the stored value).
 
-import type { Aggregator, Entry, RollUpContext } from '../../model/index.js';
+import type { Aggregator, StoredEntry, RollUpContext } from '../../model/index.js';
 
 /** The one place this rule is written: a value counts only when it is a finite number.
  *  `ctx.numericValues` applies the same rule to a whole child list (issue #124). */
@@ -10,7 +10,7 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
+function durationMs(ctx: RollUpContext, entry: StoredEntry): number | undefined {
   const duration = ctx.durationOf(entry);
   // A non-spanning Entry (ADR 0012) has no duration — same hole as a non-finite one.
   if (duration === undefined || !isFiniteNumber(duration.value) || duration.value === 0) return undefined;
@@ -21,7 +21,7 @@ function durationMs(ctx: RollUpContext, entry: Entry): number | undefined {
  *  stored value (`undefined`) when every child is a hole. */
 function foldNumbers(
   ctx: RollUpContext,
-  children: readonly Entry[],
+  children: readonly StoredEntry[],
   fold: (found: number, value: number) => number,
 ): number | undefined {
   const values = ctx.numericValues(children);

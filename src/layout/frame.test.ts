@@ -20,11 +20,11 @@ import {
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, Instant, TimeSpan } from '../model/index.js';
+import type { StoredEntry, Instant, TimeSpan } from '../model/index.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
-function spanOf(entry: Entry): TimeSpan {
+function spanOf(entry: StoredEntry): TimeSpan {
   return { start: entry.start as Instant, end: entry.end as Instant };
 }
 
@@ -523,7 +523,7 @@ describe('computeFrame — horizontal culling', () => {
     pxPerMs: 1,
   });
 
-  function entryAt(id: string, x: number, width: number): Entry {
+  function entryAt(id: string, x: number, width: number): StoredEntry {
     const start = instant(x);
     const end = instant(x + width);
     return {
@@ -536,7 +536,7 @@ describe('computeFrame — horizontal culling', () => {
     };
   }
 
-  const entries: Entry[] = [
+  const entries: StoredEntry[] = [
     entryAt('outside-left', 0, 100), // [0, 100) — fully left of the window, even buffered
     entryAt('touches-left', 150, 50), // [150, 200) — touches the tight window's left edge
     entryAt('inside', 250, 10), // [250, 260) — fully inside
@@ -640,7 +640,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     range: { start: instant('2026-08-24T00:00:00Z'), end: instant('2026-09-14T00:00:00Z') },
     pxPerMs: 1 / (60 * 60 * 1000),
   });
-  const gridEntries: readonly Entry[] = [
+  const gridEntries: readonly StoredEntry[] = [
     {
       ...sampleEntries[0]!,
       id: entryId('grid-1'),
@@ -907,7 +907,7 @@ describe(
   'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
-    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => {
+    const large: StoredEntry[] = seededEntryInputs({ count: 5000 }).map((input) => {
       const start = instant(input.start as Date);
       const end = instant(input.end as Date);
       return {
@@ -982,7 +982,7 @@ describe('computeFrame row sources (S4.6)', () => {
 });
 
 describe('computeFrame lanes (S4.8)', () => {
-  const overlapping: Entry = {
+  const overlapping: StoredEntry = {
     ...sampleEntries[0]!,
     segments: [
       { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
@@ -1009,7 +1009,7 @@ describe('computeFrame lanes (S4.8)', () => {
   });
 
   it('culls through the height index when pack-mode rows have different heights', () => {
-    const short: Entry = { ...sampleEntries[1]!, id: sampleEntries[1]!.id };
+    const short: StoredEntry = { ...sampleEntries[1]!, id: sampleEntries[1]!.id };
     const frame = computeFrame({
       entries: [overlapping, short],
       scale,
@@ -1032,7 +1032,7 @@ describe('computeFrame lanes (S4.8)', () => {
 
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps minimumSpan', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan: StoredEntry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
     const { x, width, minimumSpan } = barSpan(spanOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
@@ -1040,7 +1040,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
   });
 
   it('honours a custom minBarWidthPx', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan: StoredEntry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
     const { width } = barSpan(spanOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
@@ -1049,7 +1049,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
-    const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
+    const narrowSpan: StoredEntry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
     const { x, width, minimumSpan } = barSpan(spanOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
@@ -1057,7 +1057,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
   });
 
   it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
-    const wideSpan: Entry = sampleEntries[0]!;
+    const wideSpan: StoredEntry = sampleEntries[0]!;
     const { x, width, minimumSpan } = barSpan(spanOf(wideSpan), scale);
     expect(width).toBe(
       scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),

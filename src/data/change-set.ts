@@ -5,7 +5,7 @@ import type {
   ChangeOrigin,
   ChangeSet,
   ChangeSetId,
-  Entry,
+  StoredEntry,
   EntityAdded,
   EntityRemoved,
   EntryId,
@@ -49,7 +49,7 @@ function pushRow(
  * because `props` is not itself a Field.
  */
 export function diffEdit(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   id: EntryId,
   edit: ProposedEdit,
   registry: FieldRegistry,

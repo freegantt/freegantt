@@ -5,7 +5,7 @@
 // already re-exports ElementDescription, so `render/dom` (layout-only import) and `view/`/`api/`
 // (both allowed to import layout/) reach them through one seam.
 
-import type { Entry, PluginId } from '../model/index.js';
+import type { StoredEntry, PluginId } from '../model/index.js';
 import type { ElementDescription } from '../model/index.js';
 import type { FrameBar, FrameRow } from './frame.js';
 import type { ResolvedColumn } from './column.js';
@@ -27,7 +27,7 @@ export interface ResolvedBarLabel {
 }
 
 export interface BarRendererContext {
-  entry: Entry;
+  entry: StoredEntry;
   item: FrameBar;
   /** Absent when the consumer asked for no label (`barLabels: 'none'`) — so a renderer reads "this
    *  bar has a label, here is where it goes" or nothing, and "a label with nowhere to paint" stays
@@ -44,7 +44,7 @@ export type RendererByLook = Readonly<Record<string, BarRenderer>>;
 
 export interface CellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row (`layout/rows`). */
-  entry?: Entry;
+  entry?: StoredEntry;
   row: FrameRow;
   column: ResolvedColumn;
   /** What the grid paints: the column's Field value, through the Field's own `formatValue`. */
@@ -62,7 +62,7 @@ export interface HeaderRendererContext {
 export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription | undefined;
 
 export interface TooltipRendererContext {
-  entry: Entry;
+  entry: StoredEntry;
   item: FrameBar;
 }
 export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescription | undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Entry, FormatContext } from '../../model/index.js';
+import type { StoredEntry, FormatContext } from '../../model/index.js';
 import { percent } from './field-types.js';
 
 function ctx(locale: Intl.LocalesArgument): FormatContext {
@@ -12,11 +12,11 @@ function ctx(locale: Intl.LocalesArgument): FormatContext {
 }
 
 // formatValue never reads `entry` here, so a bare stand-in is enough to satisfy the signature.
-const entry = {} as Entry;
+const entry = {} as StoredEntry;
 
 describe('percent — the shipped Field type', () => {
   it('formats 0, 35, 100 and 120 in en-US', () => {
-    const format = (value: number | undefined, formatCtx: FormatContext, e: Entry): string =>
+    const format = (value: number | undefined, formatCtx: FormatContext, e: StoredEntry): string =>
       percent.formatValue!(value, formatCtx, e);
     expect(format(0, ctx('en-US'), entry)).toBe('0%');
     expect(format(35, ctx('en-US'), entry)).toBe('35%');

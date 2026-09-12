@@ -1,6 +1,13 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns where a Field's value lives.
 
-import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
+import type {
+  Dataset,
+  StoredEntry,
+  Field,
+  FormatContext,
+  GridColumn,
+  GridColumnInput,
+} from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 import { createFieldContext } from '../data/fields/field-access.js';
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
@@ -123,7 +130,7 @@ export function resolveColumns(
     return [
       {
         ...column,
-        format: (entry: Entry) => {
+        format: (entry: StoredEntry) => {
           const value = formatCtx.read(entry, field.key);
           if (field.formatValue) return field.formatValue(value, formatCtx, entry);
           return stringifyPrimitive(value);
@@ -149,7 +156,7 @@ export function resolveFieldCompares(
   const fallback = defaultCompareStored(locale);
   return fields.map((field) => ({
     key: field.key,
-    readStored: (entry: Entry) => fieldCtx.read(entry, field.key),
+    readStored: (entry: StoredEntry) => fieldCtx.read(entry, field.key),
     compareStored: (a, b) => {
       if (field.compare === undefined) return fallback(a, b);
       return field.compare(a, b);

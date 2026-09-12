@@ -3,12 +3,12 @@ import { identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, EntryEdit, EntryId, Instant } from '../model/index.js';
+import type { StoredEntry, EntryEdit, EntryId, Instant } from '../model/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
 import type { EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
 
-function entry(id: string): Entry {
+function entry(id: string): StoredEntry {
   return {
     id: entryId(id),
     name: id,
@@ -36,7 +36,7 @@ describe('identityExtender', () => {
 // D-S5-23: installing an extender composes rather than evicting. `data/` still holds one field and
 // calls it at one site — what changes is only how a second plugin arrives.
 describe('DatasetState.setExtender (D-S5-23)', () => {
-  const requestEntries = new Map<EntryId, Entry>();
+  const requestEntries = new Map<EntryId, StoredEntry>();
   const request = {
     entries: requestEntries,
     proposed: new Map() as ProposedEdits,

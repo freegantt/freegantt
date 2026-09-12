@@ -1,17 +1,17 @@
 // layout/ — `{ source: 'entries' }`. Flat list matches S1; tree is depth-first in insertion order.
 
 import { entryId, rowId } from '../../model/index.js';
-import type { Entry, EntryId, RowId } from '../../model/index.js';
+import type { StoredEntry, EntryId, RowId } from '../../model/index.js';
 import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
 import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
-export function entryTreeIndex(entries: readonly Entry[]): {
-  roots: readonly Entry[];
-  childrenOf: ReadonlyMap<EntryId, readonly Entry[]>;
+export function entryTreeIndex(entries: readonly StoredEntry[]): {
+  roots: readonly StoredEntry[];
+  childrenOf: ReadonlyMap<EntryId, readonly StoredEntry[]>;
 } {
   const known = new Set(entries.map((entry) => entry.id));
-  const childrenOf = new Map<EntryId, Entry[]>();
-  const roots: Entry[] = [];
+  const childrenOf = new Map<EntryId, StoredEntry[]>();
+  const roots: StoredEntry[] = [];
   for (const entry of entries) {
     const parent = entry.parentId;
     if (parent === undefined || !known.has(parent)) {
@@ -26,7 +26,7 @@ export function entryTreeIndex(entries: readonly Entry[]): {
 }
 
 function entryRow(
-  entry: Entry,
+  entry: StoredEntry,
   fields: {
     depth: number;
     expandable: boolean;
@@ -46,7 +46,10 @@ function entryRow(
   };
 }
 
-export function resolveEntriesSource(entries: readonly Entry[], source: EntriesRowSource): UnindexedRow[] {
+export function resolveEntriesSource(
+  entries: readonly StoredEntry[],
+  source: EntriesRowSource,
+): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   if (source.tree !== true) {
     return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));
@@ -54,7 +57,7 @@ export function resolveEntriesSource(entries: readonly Entry[], source: EntriesR
 
   const { roots, childrenOf } = entryTreeIndex(entries);
   const rows: UnindexedRow[] = [];
-  const stack: { list: readonly Entry[]; index: number; depth: number; parentRowId?: RowId }[] = [
+  const stack: { list: readonly StoredEntry[]; index: number; depth: number; parentRowId?: RowId }[] = [
     { list: roots, index: 0, depth: 0 },
   ];
   while (stack.length > 0) {

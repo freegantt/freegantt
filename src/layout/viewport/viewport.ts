@@ -11,7 +11,7 @@ import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { Entry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
+import type { StoredEntry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -27,7 +27,7 @@ export interface ViewportOptions {
  *  S2.4's live binding is what pushes an updated snapshot in on every dataset change, through the
  *  returned handle, not through this shape widening. */
 export interface DatasetBinding {
-  readonly entries: readonly Entry[];
+  readonly entries: readonly StoredEntry[];
   readonly timeZone: string;
 }
 
@@ -41,7 +41,7 @@ export interface ViewportHandle {
   setContentSize(size: Size): void;
   /** A committed changeset's fresh `entries.all` snapshot (S2.4, D-S2-20). Fans out to
    *  `ScaleBinding.entries`, which re-resolves `'fitDataset'` through its own equality check. */
-  setEntries(entries: readonly Entry[]): void;
+  setEntries(entries: readonly StoredEntry[]): void;
 }
 
 function sameOverscan(a: Overscan, b: Overscan): boolean {

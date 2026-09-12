@@ -40,7 +40,7 @@ import {
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
 import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
-import type { Entry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
+import type { StoredEntry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
 import type { FrameLayoutView } from '../layout/index.js';
@@ -62,7 +62,7 @@ export interface DomTarget {
   /** The node the walk stopped on — the bar, the cell, the row, the header cell or the splitter.
    *  A popup anchors to it; the cell editor positions over it. */
   element: HTMLElement;
-  entry?: Entry;
+  entry?: StoredEntry;
   /** Every Entry this node stands for, in row order. Empty for a header cell, for the splitter, and
    *  for a grouping header row. Never `undefined`, so a reader counts it without a fallback. */
   entryIds: readonly EntryId[];
@@ -139,7 +139,7 @@ export interface ContainerDomPorts {
   paneLayout: PaneLayout;
   /** The Entry one id names, for the node's subject — `Dataset.entries.get`. It stays its own member,
    *  not part of `layout`: a node's subject is the *live* Entry, not the frame's own copy. */
-  entryById: (id: EntryId) => Entry | undefined;
+  entryById: (id: EntryId) => StoredEntry | undefined;
   /** What the current frame drew — `FrameLayout` itself, or a test's own `FrameLayoutView` literal. */
   layout: FrameLayoutView;
 }
@@ -285,7 +285,7 @@ export class ContainerDom implements GanttDom {
   }
 
   /** The Entry whose Fields this row's cells format. `data-entry-id` names it, and nothing else. */
-  #subjectOfRow(row: HTMLElement): Entry | undefined {
+  #subjectOfRow(row: HTMLElement): StoredEntry | undefined {
     const raw = row.dataset[ENTRY_ID_KEY];
     return raw === undefined ? undefined : this.#ports.entryById(raw as EntryId);
   }
@@ -315,7 +315,7 @@ function attributeIs(name: string, value: string): string {
   return `[${name}="${cssEscapeAttr(value)}"]`;
 }
 
-function entryPart(entry: Entry | undefined): { entry?: Entry } {
+function entryPart(entry: StoredEntry | undefined): { entry?: StoredEntry } {
   return entry === undefined ? {} : { entry };
 }
 

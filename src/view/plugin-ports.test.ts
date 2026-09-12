@@ -3,7 +3,7 @@
 // loop, so the gate, the repaint and the disposal were only ever tested through a whole Gantt.
 import { describe, expect, it, vi } from 'vitest';
 import { RegistrationClosedError } from '../model/index.js';
-import type { Disposer, Entry, EntryId, ErrorReportInput, PluginId } from '../model/index.js';
+import type { Disposer, StoredEntry, EntryId, ErrorReportInput, PluginId } from '../model/index.js';
 import type { FrameBar, ResolvedColumn, TooltipRenderer } from '../layout/index.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
@@ -55,8 +55,8 @@ function fakeMountLayer(): GanttShellPorts['overlay'] {
   return { present: vi.fn(), onResize: vi.fn(), bounds: new DOMRect() };
 }
 
-function makeEntry(id: string): Entry {
-  return { id: id as EntryId, name: id, kind: 'span' } as unknown as Entry;
+function makeEntry(id: string): StoredEntry {
+  return { id: id as EntryId, name: id, kind: 'span' } as unknown as StoredEntry;
 }
 
 function makeBar(): FrameBar {

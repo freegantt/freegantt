@@ -29,7 +29,7 @@ import type {
   RendererByLook,
 } from '../layout/index.js';
 import type {
-  Entry,
+  StoredEntry,
   EntryEdit,
   EntryId,
   FieldKey,
@@ -639,8 +639,8 @@ export class Gantt<TProps = unknown> {
    *  change. An id that no longer exists in the store is skipped — for example after
    *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
    *  selected, assign `selectedSegmentIds`; this getter is read-only. */
-  get selectedEntries(): readonly Entry[] {
-    const entries: Entry[] = [];
+  get selectedEntries(): readonly StoredEntry[] {
+    const entries: StoredEntry[] = [];
     for (const id of this.selectedEntryIds) {
       const entry = this.#dataset.entries.get(id);
       if (entry !== undefined) entries.push(entry);

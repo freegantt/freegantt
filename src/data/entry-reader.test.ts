@@ -15,7 +15,7 @@ import {
   segmentId,
   SegmentsOutOfSyncError,
 } from '../model/index.js';
-import type { Entry, EntryEdit, EntryInput } from '../model/index.js';
+import type { StoredEntry, EntryEdit, EntryInput } from '../model/index.js';
 import { addMs, instant, toInstant } from '../time/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import type { ProposedEdit } from './edit-extension.js';
@@ -42,7 +42,7 @@ function createContext(): EntryReadContext {
 function toProposedEdit(
   edit: EntryEdit,
   context: EntryReadContext,
-  entry: Entry,
+  entry: StoredEntry,
   registry: FieldRegistry,
   operation: string,
 ): ProposedEdit {
@@ -317,7 +317,7 @@ describe('toProposedEdit (S4.10, D-S4-30)', () => {
 describe('reconcileExtenderEdits reads the effective, not the stale, entry (finding A, hole 2)', () => {
   const context = createContext();
 
-  function committedSegmentedEntry(): ReadonlyMap<ReturnType<typeof entryId>, Entry> {
+  function committedSegmentedEntry(): ReadonlyMap<ReturnType<typeof entryId>, StoredEntry> {
     const [entry] = toEntries(
       [
         {
@@ -560,7 +560,7 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
 describe('moveEntryTo writes segments and lets core derive the envelope (D-S5-50, #239)', () => {
   /** Two Segments. A date-only `end` is inclusive here, so they store as `[01-01, 01-06)` and
    *  `[01-06, 01-11)`, and the Entry's envelope is `[01-01, 01-11)`. */
-  function twoSegmentEntry(context: EntryReadContext): Entry {
+  function twoSegmentEntry(context: EntryReadContext): StoredEntry {
     const [entry] = toEntries(
       [
         {
@@ -835,7 +835,7 @@ describe('InvertedSpanError names the caller, the ids the consumer wrote, and bo
 });
 
 describe('a refusal names the caller that reached it, not one door of two (#239, #237)', () => {
-  function twoSegments(context: EntryReadContext): Entry {
+  function twoSegments(context: EntryReadContext): StoredEntry {
     const [entry] = toEntries(
       [
         {

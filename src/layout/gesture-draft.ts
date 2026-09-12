@@ -5,7 +5,7 @@
 // calling one of those functions.
 
 import type {
-  Entry,
+  StoredEntry,
   EntryId,
   Instant,
   ItemId,
@@ -41,7 +41,7 @@ export interface DraftInput {
    *  0013). Every one of them gets an edit here; which of those edits commit is the caller's own
    *  answer (`view/gesture-pipeline.ts`), because a parent's dates roll up rather than being
    *  written. */
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
   /** Horizontal pointer travel since the gesture armed, in content px (D-S3-11: vertical is ignored). */
   dxPx: number;
   /** The Selection (#212, ADR 0010) — the Segment ids the Gantt currently highlights. It is the one
@@ -111,7 +111,10 @@ function translate(zone: string, instant: Instant, by: Translation): Instant {
  *  An Entry the Selection names none of moves whole — a hover resize grabs a bar nobody selected,
  *  and it still has to act on something. The answer is a list of indexes into `entry.segments`, so
  *  every rewrite below can keep each Segment's own id.  */
-function gesturedSegments(entry: Entry, selected: ReadonlySet<SegmentId> | undefined): readonly number[] {
+function gesturedSegments(
+  entry: StoredEntry,
+  selected: ReadonlySet<SegmentId> | undefined,
+): readonly number[] {
   const everySegment = entry.segments.map((_segment, index) => index);
   if (selected === undefined) return everySegment;
   const held = everySegment.filter((index) => selected.has(entry.segments[index]!.id));
@@ -121,12 +124,12 @@ function gesturedSegments(entry: Entry, selected: ReadonlySet<SegmentId> | undef
 /** The envelope of the Segments a gesture reaches — the earliest `start` and the latest `end` among
  *  them. A Selection of one Segment makes this that Segment's own span, which is why a click on one
  *  bar anchors the drag on that bar. */
-function envelopeOfIndexes(entry: Entry, indexes: readonly number[]): { start: Instant; end: Instant } {
+function envelopeOfIndexes(entry: StoredEntry, indexes: readonly number[]): { start: Instant; end: Instant } {
   return envelopeOfSegments(indexes.map((index) => entry.segments[index]!));
 }
 
 /** The instant a gesture anchors on or drags: one edge of the reached Segments' envelope. */
-function edgeInstantOf(entry: Entry, indexes: readonly number[], edge: 'start' | 'end'): Instant {
+function edgeInstantOf(entry: StoredEntry, indexes: readonly number[], edge: 'start' | 'end'): Instant {
   const envelope = envelopeOfIndexes(entry, indexes);
   return edge === 'start' ? envelope.start : envelope.end;
 }
@@ -134,7 +137,7 @@ function edgeInstantOf(entry: Entry, indexes: readonly number[], edge: 'start' |
 /** The same edge, read straight from the Selection — what `draftForMove`/`draftForResize` anchor on
  *  before they know each Entry's own reached Segments. */
 function gesturedEdgeInstant(
-  entry: Entry,
+  entry: StoredEntry,
   edge: 'start' | 'end',
   selected: ReadonlySet<SegmentId> | undefined,
 ): Instant {
@@ -144,7 +147,11 @@ function gesturedEdgeInstant(
 /** Which reached Segment holds the dragged edge — the earliest `start` or the latest `end` among
  *  them. A multi-Segment resize moves that one Segment and leaves its siblings where they are.
  *  Segments are authored in any order, so the answer is a comparison, never the first index (#200). */
-function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], edge: 'start' | 'end'): number {
+function segmentIndexAtEnvelopeEdge(
+  entry: StoredEntry,
+  indexes: readonly number[],
+  edge: 'start' | 'end',
+): number {
   let found = indexes[0]!;
   for (const index of indexes) {
     const segment = entry.segments[index]!;
@@ -160,7 +167,7 @@ function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], ed
  *  `Translation` it carries. */
 function translatedEdit(
   zone: string,
-  entry: Entry,
+  entry: StoredEntry,
   by: Translation,
   indexes: readonly number[],
 ): ProposedEdit {
@@ -188,7 +195,7 @@ function translatedEdit(
  *  An Entry holds a Segment if and only if it spans (ADR 0012), so this is the half-dated row — a
  *  descendant of a dragged parent bar that shows in the grid and draws no bar. It is unreachable by a
  *  direct drag, because there is no bar to grab. */
-function translatedDatesEdit(zone: string, entry: Entry, by: Translation): ProposedEdit {
+function translatedDatesEdit(zone: string, entry: StoredEntry, by: Translation): ProposedEdit {
   const proposedKeys = new Set<string>();
   const dates: { start?: Instant; end?: Instant } = {};
   if (entry.start !== undefined) {
@@ -206,7 +213,7 @@ function translatedDatesEdit(zone: string, entry: Entry, by: Translation): Propo
  *  clamp: the dragged edge never crosses the fixed one, so an inverted span is refused here, in the
  *  layout layer, before it reaches a changeset (D-S3-4). */
 function resizeEdit(
-  entry: Entry,
+  entry: StoredEntry,
   edge: 'start' | 'end',
   moved: Instant,
   indexes: readonly number[],
@@ -249,7 +256,7 @@ export interface PreviewOffsetsInput {
   /** Extension-hook extras layered on top (S3.6). Empty until then. */
   extra: ProposedEdits;
   /** Committed entries `proposed`/`extra` are diffed against — one lookup per row, not a dataset scan. */
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
   scale: TimeScale;
 }
 

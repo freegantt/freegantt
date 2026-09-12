@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, rowId, segmentId, UnknownFieldError } from '../../model/index.js';
-import type { Entry, Instant } from '../../model/index.js';
+import type { StoredEntry, Instant } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSource } from './row-source.js';
 import { resolveRows } from './resolve-rows.js';
@@ -12,10 +12,10 @@ function instant(n: number): Instant {
 function entry(
   id: string,
   opts?: { parentId?: string; team?: string; start?: number; cost?: number },
-): Entry {
+): StoredEntry {
   const start = instant(opts?.start ?? 0);
   const end = instant((opts?.start ?? 0) + 1);
-  const row: Entry = {
+  const row: StoredEntry = {
     id: entryId(id),
     name: id,
     start,
@@ -34,7 +34,7 @@ function entry(
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: StoredEntry) => (row.props as { cost?: number } | undefined)?.cost;
   return [
     {
       key: 'name',
@@ -69,7 +69,7 @@ const treeEntries = [
   entry('q', { team: 'B', start: 5 }),
 ];
 
-const teamA = (row: Entry) => (row.props as { team?: string } | undefined)?.team === 'A';
+const teamA = (row: StoredEntry) => (row.props as { team?: string } | undefined)?.team === 'A';
 
 describe('resolveRows (D2, S4.9)', () => {
   it('matchOnly plus collapse does not paint a twisty that hides nothing', () => {
