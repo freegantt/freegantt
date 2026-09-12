@@ -144,15 +144,15 @@
         live.
       </p>
       <p>
-        <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3]): a consumer-defined
-        <code>'buffer'</code> kind — <code>harness/plugins/buffer-kind.ts</code>, zero core edits, zero
-        private imports. One plugin claims all four seams: <code>ctx.layout.registerItemProducer</code> (what
-        shape it draws), <code>ctx.view.registerRenderer('bar', …)</code> (the hatched fill),
-        <code>ctx.interaction.registerKindDefaults</code> (no resize handle), and
-        <code>ctx.commands.register</code> (its own right-click item, scoped to the kind by
-        <code>when</code>). Uncheck "Custom milestone + cost renderers" to see the hatch come from the
-        plugin's own registration rather than this page's <code>barRenderer</code> config — same pixels,
-        D-S5-11's config-beats-a-plugin rule is what changes hands.
+        <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3], ADR 0018): a consumer-defined
+        <code>'buffer'</code> variant — <code>harness/plugins/buffer-kind.ts</code>, zero core edits, zero
+        private imports. One <code>ctx.variants.add</code> call answers all four questions in one object:
+        <code>when</code> (which rows wear it), <code>items</code> (what shape it draws),
+        <code>paint</code> (the hatched fill) and <code>can</code> (no resize handle). One
+        <code>ctx.commands.register</code> adds its own right-click item, scoped to the variant by
+        <code>when: ({ variant }) =&gt; …</code>. Uncheck "Custom milestone + cost renderers" to see this
+        page's own <code>variants</code> entry hand the hatch back to the plugin's — same pixels, and a
+        consumer's rules outranking every plugin's is what changes hands.
       </p>
       <p>
         <code>riskKind()</code> (review P2): a <em>second</em> kind-defining plugin —

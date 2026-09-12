@@ -61,7 +61,7 @@ import {
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
  *  keyed by `GanttShell` per `FrameColumn.field` (S5.4, D-S5-11). */
 type BoundCellRenderer = (ctx: {
-  entry?: Entry;
+  entry?: Entry | undefined;
   row: FrameRow;
   value: string;
 }) => ElementDescription | undefined;
@@ -86,7 +86,7 @@ export interface DomBackendOptions {
    *  below already takes — a closure over `FrameSettings`, not a value snapshotted at construction.
    *  Omitted — a test backend built with no options — falls back to `'fitBar'`. */
   readBarLabels?: () => BarLabels;
-  resolveBarRenderer: (kind: string) => ResolvedRenderer<BarRenderer> | undefined;
+  resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
 }
@@ -189,7 +189,7 @@ type RowBandGeom = {
 };
 type BarGeom = Pick<
   FrameBar,
-  'look' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
+  'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
 > & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
@@ -200,12 +200,6 @@ type BarGeom = Pick<
    *  or a `barRenderer` result already owns this bar's content). */
   labelPlacement: BarLabelPlacement | undefined;
 };
-/** Shape class from `data-kind` (D-S4-24) — a lookup, never `if (look === …)`. Core ships no diamond
- *  (ADR 0013); a plugin's own look paints through its own `barRenderer` registration instead. */
-const BAR_SHAPE_CLASS = Object.freeze({
-  parent: 'fg-bar-summary',
-}) as Readonly<Record<string, string>>;
-
 /** 1-based, so the first row reads 'odd' — the same counting `--fg-row-odd-bg` is named for. The
  *  absolute frame row index drives it, never DOM child position: the row layer only holds the
  *  windowed rows, so `:nth-child` flips the whole zebra one row out of phase as soon as the pane
@@ -247,9 +241,24 @@ function resolveBarLabelPlacement(
   return fitsOutside ? 'outside' : 'inside';
 }
 
-function barClassName(kind: string): string {
-  const shape = BAR_SHAPE_CLASS[kind];
-  return shape === undefined ? BAR_CLASS : `${BAR_CLASS} ${shape}`;
+/** Does this paint own the bar's content, or only decorate it (ADR 0018, `J34`)? A description that
+ *  names `text`, `html` or `children` replaces what the library would draw, label included. One that
+ *  names only `class`, `style` or `attrs` says nothing about content, so the library's own label
+ *  stays. Core's `parent` variant is the first caller: it adds `fg-bar-summary` and keeps the
+ *  label — which is what the deleted `BAR_SHAPE_CLASS` lookup used to do, without being a table
+ *  keyed by a variant name. */
+function paintsItsOwnContent(description: ElementDescription): boolean {
+  return (
+    description.text !== undefined || description.html !== undefined || description.children !== undefined
+  );
+}
+
+/** What a bar node shows: the paint's own content, the paint's decoration over the library's label,
+ *  or the library's label alone. */
+function barContent(painted: ElementDescription | undefined, label: ElementDescription): ElementDescription {
+  if (painted === undefined) return label;
+  if (paintsItsOwnContent(painted)) return painted;
+  return { ...painted, ...label };
 }
 /** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
  *  than `BarGeom`, which also carries paint fields the handles don't read. */
@@ -438,7 +447,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   const itemIdsByEntryId = new Map<EntryId, ItemId[]>();
   /** The mounted bars that paint for each Segment (#212, ADR 0010) — the Segment→Items relation the
    *  Selection is keyed by. A bar that drew one Segment is filed under it. A bar that drew an Entry's
-   *  whole span (a parent, or a plugin's own look) is filed under every Segment of that Entry,
+   *  whole span (a parent, or a plugin's own variant) is filed under every Segment of that Entry,
    *  because any of them selects it. `syncBars` is the only writer, so the selection diff never scans
    *  mounted bars. */
   const itemIdsBySegmentId = new Map<SegmentId, ItemId[]>();
@@ -643,7 +652,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   }
 
   /** S5.7, D-S5-18: the grabbed header cell follows the pointer. A `translateX` on the cell itself
-   *  plus one `data-dragging` attribute for the lifted look — a hot-path write only (I5): the cell
+   *  plus one `data-dragging` attribute for the lifted bar — a hot-path write only (I5): the cell
    *  keeps its slot in the header's flex flow, so no neighbour reflows and every other cell's
    *  on-screen position holds still for the whole drag. */
   function paintColumnDrag(columnKey: string, offsetPx: number): void {
@@ -1117,7 +1126,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       key: (bar) => bar.id,
       create: (bar) => {
         const node = document.createElement('div');
-        node.className = barClassName(bar.look);
+        node.className = BAR_CLASS;
         node.dataset[ITEM_ID_KEY] = bar.id;
         node.dataset[TESTID_KEY] = BAR_TESTID;
         node.setAttribute('role', 'img');
@@ -1145,27 +1154,28 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           barLabelGapPx,
           contentWidthPx,
         );
-        const resolved = resolveBarRenderer(bar.look);
+        // The row, never `bar.variant`: which paint this bar wears is the rule that claimed this
+        // row, and two rules may share one name (`F3`).
+        const entry = entryById(bar.entryId);
+        const resolved = entry === undefined ? undefined : resolveBarRenderer(entry);
         let content: ElementDescription | undefined;
-        if (resolved !== undefined) {
-          const entry = entryById(bar.entryId);
-          if (entry !== undefined) {
-            const context: BarRendererContext = { entry, item: bar };
-            if (resolvedPlacement !== undefined) {
-              context.label = { text: bar.label, placement: resolvedPlacement };
-            }
-            content = callRenderer('bar', resolved, context, raiseError);
+        if (resolved !== undefined && entry !== undefined) {
+          const context: BarRendererContext = { entry, item: bar };
+          if (resolvedPlacement !== undefined) {
+            context.label = { text: bar.label, placement: resolvedPlacement };
           }
+          content = callRenderer('bar', resolved, context, raiseError);
         }
         // A `barRenderer` result owns this bar's content, so the library injects no label child and
         // stamps no `data-label` for it — the S5.4 seam (D-S5-11). The renderer's own label rides in
         // its markup instead, which is also why the mid-drag restamp below skips such a bar: its
         // label placement is a frame fact for it, not a hot-path one.
-        const paintedPlacement = content === undefined ? resolvedPlacement : undefined;
-        labelWidthByItemId.set(bar.id, content === undefined ? textWidth : undefined);
+        const ownsContent = content !== undefined && paintsItsOwnContent(content);
+        const paintedPlacement = ownsContent ? undefined : resolvedPlacement;
+        labelWidthByItemId.set(bar.id, ownsContent ? undefined : textWidth);
         labelPlacementByItemId.set(bar.id, paintedPlacement);
         return {
-          look: bar.look,
+          variant: bar.variant,
           label: bar.label,
           x: bar.x,
           y: bar.y,
@@ -1182,16 +1192,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         };
       },
       patch: (node, geom) => {
-        node.className = barClassName(geom.look);
-        node.dataset['kind'] = geom.look;
+        node.dataset['variant'] = geom.variant;
         // #212: which Segment a bar draws is a frame fact, not a birth fact, so `patch` writes it.
         // A bar node's key is `${entryId}:${segmentIndex}`, and an index renumbers when a Segment
         // goes. The node survives and draws its neighbour, so a stamp written once at creation lies.
         if (geom.segmentId === undefined) delete node.dataset[SEGMENT_ID_KEY];
         else node.dataset[SEGMENT_ID_KEY] = geom.segmentId;
-        // States a fact about the paint, not a judgement on the look (plans/01 §2.5) — every bar
-        // `barSpan` floors carries it the same way. Pair with `data-kind` to tell which look was
-        // floored.
+        // States a fact about the paint, not a judgement on the variant (plans/01 §2.5) — every bar
+        // `barSpan` floors carries it the same way. Pair with `data-variant` to tell which variant
+        // was floored.
         if (geom.minimumSpan) node.dataset['span'] = 'minimum';
         else delete node.dataset['span'];
         node.dataset['flag'] = flagTokens(geom.flags);
@@ -1210,7 +1219,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           geom.labelPlacement === undefined
             ? { text: '' }
             : { children: [{ key: 'label', class: { 'fg-bar-label': true }, text: geom.label }] };
-        applyElementDescription(node, geom.content ?? defaultContent);
+        applyElementDescription(node, barContent(geom.content, defaultContent));
       },
     });
   }

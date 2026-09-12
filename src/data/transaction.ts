@@ -7,10 +7,10 @@ import type {
   ChangeSet,
   ChangeSetId,
   DatasetEventMap,
-  Entry,
+  StoredEntry,
   EntryId,
-  FieldContext,
   FieldUpdated,
+  HierarchySource,
   SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
@@ -21,7 +21,9 @@ import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
+import type { FieldAccess } from './fields/field-access.js';
 import { rollUpFields } from './rollup.js';
+import type { ParentIndex } from './hierarchy-source.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -36,10 +38,12 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  *body* (via its own `TxToken`) to call directly on `EntryStore`, never for `runTransaction` to call
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
-  committedById(): ReadonlyMap<EntryId, Entry>;
+  committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
+  committedParents(): ParentIndex;
   beginTransaction(token: TxToken): void;
-  pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
-  pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
+  pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
+  pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingEdits(): ProposedEdits;
   /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
    *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */
@@ -90,7 +94,11 @@ export interface TransactionData {
   nextChangeSetId(): ChangeSetId;
   readonly bus: EventBus<DatasetEventMap>;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  readonly fieldAccess: FieldAccess;
+  /** The tree the Rollup walks (ADR 0020). A getter, not a fixed field, because a plugin composes
+   *  onto the occupant while it sets up — the store and the Rollup read the same one, which is why
+   *  a plugin that changes the tree has changed the Rollup and the two can never disagree. */
+  readonly hierarchySource: HierarchySource;
   bumpDatasetRevision(): void;
   /** The commit path's real counter (ADR 0012) — see `CommitChangeSetInput.mintSegmentId`, the
    *  structurally-narrower shape `buildCommitChangeSet` actually reads. */
@@ -129,8 +137,13 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldContext, () =>
-    data.mintSegmentId(),
+  const { updated } = rollUpFields(
+    byId,
+    undefined,
+    data.fields,
+    data.fieldAccess,
+    () => data.mintSegmentId(),
+    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
   );
   writeConstructionUpdates(data, updated);
 

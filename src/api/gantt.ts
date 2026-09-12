@@ -26,7 +26,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByLook,
+  EntryVariant,
 } from '../layout/index.js';
 import type {
   Entry,
@@ -43,10 +43,12 @@ import type {
   ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
+import { PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import { extraEditsFor, type Dataset } from './dataset.js';
-import type { GanttPluginOf, PluginContextOf } from './plugin.js';
+import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
+import type { PluginContextOf } from './plugin-context.js';
 import type {
   CommandOf,
   CommandContextOf,
@@ -148,10 +150,34 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  side, and still fall back to ellipsised-inside when the forced side has no room. `'none'` paints
    *  no label at all. */
   barLabels?: BarLabels;
-  /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
-   *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
-   *  branching. `undefined` returned from either form keeps the library's own bar output. */
-  barRenderer?: BarRenderer | RendererByLook;
+  /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
+   *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
+   *
+   *  A rule that names the rows it covers answers first, and the library's own summary rule is such
+   *  a rule (`J40`, `J61`). So this never paints a row with children, which the library paints as a
+   *  summary. To paint those too, claim them with a rule of your own:
+   *  `variants: [{ name: 'summary', when: (entry) => entry.hasChildren, paint }]` — a consumer's
+   *  rule outranks the library's.
+   *
+   *  To paint one kind of row and leave the rest alone, write a variant instead: `variants: [{ name,
+   *  when, paint }]` (ADR 0018). That is what the retired per-kind map form was for, and a variant
+   *  says which rows it covers in the same object. */
+  barRenderer?: BarRenderer;
+  /** Live (ADR 0018). One variant is one object: `when` says which rows wear it, `items` what shape
+   *  it draws, `paint` how it looks, and `can` what you can do to it.
+   *
+   *  ```ts
+   *  variants: [{ name: 'milestone', when: { milestone: true }, paint: milestoneBar, can: { resize: false } }]
+   *  ```
+   *
+   *  Nothing stores a variant. It is a rule, resolved per Gantt, so two Gantts on one Dataset may
+   *  paint the same row differently (I2). To pin one named row, write the data — declare a Field,
+   *  `update(id, { milestone: true })`, and let `when` read it back.
+   *
+   *  The rules here win over every plugin's, whatever order the plugins installed in, and both win
+   *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
+   *  the later one wins. Default `[]`. */
+  variants?: readonly EntryVariant<TProps>[];
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
   cellRenderer?: CellRenderer;
@@ -164,8 +190,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
    *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
    *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
-   *  add or drop one plugin without restating the set (D-S5-36). */
-  plugins?: readonly GanttPlugin<TProps>[];
+   *  add or drop one plugin without restating the set (D-S5-36).
+   *
+   *  ADR 0019: chrome only. A plugin with a `data` half declares a Field or claims the edit hook, and
+   *  both must be in place before the Dataset's first Rollup — so it installs on the `Dataset`
+   *  instead. `data?: never` on this arm is what stops the wrong one compiling here. */
+  plugins?: readonly ChromePlugin<TProps>[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -192,12 +222,31 @@ export type GanttScaleOptions =
 
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
-/** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
- *  header for why the generic form lives there and the binding happens here. This is the type a
- *  plugin author actually sees: `api/index.ts` re-exports these bound names alongside the generic
- *  `GanttPluginOf`/`PluginContextOf` shapes. */
-export type GanttPlugin<TProps = unknown> = GanttPluginOf<Gantt<TProps>, Dataset<TProps>>;
+/** ADR 0019, `Q4`: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
+ *  a plugin with a `data` half is already a red squiggle in an editor. This catches the caller the
+ *  compiler never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A
+ *  library refuses in both languages it is read in.
+ *
+ *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and
+ *  the message says where the plugin goes instead. */
+function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): readonly ChromePlugin<TProps>[] {
+  for (const plugin of plugins) {
+    if (typeof (plugin as { data?: unknown }).data === 'function') {
+      throw PluginSetupError.wrongInstallSite(plugin.id);
+    }
+  }
+  return plugins;
+}
+
+/** S5.1, D-S5-1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class. See
+ *  `api/plugin.ts`'s file header for why the generic forms live there and the binding happens here.
+ *  This file is the one that sees both `Gantt` and `Dataset`. So all four names bind here, the
+ *  Dataset-installed ones included. These are the types a plugin author actually writes, and
+ *  `api/index.ts` re-exports them alongside the generic `*Of` shapes. */
 export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
+export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps>>;
+export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
+export type Plugin<TProps = unknown> = PluginOf<PluginContext<TProps>, Dataset<TProps>>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
@@ -261,7 +310,13 @@ export class Gantt<TProps = unknown> {
       // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
       // `buildPluginContext` already carries).
       ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
-      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+      // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
+      ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
+      // ADR 0019: the Dataset's own plugins ride along. Their `view` halves belong to every Gantt
+      // bound to that Dataset, and one `requires` graph orders them together with this Gantt's own
+      // chrome. A plugin with no `view` half joins the graph and runs nothing here.
+      datasetPlugins: options.dataset.plugins,
+      ...(options.plugins !== undefined ? { plugins: assertChromeOnly(options.plugins) } : {}),
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
@@ -291,7 +346,7 @@ export class Gantt<TProps = unknown> {
             });
           }),
         // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
-        // `api/Dataset` and `gantt` is `this`. See `api/plugin.ts`'s file header for why `view/` may
+        // `api/Dataset` and `gantt` is `this`. See `api/plugin-context.ts`'s file header for why `view/` may
         // name neither. `this` is captured, not read (N7): a plugin's `setup()` runs *inside* the
         // `new GanttShell(...)` call above, before this constructor reaches its own closing brace,
         // so `#shell` is not yet assigned — but `ctx.gantt` only needs `this` to exist, not `#shell`
@@ -429,15 +484,30 @@ export class Gantt<TProps = unknown> {
     this.#shell.barLabels = value;
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByLook`
-   *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
-   *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
-  get barRenderer(): BarRenderer | RendererByLook | undefined {
+  /** Live (S5.4, D-S5-11). Assigning repaints every bar with no remount (I8). */
+  get barRenderer(): BarRenderer | undefined {
     return this.#shell.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
+  set barRenderer(renderer: BarRenderer | undefined) {
     this.#shell.barRenderer = renderer;
+  }
+
+  /** Live (ADR 0018). Assigning replaces this Gantt's own variant list. Every row resolves its
+   *  variant again, and a row whose rule no longer answers falls back to whatever wins next. A
+   *  plugin's own variants stand, and they still lose to these.
+   *
+   *  A variant list is a value, not a mutable object (#187): push onto the array you already
+   *  assigned and nothing repaints. Assign a copy — `[...gantt.variants, myVariant]`. */
+  get variants(): readonly EntryVariant<TProps>[] {
+    return this.#shell.variants as readonly EntryVariant<TProps>[];
+  }
+
+  set variants(next: readonly EntryVariant<TProps>[]) {
+    // ADR 0018: one cast at the façade. `GanttOptions<TProps>` types every rule an app author
+    // writes; the registry inside `view/` holds the erased shape, the same way `api/dataset.ts`
+    // re-types the whole store for `TProps`.
+    this.#shell.variants = next as readonly EntryVariant[];
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
@@ -639,8 +709,8 @@ export class Gantt<TProps = unknown> {
    *  change. An id that no longer exists in the store is skipped — for example after
    *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
    *  selected, assign `selectedSegmentIds`; this getter is read-only. */
-  get selectedEntries(): readonly Entry[] {
-    const entries: Entry[] = [];
+  get selectedEntries(): readonly Entry<TProps>[] {
+    const entries: Entry<TProps>[] = [];
     for (const id of this.selectedEntryIds) {
       const entry = this.#dataset.entries.get(id);
       if (entry !== undefined) entries.push(entry);
@@ -739,32 +809,35 @@ export class Gantt<TProps = unknown> {
   }
 
   /** An `EntryId` reveals that Entry's whole envelope; a `SegmentId` reveals that one Segment alone.
-   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). */
-  reveal(id: EntryId | SegmentId): void {
+   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). A plain
+   *  `string` is legal. The Dataset resolves the reading; nothing reads the brand. */
+  reveal(id: EntryId | SegmentId | string): void {
     this.#shell.reveal(id);
   }
 
-  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */
-  get plugins(): readonly GanttPlugin<TProps>[] {
-    return this.#shell.plugins;
+  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. This Gantt's own chrome plugins, and
+   *  only those: a plugin installed on the Dataset stays off this list, because this Gantt cannot
+   *  drop it (ADR 0019). */
+  get plugins(): readonly ChromePlugin<TProps>[] {
+    return this.#shell.plugins as readonly ChromePlugin<TProps>[];
   }
 
-  set plugins(next: readonly GanttPlugin<TProps>[]) {
-    this.#shell.plugins = next;
+  set plugins(next: readonly ChromePlugin<TProps>[]) {
+    this.#shell.plugins = assertChromeOnly(next);
   }
 
   /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
    *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
-  installPlugin(plugin: GanttPlugin<TProps>): void {
-    this.#shell.installPlugin(plugin);
+  installPlugin(plugin: ChromePlugin<TProps>): void {
+    this.#shell.installPlugin(assertChromeOnly([plugin])[0]!);
   }
 
   /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
-  hasPlugin(plugin: GanttPlugin<TProps> | PluginId): boolean {
+  hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean {
     const id = typeof plugin === 'string' ? plugin : plugin.id;
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
@@ -773,7 +846,7 @@ export class Gantt<TProps = unknown> {
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
    *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
-  uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void {
+  uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 

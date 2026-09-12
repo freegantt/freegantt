@@ -2,7 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
+import type {
+  Entry,
+  EntryId,
+  ErrorReportInput,
+  Instant,
+  ProposedEdits,
+  Segment,
+  StoredEntry,
+} from '../model/index.js';
+import { entryDouble } from '../layout/entry-double.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import type { EntryMove } from './event-bus.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
@@ -37,6 +46,12 @@ function pe(patch: Record<string, unknown>): {
 }
 
 function entry(id: string, start: number, end: number): Entry {
+  return entryDouble({ id, start, end });
+}
+
+/** The same row as stored values. `EditRequest.entries` is the pre-transaction snapshot and is
+ *  committed-only by contract (D-S5-45, ADR 0017), so it never carries a live row. */
+function storedRow(id: string, start: number, end: number, segments?: readonly Segment[]): StoredEntry {
   const startInstant = start as Instant;
   const endInstant = end as Instant;
   return {
@@ -44,9 +59,13 @@ function entry(id: string, start: number, end: number): Entry {
     name: id,
     start: startInstant,
     end: endInstant,
-    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+    segments: segments ?? [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
     props: {},
   };
+}
+
+function storedMap(...rows: readonly StoredEntry[]): ReadonlyMap<EntryId, StoredEntry> {
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
@@ -715,11 +734,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       };
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
-        committedEntriesById: () =>
-          new Map([
-            [a.id, a],
-            [x.id, x],
-          ]),
+        committedEntriesById: () => storedMap(storedRow('a', 100, 200), storedRow('x', 300, 400)),
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
@@ -747,22 +762,13 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     // it throws for real.
     it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path still throws', async () => {
       const a = entry('a', 100, 200);
-      const x: Entry = {
-        id: entryId('x'),
-        name: 'x',
-        start: 300 as Instant,
-        end: 500 as Instant,
-        segments: [
-          { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
-          { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
-        ],
-        props: {},
-      };
-      const committedEntriesById = () =>
-        new Map([
-          [a.id, a],
-          [x.id, x],
-        ]);
+      const twoSegments: readonly Segment[] = [
+        { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
+        { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
+      ];
+      const x = entryDouble({ id: 'x', start: 300, end: 500, segments: twoSegments });
+      const committedEntriesById = (): ReadonlyMap<EntryId, StoredEntry> =>
+        storedMap(storedRow('a', 100, 200), storedRow('x', 300, 500, twoSegments));
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => new Map([[x.id, pe({ start: 350 })]]);
       const commitEntryEdits = vi.fn((draft: ProposedEdits) => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
@@ -811,11 +817,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         new Map([[x.id, pe({ start: 350, end: 450 })]]);
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
-        committedEntriesById: () =>
-          new Map([
-            [a.id, a],
-            [x.id, x],
-          ]),
+        committedEntriesById: () => storedMap(storedRow('a', 100, 200), storedRow('x', 300, 400)),
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
@@ -884,7 +886,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     // The default `identityExtender` writes nothing, so a frame has nothing to reconcile and must
     // read no entry at all. Copying the roster to build "effective" entries first made every frame
     // cost the whole dataset — invisible on a 3-row fixture, O(dataset) on D2's 10k target.
-    const roster = new Map([[entryId('a'), entry('a', 0, 100)]]);
+    const roster = new Map([[entryId('a'), storedRow('a', 0, 100)]]);
     let walks = 0;
     const walk = roster[Symbol.iterator].bind(roster);
     roster[Symbol.iterator] = () => {
@@ -908,7 +910,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     // D-S5-45: the hook can read `entryAfterEdits` on every frame to see this transaction's own body
     // edit — that read must cost one lookup, not a copy of the roster, whether or not the hook goes on
     // to write anything (the "writes nothing" half of this idea is `never copies the dataset` above).
-    const roster = new Map([[entryId('a'), entry('a', 0, 100)]]);
+    const roster = new Map([[entryId('a'), storedRow('a', 0, 100)]]);
     let walks = 0;
     const walk = roster[Symbol.iterator].bind(roster);
     roster[Symbol.iterator] = () => {
@@ -937,13 +939,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
   /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
   function startOnly(id: string, start: number): Entry {
-    return {
-      id: entryId(id),
-      name: id,
-      start: start as Instant,
-      segments: [],
-      props: {},
-    };
+    return entryDouble({ id, start });
   }
 
   /** One phase bar over two children — the shape a real roll-up parent is always in. `entriesMovedBy`

@@ -5,11 +5,10 @@ import type {
   ChangeOrigin,
   ChangeSet,
   ChangeSetId,
-  Entry,
+  StoredEntry,
   EntityAdded,
   EntityRemoved,
   EntryId,
-  FieldContext,
   FieldKey,
   FieldUpdated,
   Segment,
@@ -17,7 +16,8 @@ import type {
   UpdatedRow,
 } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
-import { proposedKeysOf, entryAfterEdit } from './fields/field-access.js';
+import { proposedKeysOf, entryAfterEdit, readField } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 function pushRow(
@@ -49,11 +49,11 @@ function pushRow(
  * because `props` is not itself a Field.
  */
 export function diffEdit(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   id: EntryId,
   edit: ProposedEdit,
   registry: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
 ): readonly FieldUpdated[] {
   const current = entries.get(id);
   if (!current) return [];
@@ -69,7 +69,7 @@ export function diffEdit(
 
   for (const field of registry.all) {
     if (!authored.has(String(field.key))) continue;
-    emit(field.key, ctx.read(current, field.key), ctx.read(next, field.key));
+    emit(field.key, readField(current, field, access), readField(next, field, access));
   }
   return rows;
 }

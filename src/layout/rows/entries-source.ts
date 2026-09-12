@@ -7,22 +7,22 @@ import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
 
 export function entryTreeIndex(entries: readonly Entry[]): {
   roots: readonly Entry[];
-  childrenOf: ReadonlyMap<EntryId, readonly Entry[]>;
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>;
 } {
   const known = new Set(entries.map((entry) => entry.id));
-  const childrenOf = new Map<EntryId, Entry[]>();
+  const childRowsOf = new Map<EntryId, Entry[]>();
   const roots: Entry[] = [];
   for (const entry of entries) {
-    const parent = entry.parentId;
+    const parent = entry.parent()?.id;
     if (parent === undefined || !known.has(parent)) {
       roots.push(entry);
       continue;
     }
-    const siblings = childrenOf.get(parent);
+    const siblings = childRowsOf.get(parent);
     if (siblings) siblings.push(entry);
-    else childrenOf.set(parent, [entry]);
+    else childRowsOf.set(parent, [entry]);
   }
-  return { roots, childrenOf };
+  return { roots, childRowsOf };
 }
 
 function entryRow(
@@ -52,7 +52,7 @@ export function resolveEntriesSource(entries: readonly Entry[], source: EntriesR
     return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));
   }
 
-  const { roots, childrenOf } = entryTreeIndex(entries);
+  const { roots, childRowsOf } = entryTreeIndex(entries);
   const rows: UnindexedRow[] = [];
   const stack: { list: readonly Entry[]; index: number; depth: number; parentRowId?: RowId }[] = [
     { list: roots, index: 0, depth: 0 },
@@ -65,7 +65,7 @@ export function resolveEntriesSource(entries: readonly Entry[], source: EntriesR
     }
     const entry = frame.list[frame.index]!;
     frame.index += 1;
-    const children = childrenOf.get(entry.id) ?? [];
+    const children = childRowsOf.get(entry.id) ?? [];
     rows.push(
       entryRow(entry, {
         depth: frame.depth,

@@ -7,6 +7,7 @@ import type {
   ChangeSet,
   DatasetEventMap,
   DateOnlyEndRule,
+  DurationMeasure,
   EditRequest,
   ProposedEdits,
   EntryInput,
@@ -22,8 +23,9 @@ import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js'
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
-import type { DatasetPluginContextOf, DatasetPluginOf } from './dataset-plugin.js';
-import type { PluginId } from '../model/index.js';
+import type { DatasetPluginContextOf } from './dataset-plugin.js';
+import type { PluginOf } from './plugin.js';
+import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 
@@ -35,12 +37,15 @@ import type { ZonedTime } from '../time/index.js';
 // key for is a `Dataset` regardless.
 const datasetState = new WeakMap<object, DatasetState>();
 
-// The Dataset-bound aliases behind `api/dataset-plugin.ts`'s generic shapes (the `*Of` pairing
-// `api/plugin.ts` and `api/command.ts` already use). A plugin author writing against the concrete
-// `Dataset` names these two; code parameterizing over its own Dataset type names the `*Of` forms.
+// The Dataset-bound alias behind `api/dataset-plugin.ts`'s generic shape (the `*Of` pairing
+// `api/plugin-context.ts` and `api/command.ts` already use). A plugin author writing against the concrete
+// `Dataset` names this one; code parameterizing over its own Dataset type names the `*Of` form.
 // `TProps` defaults here for the same reason `Dataset`'s own does: a plugin that does not care about
-// the consumer's `props` shape writes `DatasetPlugin` and nothing more.
-export type DatasetPlugin<TProps = unknown> = DatasetPluginOf<Dataset<TProps>>;
+// the consumer's `props` shape writes `DatasetPluginContext` and nothing more.
+//
+// ADR 0019: the three plugin aliases — `ChromePlugin`, `DataPlugin`, `Plugin` — bind on `api/gantt.ts`
+// instead, because a `view` half names the `Gantt` class and this file may not import it (that
+// direction is already taken, and `no-circular` reads a type-only edge as a real one).
 export type DatasetPluginContext<TProps = unknown> = DatasetPluginContextOf<Dataset<TProps>>;
 
 export interface DatasetOptions<TProps = unknown> {
@@ -74,14 +79,30 @@ export interface DatasetOptions<TProps = unknown> {
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
+  /** How core measures a duration (ADR 0017, Q6/J12). `'span'` is `end - start`, and it counts a gap
+   *  between two Segments; `'segments'` sums the Segments and counts no gap. Defaults to `'span'`.
+   *  `entry.duration()`, `ctx.duration()` and the core `duration` Field all read it. It sits on the
+   *  Dataset and not on a Field: two Fields on one Dataset must not disagree about what a duration
+   *  is. */
+  measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
   history?: { capacity?: number };
-  /** Dataset plugins to install (D-S5-24). An unordered set: installation resolves setup order from each
-   *  plugin's `requires`, so `[scheduling(), entryDependencies()]` and the reverse install the same
-   *  way (D-S5-31). Every plugin sets up during this constructor, so a Field one declares is in the
-   *  registry before the first Rollup walks — which is why `Dataset.plugins` is read-only. */
-  plugins?: readonly DatasetPluginOf<Dataset<TProps>>[];
+  /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
+   *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
+   *  reverse install the same way (D-S5-31).
+   *
+   *  Every plugin's `data` half runs during this constructor, so a Field one declares is in the
+   *  registry before the first Rollup walks — which is why `Dataset.plugins` is read-only. A plugin
+   *  that also fills a `view` half has that half run once per `Gantt` bound to this Dataset, each
+   *  with its own context (I2). A chrome-only plugin is legal here too, and then every Gantt on this
+   *  Dataset gets it; install it on one `Gantt` instead to give it to that Gantt alone.
+   *
+   *  `PluginOf`'s Gantt type argument stays `unknown` here: a Dataset never calls a `view` half, so
+   *  it never needs the `Gantt` type to type-check what it holds — and naming `Gantt` in this file
+   *  would close an import cycle. Write the fully bound `Plugin<TProps>` (`api/gantt.ts`) when you
+   *  declare a plugin; it assigns here unchanged. */
+  plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
 }
 
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
@@ -90,7 +111,7 @@ export interface DatasetOptions<TProps = unknown> {
 // it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
 //
 // TProps is the documented generic (`plans/02` §1.6, ADR 0011) — it types both `entry.props` and the
-// declared-key map `entries.fieldValue` resolves against; TypeScript does not infer a later type
+// declared-key map `entry.read` resolves against; TypeScript does not infer a later type
 // parameter once an earlier one is written, so a plugin generic cannot join it without breaking
 // inference on this one (#123).
 // TProps trust boundary (plans/02): the internal store (`DatasetState`, `data/`'s `EntryStore`) is
@@ -104,7 +125,7 @@ export class Dataset<TProps = unknown> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
-  readonly #plugins: readonly DatasetPluginOf<Dataset<TProps>>[];
+  readonly #plugins: readonly PluginOf<unknown, Dataset<TProps>>[];
 
   constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
@@ -119,8 +140,8 @@ export class Dataset<TProps = unknown> {
     datasetState.set(this, this.#state);
   }
 
-  /** Runs inside `DatasetState`'s constructor, at the one moment a plugin may set up: the entry store
-   *  exists and the construction Rollup has not run (D-S5-4). `this.#state` is not assigned yet, so
+  /** Runs inside `DatasetState`'s constructor, at the one moment a plugin's `data` half may set up:
+   *  the entry store exists and the construction Rollup has not run (D-S5-4). `this.#state` is not assigned yet, so
    *  every context member below reads `state` — the same instance, one line earlier. */
   #installPlugins(state: DatasetState): () => void {
     return installDatasetPlugins(this.#plugins, createErrorRaiser(state.bus), (pluginId: PluginId) => {
@@ -152,6 +173,15 @@ export class Dataset<TProps = unknown> {
             state.setExtender(wrap);
           },
         },
+        hierarchy: {
+          // Trusted, unchecked TProps cast — the same trust boundary the class note above describes.
+          // `data/` holds one erased tree for every Dataset; `TProps` types the plugin author's own
+          // read of `entry.props` and reaches no further.
+          setSource: (wrap) => {
+            gate.assertOpen();
+            state.setHierarchySource(wrap as HierarchySourceWrapper);
+          },
+        },
         store: {
           reserve: <T extends object>() => state.pluginStores.reserve<T>(pluginId),
           read: <T extends object>(otherId: PluginId) => state.pluginStores.read<T>(otherId),
@@ -164,11 +194,11 @@ export class Dataset<TProps = unknown> {
 
   /** The plugins this Dataset installed, in the order the caller wrote them. Read-only — see
    *  `DatasetOptions.plugins` for why a Dataset cannot take a new set after construction. */
-  get plugins(): readonly DatasetPluginOf<Dataset<TProps>>[] {
+  get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[] {
     return this.#plugins;
   }
 
-  /** Releases every installed plugin, in reverse setup order. A Dataset with no plugins needs no
+  /** Releases every installed `data` half, in reverse setup order. A Dataset with no plugins needs no
    *  `destroy()` call — nothing holds a resource. */
   destroy(): void {
     this.#state.destroy();
@@ -195,7 +225,7 @@ export class Dataset<TProps = unknown> {
   }
 
   /** The resolved Field for this key, or `undefined` when the key is not declared. This is the
-   *  declaration, not an Entry value; `entries.fieldValue` reads the value. */
+   *  declaration, not an Entry value; `entry.read(key)` reads the value. */
   field(key: FieldKey): Field | undefined {
     return this.#state.fields.get(key);
   }

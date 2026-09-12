@@ -27,7 +27,7 @@ type RowProducer = (input: RowPassInput) => UnindexedRow[];
 
 const PRODUCE_ROWS = {
   entries: (input) => resolveEntriesSource(input.entries, input.source as EntriesRowSource),
-  group: (input) => resolveGroupSource(input.entries, input.source as GroupRowSource, input.fieldContext),
+  group: (input) => resolveGroupSource(input.entries, input.source as GroupRowSource),
   custom: (input) => resolveCustomSource(input.source as CustomRowSource, { entries: input.entries }),
 } as const satisfies Record<RowSource['source'], RowProducer>;
 
@@ -59,7 +59,7 @@ export function resolveOpenRows(input: {
   const built = produceRows(pass);
   const { source, entries, fieldCompares = [], fieldContext } = pass;
   if (source.source === 'custom') return built;
-  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source), fieldContext);
+  const filtered = applyFilter(built, entries, source.filter, filterPolicyOf(source));
   return applySort(filtered, entries, source.sort, fieldCompares, fieldContext);
 }
 

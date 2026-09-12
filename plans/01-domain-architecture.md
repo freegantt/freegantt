@@ -176,7 +176,7 @@ interface Item {
   id: ItemId;                  // deterministic — see §2.4
   rowId: RowId;
   entryId: EntryId;
-  look: 'parent' | 'leaf' | (string & {});  // structure, or a plugin-owned look — stamped as data-kind
+  variant: string;             // the Variant this Gantt resolved — stamped as data-variant (ADR 0018)
   segmentIndex?: number;
   start: Instant; end: Instant;
   lane: number;                // sub-lane within the row
@@ -223,7 +223,7 @@ rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-de
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is a seam, mirroring rendering (§10): the pipeline asks structure first. A parent with children uses the parent producer. A leaf uses the bar producer. A plugin that owns ids registers a producer for those ids via `layout.registerItemProducer` (§10, S5.9, D-S5-22). Unregistered ids fall back to the structure look.
+Item emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `items` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
 
 ```ts
 type ItemProducer = (entry: Entry) => readonly Item[];
@@ -233,22 +233,22 @@ type ItemProducer = (entry: Entry) => readonly Item[];
 
 `Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
 
-### 2.5 Entry structure — children decide derivation and the default look
+### 2.5 Entry structure — children decide derivation and the default Variant
 
-An Entry has children, or it does not. That structure answers derivation and the default bar look. Every other layer maps that answer through a registry or seam it already has — never `if (kind === ...)` chains in core (ADR 0013):
+An Entry has children, or it does not. That structure answers derivation and the default bar shape. Every other layer maps that answer through a registry or seam it already has — never `if (kind === ...)` or `if (variant === ...)` chains in core (ADR 0013, ADR 0018):
 
-| Layer | What structure or a plugin store selects | Seam |
+| Layer | What structure or a Variant rule selects | Seam |
 |---|---|---|
 | `scheduling/` | a parent spans its children via rollup vs. a leaf that is directly schedulable, *when a scheduling plugin is installed* | `SchedulingPolicy` (§7), plugin-owned |
-| `layout/` | item emission — bar vs. summary; whether items are emitted at all | structure → `ItemProducer` in the §2.3 pipeline |
-| `render/` | appearance — default renderer; `data-kind` on the element for CSS (look, not an Entry classification) | renderer registry (`02` §4) |
-| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
+| `layout/` | item emission — bar vs. summary; whether items are emitted at all | the resolved Variant's `items` (ADR 0018) |
+| `render/` | appearance — default renderer; `data-variant` on the element for CSS (the Variant this Gantt resolved, not an Entry classification) | the Variant's `paint`, then the renderer registry (`02` §4) |
+| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | the Variant's `can`, then the capability resolver (§9) |
 
 Rules:
 
 - **Derivation is structure.** An Entry derives when it has children. An empty phase is a bar until a child arrives. Losing the last child leaves a normal Entry with no dates. There is no stored classification, no `rollUpKinds`, and no `hierarchy.autoGroup`. Dates are optional (ADR 0012): a dateless parent is legal; the store does not mint a fake span. The Rollup is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
-- **Look follows children, or a plugin store.** A parent with children draws the parent look. A leaf draws a bar. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns (ADR 0002) and registers at the four seams above. Anything not registered falls back to the structure look.
-- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a diamond floor when that look is in play (`diamondSizePx * √2`). `FrameBar.minimumSpan` states the fact for every bar this floor touched. `render/` stamps it as `data-span="minimum"` (CONTEXT.md, `02` §4).
+- **The shape follows children, or a Variant rule.** A parent with children draws core's own `parent` Variant. A leaf draws a bar. Core does not ship a diamond. A plugin or a consumer that needs a shape that is not parent-or-bar declares a Variant whose `when` rule claims the rows (ADR 0018) — it stores no list of the ids it owns, so a row added later is claimed too. One object answers all four seams above. Every row resolves, because core's `leaf` carries no `when`.
+- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a diamond floor when a Variant paints one (`diamondSizePx * √2`). `FrameBar.minimumSpan` states the fact for every bar this floor touched. `render/` stamps it as `data-span="minimum"` (CONTEXT.md, `02` §4).
 - **Parent *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing. A parent Entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing parents is well-defined, because one is structure and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
@@ -405,7 +405,7 @@ interface GeometryFrame {
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
-    look: 'parent' | 'leaf' | (string & {});  // backends stamp it as data-kind — CSS with zero JS; not an Entry classification
+    variant: string;             // backends stamp it as data-variant — CSS with zero JS; not an Entry classification
     /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
      *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
     segmentId?: SegmentId;
@@ -428,7 +428,7 @@ interface GeometryFrame {
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
    *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
    *  plugin-contributed emission seam — `ctx.layout.registerLinkEmitter(emitter)`, aggregating like
-   *  `decorationProviders` rather than replacing like `registerItemProducer`. `id` stays a plain
+   *  `decorationProviders` rather than replacing like a Variant's own `items`. `id` stays a plain
    *  `string`: a brand would make `layout/` depend on plugin-owned types. The emitter reads the
    *  Dataset-side plugin's store through the Gantt-side `ctx.store.read(pluginId)`, D-S5-30's own
    *  name on the second surface. Full design in #136 (supersedes #16); it lands in S7, after S5.10
@@ -521,6 +521,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 - **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
+- **`data/` has two plugin seams, and each takes one occupant that composes.** The **extension hook** (D4, above) answers "what else does this edit write?", and a plugin claims it through `ctx.edits.setExtender`. The **hierarchy source** (ADR 0020) answers "which Entry is the parent of this one?", and a plugin claims it through `ctx.hierarchy.setSource`. Both start out occupied by core — the identity extender, and `(entry) => entry.parentId` — and installing wraps the current occupant rather than evicting it (D-S5-23). The source reads a `StoredEntry`, never the live `Entry`, because every live answer (`parent()`, `children()`, `depth`, `descendants()`) is built from it. Core inverts the answer into the child index, so one Entry can never have two parents; it refuses an unknown parent id and a chain that loops, reads that Entry as a root, and reports each once per revision. The Rollup walks the same source, so a plugin that changes the tree has changed the Rollup and there is no second knob that could let the two disagree.
 - **The envelope has one function, and now one owner on every write path** (#212, finding 4; closed by the 2026-09-06 fix-plan review, R2, findings B1 and its remainder): an Entry's `start`/`end` are meant to be the envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — and `time/`'s `envelopeOfSegments` is the one function that computes it. Every path that writes `start`/`end` now goes through it or a function built on it. Ingest, a plain `entries.update(id, { segments })`, and a drag/resize gesture call it directly. The Rollup (`data/rollup.ts`, `widenSegmentsToEnvelope`) restores the invariant on a rolling-up parent in two steps: every Segment first clamps into the parent's newly rolled-up `[start, end)` (a Segment the new span has moved past collapses to the nearest edge, rather than keeping a stretch the parent no longer covers), and then whichever Segment does not yet reach an edge exactly widens to it — the earliest-starting Segment supplies the new `start`, the latest-ending one the new `end`. One Segment plays both roles when the parent draws only one, which is why a several-Segment parent was the harder case: a rolled-up span can shrink past an interior Segment as easily as it can grow past every one, so widening only the two extremal Segments (with no clamp) is not enough on its own. Rejecting a several-Segment roll-up parent at ingest, or making the rolled-up value computed-on-read for that case only, were both considered and rejected: the first makes derivation and "how many Segments a consumer authors" interact for no reason a consumer could predict, and the second would split `start`/`end` between stored and computed depending on Segment count, which is exactly the kind of special case the seams below exist to avoid. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does, and now gets it, on one refusal rather than two answers for one input (D-S5-44; a caller-identity split — a computed translate for the extender's cascade, a refusal for `entries.update()` — was tried and rejected): `data/entry-reader.ts`'s `reconcileEnvelope` is the one function that decides a `ProposedEdit` against an Entry's Segments, and every caller reaches it. `toProposedEdit` calls it directly for `entries.update()`. An `EditExtender`'s cascade reaches it through `reconcileExtenderEdits`, called once per edit from both `build-commit-change-set.ts` at commit and, as `reconcileExtenderEditsForPreview`, from `view/gesture-pipeline.ts`'s drag preview — the preview's copy runs inside a rAF callback with nothing to catch a throw, so it drops a refused edit instead of throwing (that Entry paints no ghost for the frame) while the commit path still throws for real. A direct `start`/`end` write against a several-Segment Entry with no `segments` of its own is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) from every one of these callers alike, because a `ProposedEdit` is one shape with one meaning regardless of who wrote it. `data/entry-reader.ts`'s `moveEntryTo` is the escape a plugin author reaches for instead: it writes every Segment of an Entry translated rigidly to a new `start`, which is what the refused envelope-only write could not say. `envelopeOfSegments` itself lives in `time/`, not in `data/` or `layout/` (both call it): those two layers may not import each other (§1), and `time/` is the one layer both already reach through for zone-aware date arithmetic (I10) — this is a plain numeric min/max over two `Instant`s, not date arithmetic, but the placement still keeps every caller on one function instead of a copy in each layer.
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
@@ -717,7 +718,7 @@ Invariants the data-gesture attachments own:
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1), over the defaults a plugin registered for a look. ADR 0013 deleted `Entry.kind`, so no per-kind default is left to build over. The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1), over the resolved Variant's own `can` (ADR 0018), over the library rule. ADR 0013 deleted `Entry.kind`, so no stored classification is left to build over, and a predicate at any level may answer `undefined` for "no opinion". The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
 
   **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. An Entry with children refuses `move` and `resize` when both of its dates roll up. No stored classification decides it (ADR 0013). The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
 
@@ -727,20 +728,47 @@ Attachments talk to `data/` only through drafts and transactions (the shell's `c
 
 ## 10. `extensions/` — the plugin contract
 
-"Everything is extensible" needs one extension contract for each object a plugin installs into.
-FreeGantt ships two: a **Gantt plugin** joins a mounted Gantt, and a **Dataset plugin** joins a
-Dataset while it constructs. Both shipped in S5 (`plans/s5-extensibility-and-editing`).
-
-### 10.1 The Gantt plugin
+"Everything is extensible" needs one plugin type, and one install site per half. A plugin has two
+halves: `view` joins a mounted Gantt, and `data` joins a Dataset while it constructs (ADR 0019). An
+author writes both through `definePlugin`, and the shape they wrote decides where the plugin
+installs. S5 shipped it (`plans/s5-extensibility-and-editing`).
 
 ```ts
-interface GanttPlugin {
+/** Call: `definePlugin({ id: 'demo.phases', data(ctx) { … }, view(ctx) { … } })`. */
+interface PluginIdentity {
   id: PluginId;
-  /** Called once after the Gantt mounts. Returns a Disposer for a resource the plugin owns
-   *  itself, or nothing at all — every register* call below already files its own removal. */
-  setup(ctx: PluginContext): Disposer | void;
+  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
+   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
+   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. One list
+   *  covers both halves. */
+  requires?: readonly PluginId[];
 }
 
+/** Chrome and nothing else. It installs on the `Gantt`, and `gantt.plugins` reconfigures it live. */
+interface ChromePlugin extends PluginIdentity {
+  view(ctx: PluginContext): Disposer | void;
+  /** `never`, so the wrong install site is a red squiggle rather than a runtime discovery. */
+  data?: never;
+}
+
+/** A plugin that owns state — Fields, the edit hook, the hierarchy source, a store — and may paint
+ *  it too. **The install site is where the state lives**: this arm installs on the `Dataset`,
+ *  because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset
+ *  then runs `view` once, each with its own context, so I2 holds by construction. */
+interface DataPlugin extends PluginIdentity {
+  data(ctx: DatasetPluginContext): Disposer | void;
+  view?(ctx: PluginContext): Disposer | void;
+}
+
+type Plugin = ChromePlugin | DataPlugin;
+```
+
+Each half returns a `Disposer` for a resource the plugin owns itself — a socket, a timer, a
+subscription — or nothing at all. Every `register*` call below already files its own removal.
+
+### 10.1 The `view` half's context
+
+```ts
 interface PluginContext {
   dataset: Dataset;                  // the public Dataset: no privileged access, no second surface
   gantt: Gantt;                      // the public façade: live config and public methods
@@ -765,13 +793,12 @@ interface PluginContext {
       options?: { capture?: boolean },
     ): Disposer;
   };
-  layout: {
-    registerItemProducer(look: 'parent' | 'leaf' | (string & {}), producer: ItemProducer): Disposer;   // S5.9, D-S5-22: structure or a plugin-owned look — S4 shipped the ItemProducer seam itself (§9) with no external caller
+  variants: {
+    add(variant: EntryVariant): Disposer;   // ADR 0018: one object answers `when`, `items`, `paint` and `can` — it replaced four registrations that each repeated the name
   };
   interaction: {
     registerKeybinding(b: KeyBinding): Disposer;
     registerKeyHandler(chord: string, handler: (e: KeyEventLike) => void): () => void;
-    registerLookDefaults(look: 'parent' | 'leaf' | (string & {}), defaults: KindDefaults): Disposer;
     canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
     announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
@@ -779,28 +806,17 @@ interface PluginContext {
 }
 ```
 
-A Gantt plugin declares no Field. `registerField` moved off this contract during S5 — a Gantt plugin
-shows a Field through `view.registerGridColumn` alone, and a Dataset plugin declares the Field
-itself (§10.2). `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the
-group a plugin reads it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not
-name (D-S5-5).
+The `view` half declares no Field. `registerField` moved off this context during S5 — it shows a
+Field through `view.registerGridColumn` alone, and the `data` half declares the Field itself (§10.2).
+`PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the group a plugin reads
+it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not name (D-S5-5).
 
-### 10.2 The Dataset plugin
+### 10.2 The `data` half's context
 
-A Dataset plugin sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset
-runs — it never meets a pane, the overlay, or a gesture.
+This half sees only the data a Dataset holds. It stays DOM-free and runs wherever a Dataset runs — it
+never meets a pane, the overlay, or a gesture.
 
 ```ts
-interface DatasetPlugin {
-  id: PluginId;
-  /** Plugin ids that must also be installed. Installation resolves setup order from `requires`
-   *  alone (D-S5-31), so `[a, b]` and `[b, a]` install identically. A required id nobody installs
-   *  throws MissingPluginError; a requirement cycle throws PluginRequirementCycleError. */
-  requires?: readonly PluginId[];
-  /** Called once while the Dataset constructs. Returns a Disposer, or nothing. */
-  setup(ctx: DatasetPluginContext): Disposer | void;
-}
-
 interface DatasetPluginContext {
   dataset: Dataset;
   events: DatasetEvents;              // on/off over beforeChange/change; a false return vetoes the ChangeSet
@@ -812,6 +828,9 @@ interface DatasetPluginContext {
   edits: {
     setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
   };
+  hierarchy: {
+    setSource(wrap: HierarchySourceWrapper): void;  // ADR 0020: which Entry is the parent; installs compose the same way
+  };
   store: {
     reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
     read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined; // another plugin's, read-only
@@ -822,10 +841,10 @@ interface DatasetPluginContext {
 
 `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
 must exist before the first Rollup, so a consumer who wants a different plugin set builds a new
-Dataset instead of reconfiguring one live. Every register* call above is legal only while `setup`
-runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's `ctx.disposables`
-retracts its own registrations on uninstall, so a plugin returns a Disposer only for a resource it
-owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
+Dataset instead of reconfiguring one live. Every register* call above is legal only while the half
+that owns it runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's
+`ctx.disposables` retracts its own registrations on uninstall, so a plugin returns a Disposer only
+for a resource it owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
 "a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
 keeps them under the plugin's own id for as long as it lives (D-S5-24), and `store.read` lets a later
 plugin — the setup order `requires` fixes — read an earlier plugin's rows.

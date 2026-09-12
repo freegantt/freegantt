@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Entry, FieldKey, Instant, RollUpContext } from '../../model/index.js';
+import type { StoredEntry, FieldKey, Instant, RollUpContext } from '../../model/index.js';
 import { entryId, segmentId } from '../../model/index.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
-import { createFieldContext, createRollUpContext } from './field-access.js';
+import { createFieldAccess, createRollUpContext } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 
-function child(id: string, values: Record<string, unknown>, duration = 1): Entry {
+function child(id: string, values: Record<string, unknown>, duration = 1): StoredEntry {
   return {
     id: entryId(id),
     name: id,
@@ -17,16 +17,22 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Entry
 }
 
 /** The real context the Rollup builds, not a hand-rolled stand-in: a shipped Aggregator must read
- *  through the same `values`/`numericValues` a consumer's Aggregator gets (D-S4-8, one path). */
-function ctx(field: FieldKey): RollUpContext {
+ *  through the same `values`/`numericValues` a consumer's Aggregator gets (D-S4-8, one path). The
+ *  children ride on the context now, never beside the parent (ADR 0017). */
+function ctx(field: FieldKey, children: readonly StoredEntry[]): RollUpContext {
   const registry = new FieldRegistry({
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: field, type: 'money' }],
   });
-  return createRollUpContext(createFieldContext(registry, 'UTC'), field);
+  return createRollUpContext(
+    createFieldAccess({ fields: registry, timeZone: 'UTC' }),
+    parent,
+    children,
+    field,
+  );
 }
 
-const parent: Entry = {
+const parent: StoredEntry = {
   id: entryId('p'),
   name: 'p',
   start: 0 as Instant,
@@ -38,27 +44,27 @@ const parent: Entry = {
 describe('shipped Aggregators (D-S4-3)', () => {
   it('sum / min / max skip holes and return undefined when every child is skipped', () => {
     const children = [child('a', { cost: 1 }), child('b', {}), child('c', { cost: 3 })];
-    expect(SHIPPED_AGGREGATORS.sum?.(children, parent, ctx('cost'))).toBe(4);
-    expect(SHIPPED_AGGREGATORS.min?.(children, parent, ctx('cost'))).toBe(1);
-    expect(SHIPPED_AGGREGATORS.max?.(children, parent, ctx('cost'))).toBe(3);
-    expect(SHIPPED_AGGREGATORS.sum?.([child('z', {})], parent, ctx('cost'))).toBeUndefined();
+    expect(SHIPPED_AGGREGATORS.sum?.(parent, ctx('cost', children))).toBe(4);
+    expect(SHIPPED_AGGREGATORS.min?.(parent, ctx('cost', children))).toBe(1);
+    expect(SHIPPED_AGGREGATORS.max?.(parent, ctx('cost', children))).toBe(3);
+    expect(SHIPPED_AGGREGATORS.sum?.(parent, ctx('cost', [child('z', {})]))).toBeUndefined();
   });
 
   it("'none' always returns undefined", () => {
-    expect(SHIPPED_AGGREGATORS.none?.([child('a', { cost: 1 })], parent, ctx('cost'))).toBeUndefined();
+    expect(SHIPPED_AGGREGATORS.none?.(parent, ctx('cost', [child('a', { cost: 1 })]))).toBeUndefined();
   });
 
   it('count skips holes', () => {
     const children = [child('a', { cost: 1 }), child('b', {}), child('c', { cost: 3 })];
-    expect(SHIPPED_AGGREGATORS.count?.(children, parent, ctx('cost'))).toBe(2);
-    expect(SHIPPED_AGGREGATORS.count?.([child('z', {})], parent, ctx('cost'))).toBeUndefined();
+    expect(SHIPPED_AGGREGATORS.count?.(parent, ctx('cost', children))).toBe(2);
+    expect(SHIPPED_AGGREGATORS.count?.(parent, ctx('cost', [child('z', {})]))).toBeUndefined();
   });
 
   it('weightedMeanByDuration skips zero-duration children', () => {
     const children = [child('a', { cost: 10 }, 2), child('b', { cost: 100 }, 0), child('c', { cost: 20 }, 2)];
-    expect(SHIPPED_AGGREGATORS.weightedMeanByDuration?.(children, parent, ctx('cost'))).toBe(15);
+    expect(SHIPPED_AGGREGATORS.weightedMeanByDuration?.(parent, ctx('cost', children))).toBe(15);
     expect(
-      SHIPPED_AGGREGATORS.weightedMeanByDuration?.([child('z', { cost: 10 }, 0)], parent, ctx('cost')),
+      SHIPPED_AGGREGATORS.weightedMeanByDuration?.(parent, ctx('cost', [child('z', { cost: 10 }, 0)])),
     ).toBeUndefined();
   });
 });

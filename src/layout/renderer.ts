@@ -37,20 +37,15 @@ export interface BarRendererContext {
 /** `undefined` keeps the library's own output for this one bar (D-S5-11). */
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
 
-/** Per-kind map for `barRenderer` only (D-S5-12) — a cell belongs to a column and a header to a
- *  column/band, neither has a kind to key on. `'*'` is the catch-all; an exact `entry.kind` match
- *  wins over it, and the library default wins when neither matches. */
-export type RendererByLook = Readonly<Record<string, BarRenderer>>;
-
 export interface CellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row (`layout/rows`). */
-  entry?: Entry;
+  entry?: Entry | undefined;
   row: FrameRow;
   column: ResolvedColumn;
   /** What the grid paints: the column's Field value, through the Field's own `formatValue`. */
   value: string;
-  /** The same Field value before formatting — what `dataset.entries.fieldValue(id, column.field)`
-   *  answers, for every Field source alike (review H3). A renderer that branches on magnitude reads
+  /** The same Field value before formatting — what `entry.read(column.field)` answers, for every
+   *  Field source alike (review H3). A renderer that branches on magnitude reads
    *  this; one that paints text reads `value`. `undefined` on a row with no Entry. */
   fieldValue: unknown;
 }
@@ -68,9 +63,12 @@ export interface TooltipRendererContext {
 export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescription | undefined;
 
 /** What `ctx.view.registerRenderer(point, renderer)` and `GanttOptions`'s four renderer keys both
- *  accept for one `point` — only `bar` also takes the per-kind map form (D-S5-12). */
+ *  accept for one `point`. Four points, four function types, one slot each.
+ *
+ *  ADR 0018 retired the `bar` point's per-kind map. It was a fifth site for a variant's name, and a
+ *  variant's own `paint` is where that job lives now. */
 export type RendererFor<P extends RendererPoint> = P extends 'bar'
-  ? BarRenderer | RendererByLook
+  ? BarRenderer
   : P extends 'cell'
     ? CellRenderer
     : P extends 'header'

@@ -1,7 +1,7 @@
 // data/ — core Fields are ordinary declarations (D-S4-4). A core key reads and writes the Entry
 // directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
-import type { Duration, Entry, Field, FieldKey, Instant } from '../../model/index.js';
+import type { Duration, Entry, StoredEntry, Field, FieldKey, Instant } from '../../model/index.js';
 import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, MS } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
@@ -9,8 +9,8 @@ const byReference = (from: unknown, to: unknown): boolean => from === to;
 // Segment identity is part of the value (#212, ADR 0010): an id-only write — the same start and end,
 // a different `SegmentId` — must reach the changeset, or the Selection silently loses what it holds.
 const segmentsEqual = (from: unknown, to: unknown): boolean => {
-  const a = from as Entry['segments'];
-  const b = to as Entry['segments'];
+  const a = from as StoredEntry['segments'];
+  const b = to as StoredEntry['segments'];
   if (a === b) return true;
   if (a === undefined || b === undefined || a.length !== b.length) return false;
   return a.every(
@@ -103,7 +103,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'duration',
-    compute: (entry, ctx) => ctx.durationOf(entry),
+    compute: (_entry, ctx) => ctx.duration(),
     compare: compareDuration,
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end', width: 100 },

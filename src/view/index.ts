@@ -25,7 +25,6 @@ export type {
   CapabilityRule,
   GestureCapability,
   Interactions,
-  KindDefaults,
   WriteRefusalReason,
   WriteRule,
   WriteVerdict,

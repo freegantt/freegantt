@@ -471,7 +471,7 @@ test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012
   // `task-alpha-1` draws one Segment (its whole span) and owns `deep-leaf` as a child (fixtures/
   // hierarchy-dataset.ts). Deleting that Segment no longer removes the Entry (ADR 0012): the row
   // stays, and never had a reason to reparent `deep-leaf` in the first place.
-  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(before).toBe('task-alpha-1');
 
   const bar = page.locator('#gantt .fg-bar[data-item-id^="task-alpha-1:"]').first();
@@ -480,6 +480,63 @@ test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012
 
   await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(true);
   await expect(page.locator('#gantt .fg-row[data-entry-id="deep-leaf"]')).toBeVisible();
-  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
+  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(after).toBe('task-alpha-1');
 });
+
+// ADR 0020: a plugin states the parent of an Entry out of a `props` key, and everything downstream
+// follows one answer. `harness/plugins/phase-hierarchy.ts` is the plugin; `#phase-btn` is the one
+// write. Nothing here names a fixture row: the test reads the tree before the click and finds the
+// row that moved by comparing it with the tree after.
+test('a plugin tree makes a childless Entry a parent in fact, not by a stored word', async ({ page }) => {
+  await gotoHierarchy(page);
+
+  const readTree = async (): Promise<Record<string, string>> =>
+    page.evaluate(() => {
+      const tree: Record<string, string> = {};
+      for (const entry of window.__dataset.entries.all) tree[entry.id] = String(entry.parent()?.id);
+      return tree;
+    });
+
+  const before = await readTree();
+  await page.locator('#phase-btn').click();
+  await expect.poll(async () => JSON.stringify(await readTree())).not.toBe(JSON.stringify(before));
+  const after = await readTree();
+
+  const movedId = Object.keys(after).find((id) => after[id] !== before[id]);
+  expect(movedId).toBeDefined();
+  const newParentId = after[movedId!]!;
+
+  const state = await page.evaluate(
+    ({ newParentId, movedId }: { newParentId: string; movedId: string }) => {
+      const newParent = window.__dataset.entries.get(newParentId);
+      const moved = window.__dataset.entries.get(movedId);
+      return {
+        hasChildren: newParent?.hasChildren,
+        // It derives: the Rollup gave it its child's span, which it never authored.
+        spans: newParent?.start !== undefined && newParent?.end !== undefined,
+        childDepth: moved?.depth,
+        // No `parentId` was written anywhere — the move is a `phaseId` edit alone.
+        storedParentId: String(moved?.toInput().parentId),
+      };
+    },
+    { newParentId, movedId: movedId! },
+  );
+
+  expect(state.hasChildren).toBe(true);
+  expect(state.spans).toBe(true);
+  expect(state.childDepth).toBe((await newParentDepth(page, newParentId)) + 1);
+  // The stored field still says what it always said: the plugin owns the tree, not the field.
+  expect(state.storedParentId).toBe(before[movedId!]);
+
+  // It paints as a summary because it *is* one (ADR 0018, step 3) — no variant was registered here.
+  // The pane mounts the rows it can show, so bring this one into view before asking about its bar.
+  await page.evaluate((id: string) => {
+    window.__gantt.reveal(id);
+  }, newParentId);
+  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${newParentId}:"]`)).toHaveCount(1);
+});
+
+async function newParentDepth(page: import('@playwright/test').Page, id: string): Promise<number> {
+  return page.evaluate((newParentId: string) => window.__dataset.entries.get(newParentId)?.depth ?? 0, id);
+}

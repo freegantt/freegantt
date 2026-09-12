@@ -204,7 +204,7 @@ describe('runTransaction', () => {
     expect(changeCount).toBe(1);
   });
 
-  it('read-your-own-writes: get/size/childrenOf see a staged add; all does not, until commit (D-S2-21)', () => {
+  it('read-your-own-writes: get/size and a row’s children see a staged add; all does not, until commit (D-S2-21)', () => {
     const state = dataset([{ id: 'root' }]);
     let sizeDuring = -1;
     let childDuring: unknown;
@@ -223,7 +223,7 @@ describe('runTransaction', () => {
           props: {},
         });
         sizeDuring = state.entries.size;
-        childDuring = state.entries.childrenOf(entryId('root')).map((e) => e.id);
+        childDuring = (state.entries.get(entryId('root'))?.children() ?? []).map((e) => e.id);
         allDuring = state.entries.all;
       },
       'user',
@@ -235,12 +235,12 @@ describe('runTransaction', () => {
     expect(allDuring.map((e) => (e as { id: unknown }).id)).toEqual([entryId('root')]);
   });
 
-  it('childrenOf sees a parentId edit in the write set', () => {
+  it('entry.children() sees a parentId edit in the write set', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a' }]);
     state.transaction(() => {
       state.entries.update('c', { parentId: 'b' });
-      expect(state.entries.childrenOf('a').map((e) => e.id)).toEqual([]);
-      expect(state.entries.childrenOf('b').map((e) => e.id)).toEqual([entryId('c')]);
+      expect((state.entries.get('a')?.children() ?? []).map((e) => e.id)).toEqual([]);
+      expect((state.entries.get('b')?.children() ?? []).map((e) => e.id)).toEqual([entryId('c')]);
     });
   });
 
@@ -363,7 +363,7 @@ describe('runTransaction', () => {
       'user',
     );
 
-    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500 });
+    expect(state.entries.get(entryId('t1'))?.toInput().props).toEqual({ cost: 500 });
   });
 
   it('I4 still fires when body and extender propose the same props-addressed Field', () => {
@@ -422,7 +422,7 @@ describe('runTransaction', () => {
       ),
     ).not.toThrow();
 
-    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500, risk: 1 });
+    expect(state.entries.get(entryId('t1'))?.toInput().props).toEqual({ cost: 500, risk: 1 });
   });
 
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
@@ -731,11 +731,8 @@ describe('runTransaction', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
-    const costOf = (id: string): number | undefined => {
-      const entry = state.entries.get(id);
-      if (!entry) return undefined;
-      return state.fieldContext.read(entry, 'cost') as number | undefined;
-    };
+    const costOf = (id: string): number | undefined =>
+      state.entries.get(id)?.read('cost') as number | undefined;
 
     let changeCount = 0;
     const updatedIds = new Set<string>();
@@ -1063,7 +1060,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
 
     renameT1(state);
 
-    expect(state.entries.fieldValue(entryId('t2'), 'cost')).toBe(500);
+    expect(state.entries.get(entryId('t2'))?.read('cost')).toBe(500);
     expect(rows.some((row) => row.field === 'cost')).toBe(true);
   });
 

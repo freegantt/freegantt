@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FrameMemory } from './frame-memory.js';
-import { createItemProducerRegistry } from './items/produce-items.js';
+import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import { entryId, rowId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
+import { entryDoubleLike } from './entry-double.js';
 import type { PlannedRow } from './rows/row-source.js';
 
 function packPlan(entries = sampleEntries): readonly PlannedRow[] {
@@ -21,7 +22,7 @@ function packPlan(entries = sampleEntries): readonly PlannedRow[] {
 }
 
 describe('FrameMemory (A2)', () => {
-  const registry = createItemProducerRegistry();
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
   const laneGap = 2;
 
   it('heightOfRow follows packed lane count without a FrameLayout', () => {
@@ -38,14 +39,13 @@ describe('FrameMemory (A2)', () => {
     });
     expect(memory.heightOfRow(0)).toBe(32);
 
-    const three = {
-      ...one,
+    const three = entryDoubleLike(one, {
       segments: [one, one, one].map((span, index) => ({
         id: segmentId(`${one.id}-${index}`),
         start: span.start!,
         end: span.end!,
       })),
-    };
+    });
     memory.sync({
       plan,
       rowHeight: 32,
@@ -65,13 +65,12 @@ describe('FrameMemory (A2)', () => {
     const firstSegmentId = memory.packedRow(String(plan[0]!.id)).segmentIds;
     expect(firstSegmentId).toEqual([one.segments[0]!.id]);
 
-    const two = {
-      ...one,
+    const two = entryDoubleLike(one, {
       segments: [
         one.segments[0]!,
         { id: segmentId(`${one.id}-1`), start: one.segments[0]!.start, end: one.segments[0]!.end },
       ],
-    };
+    });
     memory.sync({ plan, rowHeight: 32, laneGap, entries: [two], registry, datasetRevision: 1 });
 
     expect(memory.packedRow(String(plan[0]!.id)).segmentIds).toEqual(two.segments.map((s) => s.id));
@@ -98,7 +97,7 @@ describe('FrameMemory (A2)', () => {
 });
 
 describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', () => {
-  const registry = createItemProducerRegistry();
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
   const laneGap = 2;
 
   function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {

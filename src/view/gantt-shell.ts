@@ -7,8 +7,7 @@ import {
   ScrollModel,
   TimeScaleModel,
   Viewport,
-  createItemProducerRegistry,
-  resolveLook,
+  createVariantRegistry,
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
@@ -23,15 +22,17 @@ import type {
   TimeScaleFit,
   ViewportHandle,
   ViewPreset,
-  ItemProducerRegistry,
-  LookClaimant,
+  EntryVariant,
+  VariantClaimant,
+  VariantRegistry,
   ReportDoubleClaim,
+  ReportUnknownFieldMatch,
+  ResolvedRenderer,
   BarLabels,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByLook,
   FrameBar,
 } from '../layout/index.js';
 
@@ -48,7 +49,6 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
-import { descendantsOf } from '../data/entry-tree.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
@@ -84,6 +84,7 @@ import {
 } from '../model/index.js';
 import type {
   Dataset,
+  Disposer,
   Entry,
   EntryId,
   FieldKey,
@@ -121,7 +122,7 @@ import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
 import { SegmentSelection } from './segment-selection.js';
 import type { SegmentSelectionPorts } from './segment-selection.js';
-import { createFieldContext } from '../data/fields/field-access.js';
+
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
 
@@ -214,7 +215,7 @@ export interface GanttShellWiring {
    *  reason `commitEntryEdits` exists. The `Gantt` façade does not exist yet when this constructor
    *  runs. It returns `unknown` because `api/gantt.ts` binds the concrete
    *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
-   *  closing an import cycle (`api/plugin.ts`'s file header). */
+   *  closing an import cycle (`api/plugin-context.ts`'s file header). */
   buildPluginContext?: (parts: PluginContextParts) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
    *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and
@@ -225,6 +226,9 @@ export interface GanttShellWiring {
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
   buildCommandContext?: (parts: {
     entry?: Entry;
+    /** ADR 0018: the variant this Gantt resolved for `entry`. Filled beside `entry`, from the same
+     *  resolution the layout pass uses. */
+    variant?: string;
     target?:
       | {
           kind: 'header';
@@ -309,7 +313,7 @@ export interface GanttShellOptions {
   /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
-  barRenderer?: BarRenderer | RendererByLook;
+  barRenderer?: BarRenderer;
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. */
   cellRenderer?: CellRenderer;
@@ -333,13 +337,23 @@ export interface GanttShellOptions {
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
    *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
   extraEditsFor?: (request: EditRequest) => ProposedEdits;
-  /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
-   *  replacement; `GanttOptions` has no such field (public registration is S5). */
-  itemProducerRegistry?: ItemProducerRegistry;
-  /** Installed before this shell's first paint (N7). A plugin-defined look, keybinding or command
+  /** Internal (D-S4-24, ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
+   *  inject a replacement. */
+  variantRegistry?: VariantRegistry;
+  /** The consumer's own variants — `GanttOptions.variants`, already erased to the untyped shape
+   *  (ADR 0018). They outrank every plugin's, whatever order the plugins install in. */
+  variants?: readonly EntryVariant[];
+  /** Installed before this shell's first paint (N7). A plugin-defined variant, keybinding or command
    *  reaches frame 1, the same as every other constructor option. Before N7, `Gantt.plugins`'s live
-   *  setter ran after this constructor returned, so frame 1 missed them. */
+   *  setter ran after this constructor returned, so frame 1 missed them.
+   *
+   *  ADR 0019: this Gantt's own chrome plugins, the live-reconfigurable set. */
   plugins?: readonly ShellPlugin<unknown>[];
+  /** ADR 0019: the Dataset's own plugins. Their `view` halves install here too, ahead of this
+   *  shell's chrome. They stay installed for this shell's whole life, because this Gantt did not
+   *  install them and cannot drop them. A plugin with no `view` half joins the `requires` graph and
+   *  runs nothing. */
+  datasetPlugins?: readonly ShellPlugin<unknown>[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
   zoomPresets?: readonly PresetRef[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
@@ -407,6 +421,14 @@ export class GanttShell {
   /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #interactions: Interactions = {};
+  /** The consumer's own variants, and the disposers that retract them. Reassigning `variants`
+   *  retracts the whole list and installs the new one (ADR 0018).
+   *
+   *  A plain array, not a `DisposableStore` (`J38`). A store latches on its first `disposeAll()`
+   *  and disposes anything added after it. That is right for a lifetime that ends once, and wrong
+   *  for a list that is replaced live. */
+  #variants: readonly EntryVariant[] = [];
+  #consumerVariantDisposers: Disposer[] = [];
   /** D-S3-24: this Gantt's own snap, or `undefined` while the showing preset decides. It changes no
    *  paint, so it is a plain field and not a frame setting. */
   #snap: SnapSetting | undefined;
@@ -426,10 +448,6 @@ export class GanttShell {
    *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
   #lastBarById = new Map<ItemId, FrameBar>();
-  /** The committed Entries keyed by id, and the `datasetRevision` they were built from.
-   *  `#committedEntriesById` below is the only reader and the only writer. */
-  #entriesById: ReadonlyMap<EntryId, Entry> = new Map();
-  #entriesByIdRevision: number | undefined;
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
@@ -452,6 +470,10 @@ export class GanttShell {
     off: (name, handler) => this.off(name, handler),
   };
   #pluginRuntime!: PluginRuntime<unknown>;
+  /** ADR 0019: the two lists `#pluginRuntime` installs together, kept apart so `plugins` reports
+   *  what this Gantt owns and `uninstallPlugin` refuses what the Dataset owns. */
+  #datasetPlugins: readonly ShellPlugin<unknown>[] = [];
+  #chromePlugins: readonly ShellPlugin<unknown>[] = [];
   /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2). Core commands and core
    *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
   #commandRegistry!: CommandRegistry<unknown>;
@@ -570,8 +592,17 @@ export class GanttShell {
     );
     this.#registrations = new PluginRegistrations(
       this.#pluginRegistrationPorts(),
-      options.itemProducerRegistry ?? createItemProducerRegistry({}, this.#reportDoubleClaim()),
+      options.variantRegistry ??
+        createVariantRegistry({
+          fieldFor: (key) => this.#options.dataset.field(key),
+          reportDoubleClaim: this.#reportDoubleClaim(),
+          reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
+        }),
     );
+    // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
+    // synchronously, and that onChange IS this shell's first render. A consumer variant installed
+    // after it would paint nothing until something else invalidated the frame.
+    this.#installConsumerVariants(options.variants ?? []);
     this.#bindColumns();
 
     // Mount before binding (#22). The render target exists by the time the binding's own onChange
@@ -583,8 +614,15 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        resolveBarRenderer: (look) =>
-          this.#registrations.renderers.resolveBar(look, this.#frameSettings.barRenderer),
+        // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
+        // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
+        // map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's own
+        // `barRenderer` beats a plugin's whole-point `bar` renderer.
+        //
+        // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**
+        // (`J61`). A consumer who wants to paint a summary row writes a variant that claims it.
+        // Their rule then beats core's by rank, which is what D-S5-11 asks for.
+        resolveBarRenderer: (entry) => this.#paintFor(entry),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
@@ -753,7 +791,7 @@ export class GanttShell {
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
-      committedEntriesById: () => this.#committedEntriesById(),
+      committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.locale,
       applyGestureState: (preview, pendingItemIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
@@ -871,13 +909,17 @@ export class GanttShell {
     }
     // N7: applied through the same live setters `api/gantt.ts` used to call *after* this
     // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
-    // plugin's look, keybinding or command now reaches frame 1, and so does a zoom or a selection.
+    // plugin's variant, keybinding or command now reaches frame 1, and so does a zoom or a selection.
     // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
     // `#segmentSelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
-    // post-construction assignment would have. `resolveLook`/`Capabilities` read these registries
+    // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
     // live at render time, never a cached snapshot. So applying them a few lines earlier changes
     // only which frame the result first appears in.
-    if (options.plugins !== undefined) this.plugins = options.plugins;
+    // ADR 0019: the Dataset's plugins are held first, so the one assignment below installs both
+    // sets under one `requires` order. It runs even for an empty chrome list, because the Dataset's
+    // own `view` halves still have to reach frame 1.
+    this.#datasetPlugins = options.datasetPlugins ?? [];
+    this.plugins = options.plugins ?? [];
     if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
     if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
     this.#phase = 'live';
@@ -949,11 +991,11 @@ export class GanttShell {
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
-  get barRenderer(): BarRenderer | RendererByLook | undefined {
+  get barRenderer(): BarRenderer | undefined {
     return this.#frameSettings.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
+  set barRenderer(renderer: BarRenderer | undefined) {
     this.#frameSettings.set({ barRenderer: renderer });
   }
 
@@ -1081,6 +1123,52 @@ export class GanttShell {
     return this.#segmentSelection.entryIds;
   }
 
+  get variants(): readonly EntryVariant[] {
+    return this.#variants;
+  }
+
+  /** Live (ADR 0018): replaces the consumer's own variant list. Every row resolves its variant again,
+   *  every row produces its Items again, and every capability re-resolves — one registration changes
+   *  all three. A plugin's variants are untouched, and they still lose to these. */
+  set variants(next: readonly EntryVariant[]) {
+    this.#installConsumerVariants(next);
+    this.#layout.invalidateFrom(0);
+    this.#refreshCapabilities();
+    this.#frames.request();
+  }
+
+  /** The variant this Gantt resolved for one row (ADR 0018). A command context names it, so a
+   *  command's `when` reads `({ variant }) => variant === MY_VARIANT` instead of holding a list of the
+   *  ids its own plugin owns. `interaction/` and `render/` read the same answer.
+   *
+   *  A variant is per Gantt, so a row cannot answer this itself (I2, ADR 0017). */
+  variantOf(entry: Entry): string {
+    return this.#registrations.variants.resolveFor(entry).name;
+  }
+
+  /** Drops whatever the consumer's list held before, then adds the new one. Registration order
+   *  inside the list is the author's own, and the newest of two overlapping rules wins. */
+  #installConsumerVariants(next: readonly EntryVariant[]): void {
+    for (const retract of this.#consumerVariantDisposers) retract();
+    this.#variants = next;
+    this.#consumerVariantDisposers = next.map((variant) =>
+      this.#registrations.variants.addConsumerVariant(variant),
+    );
+  }
+
+  /** Who paints this bar: the resolved variant's own `paint`, or the catch-all renderers when it
+   *  has none. One ladder, and `resolveBarRenderer` is its only caller.
+   *
+   *  It reads the row, never the variant's name. Two registrations may share one name. A lookup by
+   *  name can then answer with the paint of a rule that did not claim this row (`F3`). No
+   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-claim
+   *  diagnostic is what names a plugin. */
+  #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
+    const paint = this.#registrations.variants.resolveFor(entry).paint;
+    if (paint !== undefined) return { renderer: paint };
+    return this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer);
+  }
+
   get interactions(): Interactions {
     return this.#interactions;
   }
@@ -1100,7 +1188,7 @@ export class GanttShell {
     this.#refreshCapabilities();
   }
 
-  /** D-S5-35: drops this Gantt's own rule for one gesture. A plugin's kind defaults and the library
+  /** D-S5-35: drops this Gantt's own rule for one gesture. A variant's own `can` and the library
    *  table answer that gesture again. Clearing a gesture that carries no rule changes nothing. */
   clearCapabilityRule(capability: keyof Interactions): void {
     if (this.#interactions[capability] === undefined) return;
@@ -1133,25 +1221,16 @@ export class GanttShell {
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
-   *  interactions`, and `registerLookDefaults`'s own gate all re-derive from here, rather than
-   *  repeating the three-argument call. */
+   *  interactions` and `set variants` all re-derive from here, rather than repeating the call. */
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities({
       interactions: this.#interactions,
-      hasChildren: (entry) => this.#options.dataset.entries.childrenOf(entry.id).length > 0,
-      descendantsOf: (entry) => descendantsOf(entry.id, (id) => this.#options.dataset.entries.childrenOf(id)),
       fieldFor: (key) => this.#options.dataset.field(key),
-      lookOf: (entry) =>
-        resolveLook(
-          entry,
-          this.#registrations.itemProducers,
-          this.#options.dataset.entries.childrenOf(entry.id).length > 0,
-        ),
-      registeredDefaultsFor: (look) => this.#registrations.lookDefaultsFor(look),
+      variantInteractionsFor: (entry) => this.#registrations.variants.resolveFor(entry).can,
     });
   }
 
-  /** `set interactions` and `registerLookDefaults`'s register/dispose pair both change an input
+  /** `set interactions` and a variant registration's register/dispose pair both change an input
    *  `#resolveCapabilities` reads. So both re-resolve the capability table and re-derive the
    *  affordance ids the same way (#154). This method writes that once, instead of three times. The
    *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to
@@ -1230,7 +1309,7 @@ export class GanttShell {
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
-      ...(entry !== undefined ? { entry } : {}),
+      ...(entry !== undefined ? { entry, variant: this.variantOf(entry) } : {}),
       ...(target !== undefined ? { target } : {}),
     }) as CommandContext<unknown>;
   }
@@ -1415,6 +1494,7 @@ export class GanttShell {
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
       canWrite: (entry, field) => this.#capabilities.canWrite(entry, field),
+      variantOf: (entry) => this.variantOf(entry),
       proposeEntryEdit: (payload) => this.#events.emit('beforeEntryEdit', payload),
       announceEntryEdit: (payload) => {
         this.#events.emit('entryEdit', payload);
@@ -1449,12 +1529,12 @@ export class GanttShell {
     };
   }
 
-  /** Where a `DoubleLookClaim` is reported (Q10). Two plugins claimed one Entry. The first claim
-   *  paints and the second draws nothing. This names both, so the consumer sees which two plugins
-   *  overlap. The library never arbitrates — the consumer chose the plugins.
+  /** Where a `DoubleVariantClaim` is reported (Q10, ADR 0018). Two plugins' rules both claimed one
+   *  Entry. The newest paints and the older draws nothing. This names both, so the consumer sees
+   *  which two plugins overlap. The library never arbitrates — the consumer chose the plugins.
    *
-   *  One report per pair of looks, not one per hover. `resolveLook` runs on every hover change, and
-   *  the same two plugins collide on every Entry they both own. The first collision is the news.
+   *  One report per pair of variants, not one per hover. `variantFor` runs on every hover change,
+   *  and the same two plugins collide on every Entry they both own. The first collision is the news.
    *
    *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`.
    *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
@@ -1463,16 +1543,38 @@ export class GanttShell {
   #reportDoubleClaim(): ReportDoubleClaim {
     const reported = new Set<string>();
     return ({ entryId, painted, ignored }) => {
-      const pair = `${painted.look}|${ignored.look}`;
+      const pair = `${painted.variant}|${ignored.variant}`;
       if (reported.has(pair)) return;
       reported.add(pair);
-      const by = (claimant: LookClaimant): string =>
-        claimant.pluginId === undefined ? `'${claimant.look}'` : `'${claimant.look}' (${claimant.pluginId})`;
+      const by = (claimant: VariantClaimant): string =>
+        claimant.pluginId === undefined
+          ? `'${claimant.variant}'`
+          : `'${claimant.variant}' (${claimant.pluginId})`;
       const message =
-        `Two look claims both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
-        `The first registered claim paints; ${by(ignored)} draws nothing on the entries they share.`;
+        `Two variant rules both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
+        `The newest registered rule paints; ${by(ignored)} draws nothing on the entries they share.`;
       this.#raiseError(
-        { code: 'look-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        { code: 'variant-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
+  /** Where an `UnknownFieldMatch` is reported (`J59`). A `when` names a key no Field declares, so
+   *  the rule claims no row — a typo, or a plugin key the Dataset never declared. The frame keeps
+   *  drawing; this says what stopped matching.
+   *
+   *  One report per rule and key, not one per row. A rule that names a missing key names it on
+   *  every row of every pass, and the first row is the news. The rule itself holds that set —
+   *  `compileRule` — so nothing allocates on the hover path after the first report. */
+  #reportUnknownFieldMatch(): ReportUnknownFieldMatch {
+    return ({ rule, key }) => {
+      const owner = rule.pluginId === undefined ? '' : ` (${rule.pluginId})`;
+      const message =
+        `The variant rule '${rule.variant}'${owner} matches on field '${key}', and no Field declares it. ` +
+        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-variant-field', message, severity: 'warning', by: 'core', field: key },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };
@@ -1536,22 +1638,6 @@ export class GanttShell {
     this.#viewport.scroll.panTo({ x: x + dx, y: y + dy });
   }
 
-  /** The committed Entries keyed by id — what the edit-extension hook reads a drag preview against
-   *  (`GesturePipeline#extraFor`). It is rebuilt only when the Dataset says it changed.
-   *
-   *  That reader runs once per rAF frame for the whole length of a drag. Rebuilding the map there
-   *  copied every Entry in the Dataset sixty times a second (I5). A drag commits once, at the end,
-   *  so a drag now rebuilds this at most once. One revision is the whole cache key, because
-   *  `EditRequest.entries` is committed-only by contract (D-S5-45). */
-  #committedEntriesById(): ReadonlyMap<EntryId, Entry> {
-    const revision = this.#options.dataset.datasetRevision;
-    if (revision !== this.#entriesByIdRevision) {
-      this.#entriesById = new Map(this.#options.dataset.entries.all.map((entry) => [entry.id, entry]));
-      this.#entriesByIdRevision = revision;
-    }
-    return this.#entriesById;
-  }
-
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
    *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
    *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
@@ -1606,13 +1692,12 @@ export class GanttShell {
     return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
-  /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
-   *  a core, `props`-addressed or `compute` Field alike (ADR 0011). It shares the memo
+  /** Review H3: `CellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
+   *  core, `props`-addressed or `compute` Field alike (ADR 0011, ADR 0017). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
   #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
-    if (entry === undefined) return undefined;
-    return this.#options.dataset.entries.fieldValue(entry.id, key);
+    return entry?.read(key);
   }
 
   get theme(): Theme {
@@ -1764,8 +1849,10 @@ export class GanttShell {
    *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
    *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
    *  says which one the caller meant. A collapsed ancestor expands so the row exists. A
-   *  still-hidden row (filter) keeps the current y — it does not jump to 0. */
-  reveal(id: EntryId | SegmentId): void {
+   *  still-hidden row (filter) keeps the current y — it does not jump to 0.
+   *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
+   *  reading the brand. */
+  reveal(id: EntryId | SegmentId | string): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
     if (entry !== undefined) {
@@ -1818,28 +1905,32 @@ export class GanttShell {
 
   /** Live (D-S5-3): assignment diffs by `id` against what is already installed. A plugin present in
    *  both lists is left alone. Only the difference is set up or disposed. `api/gantt.ts` is the only
-   *  caller with a `Gantt` façade to hand `setup()`, so it alone writes here. */
+   *  caller with a `Gantt` façade to hand `view()`, so it alone writes here.
+   *
+   *  ADR 0019: this Gantt's own chrome plugins, and only those. The Dataset's plugins install
+   *  beside them and stay off this list — this Gantt cannot drop what it did not install. */
   get plugins(): readonly ShellPlugin<unknown>[] {
-    return this.#pluginRuntime.plugins;
+    return this.#chromePlugins;
   }
 
   set plugins(next: readonly ShellPlugin<unknown>[]) {
-    this.#pluginRuntime.install(next);
+    this.#pluginRuntime.install([...this.#datasetPlugins, ...next]);
+    this.#chromePlugins = next;
   }
 
   /** D-S5-36: adds one plugin to the installed set. It sets up that plugin alone and leaves every
    *  other one untouched. An id that is already installed throws `DuplicatePluginIdError`. */
   installPlugin(plugin: ShellPlugin<unknown>): void {
-    this.#pluginRuntime.install([...this.#pluginRuntime.plugins, plugin]);
+    this.plugins = [...this.#chromePlugins, plugin];
   }
 
   /** D-S5-36: disposes one installed plugin, by id, and leaves every other one running. An id
-   *  nothing installs throws `PluginNotInstalledError`. */
+   *  nothing installs throws `PluginNotInstalledError` — a Dataset plugin's id included, because
+   *  the Dataset owns that one (ADR 0019). */
   uninstallPlugin(id: PluginId): void {
-    const installed = this.#pluginRuntime.plugins;
-    const next = installed.filter((plugin) => plugin.id !== id);
-    if (next.length === installed.length) throw new PluginNotInstalledError(id);
-    this.#pluginRuntime.install(next);
+    const next = this.#chromePlugins.filter((plugin) => plugin.id !== id);
+    if (next.length === this.#chromePlugins.length) throw new PluginNotInstalledError(id);
+    this.plugins = next;
   }
 
   /** S5.2, D-S5-6: `Gantt.commands`'s own backing registry — read-only, the registry object itself
@@ -1871,10 +1962,7 @@ export class GanttShell {
     // rebind paint twice.
     this.#frameSettings.set({
       fieldCompares: bound.fieldCompares,
-      fieldContext: createFieldContext(
-        { get: (key) => this.#options.dataset.field(key) },
-        this.#options.dataset.timeZone,
-      ),
+      fieldContext: { timeZone: this.#options.dataset.timeZone },
     });
     // #139/#157: the columns just changed, so the width they dictate changed with them.
     this.#gridPaneWidth.resizeToColumns();
@@ -1967,7 +2055,7 @@ export class GanttShell {
         revision: this.#revision++,
         columns: this.#columnChrome.resolvedColumns,
         collapsed: this.#treeCollapse.ids,
-        itemProducerRegistry: this.#registrations.itemProducers,
+        variants: this.#registrations.variants,
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
       }),

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { attachScroll } from './scroll-attachment.js';
 import { Viewport } from '../layout/index.js';
 import type { DatasetBinding } from '../layout/index.js';
-import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant } from '../model/index.js';
+import { entryDouble } from '../layout/entry-double.js';
 
 // view/ has no import edge to time/ (plans/01 §1) — instant() lives there. Date.parse on a
 // Z-offset string is deterministic regardless of the local machine's zone, unlike `new Date(str)`
@@ -13,16 +13,7 @@ function instant(iso: string): Instant {
 }
 
 function entry(id: string, start: string, end: string): Entry {
-  const startInstant = instant(start);
-  const endInstant = instant(end);
-  return {
-    id: entryId(id),
-    name: id,
-    start: startInstant,
-    end: endInstant,
-    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
-    props: {},
-  };
+  return entryDouble({ id, start: instant(start), end: instant(end) });
 }
 
 const dataset: DatasetBinding = {

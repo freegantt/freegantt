@@ -6,8 +6,9 @@ import type { Entry, EntryId, ItemId, SegmentId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
-import { createItemProducerRegistry, produceItemsForRow } from './items/produce-items.js';
-import type { Item, ItemProducerRegistry } from './items/produce-items.js';
+import { produceItemsForRow } from './items/produce-items.js';
+import { NO_VARIANTS } from './items/item.js';
+import type { Item, VariantItems } from './items/item.js';
 import { packRow, packedRowHeight, singleLane } from './lanes/pack-lanes.js';
 import type { PackedRow } from './lanes/pack-lanes.js';
 
@@ -29,7 +30,7 @@ export interface FrameMemoryBind {
   readonly rowHeight: number;
   readonly laneGap: number;
   readonly entries: readonly Entry[];
-  readonly registry: ItemProducerRegistry;
+  readonly registry: VariantItems;
   readonly datasetRevision: number;
   /** Test seam: override packed/fixed height for index-space overscan checks. */
   readonly heightAt?: (index: number) => number;
@@ -49,10 +50,7 @@ export class FrameMemory {
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
   #entryById = new Map<EntryId, Entry>();
-  /** ADR 0013: structure, not a stored classification, decides the default look — every id at least
-   *  one held Entry names as its `parentId`. Rebuilt alongside `#entryById` in `sync()`. */
-  #parentIds = new Set<EntryId>();
-  #registry: ItemProducerRegistry = createItemProducerRegistry();
+  #registry: VariantItems = NO_VARIANTS;
   #rowHeight = 0;
   #cachedRowCount = -1;
   #cachedRowHeight = -1;
@@ -72,10 +70,6 @@ export class FrameMemory {
     this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
     this.#rowHeight = bind.rowHeight;
     this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));
-    this.#parentIds = new Set();
-    for (const entry of bind.entries) {
-      if (entry.parentId !== undefined) this.#parentIds.add(entry.parentId);
-    }
     this.#registry = bind.registry;
     if (bind.heightAt !== undefined) this.#heightAt = bind.heightAt;
     else this.#heightAt = undefined;
@@ -112,7 +106,7 @@ export class FrameMemory {
     if (hit !== undefined) return hit;
     const row = this.#rowById.get(id);
     if (row === undefined) return this.#noRow;
-    const items = produceItemsForRow(row, this.#entryById, this.#registry, (id) => this.#parentIds.has(id));
+    const items = produceItemsForRow(row, this.#entryById, this.#registry);
     const packed: RowMemory = {
       items,
       packing: row.heightMode === 'pack' ? packRow(items) : singleLane(items),
@@ -150,7 +144,7 @@ export class FrameMemory {
    *  no layer outside `layout/` can restate the rule against an Entry source of its own.
    *
    *  An Item that drew one Segment stands for that Segment alone. An Item that drew its Entry's
-   *  whole span — a parent, or a plugin's own look — stands for every Segment of that Entry,
+   *  whole span — a parent, or a plugin's own variant — stands for every Segment of that Entry,
    *  because any of them selects it. An Item whose Entry this memory does not hold stands for no
    *  Segment.
    *

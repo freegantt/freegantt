@@ -94,8 +94,7 @@ async function grabbableParentBar(page: Page): Promise<DragTarget> {
     }
 
     const childIds = await page.evaluate((id) => {
-      return window.__gantt.dataset.entries
-        .childrenOf(id)
+      return (window.__gantt.dataset.entries.get(id)?.children() ?? [])
         .filter((child) => child.start !== undefined && child.end !== undefined)
         .map((child) => String(child.id));
     }, parentId);

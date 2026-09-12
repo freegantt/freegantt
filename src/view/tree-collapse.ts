@@ -108,7 +108,7 @@ export class TreeCollapse {
       this.collapse(row.id);
       return true;
     }
-    const parentId = entry.parentId;
+    const parentId = entry.parent()?.id;
     if (parentId !== undefined && this.#ctx.canSelect(parentId)) {
       this.#ctx.proposeSelection([parentId]);
       return true;
@@ -150,7 +150,7 @@ export class TreeCollapse {
 
   #firstChildOf(parentId: EntryId): EntryId | undefined {
     for (const entry of this.#ctx.entries()) {
-      if (entry.parentId === parentId) return entry.id;
+      if (entry.parent()?.id === parentId) return entry.id;
     }
     return undefined;
   }

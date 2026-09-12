@@ -62,7 +62,7 @@ export interface DomTarget {
   /** The node the walk stopped on — the bar, the cell, the row, the header cell or the splitter.
    *  A popup anchors to it; the cell editor positions over it. */
   element: HTMLElement;
-  entry?: Entry;
+  entry?: Entry | undefined;
   /** Every Entry this node stands for, in row order. Empty for a header cell, for the splitter, and
    *  for a grouping header row. Never `undefined`, so a reader counts it without a fallback. */
   entryIds: readonly EntryId[];

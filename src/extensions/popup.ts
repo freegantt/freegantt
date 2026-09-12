@@ -5,10 +5,16 @@
 // door into `view/` or `render/` (D-S5-5).
 
 import type { Disposer, ElementDescription } from '../model/index.js';
-// `../api/plugin.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
+// `../api/plugin-context.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
 // `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
-import type { DomEventHandler, DomEventOptions, GanttDom, MountLayer, PaneName } from '../api/plugin.js';
+import type {
+  DomEventHandler,
+  DomEventOptions,
+  GanttDom,
+  MountLayer,
+  PaneName,
+} from '../api/plugin-context.js';
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';

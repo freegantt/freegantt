@@ -7,13 +7,14 @@
 // `ContainerDom` to read it back. A rename in `render/dom/dom-contract.ts` keeps this green; a
 // rename at one paint site only does not.
 import { describe, expect, it } from 'vitest';
-import { FrameLayout, createItemProducerRegistry } from '../layout/index.js';
+import { FrameLayout, createVariantRegistry } from '../layout/index.js';
 import type { RowSource, TimeScale, ViewPreset } from '../layout/index.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import type { Entry, EntryId } from '../model/index.js';
+import { entryDoubleLike, entryDoubles, entryValuesOf } from '../layout/entry-double.js';
 import { segmentId } from '../model/index.js';
 
 // Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
@@ -78,7 +79,7 @@ function paintOneGantt(
   });
   // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
   const layout = new FrameLayout();
-  const itemProducerRegistry = createItemProducerRegistry();
+  const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
   const paint = (): void => {
     backend.sync(
       layout.computeFrame({
@@ -90,7 +91,7 @@ function paintOneGantt(
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
         columns: [
           { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
           { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
@@ -267,13 +268,12 @@ describe('ContainerDom — finding an element from an id', () => {
   });
 
   it('barFor anchors on the first bar the frame mounted, not on segment 0 (#185)', () => {
-    const segmented: Entry = {
-      ...entries[0]!,
+    const segmented: Entry = entryDoubleLike(entries[0]!, {
       segments: [
         { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start!, end: entries[0]!.end! },
         { id: segmentId(`${entries[0]!.id}-1`), start: entries[0]!.start!, end: entries[0]!.end! },
       ],
-    };
+    });
     const gantt = paintOneGantt([segmented]);
 
     // Virtualization culled the entry's first Segment; the second one is still on screen.
@@ -312,13 +312,12 @@ describe('ContainerDom — finding an element from an id', () => {
 
 describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   /** Two Segments with ids a test can name, so it can say which one the pane picked. */
-  const twoSegments: Entry = {
-    ...entries[0]!,
+  const twoSegments: Entry = entryDoubleLike(entries[0]!, {
     segments: [
       { id: segmentId('seg-a'), start: entries[0]!.start!, end: entries[0]!.end! },
       { id: segmentId('seg-b'), start: entries[0]!.start!, end: entries[0]!.end! },
     ],
-  };
+  });
 
   it('a bar on the timeline stands for the one Segment it draws', () => {
     const gantt = paintOneGantt([twoSegments]);
@@ -333,8 +332,11 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
     // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
     // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
     // and the Entry is its Segments.
-    const child: Entry = { ...entries[1]!, parentId: twoSegments.id };
-    const gantt = paintOneGantt([twoSegments, child]);
+    const [parent, child] = entryDoubles([
+      entryValuesOf(twoSegments),
+      entryValuesOf(entries[1]!, { parentId: String(twoSegments.id) }),
+    ]) as readonly [Entry, Entry];
+    const gantt = paintOneGantt([parent, child]);
     const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
 
     expect(bar.dataset['segmentId']).toBeUndefined();
@@ -363,14 +365,13 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   });
 
   it('a bar names the Segment it draws now, not the one it drew before a Segment was removed (#212)', () => {
-    const threeSegments: Entry = {
-      ...entries[0]!,
+    const threeSegments: Entry = entryDoubleLike(entries[0]!, {
       segments: [
         { id: segmentId('sg1'), start: entries[0]!.start!, end: entries[0]!.end! },
         { id: segmentId('sg2'), start: entries[0]!.start!, end: entries[0]!.end! },
         { id: segmentId('sg3'), start: entries[0]!.start!, end: entries[0]!.end! },
       ],
-    };
+    });
     const gantt = paintOneGantt([threeSegments]);
     const first = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
     expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg1')]);
@@ -378,7 +379,7 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
     // The consumer removes the first Segment. Bar keys are `${entryId}:${segmentIndex}`, so the node
     // survives and now draws `sg2`. Naming `sg1` here is naming a Segment the Dataset dropped, and
     // the Delete command that reads this target would throw on it.
-    gantt.repaint([{ ...threeSegments, segments: threeSegments.segments.slice(1) }]);
+    gantt.repaint([entryDoubleLike(threeSegments, { segments: threeSegments.segments.slice(1) })]);
 
     expect(gantt.container.querySelector<HTMLElement>('[data-item-id]')).toBe(first);
     expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg2')]);

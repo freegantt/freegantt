@@ -7,7 +7,7 @@
 // the half-open boundary itself, not a date-only value `dateOnlyEnd` would read as "through that day".
 
 import { Dataset } from '../src/api/index.js';
-import type { Entry, EntryInput } from '../src/api/index.js';
+import type { Entry, EntryInput, StoredEntry } from '../src/api/index.js';
 
 /** What a consumer actually writes — plain JSON, no id branding or date math. The harness uses this
  * directly, exactly as a consumer would. */
@@ -82,7 +82,10 @@ export const sampleEntryInputs: EntryInput[] = [
 /** The same entries, read once through the real Dataset boundary. Layout/render tests below `api/`
  * work with resolved `Entry` values (branded ids, `Instant` dates) and have no boundary of their own
  * to read `sampleEntryInputs` through, so this gives them the one already-resolved source of truth. */
-export const sampleEntries: readonly Entry[] = new Dataset({
-  entries: sampleEntryInputs,
-  timeZone: 'UTC',
-}).entries.all;
+const sampleDataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
+
+export const sampleEntries: readonly Entry[] = sampleDataset.entries.all;
+
+/** The same rows as stored values (ADR 0017). A test that describes a *change* carries these; a test
+ *  that asks a question about a row now carries `sampleEntries`. */
+export const sampleStoredEntries: readonly StoredEntry[] = [...sampleDataset.entries.storedValues.values()];

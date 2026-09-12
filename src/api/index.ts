@@ -1,18 +1,20 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions, DatasetPlugin, DatasetPluginContext } from './dataset.js';
+export type { DatasetOptions, DatasetPluginContext } from './dataset.js';
 // S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
 // aliases above, plus the vocabulary a plugin author names directly — its own store, another
 // plugin's read-only view, and the wrapper that composes onto the extension hook.
 export type {
-  DatasetPluginOf,
   DatasetPluginContextOf,
   DatasetEvents,
   DatasetFieldRegistrations,
   DatasetEditHook,
+  DatasetHierarchy,
   DatasetStoreAccess,
   PluginStore,
   PluginStoreView,
   ExtenderWrapper,
+  HierarchySource,
+  HierarchySourceWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
@@ -60,6 +62,7 @@ export type {
   Field,
   FieldEditable,
   FieldType,
+  ComputeContext,
   FieldContext,
   FormatContext,
   RollUpContext,
@@ -92,7 +95,9 @@ export type {
   GanttScaleOptions,
   DateLineInput,
   DateLine,
-  GanttPlugin,
+  ChromePlugin,
+  DataPlugin,
+  Plugin,
   PluginContext,
   Command,
   CommandContext,
@@ -104,7 +109,11 @@ export type {
 // The generic shapes behind the Gantt-bound aliases above (S5.1/S5.2). A plugin author writing
 // against `Gantt` names the bound forms; code parameterizing over its own Gantt type names these —
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
-export type { GanttPluginOf, PluginContextOf, PluginContextParts } from './plugin.js';
+export type { ChromePluginOf, DataPluginOf, PluginIdentity, PluginOf } from './plugin.js';
+export type { PluginContextOf, PluginContextParts } from './plugin-context.js';
+// ADR 0019: one plugin, one install site. `definePlugin` narrows to the arm the object fills, so a
+// plugin with a `data` half never type-checks into `GanttOptions.plugins`.
+export { definePlugin } from './define-plugin.js';
 export type {
   BuiltInCommandId,
   CommandId,
@@ -140,7 +149,6 @@ export type {
 export type {
   CapabilityRule,
   Interactions,
-  KindDefaults,
   WriteRefusalReason,
   WriteRule,
   WriteVerdict,
@@ -258,8 +266,8 @@ export type { PluginId, Disposer, KeyChord } from '../model/index.js';
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
+  StoredEntry,
   EntryId,
-  EntryLook,
   Segment,
   SegmentId,
   RowId,
@@ -268,6 +276,7 @@ export type {
   TimeUnit,
   TimeSpan,
   Duration,
+  DurationMeasure,
   EntryStoreView,
   EntryStore,
 } from '../model/index.js';
@@ -318,7 +327,6 @@ export type {
   BarLabels,
   BarLabelPlacement,
   ResolvedBarLabel,
-  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,
@@ -343,13 +351,14 @@ export type {
   RangeBand,
   RowStripe,
 } from '../layout/index.js';
-// S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)`'s own vocabulary — a plugin
-// author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
-// are exported rather than left to structural inference.
+// ADR 0018: `EntryVariant.items`'s own vocabulary — a plugin author naming `ItemProducer`
+// explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
+// to structural inference.
 export type { Item, ItemProducer } from '../layout/index.js';
-// Q10: `ctx.layout.registerLookClaim(look, claim)`'s own vocabulary, exported for the same reason —
-// a plugin author who names the predicate's type needs to be able to name it (J30).
-export type { LookClaim } from '../layout/index.js';
+// ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
+// it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
+// `VariantPredicate` names its predicate arm alone.
+export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';

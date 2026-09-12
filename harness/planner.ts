@@ -15,20 +15,14 @@ import type {
   EntryId,
   GridColumnInput,
   Instant,
-  RendererByLook,
+  EntryVariant,
   ResolvedBarLabel,
 } from '../src/api/index.js';
-import {
-  plannerCheckpointEntryIds,
-  plannerEntryInputs,
-  plannerFieldOptions,
-  plannerSpan,
-} from '../fixtures/planner-dataset.js';
+import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import type { PlannerThemeChoice } from './planner-toolbar.js';
 import { weekendShading } from './plugins/weekend-shading.js';
-import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: what this page shows, the config that does it, and the spec section behind it.
@@ -39,8 +33,6 @@ const dataset = new Dataset<PlannerEntryProps>({
   timeZone: 'UTC',
   ...plannerFieldOptions,
 });
-
-const checkpointEntryIds = new Set(plannerCheckpointEntryIds);
 
 // The design's own column set, left to right. Each one names a Field and carries presentation only —
 // the width, the alignment, and where a cell paints something other than its formatted text.
@@ -66,11 +58,11 @@ function phaseFill(phase: unknown): string | undefined {
  *  bar already says which phase they are. */
 function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (entry === undefined) return undefined;
-  const props = entry.props as PlannerEntryProps | undefined;
-  const isPhase = dataset.entries.childrenOf(entry.id).length > 0;
-  const isCheckpoint = checkpointEntryIds.has(String(entry.id));
+  const phase = entry.read('phase');
+  const isPhase = entry.hasChildren;
+  const isCheckpoint = entry.read('checkpoint') === true;
   const children: (ElementDescription & { key?: string })[] = [];
-  const fill = phaseFill(props?.phase);
+  const fill = phaseFill(phase);
   if (fill !== undefined && !isPhase && !isCheckpoint) {
     children.push({ key: 'tag', class: { 'demo-phase-tag': true }, style: { background: fill } });
   }
@@ -82,7 +74,7 @@ function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescripti
  *  be — a photo rather than initials — which has no declared Field type yet. Initials until it does. */
 function ownerCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (value === '') return { text: '' };
-  const fill = phaseFill((entry?.props as PlannerEntryProps | undefined)?.phase);
+  const fill = phaseFill(entry?.read('phase'));
   return {
     class: { 'demo-avatar': true },
     ...(fill === undefined ? {} : { style: { background: fill } }),
@@ -162,7 +154,7 @@ function barLabel(label: ResolvedBarLabel, styleClass?: string): ElementDescript
 /** How far along one row is, as the percentage the design paints. `undefined` for a row that
  *  declares no progress at all, which is not the same fact as `0`. */
 function progressOf(entryId: EntryId): number | undefined {
-  const progress = dataset.entries.fieldValue(entryId, 'progress');
+  const progress = dataset.entries.get(entryId)?.read('progress');
   return typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined;
 }
 
@@ -171,9 +163,8 @@ function progressOf(entryId: EntryId): number | undefined {
  *  its label, and an inset ring when the row is on the critical path. `'*'` registers it as the
  *  catch-all, so any kind this page does not answer for by name lands here. */
 function phaseBar({ entry, label }: BarRendererContext): ElementDescription | undefined {
-  const props = entry.props as PlannerEntryProps | undefined;
-  const fill = phaseFill(props?.phase);
-  const description: ElementDescription = { class: { 'demo-critical': props?.critical === true } };
+  const fill = phaseFill(entry.read('phase'));
+  const description: ElementDescription = { class: { 'demo-critical': entry.read('critical') === true } };
   if (fill !== undefined) description.style = { '--fg-bar-fill': fill };
 
   const children: (ElementDescription & { key?: string })[] = [];
@@ -185,18 +176,11 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   // The critical ring is a child, not a box-shadow on the bar. The bar's own shadow slot belongs to
   // the library — `hovered` and `dragging` both paint there — and a second box-shadow rule on
   // `.fg-bar` would replace theirs rather than join it. A nested ring composes with both for free.
-  if (props?.critical === true) {
+  if (entry.read('critical') === true) {
     children.push({ key: 'critical', class: { 'demo-critical-ring': true } });
   }
   if (children.length > 0) description.children = children;
   return description;
-}
-
-/** A phase's rail is the library's own paint, and the design draws exactly that: a solid rail in the
- *  row ink, with end caps and no label. `undefined` keeps it, so this kind opts out of the page's
- *  own bar paint rather than restating it. */
-function phaseRail(): ElementDescription | undefined {
-  return undefined;
 }
 
 /** A checkpoint (DESIGN-FACTS §2.5): a diamond glyph, filled when the checkpoint is done and hollow —
@@ -220,10 +204,14 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
   return description;
 }
 
-// ADR 0013: core computes only the `'parent'`/`'leaf'` structural looks itself — a phase (any row
-// with children) reaches `'parent'` with no plugin at all. A checkpoint is not structural, so
-// `milestoneKind()` (installed below, owning `plannerCheckpointEntryIds`) makes `'milestone'` real.
-const PHASE_BARS: RendererByLook = { '*': phaseBar, parent: phaseRail, milestone: checkpointDiamond };
+// ADR 0018: one variant, one rule. A checkpoint states its own rule against the Field the fixture
+// writes. Nothing here stores a variant, and nothing keeps a list of the rows it owns.
+//
+// A phase needs no entry at all. Core's own `parent` variant already claims a row with children and
+// paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
+const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
+  { name: 'checkpoint', when: { checkpoint: true }, paint: checkpointDiamond },
+];
 
 const gantt = new Gantt({
   container: '#gantt',
@@ -235,7 +223,9 @@ const gantt = new Gantt({
   // option — and the design's own 36px is the library's default now, so this page states nothing.
   range: plannerSpan,
   preset: 'weekAndMonth',
-  barRenderer: PHASE_BARS,
+  // Every bar this page paints that no variant above claims.
+  barRenderer: phaseBar,
+  variants: PLANNER_VARIANTS,
 });
 
 // ---- Chrome ----------------------------------------------------------------------------------
@@ -243,7 +233,6 @@ const gantt = new Gantt({
 // Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2) — a working plugin over
 // the public surface alone, install and a CSS band, nothing this page re-derives.
 gantt.installPlugin(weekendShading());
-gantt.installPlugin(milestoneKind(plannerCheckpointEntryIds));
 
 const THEME_STORAGE_KEY = 'freegantt-planner-theme';
 
@@ -343,7 +332,7 @@ function renderSelection(): void {
         : first.end !== undefined
           ? `— → ${formatDate(zone, first.end)}`
           : 'No dates';
-  const done = dataset.entries.fieldValue(first.id, 'progress');
+  const done = first.read('progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
   setReadout(`${first.name} · ${span}${percent}${more}`);

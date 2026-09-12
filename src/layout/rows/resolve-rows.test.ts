@@ -1,40 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, rowId, segmentId, UnknownFieldError } from '../../model/index.js';
-import type { Entry, Instant } from '../../model/index.js';
+import { rowId, UnknownFieldError } from '../../model/index.js';
+import type { Entry } from '../../model/index.js';
+import type { EntryDoubleValues } from '../entry-double.js';
+import { entryDoubles } from '../entry-double.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSource } from './row-source.js';
 import { resolveRows } from './resolve-rows.js';
 
-function instant(n: number): Instant {
-  return n as Instant;
-}
-
-function entry(
+function stored(
   id: string,
-  opts?: { parentId?: string; team?: string; start?: number; cost?: number },
-): Entry {
-  const start = instant(opts?.start ?? 0);
-  const end = instant((opts?.start ?? 0) + 1);
-  const row: Entry = {
-    id: entryId(id),
-    name: id,
-    start,
-    end,
-    segments: [{ id: segmentId(`${id}-1`), start, end }],
-    props: {},
+  opts?: { parentId?: string; team?: string; start?: number; end?: number; cost?: number },
+): EntryDoubleValues {
+  return {
+    id,
+    start: opts?.start ?? 0,
+    end: opts?.end ?? (opts?.start ?? 0) + 1,
+    ...(opts?.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    props: {
+      ...(opts?.team !== undefined ? { team: opts.team } : {}),
+      ...(opts?.cost !== undefined ? { cost: opts.cost } : {}),
+    },
   };
-  if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
-  if (opts?.team !== undefined || opts?.cost !== undefined) {
-    row.props = {
-      ...(opts.team !== undefined ? { team: opts.team } : {}),
-      ...(opts.cost !== undefined ? { cost: opts.cost } : {}),
-    };
-  }
-  return row;
 }
 
 function costCompares(): readonly FieldCompare[] {
-  const readMetaCost = (row: Entry) => (row.props as { cost?: number } | undefined)?.cost;
+  const readMetaCost = (row: Entry) => row.read('cost');
   return [
     {
       key: 'name',
@@ -62,18 +52,22 @@ function costCompares(): readonly FieldCompare[] {
   ];
 }
 
-const treeEntries = [
-  entry('p', { team: 'A', start: 0 }),
-  entry('c1', { parentId: 'p', team: 'A', start: 20 }),
-  entry('c2', { parentId: 'p', team: 'A', start: 10 }),
-  entry('q', { team: 'B', start: 5 }),
-];
+const treeEntries = entryDoubles([
+  stored('p', { team: 'A', start: 0 }),
+  stored('c1', { parentId: 'p', team: 'A', start: 20 }),
+  stored('c2', { parentId: 'p', team: 'A', start: 10 }),
+  stored('q', { team: 'B', start: 5 }),
+]);
 
-const teamA = (row: Entry) => (row.props as { team?: string } | undefined)?.team === 'A';
+const teamA = (row: Entry) => row.read('team') === 'A';
 
 describe('resolveRows (D2, S4.9)', () => {
   it('matchOnly plus collapse does not paint a twisty that hides nothing', () => {
-    const entries = [entry('a'), entry('b', { parentId: 'a' }), entry('c', { parentId: 'b' })];
+    const entries = entryDoubles([
+      stored('a'),
+      stored('b', { parentId: 'a' }),
+      stored('c', { parentId: 'b' }),
+    ]);
     const rows = resolveRows({
       entries,
       rows: { source: 'entries', tree: true, filter: () => true, filterPolicy: 'matchOnly' },
@@ -87,8 +81,7 @@ describe('resolveRows (D2, S4.9)', () => {
   });
 
   it('a computed Field sorts even when it is not a stored key', () => {
-    const entries = [entry('short', { start: 0 }), entry('long', { start: 10 })];
-    entries[1]!.end = instant(40);
+    const entries = entryDoubles([stored('short', { start: 0 }), stored('long', { start: 10, end: 40 })]);
     const rows = resolveRows({
       entries,
       rows: { source: 'entries', sort: { field: 'duration' } },
@@ -98,7 +91,7 @@ describe('resolveRows (D2, S4.9)', () => {
   });
 
   it("sort: { field: 'cost' } uses the cost comparer even when name is the only grid column", () => {
-    const entries = [entry('high', { cost: 12_000 }), entry('low', { cost: 500 })];
+    const entries = entryDoubles([stored('high', { cost: 12_000 }), stored('low', { cost: 500 })]);
     const rows = resolveRows({
       entries,
       rows: { source: 'entries', sort: { field: 'cost' } },
@@ -110,7 +103,7 @@ describe('resolveRows (D2, S4.9)', () => {
   it('an unregistered sort field throws UnknownFieldError', () => {
     expect(() =>
       resolveRows({
-        entries: [entry('a')],
+        entries: entryDoubles([stored('a')]),
         rows: { source: 'entries', sort: { field: 'nope' } },
         fieldCompares: costCompares(),
       }),
@@ -172,7 +165,7 @@ describe('resolveRows source × policy × sort × collapsed', () => {
       name: 'group sort collapsed',
       rows: {
         source: 'group',
-        groupBy: (row) => String((row.props as { team?: string }).team),
+        groupBy: (row) => String(row.read('team')),
         sort: { field: 'start' },
       },
       collapsed: [rowId('group:A')],
@@ -182,7 +175,7 @@ describe('resolveRows source × policy × sort × collapsed', () => {
       name: 'group sort expanded',
       rows: {
         source: 'group',
-        groupBy: (row) => String((row.props as { team?: string }).team),
+        groupBy: (row) => String(row.read('team')),
         sort: { field: 'start' },
       },
       ids: ['group:A', 'p', 'c2', 'c1', 'group:B', 'q'],
