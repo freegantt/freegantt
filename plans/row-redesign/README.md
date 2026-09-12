@@ -140,6 +140,8 @@ ctx.addVariant({ name: 'buffer', when: (entry) => entry.read('slack') > 0, paint
 
 ## Open
 
-Each ADR's frontmatter carries its own. What still needs the author:
+Each ADR's frontmatter carries its own. One thing still needs the author, and it blocks no build:
 
-1. **The hierarchy seam's name.** [0020](../../docs/adr/0020-a-plugin-may-own-the-hierarchy.md) writes `setHierarchySource`, beside `setExtender`. The glossary term is Hierarchy (`CONTEXT.md:47`), and that entry needs an edit either way — it defines the tree as `parentId`.
+1. **Which end of the setup order wins a double claim.** `requires` sets the order — D-S5-31, ruled 2026-09-01, and no build adds a knob. What is open is one word: the **first** registration wins, or the **newest**. HEAD says both. `registerClaim` and `register` say newest (`layout/items/produce-items.ts:134-144`); `claimedLookFor` says *"the first yes is the whole answer"* (`:197`). See `Q5` in [`BUILD-LOG.md`](BUILD-LOG.md).
+
+**Closed 2026-09-11.** The hierarchy seam is `setHierarchySource` (`Q3`). `CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`, and Build 4 edits that entry.

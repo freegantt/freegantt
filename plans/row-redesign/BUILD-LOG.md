@@ -46,7 +46,7 @@ ADR 0017 rule 5 says `read()` is *the one* value door. Three doors answer the sa
 
 **ADR 0017's *Open* undercounts the surface.** It names two renderer contexts. `entry?: Entry` appears at seven sites: `model/field.ts:68`, `layout/renderer.ts:47`, `view/gantt-shell.ts:227`, `view/gantt-dom.ts:65`, `render/dom/index.ts:64`, `api/command.ts:131`, `extensions/features/context-menu.ts:34`. Not all of them want `TProps` — establishing which do is part of the answer.
 
-**Answered 2026-09-11. No prototype was run, and none is needed yet. Still open, and deferred past this redesign.**
+**Answered 2026-09-11. No prototype was run, and none is needed yet. The author accepted the defer the same day: it is settled on [#284](https://github.com/Pawel-IT/FreeGantt/issues/284), after Build 4, and no build in this redesign waits on it.**
 
 **[#284](https://github.com/Pawel-IT/FreeGantt/issues/284) does not close this.** It types **plugin** keys through an ambient interface merge (`PluginEntryProps`). Q2 asks about the **consumer's** keys at the **renderer** seam. Two different holes. All six casts above are consumer keys or core values, so #284 removes none of them.
 
@@ -64,11 +64,11 @@ ADR 0017 rule 5 says `read()` is *the one* value door. Three doors answer the sa
 
 ## Q3 — what is the hierarchy seam called?
 
-**Raised in ADR 0020's own `open:`. Build 4. Open.**
+**Raised in ADR 0020's own `open:`. Build 4. RULED 2026-09-11: the seam is `setHierarchySource`.**
 
-The draft writes `setHierarchySource`, beside `setExtender`. The glossary term is Hierarchy (`CONTEXT.md:47`), and that entry needs an edit either way — it defines the tree as `parentId`.
+It sits beside `setExtender` on the `data` half, and it reads the same way: `ctx.setHierarchySource((entry) => …)`. The author accepted the draft word.
 
-**Until the author answers:** Build 4 uses the draft word and files the glossary edit behind it.
+`CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`. Build 4 edits that entry: the tree is what the hierarchy source answers, and `parentId` is core's own source.
 
 ---
 
@@ -86,11 +86,25 @@ A plugin with a `data` half, handed to a `Gantt`, has arrived too late to declar
 
 ## Q5 — which rule wins when two plugins both answer yes?
 
-**Raised in ADR 0018's own `open:`. Build 2. Open.**
+**Raised in ADR 0018's own `open:`. Build 2. Half of it was never open, and the author said so on 2026-09-11.**
 
-Registration order decides it today. Nobody has ruled on what sets that order across plugins.
+**What sets the order was decided on 2026-09-01: `requires`.** D-S5-31 — `plans/s5-extensibility-and-editing/README.md` Q19, `plans/01:892`. A plugin declares `requires: readonly PluginId[]`, and the host topologically sorts the installed set by that graph before any `setup` runs (`extensions/install-dataset-plugins.ts`, `resolveSetupOrder`). `[a, b]` and `[b, a]` install identically. A missing prerequisite throws `MissingPluginError`, a ring throws `PluginRequirementCycleError`, and **there is no `PluginOrderError`, because there is no wrong order left to write.**
 
-**Until the author answers:** Build 2 keeps registration order and keeps the double-claim diagnostic. `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive the rename for this reason.
+So the order is inferred, not authored. Two plugins with an edge between them are already ordered. **Two plugins with no edge are siblings, and `plans/01:892` states the rule for them: siblings must not depend on load order.** A sibling collision is an authoring error, and the double-claim diagnostic is what names it. That is the diagnostic's whole job.
+
+[ADR 0019](../../docs/adr/0019-one-plugin-one-install-site.md) is what carries this to variants. Today a variant is registered by a Gantt plugin, and a Gantt plugin's order is array order. After 0019 one plugin holds both halves and one `requires`, so one resolved order serves the `data` half and the `view` half together.
+
+**What is still open is one word: which end of that order wins.** The codebase says both things today.
+
+| Seam | Rule at HEAD |
+|---|---|
+| `registerClaim(look, claim)` (`produce-items.ts:134-137`) | **newest wins**, and disposal restores the one before it |
+| `register(look, producer)` (`:138-144`) | **newest wins** — it replaces whatever the look resolved to |
+| `claimedLookFor(entry)` across two different looks (`:188-198`) | **first yes wins** — *"the first yes is the whole answer"* |
+
+**Recommendation: last wins, so all three seams agree.** It also matches what `requires` means. `b.requires = ['a']` says b builds on a, so b installs second — and b is the one that should be able to override. Under first-wins, declaring a dependency makes you lose, which reads backwards.
+
+**Until the author answers that one word:** Build 2 keeps `claimedLookFor`'s first-yes behaviour and keeps the double-claim diagnostic. `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive the rename for this reason.
 
 ---
 
