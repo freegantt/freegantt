@@ -275,7 +275,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
     dataset.entries.update('e1', { owner: 'bo' });
 
-    expect(dataset.entries.fieldValue('e1', 'owner')).toBe('bo');
+    expect(dataset.entries.get('e1')?.read('owner')).toBe('bo');
     gantt.destroy();
     container.remove();
   });
@@ -355,7 +355,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const el = input(container);
     el.value = '$650';
     enter(el);
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(650);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(650);
     gantt.destroy();
     container.remove();
   });
@@ -367,7 +367,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     el.value = 'not a number';
     enter(el);
     expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(500);
     gantt.destroy();
     container.remove();
   });
@@ -1047,7 +1047,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // Exactly one live control — the budget editor, still holding the value it refused.
     expect(container.querySelectorAll('.fg-cell-editor-control')).toHaveLength(1);
     expect(input(container).value).toBe('not a number');
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(500);
 
     gantt.destroy();
     container.remove();

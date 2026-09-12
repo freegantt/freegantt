@@ -47,11 +47,11 @@ describe('EntryStore', () => {
       [entry('root'), entry('a', 'root'), entry('b', 'root'), entry('c')],
       createContext(),
     );
-    expect(store.childrenOf('root').map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
+    expect(store.storedChildrenOf('root').map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
   });
 
   it('an entry with no children returns an empty array, not undefined', () => {
     const store = new EntryStore([entry('leaf')], createContext());
-    expect(store.childrenOf(entryId('leaf'))).toEqual([]);
+    expect(store.storedChildrenOf(entryId('leaf'))).toEqual([]);
   });
 });

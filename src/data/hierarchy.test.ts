@@ -51,11 +51,11 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05' },
     ]);
-    expect(state.entries.childrenOf('p1')).toEqual([]);
+    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
 
     state.entries.update('c1', { parentId: 'p1' });
 
-    expect(state.entries.childrenOf('p1')).toHaveLength(1);
+    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(1);
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
@@ -65,7 +65,7 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'p1', start: '2026-01-01', end: '2026-01-02', cost: 500 },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05', cost: 10 },
     ]);
-    expect(state.entries.get('p1')!.props['cost']).toBe(500);
+    expect(state.entries.get('p1')!.read('cost')).toBe(500);
 
     let sawCostDrop = false;
     state.on('change', ({ changeSet }) => {
@@ -77,7 +77,7 @@ describe('structure decides derivation (ADR 0013)', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     expect(sawCostDrop).toBe(true);
-    expect(state.entries.get('p1')!.props['cost']).toBe(10);
+    expect(state.entries.get('p1')!.read('cost')).toBe(10);
   });
 
   it('[ADR 0013] losing the last child demotes: name stays, dates clear, no bar', () => {
@@ -94,7 +94,7 @@ describe('structure decides derivation (ADR 0013)', () => {
     expect(p1.start).toBeUndefined();
     expect(p1.end).toBeUndefined();
     expect(p1.segments).toEqual([]);
-    expect(state.entries.childrenOf('p1')).toEqual([]);
+    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
   });
 
   it('construction rolls up a parent that already has children, silently', () => {
@@ -116,13 +116,13 @@ describe('structure decides derivation (ADR 0013)', () => {
     const end = state.entries.get('p1')!.end;
 
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.childrenOf('p1')).toHaveLength(1);
+    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(1);
 
     state.undo();
-    expect(state.entries.childrenOf('p1')).toEqual([]);
+    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
     expect(state.entries.get('p1')!.start).toBe(start);
     expect(state.entries.get('p1')!.end).toBe(end);
-    expect(state.entries.get('c1')!.parentId).toBeUndefined();
+    expect(state.entries.get('c1')!.parent()?.id).toBeUndefined();
   });
 
   it('one undo reverses both the parentId write and the dropped authored value it caused (ADR 0013)', () => {
@@ -132,12 +132,12 @@ describe('structure decides derivation (ADR 0013)', () => {
     ]);
 
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.get('p1')!.props['cost']).toBe(10); // the authored 500 already dropped
+    expect(state.entries.get('p1')!.read('cost')).toBe(10); // the authored 500 already dropped
     expect(state.canUndo).toBe(true);
 
     state.undo();
-    expect(state.entries.get('c1')!.parentId).toBeUndefined();
-    expect(state.entries.get('p1')!.props['cost']).toBe(500); // one undo restores both
+    expect(state.entries.get('c1')!.parent()?.id).toBeUndefined();
+    expect(state.entries.get('p1')!.read('cost')).toBe(500); // one undo restores both
     expect(state.canUndo).toBe(false);
   });
 });

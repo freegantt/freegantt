@@ -32,7 +32,7 @@ function assertParentsMatchAggregator(
 ): void {
   const aggregator = SHIPPED_AGGREGATORS[rollUp];
   for (const parent of state.entries.all) {
-    const children = state.entries.childrenOf(parent.id);
+    const children = (state.entries.get(parent.id)?.children() ?? []);
     if (children.length === 0) continue;
     const expected = aggregator?.(children, parent, createRollUpContext(state.fieldContext, 'cost'));
     expect(state.fieldContext.read(parent, 'cost')).toBe(expected);

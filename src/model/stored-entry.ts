@@ -79,13 +79,17 @@ export function spansTime<T extends { start?: Instant | undefined; end?: Instant
  * `InstantInput`. An `Entry` is itself a valid `EntryInput`, so a consumer that already holds branded
  * values passes them through unchanged.
  *
- * `Dataset` reads this into `Entry` once, at construction, in the Dataset's own zone — see
+ * `Dataset` reads this into a `StoredEntry` once, at construction, in the Dataset's own zone — see
  * `DateOnlyEndRule` for how a date-only `end` is read.
+ *
+ * Every optional key admits an explicit `undefined`, which is what keeps the sentence above true
+ * under `exactOptionalPropertyTypes`: a live `Entry`'s `start` is `Instant | undefined`, and
+ * `entry.toInput()` hands one straight back to `entries.add`.
  */
 export interface EntryInput<TProps = Record<string, unknown>> {
   id: string;
   /** Hierarchy; roots have none. */
-  parentId?: string;
+  parentId?: string | undefined;
   /** No stored classification (ADR 0013). An Entry derives when it has children — gaining one
    *  promotes it, losing the last one demotes it, and nothing here says which. */
   name: string;
@@ -93,12 +97,12 @@ export interface EntryInput<TProps = Record<string, unknown>> {
    * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment
    * and draws no bar otherwise. One date with no other is legal and stores as written. An unreadable
    * date is still an `InvalidInstantError`. */
-  start?: InstantInput;
+  start?: InstantInput | undefined;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
-  end?: InstantInput;
+  end?: InstantInput | undefined;
   /** Interrupted work — renders as multiple bars on one row. Omit it and ingest fills one Segment
    * over `[start, end)`, so a stored `Entry` always has at least one. */
-  segments?: readonly SegmentInput[];
+  segments?: readonly SegmentInput[] | undefined;
   /** Passenger data, and a bag a consumer already holds (ADR 0011, Q15). A declared Field key belongs
    *  at the top level instead — `entries.add({ id, name, owner: 'Ali' })` — and naming one both here
    *  and at the top throws. An unknown top-level key, or a key here that names a core key, warns and

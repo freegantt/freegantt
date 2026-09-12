@@ -129,7 +129,7 @@ describe('produceItemsForRow', () => {
 
   it('[S4-A8] an entry with no children produces no Item; a child gives it a real span (ADR 0012)', () => {
     const dataset = emptyGroupDataset();
-    const hasChildren = (id: EntryId): boolean => dataset.entries.childrenOf(id).length > 0;
+    const hasChildren = (id: EntryId): boolean => (dataset.entries.get(id)?.children() ?? []).length > 0;
     const empty = dataset.entries.get('g1')!;
     expect(empty.start).toBeUndefined();
     expect(empty.end).toBeUndefined();

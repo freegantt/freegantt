@@ -223,7 +223,7 @@ describe('runTransaction', () => {
           props: {},
         });
         sizeDuring = state.entries.size;
-        childDuring = state.entries.childrenOf(entryId('root')).map((e) => e.id);
+        childDuring = (state.entries.get(entryId('root'))?.children() ?? []).map((e) => e.id);
         allDuring = state.entries.all;
       },
       'user',
@@ -239,8 +239,8 @@ describe('runTransaction', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a' }]);
     state.transaction(() => {
       state.entries.update('c', { parentId: 'b' });
-      expect(state.entries.childrenOf('a').map((e) => e.id)).toEqual([]);
-      expect(state.entries.childrenOf('b').map((e) => e.id)).toEqual([entryId('c')]);
+      expect((state.entries.get('a')?.children() ?? []).map((e) => e.id)).toEqual([]);
+      expect((state.entries.get('b')?.children() ?? []).map((e) => e.id)).toEqual([entryId('c')]);
     });
   });
 
@@ -1063,7 +1063,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
 
     renameT1(state);
 
-    expect(state.entries.fieldValue(entryId('t2'), 'cost')).toBe(500);
+    expect(state.entries.get(entryId('t2'))?.read('cost')).toBe(500);
     expect(rows.some((row) => row.field === 'cost')).toBe(true);
   });
 

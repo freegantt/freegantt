@@ -47,7 +47,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'props' }] })).toThrow(ReservedFieldKeyError);
   });
 
-  it('{ key: cost, type: money } reads entry.props.cost, unmediated', () => {
+  it('{ key: cost, type: money } reads entry.read(cost), unmediated', () => {
     const registry = new FieldRegistry({
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
