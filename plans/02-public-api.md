@@ -373,7 +373,7 @@ barRenderer: ({ entry, item }) => ({
 
 Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (structure, fields, typed `props`):
 
-**Look.** Every bar element carries `data-kind`, so look styling is level-2 CSS with zero JS (`.fg-bar[data-kind="parent"] { ... }`). That attribute is the look a producer claimed — parent, leaf, or a plugin look — not a stored Entry classification (ADR 0013). A bar whose painted span was widened to `--fg-bar-min-width` or a diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-kind` to style a floored span differently from a floored diamond (`.fg-bar[data-kind="leaf"][data-span="minimum"] { ... }`). At level 3, `barRenderer` is either one function that branches, or a map keyed on look so the common case needs no branching — a plugin look slots in by the id the plugin stores:
+**Variant.** Every bar element carries `data-variant`, so variant styling is level-2 CSS with zero JS (`.fg-bar[data-variant="parent"] { ... }`). That attribute is the Variant this Gantt resolved for the row — `parent`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification (ADR 0013, ADR 0018). A bar whose painted span was widened to `--fg-bar-min-width` or a diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-variant` to style a floored span differently from a floored diamond (`.fg-bar[data-variant="leaf"][data-span="minimum"] { ... }`). At level 3, `variants` paints one named set of rows and `barRenderer` is the catch-all for every bar no Variant paints:
 
 ```ts
 barRenderer: {
@@ -388,7 +388,7 @@ barRenderer: {
 
 A `barRenderer` result owns its bar's content, so the library injects no label child and stamps no `data-label` for it. It still reads the same answer: `ctx.label` carries the resolved `{ text, placement }` for that bar at that width, and is absent under `barLabels: 'none'`. So a consumer who customises a bar keeps fit-based labelling and never needs a text ruler — the library measures once, in one place, for its own label and a renderer's alike.
 
-**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over per-kind defaults. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a kind (or any predicate) ships its own action set.
+**Actions.** The `interactions` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over the resolved Variant's own `can` (ADR 0018), which is layered over the library rule. A predicate at any level may answer `undefined` for "no opinion", and the answer falls to the next level. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedSegmentIds` setter does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a Variant (`when: ({ variant }) => ...`) or any predicate ships its own action set.
 
 **`interactions.edit` names a cell, not an entry** (#256). Its predicate takes `(entry, field)`, because a write names one Entry and one Field — the changeset's own shape. It is the one override above `Field.editable` (§2.6), and the only per-entry axis that key has: a Field states which values are writable at all, and this states which of them are writable *here*. It answers for every writer at once — the cell editor, both resize handles, and the bar move — because all three write a cell. A predicate returns `undefined` for a cell it has no opinion about, and the rules below it decide that cell, so locking one End does not open every derived value on the page. A bare boolean pins every cell with no fall-through.
 
@@ -573,7 +573,7 @@ app author installing two plugins meets one rule rather than one rule per seam.
 | Seam shape | Two plugins claim the same thing | Seams |
 |---|---|---|
 | **A single paint slot** | **Throws** `RendererAlreadyRegisteredError`, naming the slot and both plugin ids. Two plugins painting one slot is an authoring mistake, and silence would make it look like the second plugin did nothing. | `view.registerRenderer` |
-| **Keyed by an identifier** | **The newest registration wins**, and the one it covered is still there. | `commands.register`, `interaction.registerKindDefaults`, `view.registerGridColumn`, `layout.registerItemProducer` |
+| **Keyed by an identifier** | **The newest registration wins**, and the one it covered is still there. | `commands.register`, `variants.add`, `view.registerGridColumn` |
 | **Additive, no key** | No collision to have — every registration runs. | `view.registerDecoration`, `interaction.registerKeybinding` (newest-first at resolve time) |
 
 **Lifetime is the same for all six: a registration lives exactly as long as the plugin that made it.**
@@ -588,15 +588,17 @@ teardown already holds a copy. A plugin that shows a column, a key binding or a 
 mode only calls it to retract that registration while the plugin keeps running. Calling it twice is
 safe.
 
-**A paint slot is not always a whole point.** `cell`, `header` and `tooltip` are: one plugin claims
-each, because a cell belongs to a column and a header to a band, so neither has a key to merge on.
-The `bar` point already takes a per-kind map (D-S5-12), and that map **is** the key. So
-`registerRenderer('bar', { buffer: … })` claims `bar:buffer` alone. A plugin that defines one kind
-and a plugin that defines another both install, and both paint. Two plugins that name the same kind
-still throw. The whole-point form, `registerRenderer('bar', fn)`, stays exclusive: one function
-answers every kind, so it refuses, and is refused by, any per-kind claim. A consumer's own
-`barRenderer` still wins over every plugin slot (D-S5-11), and a registered `'*'` still answers every
-kind the exact slots miss.
+**Every paint point is a whole point.** `bar`, `cell`, `header` and `tooltip` all hold one slot, and
+one plugin claims each. The `bar` point held one slot per variant name until ADR 0018, so two
+plugins that each defined a variant both registered here. They install through `ctx.variants.add`
+now, and each Variant carries its own `paint`, so the per-variant map retires with `RendererByLook`
+and D-S5-12 with it.
+
+**A Variant's `paint` names the rows it covers, so it answers before `barRenderer`.** `barRenderer`
+is the catch-all for every bar no Variant paints, which is what the retired map's `'*'` entry meant.
+D-S5-11 still orders that catch-all: a consumer's own `barRenderer` beats a plugin's whole-point
+`bar` renderer. To take a row a plugin's Variant claimed, declare a Variant of the same name — the
+consumer's rules outrank every plugin's.
 
 **A plugin's `setup(ctx)` returns a `Disposer`, or nothing.** Every `register*` and every
 `onDomEvent` files its own removal in `ctx.disposables`, so a plugin that owns no timer, socket or
@@ -604,8 +606,9 @@ subscription of its own has nothing left to return. `return () => {};` was cerem
 newcomer it read as if something were missing.
 
 **`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, which is
-what almost every item producer wants: `ctx.layout.registerItemProducer(kind, (entry) =>
-[wholeEntryItem(entry)])`. It is pure and DOM-free, and it is the one owner of the
+what almost every `EntryVariant.items` producer wants, and what a Variant that omits `items`
+already draws.
+ It is pure and DOM-free, and it is the one owner of the
 `${entryId}:${segmentIndex}` Item id convention — the one thing a plugin could otherwise get wrong
 from documentation alone.
 

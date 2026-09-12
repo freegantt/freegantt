@@ -176,7 +176,7 @@ interface Item {
   id: ItemId;                  // deterministic — see §2.4
   rowId: RowId;
   entryId: EntryId;
-  look: 'parent' | 'leaf' | (string & {});  // structure, or a plugin-owned look — stamped as data-kind
+  variant: string;             // the Variant this Gantt resolved — stamped as data-variant (ADR 0018)
   segmentIndex?: number;
   start: Instant; end: Instant;
   lane: number;                // sub-lane within the row
@@ -223,7 +223,7 @@ rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-de
 
 Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is a seam, mirroring rendering (§10): the pipeline asks structure first. A parent with children uses the parent producer. A leaf uses the bar producer. A plugin that owns ids registers a producer for those ids via `layout.registerItemProducer` (§10, S5.9, D-S5-22). Unregistered ids fall back to the structure look.
+Item emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `items` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
 
 ```ts
 type ItemProducer = (entry: Entry) => readonly Item[];
@@ -233,22 +233,22 @@ type ItemProducer = (entry: Entry) => readonly Item[];
 
 `Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
 
-### 2.5 Entry structure — children decide derivation and the default look
+### 2.5 Entry structure — children decide derivation and the default Variant
 
-An Entry has children, or it does not. That structure answers derivation and the default bar look. Every other layer maps that answer through a registry or seam it already has — never `if (kind === ...)` chains in core (ADR 0013):
+An Entry has children, or it does not. That structure answers derivation and the default bar shape. Every other layer maps that answer through a registry or seam it already has — never `if (kind === ...)` or `if (variant === ...)` chains in core (ADR 0013, ADR 0018):
 
-| Layer | What structure or a plugin store selects | Seam |
+| Layer | What structure or a Variant rule selects | Seam |
 |---|---|---|
 | `scheduling/` | a parent spans its children via rollup vs. a leaf that is directly schedulable, *when a scheduling plugin is installed* | `SchedulingPolicy` (§7), plugin-owned |
-| `layout/` | item emission — bar vs. summary; whether items are emitted at all | structure → `ItemProducer` in the §2.3 pipeline |
-| `render/` | appearance — default renderer; `data-kind` on the element for CSS (look, not an Entry classification) | renderer registry (`02` §4) |
-| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | capability resolver (§9) |
+| `layout/` | item emission — bar vs. summary; whether items are emitted at all | the resolved Variant's `items` (ADR 0018) |
+| `render/` | appearance — default renderer; `data-variant` on the element for CSS (the Variant this Gantt resolved, not an Entry classification) | the Variant's `paint`, then the renderer registry (`02` §4) |
+| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | the Variant's `can`, then the capability resolver (§9) |
 
 Rules:
 
 - **Derivation is structure.** An Entry derives when it has children. An empty phase is a bar until a child arrives. Losing the last child leaves a normal Entry with no dates. There is no stored classification, no `rollUpKinds`, and no `hierarchy.autoGroup`. Dates are optional (ADR 0012): a dateless parent is legal; the store does not mint a fake span. The Rollup is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
-- **Look follows children, or a plugin store.** A parent with children draws the parent look. A leaf draws a bar. Core does not ship a diamond. A plugin that needs a look that is not parent-or-bar stores which ids it owns (ADR 0002) and registers at the four seams above. Anything not registered falls back to the structure look.
-- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a diamond floor when that look is in play (`diamondSizePx * √2`). `FrameBar.minimumSpan` states the fact for every bar this floor touched. `render/` stamps it as `data-span="minimum"` (CONTEXT.md, `02` §4).
+- **The shape follows children, or a Variant rule.** A parent with children draws core's own `parent` Variant. A leaf draws a bar. Core does not ship a diamond. A plugin or a consumer that needs a shape that is not parent-or-bar declares a Variant whose `when` rule claims the rows (ADR 0018) — it stores no list of the ids it owns, so a row added later is claimed too. One object answers all four seams above. Every row resolves, because core's `leaf` carries no `when`.
+- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), `max`'d against a diamond floor when a Variant paints one (`diamondSizePx * √2`). `FrameBar.minimumSpan` states the fact for every bar this floor touched. `render/` stamps it as `data-span="minimum"` (CONTEXT.md, `02` §4).
 - **Parent *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing. A parent Entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing parents is well-defined, because one is structure and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
@@ -405,7 +405,7 @@ interface GeometryFrame {
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
     id: ItemId; entryId: EntryId; rowId: RowId;
-    look: 'parent' | 'leaf' | (string & {});  // backends stamp it as data-kind — CSS with zero JS; not an Entry classification
+    variant: string;             // backends stamp it as data-variant — CSS with zero JS; not an Entry classification
     /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
      *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
     segmentId?: SegmentId;
@@ -428,7 +428,7 @@ interface GeometryFrame {
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
    *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
    *  plugin-contributed emission seam — `ctx.layout.registerLinkEmitter(emitter)`, aggregating like
-   *  `decorationProviders` rather than replacing like `registerItemProducer`. `id` stays a plain
+   *  `decorationProviders` rather than replacing like a Variant's own `items`. `id` stays a plain
    *  `string`: a brand would make `layout/` depend on plugin-owned types. The emitter reads the
    *  Dataset-side plugin's store through the Gantt-side `ctx.store.read(pluginId)`, D-S5-30's own
    *  name on the second surface. Full design in #136 (supersedes #16); it lands in S7, after S5.10
@@ -717,7 +717,7 @@ Invariants the data-gesture attachments own:
 - Gesture lifecycle: `pointerdown → draft → (preview via hot path) → before* event (cancelable, may be async) → one transaction → after event`.
 - Escape cancels; pointer capture always; touch works.
 - Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
-- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1), over the defaults a plugin registered for a look. ADR 0013 deleted `Entry.kind`, so no per-kind default is left to build over. The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
+- **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `interactions` config (`02` §4.1), over the resolved Variant's own `can` (ADR 0018), over the library rule. ADR 0013 deleted `Entry.kind`, so no stored classification is left to build over, and a predicate at any level may answer `undefined` for "no opinion". The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
 
   **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. An Entry with children refuses `move` and `resize` when both of its dates roll up. No stored classification decides it (ADR 0013). The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
 
@@ -765,13 +765,12 @@ interface PluginContext {
       options?: { capture?: boolean },
     ): Disposer;
   };
-  layout: {
-    registerItemProducer(look: 'parent' | 'leaf' | (string & {}), producer: ItemProducer): Disposer;   // S5.9, D-S5-22: structure or a plugin-owned look — S4 shipped the ItemProducer seam itself (§9) with no external caller
+  variants: {
+    add(variant: EntryVariant): Disposer;   // ADR 0018: one object answers `when`, `items`, `paint` and `can` — it replaced four registrations that each repeated the name
   };
   interaction: {
     registerKeybinding(b: KeyBinding): Disposer;
     registerKeyHandler(chord: string, handler: (e: KeyEventLike) => void): () => void;
-    registerLookDefaults(look: 'parent' | 'leaf' | (string & {}), defaults: KindDefaults): Disposer;
     canWrite(entry: Entry, field: FieldKey): WriteVerdict;   // #256: one answer per cell, the same one the handles ask
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;   // asks; the answer is a Veto
     announceEntryEdit(payload: EntryFieldEdit): void;                        // tells; nothing comes back
