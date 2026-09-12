@@ -2121,8 +2121,9 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      // ADR 0018: core ships no diamond and no 'milestone' variant. The consumer says which rows
-      // wear one and how it looks, in one object, and needs no plugin at all.
+      // ADR 0018: core ships no 'milestone' variant (ADR 0022's shipped look is named `diamond`).
+      // The consumer says which rows wear one and how it looks, in one object, and needs no plugin
+      // at all.
       variants: [
         {
           name: 'milestone',
@@ -4309,9 +4310,9 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
       ],
       timeZone: 'UTC',
     });
-    // ADR 0013: core ships no diamond and refuses resize for no look by default — a plugin owns
-    // that pair of registrations for the ids it claims (`harness/plugins/milestone-kind.ts` is the
-    // real one; this inlines the smallest version of it).
+    // ADR 0013: core ships no 'milestone' variant and refuses resize for no look by default — a
+    // plugin owns that pair of registrations for the ids it claims
+    // (`harness/plugins/milestone-kind.ts` is the real one; this inlines the smallest version of it).
     const gantt = new Gantt({
       container,
       dataset,

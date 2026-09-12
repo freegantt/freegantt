@@ -1,5 +1,5 @@
 ---
-status: proposed — opened 2026-09-12, out of a defect on `harness/planner.ts`'s checkpoint glyph and the grill that followed. Not built.
+status: accepted — opened 2026-09-12, out of a defect on `harness/planner.ts`'s checkpoint glyph and the grill that followed. Accepted 2026-09-12.
 decided: the base stylesheet ships inside one cascade layer, `@layer freegantt`, so an unlayered consumer rule wins at any specificity. Level 2 of the Customization ladder (`plans/02` §4) becomes true, which it was not.
 open: nothing this record answers. Per-look stylesheet splitting is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286), and [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) answers it.
 ---

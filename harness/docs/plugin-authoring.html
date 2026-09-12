@@ -33,8 +33,8 @@
         <h1>Writing a plugin</h1>
         <p class="tagline">
           How a plugin author writes one plugin, installs it once, and fills the public seams. The
-          worked example is a milestone variant: a diamond core does not ship. It takes four lines and
-          no id list.
+          worked example is a milestone variant: core ships the diamond, but not the name
+          <code>'milestone'</code>. It takes four lines and no id list.
         </p>
         <div class="updated"><span class="k">updated</span> 2026-09-11 — ADRs 0011–0020</div>
         <div class="meta">
@@ -404,8 +404,9 @@ export const phases = definePlugin({
         <section id="s4">
           <h2><span class="num">4</span>Write a variant</h2>
           <p class="lede">
-            A variant is one object, and it answers from a rule. Nothing stores a variant. Core ships no
-            diamond, so a milestone is the smallest real example — and it needs no plugin at all.
+            A variant is one object, and it answers from a rule. Nothing stores a variant. Core ships
+            <code>diamond()</code>, but not the name <code>'milestone'</code> — so a milestone is the
+            smallest real example, and it needs no plugin at all.
           </p>
           <p class="src"><b>derived from</b> ADR 0018, ADR 0017</p>
 

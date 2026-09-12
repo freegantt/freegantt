@@ -39,8 +39,9 @@ export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
  *  span floors here at minimum, even one a caller (or a drag) has driven to zero width: a bar
  *  narrower than this is both invisible and too thin to grab back by its resize handle, which sits
  *  on an 8px hit box straddling each edge (`.fg-bar-handle`, `view/styles.ts`) — 12px leaves the two
- *  handles a 4px gap instead of overlapping. ADR 0013: core ships no diamond, so there is no second,
- *  larger floor to `max` this against any more. */
+ *  handles a 4px gap instead of overlapping. ADR 0013 removed a second, larger floor this once maxed
+ *  against for a diamond. ADR 0022's `diamond()` takes its own fixed-box path instead (`Item.box`),
+ *  so this floor still has nothing to `max` against. */
 export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
 
 /** Shipped bar height (CONTEXT.md) — `--fg-bar-height` fallback, in px. A bar paints shorter than its
@@ -54,9 +55,9 @@ export const DEFAULT_BAR_HEIGHT_PX = 18;
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
  *
- * A zero-length span (`start === end` — ADR 0012, ADR 0013: core ships no diamond for it any more)
- * still floors at `minBarWidthPx`, centred on its own instant, the same as any other painted span
- * too narrow to grab.
+ * A zero-length span (`start === end` — ADR 0012) still floors at `minBarWidthPx`, centred on its
+ * own instant, the same as any other painted span too narrow to grab — unless a `diamond()` Variant
+ * (ADR 0022) claims the row and gives it a fixed box instead.
  *
  * An Item that carries `box` (ADR 0022) skips the span-and-floor path entirely: its width is the
  * box's own `widthPx`, positioned by its own `anchor`. `'center'` reads the box's edges off the

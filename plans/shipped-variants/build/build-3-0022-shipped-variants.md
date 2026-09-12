@@ -243,25 +243,40 @@ no lint fires. Logged as **J8**.
 
 Every statement below is **true at HEAD**. Each one flips with this build, and not before.
 
-- [ ] `CONTEXT.md:40`, `:41` (the *Avoid* entry), `:44`
-- [ ] `plans/01-domain-architecture.md:250`
-- [ ] `plans/03-slices.md:187`
-- [ ] `src/layout/frame.ts:42`, `:57`
-- [ ] `src/view/styles.test.ts:210`
-- [ ] `src/api/gantt.test.ts:2123`, `:4185`
-- [ ] `harness/plugins.ts:110`
-- [ ] `harness/main.ts:423`
-- [ ] `harness/planner.ts:188`
-- [ ] `e2e/renderer-callbacks.spec.ts:14`
-- [ ] `plans/02-public-api.md` §4.1 gains the shipped set.
-- [ ] `plans/field-redesign/**` is historical working material. Add one supersession banner to its
+- [x] `CONTEXT.md:40`, `:41` (the *Avoid* entry), `:44`
+- [x] `plans/01-domain-architecture.md:250`
+- [x] `plans/03-slices.md:187`
+- [x] `src/layout/frame.ts:42`, `:57`
+- [x] `src/view/styles.test.ts:210` — the comment had drifted to lines 222–224; fixed there.
+- [x] `src/api/gantt.test.ts:2123`, `:4185` — six commits moved these; the real comments sat at
+      `:2124` and `:4313`, fixed there.
+- [x] `harness/plugins.ts:110` — already correct (wave D).
+- [x] `harness/main.ts:423` — already correct (wave D).
+- [x] `harness/planner.ts:188` — already correct (wave D).
+- [x] `e2e/renderer-callbacks.spec.ts:14` — already correct (wave D).
+- [x] `plans/02-public-api.md` §4.1 gains the shipped set.
+- [x] `plans/field-redesign/**` is historical working material. Add one supersession banner to its
       README, the way `docs/adr/README.md:26` handles ADR 0014. **Do not rewrite its build logs.**
-- [ ] `e2e/planner.spec.ts:15`, `e2e/theme.spec.ts:9` and `e2e/row-hover.spec.ts:49` each exclude
+- [x] `e2e/planner.spec.ts:15`, `e2e/theme.spec.ts:9` and `e2e/row-hover.spec.ts:49` each exclude
       `.fg-bar-diamond` from a selector, to pick a plain bar. The class matches nothing at HEAD, so
       each exclusion is dormant. **The rule: keep it on a page that installs `diamond()`, delete it
       on a page that does not.** After unit G all three pages install it — `planner.spec.ts` loads
       `/planner.html`, and the other two load `/` — so all three exclusions become live and stay.
-- [ ] `grep -rn "diamond"` finds anything this list missed. Check `harness/docs/*.html` too.
+      Confirmed: all three still installed at HEAD. No line change; the note is a fact, not an action.
+- [x] `grep -rn "diamond"` finds anything this list missed. Check `harness/docs/*.html` too. Found
+      and fixed `harness/docs/plugin-authoring.html` (two lines). `harness/docs/classes.html`,
+      `files.html` and `lifecycle.html` still describe a retired `EntryKind` item-emission scheme
+      (pre-ADR-0013) — stale since that ADR, not since this build, and not on this build's list, so
+      left alone and logged (Q9).
+- [x] Four extra items a prior agent found and could not take:
+      - `plans/01-domain-architecture.md:251` (`FrameBar.minimumSpan`) — fixed alongside `:250`.
+      - `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md:164` — a shipped slice's spec,
+        so corrected in place (judgement call, logged).
+      - `e2e/planner.spec.ts:63` — `core's own \`parent\` variant` → `summary`.
+      - `harness/docs/plugin-authoring.html` — fixed above.
+      - `grep -rn "variantOf" src harness e2e docs plans` — no live stale reference found; every hit
+        is inside a decision record (ADR 0022 body) or this plan's own history (BUILD-LOG, README,
+        the "What is true at HEAD" section of this file). Logged (Q10).
 
 Already done ahead of this build, because they were stale rather than true: `--fg-diamond-size` and
 `--fg-diamond-stroke` are out of `docs/05-consumer-api.md` and `CONTEXT.md`; ADR 0012 and ADR 0013
@@ -293,17 +308,20 @@ carry `status:` amendments, and ADR 0013 carries a banner. Do not redo these.
 
 ## Gate
 
-- [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`
-- [ ] Report the verdict line.
-- [ ] Screenshot `planner.html` in both themes, at the default zoom and one step in. The checkpoint
-      must read as a diamond at both.
+- [x] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`
+- [x] Report the verdict line. `verify:full PASS — all 16 checks green, test:e2e included (72s).`
+- [x] Screenshot `planner.html` in both themes, at the default zoom and one step in. The checkpoint
+      must read as a diamond at both. Confirmed: a 13px × 13px `.fg-bar-diamond::before` diamond,
+      unchanged across a zoom step, in both Light and Dark.
 
 ## Close the issues
 
-- [ ] Close [#289](https://github.com/Pawel-IT/FreeGantt/issues/289). Name what landed, and say that
+- [x] Close [#289](https://github.com/Pawel-IT/FreeGantt/issues/289). Name what landed, and say that
       ADR 0022 was amended in place (J2, J9).
-- [ ] Close [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) — unit E7 holds its wording.
-- [ ] Apply the labels to both with the `label-issues` skill.
+- [x] Close [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) — unit E7 holds its wording.
+      Already closed, in build 3 unit E7.
+- [x] Apply the labels to both with the `label-issues` skill. #286 already labelled at E7; #289
+      labelled at close-out.
 
 ## Done when
 

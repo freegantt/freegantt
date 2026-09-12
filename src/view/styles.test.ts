@@ -219,9 +219,10 @@ describe('ensureBaseStyles', () => {
     expect(outsideRule).not.toContain('ellipsis');
   });
 
-  // ADR 0013 retired core's milestone diamond (`.fg-bar-diamond`) end to end — the shipped sheet
-  // never wrote it, so the three tests that once read it here are gone with the feature. A
-  // diamond look is a plugin's own CSS now, not core's.
+  // ADR 0013 retired core's milestone diamond (`.fg-bar-diamond`) end to end — the base sheet never
+  // wrote it, so the three tests that once read it here stayed gone. ADR 0022 brought the class back
+  // as a shipped `diamond()` Variant, but its rules live on the Variant's own `css`
+  // (`variant-styles.ts`), never in this base sheet — see `variants.test.ts` instead.
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
   // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.
