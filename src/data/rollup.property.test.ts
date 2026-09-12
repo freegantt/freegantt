@@ -31,11 +31,13 @@ function assertParentsMatchAggregator(
   rollUp: (typeof ROLLUP_AGGREGATORS)[number],
 ): void {
   const aggregator = SHIPPED_AGGREGATORS[rollUp];
+  const stored = state.entries.storedValues;
   for (const parent of state.entries.all) {
-    const children = (state.entries.get(parent.id)?.children() ?? []);
+    const children = (parent.children() ?? []).map((child) => stored.get(child.id)!);
     if (children.length === 0) continue;
-    const expected = aggregator?.(children, parent, createRollUpContext(state.fieldContext, 'cost'));
-    expect(state.fieldContext.read(parent, 'cost')).toBe(expected);
+    const storedParent = stored.get(parent.id)!;
+    const ctx = createRollUpContext(state.fieldAccess, storedParent, children, 'cost');
+    expect(parent.read('cost')).toBe(aggregator?.(storedParent, ctx));
   }
 }
 

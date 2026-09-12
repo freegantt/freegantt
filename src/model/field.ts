@@ -142,11 +142,7 @@ export type Field<TValue = unknown> =
        *  and `compare` are: `TValue` sits in a parameter here, so a property would make
        *  `Field<number>` stop being assignable to `Field<unknown>`, and the registry holds bare
        *  `Field`. `FieldDistributor` is the type a consumer writes one against. */
-      distribute?(
-        value: TValue | undefined,
-        parent: StoredEntry,
-        ctx: RollUpContext,
-      ): EntryEdits | undefined;
+      distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
       // `compute` is genuinely absent here, not `compute?: never`: `'compute' in field` is the
       // discriminant `hasSomewhereToWrite` and the write resolver both ask, and TypeScript's `in`
       // narrowing only excludes an arm that never declares the key at all — a `never`-typed optional
@@ -223,11 +219,7 @@ export interface FieldType<TValue = unknown> {
   /** One distribution policy for every Field on this type — which is why `FieldDistributor` reads
    *  the Field key off `ctx.field` rather than closing over one. A method, not a property, for the
    *  variance reason `Field.distribute` states. */
-  distribute?(
-    value: TValue | undefined,
-    parent: StoredEntry,
-    ctx: RollUpContext,
-  ): EntryEdits | undefined;
+  distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -311,7 +303,4 @@ export type FieldDistributor<TValue = unknown> = (
 ) => EntryEdits | undefined;
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
-export type Aggregator<TValue = unknown> = (
-  parent: StoredEntry,
-  ctx: RollUpContext,
-) => TValue | undefined;
+export type Aggregator<TValue = unknown> = (parent: StoredEntry, ctx: RollUpContext) => TValue | undefined;

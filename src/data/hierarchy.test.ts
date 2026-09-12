@@ -51,11 +51,11 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', start: '2026-03-01', end: '2026-03-05' },
     ]);
-    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
+    expect(state.entries.get('p1')?.children() ?? []).toEqual([]);
 
     state.entries.update('c1', { parentId: 'p1' });
 
-    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(1);
+    expect(state.entries.get('p1')?.children() ?? []).toHaveLength(1);
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
     expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
   });
@@ -94,7 +94,7 @@ describe('structure decides derivation (ADR 0013)', () => {
     expect(p1.start).toBeUndefined();
     expect(p1.end).toBeUndefined();
     expect(p1.segments).toEqual([]);
-    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
+    expect(state.entries.get('p1')?.children() ?? []).toEqual([]);
   });
 
   it('construction rolls up a parent that already has children, silently', () => {
@@ -116,10 +116,10 @@ describe('structure decides derivation (ADR 0013)', () => {
     const end = state.entries.get('p1')!.end;
 
     state.entries.update('c1', { parentId: 'p1' });
-    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(1);
+    expect(state.entries.get('p1')?.children() ?? []).toHaveLength(1);
 
     state.undo();
-    expect((state.entries.get('p1')?.children() ?? [])).toEqual([]);
+    expect(state.entries.get('p1')?.children() ?? []).toEqual([]);
     expect(state.entries.get('p1')!.start).toBe(start);
     expect(state.entries.get('p1')!.end).toBe(end);
     expect(state.entries.get('c1')!.parent()?.id).toBeUndefined();

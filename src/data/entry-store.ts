@@ -19,9 +19,7 @@ import type {
   EntryInput,
   EntryEdit,
   EntryEdits,
-  FieldContext,
   FieldKey,
-  FieldValue,
   Segment,
   SegmentId,
 } from '../model/index.js';

@@ -285,7 +285,10 @@ export function rollUpFields(
 
       let value: unknown;
       try {
-        value = aggregator(effectiveParent, createRollUpContext(passAccess, effectiveParent, children, field.key));
+        value = aggregator(
+          effectiveParent,
+          createRollUpContext(passAccess, effectiveParent, children, field.key),
+        );
       } catch (cause) {
         throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }

@@ -1,22 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { StoredEntry, FormatContext } from '../../model/index.js';
+import type { Entry, FormatContext } from '../../model/index.js';
 import { percent } from './field-types.js';
 
 function ctx(locale: Intl.LocalesArgument): FormatContext {
-  return {
-    timeZone: 'UTC',
-    locale,
-    read: () => undefined,
-    durationOf: () => ({ value: 0, unit: 'millisecond' }),
-  };
+  return { timeZone: 'UTC', locale };
 }
 
-// formatValue never reads `entry` here, so a bare stand-in is enough to satisfy the signature.
-const entry = {} as StoredEntry;
+// Neither half of `percent` reads `entry`, so a bare stand-in is enough to satisfy both signatures.
+const entry = {} as Entry;
 
 describe('percent — the shipped Field type', () => {
   it('formats 0, 35, 100 and 120 in en-US', () => {
-    const format = (value: number | undefined, formatCtx: FormatContext, e: StoredEntry): string =>
+    const format = (value: number | undefined, formatCtx: FormatContext, e: Entry): string =>
       percent.formatValue!(value, formatCtx, e);
     expect(format(0, ctx('en-US'), entry)).toBe('0%');
     expect(format(35, ctx('en-US'), entry)).toBe('35%');
@@ -44,19 +39,19 @@ describe('percent — the shipped Field type', () => {
 
   it('parses a bare number, a percent sign, and padded whitespace', () => {
     const parse = (text: string, parseCtx: FormatContext): number | undefined =>
-      percent.parseValue!(text, parseCtx);
+      percent.parseValue!(text, parseCtx, entry);
     expect(parse('35', ctx('en-US'))).toBe(35);
     expect(parse('35%', ctx('en-US'))).toBe(35);
     expect(parse(' 35 % ', ctx('en-US'))).toBe(35);
   });
 
   it('refuses non-numeric text', () => {
-    expect(percent.parseValue!('abc', ctx('en-US'))).toBeUndefined();
+    expect(percent.parseValue!('abc', ctx('en-US'), entry)).toBeUndefined();
   });
 
   it('keeps a negative or an over-100 reading, unclamped', () => {
-    expect(percent.parseValue!('-5', ctx('en-US'))).toBe(-5);
-    expect(percent.parseValue!('120', ctx('en-US'))).toBe(120);
+    expect(percent.parseValue!('-5', ctx('en-US'), entry)).toBe(-5);
+    expect(percent.parseValue!('120', ctx('en-US'), entry)).toBe(120);
   });
 
   it('ships inputType and a column default carrying alignment, and no rollUp', () => {

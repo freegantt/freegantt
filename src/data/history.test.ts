@@ -60,17 +60,20 @@ describe('History', () => {
       { id: 'parent', kind: 'group' },
       { id: 'child', parentId: 'parent', start: 0, end: 10 },
     ]);
-    const parentBefore = state.entries.get('parent')!;
-    const childBefore = state.entries.get('child')!;
+    // An `Entry` is one object per id and every read is live (ADR 0017), so a "before" reading is a
+    // value held, never a row held.
+    const parentStartBefore = state.entries.get('parent')!.start;
+    const parentEndBefore = state.entries.get('parent')!.end;
+    const childEndBefore = state.entries.get('child')!.end;
 
     state.entries.update('child', { end: 20 });
-    expect(state.entries.get('parent')?.end).not.toEqual(parentBefore.end);
+    expect(state.entries.get('parent')?.end).not.toEqual(parentEndBefore);
 
     state.undo();
 
-    expect(state.entries.get('child')?.end).toEqual(childBefore.end);
-    expect(state.entries.get('parent')?.start).toEqual(parentBefore.start);
-    expect(state.entries.get('parent')?.end).toEqual(parentBefore.end);
+    expect(state.entries.get('child')?.end).toEqual(childEndBefore);
+    expect(state.entries.get('parent')?.start).toEqual(parentStartBefore);
+    expect(state.entries.get('parent')?.end).toEqual(parentEndBefore);
   });
 
   it('undo of a cascade from an injected extender restores both the user field and the patched one', () => {
@@ -228,11 +231,11 @@ describe('History', () => {
       timeZone: 'UTC',
       fields: [{ key: 'team' }],
     });
-    expect('team' in state.entries.get('t1')!.props).toBe(false);
+    expect(state.entries.get('t1')!.read('team')).toBeUndefined();
 
     state.entries.update('t1', { team: 'A' });
     state.undo();
 
-    expect('team' in state.entries.get('t1')!.props).toBe(false);
+    expect(state.entries.get('t1')!.read('team')).toBeUndefined();
   });
 });

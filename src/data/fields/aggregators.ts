@@ -19,19 +19,14 @@ function weightOf(duration: { value: number } | undefined): number | undefined {
 
 /** `min`, `max` and `sum` are one shape: fold this Field's numbers across the children, and keep the
  *  stored value (`undefined`) when every child is a hole. */
-function foldNumbers(
-  ctx: RollUpContext,
-  fold: (found: number, value: number) => number,
-): number | undefined {
+function foldNumbers(ctx: RollUpContext, fold: (found: number, value: number) => number): number | undefined {
   const values = ctx.numericValues();
   return values.length === 0 ? undefined : values.reduce(fold);
 }
 
-const min: Aggregator<number> = (_parent, ctx) =>
-  foldNumbers(ctx, (found, value) => Math.min(found, value));
+const min: Aggregator<number> = (_parent, ctx) => foldNumbers(ctx, (found, value) => Math.min(found, value));
 
-const max: Aggregator<number> = (_parent, ctx) =>
-  foldNumbers(ctx, (found, value) => Math.max(found, value));
+const max: Aggregator<number> = (_parent, ctx) => foldNumbers(ctx, (found, value) => Math.max(found, value));
 
 const sum: Aggregator<number> = (_parent, ctx) => foldNumbers(ctx, (found, value) => found + value);
 

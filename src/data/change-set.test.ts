@@ -3,7 +3,7 @@ import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId, segmentId } from '../model/index.js';
 import type { StoredEntry, EntryId, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
-import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
+import { createFieldAccess, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
 function span(start: number, end: number): { start: Instant; end: Instant } {
@@ -25,7 +25,7 @@ const registry = new FieldRegistry({
   fieldTypes: { money: { rollUp: 'sum' } },
   fields: [{ key: 'cost', type: 'money' }],
 });
-const fieldCtx = createFieldContext(registry, 'UTC');
+const fieldCtx = createFieldAccess({ fields: registry, timeZone: 'UTC' });
 
 describe('FieldRegistry.valuesEqual', () => {
   it('compares primitives by reference', () => {

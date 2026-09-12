@@ -174,7 +174,7 @@ describe('entries.update', () => {
     const seen = changeSets(state);
     expect(() => state.entries.update('t1', { cost: 500 })).toThrow(UnknownFieldError);
     expect(seen).toHaveLength(0);
-    expect(state.entries.get('t1')?.props).toEqual({});
+    expect(state.entries.get('t1')?.toInput().props).toEqual({});
   });
 });
 
@@ -727,7 +727,10 @@ describe('rollup (§1.5)', () => {
       { id: 'p1' },
       { id: 'c1', parentId: 'p1', start: '2026-01-01', end: '2026-01-10' },
     ]);
-    const before = state.entries.get('p1')!;
+    // One `Entry` per id, every read live (ADR 0017): a "before" reading is a value held, never a
+    // row held.
+    const startBefore = state.entries.get('p1')!.start;
+    const endBefore = state.entries.get('p1')!.end;
     const seen = changeSets(state);
 
     state.entries.update('c1', { start: '2026-02-01', end: '2026-02-15' });
@@ -739,16 +742,16 @@ describe('rollup (§1.5)', () => {
     // start })`.
     expect(parentRows.map((row) => row.field).sort()).toEqual(['end', 'segments', 'start']);
     const after = state.entries.get('p1')!;
-    expect(after.start).not.toBe(before.start);
-    expect(after.end).not.toBe(before.end);
+    expect(after.start).not.toBe(startBefore);
+    expect(after.end).not.toBe(endBefore);
 
     // "one undo restores both": `entries.update()` now refuses a direct write to a rolled-up field
     // on a parent that still has children (`DerivedFieldNotWritableError`, this build's own decision
     // 6) — so undo goes through `replay(invertChangeSet(...))`, the same door
     // `api/dataset.test.ts`'s "a consumer History..." test uses, not a manual per-field `update()`.
     state.replay(invertChangeSet(seen[0]!));
-    expect(state.entries.get('p1')?.start).toBe(before.start);
-    expect(state.entries.get('p1')?.end).toBe(before.end);
+    expect(state.entries.get('p1')?.start).toBe(startBefore);
+    expect(state.entries.get('p1')?.end).toBe(endBefore);
   });
 
   it('a two-level tree rolls up in one pass', () => {
@@ -841,7 +844,8 @@ describe('a derived cell is read-only until the Field says what a write means (A
   });
 
   it('a Field that declares distribute writes the children, and the Rollup reads the cell back', () => {
-    const state = costDataset((total, children) => {
+    const state = costDataset((total, _parent, ctx) => {
+      const children = ctx.children();
       const share = (total as number) / children.length;
       return new Map(children.map((child) => [child.id, { cost: share }]));
     });
@@ -855,8 +859,10 @@ describe('a derived cell is read-only until the Field says what a write means (A
 
   it('the distributed writes and their rolled-up parent land in one changeset, and one undo step', () => {
     const state = costDataset(
-      (total, children) =>
-        new Map(children.map((child) => [child.id, { cost: (total as number) / children.length }])),
+      (total, _parent, ctx) =>
+        new Map(
+          ctx.children().map((child) => [child.id, { cost: (total as number) / ctx.children().length }]),
+        ),
     );
     const seen = changeSets(state);
 

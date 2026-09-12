@@ -107,7 +107,9 @@ describe('composing two extenders that write one Entry (#197)', () => {
     const state = datasetWithTarget();
     state.setExtender(() => inner);
     state.setExtender((next) => (call) => mergeEntryEdits(next(call), outer(call)));
-    const entries = new Map([[target, state.entries.get(target)!]]);
+    // `EditRequest.entries` is the pre-transaction snapshot, so it carries stored values and never
+    // a live row (D-S5-45, ADR 0017).
+    const entries = new Map([[target, state.entries.storedValues.get(target)!]]);
     const request = {
       entries,
       proposed: new Map() as ProposedEdits,
@@ -185,7 +187,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
 
     const committed = state.entries.get(target);
     expect(committed?.name).toBe('A');
-    expect((committed?.props as { tag?: string } | undefined)?.tag).toBe('milestone');
+    expect(committed?.read('tag')).toBe('milestone');
     expect(committed?.parent()?.id).toBe(entryId('t1'));
   });
 
