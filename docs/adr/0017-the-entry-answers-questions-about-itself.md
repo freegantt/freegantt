@@ -111,7 +111,7 @@ Three names lost. `EntrySnapshot` fails check 4: `CONTEXT.md:23` gives "Snapshot
 2. **One `Entry` per id, and every read is live.** The `Entry` allocates nothing per frame and keeps a stable identity inside a `Set`. **Live means what `childrenOf` answers today**: the committed index, overlaid with the open write set (`entry-store.ts:214-218`). It does not mean `all`, which is committed-only (D-S2-21, `:167`).
 3. **No derived type reads `keyof` the `Entry`.** `CoreFieldKey`, `CoreFieldValues` and `ProposedEdit` all derive from `StoredEntry`, and they stay that way.
 4. **A getter answers one value. Anything that returns a collection is a method.** `hasChildren` is a getter and rides the `#hasChildren` fast path. `children()`, `parent()` and `descendants()` carry parentheses, because each one may allocate or walk.
-5. **`read()` is the one value door**, so `entry.props` leaves the read surface. [ADR 0014](0014-the-plugin-author-surface.md) decision 13 already picked `read` as the name. This keeps the name and drops one of its two surfaces.
+5. **`read()` is the one value door**, so `entry.props` leaves the read surface. [ADR 0014](0014-the-plugin-author-surface.md) picked `read` as the name first, and the author withdrew that ADR on 2026-09-11. The name stands on its own merit here: `entry.read('cost')` reads true in English, and this ADR publishes one surface for it, not two.
 
 **The `Entry` reads. The store writes.** There is no `entry.update()`. `dataset.entries.update(id, edit)` stays the one write door, and [ADR 0015](0015-what-the-write-door-refuses.md) keeps everything it decided.
 
@@ -151,7 +151,7 @@ So the import graph is the one that ships today — `layout/ → model/`. What c
 
 **The public surface gets smaller, not larger.** `EntryStoreView.childrenOf` and `EntryStoreView.fieldValue` become `Entry` members. The cost is `entries.get(id)?.children() ?? []` where a call site used `childrenOf(id)`. **Ruled 2026-09-11: they go.**
 
-**P7 — this ADR deletes `fieldValue`, which is what HEAD ships** (`model/dataset.ts:28`). [ADR 0014](0014-the-plugin-author-surface.md) renames it to `read` and is unbuilt. Whichever lands first, one rename happens, not two. 0014 is **not** a precondition of this ADR.
+**P7 — this ADR deletes `fieldValue`, which is what HEAD ships** (`model/dataset.ts:28`). **[ADR 0014](0014-the-plugin-author-surface.md) is `not planned` as of 2026-09-11 (`343fbf6`)**, so nothing else renames this door and no build has to coordinate with one. This ADR owns the change outright: 77 references in 14 files, and one rename happens, not two.
 
 **A removed id carries no flag.** An `Entry` outlives its `StoredEntry` and keeps the last values it read. Existence has one door already — `entries.has(id)`, and `entries.get(id)` answering `undefined`. A `removed` boolean would be a second door onto the same fact, and it would invite an `if (entry.removed)` branch at every reader. Nothing in core needs one: the edit pipeline carries `StoredEntry` values, so undo and replay never meet an `Entry`.
 
