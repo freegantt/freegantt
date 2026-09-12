@@ -37,6 +37,9 @@ declare global {
 // same answer narrowed to one row through `interactions.edit`.
 //
 // `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
+// All three states sit below, and two doors read them (ADR 0015). End is `'api'`: the Move buttons
+// shift it, and no user may drag or type it. `contractId` is `'never'`: it arrives with the entry
+// and nothing in this app may change it. Cost declares nothing, so it stays open to both doors.
 // ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
 // `money` rolls up with `sum`, so the write that reverses a sum is a split — read `distribute` as the
 // Aggregator backwards. This page splits evenly and puts the rounding remainder on the last child,
@@ -61,7 +64,13 @@ const COST_FIELDS = {
   },
   fields: [
     { key: 'cost' as const, type: 'money' },
-    { key: 'end' as const, editable: false },
+    // #142 gave the core-Field override its first call site, and #256 its first e2e. `'api'` is what
+    // this page always meant by it: the toolbar moves a bar by a day, and the End cell and the End
+    // resize handle both stay dead.
+    { key: 'end' as const, editable: 'api' as const },
+    // The lock. A contract id comes in with the entry and nothing here may rewrite it, so
+    // `entries.update()` refuses it as flatly as the grid does.
+    { key: 'contractId' as const, editable: false },
   ],
 };
 
@@ -76,7 +85,7 @@ const ROLLUP_TREE = [
     parentId: 'phase',
     start: '2026-01-01',
     end: '2026-01-10',
-    props: { cost: 100 },
+    props: { cost: 100, contractId: 'C-4417' },
   },
   {
     id: 'task-b',
@@ -84,7 +93,7 @@ const ROLLUP_TREE = [
     parentId: 'phase',
     start: '2026-01-15',
     end: '2026-01-20',
-    props: { cost: 200 },
+    props: { cost: 200, contractId: 'C-4418' },
   },
 ];
 
@@ -94,7 +103,7 @@ const ROLLUP_TREE = [
 // fresh one at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost: number }>({
+const dataset = new Dataset<{ cost: number; contractId?: string }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,

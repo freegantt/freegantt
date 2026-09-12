@@ -1,5 +1,5 @@
 ---
-status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
+status: accepted — verdict: `verify:full PASS — all 16 checks green, test:e2e included (72s).` (Build 5, 2026-09-11; the api report is the author's to approve and is handed over unapplied). Spike report: [reviews/2026-09-10-0015-write-door-spikes](../../plans/field-redesign/reviews/2026-09-10-0015-write-door-spikes/README.md). Split out of ADR 0011 on 2026-09-09.
 decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` (19). The serialize-as-`"never"` half has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md); the lock itself stands. Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
 open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---

@@ -69,6 +69,7 @@ interface Meta {
   cost?: number;
   budget?: number;
   quantity?: number;
+  owner?: string;
 }
 
 const ENTRIES: readonly EntryInput<Meta>[] = [
@@ -111,6 +112,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'cost' }, // money, no parseValue — F12 refuses to open
   { field: 'budget' }, // money, WITH parseValue — round-trips
   { field: 'quantity' }, // no `type`, `inputType: 'number'` only
+  { field: 'owner' }, // editable: 'api' — the app writes it, the user never types it
 ];
 
 function makeGantt(
@@ -149,6 +151,8 @@ function makeGantt(
       // #142: `name`/`start` are core Fields that already default to editable (`core-fields.ts`);
       // `end` is the one demonstration this suite pins closed, so it states the override itself.
       { key: 'end', editable: false },
+      // ADR 0015's middle state: `entries.update()` writes it, and this cell stays dead.
+      { key: 'owner', editable: 'api', column: { header: 'Owner' } },
     ],
   });
   const gantt = new Gantt({
@@ -252,11 +256,26 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
   // The two silent refusals, by decision (`s5.8-inline-editing.md` §1, "Which refusals speak").
   // Neither cell offers an editor at all, so nothing mounts — no editor, and no notice either.
-  it('a non-editable column never opens, and says nothing (default false)', () => {
+  it("a locked column never opens, and says nothing (editable: 'never')", () => {
     const { container, gantt } = makeGantt();
     dblclick(cellFor(container, 'e1', 'end'));
     expect(container.querySelector('.fg-cell-editor')).toBeNull();
     expect(refusal(container)).toBeNull();
+    gantt.destroy();
+    container.remove();
+  });
+
+  // ADR 0015, the second threshold: `entries.update()` writes this Field, and the cell still refuses
+  // the editor. One key answers both doors, and they answer differently on purpose.
+  it("an editable: 'api' column keeps its cell dead, while entries.update() writes the value", () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'owner'));
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
+
+    dataset.entries.update('e1', { owner: 'bo' });
+
+    expect(dataset.entries.fieldValue('e1', 'owner')).toBe('bo');
     gantt.destroy();
     container.remove();
   });

@@ -43,6 +43,19 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 export type FieldTypeName = string & {};
 
+/** How far a Field's value may change (ADR 0015). One key, two thresholds: the grid writes it only
+ *  at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
+ *
+ *  - `'anywhere'` — the cell editor opens, a drag writes it, and `update()` writes it. The default.
+ *  - `'api'` — `update()` writes it; the grid cell is dead. A value the app owns and the user does
+ *    not type.
+ *  - `'never'` — a lock. `update()` throws `FieldNotEditableError`.
+ *
+ *  `true` and `false` are input-only aliases for `'anywhere'` and `'never'`, the same way
+ *  `InstantInput` takes a string and stores an `Instant`. After ingest the stored Field holds this
+ *  enum, so `dataset.fields.all` reads one word back. */
+export type FieldEditable = 'never' | 'api' | 'anywhere';
+
 /** What a per-column `cellRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
  *  `CellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
  *  — the consumer wrote it right there in the same `GridColumn` — so it needs no `column` argument to
@@ -129,15 +142,29 @@ export type Field<TValue = unknown> =
       type?: FieldTypeName;
       /** Name only — a function does not serialize (ADR 0005). */
       rollUp?: AggregatorName;
-      /** Whether this Field's value may change: the inline cell editor honours it (S5.8), and bar
-       *  drag-resize honours the same answer for `start`/`end` (#142) — one home for "may this value
-       *  change," asked by every gesture that writes it (I14). Default `false`.
+      /** Where this Field's value may change (ADR 0015). **One key, two thresholds** — the grid
+       *  writes it only at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
+       *  That is I14: the inline cell editor (S5.8), bar drag-resize for `start`/`end` (#142) and the
+       *  API door all read this one key, and never disagree about it.
+       *
+       *  - `'anywhere'` — the cell editor opens, a drag writes it, and `update()` writes it.
+       *  - `'api'` — `update()` writes it; the grid cell is dead. A value the app owns and the user
+       *    does not type.
+       *  - `'never'` — a lock. `update()` throws `FieldNotEditableError`.
+       *
+       *  **Absent means `'anywhere'`.** `true` and `false` are input-only aliases for `'anywhere'`
+       *  and `'never'`; after ingest the stored Field holds the enum, so `dataset.fields.all` reads
+       *  it back as one.
+       *
+       *  A lock is not a wall around the data. Create, ingest and History replay still write a
+       *  `'never'` Field — it names what a *caller* may write, not what the library may.
        *
        *  A core Field (`start`, `name`, ...) is declared by the library and cannot be redeclared, so a
        *  consumer overrides only this key on one through `DatasetOptions.fields`/`ctx.fields.register`
        *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
-       *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`). */
-      editable?: boolean;
+       *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`).
+       *  `dataset.setFieldEditable(key, editable)` changes it after setup; nothing else may. */
+      editable?: FieldEditable | boolean;
       /** What a write to this Field on a **rolling-up parent** means (ADR 0013 amendment). Absent,
        *  and that cell is read-only — refused standalone and refused inside `dataset.transaction()`
        *  alike, because permission follows the thing written, never the call that wrapped it.
@@ -221,7 +248,8 @@ export interface FieldType<TValue = unknown> {
   /** A Field naming this type may still override it (D-S4-3) — `{ key: 'cost', type: 'money',
    *  rollUp: 'none' }` opts one Field on a shared type out. */
   rollUp?: AggregatorName;
-  editable?: boolean;
+  /** Read `Field.editable` for the three states. A Field naming this type may override it. */
+  editable?: FieldEditable | boolean;
   /** One distribution policy for every Field on this type — which is why `FieldDistributor` reads
    *  the Field key off `ctx.field` rather than closing over one. A method, not a property, for the
    *  variance reason `Field.distribute` states. */

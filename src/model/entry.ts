@@ -135,8 +135,8 @@ export type PropsEdit<TProps> = { [K in keyof TProps]?: TProps[K] | undefined };
  * (`props?: never` below is what makes `{ props: { owner: 'Sam' } }` fail to compile, the same brand
  * that keeps a `ProposedEdit` from masquerading as this type).
  *
- * An edit may remove exactly what a stored Entry may lack: `kind`/`name`/`segments` are required on
- * `Entry`, so `{ kind: undefined }` does not compile, while `{ parentId: undefined }` and (after ADR
+ * An edit may remove exactly what a stored Entry may lack: `name` and `segments` are required on
+ * `Entry`, so `{ name: undefined }` does not compile, while `{ parentId: undefined }` and (after ADR
  * 0012) `{ start: undefined }` do. Every declared consumer key is removable without exception, because
  * `props` is `Partial<TProps>` everywhere already. */
 export type EntryEdit<TProps = Record<string, unknown>> = {

@@ -137,9 +137,22 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
 
   it('refuses an undeclared key', () => {
     const caps = capabilities();
-    const e = entry();
-    expect(caps.canWrite(e, 'parentId').ok).toBe(false);
-    expect(caps.canWrite(e, 'nothing-declares-this').ok).toBe(false);
+    expect(caps.canWrite(entry(), 'nothing-declares-this').ok).toBe(false);
+  });
+
+  // ADR 0015: the default is `'anywhere'`, so a core Field that declares no `editable` answers yes
+  // here. `parentId` never reaches a cell anyway — it declares no `column`, so no grid asks — and
+  // that absent column is what keeps it out of the grid, not a second declaration restating it.
+  it('answers yes for a declared Field that states no editable of its own', () => {
+    const caps = capabilities();
+    expect(caps.canWrite(entry(), 'parentId').ok).toBe(true);
+    expect(caps.canWrite(entry(), 'segments').ok).toBe(true);
+  });
+
+  // The middle state: the app writes it through `entries.update()`, the user never types it.
+  it("refuses the grid for editable: 'api', which is the whole point of that state", () => {
+    const caps = capabilities({}, { key: 'cost', editable: 'api' });
+    expect(caps.canWrite(entry(), 'cost')).toEqual({ ok: false });
   });
 
   it('refuses a compute-sourced Field and an undeclared key — neither has a stored home', () => {

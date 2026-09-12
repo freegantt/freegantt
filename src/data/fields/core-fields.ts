@@ -66,8 +66,9 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     equals: byReference,
     formatValue: stringifyPrimitive,
     // #142: a stored, ordinary value with nothing else that ever rewrites it — nothing refuses an
-    // edit here by default.
-    editable: true,
+    // edit here by default. ADR 0015 states the word rather than the alias: `'anywhere'` is what
+    // `true` already meant.
+    editable: 'anywhere',
     // #139: the Name column carries the tree indent and twisty on top of its text, so its natural
     // width is wider than a date's.
     column: { header: 'Name', width: 240 },
@@ -77,9 +78,10 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     rollUp: 'min',
     equals: byReference,
     formatValue: formatStart,
-    // #142: one answer gates the inline cell editor and bar drag-resize alike (I14) — `true` is
-    // what every span kind already allowed a resize drag to write before this Field existed.
-    editable: true,
+    // #142: one answer gates the inline cell editor and bar drag-resize alike (I14) —
+    // `'anywhere'` is what every span kind already allowed a resize drag to write before this Field
+    // existed. A consumer locks it with `{ key: 'start', editable: false }` (ADR 0015).
+    editable: 'anywhere',
     column: { header: 'Start', width: 120 },
   },
   {
@@ -88,7 +90,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     equals: byReference,
     formatValue: formatEnd,
     // #142: see `start` above — the same one answer, the same reason.
-    editable: true,
+    editable: 'anywhere',
     column: { header: 'End', width: 120 },
   },
   {

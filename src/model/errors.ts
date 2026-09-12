@@ -431,6 +431,28 @@ export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
   }
 }
 
+/** `code: 'field-not-editable'` — `entries.update()` named a Field whose `editable` is `'never'`
+ *  (ADR 0015). The same key gates the grid at a second threshold: `'api'` keeps the cell dead and
+ *  still lets `update()` through, so only the lock reaches this door.
+ *
+ *  A lock names what a *caller* may write, never what the library may. Construction, `entries.add()`
+ *  and History replay all still write a locked Field, so this error belongs to the change door
+ *  alone. */
+export class FieldNotEditableError extends FreeGanttError {
+  readonly field: FieldKey;
+  readonly operation: string;
+
+  constructor(field: FieldKey, operation: string) {
+    super(
+      'field-not-editable',
+      `${operation}: "${field}" is declared editable: 'never', so its value cannot change. Call dataset.setFieldEditable("${field}", 'api') to open it to this door, or 'anywhere' to open the grid too.`,
+    );
+    this.name = 'FieldNotEditableError';
+    this.field = field;
+    this.operation = operation;
+  }
+}
+
 /** `code: 'derived-field-not-writable'` — `entries.update()` named a Field on an Entry that has
  *  children, and that Field rolls up (ADR 0013). Nothing but the Rollup writes a rolling-up parent's
  *  cell: a write here would commit and the next Rollup would overwrite it in silence, so the library

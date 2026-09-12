@@ -239,6 +239,16 @@ allowlist exists for; `data/` and `layout/` have no such seam and never will, on
 
 **Message:** `Structure moves to the base stylesheet; inline styles are for live per-frame/per-instance geometry only (transform/width/height). (plans/s1.10-theming-and-a11y/README.md D-S1.10-6)`
 
+### 3.12 `freegantt/editable-has-one-reader` — syntactic · I14 · ADR 0015
+
+**Flags:** in `src/**/*.ts` outside `src/data/fields/field-registry.ts` and outside test files — any read of an `editable` member: `field.editable`, `field['editable']`, and `const { editable } = field`.
+
+**Allowed:** the declaration itself (`{ key: 'start', editable: 'anywhere' }` is a Property, not a read), and `field-registry.ts`, where `editableOf` resolves the boolean aliases and the absent-key default. Every other caller asks a named threshold from `src/data/write-rule.ts`: `isUserEditable(field)` for the grid — the cell editor, a bar handle, a bar move — and `isApiEditable(field)` for `entries.update()`.
+
+**Why:** this is the check that would have caught #256. `view/capability.ts` read `field.editable === true` while `entries.update()` read nothing at all, so one key had two answers: the grid hid a handle over a write that still landed. A second reader of the raw key is how that split comes back.
+
+**Message:** `` `Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `isUserEditable(field)` for the grid, or `isApiEditable(field)` for `entries.update()` — one key, two thresholds. ``
+
 ---
 
 ## 4. Message discipline
@@ -255,7 +265,8 @@ Rules land with the code they can govern. Rows below match the matrix statuses.
 | S1 | + B4, 3.2, 3.10, 3.11 |
 | S2.7 | + B7, B8, B9, B10, 3.3a, 3.4, 3.6, 3.7, 3.8 (S2.7 correction: the plan drafted these against S0/S2, before the code they govern existed to write fixtures against — `no-store-mutation-outside-transaction` needs `data/transaction.ts`, `require-invariant-header` needs its five listed files, and so on; all landed together at slice-close instead) |
 | S4 | dependency-cruiser: `rollup-is-removable`, `autogroup-is-removable`, `layout-boundary` (proved by `scripts/guard-red-test.mjs`) |
-| S3 | (no new ESLint rules — I6/I14 are tests) |
+| S3 | (no new ESLint rules — I6 is a test) |
+| ADR 0015 | + 3.12 `editable-has-one-reader` (I14's lint half; the thresholds themselves stay tests) |
 
 **Not yet shipped (S2.7 correction — the table above previously claimed these landed at S0, before the
 code they govern existed):** B3 (no production id minter needs it — `01-invariant-guard-matrix.md`'s

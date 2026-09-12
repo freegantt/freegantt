@@ -12,6 +12,7 @@ import type {
   EntryInput,
   EntryStore as EntryStoreContract,
   Field,
+  FieldEditable,
   FieldKey,
   FieldType,
   PluginStoreView,
@@ -203,6 +204,18 @@ export class Dataset<TProps = unknown> {
    *  named `type` bundle merges in. */
   get fields(): { readonly all: readonly Field[] } {
     return { all: this.#state.fields.all };
+  }
+
+  /** Call: `dataset.setFieldEditable('start', 'never')` — "set Field start editable to never."
+   *
+   *  The Field *set* is fixed after construction; this one attribute is not (ADR 0015). It changes a
+   *  Field the Dataset already declares and adds none, so an unknown key throws `UnknownFieldError`.
+   *  `true` and `false` still alias `'anywhere'` and `'never'`.
+   *
+   *  Which Entry a value is writable *on* is `gantt.interactions.edit`, per row. This key states
+   *  which values are writable at all. */
+  setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void {
+    this.#state.fields.setEditable(key, editable);
   }
 
   /** A counter that rises once per committed change. Call: `if (dataset.datasetRevision !== seen)`

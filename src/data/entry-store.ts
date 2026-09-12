@@ -23,10 +23,12 @@ import type {
 import {
   entryId,
   segmentId,
+  ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   EntryNotFoundError,
+  FieldNotEditableError,
   ParentCycleError,
   SegmentNotFoundError,
   UnknownFieldError,
@@ -47,7 +49,7 @@ import {
   writeOntoEntry,
 } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
-import { resolveWriteTarget } from './write-rule.js';
+import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -388,32 +390,54 @@ export class EntryStore implements EntryStoreContract {
   }
 
   update(id: EntryId | string, edit: EntryEdit): Entry {
+    return this.#updateFrom('entries.update', id, edit);
+  }
+
+  /** The body every door that edits one Entry shares. `operation` is the call the consumer actually
+   *  wrote, so a refusal names a door they can act on: `entries.removeSegments` removes a Segment
+   *  through this same body, and a caller who never wrote `update` must not be told about it. */
+  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): Entry {
     return this.#mutate((token) => {
       const key = entryId(id);
-      if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.update');
-      for (const field of Object.keys(edit)) {
-        if (!this.#registry.has(field)) throw new UnknownFieldError(field, 'entries.update');
-      }
-      const { own, toChildren } = this.#splitDerivedWrites(key, edit);
+      if (!this.has(key)) throw new EntryNotFoundError(key, operation);
+      for (const field of Object.keys(edit)) this.#assertFieldTakesThisWrite(field, operation);
+      const { own, toChildren } = this.#splitDerivedWrites(key, edit, operation);
       if (edit.parentId !== undefined) {
-        this.#assertParentValid(key, entryId(edit.parentId), 'entries.update');
+        this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
       const current = this.get(key)!;
       if (Object.keys(own).length > 0) {
-        const reading = toEditReading(own, this.#context, current, this.#registry, 'entries.update');
+        const reading = toEditReading(own, this.#context, current, this.#registry, operation);
         const stored = reading.stored;
         if (stored.segments !== undefined) {
-          this.#assertSegmentIdsUnique(stored.segments, key, 'entries.update');
+          this.#assertSegmentIdsUnique(stored.segments, key, operation);
         }
         this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
       }
       // Each distributed edit lands through the door it would have come in by, so a child that is
       // itself a rolling-up parent distributes again, or refuses. The walk ends at the leaves.
       for (const edits of toChildren) {
-        for (const [childId, childEdit] of edits) this.update(childId, childEdit);
+        for (const [childId, childEdit] of edits) this.#updateFrom(operation, childId, childEdit);
       }
       return this.get(key)!;
     });
+  }
+
+  /** Does the Field this key names take a write from this door at all? Three questions, in the one
+   *  order that leaves the caller somewhere to go (ADR 0015).
+   *
+   *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`:
+   *  a compute Field owns no stored home, and it may not carry `editable` either, so asking
+   *  `editable` first would answer "declare an editable" about a key the register door refuses. Then
+   *  the API threshold, which refuses the lock and nothing else.
+   *
+   *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
+   *  is `#splitDerivedWrites`, below. */
+  #assertFieldTakesThisWrite(field: string, operation: string): void {
+    const declared = this.#registry.get(field);
+    if (declared === undefined) throw new UnknownFieldError(field, operation);
+    if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
+    if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
   }
 
   /** Splits one patch into what lands on `id` itself and what its Fields distribute to the children
@@ -424,7 +448,11 @@ export class EntryStore implements EntryStoreContract {
    *  The answer reads the Field declaration and one structural fact, through the one resolver
    *  `view/capability.ts` also reads. It asks nothing about the call — whether it opened this
    *  transaction or joined one a consumer already had open makes no difference to what is allowed. */
-  #splitDerivedWrites(id: EntryId, edit: EntryEdit): { own: EntryEdit; toChildren: readonly EntryEdits[] } {
+  #splitDerivedWrites(
+    id: EntryId,
+    edit: EntryEdit,
+    operation: string,
+  ): { own: EntryEdit; toChildren: readonly EntryEdits[] } {
     if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
     const own: Record<string, unknown> = { ...edit };
     const toChildren: EntryEdits[] = [];
@@ -432,7 +460,7 @@ export class EntryStore implements EntryStoreContract {
     for (const [field, value] of Object.entries(edit)) {
       const declared = this.#registry.get(field)!;
       if (resolveWriteTarget(true, declared) === 'entry') continue;
-      if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, 'entries.update');
+      if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, operation);
       children ??= this.childrenOf(id);
       // Called on its own declaration, never detached from it — the same way `equals` and
       // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
@@ -446,7 +474,7 @@ export class EntryStore implements EntryStoreContract {
       // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
       // nothing to write — is refused with the same error an absent `distribute` gives.
       if (edits === undefined || edits.size === 0 || edits.has(id)) {
-        throw new DerivedFieldNotWritableError(field, id, 'entries.update');
+        throw new DerivedFieldNotWritableError(field, id, operation);
       }
       toChildren.push(edits);
       delete own[field];
@@ -508,10 +536,10 @@ export class EntryStore implements EntryStoreContract {
       // transaction body, so the Rollup yielded to it (decision 5) and a parent with a dated child
       // committed with no dates at all (N8, BUILD-LOG). The library obeys the rule it publishes.
       if (this.#hasChildren(id)) return;
-      this.update(id, { start: undefined, end: undefined });
+      this.#updateFrom('entries.removeSegments', id, { start: undefined, end: undefined });
       return;
     }
-    this.update(id, { segments: remaining });
+    this.#updateFrom('entries.removeSegments', id, { segments: remaining });
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {

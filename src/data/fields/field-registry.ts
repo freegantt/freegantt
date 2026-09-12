@@ -11,9 +11,10 @@
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
 // the caller already holds, not data the library owes a reader (ADR 0016).
 
-import type { Aggregator, Field, FieldKey, FieldType } from '../../model/index.js';
+import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  UnknownFieldError,
   ReservedFieldKeyError,
   DuplicateFieldKeyError,
   IllegalCoreFieldOverrideError,
@@ -58,7 +59,7 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
   const merged = bundle === undefined ? { ...field } : { ...bundle, ...field };
   const column = mergeColumn(field, bundle);
-  return { ...merged, ...(column !== undefined ? { column } : {}) };
+  return toStoredEditable({ ...merged, ...(column !== undefined ? { column } : {}) });
 }
 
 /** #142: the only keys a consumer declaration may carry when it names a core Field's key. A core
@@ -75,6 +76,29 @@ export function rollsUp(field: Field): boolean {
   return field.rollUp !== undefined && field.rollUp !== 'none';
 }
 
+/** How far may this Field's value change (ADR 0015)? One accessor, because the alias table and the
+ *  default belong in one place: `data/write-rule.ts` reads it at both thresholds, and a Field
+ *  declared by hand — a test's own literal, a `FieldLookup` a consumer wrote — still reaches those
+ *  thresholds carrying the boolean the public type accepts.
+ *
+ *  An **absent** key answers `'anywhere'`: a declared value is editable until the consumer locks it
+ *  (decision 18, grill 2026-09-10). The default lives here and nowhere else, so no core Field and no
+ *  spec sentence restates it. */
+export function editableOf(field: Field): FieldEditable {
+  const declared = field.editable;
+  if (declared === undefined || declared === true) return 'anywhere';
+  if (declared === false) return 'never';
+  return declared;
+}
+
+/** The stored spelling of one declaration's `editable`. `true`/`false` are input-only aliases, the
+ *  way an ISO string is an input alias for an `Instant`, so `dataset.fields.all` reads back one
+ *  word. An absent key stays absent — `editableOf` owns the default (ADR 0015). */
+function toStoredEditable(field: Field): Field {
+  if (typeof field.editable !== 'boolean') return field;
+  return { ...field, editable: field.editable ? 'anywhere' : 'never' };
+}
+
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable'] as const;
 
 /** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
@@ -87,7 +111,7 @@ function illegalCoreOverrideKey(field: Field): string | undefined {
 }
 
 export class FieldRegistry {
-  readonly #resolved: ResolvedField[] = [];
+  #resolved: ResolvedField[] = [];
   readonly #byKey = new Map<string, ResolvedField>();
   /** #142: every core key a consumer has already overridden (`#mergeCoreFieldOverride`) — a second
    *  declaration naming the same core key is a clash, same as two ordinary declarations sharing a
@@ -107,9 +131,10 @@ export class FieldRegistry {
     for (const field of options.fields ?? []) this.#add(field, true);
   }
 
-  /** Declaration order, core Fields first. One array identity for this registry's whole life: every
-   *  `register` call runs during construction, before anything reads a Field, so no reader ever sees
-   *  this array grow. */
+  /** Declaration order, core Fields first. The array never grows after construction: every
+   *  `register` call runs there, before anything reads a Field. `setEditable` replaces it with a
+   *  copy of the same length, so a reader that cached it by identity sees the new `editable` and a
+   *  reader mid-pass keeps a list that stays true (#187). */
   get all(): readonly ResolvedField[] {
     return this.#resolved;
   }
@@ -180,13 +205,33 @@ export class FieldRegistry {
     }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
-    const merged = {
+    const merged = toStoredEditable({
       ...core,
       ...(field.editable !== undefined ? { editable: field.editable } : {}),
-    };
+    });
     this.#byKey.set(key, merged);
     this.#resolved[this.#resolved.indexOf(core)] = merged;
     this.#consumerOverriddenCoreKeys.add(key);
+  }
+
+  /** Call: `dataset.setFieldEditable('start', 'never')` — the one Field attribute that may change
+   *  after setup (ADR 0015, Q16). It changes a declared Field; it never adds one, so an unknown key
+   *  is `UnknownFieldError`.
+   *
+   *  It copies the Field and replaces `all`'s array identity, because a config value is a value
+   *  (#187): a reader caches that array by identity, and a poke at `dataset.field('start').editable`
+   *  would change nothing it can see. The Field a caller already holds keeps the answer it had — it
+   *  is a resolved snapshot, not a signal. */
+  setEditable(key: FieldKey, editable: FieldEditable | boolean): void {
+    const field = this.get(key);
+    if (field === undefined) throw new UnknownFieldError(key, 'dataset.setFieldEditable');
+    // `compute` first, and for the reason the register door checks it first: a compute Field has no
+    // stored home, so opening it would promise a write that lands nowhere (ADR 0015).
+    if ('compute' in field)
+      throw new ComputedFieldCannotBeWrittenError(String(key), 'dataset.setFieldEditable');
+    const next = toStoredEditable({ ...field, editable });
+    this.#byKey.set(String(key), next);
+    this.#resolved = this.#resolved.map((declared) => (declared === field ? next : declared));
   }
 
   get(key: FieldKey): ResolvedField | undefined {

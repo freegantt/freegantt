@@ -8,11 +8,13 @@ import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import * as fieldAccess from './fields/field-access.js';
 import {
+  ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   DuplicateSegmentIdError,
   EmptySegmentsError,
   EntryNotFoundError,
+  FieldNotEditableError,
   ParentCycleError,
   SegmentNotFoundError,
   UnknownFieldError,
@@ -934,5 +936,124 @@ describe('removability (D-S2-23)', () => {
     const p1 = state.entries.get('p1')!;
     expect(p1.start).toBe(toInstant('UTC', '2026-05-01'));
     expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'inclusive'));
+  });
+});
+
+describe('the write door: what entries.update() refuses (ADR 0015)', () => {
+  /** One Dataset holding all three `editable` states, plus the shipped `compute` Field. `start` is
+   *  the lock, `owner` is the app-owned value a user never types, and `cost` declares nothing — so
+   *  it answers the default, `'anywhere'`. */
+  function doorDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05', props: { cost: 10, owner: 'ana' } },
+      ],
+      fields: [{ key: 'start', editable: false }, { key: 'owner', editable: 'api' }, { key: 'cost' }],
+    });
+  }
+
+  it("refuses a 'never' Field, and writes nothing", () => {
+    const state = doorDataset();
+
+    expect(() => state.entries.update('e1', { start: '2026-03-01' })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+
+  it("un-dating a 'never' Field is a change too, so it throws as well", () => {
+    const state = doorDataset();
+
+    expect(() => state.entries.update('e1', { start: undefined })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+
+  it("writes an 'api' Field — that state closes the grid cell, never this door", () => {
+    const state = doorDataset();
+
+    state.entries.update('e1', { owner: 'bo' });
+
+    expect(state.entries.fieldValue('e1', 'owner')).toBe('bo');
+  });
+
+  it('writes a Field that declares no editable at all, because the default is anywhere', () => {
+    const state = doorDataset();
+
+    state.entries.update('e1', { cost: 42 });
+
+    expect(state.entries.fieldValue('e1', 'cost')).toBe(42);
+  });
+
+  it('refuses a compute Field, and the message names this door', () => {
+    const state = doorDataset();
+
+    try {
+      state.entries.update('e1', { duration: 1 });
+      expect.unreachable('expected ComputedFieldCannotBeWrittenError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ComputedFieldCannotBeWrittenError);
+      expect((error as ComputedFieldCannotBeWrittenError).message).toContain('entries.update');
+    }
+  });
+
+  // A lock names what a *caller* may write, never what the library may.
+  it('lets construction, entries.add() and History replay write a locked Field', () => {
+    const state = doorDataset();
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+
+    state.entries.add({ id: 'e2', name: 'e2', start: '2026-02-01', end: '2026-02-03' });
+    expect(state.entries.get('e2')!.start).toBe(toInstant('UTC', '2026-02-01'));
+
+    // The replay half: move a date while the Field is open, lock it, then undo. The undo replays a
+    // `start` write onto a Field the consumer has since locked, and it must still land.
+    const openThenLocked = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
+    openThenLocked.entries.update('x', { start: '2026-01-03' });
+    openThenLocked.fields.setEditable('start', 'never');
+
+    openThenLocked.undo();
+
+    expect(openThenLocked.entries.get('x')!.start).toBe(toInstant('UTC', '2026-01-01'));
+  });
+});
+
+describe('a lock holds at every caller-facing door (ADR 0015)', () => {
+  /** Removing the last Segment un-dates the Entry, and un-dating is a change. So a locked `end`
+   *  refuses that removal too — and the message names `entries.removeSegments`, the call the
+   *  consumer wrote, never the `update` it delegates to (J37, BUILD-LOG). */
+  it("refuses a last-Segment removal that would un-date a 'never' end, and names that door", () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05' }],
+      fields: [{ key: 'end', editable: false }],
+    });
+    const only = state.entries.get('e1')!.segments[0]!.id;
+
+    try {
+      state.entries.removeSegments([only]);
+      expect.unreachable('expected FieldNotEditableError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(FieldNotEditableError);
+      expect((error as FieldNotEditableError).operation).toBe('entries.removeSegments');
+    }
+    expect(state.entries.get('e1')!.segments).toHaveLength(1);
+  });
+
+  it('removes a Segment from an Entry whose dates are open, as it always did', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        {
+          id: 'e1',
+          name: 'e1',
+          segments: [
+            { id: 's1', start: '2026-01-01', end: '2026-01-02' },
+            { id: 's2', start: '2026-01-04', end: '2026-01-05' },
+          ],
+        },
+      ],
+    });
+
+    state.entries.removeSegments(['s1']);
+
+    expect(state.entries.get('e1')!.segments.map((segment) => segment.id)).toEqual([segmentId('s2')]);
   });
 });
