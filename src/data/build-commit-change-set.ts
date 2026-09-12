@@ -8,7 +8,7 @@ import type {
   ChangeSetId,
   EntityAdded,
   EntityRemoved,
-  Entry,
+  StoredEntry,
   EntryId,
   FieldContext,
   FieldUpdated,
@@ -41,7 +41,7 @@ import { isDevMode } from './dev-mode.js';
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
  *  importing `transaction.ts` (cycle avoidance). */
 export interface CommitChangeSetEntryStore {
-  committedById(): ReadonlyMap<EntryId, Entry>;
+  committedById(): ReadonlyMap<EntryId, StoredEntry>;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): ProposedEdits;
@@ -77,7 +77,7 @@ export interface CommitChangeSetInput {
 }
 
 export function diffEdits(
-  byId: ReadonlyMap<EntryId, Entry>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
   fields: FieldRegistry,
   ctx: FieldContext,
@@ -161,7 +161,7 @@ function guardExtensionHookDoesNotOverwriteBody(
  *  disagree throw `SegmentsOutOfSyncError('conflicting', ...)` instead of one silently overwriting
  *  the other's Segment. */
 function reconcileSharedEnvelope(
-  original: Entry,
+  original: StoredEntry,
   bodyEdit: ProposedEdit,
   bodyAuthoredKeys: ReadonlySet<string>,
   extenderEdit: ProposedEdit,
@@ -192,7 +192,7 @@ function reconcileSharedEnvelope(
  *  commit path diffs, replacing the two separate diffs of `proposed` and `extenderEdits` that used to
  *  let one field reach the `ChangeSet` twice with two different `to` values (#232). */
 function mergeBodyAndExtenderEdits(
-  byId: ReadonlyMap<EntryId, Entry>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
   extenderEdits: ProposedEdits,

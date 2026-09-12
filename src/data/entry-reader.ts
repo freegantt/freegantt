@@ -18,7 +18,7 @@ import {
 } from '../model/index.js';
 import type {
   DateOnlyEndRule,
-  Entry,
+  StoredEntry,
   EntryEdit,
   EntryId,
   EntryInput,
@@ -126,7 +126,7 @@ function toSegments(
 
 /** The one Segment an Entry draws, or `undefined` when it draws several — the question
  * `segments-out-of-sync` and a plain `start` edit both ask (#212). */
-function soleSegmentOf(entry: Entry): Segment | undefined {
+function soleSegmentOf(entry: StoredEntry): Segment | undefined {
   return entry.segments.length === 1 ? entry.segments[0] : undefined;
 }
 
@@ -212,13 +212,13 @@ export function toEntry(
   context: EntryReadContext,
   registry: FieldRegistry,
   operation: string,
-): Entry {
+): StoredEntry {
   const id = entryId(input.id);
   const owner: EditOrigin = { entryId: id, operation };
   const dates = toEntryDates(input, context, owner);
   const segments = toSegments(input, dates, context, owner);
   const envelope = segments.length > 0 ? envelopeOfSegments(segments) : dates;
-  const entry: Entry = {
+  const entry: StoredEntry = {
     id,
     name: input.name,
     segments,
@@ -246,7 +246,7 @@ export function authoredSegmentIdsOf(inputs: readonly EntryInput[]): ReadonlySet
 /** No two Segments in a construction-time `entries: EntryInput[]` list share one `SegmentId` — the
  *  same rule `entries.add`/`entries.update` enforce against the live store (#212, ADR 0010). Checked
  *  once over the whole list, so an authored duplicate never reaches the store in the first place. */
-function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
+function assertNoDuplicateSegmentIds(entries: readonly StoredEntry[]): void {
   const seen = new Set<SegmentId>();
   for (const entry of entries) {
     for (const segment of entry.segments) {
@@ -261,7 +261,7 @@ export function toEntries(
   context: EntryReadContext,
   registry: FieldRegistry,
   operation = 'construction',
-): readonly Entry[] {
+): readonly StoredEntry[] {
   const entries = inputs.map((input) => toEntry(input, context, registry, operation));
   assertNoDuplicateSegmentIds(entries);
   return entries;
@@ -307,7 +307,7 @@ export interface EnvelopeReconciliation {
  * Segment for that one preview frame — never committed, so never a real inconsistency.
  */
 export function reconcileEnvelope(
-  entry: Entry,
+  entry: StoredEntry,
   stored: ProposedEdit,
   operation: string,
   mintSegmentId?: () => SegmentId,
@@ -439,7 +439,7 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
  */
-export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
+export function moveEntryTo(entry: StoredEntry, start: Instant): EntryEdit {
   // Moving an Entry rigidly only makes sense for one that already spans (`spansTime`, ADR 0012):
   // a dateless or one-date Entry holds no Segment to translate. This was a cast until Q5 gave the
   // rule one home; the edit it returns is the same empty Segment list the map below produced.
@@ -482,7 +482,7 @@ export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
  *  `catch` branch's drop, because `reconcileEnvelope` still throws synchronously and this rethrows it
  *  unchanged. */
 function reconcileExtenderEditsWith(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
   refuse: 'throw' | 'drop',
   mintSegmentId?: () => SegmentId,
@@ -504,7 +504,7 @@ function reconcileExtenderEditsWith(
 }
 
 export function reconcileExtenderEdits(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
   mintSegmentId?: () => SegmentId,
 ): ProposedEdits {
@@ -521,7 +521,7 @@ export function reconcileExtenderEdits(
  * `mintSegmentId`: a preview frame never reaches the store, so there is no real counter to mint from.
  */
 export function reconcileExtenderEditsForPreview(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
 ): ProposedEdits {
   return reconcileExtenderEditsWith(entries, edits, 'drop');
@@ -555,7 +555,7 @@ export interface EditsReading {
 export function toEditReading(
   edit: EntryEdit,
   context: EntryReadContext,
-  entry: Entry,
+  entry: StoredEntry,
   registry: FieldRegistry,
   operation: string,
 ): EditReading {
@@ -623,7 +623,7 @@ export function toEditReading(
 export function toEditsReading(
   edits: EntryEdits,
   context: EntryReadContext,
-  entryFor: (id: EntryId) => Entry | undefined,
+  entryFor: (id: EntryId) => StoredEntry | undefined,
   registry: FieldRegistry,
 ): EditsReading {
   const stored = new Map<EntryId, ProposedEdit>();

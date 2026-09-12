@@ -7,7 +7,7 @@ import type {
   ChangeSet,
   ChangeSetId,
   DatasetEventMap,
-  Entry,
+  StoredEntry,
   EntryId,
   FieldContext,
   FieldUpdated,
@@ -36,10 +36,10 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  *body* (via its own `TxToken`) to call directly on `EntryStore`, never for `runTransaction` to call
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
-  committedById(): ReadonlyMap<EntryId, Entry>;
+  committedById(): ReadonlyMap<EntryId, StoredEntry>;
   beginTransaction(token: TxToken): void;
-  pendingAdded(): readonly { store: 'entries'; entity: Entry }[];
-  pendingRemoved(): readonly { store: 'entries'; entity: Entry }[];
+  pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
+  pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingEdits(): ProposedEdits;
   /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
    *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */

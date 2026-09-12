@@ -8,7 +8,7 @@
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type {
-  Entry,
+  StoredEntry,
   EntryId,
   ErrorCode,
   Instant,
@@ -42,7 +42,7 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
  *  allocates nothing (I5). */
 const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
-const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
+const NO_ENTRIES: ReadonlyMap<EntryId, StoredEntry> = Object.freeze(new Map<EntryId, StoredEntry>());
 /** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
 const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
 
@@ -60,7 +60,7 @@ export interface GesturePipelineDeps {
   /** The Entries those Segments belong to, deduped, in row order — one projection, resolved by the
    *  shell, so this file never turns a Segment into an Entry itself. */
   selectedEntryIds(): readonly EntryId[];
-  entryById(id: EntryId): Entry | undefined;
+  entryById(id: EntryId): StoredEntry | undefined;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
    *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
    *  question to one handle (#142); every other capability ignores it. */
@@ -68,7 +68,7 @@ export interface GesturePipelineDeps {
   /** ADR 0013: which Entries a move of this bar writes — `Capabilities.entriesMovedBy`, resolved by
    *  the shell like every other capability answer (I14). An ordinary bar answers with itself. A
    *  parent bar answers with the dated descendants below it, because its own dates roll up. */
-  entriesMovedBy(entry: Entry): readonly Entry[];
+  entriesMovedBy(entry: StoredEntry): readonly StoredEntry[];
   commitEntryEdits(edits: ProposedEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
@@ -87,7 +87,7 @@ export interface GesturePipelineDeps {
    *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
    *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
    *  `datasetRevision`, which rises once per committed change. */
-  committedEntriesById?(): ReadonlyMap<EntryId, Entry>;
+  committedEntriesById?(): ReadonlyMap<EntryId, StoredEntry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
@@ -221,11 +221,11 @@ export class GesturePipeline {
     grabbedId: EntryId,
     capability: GestureCapability,
     edge?: 'start' | 'end',
-  ): readonly Entry[] {
+  ): readonly StoredEntry[] {
     const selection = this.#deps.selectedEntryIds();
     const inMultiSelection = selection.includes(grabbedId) && selection.length > 1;
     const candidateIds = inMultiSelection ? selection : [grabbedId];
-    const entries: Entry[] = [];
+    const entries: StoredEntry[] = [];
     const seen = new Set<EntryId>();
     const pushCapable = (id: EntryId): void => {
       if (seen.has(id)) return;
@@ -259,7 +259,7 @@ export class GesturePipeline {
    *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
    *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
    *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
-  #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
+  #stepPx(gesture: EntryGesture, anchor: StoredEntry, suspendSnap: boolean | undefined): number {
     const snap = this.#resolveSnap(suspendSnap);
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
@@ -284,14 +284,14 @@ export class GesturePipeline {
    *  A resize reaches none of this: a parent never passes `can('resize', …)`, because one edge of a
    *  derived envelope names no descendant to resize. */
   #draftedEntries(
-    bars: readonly Entry[],
+    bars: readonly StoredEntry[],
     capability: GestureCapability,
-  ): { entries: readonly Entry[]; paintedOnly: ReadonlySet<EntryId> } {
+  ): { entries: readonly StoredEntry[]; paintedOnly: ReadonlySet<EntryId> } {
     if (capability !== 'move') return { entries: bars, paintedOnly: NOTHING_PAINTED_ONLY };
-    const entries: Entry[] = [];
+    const entries: StoredEntry[] = [];
     const seen = new Set<EntryId>();
     const paintedOnly = new Set<EntryId>();
-    const push = (entry: Entry): void => {
+    const push = (entry: StoredEntry): void => {
       if (seen.has(entry.id)) return;
       entries.push(entry);
       seen.add(entry.id);
@@ -307,7 +307,7 @@ export class GesturePipeline {
 
   #proposalFor(input: {
     gesture: EntryGesture;
-    entries: readonly Entry[];
+    entries: readonly StoredEntry[];
     paintedOnly: ReadonlySet<EntryId>;
     grabbed: EntryId;
     dxPx: number;
@@ -487,7 +487,7 @@ export class GesturePipeline {
     if (!proposal || proposal.paints.size === 0) return undefined;
     const draft = proposal.paints;
     const extra = this.#extraFor(proposal.writes);
-    const entries: Entry[] = [];
+    const entries: StoredEntry[] = [];
     const seen = new Set<EntryId>();
     const pushEntry = (id: EntryId): void => {
       if (seen.has(id)) return;

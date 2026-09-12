@@ -6,7 +6,7 @@ import './harness-nav.ts';
 import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
 import type {
   DatasetEventMap,
-  Entry,
+  StoredEntry,
   EntryInput,
   FieldContext,
   GridColumnsChange,
@@ -98,7 +98,7 @@ function buildRowSource(): RowSource {
   const shared = {
     heightMode,
     ...(filterTeam !== null && rowsMode !== 'grouped'
-      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      ? { filter: (entry: StoredEntry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
       : {}),
     ...(sortField !== 'none' && rowsMode !== 'grouped'
       ? { sort: { field: sortField as 'start' | 'cost' | 'name' } }
@@ -108,7 +108,8 @@ function buildRowSource(): RowSource {
   if (rowsMode === 'grouped') {
     return {
       source: 'group',
-      groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
+      groupBy: (entry: StoredEntry, fields?: FieldContext) =>
+        String(fields?.read(entry, 'team') ?? 'unassigned'),
       ...shared,
     };
   }

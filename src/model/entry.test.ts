@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from './ids.js';
 import { spansTime } from './entry.js';
-import type { Entry } from './entry.js';
+import type { StoredEntry } from './entry.js';
 import type { Instant } from './time.js';
 
 const instant = (value: number): Instant => value as Instant;
 
-function entry(dates: { start?: Instant; end?: Instant }): Entry {
+function entry(dates: { start?: Instant; end?: Instant }): StoredEntry {
   return { id: entryId('e1'), name: 'Design', segments: [], props: {}, ...dates };
 }
 
@@ -52,7 +52,7 @@ describe('spansTime', () => {
   });
 
   it('keeps every other key of the record it narrows', () => {
-    const subject: Entry = {
+    const subject: StoredEntry = {
       id: entryId('e2'),
       name: 'Build',
       start: instant(1),

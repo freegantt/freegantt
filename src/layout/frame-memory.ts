@@ -2,7 +2,7 @@
 // live here so a pack row is produced once per dataset revision, whether `heightOfRow` forced it
 // above the viewport or `placeFrame` placed it in the window.
 
-import type { Entry, EntryId, ItemId, SegmentId } from '../model/index.js';
+import type { StoredEntry, EntryId, ItemId, SegmentId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
@@ -28,7 +28,7 @@ export interface FrameMemoryBind {
   readonly plan: readonly PlannedRow[];
   readonly rowHeight: number;
   readonly laneGap: number;
-  readonly entries: readonly Entry[];
+  readonly entries: readonly StoredEntry[];
   readonly registry: ItemProducerRegistry;
   readonly datasetRevision: number;
   /** Test seam: override packed/fixed height for index-space overscan checks. */
@@ -48,7 +48,7 @@ export class FrameMemory {
   };
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
-  #entryById = new Map<EntryId, Entry>();
+  #entryById = new Map<EntryId, StoredEntry>();
   /** ADR 0013: structure, not a stored classification, decides the default look — every id at least
    *  one held Entry names as its `parentId`. Rebuilt alongside `#entryById` in `sync()`. */
   #parentIds = new Set<EntryId>();

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
+import type { StoredEntry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import type { EntryMove } from './event-bus.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
@@ -36,7 +36,7 @@ function pe(patch: Record<string, unknown>): {
   return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(Object.keys(patch)), ...patch };
 }
 
-function entry(id: string, start: number, end: number): Entry {
+function entry(id: string, start: number, end: number): StoredEntry {
   const startInstant = start as Instant;
   const endInstant = end as Instant;
   return {
@@ -58,7 +58,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   const emitted: [string, unknown][] = [];
   const applied: unknown[] = [];
   const reported: ErrorReportInput[] = [];
-  const entries = new Map<EntryId, Entry>();
+  const entries = new Map<EntryId, StoredEntry>();
   const deps: GesturePipelineDeps = {
     timeZone: () => 'UTC',
     timeScale: () => linearScale,
@@ -85,7 +85,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
 
 /** Wires `entryById` off a fixed roster, the shape most tests below want: one grabbed
  *  entry, every capability granted, no multi-selection. */
-function withRoster(entries: readonly Entry[], overrides: Partial<GesturePipelineDeps> = {}) {
+function withRoster(entries: readonly StoredEntry[], overrides: Partial<GesturePipelineDeps> = {}) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   return makeDeps({ entryById: (id) => byId.get(id), ...overrides });
 }
@@ -195,7 +195,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('moves every bar of a segmented entry with no pick (#211, D-S4-30)', async () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', 0, 300),
       segments: [
         { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
@@ -233,7 +233,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('moves only the selected bar of a segmented entry, envelope follows (#211, #212)', async () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', 0, 300),
       segments: [
         { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
@@ -272,14 +272,14 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('a multi-Entry drag moves each Entry’s own selected Segment, or whole when none is (#211)', async () => {
-    const picked: Entry = {
+    const picked: StoredEntry = {
       ...entry('picked', 0, 200),
       segments: [
         { id: segmentId('picked-a'), start: 0 as Instant, end: 100 as Instant },
         { id: segmentId('picked-b'), start: 100 as Instant, end: 200 as Instant },
       ],
     };
-    const unpicked: Entry = {
+    const unpicked: StoredEntry = {
       ...entry('unpicked', 300, 500),
       segments: [
         { id: segmentId('unpicked-a'), start: 300 as Instant, end: 400 as Instant },
@@ -311,7 +311,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('a resize on a selected Segment writes only that Segment’s edge (#211, #212)', async () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', 0, 300),
       segments: [
         { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
@@ -342,7 +342,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
-    const milestone: Entry = entry('m', 50, 50);
+    const milestone: StoredEntry = entry('m', 50, 50);
     const { deps } = withRoster([milestone], { canGesture: () => false });
     const pipeline = new GesturePipeline(deps);
 
@@ -747,7 +747,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     // it throws for real.
     it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path still throws', async () => {
       const a = entry('a', 100, 200);
-      const x: Entry = {
+      const x: StoredEntry = {
         id: entryId('x'),
         name: 'x',
         start: 300 as Instant,
@@ -936,7 +936,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
 describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
   /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
-  function startOnly(id: string, start: number): Entry {
+  function startOnly(id: string, start: number): StoredEntry {
     return {
       id: entryId(id),
       name: id,
@@ -948,7 +948,7 @@ describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
 
   /** One phase bar over two children — the shape a real roll-up parent is always in. `entriesMovedBy`
    *  answers the way `view/capability.ts` does: the parent writes the rows below it, never itself. */
-  function withParent(children: readonly Entry[]) {
+  function withParent(children: readonly StoredEntry[]) {
     const parent = entry('phase', 100, 400);
     return withRoster([parent, ...children], {
       entriesMovedBy: (grabbed) => (grabbed.id === parent.id ? children : [grabbed]),

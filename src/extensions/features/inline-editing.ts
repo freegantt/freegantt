@@ -43,7 +43,7 @@ import {
 import type {
   CoreFieldValue,
   Disposer,
-  Entry,
+  StoredEntry,
   EntryId,
   Field,
   FieldContext,
@@ -93,7 +93,7 @@ function isDateField(field: Field): boolean {
  *
  *  So this is a rule about which door, not about whether the value may change. Folding it into
  *  `canWrite` would take the handles off every segmented bar. */
-function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
+function writesSegmentEnvelope(entry: StoredEntry, field: Field): boolean {
   if (entry.segments.length <= 1) return false;
   return field.key === 'start' || field.key === 'end';
 }
@@ -113,9 +113,9 @@ function canOpenGeneric(field: Field): boolean {
 function fieldContextFor(ctx: PluginContext): FieldContext {
   return {
     timeZone: ctx.dataset.timeZone,
-    read: <K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined =>
+    read: <K extends FieldKey>(entry: StoredEntry, key: K): CoreFieldValue<K> | undefined =>
       ctx.dataset.entries.fieldValue(entry.id, key),
-    durationOf: (entry: Entry) => {
+    durationOf: (entry: StoredEntry) => {
       // An Entry that does not span (`spansTime`, ADR 0012) has no duration; `diffDays` needs two
       // real dates.
       if (!spansTime(entry)) return undefined;
@@ -241,7 +241,7 @@ export interface CellEditorPorts {
    *  Keymap, so the newest handler wins (D-S5-9). */
   bindEscape(onEscape: () => void): Disposer;
   /** The stored entry, re-read at commit time — the session keeps no copy of it. */
-  entryById(id: EntryId): Entry | undefined;
+  entryById(id: EntryId): StoredEntry | undefined;
   /** The stored value of one field, for the `from` and the `to` of `entryEdit`. */
   storedValue(id: EntryId, field: FieldKey): unknown;
   /** One `entries.update` call: one transaction, one changeset, one undo step (I6). It throws
@@ -736,7 +736,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         return '';
       }
 
-      function openGeneric(pending: PendingOpen, entry: Entry, field: Field, cell: HTMLElement): void {
+      function openGeneric(pending: PendingOpen, entry: StoredEntry, field: Field, cell: HTMLElement): void {
         const fieldValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
@@ -761,7 +761,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         });
       }
 
-      function openDate(pending: PendingOpen, entry: Entry, field: Field): void {
+      function openDate(pending: PendingOpen, entry: StoredEntry, field: Field): void {
         // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
         // so a consumer-declared date Field reads back as `unknown` without this.
         // A blank cell (ADR 0012: the Entry does not hold this date) opens empty. This is the same
@@ -799,7 +799,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       /** D-S5-19: the veto question fires *before the editor opens*, not before the write. A
        *  consumer's `beforeEntryEdit` handler opens its own dialog, and returns `false` to suppress
        *  the built-in editor entirely (U8). */
-      function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
+      function openFor(entry: StoredEntry, field: Field, cell: HTMLElement): void {
         const edited: EditedCell = { entryId: entry.id, field: field.key };
         editing.dismissNotice();
         // Which refusals speak (`s5.8-inline-editing.md` §1). A cell that offers no editor at all

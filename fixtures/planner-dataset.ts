@@ -14,7 +14,7 @@
 // is a construction plan because a consumer said so, not because the library knows one.
 
 import { addMs, instant, MS } from '../src/api/index.js';
-import type { Entry, EntryInput, Field, Instant } from '../src/api/index.js';
+import type { StoredEntry, EntryInput, Field, Instant } from '../src/api/index.js';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
 export interface PlannerEntryProps {
@@ -186,7 +186,7 @@ const PLANNER_FIELDS: readonly Field[] = [
   // that refuses the editor for a reason a reader can see.
   {
     key: 'ref',
-    compute: (entry: Entry) =>
+    compute: (entry: StoredEntry) =>
       CHECKPOINT_ENTRY_IDS.has(String(entry.id)) ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
     // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width

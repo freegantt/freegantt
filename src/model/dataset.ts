@@ -3,7 +3,7 @@
 // not a snapshot array (D-S2-2). `Dataset` here is the bindable surface a Gantt holds; the public
 // class adds `transaction()` and the construction-time options a view never reads.
 
-import type { Entry, EntryEdit, EntryInput } from './entry.js';
+import type { StoredEntry, EntryEdit, EntryInput } from './entry.js';
 import type { Field, FieldKey, FieldValue } from './field.js';
 import type { EntryId, SegmentId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
@@ -12,12 +12,12 @@ import type { DatasetEventMap } from './change-set.js';
  *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
  *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */
 export interface EntryStoreView<TProps = Record<string, unknown>> {
-  readonly all: readonly Entry<TProps>[];
-  get(id: EntryId | string): Entry<TProps> | undefined;
+  readonly all: readonly StoredEntry<TProps>[];
+  get(id: EntryId | string): StoredEntry<TProps> | undefined;
   has(id: EntryId | string): boolean;
   readonly size: number;
   /** Direct children, in insertion order. An entry with no children returns `[]`. */
-  childrenOf(id: EntryId | string): readonly Entry<TProps>[];
+  childrenOf(id: EntryId | string): readonly StoredEntry<TProps>[];
   /** The value of `field` on this entry. Routes through the Field registry, so a `props` Field and
    *  a `compute` Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
    *  A missing id throws `EntryNotFoundError`.
@@ -56,8 +56,8 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  Ingest itself still reads a flat declared key off any object at runtime — `propsFromInput`
    *  (`entry-reader.ts`) does not consult this type — so a caller loses only the static
    *  autocomplete/check, not the behaviour. Flagged for the author (BUILD-LOG Q). */
-  add(input: EntryInput<TProps>): Entry<TProps>;
-  update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
+  add(input: EntryInput<TProps>): StoredEntry<TProps>;
+  update(id: EntryId | string, edit: EntryEdit<TProps>): StoredEntry<TProps>;
   remove(id: EntryId | string): void;
   /** Removes Segments in one transaction, across several Entries when `ids` names several (ADR
    *  0010, #212). An Entry that keeps a Segment gets its envelope recomputed; an Entry whose last

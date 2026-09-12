@@ -15,7 +15,7 @@ import {
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetPlugin, Duration, StoredEntry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -28,7 +28,7 @@ const oneEntry = (overrides: Partial<EntryInput> = {}): EntryInput => ({
   ...overrides,
 });
 
-const first = (dataset: Dataset): Entry => {
+const first = (dataset: Dataset): StoredEntry => {
   const entry = dataset.entries.all[0];
   if (!entry) throw new Error('expected one entry');
   return entry;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { entryId, rowId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, Instant, RowId } from '../model/index.js';
+import type { StoredEntry, EntryId, Instant, RowId } from '../model/index.js';
 import { TreeCollapse } from './tree-collapse.js';
 import type { TreeCollapseContext, TreeCollapseRow } from './tree-collapse.js';
 import type { CollapseChange } from './collapse-state.js';
@@ -9,10 +9,10 @@ function instant(n: number): Instant {
   return n as Instant;
 }
 
-function entry(id: string, parentId?: string): Entry {
+function entry(id: string, parentId?: string): StoredEntry {
   const start = instant(0);
   const end = instant(1);
-  const record: Entry = {
+  const record: StoredEntry = {
     id: entryId(id),
     name: id,
     start,
@@ -41,7 +41,7 @@ function row(
 function makeCollapse(
   options: {
     plannedRows?: TreeCollapseRow[];
-    entries?: Entry[];
+    entries?: StoredEntry[];
     selected?: EntryId;
     canSelect?: (id: EntryId) => boolean;
     rowIdForEntry?: (id: EntryId) => RowId | undefined;

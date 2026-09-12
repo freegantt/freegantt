@@ -13,7 +13,7 @@ import { createDomBackend } from '../render/dom/index.js';
 import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
-import type { Entry, EntryId } from '../model/index.js';
+import type { StoredEntry, EntryId } from '../model/index.js';
 import { segmentId } from '../model/index.js';
 
 // Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
@@ -48,21 +48,21 @@ const oneRowForAllThree: RowSource = {
 /** One mounted Gantt's worth of DOM: a `PaneLayout` for the panes and the splitter, and a real
  *  `render/dom` backend painting into its surfaces. */
 function paintOneGantt(
-  painted: readonly Entry[] = entries,
+  painted: readonly StoredEntry[] = entries,
   rows?: RowSource,
 ): {
   dom: ContainerDom;
   container: HTMLElement;
   /** Paints a second frame over the same nodes, the way a Dataset edit does. The reconciler reuses
    *  every node whose key survived, so this is how a test sees what a recycled node carries. */
-  repaint(next: readonly Entry[]): void;
+  repaint(next: readonly StoredEntry[]): void;
   destroy(): void;
 } {
   const container = document.createElement('div');
   document.body.append(container);
   const paneLayout = new PaneLayout({ container });
   let current = painted;
-  const entryById = (id: EntryId): Entry | undefined => current.find((entry) => entry.id === id);
+  const entryById = (id: EntryId): StoredEntry | undefined => current.find((entry) => entry.id === id);
   // The backend needs its own Entry lookup: a bar that draws a whole Entry names no single Segment,
   // so the paint asks which Segments that Entry owns (#212).
   const backend = createDomBackend({
@@ -267,7 +267,7 @@ describe('ContainerDom — finding an element from an id', () => {
   });
 
   it('barFor anchors on the first bar the frame mounted, not on segment 0 (#185)', () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entries[0]!,
       segments: [
         { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start!, end: entries[0]!.end! },
@@ -312,7 +312,7 @@ describe('ContainerDom — finding an element from an id', () => {
 
 describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   /** Two Segments with ids a test can name, so it can say which one the pane picked. */
-  const twoSegments: Entry = {
+  const twoSegments: StoredEntry = {
     ...entries[0]!,
     segments: [
       { id: segmentId('seg-a'), start: entries[0]!.start!, end: entries[0]!.end! },
@@ -333,7 +333,7 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
     // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
     // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
     // and the Entry is its Segments.
-    const child: Entry = { ...entries[1]!, parentId: twoSegments.id };
+    const child: StoredEntry = { ...entries[1]!, parentId: twoSegments.id };
     const gantt = paintOneGantt([twoSegments, child]);
     const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
 
@@ -363,7 +363,7 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   });
 
   it('a bar names the Segment it draws now, not the one it drew before a Segment was removed (#212)', () => {
-    const threeSegments: Entry = {
+    const threeSegments: StoredEntry = {
       ...entries[0]!,
       segments: [
         { id: segmentId('sg1'), start: entries[0]!.start!, end: entries[0]!.end! },

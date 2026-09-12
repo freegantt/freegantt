@@ -2,14 +2,14 @@
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
 import type { Duration } from './time.js';
-import type { Entry, EntryEdits } from './entry.js';
+import type { StoredEntry, EntryEdits } from './entry.js';
 import type { ElementDescription } from './render.js';
 
 /** The shipped subset — keys of `Entry` except `id` and `props`. The comparator exhaustiveness check
  *  stays over this set (ADR 0005 §28). `props` omits alongside this, or neither does (ADR 0011):
  *  change one and not the other, and `read(id, 'props')` types as the whole bag while the registry
  *  refuses the key at runtime. */
-export type CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>;
+export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 
 /** A Field's name, and the changeset's `field`. Open by construction (D-S2-26, ADR 0005). */
 export type FieldKey = CoreFieldKey | (string & {});
@@ -18,7 +18,7 @@ export type FieldKey = CoreFieldKey | (string & {});
  *  plus `duration` — the one core Field that computes its value and owns no `Entry` key
  *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
  *  `entries.get(id)?.props`. */
-export interface CoreFieldValues extends Omit<Entry, 'id' | 'props'> {
+export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
   /** `end - start`, computed on read (`CORE_FIELDS`) — the one core Field with no `Entry` key. */
   duration: Duration;
 }
@@ -65,7 +65,7 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
  *  import `layout/`. */
 export interface ColumnCellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row. */
-  entry?: Entry;
+  entry?: StoredEntry;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
   /** The same Field value before formatting — what `dataset.entries.fieldValue(id, field)` answers
@@ -175,8 +175,8 @@ export type Field<TValue = unknown> =
        *  `Field`. `FieldDistributor` is the type a consumer writes one against. */
       distribute?(
         value: TValue | undefined,
-        children: readonly Entry[],
-        parent: Entry,
+        children: readonly StoredEntry[],
+        parent: StoredEntry,
         ctx: RollUpContext,
       ): EntryEdits | undefined;
       // `compute` is genuinely absent here, not `compute?: never`: `'compute' in field` is the
@@ -189,7 +189,7 @@ export type Field<TValue = unknown> =
        *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
        *  cell — a formatter that needs the Entry declares this third parameter instead; every other
        *  formatter still assigns with two, or one (#240). */
-      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
       /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
        *  back into a stored value. `undefined` means the text names no value — the editor stays open in
        *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
@@ -225,9 +225,9 @@ export type Field<TValue = unknown> =
        *  read a value through `entry.props`, and read a Field — a core key, `duration`, or another
        *  Field's own `compute` arm — through `ctx.read`. `entry.props` alone cannot reach those.
        *  Named `compute`, not `get`: `get` already names three unrelated jobs in this codebase. */
-      compute(entry: Entry, ctx: FieldContext): TValue | undefined;
+      compute(entry: StoredEntry, ctx: FieldContext): TValue | undefined;
       compare?(a: TValue | undefined, b: TValue | undefined): number;
-      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+      formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
       column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
       // Declared `never` (never abbreviated away, unlike the ADR's shorthand comment) so a caller
       // holding a bare `Field` can read `field.equals`/`.parseValue`/`.inputType` without narrowing
@@ -255,13 +255,13 @@ export interface FieldType<TValue = unknown> {
    *  variance reason `Field.distribute` states. */
   distribute?(
     value: TValue | undefined,
-    children: readonly Entry[],
-    parent: Entry,
+    children: readonly StoredEntry[],
+    parent: StoredEntry,
     ctx: RollUpContext,
   ): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
-  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
+  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
   parseValue?(text: string, ctx: FieldContext): TValue | undefined;
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
   column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
@@ -280,10 +280,10 @@ export type FieldLookup = {
  *  `dataset.entries.fieldValue`, which the Dataset does type. */
 export interface FieldContext {
   readonly timeZone: string;
-  read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined;
+  read<K extends FieldKey>(entry: StoredEntry, key: K): CoreFieldValue<K> | undefined;
   /** `undefined` iff `entry` does not span (ADR 0012) — an Entry with no `start`/`end` has no
    *  duration to state. */
-  durationOf(entry: Entry): Duration | undefined;
+  durationOf(entry: StoredEntry): Duration | undefined;
 }
 
 /** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13). */
@@ -300,10 +300,10 @@ export interface FormatContext extends FieldContext {
 export interface RollUpContext extends FieldContext {
   readonly field: FieldKey;
   /** `ctx.field` read off each child, in order. A child with no value is a hole (`undefined`). */
-  values(children: readonly Entry[]): readonly unknown[];
+  values(children: readonly StoredEntry[]): readonly unknown[];
   /** Like `values`, but keeps only finite numbers — holes and non-numeric values drop, same rule
    *  shipped `sum`/`min`/`max` already follow. */
-  numericValues(children: readonly Entry[]): readonly number[];
+  numericValues(children: readonly StoredEntry[]): readonly number[];
 }
 
 /** What a write to a rolling-up parent's cell **means** (ADR 0013, amendment 2026-09-11). Read the
@@ -324,14 +324,14 @@ export interface RollUpContext extends FieldContext {
  *  absent `distribute` gives. A policy with nothing to write is a policy that says no. */
 export type FieldDistributor<TValue = unknown> = (
   value: TValue | undefined,
-  children: readonly Entry[],
-  parent: Entry,
+  children: readonly StoredEntry[],
+  parent: StoredEntry,
   ctx: RollUpContext,
 ) => EntryEdits | undefined;
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
 export type Aggregator<TValue = unknown> = (
-  children: readonly Entry[],
-  parent: Entry,
+  children: readonly StoredEntry[],
+  parent: StoredEntry,
   ctx: RollUpContext,
 ) => TValue | undefined;

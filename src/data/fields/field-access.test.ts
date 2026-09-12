@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
-import type { Entry, Instant, ProposedEdit } from '../../model/index.js';
+import type { StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
   createFieldContext,
   createRollUpContext,
@@ -16,7 +16,7 @@ import {
 } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 
-const span = (props?: Record<string, unknown>): Entry => {
+const span = (props?: Record<string, unknown>): StoredEntry => {
   return {
     id: entryId('t1'),
     name: 't1',
@@ -88,7 +88,7 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 
   it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
-    const dateless: Entry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
+    const dateless: StoredEntry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
     expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 

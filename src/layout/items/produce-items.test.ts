@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
 import { entryId, itemId, rowId, segmentId } from '../../model/index.js';
-import type { Entry, EntryId, Instant } from '../../model/index.js';
+import type { StoredEntry, EntryId, Instant } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { createItemProducerRegistry, produceItemsForRow, wholeEntryItem } from './produce-items.js';
 
@@ -40,7 +40,7 @@ function asInstant(ms: number): Instant {
   return ms as Instant;
 }
 
-function spanEntry(id: string, extras: Partial<Entry> = {}): Entry {
+function spanEntry(id: string, extras: Partial<StoredEntry> = {}): StoredEntry {
   return {
     id: entryId(id),
     name: id,
@@ -65,7 +65,7 @@ function planned(entryIds: readonly EntryId[], kind: 'entry' | 'header' = 'entry
   };
 }
 
-function entryByIdFor(entries: readonly Entry[]): ReadonlyMap<EntryId, Entry> {
+function entryByIdFor(entries: readonly StoredEntry[]): ReadonlyMap<EntryId, StoredEntry> {
   return new Map(entries.map((entry) => [entry.id, entry]));
 }
 
@@ -115,7 +115,7 @@ describe('produceItemsForRow', () => {
   });
 
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
-    const t1: Entry = {
+    const t1: StoredEntry = {
       id: entryId('t1'),
       name: 't1',
       start: asInstant(0),

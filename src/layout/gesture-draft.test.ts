@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
-import type { Entry, Instant, ProposedEdit, ProposedEdits } from '../model/index.js';
+import type { StoredEntry, Instant, ProposedEdit, ProposedEdits } from '../model/index.js';
 import { entryId, itemId, segmentId } from '../model/index.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
@@ -11,7 +11,7 @@ const scale = createTimeScale({
   pxPerMs: 1 / MS.MINUTE, // 1px per minute
 });
 
-function entry(id: string, start: string, end: string): Entry {
+function entry(id: string, start: string, end: string): StoredEntry {
   const startInstant = instant(start);
   const endInstant = instant(end);
   return {
@@ -173,7 +173,7 @@ describe('draftForResize', () => {
 
   it('moves the envelope edge of a segmented entry, leaving its other Segments alone (#200)', () => {
     // Authored out of order on purpose: the envelope edge is a comparison, never index 0.
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-17T00:00:00Z'),
       segments: [
         {
@@ -225,7 +225,7 @@ describe('draftForResize', () => {
   });
 
   it('clamps a segmented entry at its own edge Segment, never inverting it (#200)', () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-17T00:00:00Z'),
       segments: [
         {
@@ -330,7 +330,7 @@ describe('previewOffsets', () => {
 });
 
 describe('draftForMove — segments (S4.10, D-S4-30)', () => {
-  const segmented: Entry = {
+  const segmented: StoredEntry = {
     ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
     segments: [
       {
@@ -390,7 +390,7 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
   });
 
   it('writes segments for a one-segment entry so the store does not throw (D3)', () => {
-    const one: Entry = {
+    const one: StoredEntry = {
       ...entry('t1', '2026-06-15T14:00:00Z', '2026-06-16T00:00:00Z'),
       segments: [
         {
@@ -417,7 +417,7 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
 
   it('moves every segment of a co-selected segmented entry as one span (D-S4-30)', () => {
     const grabbed = entry('g', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
-    const other: Entry = {
+    const other: StoredEntry = {
       ...entry('o', '2026-06-16T09:00:00Z', '2026-06-18T00:00:00Z'),
       segments: [
         {
@@ -447,7 +447,7 @@ describe('draftForMove — segments (S4.10, D-S4-30)', () => {
 });
 
 describe('draftForMove/draftForResize — the Selection picks the Segments (#211, #212)', () => {
-  const segmented: Entry = {
+  const segmented: StoredEntry = {
     ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
     segments: [
       {
@@ -493,7 +493,7 @@ describe('draftForMove/draftForResize — the Selection picks the Segments (#211
   });
 
   it('move: several Entries each move their own selected Segment, or whole when none is selected', () => {
-    const other: Entry = {
+    const other: StoredEntry = {
       ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
       segments: [
         {
@@ -538,7 +538,7 @@ describe('draftForMove/draftForResize — the Selection picks the Segments (#211
   it('move: two segmented Entries each with one Segment selected move only those two bars', () => {
     // The exact case a ctrl-click multi-selection paints: exactly one bar per Entry lights up, so
     // exactly one bar per Entry must move — never the other four Segments across the two Entries.
-    const other: Entry = {
+    const other: StoredEntry = {
       ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
       segments: [
         {
@@ -601,7 +601,7 @@ describe('draftForMove/draftForResize — the Selection picks the Segments (#211
   });
 
   it('resize: several Entries use each own selected edge, else the envelope edge, same delta', () => {
-    const other: Entry = {
+    const other: StoredEntry = {
       ...entry('other', '2026-06-15T14:00:00Z', '2026-06-18T00:00:00Z'),
       segments: [
         {
@@ -725,7 +725,7 @@ describe('draftForMove/draftForResize — the Selection picks the Segments (#211
 
 describe('previewOffsets — segments (S4.10)', () => {
   it('offsets each segment item independently', () => {
-    const segmented: Entry = {
+    const segmented: StoredEntry = {
       ...entry('seg', '2026-06-15T14:00:00Z', '2026-06-20T00:00:00Z'),
       segments: [
         {

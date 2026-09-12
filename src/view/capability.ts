@@ -12,12 +12,12 @@
 
 import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
-import type { Entry, Field, FieldKey } from '../model/index.js';
+import type { StoredEntry, Field, FieldKey } from '../model/index.js';
 import type { EntryLook } from '../layout/index.js';
 
 /** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
  *  (U4: `interactions: { resize: e => e.props.locked !== true }`). */
-export type CapabilityRule = boolean | ((entry: Entry) => boolean);
+export type CapabilityRule = boolean | ((entry: StoredEntry) => boolean);
 
 /** #256: the write rule takes the cell, because a write names one. Call:
  *  `interactions: { edit: (entry, field) => (entry.id === 'fixed' && field === 'end' ? false : undefined) }`.
@@ -34,7 +34,7 @@ export type CapabilityRule = boolean | ((entry: Entry) => boolean);
  *
  *  `move`/`resize`/`select` keep a plain `CapabilityRule` on purpose. Each names one gesture over
  *  one Entry. A predicate that answers every Entry is a fair thing to ask for. */
-export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
+export type WriteRule = boolean | ((entry: StoredEntry, field: FieldKey) => boolean | undefined);
 
 /** The gestures that arm and paint. A write is not one of them. It is the thing a gesture, a cell
  *  editor, or a keyboard nudge sets out to do, and `canWrite` decides it. */
@@ -68,16 +68,16 @@ export type WriteVerdict = FieldWriteVerdict;
 export interface Capabilities {
   /** `edge` narrows a `'resize'` question to one handle (#142). With no edge, `'resize'` asks
    *  whether *either* handle may resize. Every other capability ignores it. */
-  can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
+  can(capability: GestureCapability, entry: StoredEntry, edge?: 'start' | 'end'): boolean;
   /** #256: the one answer to "may this Field's value change on this Entry". Every writer asks it:
    *  the cell editor, the resize drag, the move drag and the keyboard nudge. */
-  canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+  canWrite(entry: StoredEntry, field: FieldKey): WriteVerdict;
   /** ADR 0013: which Entries a move of this bar writes. An ordinary bar writes itself. A parent's
    *  own `start`/`end` roll up from its children. So a parent bar writes the dated descendants below
    *  it instead, and the Rollup moves the parent's own envelope at commit.
    *
    *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
-  entriesMovedBy(entry: Entry): readonly Entry[];
+  entriesMovedBy(entry: StoredEntry): readonly StoredEntry[];
 }
 
 /** S5.9, D-S5-22: `ctx.interaction.registerLookDefaults(look, defaults)` is a plugin's per-look
@@ -96,11 +96,11 @@ export interface CapabilityInputs {
   /** ADR 0013: an Entry derives when it has children — structure, not a stored classification.
    *  `GanttShell` passes `(entry) => dataset.entries.childrenOf(entry.id).length > 0` straight
    *  through. */
-  hasChildren: (entry: Entry) => boolean;
+  hasChildren: (entry: StoredEntry) => boolean;
   /** ADR 0013: every Entry below this one, deepest included. A parent bar's drag translates the
    *  dated descendants under it. So "may this parent move" asks about the whole subtree, and not
    *  about one level. `GanttShell` passes `data/entry-tree.ts`'s own `descendantsOf`. */
-  descendantsOf: (entry: Entry) => readonly Entry[];
+  descendantsOf: (entry: StoredEntry) => readonly StoredEntry[];
   /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
    *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
@@ -110,14 +110,14 @@ export interface CapabilityInputs {
    *  `registerLookDefaults(itsOwnLook, …)` reaches the Entries it claims. The look is named with a
    *  placeholder, never a real plugin's id. [S5-A3] greps this tree for a consumer look's own name
    *  and expects zero hits. Core prose that borrows one starts the coupling that gate catches. */
-  lookOf: (entry: Entry) => EntryLook;
+  lookOf: (entry: StoredEntry) => EntryLook;
   /** S5.9, D-S5-22. */
   registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
  *  the hover path (I5). */
-const NOTHING_MOVES: readonly Entry[] = Object.freeze([]);
+const NOTHING_MOVES: readonly StoredEntry[] = Object.freeze([]);
 
 /** Is there a value here to write at all? This is structure, not policy. So it sits above every
  *  rule. No consumer predicate and no plugin default opens a cell with no stored home.
@@ -159,10 +159,10 @@ function gestureIsOffered(): boolean {
  *  `SegmentsOutOfSyncError`, because an envelope alone names no Segment to move. */
 function mayWriteTheDatesItSets(
   capability: GestureCapability,
-  entry: Entry,
+  entry: StoredEntry,
   edge: 'start' | 'end' | undefined,
-  canWrite: (entry: Entry, field: FieldKey) => WriteVerdict,
-  moveWritesSomething: (entry: Entry) => boolean,
+  canWrite: (entry: StoredEntry, field: FieldKey) => WriteVerdict,
+  moveWritesSomething: (entry: StoredEntry) => boolean,
 ): boolean {
   switch (capability) {
     case 'select':
@@ -198,7 +198,7 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
 export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
   const { interactions, hasChildren, descendantsOf, fieldFor, lookOf, registeredDefaultsFor } = inputs;
 
-  const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
+  const canWrite = (entry: StoredEntry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
     const rule = interactions?.edit;
@@ -212,19 +212,19 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
   /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when both of them may
    *  change. It asks about the Fields, never about the values, so a dateless leaf answers the same
    *  as a dated one. */
-  const movesItsOwnDates = (entry: Entry): boolean =>
+  const movesItsOwnDates = (entry: StoredEntry): boolean =>
     canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
 
   /** ADR 0013: a descendant travels with the parent bar when every date it holds may change. It is
    *  not the leaf rule above. A child with a `start` and no `end` moves that `start`. A closed `end`
    *  it never had must not stop it. */
-  const mayTranslateTheDatesItHolds = (entry: Entry): boolean =>
+  const mayTranslateTheDatesItHolds = (entry: StoredEntry): boolean =>
     (entry.start === undefined || canWrite(entry, 'start').ok) &&
     (entry.end === undefined || canWrite(entry, 'end').ok);
 
-  const entriesMovedBy = (entry: Entry): readonly Entry[] => {
+  const entriesMovedBy = (entry: StoredEntry): readonly StoredEntry[] => {
     if (!hasChildren(entry)) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
-    const moved: Entry[] = [];
+    const moved: StoredEntry[] = [];
     for (const descendant of descendantsOf(entry)) {
       // A descendant with children of its own derives its dates the same way this parent does.
       // The walk passes over it, and reaches the dated rows below it.
@@ -243,10 +243,10 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
   /** Does this bar's move write anything at all? `entriesMovedBy` says *what* it writes; this says
    *  *whether*. The hover path asks this one (`can('move', …)` resolves an affordance), so an
    *  ordinary bar answers it without building a list (I5). */
-  const moveWritesSomething = (entry: Entry): boolean =>
+  const moveWritesSomething = (entry: StoredEntry): boolean =>
     hasChildren(entry) ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
 
-  const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
+  const isOffered = (capability: GestureCapability, entry: StoredEntry): boolean => {
     const rule = interactions?.[capability];
     if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
     const registered = registeredDefaultsFor?.(lookOf(entry))?.[capability];

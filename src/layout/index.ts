@@ -89,7 +89,7 @@ export type {
   SegmentId,
   ClientPoint,
   ElementDescription,
-  Entry,
+  StoredEntry,
 } from '../model/index.js';
 // S5.12, D-S5-40: `render/` may import `layout/` and nothing else (plans/01 §1), so the raise seam
 // reaches `render/dom` the same way `ElementDescription` and `Entry` above already do — a backend

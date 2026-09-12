@@ -1,6 +1,6 @@
 // layout/ — one row pass: produce, filter, sort, collapse (D-S4-19, D-S4-28).
 
-import type { Entry, FieldContext } from '../../model/index.js';
+import type { StoredEntry, FieldContext } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 import { applyCollapse } from './collapse.js';
 import { applyFilter } from './filter.js';
@@ -44,7 +44,7 @@ export function stampIndex(rows: readonly UnindexedRow[]): readonly PlannedRow[]
 
 /** Produce, filter, and sort — collapse is a later pass so ancestry still has `parentRowId` (D4). */
 export function resolveOpenRows(input: {
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
   rows?: RowSource;
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
@@ -69,7 +69,7 @@ function filterPolicyOf(source: Exclude<RowSource, CustomRowSource>): FilterPoli
 
 /** Call: `resolveRows({ entries, rows: gantt.rowSource, collapsed })`. */
 export function resolveRows(input: {
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
   rows?: RowSource;
   collapsed?: readonly string[];
   fieldCompares?: readonly FieldCompare[];

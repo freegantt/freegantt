@@ -25,7 +25,7 @@ export interface SegmentInput extends TimeSpanInput {
   id?: string;
 }
 
-export interface Entry<TProps = Record<string, unknown>> {
+export interface StoredEntry<TProps = Record<string, unknown>> {
   id: EntryId;
   /** Hierarchy; roots have none. */
   parentId?: EntryId;
@@ -117,7 +117,7 @@ type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
 // key, never one that kept it.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 type OptionalKeysOf<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];
-type RemovableEntryKey = OptionalKeysOf<Entry> & keyof EntryEnvelope<unknown>;
+type RemovableEntryKey = OptionalKeysOf<StoredEntry> & keyof EntryEnvelope<unknown>;
 
 /** A patch of `props`: every key optional, and every key removable by an explicit `undefined`. There
  *  is no protected key, because `props` is `Partial<TProps>` at every storage door — a key `TProps`
@@ -176,7 +176,7 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
   /** Never optional here: every `ProposedEdit` is built through `toEditReading`, which always seeds
    *  this set (`withProposedKeys`). */
   readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<Entry, 'id' | 'start' | 'end' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'props'>> & {
     // Same widening as `EntryEdit`, for the same reason: `stored.start = undefined` has to be legal
     // once `toEditReading` reads an explicit clear off the wire (ADR 0012).
     start?: Instant | undefined;
@@ -201,7 +201,7 @@ export interface EditRequest {
   /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
    *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
    *  transaction's own body edits (D-S5-45). */
-  entries: ReadonlyMap<EntryId, Entry>;
+  entries: ReadonlyMap<EntryId, StoredEntry>;
   /** What the caller asked to change — storage-shaped and complete, the same as `entries` above
    *  (`plans/02`, "core fills zone math"): a cascade compares it against `entries` with no
    *  normalizing step of its own. */
@@ -213,7 +213,7 @@ export interface EditRequest {
    *  reasoning from it can propose a write core then refuses against the shape it actually has
    *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
    *  rAF frame and must not copy the dataset to answer it (I5). */
-  entryAfterEdits(id: EntryId): Entry | undefined;
+  entryAfterEdits(id: EntryId): StoredEntry | undefined;
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so

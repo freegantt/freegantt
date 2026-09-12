@@ -12,7 +12,7 @@ import {
   watchAllErrors,
 } from '../src/api/index.js';
 import type {
-  Entry,
+  StoredEntry,
   FieldContext,
   GridColumnInput,
   RowSource,
@@ -201,14 +201,15 @@ function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
   const shared = {
     heightMode,
     ...(filterTeam !== null && !next.grouped
-      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      ? { filter: (entry: StoredEntry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
       : {}),
     ...(sortByName && !next.grouped ? { sort: { field: 'name' as const } } : {}),
   };
   const source: RowSource = next.grouped
     ? {
         source: 'group',
-        groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
+        groupBy: (entry: StoredEntry, fields?: FieldContext) =>
+          String(fields?.read(entry, 'team') ?? 'unassigned'),
         ...shared,
       }
     : { source: 'entries', tree: true, ...shared };

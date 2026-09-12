@@ -8,7 +8,7 @@ import type {
   BarRenderer,
   BarRendererContext,
   ElementDescription,
-  Entry,
+  StoredEntry,
   EntryId,
   FrameBar,
   FrameHeaderBand,
@@ -61,7 +61,7 @@ import {
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
  *  keyed by `GanttShell` per `FrameColumn.field` (S5.4, D-S5-11). */
 type BoundCellRenderer = (ctx: {
-  entry?: Entry;
+  entry?: StoredEntry;
   row: FrameRow;
   value: string;
 }) => ElementDescription | undefined;
@@ -77,7 +77,7 @@ type BoundHeaderRenderer = () => ElementDescription | undefined;
  *  `entryById: () => undefined`, `index.test.ts`'s own `paintingBackend` helper — rather than getting
  *  it for free by omitting the whole options object. */
 export interface DomBackendOptions {
-  entryById: (id: EntryId) => Entry | undefined;
+  entryById: (id: EntryId) => StoredEntry | undefined;
   /** S5.12, D-S5-40: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
    *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
    *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */

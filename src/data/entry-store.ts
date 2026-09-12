@@ -9,7 +9,7 @@
 // open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
 
 import type {
-  Entry,
+  StoredEntry,
   EntryId,
   EntryInput,
   EntryEdit,
@@ -55,17 +55,22 @@ import { isApiEditable, resolveWriteTarget } from './write-rule.js';
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
  *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
  *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. */
-function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry: FieldRegistry): Entry {
+function applyFieldRow(
+  current: StoredEntry,
+  field: FieldKey,
+  value: unknown,
+  registry: FieldRegistry,
+): StoredEntry {
   const declared = registry.get(field);
   if (declared) return writeOntoEntry(current, declared, value);
   const next: Record<string, unknown> = { ...current };
   if (value === undefined) delete next[field];
   else next[field] = value;
-  return next as unknown as Entry;
+  return next as unknown as StoredEntry;
 }
 
 interface WriteSet {
-  added: Map<EntryId, Entry>;
+  added: Map<EntryId, StoredEntry>;
   removed: Set<EntryId>;
   edits: Map<EntryId, ProposedEdit>;
   /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
@@ -110,11 +115,11 @@ function recordSegmentOwnership(
 }
 
 export class EntryStore implements EntryStoreContract {
-  #byId: Map<EntryId, Entry>;
+  #byId: Map<EntryId, StoredEntry>;
   /** One write per commit; every derived value below invalidates from it (D-S2-4). */
   #revision = signal(0);
-  #all: () => readonly Entry[];
-  #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
+  #all: () => readonly StoredEntry[];
+  #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
   /** `SegmentId → EntryId` (finding 6, #212): the answer `entryIdOfSegment`/`entryIdsOfSegments`
    *  publish, and the one place that answer is computed. Maintained alongside `#byId` on every
    *  commit — `#reindexSegments`, `#rememberSegmentsOf`, `#forgetSegmentsOf` are the only writers —
@@ -127,14 +132,14 @@ export class EntryStore implements EntryStoreContract {
    *  restoration, so this survives an unrelated `'user'` re-add of the same id in between — an
    *  id-keyed map would let that second object's index clobber the first's (undo-all then restores
    *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
-  #removedAtIndex = new Map<Entry, number>();
+  #removedAtIndex = new Map<StoredEntry, number>();
   #context: EntryReadContext;
   readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
   readonly #fieldContext: FieldContext;
 
   constructor(
-    entries: readonly Entry[],
+    entries: readonly StoredEntry[],
     context: EntryReadContext,
     registry: FieldRegistry = new FieldRegistry(),
     fieldContext: FieldContext = createFieldContext(registry, context.timeZone),
@@ -153,7 +158,7 @@ export class EntryStore implements EntryStoreContract {
       return Array.from(this.#byId.values());
     });
     this.#byParent = computed(() => {
-      const byParent = new Map<EntryId | undefined, Entry[]>();
+      const byParent = new Map<EntryId | undefined, StoredEntry[]>();
       for (const entry of this.#all()) {
         const siblings = byParent.get(entry.parentId);
         if (siblings) siblings.push(entry);
@@ -164,11 +169,11 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** Committed only — a write set open on a transaction in progress is not reflected here (D-S2-21). */
-  get all(): readonly Entry[] {
+  get all(): readonly StoredEntry[] {
     return this.#all();
   }
 
-  get(id: EntryId | string): Entry | undefined {
+  get(id: EntryId | string): StoredEntry | undefined {
     const key = entryId(id);
     if (!this.#writeSet) return this.#byId.get(key);
     if (this.#writeSet.removed.has(key)) return undefined;
@@ -211,7 +216,7 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */
-  childrenOf(id: EntryId | string): readonly Entry[] {
+  childrenOf(id: EntryId | string): readonly StoredEntry[] {
     const parent = entryId(id);
     if (!this.#writeSet) return this.#byParent().get(parent) ?? [];
     return this.#childrenOfWriteSet(parent);
@@ -219,12 +224,12 @@ export class EntryStore implements EntryStoreContract {
 
   /** Overlay the write set onto the committed `byParent` index — O(children + edits + adds),
    *  not O(dataset). `remove` walks this while a transaction is already open (S2.3 §1.4). */
-  #childrenOfWriteSet(parent: EntryId): readonly Entry[] {
+  #childrenOfWriteSet(parent: EntryId): readonly StoredEntry[] {
     const writeSet = this.#writeSet;
     if (!writeSet) return [];
     const seen = new Set<EntryId>();
-    const result: Entry[] = [];
-    const pushIfChild = (entry: Entry | undefined): void => {
+    const result: StoredEntry[] = [];
+    const pushIfChild = (entry: StoredEntry | undefined): void => {
       if (!entry || entry.parentId !== parent || seen.has(entry.id)) return;
       seen.add(entry.id);
       result.push(entry);
@@ -331,7 +336,7 @@ export class EntryStore implements EntryStoreContract {
   /** Adds every Segment `entity` draws to `#entryIdBySegmentId`, pointing each at `entity.id`.
    *  Construction's initial seeding and a committed add both call this — the one place a Segment
    *  starts being findable through the index. */
-  #rememberSegmentsOf(entity: Entry): void {
+  #rememberSegmentsOf(entity: StoredEntry): void {
     for (const segment of entity.segments) this.#entryIdBySegmentId.set(segment.id, entity.id);
   }
 
@@ -341,7 +346,7 @@ export class EntryStore implements EntryStoreContract {
    *  (finding B3, #212): a Segment id `entity` once drew but the index now credits to a different
    *  Entry — handed off in the same commit — is that Entry's, not `entity`'s, to delete. Without the
    *  guard, processing `entity`'s row after the new owner's row deletes the new owner's live entry. */
-  #forgetSegmentsOf(entity: Entry): void {
+  #forgetSegmentsOf(entity: StoredEntry): void {
     for (const segment of entity.segments) {
       if (this.#entryIdBySegmentId.get(segment.id) === entity.id) this.#entryIdBySegmentId.delete(segment.id);
     }
@@ -368,14 +373,14 @@ export class EntryStore implements EntryStoreContract {
 
   /** The committed by-id map a transaction diffs against — never the write set (D-S2-6, D-S2-7).
    *  Distinct from Snapshot (`entries.all`), which is the cached array. */
-  committedById(): ReadonlyMap<EntryId, Entry> {
+  committedById(): ReadonlyMap<EntryId, StoredEntry> {
     return this.#byId;
   }
 
   // ---- Public mutators (S2.3 §1.1): validate against the write set, then stage; each auto-wraps in
   // a transaction via `runTransaction`, which joins one already open (D-S2-8) ----
 
-  add(input: EntryInput): Entry {
+  add(input: EntryInput): StoredEntry {
     return this.#mutate((token) => {
       const id = entryId(input.id);
       if (this.has(id)) throw new DuplicateEntryIdError(id);
@@ -389,14 +394,14 @@ export class EntryStore implements EntryStoreContract {
     });
   }
 
-  update(id: EntryId | string, edit: EntryEdit): Entry {
+  update(id: EntryId | string, edit: EntryEdit): StoredEntry {
     return this.#updateFrom('entries.update', id, edit);
   }
 
   /** The body every door that edits one Entry shares. `operation` is the call the consumer actually
    *  wrote, so a refusal names a door they can act on: `entries.removeSegments` removes a Segment
    *  through this same body, and a caller who never wrote `update` must not be told about it. */
-  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): Entry {
+  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): StoredEntry {
     return this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, operation);
@@ -456,7 +461,7 @@ export class EntryStore implements EntryStoreContract {
     if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
     const own: Record<string, unknown> = { ...edit };
     const toChildren: EntryEdits[] = [];
-    let children: readonly Entry[] | undefined;
+    let children: readonly StoredEntry[] | undefined;
     for (const [field, value] of Object.entries(edit)) {
       const declared = this.#registry.get(field)!;
       if (resolveWriteTarget(true, declared) === 'entry') continue;
@@ -611,7 +616,7 @@ export class EntryStore implements EntryStoreContract {
    *  staging saw them a moment ago (read-your-own-writes, `get`) before overwriting the maps, so a
    *  Segment the replaced object drew and `entry` does not is released, not left pointing stale
    *  (finding B4, #212) — `recordSegmentOwnership` does that release-then-claim in one call. */
-  stageAdd(_token: TxToken, entry: Entry): void {
+  stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
     const replaced = this.get(entry.id);
     writeSet.added.set(entry.id, entry);
@@ -662,14 +667,14 @@ export class EntryStore implements EntryStoreContract {
     recordSegmentOwnership(writeSet, id, before, undefined);
   }
 
-  pendingAdded(): readonly { store: 'entries'; entity: Entry }[] {
+  pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[] {
     if (!this.#writeSet) return [];
     return Array.from(this.#writeSet.added.values(), (entity) => ({ store: 'entries' as const, entity }));
   }
 
-  pendingRemoved(): readonly { store: 'entries'; entity: Entry }[] {
+  pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[] {
     if (!this.#writeSet) return [];
-    const result: { store: 'entries'; entity: Entry }[] = [];
+    const result: { store: 'entries'; entity: StoredEntry }[] = [];
     for (const id of this.#writeSet.removed) {
       const entity = this.#byId.get(id);
       if (entity) result.push({ store: 'entries', entity });
@@ -750,7 +755,7 @@ export class EntryStore implements EntryStoreContract {
    *  `stageAdd` clears it — so without this the old object's Segments stay indexed forever, findable
    *  under an id nothing draws any more. `#forgetSegmentsOf`'s own ownership guard makes the order
    *  against other rows in this same commit safe. */
-  #forgetReplacedEntity(entity: Entry): void {
+  #forgetReplacedEntity(entity: StoredEntry): void {
     const replaced = this.#byId.get(entity.id);
     if (replaced !== undefined && replaced !== entity) this.#forgetSegmentsOf(replaced);
   }

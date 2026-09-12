@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EntryStore } from './entry-store.js';
 import { entryId, segmentId } from '../model/index.js';
-import type { Entry, Instant } from '../model/index.js';
+import type { StoredEntry, Instant } from '../model/index.js';
 import type { EntryReadContext } from './entry-reader.js';
 
 // Each test gets its own counter, so no test can see another test's minted ids (I2).
@@ -14,8 +14,8 @@ function createContext(): EntryReadContext {
   };
 }
 
-function entry(id: string, parentId?: string): Entry {
-  const base: Entry = {
+function entry(id: string, parentId?: string): StoredEntry {
+  const base: StoredEntry = {
     id: entryId(id),
     name: id,
     start: 0 as Instant,

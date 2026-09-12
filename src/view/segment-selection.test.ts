@@ -3,7 +3,7 @@ import { SegmentSelection } from './segment-selection.js';
 import type { SegmentSelectionPorts, SegmentSelectionRow } from './segment-selection.js';
 import { EntryStore } from '../data/entry-store.js';
 import { entryId, itemId, rowId, segmentId } from '../model/index.js';
-import type { ChangeSet, Entry, EntryId, Instant, ItemId, RowId, SegmentId } from '../model/index.js';
+import type { ChangeSet, StoredEntry, EntryId, Instant, ItemId, RowId, SegmentId } from '../model/index.js';
 import type { SelectionChange } from './event-bus.js';
 
 // T1-7 (#246 S2-4): `SegmentSelection` has no direct test — everything about it was covered only
@@ -16,7 +16,7 @@ function instant(ms: number): Instant {
   return ms as Instant;
 }
 
-function entry(id: string, segmentIds: readonly string[]): Entry {
+function entry(id: string, segmentIds: readonly string[]): StoredEntry {
   return {
     id: entryId(id),
     name: id,
@@ -35,7 +35,7 @@ let mintedCount = 0;
 
 /** A real `EntryStore`, so `entryIdOfSegment`/`entryIdsOfSegments`/`segmentIdsOfEntries` answer with
  *  the library's own logic — only the row plan, capability and event plumbing around it are fakes. */
-function entryStoreOf(entries: readonly Entry[]): EntryStore {
+function entryStoreOf(entries: readonly StoredEntry[]): EntryStore {
   return new EntryStore(entries, {
     timeZone,
     dateOnlyEnd: 'inclusive',

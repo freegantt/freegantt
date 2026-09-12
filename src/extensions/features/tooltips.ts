@@ -8,7 +8,7 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin.js';
-import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
+import type { ElementDescription, StoredEntry, TimeSpan, TooltipColumn } from '../../model/index.js';
 import { spansTime } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
@@ -26,7 +26,7 @@ const DEFAULT_PLACEMENT: PopupPlacement = 'top';
  *  The parameter type says so, and `openFor` is where the question is asked. Three casts used to
  *  say it instead, and nothing tested them (Q5). */
 function defaultContent(
-  entry: Entry & TimeSpan,
+  entry: StoredEntry & TimeSpan,
   timeZone: string,
   locale: Intl.LocalesArgument | undefined,
   columns: readonly TooltipColumn[],

@@ -15,7 +15,7 @@
 import type {
   Disposer,
   ElementDescription,
-  Entry,
+  StoredEntry,
   EntryId,
   FieldKey,
   GridColumn,
@@ -103,14 +103,14 @@ export interface GanttShellPorts {
   /** The entry's bar in the last painted frame. A hover plugin works from the DOM after the render
    *  pass, so it has no `FrameBar` of its own to build a `TooltipRendererContext` from. */
   lastPaintedBar(id: EntryId): FrameBar | undefined;
-  entry(id: EntryId): Entry | undefined;
+  entry(id: EntryId): StoredEntry | undefined;
   /** The columns the grid pane actually paints — Field defaults already merged (S5.7). */
   resolvedColumns(): readonly ResolvedColumn[];
   /** One of those columns, by Field key. `ColumnChrome` answers from its own index, so this never
    *  scans the list (review A6). */
   resolvedColumn(field: FieldKey): ResolvedColumn | undefined;
   /** I14's one capability resolution, asked for one cell (#256). */
-  canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+  canWrite(entry: StoredEntry, field: FieldKey): WriteVerdict;
   /** Raises `beforeEntryEdit` on this Gantt's own bus and hands back what the handlers answered. */
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
@@ -192,7 +192,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  cannot disagree with the gesture that writes the same value. A refusal that carries a
      *  `reason` is one the user must be told about. A refusal with none is already visible, because
      *  nothing offered the write at all. */
-    canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+    canWrite(entry: StoredEntry, field: FieldKey): WriteVerdict;
     /** S5.8, D-S5-19: proposes the edit, and the answer is a Veto. This raises `beforeEntryEdit` on
      *  this Gantt's own event bus. It returns exactly what the registered handlers returned:
      *  `true`/`undefined` (no veto), `false`, or an unsettled `Promise` (D-S3-17's async-veto shape,
@@ -311,7 +311,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  default body appends these after name/dates. A consumer that builds its own tooltip content
      *  reads the same list, instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts`
      *  stays out of reach). Empty when no column is marked `tooltip: true`. */
-    resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    resolveTooltipColumns(entry: StoredEntry): readonly TooltipColumn[];
     /** Every Grid column this Gantt paints right now, in paint order. The consumer's own columns and
      *  every plugin's are both here, each with its Field defaults already merged. `gantt.gridColumns` answers a
      *  different question: what the *consumer* authored (D-S5-33). A plugin that walks the grid wants

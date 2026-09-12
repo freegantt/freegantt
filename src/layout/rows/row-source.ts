@@ -1,13 +1,13 @@
 // layout/ — row-source types. Pure data: no pixels, no Dataset, no Field registry (D-S4-19, D-S4-21).
 
-import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
+import type { StoredEntry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 
 export type RowHeightMode = 'fixed' | 'pack';
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
-export type RowFilter = (entry: Entry, fields?: FieldContext) => boolean;
+export type RowFilter = (entry: StoredEntry, fields?: FieldContext) => boolean;
 
 export interface RowSort {
   field: FieldKey;
@@ -31,12 +31,12 @@ export interface EntriesRowSource extends RowSourceCommon {
 
 export interface GroupRowSource extends RowSourceCommon {
   source: 'group';
-  groupBy(entry: Entry, fields?: FieldContext): string;
+  groupBy(entry: StoredEntry, fields?: FieldContext): string;
 }
 
 /** What `{ source: 'custom', resolve }` receives. Entries only — no pixels, no Gantt. */
 export interface CustomRowInput {
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
 }
 
 /** Public DTO for `{ source: 'custom' }`. Not the internal `PlannedRow`. */
@@ -148,7 +148,7 @@ export type UnindexedRow = Omit<PlannedRow, 'index'> & {
 
 /** One pass over the rows: source production plus filter, sort, and collapse. */
 export interface RowPassInput {
-  entries: readonly Entry[];
+  entries: readonly StoredEntry[];
   source: RowSource;
   collapsed: ReadonlySet<string>;
   fieldCompares?: readonly FieldCompare[];

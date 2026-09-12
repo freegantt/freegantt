@@ -1,14 +1,14 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
-import type { Entry, EntryId, ProposedEdits } from '../model/index.js';
+import type { StoredEntry, EntryId, ProposedEdits } from '../model/index.js';
 import { entryAfterEdit } from './fields/field-access.js';
 
 export function buildEffectiveEntries(
-  committed: ReadonlyMap<EntryId, Entry>,
-  added: readonly Entry[],
-  removed: readonly Entry[],
+  committed: ReadonlyMap<EntryId, StoredEntry>,
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
   proposed: ProposedEdits,
-): ReadonlyMap<EntryId, Entry> {
+): ReadonlyMap<EntryId, StoredEntry> {
   const map = new Map(committed);
   for (const entry of removed) map.delete(entry.id);
   for (const entry of added) map.set(entry.id, entry);
@@ -24,11 +24,11 @@ export function buildEffectiveEntries(
  *  hot path allocates only what it uses (I5). `buildEffectiveEntries` above stays the commit path's
  *  form: a commit must also apply `added` and `removed`, which a per-id read cannot see. */
 export function effectiveEntriesFor(
-  committed: ReadonlyMap<EntryId, Entry>,
+  committed: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   ids: Iterable<EntryId>,
-): ReadonlyMap<EntryId, Entry> {
-  const map = new Map<EntryId, Entry>();
+): ReadonlyMap<EntryId, StoredEntry> {
+  const map = new Map<EntryId, StoredEntry>();
   for (const id of ids) {
     const current = committed.get(id);
     if (current === undefined) continue;
@@ -43,17 +43,17 @@ export function effectiveEntriesFor(
  *  named few ids at once) would still allocate a one-entry `Map` on every call. `entryAfterEdit`
  *  itself allocates only when `id` actually has an edit pending. */
 export function entryAfterEdits(
-  committed: ReadonlyMap<EntryId, Entry>,
+  committed: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   id: EntryId,
-): Entry | undefined {
+): StoredEntry | undefined {
   const current = committed.get(id);
   if (current === undefined) return undefined;
   const edit = proposed.get(id);
   return edit === undefined ? current : entryAfterEdit(current, edit);
 }
 
-export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
+export function childIdsByParent(entries: ReadonlyMap<EntryId, StoredEntry>): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {
     if (entry.parentId === undefined) continue;
@@ -64,7 +64,7 @@ export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<Entr
   return byParent;
 }
 
-export function childCountByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, number> {
+export function childCountByParent(entries: ReadonlyMap<EntryId, StoredEntry>): Map<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const entry of entries.values()) {
     if (entry.parentId === undefined) continue;
@@ -73,7 +73,7 @@ export function childCountByParent(entries: ReadonlyMap<EntryId, Entry>): Map<En
   return counts;
 }
 
-export function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): number {
+export function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, StoredEntry>): number {
   let depth = 0;
   let current = entries.get(id);
   while (current?.parentId !== undefined) {
@@ -83,7 +83,7 @@ export function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): numb
   return depth;
 }
 
-export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): readonly EntryId[] {
+export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, StoredEntry>): readonly EntryId[] {
   const result: EntryId[] = [];
   let current = entries.get(id)?.parentId;
   while (current !== undefined) {
@@ -101,9 +101,9 @@ export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): 
  *  overflow answers no question. */
 export function descendantsOf(
   id: EntryId,
-  childrenOf: (parent: EntryId) => readonly Entry[],
-): readonly Entry[] {
-  const found: Entry[] = [];
+  childrenOf: (parent: EntryId) => readonly StoredEntry[],
+): readonly StoredEntry[] {
+  const found: StoredEntry[] = [];
   const pending: EntryId[] = [id];
   while (pending.length > 0) {
     for (const child of childrenOf(pending.pop()!)) {

@@ -5,7 +5,14 @@
 // (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type { Entry, EntryId, FieldContext, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
+import type {
+  StoredEntry,
+  EntryId,
+  FieldContext,
+  FieldUpdated,
+  SegmentId,
+  TimeSpan,
+} from '../model/index.js';
 import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
@@ -28,15 +35,15 @@ export interface RollUpEditSets {
 
 /** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
 export interface PendingRollUp {
-  readonly added: readonly Entry[];
-  readonly removed: readonly Entry[];
+  readonly added: readonly StoredEntry[];
+  readonly removed: readonly StoredEntry[];
   readonly edits: RollUpEditSets;
 }
 
 function collectTouchedIds(
-  entries: ReadonlyMap<EntryId, Entry>,
-  added: readonly Entry[],
-  removed: readonly Entry[],
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
   proposed: ProposedEdits,
 ): ReadonlySet<EntryId> {
   const touched = new Set<EntryId>();
@@ -62,7 +69,7 @@ function collectTouchedIds(
  * it, so it still needs a visit even though `isParent` on the new tree says no.
  */
 function parentsToRecompute(
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   byParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   touched: ReadonlySet<EntryId> | undefined,
@@ -117,13 +124,13 @@ function parentsToRecompute(
  * Segment over.
  */
 function widenSegmentsToEnvelope(
-  parent: Entry,
+  parent: StoredEntry,
   registry: FieldRegistry,
   ctx: FieldContext,
   parentId: EntryId,
   mintSegmentId: () => SegmentId,
   updated: FieldUpdated[],
-): Entry {
+): StoredEntry {
   const segmentsField = registry.get('segments');
   if (!segmentsField) return parent;
   // Not spanning — nothing to hold a Segment over (`spansTime`, ADR 0012). A dateless parent
@@ -159,12 +166,12 @@ function widenSegmentsToEnvelope(
  * to ask because there are no children left to ask one.
  */
 function clearDerivedValues(
-  parent: Entry,
+  parent: StoredEntry,
   registry: FieldRegistry,
   ctx: FieldContext,
   parentId: EntryId,
   updated: FieldUpdated[],
-): Entry {
+): StoredEntry {
   let effectiveParent = parent;
 
   for (const field of registry.rollingUpFields()) {
@@ -186,10 +193,10 @@ function clearDerivedValues(
 
 function effectiveEntry(
   id: EntryId,
-  entries: ReadonlyMap<EntryId, Entry>,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
   merged: ProposedEdits,
-  computed: ReadonlyMap<EntryId, Entry>,
-): Entry | undefined {
+  computed: ReadonlyMap<EntryId, StoredEntry>,
+): StoredEntry | undefined {
   const rolled = computed.get(id);
   if (rolled) return rolled;
   const current = entries.get(id);
@@ -215,7 +222,7 @@ const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], cascadeDropp
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
  */
 export function rollUpFields(
-  committed: ReadonlyMap<EntryId, Entry>,
+  committed: ReadonlyMap<EntryId, StoredEntry>,
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
   ctx: FieldContext,
@@ -238,7 +245,7 @@ export function rollUpFields(
   const byParent = childIdsByParent(entries);
   const priorByParent = pending === undefined ? byParent : childIdsByParent(committed);
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
-  const computed = new Map<EntryId, Entry>();
+  const computed = new Map<EntryId, StoredEntry>();
   const updated: FieldUpdated[] = [];
   const cascadeDropped: FieldUpdated[] = [];
 
@@ -254,7 +261,7 @@ export function rollUpFields(
       continue;
     }
 
-    const children: Entry[] = [];
+    const children: StoredEntry[] = [];
     for (const childId of childIds) {
       const child = effectiveEntry(childId, entries, merged, computed);
       if (child) children.push(child);

@@ -5,7 +5,7 @@
 import type {
   CoreFieldValue,
   Duration,
-  Entry,
+  StoredEntry,
   EntryEdit,
   EntryId,
   FieldContext,
@@ -123,14 +123,14 @@ export function createFieldContext(
 ): FieldContext {
   const ctx: FieldContext = {
     timeZone,
-    read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined {
+    read<K extends FieldKey>(entry: StoredEntry, key: K): CoreFieldValue<K> | undefined {
       const field = fields.get(key);
       if (field === undefined) return undefined;
       // The registry is heterogeneous and string-keyed (ADR 0005), so nothing here narrows the
       // stored value to the key's declared type — the cast is where the Field key's type is claimed.
       return readField(entry, field, ctx, memo?.()) as CoreFieldValue<K> | undefined;
     },
-    durationOf(entry: Entry): Duration | undefined {
+    durationOf(entry: StoredEntry): Duration | undefined {
       // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is
       // plain subtraction — an absent date yields `NaN`, never a throw — so this asks first.
       if (!spansTime(entry)) return undefined;
@@ -147,10 +147,10 @@ export function createRollUpContext(ctx: FieldContext, field: FieldKey): RollUpC
   const rollUpCtx: RollUpContext = {
     ...ctx,
     field,
-    values(children: readonly Entry[]): readonly unknown[] {
+    values(children: readonly StoredEntry[]): readonly unknown[] {
       return children.map((child) => rollUpCtx.read(child, field));
     },
-    numericValues(children: readonly Entry[]): readonly number[] {
+    numericValues(children: readonly StoredEntry[]): readonly number[] {
       const out: number[] = [];
       for (const child of children) {
         const value = rollUpCtx.read(child, field);
@@ -163,7 +163,7 @@ export function createRollUpContext(ctx: FieldContext, field: FieldKey): RollUpC
 }
 
 export function readField(
-  entry: Entry,
+  entry: StoredEntry,
   field: ResolvedField,
   ctx: FieldContext,
   memo?: FieldReadMemo,
@@ -201,7 +201,7 @@ export function writeField(edit: ProposedEdit, field: ResolvedField, value: unkn
 }
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
-export function writeOntoEntry(entry: Entry, field: ResolvedField, value: unknown): Entry {
+export function writeOntoEntry(entry: StoredEntry, field: ResolvedField, value: unknown): StoredEntry {
   return entryAfterEdit(entry, writeField(emptyProposedEdit(), field, value));
 }
 
@@ -226,7 +226,7 @@ export function writeDeclaredPropsFields(
  *  accumulated in `edit.props` onto a copy of `entry.props`, the same per-key rule `entryAfterEdit`
  *  applies. Call once, at the end of `toEditReading` — every earlier step may leave `props` a sparse
  *  patch of only the keys it touched so far. */
-export function completeProps(entry: Entry, edit: ProposedEdit): ProposedEdit {
+export function completeProps(entry: StoredEntry, edit: ProposedEdit): ProposedEdit {
   const props = propsAfterEdit(entry.props, edit.props, edit.proposedKeys);
   return props === edit.props ? edit : { ...edit, props };
 }
@@ -238,8 +238,8 @@ export function editProposesField(edit: ProposedEdit | undefined, field: Resolve
 }
 
 /** Applies a stored overlay the way `EntryStore.get` must: core keys and `props`, never proposedKeys. */
-export function entryAfterEdit(entry: Entry, edit: ProposedEdit): Entry {
-  const next: Entry = { ...entry };
+export function entryAfterEdit(entry: StoredEntry, edit: ProposedEdit): StoredEntry {
+  const next: StoredEntry = { ...entry };
   const bag = edit as Record<string, unknown>;
   for (const field of CORE_FIELDS) {
     const key = String(field.key);

@@ -1,6 +1,6 @@
 // layout/ — row-source filter policies. Pure: no Dataset, no Field registry (D-S4-28, D-S4-29).
 
-import type { Entry, EntryId, FieldContext, RowId } from '../../model/index.js';
+import type { StoredEntry, EntryId, FieldContext, RowId } from '../../model/index.js';
 import type { FilterPolicy, RowFilter, UnindexedRow } from './row-source.js';
 
 export type { RowFilter } from './row-source.js';
@@ -11,7 +11,7 @@ function entryIdOf(row: UnindexedRow): EntryId | undefined {
 
 export function visibleRowIds(
   rows: readonly UnindexedRow[],
-  entries: readonly Entry[],
+  entries: readonly StoredEntry[],
   filter: RowFilter,
   policy: FilterPolicy,
   fields?: FieldContext,
@@ -58,7 +58,7 @@ function flattenMatched(row: UnindexedRow, matched: ReadonlySet<RowId>): Unindex
 /** Applies `filter` with `policy`. When `filter` is omitted every row is `matched: true`. */
 export function applyFilter(
   rows: readonly UnindexedRow[],
-  entries: readonly Entry[],
+  entries: readonly StoredEntry[],
   filter: RowFilter | undefined,
   policy: FilterPolicy,
   fields?: FieldContext,

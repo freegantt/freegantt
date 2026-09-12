@@ -16,7 +16,7 @@ export {
 export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.js';
 export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type {
-  Entry,
+  StoredEntry,
   EntryLook,
   Segment,
   SegmentInput,

@@ -2,7 +2,7 @@
 // The shell still owns events, frames, twisty clicks, and `reveal()` geometry.
 
 import { rowId } from '../model/index.js';
-import type { Entry, EntryId, RowId } from '../model/index.js';
+import type { StoredEntry, EntryId, RowId } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 
 /** The PlannedRow fields this module reads. Layout keeps the full row. */
@@ -16,8 +16,8 @@ export interface TreeCollapseRow {
 /** What `TreeCollapse` asks the shell. Call: `new TreeCollapse({ plannedRows: () => layout.plannedRows(), ... })`. */
 export interface TreeCollapseContext {
   plannedRows(): readonly TreeCollapseRow[];
-  entries(): readonly Entry[];
-  entry(id: EntryId): Entry | undefined;
+  entries(): readonly StoredEntry[];
+  entry(id: EntryId): StoredEntry | undefined;
   canSelect(id: EntryId): boolean;
   selected(): EntryId | undefined;
   proposeSelection(ids: readonly EntryId[]): void;

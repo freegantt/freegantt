@@ -16,7 +16,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetEventMap, Entry, EntryEdit, EntryEdits, EntryId } from '../src/api/index.js';
+import type { DatasetEventMap, StoredEntry, EntryEdit, EntryEdits, EntryId } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -50,7 +50,7 @@ const COST_FIELDS = {
   fieldTypes: {
     money: {
       rollUp: 'sum' as const,
-      distribute(total: number | undefined, children: readonly Entry[]): EntryEdits | undefined {
+      distribute(total: number | undefined, children: readonly StoredEntry[]): EntryEdits | undefined {
         if (total === undefined || children.length === 0) return undefined;
         const share = Math.floor(total / children.length);
         const edits = new Map<EntryId, EntryEdit>();

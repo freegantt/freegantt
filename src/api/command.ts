@@ -8,7 +8,15 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type { Disposer, Entry, EntryId, FieldKey, KeyChord, SegmentId, TargetKind } from '../model/index.js';
+import type {
+  Disposer,
+  StoredEntry,
+  EntryId,
+  FieldKey,
+  KeyChord,
+  SegmentId,
+  TargetKind,
+} from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
 /** Every command id the library itself registers (#236). One place names them, so
@@ -128,7 +136,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  right-click landed in — the Entry whose Fields that row's cells show. A row that owns several
    *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
    *  landed on no Entry at all. */
-  entry?: Entry;
+  entry?: StoredEntry;
   target?: CommandTarget;
 }
 

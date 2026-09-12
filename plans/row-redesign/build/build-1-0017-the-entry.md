@@ -29,16 +29,16 @@ Scope: **1046 references in 118 files**; 650 in 68 files excluding tests. Measur
 
 The goal is one mechanical pass with no new type in the tree. After this unit, `Entry` does not exist and `StoredEntry` means exactly what `Entry` meant.
 
-- [ ] **Rename with `pk-rename-symbol`, not with a text replace.** `.claude/skills/pk-rename-symbol/SKILL.md` renames through the TypeScript language service, so it follows re-exports and aliases, it touches type positions only, and it never reaches prose. `CLAUDE.md` names it as the rule for exactly this job. A `\bEntry\b` pass over 1046 references cannot tell a type from the word in a sentence, and this file's own gate cannot catch what it misses (below).
-- [ ] Rename the interface in `src/model/entry.ts` from `Entry` to `StoredEntry`. Compound names — `EntryId`, `EntryInput`, `EntryEdit`, `EntryLook` — are separate symbols and the language service leaves them alone.
-- [ ] Run `pnpm typecheck` immediately after. The rename is green or it is wrong; there is no third state while only one type exists.
-- [ ] **Leave prose alone.** Comments such as *"an Entry derives"* keep the domain word — `CONTEXT.md` keeps **one** Entry entry, and Unit B gives the type name back.
-- [ ] **Skip `harness/docs/` entirely.** `plugin-authoring.html` already describes the **live** `Entry` — `entry.read`, `children()`, `hasChildren` — and it already names `StoredEntry` where it means the values. A pass over it renames the page's live type and breaks the one document that has the end state right.
-- [ ] Check `src/model/field.ts:12`. `CoreFieldKey` must read `keyof Omit<StoredEntry, 'id' | 'props'>`. This is finding P1, and this line is why the name earns its place.
-- [ ] Check `src/model/entry.ts:179`. `ProposedEdit` must derive from `StoredEntry`. This is finding P3.
-- [ ] Check `src/data/fields/field-access.ts:242`. `entryAfterEdit` takes a `StoredEntry` and returns one. Nothing changes at that line. This is finding P2.
-- [ ] Check `src/model/entry.ts:204,216`. `EditRequest.entries` and `entryAfterEdits(id)` both carry `StoredEntry`. They are deliberately different states (D-S5-45). This is finding P4.
-- [ ] Confirm the old type is gone. **This grep is a smoke test, not a gate**, and a green `pnpm typecheck` is not one either — while one type exists, the compiler cannot see a meaning invert:
+- [x] **Rename with `pk-rename-symbol`, not with a text replace.** `.claude/skills/pk-rename-symbol/SKILL.md` renames through the TypeScript language service, so it follows re-exports and aliases, it touches type positions only, and it never reaches prose. `CLAUDE.md` names it as the rule for exactly this job. A `\bEntry\b` pass over 1046 references cannot tell a type from the word in a sentence, and this file's own gate cannot catch what it misses (below).
+- [x] Rename the interface in `src/model/entry.ts` from `Entry` to `StoredEntry`. Compound names — `EntryId`, `EntryInput`, `EntryEdit`, `EntryLook` — are separate symbols and the language service leaves them alone.
+- [x] Run `pnpm typecheck` immediately after. The rename is green or it is wrong; there is no third state while only one type exists.
+- [x] **Leave prose alone.** Comments such as *"an Entry derives"* keep the domain word — `CONTEXT.md` keeps **one** Entry entry, and Unit B gives the type name back.
+- [x] **Skip `harness/docs/` entirely.** `plugin-authoring.html` already describes the **live** `Entry` — `entry.read`, `children()`, `hasChildren` — and it already names `StoredEntry` where it means the values. A pass over it renames the page's live type and breaks the one document that has the end state right.
+- [x] Check `src/model/field.ts:12`. `CoreFieldKey` must read `keyof Omit<StoredEntry, 'id' | 'props'>`. This is finding P1, and this line is why the name earns its place.
+- [x] Check `src/model/entry.ts:179`. `ProposedEdit` must derive from `StoredEntry`. This is finding P3.
+- [x] Check `src/data/fields/field-access.ts:242`. `entryAfterEdit` takes a `StoredEntry` and returns one. Nothing changes at that line. This is finding P2.
+- [x] Check `src/model/entry.ts:204,216`. `EditRequest.entries` and `entryAfterEdits(id)` both carry `StoredEntry`. They are deliberately different states (D-S5-45). This is finding P4.
+- [x] Confirm the old type is gone. **This grep is a smoke test, not a gate**, and a green `pnpm typecheck` is not one either — while one type exists, the compiler cannot see a meaning invert:
       ```bash
       grep -rnE '\bEntry\b' src/ --include=*.ts | grep -vE 'Entry(Id|Input|Edit|Edits|Look|Store|Tree|Reader|Field|Not|Variant)'
       ```
