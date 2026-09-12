@@ -139,7 +139,13 @@ export class DatasetState implements Dataset {
       fields: this.fields,
       timeZone: this.timeZone,
       measureDuration: options.measureDuration ?? 'span',
-      memo: () => ({ cache: this.computedCache, datasetRevision: this.#datasetRevision }),
+      // A row inside an open transaction is hypothetical, and `#datasetRevision` does not move
+      // until the commit lands (D-S4-10). A memo there answers a `compute` Field with the committed
+      // value for a staged row, so the memo stands down until the transaction closes (ADR 0017).
+      memo: () =>
+        this.openTransactions > 0
+          ? undefined
+          : { cache: this.computedCache, datasetRevision: this.#datasetRevision },
     });
     this.#reservedSegmentIds = authoredSegmentIdsOf(options.entries);
     this.#entryContext = {

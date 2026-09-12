@@ -641,3 +641,40 @@ caller that holds no row never reaches a read.
 
 **To reverse:** nothing to reverse — `EntryNotFoundError` still ships, and the write door still
 raises it.
+
+---
+
+## J28 — a live row seeds its last stored values at construction
+
+**Build 1, tests. Done in the code. This closes a gap the owed tests found.**
+
+ADR 0017 says an `Entry` for a removed id keeps its last values, and `live-entry.ts:51` said the
+field was *"seeded at construction"*. The constructor did not seed it, so a row that was fetched but
+never read answered `''` for `name` and `undefined` for every date once its id was removed. The
+comment stated the contract; the code did not keep it.
+
+**The call.** The constructor reads the store once — `this.#last = source.storedEntry(id)`. It costs
+one index read per id, once, and it makes the guarantee unconditional: a gesture that holds a row
+across a removal always reads a sane name.
+
+**To reverse:** drop the constructor line, and reword the comment to *"seeded on the first read"*.
+
+---
+
+## J29 — the computed-field memo stands down while a transaction is open
+
+**Build 1, tests. Done in the code. This closes a real staleness bug.**
+
+`ComputedFieldCache` keys on `#datasetRevision` (D-S4-10), which does not move until a commit lands.
+So a `compute` Field read inside an open transaction answered the **committed** value for a
+hypothetical row. A probe proved it: read a parent's `compute` Field once, open a transaction, rename
+a child, and the parent still answered with the old child's name. ADR 0017 requires the opposite —
+*"A `compute` Field reads the hypothetical row, not the store"* — and this is the test `Q7` exists
+for.
+
+**The call.** `DatasetState`'s memo callback answers `undefined` while `openTransactions > 0`.
+`readField` already treats a missing memo as "compute it", so one condition is the whole change. It
+also protects the Rollup: that pass reads effective rows the store does not hold, and memoizing one
+under the committed revision would have poisoned the cache for every later read of that id.
+
+**To reverse:** hand the memo back unconditionally, and accept a stale read inside a transaction.

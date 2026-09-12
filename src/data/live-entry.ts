@@ -54,6 +54,7 @@ class LiveEntry implements Entry {
   constructor(source: EntrySource, id: EntryId) {
     this.#source = source;
     this.id = id;
+    this.#last = source.storedEntry(id);
   }
 
   #stored(): StoredEntry | undefined {

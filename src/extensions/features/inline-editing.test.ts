@@ -1501,3 +1501,55 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     expect(notice.element.isConnected).toBe(false);
   });
 });
+
+// ADR 0017 deleted `fieldContextFor()`: `FieldContext` is `{ timeZone }`, which is public, and a
+// `parseValue` that needs a sibling value reads it off the live `entry` it is parsing into.
+describe('parseValue reads the ambient zone and the row it parses into (ADR 0017)', () => {
+  /** A Field whose parse depends on two things `extensions/` used to build a shim to reach. */
+  function makeSiblingReadingGantt(): { container: HTMLElement; gantt: Gantt; dataset: Dataset } {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      timeZone: 'Europe/Warsaw',
+      entries: [
+        { id: 'e1', name: 'One', start: '2026-01-01', end: '2026-01-05', props: { unit: 'day', span: 2 } },
+      ],
+      fields: [
+        { key: 'unit' },
+        {
+          key: 'span',
+          editable: true,
+          column: { header: 'Span' },
+          formatValue: (value) => (typeof value === 'number' ? String(value) : ''),
+          // The zone is ambient; the unit is a sibling Field on the row this text is typed into.
+          parseValue: (text, ctx, entry) => {
+            const typed = Number(text);
+            if (!Number.isFinite(typed)) return undefined;
+            return entry.read('unit') === 'day' && ctx.timeZone === 'Europe/Warsaw' ? typed : -1;
+          },
+        },
+      ],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'span' }],
+      plugins: [inlineEditing()],
+    });
+    return { container, gantt, dataset };
+  }
+
+  it('parses with a sibling Field off the entry, and with the Dataset zone off the context', () => {
+    const { container, gantt, dataset } = makeSiblingReadingGantt();
+
+    dblclick(cellFor(container, 'e1', 'span'));
+    const el = input(container);
+    el.value = '7';
+    enter(el);
+
+    expect(dataset.entries.get('e1')!.read('span')).toBe(7);
+
+    gantt.destroy();
+    container.remove();
+  });
+});
