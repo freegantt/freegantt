@@ -8,7 +8,6 @@ import {
   invertChangeSet,
   mergeEntryEdits,
   InvalidReplayOriginError,
-  EntryNotFoundError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
@@ -287,8 +286,13 @@ describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
       timeZone: 'UTC',
       entries: [{ id: 'parent', name: 'Sitework' }, oneEntry({ id: 'child', parentId: 'parent' })],
     });
-    const parentBefore = dataset.entries.get('parent')!;
-    const childBefore = dataset.entries.get('child')!;
+    // A "before" reading is a value, never a row: one `Entry` per id, and every read is live, so a
+    // held row always agrees with itself (ADR 0017 rule 2).
+    const parentBefore = {
+      start: dataset.entries.get('parent')!.start,
+      end: dataset.entries.get('parent')!.end,
+    };
+    const childBefore = { end: dataset.entries.get('child')!.end };
     const history = new ConsumerHistory(dataset);
 
     dataset.entries.update('child', { end: '2026-10-01' });
@@ -475,7 +479,7 @@ describe('Dataset fields (S4.1)', () => {
   });
 });
 
-describe('entries.fieldValue', () => {
+describe('entry.read — the one value door (ADR 0017)', () => {
   it('reads a props-addressed Field without going through entry.props directly', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -509,9 +513,12 @@ describe('entries.fieldValue', () => {
     expect(() => dataset.entries.get('t1')?.read('cost')).toThrow(UnknownFieldError);
   });
 
-  it('throws EntryNotFoundError for a missing id', () => {
+  // A missing id has one door, and it is `entries.get`. The read door is on the row, so a caller
+  // that holds no row never reaches it, and no error names the id (ADR 0017).
+  it('answers no row for a missing id, so there is nothing to read from', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(() => dataset.entries.get('missing')?.read('name')).toThrow(EntryNotFoundError);
+    expect(dataset.entries.get('missing')).toBeUndefined();
+    expect(dataset.entries.has('missing')).toBe(false);
   });
 
   it('reads a staged write inside an open transaction', () => {
@@ -529,23 +536,28 @@ describe('entries.fieldValue', () => {
 
 describe('Dataset generics (#123)', () => {
   it('types props from one TProps generic — declared Field keys and passenger keys alike', () => {
-    const dataset = new Dataset<{ team: string; cost: number }>({
+    const dataset = new Dataset<{ team: string; cost: number; note: string }>({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
-      fields: [{ key: 'cost', type: 'money' }],
+      // `entry.read` refuses a key no Field declares (ADR 0017), so both props keys are declared.
+      fields: [{ key: 'cost', type: 'money' }, { key: 'team' }],
       entries: [
         {
           id: 't1',
           name: 'Design',
           start: '2026-09-01',
           end: '2026-09-08',
-          props: { team: 'A' },
+          props: { team: 'A', note: 'carried' },
         },
       ],
     });
 
     const team: string | undefined = dataset.entries.get('t1')?.read('team');
     expect(team).toBe('A');
+
+    // `note` is a passenger key: it is in `TProps`, and no Field declares it. No read door answers
+    // it (ADR 0017), and the row still carries it.
+    expect(dataset.entries.get('t1')?.toInput().props?.note).toBe('carried');
 
     const updated = dataset.entries.update('t1', { cost: 500 });
     expect(updated.read('team')).toBe('A');
@@ -809,7 +821,8 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     const reloaded = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'note' }],
-      entries: dataset.entries.all,
+      // `all` hands back live rows (ADR 0017), and a row is copied through `toInput()`.
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
       plugins: [declaresRisk],
     });
 

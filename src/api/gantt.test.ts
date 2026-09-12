@@ -34,6 +34,12 @@ import type {
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
 
+/** What a row's dates read now. A "before" reading is a value, never a row: one `Entry` per id, and
+ *  every read is live, so a held row always agrees with itself (ADR 0017 rule 2). */
+function datesOf(entry: Entry): { start: Entry['start']; end: Entry['end'] } {
+  return { start: entry.start, end: entry.end };
+}
+
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
@@ -1678,7 +1684,9 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
     });
     const gantt = new Gantt({
       container,
@@ -1738,7 +1746,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry.toInput(), props: { cost: 1500 } })),
     });
     const seen: { value: string; fieldValue: unknown }[] = [];
     const gantt = new Gantt({
@@ -1765,7 +1773,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         money: { formatValue: (value) => (typeof value === 'number' ? `$${value}` : '') },
       },
       fields: [{ key: 'cost', type: 'money', column: { header: 'Cost' } }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry.toInput(), props: { cost: 1500 } })),
     });
     const gantt = new Gantt({
       container,
@@ -1797,7 +1805,9 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
     });
     const gantt = new Gantt({
       container,
@@ -2104,7 +2114,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   it('a custom milestone barRenderer paints a diamond, and reassigning it repaints with no bar remount (I8)', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2228,7 +2238,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it("ctx.layout.registerItemProducer draws a registered look's own shape; disposal restores the fallback", async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2274,7 +2284,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it('ctx.interaction.registerLookDefaults refuses resize for its own look; disposal restores the library default', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2315,7 +2325,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it('disposing the second of two plugins registering the same look restores the first (#146)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const bufferProducer = {
@@ -2373,7 +2383,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it('disposing the first of two plugins registering the same look still resolves the second, not the library default (#146)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const bufferProducer = {
@@ -2428,7 +2438,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it("the consumer's own interactions still wins over a registered look default", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2469,7 +2479,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2513,7 +2523,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2551,7 +2561,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2607,7 +2617,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -2655,7 +2665,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -2720,7 +2730,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     // `GridColumnInput` is `string | GridColumn`, so both plugins hand `registerGridColumn` the
     // very same value. A disposer that asks "is the column on screen mine?" by comparing that
@@ -2790,7 +2800,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
@@ -2883,7 +2893,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
+      entries: [sampleEntries[0]!.toInput(), sampleEntries[1]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2930,7 +2940,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
+      entries: [sampleEntries[0]!.toInput(), sampleEntries[1]!.toInput()],
       timeZone: 'UTC',
     });
     const bufferEntryId = sampleEntries[0]!.id;
@@ -2976,7 +2986,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it('[Q10] two plugins claiming the same entry: the first claim paints, and the collision is reported', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const dataset = new Dataset({ entries: [{ ...sampleEntries[0]! }], timeZone: 'UTC' });
+    const dataset = new Dataset({ entries: [sampleEntries[0]!.toInput()], timeZone: 'UTC' });
     // The same Entry, owned by both plugins. The `[review P2]` test above holds disjoint id sets,
     // so it never exercises this — nothing in the suite pinned a collision before Q10.
     const sharedEntryId = sampleEntries[0]!.id;
@@ -3024,7 +3034,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
+      entries: [sampleEntries[0]!.toInput(), sampleEntries[1]!.toInput()],
       timeZone: 'UTC',
     });
     // Both plugins own both entries, and a look resolves once per Entry per frame. A collision
@@ -3573,7 +3583,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
       // stored classification (ADR 0013): having a child already draws the parent look.
       entries: [
         { id: 'g1', name: 'Group' },
-        { ...sampleEntries[0]!, parentId: 'g1' },
+        { ...sampleEntries[0]!.toInput(), parentId: 'g1' },
         ...sampleEntries.slice(1),
       ],
       timeZone: 'UTC',
@@ -3764,7 +3774,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
       // child to roll up from — it needs no stored classification to draw the parent look (ADR 0013).
       entries: [
         { id: 'g1', name: 'Group' },
-        { ...sampleEntries[0]!, parentId: 'g1' },
+        { ...sampleEntries[0]!.toInput(), parentId: 'g1' },
         ...sampleEntries.slice(1),
       ],
       timeZone: 'UTC',
@@ -3822,7 +3832,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3875,7 +3885,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.on('beforeEntryMove', () => false);
 
     const afterEvents: unknown[] = [];
@@ -3888,7 +3898,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
 
     expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(dataset.canUndo).toBe(false);
 
     document.elementFromPoint = original;
@@ -3921,7 +3931,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3980,7 +3990,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.on('beforeEntryResize', () => false);
 
     const afterEvents: unknown[] = [];
@@ -3993,7 +4003,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5010, clientY: 5, pointerId: 1 }));
 
     expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(dataset.canUndo).toBe(false);
 
     document.elementFromPoint = original;
@@ -4056,7 +4066,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const beforeEvents: unknown[] = [];
@@ -4112,7 +4122,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const afterEvents: { edge: string }[] = [];
@@ -4226,7 +4236,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     let resolveVeto!: () => void;
     gantt.on(
       'beforeEntryMove',
@@ -4243,7 +4253,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     resolveVeto();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(bar.dataset['state']).not.toContain('pending');
     expect(dataset.canUndo).toBe(false);
 
@@ -4448,6 +4458,8 @@ describe('Gantt rows and collapse (S4.6)', () => {
   it('collapseAll uses expandable planned row ids, including grouped headers', async () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
+      // `entry.read` refuses a key no Field declares (ADR 0017), so the group key is declared here.
+      fields: [{ key: 'category' }],
       entries: [
         { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', props: { category: 'group' } },
         {
@@ -5038,7 +5050,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     let retract = (): void => {};
     const gantt = new Gantt({
@@ -5097,7 +5109,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
 
   const riskColumnPlugin = {
