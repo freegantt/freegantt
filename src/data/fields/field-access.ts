@@ -214,24 +214,26 @@ export function createRollUpContext(
   children: readonly StoredEntry[],
   field: FieldKey,
 ): RollUpContext {
-  const bound = readingChildrenFrom(access, () => children);
+  // `access` reads each row through its own children, and both callers already hand one that does —
+  // the Rollup's pass access, and the store's. A second binding that answered `children` for every
+  // id would tell a child's own `compute` Field about the parent (F22).
   return {
-    ...createComputeContext(bound, parent),
+    ...createComputeContext(access, parent),
     children: (): readonly StoredEntry[] => children,
     field,
     values(key: FieldKey = field): readonly unknown[] {
-      return children.map((child) => readFieldByKey(child, key, bound));
+      return children.map((child) => readFieldByKey(child, key, access));
     },
     numericValues(key: FieldKey = field): readonly number[] {
       const out: number[] = [];
       for (const child of children) {
-        const value = readFieldByKey(child, key, bound);
+        const value = readFieldByKey(child, key, access);
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;
     },
     durations(): readonly (Duration | undefined)[] {
-      return children.map((child) => measureEntryDuration(child, bound.measureDuration));
+      return children.map((child) => measureEntryDuration(child, access.measureDuration));
     },
   };
 }

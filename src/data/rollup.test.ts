@@ -375,3 +375,38 @@ describe('an Aggregator reads this pass’s own children (ADR 0017)', () => {
     expect(costOf(state, 'root')).toBe(120);
   });
 });
+
+describe('the Rollup context reads each row through its own children (F22)', () => {
+  /** `kidCount` computes from the row's own children; `kidSum` rolls the children's `kidCount` up.
+   *  Over `p → {a, b}` and `a → {a1, a2, a3}`, `p.kidSum` is `a`'s 3 plus `b`'s 0. */
+  function twoLevelDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'a', name: 'a', parentId: 'p' },
+        { id: 'b', name: 'b', parentId: 'p' },
+        { id: 'a1', name: 'a1', parentId: 'a' },
+        { id: 'a2', name: 'a2', parentId: 'a' },
+        { id: 'a3', name: 'a3', parentId: 'a' },
+      ],
+      fields: [
+        { key: 'kidCount', compute: (_entry, ctx) => ctx.children().length },
+        { key: 'kidSum', rollUp: 'sumKidCounts' },
+      ],
+      aggregators: {
+        sumKidCounts: (_parent, ctx) =>
+          ctx.values('kidCount').reduce((total: number, value) => total + Number(value), 0),
+      },
+    });
+  }
+
+  it('answers a child’s compute Field about that child, not about the parent', () => {
+    const state = twoLevelDataset();
+
+    // The store's own answer, for the same two rows the Rollup read.
+    expect(state.entries.get('a')!.read('kidCount')).toBe(3);
+    expect(state.entries.get('b')!.read('kidCount')).toBe(0);
+    expect(state.entries.get('p')!.read('kidSum')).toBe(3);
+  });
+});
