@@ -281,6 +281,17 @@ describe('what a variant answers about itself', () => {
     expect(registry.resolveFor(spanEntry('other')).can).toBeUndefined();
   });
 
+  it('answers its own `css`, and `undefined` for a rule with none (F1)', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const styled = '.fg-bar-buffer { color: red; }';
+
+    registry.addPluginVariant({ name: 'buffer', when: (entry) => entry.id === 'styled', css: styled });
+    registry.addPluginVariant({ name: 'plain', when: (entry) => entry.id === 'plain' });
+
+    expect(registry.resolveFor(spanEntry('styled')).css).toBe(styled);
+    expect(registry.resolveFor(spanEntry('plain')).css).toBeUndefined();
+  });
+
   it('reads `paint` off the rule that won, never off another rule of the same name (F3)', () => {
     // Two rules share one name and split the rows between them. A lookup by name answered with the
     // newest rule's paint whichever one claimed the row.

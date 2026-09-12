@@ -13,8 +13,8 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 
 declare global {
   interface Window {
-    __dataset: import('../src/api/index.js').Dataset;
-    __gantt: import('../src/api/index.js').Gantt;
+    __dataset: import('freegantt').Dataset;
+    __gantt: import('freegantt').Gantt;
     __fixedFinishEntryId: string;
   }
 }
@@ -156,7 +156,7 @@ test("entries.update() refuses a locked Field, and writes an 'api' one", async (
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const locked = await page.evaluate(() => {
-    const dataset = window.__dataset as import('../src/api/index.js').Dataset<{ contractId?: string }>;
+    const dataset = window.__dataset as import('freegantt').Dataset<{ contractId?: string }>;
     try {
       dataset.entries.update('task-a', { contractId: 'C-0000' });
       return 'wrote it';

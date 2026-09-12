@@ -1,7 +1,8 @@
 // layout/ — a variant is a rule, and this file is where a row meets one (ADR 0018). One object
-// answers four questions about a row's shape: which rows wear it (`when`), what shape it draws
-// (`items`), how it looks (`paint`), and what you can do to it (`can`). Before this, each question
-// was its own registration, and the variant's name was repeated at every one.
+// answers five questions about a row's shape: which rows wear it (`when`), what shape it draws
+// (`items`), how it looks (`paint`), what you can do to it (`can`), and what rules its look needs
+// (`css`, ADR 0022 §5). Before this, each question was its own registration, and the variant's name
+// was repeated at every one.
 //
 // Nothing stores a variant. It is resolved per Gantt, every layout pass, from the rules installed on
 // that Gantt (I2). An Entry carries no stored classification, which is what ADR 0013 decided and
@@ -22,15 +23,19 @@ import type { BarRenderer } from '../renderer.js';
 import type { DrawnVariant, Item, ItemProducer, VariantItems } from './item.js';
 import { wholeEntryItem, entryItem, fixedWidthItem } from './item.js';
 
-/** One row's variant, as the rule that won answered it. Every seam reads its four answers off this
- *  one object, so what a row draws, how it looks and what you can do to it always come from the
- *  same registration — never from a second lookup by name, which can answer with a different rule
- *  that happens to share the name (`F3`). */
+/** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
+ *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
+ *  needs always come from the same registration — never from a second lookup by name, which can
+ *  answer with a different rule that happens to share the name (`F3`). */
 export interface ResolvedVariant extends DrawnVariant {
   /** How it looks, or `undefined` for the library's own bar. */
   readonly paint: BarRenderer | undefined;
   /** What you can do to it, or `undefined` for no opinion at this level. */
   readonly can: Interactions | undefined;
+  /** The rules this look needs, as CSS text, or `undefined` for none (ADR 0022 §5). The same string
+   *  the variant's own `css` carried at registration — copied here so every seam answers `items` /
+   *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
+  readonly css: string | undefined;
 }
 
 /** A rule that reads the whole row. Call: `when: (entry) => entry.duration()?.value === 0`. It runs
@@ -282,7 +287,13 @@ const DIAMOND_CSS = `
  *
  *  Every key on `overrides` wins, `name` included: `bar({ name: 'phase', when: myRule })` keeps
  *  `produceLeafItems` and answers for the rows `myRule` claims instead of every row nothing else
- *  claimed. */
+ *  claimed.
+ *
+ *  **`bar` and `summary` keep their plain names (F13).** `import { bar } from 'freegantt'` reads as
+ *  a generic word at a package's top level, and a `*Variant` suffix would read further from a call
+ *  site: `variants: [bar(), summary(), diamond()]` reads as one family, and `barVariant()` names the
+ *  pipeline that builds the answer, not the job an author is doing (`CLAUDE.md`'s call-site-first
+ *  rule). The collision risk is accepted for that reason, not overlooked. */
 export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: LEAF_VARIANT_NAME,
@@ -440,6 +451,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         items: variant.items ?? ((entry, name) => [wholeEntryItem(entry, name)]),
         paint: variant.paint,
         can: variant.can,
+        css: variant.css,
       },
       claim:
         variant.when === undefined

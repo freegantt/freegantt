@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
 // dependence on `diamond()`/`summary()` being installed anywhere (unit G's job, not this one's).
 declare global {
   interface Window {
-    __gantt: import('../src/api/index.js').Gantt;
+    __gantt: import('freegantt').Gantt;
   }
 }
 

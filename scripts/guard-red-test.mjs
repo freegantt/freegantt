@@ -43,6 +43,35 @@ function checkRedTestFile(relativeFile, contents, description) {
   console.log(`guard-red-test: ${description} — blocked as expected.`);
 }
 
+function eslintFails(relativeFile) {
+  try {
+    execFileSync('npx', ['eslint', relativeFile], { cwd: root, stdio: 'pipe' });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+// F7: eslint.config.js's harness/e2e/fixtures block reads the specifier *text*, which is what
+// proves the case dependency-cruiser's resolved-path exception cannot state on its own (see the
+// comment above the two calls of this below). Same write/assert/delete shape as `checkRedTestFile`,
+// pointed at `eslint` instead of `depcruise`.
+function eslintRedTestFile(relativeFile, contents, description) {
+  const file = path.join(root, relativeFile);
+  writeFileSync(file, contents);
+  let ok = false;
+  try {
+    ok = eslintFails(relativeFile);
+  } finally {
+    unlinkSync(file);
+  }
+  if (!ok) {
+    console.error(`guard-red-test: ${description} — eslint did NOT fail. The guard is broken.`);
+    process.exit(1);
+  }
+  console.log(`guard-red-test: ${description} — blocked as expected.`);
+}
+
 checkRedTestFile(
   'src/scheduling/__boundary_red_test__.ts',
   "// Deliberate boundary violation — asserts dependency-cruiser actually blocks it.\nimport '../render/dom/index.js';\nexport {};\n",
@@ -102,12 +131,35 @@ checkRedTestFile(
   'extensions/ -> data/transaction.js boundary violation (dev-mode.ts leaf stays scoped)',
 );
 
-// #287: harness/, e2e/ and fixtures/ meet the sealed exports map the same way a real consumer does —
-// a relative path into src/ walks past it and can reach an internal no consumer could reach.
+// #287, review finding F7: dependency-cruiser matches *resolved* paths, so `pathNot:
+// '^src/api/index\.ts$'` — the clause that lets the `freegantt` alias through — cannot tell that
+// alias from a hand-written relative path naming the same file. This fixture lands one file short
+// of that clause (an internal, `src/layout/items/variants.ts`, same shape as `render/ ->
+// data/transaction.js` above): it proves the cruiser rule still blocks a relative reach past the
+// index, not that it can tell the index path itself from the alias. That second claim is
+// `eslint.config.js`'s job (F7's ESLint check, right below) — it reads the specifier text.
 checkRedTestFile(
   'harness/__boundary_red_test__.ts',
-  "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path.\nimport '../src/layout/items/variants.js';\nexport {};\n",
-  'harness/ -> src/ boundary violation (the sealed exports map, #287)',
+  "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path,\n// and this lands one file short of the one exception (src/api/index.ts) the cruiser rule states.\nimport '../src/layout/items/variants.js';\nexport {};\n",
+  'harness/ -> src/ boundary violation (an internal, one file short of the index exception, #287)',
+);
+
+// F7: the case dependency-cruiser's own exception cannot catch — a relative path that names
+// `src/api/index.ts` itself, the exact file the `freegantt` alias resolves to. `pathNot` lets the
+// alias through by resolved path, so it lets this through too; only reading the specifier *text*
+// (eslint.config.js's harness/e2e/fixtures block) can tell the two apart. Two positions: a plain
+// import, and the type-position inline `import(...)` that shipped uncaught in
+// `e2e/variant-styles.spec.ts` (`TSImportType`, which neither `no-restricted-imports` nor
+// `@typescript-eslint/no-restricted-imports` visits).
+eslintRedTestFile(
+  'harness/__index_path_red_test__.ts',
+  "// Deliberate boundary violation — the index path itself, not an internal, is the case dependency-\n// cruiser's resolved-path exception cannot tell from the 'freegantt' alias (#287, F7).\nimport { Gantt } from '../src/api/index.js';\nexport type T = Gantt;\n",
+  'harness/ -> src/api/index.ts by a relative path (the case the cruiser exception cannot catch, #287 F7)',
+);
+eslintRedTestFile(
+  'e2e/__index_path_type_position_red_test__.ts',
+  "// Deliberate boundary violation — the exact shape e2e/variant-styles.spec.ts shipped uncaught:\n// a type-position inline import() naming the index by a relative path (#287, F7).\ndeclare global {\n  interface Window {\n    __redTest: import('../src/api/index.js').Gantt;\n  }\n}\nexport {};\n",
+  "e2e/ -> src/api/index.ts by a type-position inline import() (#287 F7's live instance)",
 );
 
 console.log('guard-red-test: all boundary and removable-leaf rules correctly blocked their violations.');

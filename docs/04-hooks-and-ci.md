@@ -162,8 +162,9 @@ That last one deserves emphasis: it closes the loop `plans/04` §4 opens ("an in
 
 ### 4.1 `scripts/guard-red-test.mjs` — the red-test cases
 
-Each call writes one deliberate violation, asserts `depcruise` fails on it, then deletes the file. A
-case with no failing fixture is presumed broken (the rule this whole section states):
+Each call writes one deliberate violation, asserts the guard it targets — `depcruise` for a boundary
+or leaf rule, `eslint` for the two ESLint-only #287 cases below — fails on it, then deletes the file.
+A case with no failing fixture is presumed broken (the rule this whole section states):
 
 | Case | Rule it proves |
 |---|---|
@@ -175,7 +176,8 @@ case with no failing fixture is presumed broken (the rule this whole section sta
 | `extensions/ -> view/` | `extensions-public-only` — D-S5-5's dogfood gate: a built-in feature may see only `api/` and `model/` |
 | `render/ -> data/transaction.js` | the `data/dev-mode.ts` leaf widening stays scoped to that one file, not `data/` generally |
 | `extensions/ -> data/transaction.js` | same, from the `extensions/` side |
-| `harness/ -> src/` (`import '../src/layout/items/variants.js'`) | `harness-public-api-only` (#287) — `harness/`, `e2e/` and `fixtures/` reach `src/` through the published `freegantt` specifier alone, never a relative path |
+| `harness/ -> src/` (an internal, `import '../src/layout/items/variants.js'`) | `harness-public-api-only` (#287) — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
+| `harness/ -> src/api/index.ts` by a relative path, and the same by a type-position inline `import(...)` | `eslint.config.js`'s `harness/`/`e2e/`/`fixtures/` block (#287, review finding F7) — dependency-cruiser matches *resolved* paths, so its one exception (`pathNot: '^src/api/index\.ts$'`, for the `freegantt` alias) can't tell that alias from a relative path naming the same file; this ESLint rule reads the specifier text instead, which is the only place that distinction is visible. `e2e/variant-styles.spec.ts` shipped the type-position case uncaught — belt and braces with the cruiser rule, not a replacement |
 
 ### 4.2 Violation fixtures
 
