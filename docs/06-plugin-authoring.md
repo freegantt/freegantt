@@ -4,6 +4,12 @@ A plugin adds behavior to FreeGantt without a fork. This guide shows the two
 plugin contracts, how to install each one, every registration seam a plugin
 can use, and the errors an author meets.
 
+A draft of the plugin-author surface after ADRs 0017–0020 — one install site,
+an Entry that answers questions about itself, a look as one object, and a
+plugin-owned hierarchy — lives in `harness/docs/plugin-authoring.html`. None of
+those four is accepted. This guide describes HEAD, and its fenced examples
+typecheck against HEAD.
+
 Every claim below names the test that proves it. If a claim in an earlier
 draft had no test, this guide drops the claim instead of stating it as fact.
 

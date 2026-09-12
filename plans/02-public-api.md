@@ -4,7 +4,7 @@ The API is a product surface, designed once and defended. Everything here is wha
 
 **Public entry points:** `Dataset`, `Gantt`, the event vocabulary, the plugin contract, and the model types. Nothing else.
 
-> **The Field surface here is ahead of `src/`.** ADRs 0011–0016 are `proposed`, and the [2026-09-10 prose sweep](field-redesign/shared/prose-sweep.md) wrote their rules into this file. So `props`, `entries.read`, optional dates, derivation by children, the `editable` enum and no save format are the decided design, and `src/` still ships `meta`, `entries.fieldValue`, `Entry.kind`, `toJSON` and `schema: 4` until each ADR builds. Read the ADR before you cite this file as *what the code does*. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
+> **The by-key door here is ahead of `src/`.** ADR 0014 is still `proposed`, so `src/` ships `entries.fieldValue` where this file writes `entries.read`. Every other Field rule on this page is built code: `props`, optional dates, derivation by children, the `editable` enum, and no save format. [`plans/field-redesign/CLOSE-OUT.md`](field-redesign/CLOSE-OUT.md) tracks what is left.
 
 ---
 

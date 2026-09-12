@@ -125,6 +125,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
     ],
     specLinks: [
       { label: 'plans/02 §4.4 — Plugin registrations', href: `${PUBLIC_API}#44-plugin-registrations-one-collision-policy-one-lifetime-155` },
+      { label: 'Writing a plugin', href: './docs/plugin-authoring.html' },
       { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
     ],
   },
