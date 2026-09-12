@@ -1361,3 +1361,18 @@ out — which moves the cast rather than deleting it.
 
 **Build 4 changed neither.** It corrected the page to say what compiles, and the samples now brand
 with `entryId(...)`. That is the evidence, left visible rather than tidied away.
+
+---
+
+## J58 — `descendantsOf` is deleted, because this branch took its last caller
+
+**Review fixes, P2-1.**
+
+`entry-tree.ts`'s `descendantsOf` had one caller on `main`. This branch replaced that call with
+`entry.descendants()` and left the function behind — an export nobody reads, carrying the same
+unguarded worklist `F1` just fixed one file away, under a doc comment that invites a new caller.
+`J55` deleted `childCountByParent` from this same file for this same reason, so the same reasoning
+applies here.
+
+**To reverse:** restore it beside `ancestorsOf`, with the `seen` set `LiveEntry.descendants()` now
+carries.
