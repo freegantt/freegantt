@@ -6,7 +6,7 @@
 // types a plugin author holds but never constructs.
 
 import type { EntryId } from './ids.js';
-import type { EditExtender } from './entry.js';
+import type { EditExtender } from './stored-entry.js';
 
 /** A plugin's own identity, unique within the `plugins` list that installs it (D-S5-3). */
 export type PluginId = string;

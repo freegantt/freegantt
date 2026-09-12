@@ -1,14 +1,19 @@
 // data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21), and (S2.3
-// §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to. `all` stays
-// committed-only by design (D-S2-3's cached-identity rule); `get`/`has`/`size`/`childrenOf`/`fieldValue`
-// read through an open write set first, so a read-then-write helper inside a transaction body sees its
-// own edits.
+// §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to.
+//
+// Two questions hide in one word, and `all` answers them differently (ADR 0017, rule 2). *Which*
+// rows exist is the collection's question, and `all` answers it as of the last commit — the array is
+// a `computed` bound to `#revision`, and `ScaleBinding` compares it by reference (D-S1.5-4, D-S2-3).
+// *What a row is worth* is the row's question, and every `Entry` in that array answers it now.
+// `get`/`has`/`size` read through an open write set, so a read-then-write helper inside a
+// transaction body sees its own edits.
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
 // mutation outside a transaction does not typecheck (docs/02 §3.6). `add`/`update`/`remove` never
 // mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
 // open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
 
 import type {
+  Entry,
   StoredEntry,
   EntryId,
   EntryInput,
@@ -42,12 +47,17 @@ import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
-  createFieldContext,
+  createFieldAccess,
   createRollUpContext,
+  measureEntryDuration,
   mergeProposedEdits,
   entryAfterEdit,
+  readField,
+  readingChildrenFrom,
   writeOntoEntry,
 } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
+import { LiveEntries, unknownFieldError } from './live-entry.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
@@ -119,7 +129,16 @@ export class EntryStore implements EntryStoreContract {
   /** One write per commit; every derived value below invalidates from it (D-S2-4). */
   #revision = signal(0);
   #all: () => readonly StoredEntry[];
+  /** The same array identity rule as `#all`, one revision at a time — the elements are the live
+   *  rows `layout/` receives (`gantt-shell.ts` hands this straight on). */
+  #allLive: () => readonly Entry[];
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
+  /** Ancestor count per committed row, cached beside `#byParent` for the same reason `hasChildren`
+   *  is: `entry.depth` is a property, and a walk inside a getter breaks ADR 0017's rule 4. */
+  #depthById: () => ReadonlyMap<EntryId, number>;
+  /** One `Entry` per id, for the store's lifetime (ADR 0017, rule 2). */
+  #live: LiveEntries;
+  #access: FieldAccess;
   /** `SegmentId → EntryId` (finding 6, #212): the answer `entryIdOfSegment`/`entryIdsOfSegments`
    *  publish, and the one place that answer is computed. Maintained alongside `#byId` on every
    *  commit — `#reindexSegments`, `#rememberSegmentsOf`, `#forgetSegmentsOf` are the only writers —
@@ -136,18 +155,32 @@ export class EntryStore implements EntryStoreContract {
   #context: EntryReadContext;
   readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
-  readonly #fieldContext: FieldContext;
 
   constructor(
     entries: readonly StoredEntry[],
     context: EntryReadContext,
     registry: FieldRegistry = new FieldRegistry(),
-    fieldContext: FieldContext = createFieldContext(registry, context.timeZone),
+    access: FieldAccess = createFieldAccess({ fields: registry, timeZone: context.timeZone }),
     runner?: TransactionData,
   ) {
     this.#context = context;
     this.#registry = registry;
-    this.#fieldContext = fieldContext;
+    // The store is the tree a Field read walks: a `compute` Field asking `ctx.children()` outside a
+    // Rollup pass means the row the store holds now (#214).
+    this.#access = readingChildrenFrom(access, (id) => this.storedChildrenOf(id));
+    this.#live = new LiveEntries({
+      storedEntry: (id) => this.storedEntry(id),
+      storedChildrenOf: (id) => this.storedChildrenOf(id),
+      hasChildren: (id) => this.#hasChildren(id),
+      depthOf: (id) => this.#depthOf(id),
+      entryFor: (id) => this.#live.for(id),
+      readField: (entry, key) => {
+        const field = this.#registry.get(key);
+        if (field === undefined) throw unknownFieldError(key);
+        return readField(entry, field, this.#access);
+      },
+      durationOf: (entry) => measureEntryDuration(entry, this.#access.measureDuration),
+    });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     for (const entry of entries) this.#rememberSegmentsOf(entry);
@@ -157,6 +190,7 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.get();
       return Array.from(this.#byId.values());
     });
+    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#byParent = computed(() => {
       const byParent = new Map<EntryId | undefined, StoredEntry[]>();
       for (const entry of this.#all()) {
@@ -166,14 +200,56 @@ export class EntryStore implements EntryStoreContract {
       }
       return byParent;
     });
+    this.#depthById = computed(() => {
+      const byParent = this.#byParent();
+      const depthById = new Map<EntryId, number>();
+      const walk = (parentId: EntryId | undefined, depth: number): void => {
+        for (const child of byParent.get(parentId) ?? []) {
+          if (depthById.has(child.id)) continue;
+          depthById.set(child.id, depth);
+          walk(child.id, depth + 1);
+        }
+      };
+      walk(undefined, 0);
+      return depthById;
+    });
   }
 
-  /** Committed only — a write set open on a transaction in progress is not reflected here (D-S2-21). */
-  get all(): readonly StoredEntry[] {
+  /** How many ancestors `id` has. The committed index answers it for free; an open transaction
+   *  walks the live parent chain, which no frame ever does. */
+  #depthOf(id: EntryId): number {
+    if (!this.#writeSet) return this.#depthById().get(id) ?? 0;
+    let depth = 0;
+    let parentId = this.storedEntry(id)?.parentId;
+    const seen = new Set<EntryId>([id]);
+    while (parentId !== undefined && !seen.has(parentId)) {
+      seen.add(parentId);
+      depth += 1;
+      parentId = this.storedEntry(parentId)?.parentId;
+    }
+    return depth;
+  }
+
+  /** Live rows; *which* rows is committed-only, so this array does not grow inside an open
+   *  transaction (D-S2-21, ADR 0017 rule 2). Each row in it reads the write set. */
+  get all(): readonly Entry[] {
+    return this.#allLive();
+  }
+
+  /** The committed rows as the store holds them — what the commit path and the Rollup read. */
+  get allStored(): readonly StoredEntry[] {
     return this.#all();
   }
 
-  get(id: EntryId | string): StoredEntry | undefined {
+  /** The live row for `id`, or `undefined` once nothing by that id exists. */
+  get(id: EntryId | string): Entry | undefined {
+    const key = entryId(id);
+    return this.storedEntry(key) === undefined ? undefined : this.#live.for(key);
+  }
+
+  /** The row as this transaction leaves it — what the edit pipeline carries (ADR 0017). `get`
+   *  below hands back the live `Entry` a reader asks its questions of. */
+  storedEntry(id: EntryId | string): StoredEntry | undefined {
     const key = entryId(id);
     if (!this.#writeSet) return this.#byId.get(key);
     if (this.#writeSet.removed.has(key)) return undefined;
@@ -201,22 +277,8 @@ export class EntryStore implements EntryStoreContract {
     return size;
   }
 
-  /** The store is monomorphic — it never learns one consumer's field map — so the open default
-   *  (`Record<string, unknown>`) is what it can promise here. `api/dataset.ts` re-types the whole
-   *  store to the caller's `TFields` at the façade, in the one trusted cast documented there. */
-  fieldValue<K extends FieldKey>(
-    id: EntryId | string,
-    field: K,
-  ): FieldValue<Record<string, unknown>, K> | undefined {
-    const key = String(field);
-    if (!this.#registry.has(key)) throw new UnknownFieldError(key, 'entries.fieldValue');
-    const entry = this.get(id);
-    if (!entry) throw new EntryNotFoundError(entryId(id), 'entries.fieldValue');
-    return this.#fieldContext.read(entry, field) as FieldValue<Record<string, unknown>, K> | undefined;
-  }
-
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */
-  childrenOf(id: EntryId | string): readonly StoredEntry[] {
+  storedChildrenOf(id: EntryId | string): readonly StoredEntry[] {
     const parent = entryId(id);
     if (!this.#writeSet) return this.#byParent().get(parent) ?? [];
     return this.#childrenOfWriteSet(parent);
@@ -235,10 +297,10 @@ export class EntryStore implements EntryStoreContract {
       result.push(entry);
     };
     for (const committed of this.#byParent().get(parent) ?? []) {
-      pushIfChild(this.get(committed.id));
+      pushIfChild(this.storedEntry(committed.id));
     }
     for (const editedId of writeSet.edits.keys()) {
-      pushIfChild(this.get(editedId));
+      pushIfChild(this.storedEntry(editedId));
     }
     for (const added of writeSet.added.values()) {
       pushIfChild(added);
@@ -311,7 +373,7 @@ export class EntryStore implements EntryStoreContract {
     const seen = new Set<EntryId>();
     const result: SegmentId[] = [];
     for (const id of ids) {
-      const entry = this.get(id);
+      const entry = this.storedEntry(id);
       if (entry === undefined || seen.has(entry.id)) continue;
       seen.add(entry.id);
       for (const segment of entry.segments) result.push(segment.id);
@@ -380,7 +442,7 @@ export class EntryStore implements EntryStoreContract {
   // ---- Public mutators (S2.3 §1.1): validate against the write set, then stage; each auto-wraps in
   // a transaction via `runTransaction`, which joins one already open (D-S2-8) ----
 
-  add(input: EntryInput): StoredEntry {
+  add(input: EntryInput): Entry {
     return this.#mutate((token) => {
       const id = entryId(input.id);
       if (this.has(id)) throw new DuplicateEntryIdError(id);
@@ -394,14 +456,14 @@ export class EntryStore implements EntryStoreContract {
     });
   }
 
-  update(id: EntryId | string, edit: EntryEdit): StoredEntry {
+  update(id: EntryId | string, edit: EntryEdit): Entry {
     return this.#updateFrom('entries.update', id, edit);
   }
 
   /** The body every door that edits one Entry shares. `operation` is the call the consumer actually
    *  wrote, so a refusal names a door they can act on: `entries.removeSegments` removes a Segment
    *  through this same body, and a caller who never wrote `update` must not be told about it. */
-  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): StoredEntry {
+  #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): Entry {
     return this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, operation);
@@ -410,7 +472,7 @@ export class EntryStore implements EntryStoreContract {
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
-      const current = this.get(key)!;
+      const current = this.storedEntry(key)!;
       if (Object.keys(own).length > 0) {
         const reading = toEditReading(own, this.#context, current, this.#registry, operation);
         const stored = reading.stored;
@@ -466,14 +528,14 @@ export class EntryStore implements EntryStoreContract {
       const declared = this.#registry.get(field)!;
       if (resolveWriteTarget(true, declared) === 'entry') continue;
       if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, operation);
-      children ??= this.childrenOf(id);
+      children ??= this.storedChildrenOf(id);
       // Called on its own declaration, never detached from it — the same way `equals` and
       // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
+      const parent = this.storedEntry(id)!;
       const edits = declared.distribute(
         value,
-        children,
-        this.get(id)!,
-        createRollUpContext(this.#fieldContext, field),
+        parent,
+        createRollUpContext(this.#access, parent, children, field),
       );
       // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
       // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
@@ -533,7 +595,7 @@ export class EntryStore implements EntryStoreContract {
    *  `toEditReading` is the one owner) — this call names no `start` or `end` of its own, so there is
    *  nothing here that could disagree with them. */
   #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
-    const entry = this.get(id)!;
+    const entry = this.storedEntry(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
       // Only an Entry that owns its own dates has dates to clear. On one with children the dates are
@@ -560,7 +622,7 @@ export class EntryStore implements EntryStoreContract {
    *  so a self-referential write set never confuses the walk (S2.3 §1.4). */
   #subtreeOf(id: EntryId): readonly EntryId[] {
     const result: EntryId[] = [];
-    for (const child of this.childrenOf(id)) {
+    for (const child of this.storedChildrenOf(id)) {
       result.push(child.id);
       result.push(...this.#subtreeOf(child.id));
     }
@@ -575,7 +637,7 @@ export class EntryStore implements EntryStoreContract {
     let current: EntryId | undefined = parentId;
     while (current !== undefined) {
       if (current === id) throw new ParentCycleError(id);
-      current = this.get(current)?.parentId;
+      current = this.storedEntry(current)?.parentId;
     }
   }
 
@@ -618,7 +680,7 @@ export class EntryStore implements EntryStoreContract {
    *  (finding B4, #212) — `recordSegmentOwnership` does that release-then-claim in one call. */
   stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
-    const replaced = this.get(entry.id);
+    const replaced = this.storedEntry(entry.id);
     writeSet.added.set(entry.id, entry);
     writeSet.removed.delete(entry.id);
     writeSet.edits.delete(entry.id);
@@ -638,7 +700,7 @@ export class EntryStore implements EntryStoreContract {
     authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
   ): void {
     const writeSet = this.#openWriteSet();
-    const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
+    const before = edit.segments !== undefined ? this.storedEntry(id)?.segments : undefined;
     if (edit.parentId !== undefined) writeSet.stagedParents.add(edit.parentId);
     const staged = writeSet.added.get(id);
     if (staged) {
@@ -660,7 +722,7 @@ export class EntryStore implements EntryStoreContract {
 
   stageRemove(_token: TxToken, id: EntryId): void {
     const writeSet = this.#openWriteSet();
-    const before = this.get(id)?.segments;
+    const before = this.storedEntry(id)?.segments;
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);

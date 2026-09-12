@@ -3,29 +3,25 @@
 // not a snapshot array (D-S2-2). `Dataset` here is the bindable surface a Gantt holds; the public
 // class adds `transaction()` and the construction-time options a view never reads.
 
-import type { StoredEntry, EntryEdit, EntryInput } from './entry.js';
-import type { Field, FieldKey, FieldValue } from './field.js';
+import type { Entry } from './entry.js';
+import type { EntryEdit, EntryInput } from './stored-entry.js';
+import type { Field, FieldKey } from './field.js';
 import type { EntryId, SegmentId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
-/** The Dataset's own read view onto its entries (D-S2-2). `all` is the committed array — see D-S2-3
- *  for its cached-identity rule and D-S2-21 for what it does *not* show while a transaction is open
- *  (`get`/`has`/`size`/`childrenOf`/`fieldValue` see a transaction's own uncommitted writes; `all` does not). */
+/** The Dataset's own read view onto its entries (D-S2-2). Every row it hands back is a live `Entry`
+ *  and answers for now (ADR 0017).
+ *
+ *  **Two questions hide in one word.** *Which* rows exist is this collection's question, and `all`
+ *  answers it as of the last commit — see D-S2-3 for its cached-identity rule and D-S2-21 for what
+ *  it does *not* show while a transaction is open. *What a row is worth* is the row's own question,
+ *  and every `Entry` in that array answers it now. `get`/`has`/`size` are the live membership
+ *  doors. */
 export interface EntryStoreView<TProps = Record<string, unknown>> {
-  readonly all: readonly StoredEntry<TProps>[];
-  get(id: EntryId | string): StoredEntry<TProps> | undefined;
+  readonly all: readonly Entry<TProps>[];
+  get(id: EntryId | string): Entry<TProps> | undefined;
   has(id: EntryId | string): boolean;
   readonly size: number;
-  /** Direct children, in insertion order. An entry with no children returns `[]`. */
-  childrenOf(id: EntryId | string): readonly StoredEntry<TProps>[];
-  /** The value of `field` on this entry. Routes through the Field registry, so a `props` Field and
-   *  a `compute` Field take the same call as `start`. An unregistered key throws `UnknownFieldError`.
-   *  A missing id throws `EntryNotFoundError`.
-   *
-   *  The return type comes from the key: `'start'` reads as an `Instant`, and a key `TProps`
-   *  declares reads as the type the consumer wrote (ADR 0005). This is the far end of the
-   *  `Dataset<TProps>` generic, and where it stops. */
-  fieldValue<K extends FieldKey>(id: EntryId | string, field: K): FieldValue<TProps, K> | undefined;
   /** The Entry that draws `id`, or `undefined` when no Entry does (ADR 0010, #212). Call:
    *  `dataset.entries.entryIdOfSegment(segmentId)`. */
   entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
@@ -56,8 +52,8 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  Ingest itself still reads a flat declared key off any object at runtime — `propsFromInput`
    *  (`entry-reader.ts`) does not consult this type — so a caller loses only the static
    *  autocomplete/check, not the behaviour. Flagged for the author (BUILD-LOG Q). */
-  add(input: EntryInput<TProps>): StoredEntry<TProps>;
-  update(id: EntryId | string, edit: EntryEdit<TProps>): StoredEntry<TProps>;
+  add(input: EntryInput<TProps>): Entry<TProps>;
+  update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
   /** Removes Segments in one transaction, across several Entries when `ids` names several (ADR
    *  0010, #212). An Entry that keeps a Segment gets its envelope recomputed; an Entry whose last

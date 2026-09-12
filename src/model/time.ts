@@ -16,6 +16,16 @@ export interface Duration {
   unit: TimeUnit;
 }
 
+/** How core measures an Entry's duration (ADR 0017, Q6/J12). One policy per Dataset — a per-Field
+ *  setting would let two Fields on one Dataset disagree about what a duration is.
+ *
+ *  - `'span'` — `end - start`, gaps between Segments counted. The default.
+ *  - `'segments'` — the sum of the Segments, gaps counted nowhere.
+ *
+ *  A union rather than a boolean: a calendar-aware third answer (duration in working time) is
+ *  plausible at S7, and a union takes it without deleting a published key. */
+export type DurationMeasure = 'span' | 'segments';
+
 /**
  * A *plain* time: a wall-clock reading with no zone attached, so it names no `Instant` until a zone
  * resolves it (CONTEXT.md). A domain shape, not zone machinery — which is why it lives here and not

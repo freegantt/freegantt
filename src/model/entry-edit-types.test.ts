@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { EntryEdit } from './entry.js';
+import type { EntryEdit } from './stored-entry.js';
 
 // ADR 0011, types.md: type tests, and each half is one. This file exists to compile, not to run —
 // `it.skip` bodies never execute, so the assertions below are the type checker's job alone. A change
