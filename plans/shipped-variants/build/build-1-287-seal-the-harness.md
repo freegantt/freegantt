@@ -80,8 +80,8 @@ same as a working public surface.
 
 ## Close the issue
 
-- [ ] Close [#287](https://github.com/Pawel-IT/FreeGantt/issues/287). Name the count of imports switched, and the red case that proves the rule fires.
-- [ ] Apply the labels with the `label-issues` skill.
+- [x] Close [#287](https://github.com/Pawel-IT/FreeGantt/issues/287). Name the count of imports switched, and the red case that proves the rule fires.
+- [x] Apply the labels with the `label-issues` skill.
 
 ## Done when
 
