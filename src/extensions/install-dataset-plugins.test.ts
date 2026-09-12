@@ -1,15 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installDatasetPlugins, resolveSetupOrder } from './install-dataset-plugins.js';
-import type { OrderedPlugin } from './install-dataset-plugins.js';
+import { installDatasetPlugins } from './install-dataset-plugins.js';
+import type { InstallablePlugin } from './install-dataset-plugins.js';
 import { DisposableStore } from './disposables.js';
 import { RegistrationGate } from './plugin-runtime.js';
-import {
-  DuplicatePluginIdError,
-  MissingPluginError,
-  PluginRequirementCycleError,
-  PluginSetupError,
-  RegistrationClosedError,
-} from '../model/index.js';
+import { DuplicatePluginIdError, PluginSetupError, RegistrationClosedError } from '../model/index.js';
 import type { ErrorReportInput, RaiseError } from '../model/index.js';
 import type { Disposer, PluginId } from '../model/index.js';
 
@@ -19,17 +13,17 @@ interface TestContext {
   log: string[];
 }
 
-/** One plugin that writes its own id to the shared log as it sets up and as it disposes. */
+/** One plugin whose `data` half writes its own id to the shared log as it sets up and as it disposes. */
 function plugin(
   id: PluginId,
-  options: { requires?: readonly PluginId[]; setup?: (ctx: TestContext) => Disposer | void } = {},
-): OrderedPlugin<TestContext> {
+  options: { requires?: readonly PluginId[]; data?: (ctx: TestContext) => Disposer | void } = {},
+): InstallablePlugin<TestContext> {
   return {
     id,
     ...(options.requires ? { requires: options.requires } : {}),
-    setup(ctx) {
+    data(ctx) {
       ctx.log.push(`setup ${id}`);
-      return options.setup?.(ctx) ?? (() => ctx.log.push(`dispose ${id}`));
+      return options.data?.(ctx) ?? (() => ctx.log.push(`dispose ${id}`));
     },
   };
 }
@@ -45,7 +39,7 @@ function installer(
   log: string[],
   raiseError: RaiseError = consoleOnly,
 ): {
-  install: (plugins: readonly OrderedPlugin<TestContext>[]) => Disposer;
+  install: (plugins: readonly InstallablePlugin<TestContext>[]) => Disposer;
   gateOf: (pluginId: PluginId) => RegistrationGate | undefined;
 } {
   const gates = new Map<PluginId, RegistrationGate>();
@@ -60,49 +54,6 @@ function installer(
     gateOf: (pluginId) => gates.get(pluginId),
   };
 }
-
-describe('resolveSetupOrder (D-S5-31)', () => {
-  it('sets up a required plugin first, whichever order the array writes', () => {
-    const a = plugin('a');
-    const b = plugin('b', { requires: ['a'] });
-    expect(resolveSetupOrder([b, a]).map((p) => p.id)).toEqual(['a', 'b']);
-    expect(resolveSetupOrder([a, b]).map((p) => p.id)).toEqual(['a', 'b']);
-  });
-
-  it('keeps the array order between plugins that require nothing of each other', () => {
-    expect(resolveSetupOrder([plugin('b'), plugin('a')]).map((p) => p.id)).toEqual(['b', 'a']);
-  });
-
-  it('resolves a chain of requirements before its dependents', () => {
-    const engine = plugin('engine', { requires: ['links'] });
-    const links = plugin('links', { requires: ['calendar'] });
-    const calendar = plugin('calendar');
-    expect(resolveSetupOrder([engine, links, calendar]).map((p) => p.id)).toEqual([
-      'calendar',
-      'links',
-      'engine',
-    ]);
-  });
-
-  it('throws MissingPluginError naming both ids when a prerequisite is absent', () => {
-    const thrown = (): unknown => resolveSetupOrder([plugin('engine', { requires: ['links'] })]);
-    expect(thrown).toThrow(MissingPluginError);
-    expect(thrown).toThrow(/"engine" requires "links"/);
-  });
-
-  it('throws PluginRequirementCycleError naming every plugin in the cycle', () => {
-    const a = plugin('a', { requires: ['b'] });
-    const b = plugin('b', { requires: ['a'] });
-    let error: unknown;
-    try {
-      resolveSetupOrder([a, b]);
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toBeInstanceOf(PluginRequirementCycleError);
-    expect((error as PluginRequirementCycleError).pluginIds).toEqual(['a', 'b', 'a']);
-  });
-});
 
 describe('installDatasetPlugins', () => {
   it('installs in resolved order and disposes in reverse', () => {
@@ -126,7 +77,7 @@ describe('installDatasetPlugins', () => {
     const log: string[] = [];
     const dispose = installer(log).install([
       plugin('a', {
-        setup: (ctx) => {
+        data: (ctx) => {
           ctx.disposables.add(() => log.push('registration retracted'));
         },
       }),
@@ -142,7 +93,7 @@ describe('installDatasetPlugins', () => {
     const dispose = installer(log, (report) => reported.push(report)).install([
       plugin('a'),
       plugin('b', {
-        setup: () => () => {
+        data: () => () => {
           throw new Error('disposer boom');
         },
       }),
@@ -174,7 +125,7 @@ describe('installDatasetPlugins', () => {
   it('unwinds this batch when a setup throws, so no half-installed Dataset reaches a caller', () => {
     const log: string[] = [];
     const boom = plugin('b', {
-      setup: () => {
+      data: () => {
         throw new Error('no');
       },
     });

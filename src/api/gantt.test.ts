@@ -20,12 +20,12 @@ import {
 } from './index.js';
 import type {
   ChangeSet,
-  DatasetPlugin,
+  DataPlugin,
   EditExtender,
   Entry,
   ErrorReport,
   GanttDom,
-  GanttPlugin,
+  ChromePlugin,
   GridColumnInput,
   PluginContext,
   SegmentId,
@@ -1721,7 +1721,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
       plugins: [
         {
           id: 'demo.cell-renderer',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerRenderer('cell', () => ({ text: 'plugin' }));
             return () => {};
           },
@@ -2178,7 +2178,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       plugins: [
         {
           id: 'demo.header-renderer',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerRenderer('header', () => ({ text: 'plugin-header' }));
             return () => {};
           },
@@ -2197,7 +2197,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
 
-    // PluginRuntime.install() wraps a setup() throw in PluginSetupError (C1) — the collision itself
+    // PluginRuntime.install() wraps a view() throw in PluginSetupError (C1) — the collision itself
     // is the wrapped cause.
     let cause: unknown;
     try {
@@ -2207,14 +2207,14 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
         plugins: [
           {
             id: 'demo.renderer-one',
-            setup(ctx) {
+            view(ctx) {
               ctx.view.registerRenderer('cell', () => undefined);
               return () => {};
             },
           },
           {
             id: 'demo.renderer-two',
-            setup(ctx) {
+            view(ctx) {
               ctx.view.registerRenderer('cell', () => undefined);
               return () => {};
             },
@@ -2242,7 +2242,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.bufferVariant',
-          setup(ctx) {
+          view(ctx) {
             // One object answers every question about the variant: which rows wear it, and what
             // shape it draws. There is no stored classification to key on (ADR 0013, ADR 0018).
             ctx.variants.add({
@@ -2291,7 +2291,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.bufferVariant',
-          setup(ctx) {
+          view(ctx) {
             ctx.variants.add({
               name: 'buffer',
               when: (entry) => entry.id === sampleEntries[0]!.id,
@@ -2330,7 +2330,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   // `'variant-claimed-twice'` names (`J36`), so a console warning here is the design speaking.
   const bufferVariant = (pluginId: string, resize: boolean) => ({
     id: pluginId,
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       ctx.variants.add({
         name: 'buffer',
         when: (entry) => entry.id === sampleEntries[0]!.id,
@@ -2419,7 +2419,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.bufferVariant',
-          setup(ctx) {
+          view(ctx) {
             ctx.variants.add({
               name: 'buffer',
               when: (entry) => entry.id === sampleEntries[0]!.id,
@@ -2461,7 +2461,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.riskColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk' });
             return () => {};
           },
@@ -2505,14 +2505,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.riskColumnA',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
             return () => {};
           },
         },
         {
           id: 'demo.riskColumnB',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
             return () => {};
           },
@@ -2543,7 +2543,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.riskColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk' });
             return () => {};
           },
@@ -2594,14 +2594,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2642,14 +2642,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2714,14 +2714,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     };
     const pluginA = {
       id: 'demo.riskSharedA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         registerRisk(ctx);
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskSharedB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         registerRisk(ctx);
         return () => {};
       },
@@ -2777,14 +2777,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2848,7 +2848,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       plugins: [
         {
           id: 'demo.duplicateColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'name', header: 'Plugin name' });
             return () => {};
           },
@@ -3412,9 +3412,9 @@ describe('Gantt selection over Segments (ADR 0010, #212)', () => {
     document.body.append(container);
     const dataset = new Dataset({ entries: SEGMENTED_ENTRIES, timeZone: 'UTC' });
     let dom: GanttDom | undefined;
-    const grabDom: GanttPlugin = {
+    const grabDom: ChromePlugin = {
       id: 'test.grabDom',
-      setup: (ctx) => {
+      view: (ctx) => {
         dom = ctx.view.dom;
       },
     };
@@ -4587,7 +4587,7 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
 });
 
 describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
-  function makeGantt(container: HTMLElement, plugins?: import('./gantt.js').GanttPlugin[]) {
+  function makeGantt(container: HTMLElement, plugins?: import('./gantt.js').ChromePlugin[]) {
     return new Gantt({
       container,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
@@ -4602,7 +4602,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const gantt = makeGantt(container, [
       {
         id: 'demo.log',
-        setup(ctx) {
+        view(ctx) {
           seenGantt = ctx.gantt;
           log.push('setup');
           return () => log.push('dispose');
@@ -4629,7 +4629,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
       plugins: [
         {
           id: 'demo.reader',
-          setup(ctx) {
+          view(ctx) {
             sawEntryCount = ctx.dataset.entries.all.length;
             ctx.events.on('gridWidthChange', () => {
               firedGridWidthChange = true;
@@ -4654,7 +4654,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const barBefore = container.querySelector('.fg-bar');
 
     let disposed = false;
-    gantt.plugins = [...gantt.plugins, { id: 'demo.added', setup: () => () => (disposed = true) }];
+    gantt.plugins = [...gantt.plugins, { id: 'demo.added', view: () => () => (disposed = true) }];
     expect(gantt.plugins.map((p) => p.id)).toEqual(['demo.added']);
     expect(container.querySelector('.fg-bar')).toBe(barBefore);
 
@@ -4671,12 +4671,12 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('installPlugin adds one plugin and leaves the running ones untouched (#195)', () => {
     const log: string[] = [];
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.first', setup: () => () => log.push('first disposed') }]);
+    const gantt = makeGantt(container, [{ id: 'demo.first', view: () => () => log.push('first disposed') }]);
     const barBefore = container.querySelector('.fg-bar');
 
     gantt.installPlugin({
       id: 'demo.second',
-      setup: () => {
+      view: () => {
         log.push('second setup');
         return () => log.push('second disposed');
       },
@@ -4691,13 +4691,13 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('installPlugin refuses an id that is already installed, and installs nothing (#195)', () => {
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+    const gantt = makeGantt(container, [{ id: 'demo.only', view: () => () => {} }]);
 
     let secondSetupRan = false;
     expect(() =>
       gantt.installPlugin({
         id: 'demo.only',
-        setup: () => {
+        view: () => {
           secondSetupRan = true;
         },
       }),
@@ -4711,8 +4711,8 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('uninstallPlugin disposes the one named, by the object the caller holds (#195)', () => {
     const log: string[] = [];
     const container = document.createElement('div');
-    const kept: GanttPlugin = { id: 'demo.kept', setup: () => () => log.push('kept disposed') };
-    const dropped: GanttPlugin = { id: 'demo.dropped', setup: () => () => log.push('dropped disposed') };
+    const kept: ChromePlugin = { id: 'demo.kept', view: () => () => log.push('kept disposed') };
+    const dropped: ChromePlugin = { id: 'demo.dropped', view: () => () => log.push('dropped disposed') };
     const gantt = makeGantt(container, [kept, dropped]);
 
     gantt.uninstallPlugin(dropped);
@@ -4726,7 +4726,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('uninstallPlugin takes the id on its own, for a plugin the page no longer holds (#195)', () => {
     let disposed = false;
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.byId', setup: () => () => (disposed = true) }]);
+    const gantt = makeGantt(container, [{ id: 'demo.byId', view: () => () => (disposed = true) }]);
 
     gantt.uninstallPlugin('demo.byId');
 
@@ -4738,7 +4738,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('hasPlugin answers what a toggle reads, by id or by the object the caller holds (#195)', () => {
     const container = document.createElement('div');
-    const plugin: GanttPlugin = { id: 'demo.toggled', setup: () => () => {} };
+    const plugin: ChromePlugin = { id: 'demo.toggled', view: () => () => {} };
     const gantt = makeGantt(container, []);
 
     expect(gantt.hasPlugin('demo.toggled')).toBe(false);
@@ -4757,7 +4757,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('uninstallPlugin throws for an id nothing installs, rather than doing nothing (#195)', () => {
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+    const gantt = makeGantt(container, [{ id: 'demo.only', view: () => () => {} }]);
 
     expect(() => gantt.uninstallPlugin('demo.typo')).toThrow(PluginNotInstalledError);
     expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.only']);
@@ -4771,7 +4771,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const gantt = makeGantt(container, [
       {
         id: 'demo.check',
-        setup: () => () => {
+        view: () => () => {
           containerHadChildrenAtDispose = container.children.length > 0;
         },
       },
@@ -4786,9 +4786,9 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const containerA = document.createElement('div');
     const containerB = document.createElement('div');
     const setups: string[] = [];
-    const plugin = (label: string): import('./gantt.js').GanttPlugin => ({
+    const plugin = (label: string): import('./gantt.js').ChromePlugin => ({
       id: 'demo.shared-id',
-      setup: () => {
+      view: () => {
         setups.push(label);
         return () => {};
       },
@@ -4862,7 +4862,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.override-select-all',
-          setup(ctx) {
+          view(ctx) {
             ctx.commands.register({
               id: 'demo.selectAllOverride',
               label: 'Demo override',
@@ -4897,7 +4897,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
-  it('ctx.commands.register() called after setup() returns throws RegistrationClosedError (C2)', () => {
+  it('ctx.commands.register() called after view() returns throws RegistrationClosedError (C2)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
     let capturedCommands: PluginContext['commands'] | undefined;
@@ -4907,7 +4907,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.late-register',
-          setup(ctx) {
+          view(ctx) {
             capturedCommands = ctx.commands;
             return () => {};
           },
@@ -4922,7 +4922,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
-  it('variants.add/registerGridColumn called after setup() returns each throw RegistrationClosedError (#152)', () => {
+  it('variants.add/registerGridColumn called after view() returns each throw RegistrationClosedError (#152)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
     let capturedCtx: PluginContext | undefined;
@@ -4932,7 +4932,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.late-register-s5.9',
-          setup(ctx) {
+          view(ctx) {
             capturedCtx = ctx;
             return () => {};
           },
@@ -4968,7 +4968,7 @@ describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue
       plugins: [
         {
           id: 'demo.outside-escape',
-          setup(ctx) {
+          view(ctx) {
             const unregister = ctx.interaction.registerKeyHandler('Escape', () => {
               handlerRuns += 1;
             });
@@ -5000,7 +5000,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const plugin = {
       id: 'demo.cellRenderer',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerRenderer('cell', () => ({ text: 'from the plugin' }));
         return () => {};
       },
@@ -5030,7 +5030,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     let hijacked = 0;
     const plugin = {
       id: 'demo.commands',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.commands.register({
           id: 'freegantt.selectAll',
           label: 'Select all, the plugin way',
@@ -5078,7 +5078,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
       plugins: [
         {
           id: 'demo.retractable',
-          setup(ctx: PluginContext) {
+          view(ctx: PluginContext) {
             retract = ctx.view.registerGridColumn({ field: 'risk', header: 'Risk' });
             return () => {};
           },
@@ -5132,7 +5132,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
 
   const riskColumnPlugin = {
     id: 'demo.riskColumn',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       ctx.view.registerGridColumn({ field: 'risk' });
       return () => {};
     },
@@ -5253,9 +5253,9 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
     let savedWidth: number | undefined;
     let readMyColumn: (() => number | undefined) | undefined;
 
-    const riskColumnThatRemembers = (width?: number): GanttPlugin => ({
+    const riskColumnThatRemembers = (width?: number): ChromePlugin => ({
       id: 'demo.riskColumn',
-      setup(ctx) {
+      view(ctx) {
         ctx.view.registerGridColumn({ field: 'risk', ...(width !== undefined ? { width } : {}) });
         const myWidth = (): number | undefined =>
           ctx.view.resolvedColumns().find((column) => column.field === 'risk')?.width;
@@ -5303,7 +5303,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
 });
 
 describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #184)', () => {
-  const threeColumnGantt = (container: HTMLElement, plugins: GanttPlugin[] = []): Gantt =>
+  const threeColumnGantt = (container: HTMLElement, plugins: ChromePlugin[] = []): Gantt =>
     new Gantt({
       container,
       dataset: new Dataset({ timeZone: 'UTC', entries: sampleEntries }),
@@ -5383,9 +5383,9 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
 
   it('hiding a plugin’s own column never reaches the consumer’s configuration (D-S5-33)', async () => {
     const container = document.createElement('div');
-    const endColumnPlugin: GanttPlugin = {
+    const endColumnPlugin: ChromePlugin = {
       id: 'demo.endColumn',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'end' });
         return () => {};
       },
@@ -5421,7 +5421,7 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
     const gantt = threeColumnGantt(container, [
       {
         id: 'demo.reader',
-        setup(ctx: PluginContext) {
+        view(ctx: PluginContext) {
           seen = ctx;
           return () => {};
         },
@@ -5485,10 +5485,10 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
    *  (#250 A2: `extraEditsFor` is no longer a `Dataset` method, so a test can no longer intercept it
    *  by subclassing). Nothing else installs here, so the wrapper discards the occupant it composes
    *  onto — `data/edit-extension.test.ts` is where composition order is asserted (D-S5-23). */
-  function extenderPlugin(cascade: EditExtender): DatasetPlugin {
+  function extenderPlugin(cascade: EditExtender): DataPlugin {
     return {
       id: 'test.extender',
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(() => cascade);
       },
     };

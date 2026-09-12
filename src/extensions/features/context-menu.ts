@@ -1,4 +1,4 @@
-// extensions/features/ — the context menu built-in (S5.5, D-S5-13/14). An ordinary `GanttPlugin`,
+// extensions/features/ — the context menu built-in (S5.5, D-S5-13/14). An ordinary `ChromePlugin`,
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood
 // gate this step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
 // `api/index.ts` barrel. That barrel re-exports `contextMenu` itself (D-S5-13). `extensions/popup.ts`
@@ -16,7 +16,7 @@ import type {
   Command,
   CommandContext,
   CommandTarget,
-  GanttPlugin,
+  ChromePlugin,
   PluginContext,
 } from '../../api/gantt.js';
 import { resolveActedOn } from '../../api/command.js';
@@ -66,10 +66,10 @@ function clickedActedOn(target: DomTarget | undefined): ActedOn {
  *
  *  An item names a command and nothing else (D-S5-14). It carries no `run` of its own. The mouse
  *  path and the keyboard path are one action, never two that can drift apart. */
-export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
+export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
   return {
     id: 'freegantt.contextMenu',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       const popup: Popup = createPopup(ctx.view, ctx.interaction.registerKeyHandler);
       /** The listeners one open menu needs. They live exactly as long as that menu. `forgetOpenMenu`
        *  reassigns the store on every close, because `DisposableStore.disposeAll()` latches. A spent

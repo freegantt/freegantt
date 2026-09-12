@@ -43,10 +43,11 @@ import type {
   ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
+import { PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import { extraEditsFor, type Dataset } from './dataset.js';
-import type { GanttPluginOf, PluginContextOf } from './plugin.js';
+import type { ChromePluginOf, DataPluginOf, PluginContextOf, PluginOf } from './plugin.js';
 import type {
   CommandOf,
   CommandContextOf,
@@ -182,8 +183,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
    *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
    *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
-   *  add or drop one plugin without restating the set (D-S5-36). */
-  plugins?: readonly GanttPlugin<TProps>[];
+   *  add or drop one plugin without restating the set (D-S5-36).
+   *
+   *  ADR 0019: chrome only. A plugin with a `data` half declares a Field or claims the edit hook, and
+   *  both must be in place before the Dataset's first Rollup — so it installs on the `Dataset`
+   *  instead. `data?: never` on this arm is what stops the wrong one compiling here. */
+  plugins?: readonly ChromePlugin<TProps>[];
 }
 
 /** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -210,11 +215,30 @@ export type GanttScaleOptions =
 
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
-/** S5.1, D-S5-1: `GanttPlugin`/`PluginContext` bound to this class — see `api/plugin.ts`'s file
- *  header for why the generic form lives there and the binding happens here. This is the type a
- *  plugin author actually sees: `api/index.ts` re-exports these bound names alongside the generic
- *  `GanttPluginOf`/`PluginContextOf` shapes. */
-export type GanttPlugin<TProps = unknown> = GanttPluginOf<Gantt<TProps>, Dataset<TProps>>;
+/** ADR 0019, `Q4`: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
+ *  a plugin with a `data` half is already a red squiggle in an editor. This catches the caller the
+ *  compiler never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A
+ *  library refuses in both languages it is read in.
+ *
+ *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and
+ *  the message says where the plugin goes instead. */
+function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): readonly ChromePlugin<TProps>[] {
+  for (const plugin of plugins) {
+    if (typeof (plugin as { data?: unknown }).data === 'function') {
+      throw PluginSetupError.wrongInstallSite(plugin.id);
+    }
+  }
+  return plugins;
+}
+
+/** S5.1, D-S5-1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class — see
+ *  `api/plugin.ts`'s file header for why the generic forms live there and the binding happens here.
+ *  This file is the one that sees both `Gantt` and `Dataset`, so all four names bind here, the
+ *  Dataset-installed ones included. These are the types a plugin author actually writes:
+ *  `api/index.ts` re-exports them alongside the generic `*Of` shapes. */
+export type ChromePlugin<TProps = unknown> = ChromePluginOf<Gantt<TProps>, Dataset<TProps>>;
+export type DataPlugin<TProps = unknown> = DataPluginOf<Gantt<TProps>, Dataset<TProps>>;
+export type Plugin<TProps = unknown> = PluginOf<Gantt<TProps>, Dataset<TProps>>;
 export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
@@ -281,7 +305,11 @@ export class Gantt<TProps = unknown> {
       ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
       // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
       ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
-      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+      // ADR 0019: the Dataset's own plugins ride along. Their `view` halves belong to every Gantt
+      // bound to that Dataset, and one `requires` graph orders them together with this Gantt's own
+      // chrome. A plugin with no `view` half joins the graph and runs nothing here.
+      datasetPlugins: options.dataset.plugins,
+      ...(options.plugins !== undefined ? { plugins: assertChromeOnly(options.plugins) } : {}),
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
@@ -779,27 +807,29 @@ export class Gantt<TProps = unknown> {
     this.#shell.reveal(id);
   }
 
-  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. */
-  get plugins(): readonly GanttPlugin<TProps>[] {
-    return this.#shell.plugins;
+  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. This Gantt's own chrome plugins, and
+   *  only those: a plugin installed on the Dataset stays off this list, because this Gantt cannot
+   *  drop it (ADR 0019). */
+  get plugins(): readonly ChromePlugin<TProps>[] {
+    return this.#shell.plugins as readonly ChromePlugin<TProps>[];
   }
 
-  set plugins(next: readonly GanttPlugin<TProps>[]) {
-    this.#shell.plugins = next;
+  set plugins(next: readonly ChromePlugin<TProps>[]) {
+    this.#shell.plugins = assertChromeOnly(next);
   }
 
   /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
    *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
-  installPlugin(plugin: GanttPlugin<TProps>): void {
-    this.#shell.installPlugin(plugin);
+  installPlugin(plugin: ChromePlugin<TProps>): void {
+    this.#shell.installPlugin(assertChromeOnly([plugin])[0]!);
   }
 
   /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
-  hasPlugin(plugin: GanttPlugin<TProps> | PluginId): boolean {
+  hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean {
     const id = typeof plugin === 'string' ? plugin : plugin.id;
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
@@ -808,7 +838,7 @@ export class Gantt<TProps = unknown> {
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
    *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
-  uninstallPlugin(plugin: GanttPlugin<TProps> | PluginId): void {
+  uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 

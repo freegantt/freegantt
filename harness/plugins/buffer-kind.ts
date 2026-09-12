@@ -2,7 +2,8 @@
 // package's own public entry, never a path inside 'freegantt/src' (S5.9, [S5-A3]). A grep over
 // `src/` for the string `'buffer'` finds nothing — the whole variant lives here, in one plugin.
 
-import type { EntryEdit, GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
+import type { EntryEdit } from 'freegantt';
 
 const BUFFER_VARIANT = 'buffer';
 
@@ -16,10 +17,10 @@ const BUFFER_VARIANT = 'buffer';
  *  **The rule reads the row, so this plugin keeps no list of the ids it owns.** A page names the
  *  buffer rows in its own words, through its own Field, and a row that gains that value after
  *  install gets the variant on the next frame. */
-export function bufferKind(): GanttPlugin {
-  return {
+export function bufferKind() {
+  return definePlugin({
     id: 'demo.bufferKind',
-    setup(ctx) {
+    view(ctx) {
       ctx.variants.add({
         name: BUFFER_VARIANT,
         // Which rows are mine? The ones the page marked as buffer. A field match is equality, so
@@ -43,7 +44,7 @@ export function bufferKind(): GanttPlugin {
         when: ({ variant }) => variant === BUFFER_VARIANT,
         run: ({ entry }) => {
           if (entry === undefined) return;
-          // The Dataset's own TProps is unknown to this untyped plugin (ADR 0011: an untyped GanttPlugin
+          // The Dataset's own TProps is unknown to this untyped plugin (ADR 0011: an untyped plugin
           // sees no declared keys through EntryEdit<unknown>'s flat mapped part) — `consumed` is
           // declared on the harness's own Dataset (harness/plugins.ts), so this write is real at
           // runtime; the cast bridges the static gap an untyped plugin cannot close.
@@ -53,5 +54,5 @@ export function bufferKind(): GanttPlugin {
 
       // No disposer: `ctx.disposables` already retracts both registrations (review P4).
     },
-  };
+  });
 }

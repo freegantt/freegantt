@@ -1,10 +1,9 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions, DatasetPlugin, DatasetPluginContext } from './dataset.js';
+export type { DatasetOptions, DatasetPluginContext } from './dataset.js';
 // S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
 // aliases above, plus the vocabulary a plugin author names directly — its own store, another
 // plugin's read-only view, and the wrapper that composes onto the extension hook.
 export type {
-  DatasetPluginOf,
   DatasetPluginContextOf,
   DatasetEvents,
   DatasetFieldRegistrations,
@@ -93,7 +92,9 @@ export type {
   GanttScaleOptions,
   DateLineInput,
   DateLine,
-  GanttPlugin,
+  ChromePlugin,
+  DataPlugin,
+  Plugin,
   PluginContext,
   Command,
   CommandContext,
@@ -105,7 +106,17 @@ export type {
 // The generic shapes behind the Gantt-bound aliases above (S5.1/S5.2). A plugin author writing
 // against `Gantt` names the bound forms; code parameterizing over its own Gantt type names these —
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
-export type { GanttPluginOf, PluginContextOf, PluginContextParts } from './plugin.js';
+export type {
+  ChromePluginOf,
+  DataPluginOf,
+  PluginIdentity,
+  PluginOf,
+  PluginContextOf,
+  PluginContextParts,
+} from './plugin.js';
+// ADR 0019: one plugin, one install site. `definePlugin` narrows to the arm the object fills, so a
+// plugin with a `data` half never type-checks into `GanttOptions.plugins`.
+export { definePlugin } from './define-plugin.js';
 export type {
   BuiltInCommandId,
   CommandId,

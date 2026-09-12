@@ -344,8 +344,15 @@ export interface GanttShellOptions {
   variants?: readonly EntryVariant[];
   /** Installed before this shell's first paint (N7). A plugin-defined look, keybinding or command
    *  reaches frame 1, the same as every other constructor option. Before N7, `Gantt.plugins`'s live
-   *  setter ran after this constructor returned, so frame 1 missed them. */
+   *  setter ran after this constructor returned, so frame 1 missed them.
+   *
+   *  ADR 0019: this Gantt's own chrome plugins, the live-reconfigurable set. */
   plugins?: readonly ShellPlugin<unknown>[];
+  /** ADR 0019: the Dataset's own plugins. Their `view` halves install here too, ahead of this
+   *  shell's chrome. They stay installed for this shell's whole life, because this Gantt did not
+   *  install them and cannot drop them. A plugin with no `view` half joins the `requires` graph and
+   *  runs nothing. */
+  datasetPlugins?: readonly ShellPlugin<unknown>[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
   zoomPresets?: readonly PresetRef[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
@@ -462,6 +469,10 @@ export class GanttShell {
     off: (name, handler) => this.off(name, handler),
   };
   #pluginRuntime!: PluginRuntime<unknown>;
+  /** ADR 0019: the two lists `#pluginRuntime` installs together, kept apart so `plugins` reports
+   *  what this Gantt owns and `uninstallPlugin` refuses what the Dataset owns. */
+  #datasetPlugins: readonly ShellPlugin<unknown>[] = [];
+  #chromePlugins: readonly ShellPlugin<unknown>[] = [];
   /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2). Core commands and core
    *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
   #commandRegistry!: CommandRegistry<unknown>;
@@ -900,7 +911,11 @@ export class GanttShell {
     // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
     // live at render time, never a cached snapshot. So applying them a few lines earlier changes
     // only which frame the result first appears in.
-    if (options.plugins !== undefined) this.plugins = options.plugins;
+    // ADR 0019: the Dataset's plugins are held first, so the one assignment below installs both
+    // sets under one `requires` order. It runs even for an empty chrome list, because the Dataset's
+    // own `view` halves still have to reach frame 1.
+    this.#datasetPlugins = options.datasetPlugins ?? [];
+    this.plugins = options.plugins ?? [];
     if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
     if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
     this.#phase = 'live';
@@ -1859,28 +1874,32 @@ export class GanttShell {
 
   /** Live (D-S5-3): assignment diffs by `id` against what is already installed. A plugin present in
    *  both lists is left alone. Only the difference is set up or disposed. `api/gantt.ts` is the only
-   *  caller with a `Gantt` façade to hand `setup()`, so it alone writes here. */
+   *  caller with a `Gantt` façade to hand `view()`, so it alone writes here.
+   *
+   *  ADR 0019: this Gantt's own chrome plugins, and only those. The Dataset's plugins install
+   *  beside them and stay off this list — this Gantt cannot drop what it did not install. */
   get plugins(): readonly ShellPlugin<unknown>[] {
-    return this.#pluginRuntime.plugins;
+    return this.#chromePlugins;
   }
 
   set plugins(next: readonly ShellPlugin<unknown>[]) {
-    this.#pluginRuntime.install(next);
+    this.#pluginRuntime.install([...this.#datasetPlugins, ...next]);
+    this.#chromePlugins = next;
   }
 
   /** D-S5-36: adds one plugin to the installed set. It sets up that plugin alone and leaves every
    *  other one untouched. An id that is already installed throws `DuplicatePluginIdError`. */
   installPlugin(plugin: ShellPlugin<unknown>): void {
-    this.#pluginRuntime.install([...this.#pluginRuntime.plugins, plugin]);
+    this.plugins = [...this.#chromePlugins, plugin];
   }
 
   /** D-S5-36: disposes one installed plugin, by id, and leaves every other one running. An id
-   *  nothing installs throws `PluginNotInstalledError`. */
+   *  nothing installs throws `PluginNotInstalledError` — a Dataset plugin's id included, because
+   *  the Dataset owns that one (ADR 0019). */
   uninstallPlugin(id: PluginId): void {
-    const installed = this.#pluginRuntime.plugins;
-    const next = installed.filter((plugin) => plugin.id !== id);
-    if (next.length === installed.length) throw new PluginNotInstalledError(id);
-    this.#pluginRuntime.install(next);
+    const next = this.#chromePlugins.filter((plugin) => plugin.id !== id);
+    if (next.length === this.#chromePlugins.length) throw new PluginNotInstalledError(id);
+    this.plugins = next;
   }
 
   /** S5.2, D-S5-6: `Gantt.commands`'s own backing registry — read-only, the registry object itself

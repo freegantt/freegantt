@@ -3,7 +3,7 @@
 // gate box's whole point — the plugin only compiles because the public surface is enough.
 
 import { addMs, diffMs, entryId, fieldRowsOf, mergeEntryEdits, moveEntryTo } from 'freegantt';
-import type { DatasetPlugin, EditRequest, EntryEdit, EntryId, PluginStore } from 'freegantt';
+import type { DataPlugin, EditRequest, EntryEdit, EntryId, PluginStore } from 'freegantt';
 
 /** What the store holds per locked entry. One key today; a real plugin's row grows without ever
  *  colliding with the application's own `props` — that is what a store is for (ADR 0002, D-S5-24). */
@@ -13,7 +13,7 @@ interface LockRow {
 
 /** What the page holds after installing: the plugin itself, plus the three calls a Lock/Unlock menu
  *  item makes. `isLocked` reads the store the plugin owns, so no page keeps a `Set` of its own. */
-export interface LockEntriesPlugin extends DatasetPlugin {
+export interface LockEntriesPlugin extends DataPlugin {
   isLocked(id: string): boolean;
   lock(id: string): void;
   unlock(id: string): void;
@@ -49,7 +49,7 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
   return {
     id: 'demo.lockEntries',
 
-    setup(ctx) {
+    data(ctx) {
       store = ctx.store.reserve<LockRow>();
       for (const id of initiallyLocked) store.set(id, { locked: true });
 

@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
-import type { CellRenderer, EntryVariant, GanttPlugin } from '../src/api/index.js';
+import type { CellRenderer, ChromePlugin, EntryVariant } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -33,7 +33,7 @@ const dataset = new Dataset({
       column: { header: 'Cost', align: 'end' },
     },
   },
-  // `consumed`/`accepted` back the two variant plugins' own commands below — a GanttPlugin installs
+  // `consumed`/`accepted` back the two variant plugins' own commands below — a chrome plugin installs
   // after the Dataset's own registration closes, so it cannot declare a Field of its own; this
   // Dataset must (ADR 0011: an undeclared key is refused at `entries.update()`).
   //
@@ -169,7 +169,7 @@ weekendToggle.addEventListener('change', () => {
 //
 // The page keeps what it installed, so it names those values back to `uninstallPlugin` and guesses
 // no plugin id — `contextMenu()`'s least of all, because that id belongs to the library.
-let kindPlugins: readonly GanttPlugin[] = [];
+let kindPlugins: readonly ChromePlugin[] = [];
 
 function installKindPlugins(): void {
   kindPlugins = [contextMenu(), bufferKind(), riskKind()];

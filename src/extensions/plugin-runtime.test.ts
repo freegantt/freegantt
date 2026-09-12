@@ -29,7 +29,7 @@ function plugin(
   let capturedCtx: TestContext | undefined;
   return {
     id,
-    setup(ctx) {
+    view(ctx) {
       capturedCtx = ctx;
       onSetup(ctx);
       return () => onDispose?.(capturedCtx!);
@@ -43,7 +43,7 @@ describe('PluginRuntime', () => {
     const runtime = makeRuntime(log);
     const quiet: ShellPlugin<TestContext> = {
       id: 'quiet',
-      setup(ctx) {
+      view(ctx) {
         // Every registration a real plugin makes is already filed here, so it owns no resource of
         // its own and writes no disposer.
         ctx.disposables.add(() => log.push('registration retracted'));
@@ -137,7 +137,7 @@ describe('PluginRuntime', () => {
     expect(log).toEqual(['ctx disposable', 'own disposer']);
   });
 
-  it('a setup() throw unwinds the already-set-up plugins from that batch, in reverse, and rethrows PluginSetupError', () => {
+  it('a view() throw unwinds the already-set-up plugins from that batch, in reverse, and rethrows PluginSetupError', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);
 
@@ -158,7 +158,7 @@ describe('PluginRuntime', () => {
     expect(runtime.plugins).toEqual([]);
   });
 
-  it('a same-batch setup() throw leaves a dropped plugin installed and undisposed, not primed for a double dispose (C1)', () => {
+  it('a same-batch view() throw leaves a dropped plugin installed and undisposed, not primed for a double dispose (C1)', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);
     runtime.install([
@@ -183,7 +183,7 @@ describe('PluginRuntime', () => {
     expect(log).toEqual([]);
     expect(runtime.plugins.map((p) => p.id)).toEqual(['a']);
 
-    // The bug this guards against: disposing `removed` before `toAdd`'s setup() had succeeded left
+    // The bug this guards against: disposing `removed` before `toAdd`'s view() had succeeded left
     // `#installed` still holding 'a' after the throw above (the final reassignment was skipped), so
     // this next install() disposed it a *second* time. With the fix, 'a' was never disposed above,
     // so this is its only dispose.
