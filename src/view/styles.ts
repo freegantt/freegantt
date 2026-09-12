@@ -156,7 +156,12 @@ const DARK_COLOR_TOKENS = `
   --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
 `.trimEnd();
 
+// ADR 0021: the whole sheet ships inside one cascade layer, `@layer freegantt`, so an unlayered
+// consumer rule beats it at any specificity, with no `!important`. One layer, not several — the
+// normal cascade still applies inside it, so every equal-specificity-plus-document-order rule
+// below still resolves the way its own comment says.
 const BASE_STYLESHEET = `
+@layer freegantt {
 :root {
 ${LIGHT_COLOR_TOKENS}
 }
@@ -173,7 +178,8 @@ ${DARK_COLOR_TOKENS}
 }
 /* Attribute only, no .fg-container: the token set follows the pin wherever the pin is written. Both
    rules come after the .fg-container block above and match at the same specificity, so a pinned
-   container still reads its own set rather than the default light one. */
+   container still reads its own set rather than the default light one. The layer does not change
+   this: the normal cascade still applies inside one layer, so document order still decides here. */
 [data-fg-theme='light'] {
 ${LIGHT_COLOR_TOKENS}
 }
@@ -294,7 +300,9 @@ ${DARK_COLOR_TOKENS}
    read, and it does not depend on whatever sits behind the container. */
 /* Hover, then selection — a selected row that is also hovered reads as selected, because the later
    rule wins on equal specificity. Both paint the grid row and its timeline band from one
-   paintRowState answer, so a row reads the same on both sides of the splitter. */
+   paintRowState answer, so a row reads the same on both sides of the splitter. The layer does not
+   change this: the normal cascade still applies inside one layer, so document order still decides
+   here. */
 .fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
 .fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: var(--fg-row-selected-bg); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 10px); }
@@ -354,7 +362,9 @@ ${DARK_COLOR_TOKENS}
    would both frame a full-height rectangle of empty pane around a 10px rail. So the state paints on
    the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no outer
    border at all — and hovered rings the rail alone. Both need the box's own state paint cancelled
-   first, and they sit after the shared rules so equal specificity resolves this way. */
+   first, and they sit after the shared rules so equal specificity resolves this way. The layer
+   does not change this: the normal cascade still applies inside one layer, so document order
+   still decides here. */
 .fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
 .fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
 .fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
@@ -452,6 +462,7 @@ ${DARK_COLOR_TOKENS}
    tree along with the page, and a screen reader would never read a text change it cannot see happen.
    The 1px clip-rect technique keeps the node painted, at zero size, off-screen. */
 .fg-live-region { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+}
 `.trim();
 
 /** Injects the library's base stylesheet into `doc` exactly once. Safe to call from every Gantt

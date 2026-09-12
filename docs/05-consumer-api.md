@@ -70,6 +70,10 @@ light and dark default, and what reads it. It moved here from `plans/02` §4 (is
 a value list goes stale faster than a design decision does, so it lives beside the rest of the
 consumer surface instead of inside the spec.
 
+The whole base stylesheet ships inside one cascade layer, `@layer freegantt` (ADR 0021). Your own
+CSS rule wins over the library's, at any specificity, with no `!important` — the library's sheet
+never needs to be beaten by writing a longer selector than it did.
+
 A consumer with no CSS of its own gets these defaults. Every one is overridable by setting the same
 property on the container element, which the stylesheet's own `var(--fg-token, default)` always
 prefers over its fallback (U4). A pixel metric is read through one shared reader
