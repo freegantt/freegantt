@@ -352,3 +352,26 @@ describe('rollUpFields (S4.2)', () => {
     expect(costOf(state, 'root')).toBe(110);
   });
 });
+
+// ADR 0017: each child a Rollup reads is an *effective* row — the store, plus this transaction's
+// edits, plus the values this same bottom-up pass already produced for that child. A pass that read
+// the committed row instead would stop rolling up at the first level.
+describe('an Aggregator reads this pass’s own children (ADR 0017)', () => {
+  it('reads the value the same pass gave a child, not the committed one, across two levels', () => {
+    const state = treeDataset([
+      { id: 'root' },
+      { id: 'mid', parentId: 'root' },
+      { id: 'leafA', parentId: 'mid', props: { cost: 10 } },
+      { id: 'leafB', parentId: 'mid', props: { cost: 20 } },
+    ]);
+    expect(costOf(state, 'mid')).toBe(30);
+    expect(costOf(state, 'root')).toBe(30);
+
+    // One edit, one commit. `mid` is recomputed to 120 inside this pass, and `root` must read that
+    // 120 — the committed `mid` still says 30 while the pass runs.
+    state.entries.update('leafA', { cost: 100 });
+
+    expect(costOf(state, 'mid')).toBe(120);
+    expect(costOf(state, 'root')).toBe(120);
+  });
+});

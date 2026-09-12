@@ -245,24 +245,24 @@ Build 4 cannot land until this unit is complete. A site left reading the stored 
 
 ## Tests this build adds
 
-- [ ] One `Entry` per id, and identity is stable across reads.
-- [ ] A read is live inside an open transaction: the committed index overlaid with the write set.
-- [ ] **`all` does not grow inside an open transaction, and the rows it already holds read the write set.** One test, both halves — this is the pair a reviewer read as a contradiction (D-S2-21, ADR 0017 rule 2).
-- [ ] `entry.read('parentId')` and `entry.parent()?.id` answer the same id, on a row whose parent changed inside an open transaction.
-- [ ] `hasChildren` allocates nothing. `descendants()` walks once.
-- [ ] `entry.read()` answers a core key, a `props` key and a `compute` Field.
-- [ ] `entry.duration()` and `entry.read('duration')` answer the same value and the same unit.
-- [ ] `entry.duration()` answers `undefined` when either date is absent, and never `NaN` (ADR 0012).
-- [ ] `entry.duration()` counts gaps under `'span'` and skips them under `'segments'`, on an Entry with two Segments and a gap between them.
-- [ ] The two settings agree on an Entry with one Segment and no gap.
-- [ ] `entry.duration()` always answers `unit: 'millisecond'`. **This is #274's second half** — `formatDuration` (`core-fields.ts:52`) divides by `MS.DAY` and `compareDuration` (`:59`) subtracts raw values, and neither reads `unit`. One producer makes both correct by construction.
-- [ ] A `parseValue` that reads a sibling Field still works after `fieldContextFor()` is deleted. It reads it off the `entry` argument — `parseValue(text, ctx, entry)` — and parses its date in `ctx.timeZone`.
-- [ ] A `compute` Field reads a sibling Field through `ctx.read(key)`, and a duration through `ctx.duration()`. Both answer for the row the pass is computing, hypothetical or committed.
-- [ ] **A stored-Field read builds no `ComputeContext`.** Only a `compute` arm and a Rollup pass receive one.
-- [ ] An `Entry` for a removed id keeps its last values, and `entries.has(id)` answers false.
-- [ ] A `compute` Field walks `ctx.children()`. This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
-- [ ] **A `compute` Field reads the hypothetical row, not the store.** Open a transaction, edit a child, and assert the parent's computed value follows the edit before the commit lands. This is the test `Q7` exists for.
-- [ ] An Aggregator reads the value this same pass gave a child, not the committed one. Two levels of rolling-up parents prove it.
+- [x] One `Entry` per id, and identity is stable across reads.
+- [x] A read is live inside an open transaction: the committed index overlaid with the write set.
+- [x] **`all` does not grow inside an open transaction, and the rows it already holds read the write set.** One test, both halves — this is the pair a reviewer read as a contradiction (D-S2-21, ADR 0017 rule 2).
+- [x] `entry.read('parentId')` and `entry.parent()?.id` answer the same id, on a row whose parent changed inside an open transaction.
+- [x] `hasChildren` allocates nothing. `descendants()` walks once.
+- [x] `entry.read()` answers a core key, a `props` key and a `compute` Field.
+- [x] `entry.duration()` and `entry.read('duration')` answer the same value and the same unit.
+- [x] `entry.duration()` answers `undefined` when either date is absent, and never `NaN` (ADR 0012).
+- [x] `entry.duration()` counts gaps under `'span'` and skips them under `'segments'`, on an Entry with two Segments and a gap between them.
+- [x] The two settings agree on an Entry with one Segment and no gap.
+- [x] `entry.duration()` always answers `unit: 'millisecond'`. **This is #274's second half** — `formatDuration` (`core-fields.ts:52`) divides by `MS.DAY` and `compareDuration` (`:59`) subtracts raw values, and neither reads `unit`. One producer makes both correct by construction.
+- [x] A `parseValue` that reads a sibling Field still works after `fieldContextFor()` is deleted. It reads it off the `entry` argument — `parseValue(text, ctx, entry)` — and parses its date in `ctx.timeZone`.
+- [x] A `compute` Field reads a sibling Field through `ctx.read(key)`, and a duration through `ctx.duration()`. Both answer for the row the pass is computing, hypothetical or committed.
+- [x] **A stored-Field read builds no `ComputeContext`.** Only a `compute` arm and a Rollup pass receive one.
+- [x] An `Entry` for a removed id keeps its last values, and `entries.has(id)` answers false.
+- [x] A `compute` Field walks `ctx.children()`. This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
+- [x] **A `compute` Field reads the hypothetical row, not the store.** Open a transaction, edit a child, and assert the parent's computed value follows the edit before the commit lands. This is the test `Q7` exists for.
+- [x] An Aggregator reads the value this same pass gave a child, not the committed one. Two levels of rolling-up parents prove it.
 
 ---
 
