@@ -103,6 +103,18 @@ describe('ensureBaseStyles', () => {
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(before);
   });
 
+  it('ships wrapped in @layer freegantt (ADR 0021), so an unlayered consumer rule always wins', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toMatch(/^@layer freegantt \{/);
+    expect(css.trimEnd()).toMatch(/\}$/);
+    // The wrapper, not one rule inside it — an edit that only means to add a rule must not be able
+    // to drop the layer.
+    expect(css).toContain(':root {');
+    expect(css).toContain('.fg-live-region {');
+  });
+
   it('the injected sheet carries every D-S1.10-9 colour token on :root and on the theme pins', () => {
     clearStyles();
     ensureBaseStyles(document);
@@ -228,13 +240,22 @@ describe('ensureBaseStyles', () => {
     expect(rule).not.toContain('#D97706');
   });
 
+  // ADR 0021: the sheet ships inside `@layer freegantt`, which happy-dom's CSSOM does not parse, so
+  // a rule declared inside the layer never reaches getComputedStyle here — real engines do apply it
+  // (e2e/theme.spec.ts reads the same bar's computed colour in Chromium). This unit test instead
+  // pins the two declarations the cascade would join: the dark pin sets the dark ink token, and
+  // .fg-bar paints its label from that token.
   it('dark theme paints bar labels in dark ink so they read on the light blue fill', () => {
     clearStyles();
     const container = makeContainer();
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
-    expect(getComputedStyle(bar as Element).color).toBe('#16181D');
+    expect(container.getAttribute('data-fg-theme')).toBe('dark');
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const [darkBlock] = css.match(/\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
+    expect(darkBlock).toContain('--fg-bar-label-color: #16181D');
+    expect(css).toMatch(/\.fg-bar \{[^}]*color: var\(--fg-bar-label-color\)/);
     shell.destroy();
   });
 });

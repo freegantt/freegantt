@@ -330,6 +330,8 @@ Documented in this order; each level solves what the previous can't, and consume
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | one `definePlugin({ data, view })` (see `01` §10): fields, decorations, columns, controllers, commands |
 
+**Level 2's worked example works (ADR 0021).** The library's base stylesheet ships inside one cascade layer, `@layer freegantt`, so a consumer's own unlayered rule — `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--warn) }` above, or any other part the ladder publishes — wins over the library's rule at any specificity, with no `!important` needed.
+
 Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — a property whose zero value would be nonsense (a zero-height row is not a row) rejects it; a property whose zero value is a real, intentional choice (a consumer turning the grid pane off) keeps it. Re-read cadence stays the caller's own choice, and is stated at each call site — some properties read once at construction, others read again on every pane measurement, none per render.
 
 **The complete level-1 `--fg-*` reference — every token, its light/dark defaults, what reads it, and the retired/renamed tokens' migration notes — moved to [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (issue #221).** Level 1 stays documented here as a level of the ladder; the token-by-token values are a reference that drifts out of date faster than this design statement does, so they live beside the rest of the consumer-facing surface instead.
