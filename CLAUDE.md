@@ -57,7 +57,7 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 - Conflicts become diagnostics; the engine never silently rewrites what the user asked for.
 
 **Rendering / view** (`plans/01` §8):
-- Authored vs. derived: entries are persisted; plugin-owned stores persist with their plugin; rows/items/geometry are recomputed and never persisted. A stored Field (a core key or a key in `props`) rolls up into the store, undoable — this is what `start`/`end` already do. A `compute` Field has no home, so its aggregate is computed on read and never reaches the Document. A rolling-up parent's derived keys are omitted from the Document (ADR 0013).
+- Authored vs. derived: entries are persisted; plugin-owned stores persist with their plugin; rows/items/geometry are recomputed and never persisted. A stored Field (a core key or a key in `props`) rolls up into the store, undoable — this is what `start`/`end` already do. A `compute` Field has no home, so its aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). There is no Document — ADR 0016 deleted the save format, and `CONTEXT.md` lists that word under *Avoid*.
 - Hot path (hover/selection/drag preview) = class toggles + transforms only; zero allocation, never rebuilds a frame.
 - All time→pixel via the bound `TimeScale`; all scroll via the bound `ScrollModel`. No exceptions.
 - Renderer output is text by default; raw HTML is explicit opt-in only.
