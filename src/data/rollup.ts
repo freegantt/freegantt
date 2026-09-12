@@ -66,6 +66,11 @@ export interface PendingRollUp {
  * edit named `parentId` — a plugin source may answer out of a `props` key, so a row can move with no
  * `parentId` write to spot. The new parent needs no entry here: `parentsToRecompute` walks the
  * ancestors of every touched id in the post-operation tree.
+ *
+ * `parentIdOf` reads a **checked** index (`RollUpTree.committedParents`), so a row whose former
+ * parent link core dropped as a cycle-closer has no former parent here. That is the right answer —
+ * a dropped link never was a parent — and it is stated because two files have to be read to see it
+ * (`V1`).
  */
 function collectTouchedIds(
   entries: ReadonlyMap<EntryId, StoredEntry>,
