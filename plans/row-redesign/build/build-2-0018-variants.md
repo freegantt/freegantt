@@ -39,7 +39,10 @@
 - [ ] `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`src/view/capability.ts:113-115`). Build 1 removed the other three.
 - [ ] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Setup order resolves it and the diagnostic reports it.
 - [ ] **Do not invent an ordering knob. `requires` already is one** (D-S5-31, ruled 2026-09-01). The host topologically sorts the installed set before any `setup` runs, so `[a, b]` and `[b, a]` install identically. Two plugins with no edge between them are siblings, and a sibling must not depend on load order — that collision is what the diagnostic names.
-- [ ] **Keep `claimedLookFor`'s first-yes behaviour** (`layout/items/produce-items.ts:188-198`). `Q5` is open on one word only: whether the first or the newest registration wins. **Do not change it alone** — `registerClaim` and `register` both say newest today, so the three seams disagree, and settling that is the author's call.
+- [ ] **The newest rule wins** (`Q5`, ruled 2026-09-11). `claimedLookFor` (`layout/items/produce-items.ts:188-198`) says *"the first yes is the whole answer"* today. **Flip it**, so it agrees with `registerClaim` and `register`, which both already say newest.
+- [ ] **Walk newest-first and stop at the first yes.** Do not walk oldest-first and keep the last yes. This read runs on every hover change, where the budget is zero allocation and the early exit is the point (`:182,197`). Reversing the walk keeps the early exit at the same cost. **A reporter still walks the whole list** — a diagnostic has to see both claimants.
+- [ ] **Register core's `parent` and `leaf` FIRST, not last.** Every earlier draft said *"registered last"*, which was correct under first-wins. Under this ruling it would make **core beat every plugin variant**. Core is the floor, so it registers before anything else. `leaf` carries no `when`, so it answers for every row and the floor stays total.
+- [ ] Test: a plugin variant overrides core's `parent` on a row with children. Test: a consumer `variants` entry overrides a plugin's variant on the same row.
 
 ---
 
