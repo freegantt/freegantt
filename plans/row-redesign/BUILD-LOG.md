@@ -74,7 +74,7 @@ The draft writes `setHierarchySource`, beside `setExtender`. The glossary term i
 
 ## Q4 — which error does a misplaced plugin raise, and what does it say?
 
-**Raised in ADR 0019's own `open:`. Narrowed 2026-09-11. Build 3. Open.**
+**Raised in ADR 0019's own `open:`. Narrowed 2026-09-11. Build 3. RULED the same day: `PluginSetupError`, and the message says where to install it.** The recommendation below was taken whole. No new error type ships.
 
 A plugin with a `data` half, handed to a `Gantt`, has arrived too late to declare a Field.
 
@@ -110,7 +110,7 @@ This strengthens **Q1**. With `entry.duration()` on the row, `FieldContext.durat
 
 ## Q6 — does a segmented Entry's duration count the gaps?
 
-**Raised 2026-09-11, while closing Q1. Build 1. RULED the same day: it is an option.** The call-site name is the only part still open.
+**Raised 2026-09-11, while closing Q1. Build 1. CLOSED the same day: it is an option, and the key is `duration`.** The author took the call site below whole.
 
 Core answers the **span** today — `diffMs(entry.end, entry.start)` (`src/data/fields/field-access.ts:133`), gaps included. ADR 0017 changes nothing about that, and Build 1 must not change it either.
 
@@ -120,7 +120,7 @@ This is a Field semantics question, not a door question. It does not block Build
 
 **Ruled by the author, 2026-09-11: it is an option.** Gaps count, or they do not, and the consumer chooses.
 
-**Proposed call site — the name needs one nod before Build 1 writes it.**
+**The call site — ruled 2026-09-11.**
 
 ```ts
 new Dataset({ entries });                        // default: 'span' — end minus start, gaps counted
@@ -139,7 +139,36 @@ new Dataset({ entries, duration: 'segments' });  // the sum of the Segments, gap
 
 ## Q7 — what reads a Field off a row the store does not hold?
 
-**Raised 2026-09-11, in the author's plan review. Build 1. Open. It blocks Unit D.**
+**Raised 2026-09-11, in the author's plan review. Build 1. RULED the same day. Unit D is unblocked.**
+
+**The ruling — the read binds to the pass, and the pass carries its own children.**
+
+```ts
+interface FieldContext {
+  readonly timeZone: string;
+  /** The children of the row this pass is computing. It walks, so it carries parentheses. */
+  children(): readonly StoredEntry[];
+}
+
+interface RollUpContext extends FieldContext {
+  readonly field: FieldKey;
+  values(key?: FieldKey): readonly unknown[];        // `ctx.field` by default
+  numericValues(key?: FieldKey): readonly number[];
+  durations(): readonly (Duration | undefined)[];
+}
+```
+
+- **A `compute` Field keeps two arguments.** `compute: (entry, ctx) => …`. `entry` is a `StoredEntry`, because the row may be hypothetical. A `compute` that needs the tree reads `ctx.children()`. **This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214)** — a computed value may depend on the children.
+- **One name, both contexts.** `RollUpContext` extends `FieldContext`, so an Aggregator and a `compute` Field say `ctx.children()` for the same thing. The earlier draft of this entry proposed a `ctx.children` property on the Rollup side alone. It is withdrawn: two shapes under one name is a trap, and rule 4 wants the parentheses anyway.
+- **An Aggregator needs no per-child door.** `weightedMeanByDuration` reads `ctx.values()` beside `ctx.durations()`.
+- **`diffEdit` needs no door at all.** It calls `readField` directly. It sits in `data/` and already imports `entryAfterEdit` from that same file.
+- **`FieldContext.read` and `FieldContext.durationOf` are deleted, as `Q1` ruled.**
+
+**Two alternatives were refused on 2026-09-11.** Hand `compute` an `Entry`-shaped view over the hypothetical row: two things then implement `Entry`, a reader cannot tell which one they hold, and `entry.parent()` walks back into the store and mixes two states with no warning. Or ship no children at all and leave #214 open: it gives up the reason the redesign started.
+
+The question as it stood is below.
+
+---
 
 Q1 ruled that `FieldContext.read` and `FieldContext.durationOf` retire into `entry.read(key)` and `entry.duration()`. The caller check behind that ruling claimed every caller holds, or will hold, a live `Entry`. **Three of the five do not, and none of them can.** Verified at HEAD.
 
@@ -153,23 +182,7 @@ Q1 ruled that `FieldContext.read` and `FieldContext.durationOf` retire into `ent
 
 **This does not reopen the ruling.** Both doors leave the public surface either way. What is open is what replaces them on these three seams.
 
-**Recommendation — bind the read to the pass, and keep the surface one door.**
-
-```ts
-interface RollUpContext extends FieldContext {
-  readonly field: FieldKey;
-  readonly children: readonly StoredEntry[]; // the pass's own list, effective values included
-  values(key?: FieldKey): readonly unknown[]; // `ctx.field` by default
-  numericValues(key?: FieldKey): readonly number[];
-  durations(): readonly (Duration | undefined)[];
-}
-```
-
-`weightedMeanByDuration` then reads `ctx.values()` beside `ctx.durations()` and needs no per-child door. `diffEdit` calls `readField` directly — it is in `data/`, and it already imports `entryAfterEdit` from the same file, so it needs no public door at all.
-
-**One part has no recommendation.** A consumer's `compute` Field is handed a row that may be hypothetical. So its first argument cannot be a live `Entry`, and #214 — "a `compute` Field walks its children" — needs a door on the context rather than on the row. Name it before Build 1 writes `compute`.
-
-**Until the author answers:** Build 1 does Units A, B, C and E. It stops before deleting `FieldContext.read` and `durationOf` and reports.
+**The recommendation was taken whole.** It is at the top of this entry.
 
 ---
 
