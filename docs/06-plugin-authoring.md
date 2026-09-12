@@ -1,45 +1,52 @@
 # Plugin authoring guide
 
-A plugin adds behavior to FreeGantt without a fork. This guide shows the two
-plugin contracts, how to install each one, every registration seam a plugin
-can use, and the errors an author meets.
+A plugin adds behavior to FreeGantt without a fork. This guide shows the one
+plugin type and its two halves, where each half installs, every registration
+seam a plugin can use, and the errors an author meets.
 
-A draft of the plugin-author surface after ADRs 0017–0020 — one install site,
-an Entry that answers questions about itself, a variant as one object, and a
-plugin-owned hierarchy — lives in `harness/docs/plugin-authoring.html`. None of
-those four is accepted. This guide describes HEAD, and its fenced examples
-typecheck against HEAD.
+A draft of the plugin-author surface after ADRs 0017–0020 lives in
+`harness/docs/plugin-authoring.html`. ADR 0020's plugin-owned hierarchy is not
+accepted yet. This guide describes HEAD, and its fenced examples typecheck
+against HEAD.
 
 Every claim below names the test that proves it. If a claim in an earlier
 draft had no test, this guide drops the claim instead of stating it as fact.
 
-## Two contracts, two hosts
+## One plugin, two halves
 
-FreeGantt has two plugin contracts. Pick the one that matches where your
-behavior lives.
+A plugin is one object. It names an `id`, and it fills one or both halves.
 
-| Contract | Installs on | Context type | DOM access | Install site |
+| Half | What it sees | Context type | DOM access | Runs |
 | --- | --- | --- | --- | --- |
-| `GanttPlugin` | `Gantt` | `PluginContextOf` | Yes | `new Gantt({ plugins: [...] })` or `gantt.plugins = [...]` |
-| `DatasetPlugin` | `Dataset` | `DatasetPluginContextOf` | No | `new Dataset({ plugins: [...] })` only |
+| `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, as the `Dataset` constructs |
+| `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, as that Gantt mounts |
 
-A `GanttPlugin` sees rendering, interaction, and commands. A `DatasetPlugin`
-sees fields, edits, and events, and never touches `document` or `window` —
-the same DOM-free rule `data/` itself follows.
+**The install site is where the state lives.** A plugin with a `data` half
+installs on the `Dataset`, because a field must exist before the first rollup.
+Every `Gantt` bound to that Dataset then runs the `view` half once, each with
+its own context. A chrome-only plugin — no `data` half — installs on the
+`Gantt`, and `gantt.plugins` reconfigures it live.
 
-## The smallest working `GanttPlugin`
+A `data` half never touches `document` or `window` — the same DOM-free rule
+`data/` itself follows.
+
+`definePlugin` reads which halves an object fills and narrows to that arm. So a
+plugin with a `data` half does not typecheck into `GanttOptions.plugins`
+(`src/api/define-plugin.test.ts`, "does not typecheck").
+
+## The smallest working chrome plugin
 
 `harness/plugins/weekend-shading.ts` is a real, shipped example. It paints a
 decoration under every bar for Saturday and Sunday, and registers nothing
 else:
 
 ```ts
-import type { GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
 
-function weekendShading(): GanttPlugin {
-  return {
+function weekendShading() {
+  return definePlugin({
     id: 'demo.weekendShading',
-    setup(ctx) {
+    view(ctx) {
       ctx.view.registerDecoration('underBars', ({ span, time }) => {
         const bands = [];
         for (const day of time.eachDay(span)) {
@@ -50,38 +57,41 @@ function weekendShading(): GanttPlugin {
         return bands;
       });
     },
-  };
+  });
 }
 
 export { weekendShading };
 ```
 
-The plugin returns nothing from `setup`. It does not need a `Disposer`,
+The plugin returns nothing from `view`. It does not need a `Disposer`,
 because `ctx.disposables` already retracts the `registerDecoration` call when
 the plugin is removed (review P4; `src/extensions/plugin-runtime.test.ts`,
 "installs disposes plugin setup returns nothing").
 
-## The smallest working `DatasetPlugin`
+Wrap `definePlugin` in a factory, as above. One factory call is one install's
+worth of state, so two Gantts on one page share none of it.
 
-A `DatasetPlugin` declares a field and reads it back through the dataset's
-own field system — no new API, the same path a core field takes:
+## The smallest working `data` half
+
+A `data` half declares a field and reads it back through the dataset's own
+field system — no new API, the same path a core field takes:
 
 ```ts
-import type { DatasetPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
 
-function ownerField(): DatasetPlugin {
-  return {
+function ownerField() {
+  return definePlugin({
     id: 'demo.ownerField',
-    setup(ctx) {
+    data(ctx) {
       ctx.fields.register({ key: 'owner', type: 'text', editable: true });
     },
-  };
+  });
 }
 
 export { ownerField };
 ```
 
-`ctx.fields.register` runs once, while `setup` is on the stack. After that,
+`ctx.fields.register` runs once, while `data` is on the stack. After that,
 the field is a normal field: `dataset.entries.update(id, { owner: 'Ada' })`
 reads and writes it like any other.
 
@@ -89,14 +99,14 @@ reads and writes it like any other.
 
 ### At construction
 
-Both contracts take a `plugins` array in their constructor options:
+Both install sites take a `plugins` array in their constructor options:
 
 ```ts
-import type { DatasetPlugin, GanttPlugin } from 'freegantt';
+import type { ChromePlugin, DataPlugin } from 'freegantt';
 import { Dataset, Gantt } from 'freegantt';
 
-declare function ownerField(): DatasetPlugin;
-declare function weekendShading(): GanttPlugin;
+declare function ownerField(): DataPlugin;
+declare function weekendShading(): ChromePlugin;
 
 const dataset = new Dataset({ entries: [], plugins: [ownerField()] });
 const gantt = new Gantt({ container: '#app', dataset, plugins: [weekendShading()] });
@@ -115,17 +125,21 @@ is left running, a new `id` is set up, and a missing `id` is disposed
 list order" and "assigning list same ids sets nothing up again").
 
 ```ts
-import type { Gantt, GanttPlugin } from 'freegantt';
+import type { ChromePlugin, Gantt } from 'freegantt';
 
 declare const gantt: Gantt;
-declare function weekendShading(): GanttPlugin;
+declare function weekendShading(): ChromePlugin;
 
 gantt.plugins = [...gantt.plugins, weekendShading()];
 ```
 
-`dataset.plugins` has no setter. A `DatasetPlugin` installs once, at
-construction, and never again. A field must exist before a rollup can use
-it, so there is no safe later point to add one.
+`dataset.plugins` has no setter. A plugin with a `data` half installs once, at
+construction, and never again. A field must exist before a rollup can use it,
+so there is no safe later point to add one.
+
+A plugin with a `data` half handed to a `Gantt` raises `PluginSetupError`, and
+the message names the Dataset as the site to use instead
+(`src/api/define-plugin.test.ts`, "the message says where to install it").
 
 ## Why a factory, not a name-keyed table (D-S5-2)
 
@@ -139,7 +153,7 @@ names unique.
 
 ## Every registration seam
 
-All of these calls are legal only inside a plugin's own `setup()`. Each row
+All of these calls are legal only inside a plugin's own half. Each row
 names the seam, the key it registers under, and what happens when two
 plugins claim the same key.
 
@@ -163,34 +177,34 @@ reserved, or `undefined` if that plugin never reserved one.
 ## The registration gate (D-S5-4)
 
 Every `register*` and `fields.register*` call is legal only while that
-plugin's own `setup()` is running. The moment `setup()` returns, the gate
-closes for that plugin (`src/extensions/plugin-ports.test.ts` names this
+plugin's own half is running. The moment that half returns, the gate closes for
+that plugin (`src/extensions/plugin-ports.test.ts` names this
 "buildPluginPorts — D-S5-4 gate"; `src/extensions/install-dataset-plugins.ts`
-carries the matching "closes the gate the moment setup returns" test for
-`DatasetPlugin`).
+carries the matching "closes the gate the moment setup returns" test for the
+`data` half).
 
-Calling a gated method after `setup()` has returned throws
+Calling a gated method after that half has returned throws
 `RegistrationClosedError`:
 
 ```ts
-import type { GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
 
-function lateRegistration(): GanttPlugin {
-  return {
+function lateRegistration() {
+  return definePlugin({
     id: 'demo.lateRegistration',
-    setup(ctx) {
+    view(ctx) {
       setTimeout(() => {
-        // Throws RegistrationClosedError: setup() already returned.
+        // Throws RegistrationClosedError: view() already returned.
         ctx.commands.register({ id: 'demo.tooLate', label: 'Too late', run() {} });
       }, 0);
     },
-  };
+  });
 }
 
 export { lateRegistration };
 ```
 
-Some parts of the context stay open after `setup()` returns, because they
+Some parts of the context stay open after that half returns, because they
 are not registrations — `interaction.canWrite`, for example, is a plain
 read and keeps working (`src/view/plugin-ports.test.ts`, "leaves ungated
 parts open after setup returns").
@@ -203,7 +217,7 @@ registration with no extra code from the plugin author
 (`src/view/plugin-ports.test.ts`, "`disposables.disposeAll()` frees every
 gated registration, uninstall needs no plugin help").
 
-A plugin's own `setup()` return value — a `Disposer` — is for a resource
+A half's own return value — a `Disposer` — is for a resource
 the plugin owns itself: a timer, a socket, a subscription outside
 FreeGantt. Most plugins return nothing, as `weekendShading()` above does.
 When a plugin does return a `Disposer`, it runs after `ctx.disposables`
@@ -218,17 +232,17 @@ disposal leaves other's registrations (I2)").
 
 ## `requires` and setup order
 
-A `DatasetPlugin` may declare `requires: readonly PluginId[]` — the ids of
-plugins that must finish `setup()` first:
+A plugin may declare `requires: readonly PluginId[]` — the ids of plugins that
+must finish setting up first. One list covers both halves:
 
 ```ts
-import type { DatasetPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
 
-function lockAwareReport(): DatasetPlugin {
-  return {
+function lockAwareReport() {
+  return definePlugin({
     id: 'demo.lockAwareReport',
     requires: ['demo.lockEntries'],
-    setup(ctx) {
+    data(ctx) {
       const locks = ctx.store.read<{ isLocked: boolean }>('demo.lockEntries');
       ctx.events.on('beforeChange', ({ changeSet }) => {
         const touchesLockedEntry = changeSet.updated.some(
@@ -237,7 +251,7 @@ function lockAwareReport(): DatasetPlugin {
         return touchesLockedEntry ? false : undefined;
       });
     },
-  };
+  });
 }
 
 export { lockAwareReport };
@@ -258,30 +272,31 @@ Two errors come from a bad `requires` list:
   plugin in the cycle (`"throws PluginRequirementCycleError naming plugin
   in cycle"`).
 
-`GanttPlugin` has no `requires` field. Order there follows the `plugins`
-array as written.
+A `Gantt` sorts the Dataset's own plugins together with its own chrome, under
+that one `requires` graph (`src/api/define-plugin.test.ts`, "lets a chrome
+plugin require a plugin whose only half is data").
 
 ## Errors an author will meet
 
 | Error | Code | Thrown when | Test |
 | --- | --- | --- | --- |
 | `DuplicatePluginIdError` | `'duplicate-plugin-id'` | Two plugins in one install share an `id` | `src/extensions/plugin-runtime.test.ts`, "a duplicate id throws DuplicatePluginIdError" |
-| `MissingPluginError` | `'missing-plugin'` | A `DatasetPlugin`'s `requires` names an `id` not present in the install list | `src/extensions/install-dataset-plugins.test.ts` |
-| `PluginRequirementCycleError` | `'plugin-requirement-cycle'` | Two or more `DatasetPlugin`s require each other in a cycle | `src/extensions/install-dataset-plugins.test.ts` |
-| `RegistrationClosedError` | `'registration-closed'` | A gated method is called after that plugin's `setup()` has returned | `src/view/plugin-ports.test.ts` |
-| `PluginSetupError` | `'plugin-setup-failed'` | A plugin's `setup()` throws; wraps the original cause | `src/extensions/plugin-runtime.test.ts`, "a setup() throw unwinds already-set-up plugins batch, in reverse, rethrows PluginSetupError" |
+| `MissingPluginError` | `'missing-plugin'` | A plugin's `requires` names an `id` not present in the install list | `src/extensions/plugin-order.test.ts` |
+| `PluginRequirementCycleError` | `'plugin-requirement-cycle'` | Two or more plugins require each other in a cycle | `src/extensions/plugin-order.test.ts` |
+| `RegistrationClosedError` | `'registration-closed'` | A gated method is called after that plugin's half has returned | `src/view/plugin-ports.test.ts` |
+| `PluginSetupError` | `'plugin-setup-failed'` | A plugin's half throws, or a plugin with a `data` half reaches a `Gantt` | `src/api/define-plugin.test.ts`, "the message says where to install it" |
 | `RendererAlreadyRegisteredError` | `'renderer-already-registered'` | Two plugins claim the same `RendererPoint` slot | `src/view/renderer-registry.test.ts` |
 | `PluginNotInstalledError` | `'plugin-not-installed'` | `gantt.uninstallPlugin(id)` is called with an `id` that is not installed | `etc/freegantt.api.md` (constructor signature; see `gantt.uninstallPlugin`) |
 
-A `setup()` throw during a batch install unwinds only that batch, in
+A throw during a batch install unwinds only that batch, in
 reverse order, and leaves the plugins that were already installed before
 the batch started untouched (`src/extensions/plugin-runtime.test.ts`, "a
-same-batch setup() throw leaves dropped plugin installed undisposed, not
+same-batch view() throw leaves dropped plugin installed undisposed, not
 primed for double dispose (C1)").
 
 ## Where to go next
 
-- `CONTEXT.md` — the glossary entries for `GanttPlugin`, `DatasetPlugin`,
-  `PluginContext`, and `PluginStore`.
+- `CONTEXT.md` — the glossary entries for `Plugin`, `PluginContext`, and
+  `PluginStore`.
 - `plans/02` — the full public API surface these types come from.
 - `harness/plugins.html` — every plugin in this guide, running.
