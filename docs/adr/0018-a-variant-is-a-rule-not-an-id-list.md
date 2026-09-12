@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The working material is in `plans/row-redesign/`.
-decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
-open: which rule wins when two plugins both answer yes. Registration order decides it today. Nobody has ruled on what sets that order across plugins.
+decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
+open: nothing. **The newest rule wins** (2026-09-11, author's ruling — `Q5`), so all three registration seams agree and core registers its own two variants first. **What sets the order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
 ---
 
 # A variant is a rule, not an id list
@@ -25,23 +25,41 @@ ctx.interaction.registerLookDefaults(BUFFER_KIND, { resize: false });
 
 - **The set freezes at install.** A row added later never gets the variant.
 - **A plugin often does not know the ids.** The page must keep a parallel list and hand it over.
-- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.read('duration') === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
+- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.duration()?.value === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
 
 ## Decision
 
-**A variant is a rule. The first registered rule that answers yes wins.** There is no second source and no stored value.
+**A variant is a rule. Resolution walks newest-first and stops at the first rule that answers yes** (`Q5`, ruled 2026-09-11). There is no second source and no stored value.
 
 **One variant is one object.** Four registrations become one object, and the name appears once.
 
 ```ts
-interface EntryVariant {
+interface EntryVariant<TProps = Record<string, unknown>> {
   name: string; // this variant's identity — the `data-variant` a consumer styles, and the registry key
-  when?: VariantRule; // a predicate or a field match; omit it on the last-resort variant
+  when?: VariantRule<TProps>; // a field match or a predicate; omit it on the last-resort variant
   items?: ItemProducer; // default: one whole-entry Item — the line both examples hand-write
   paint?: BarRenderer;
   can?: Interactions; // per-variant capability, one level under the consumer's own
 }
 ```
+
+### What `when` matches
+
+**Published beside the key, because an author cannot guess it.** `{ milestone: true }` could mean "equals `true`" or "has a value", and the two answer differently for `{ status: 'blocked' }`.
+
+```ts
+type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | ((entry: Entry<TProps>) => boolean);
+
+/** Every named Field equals the value beside it. Several keys are AND. */
+type FieldMatch<TProps> = { [K in FieldKey]?: K extends keyof TProps ? TProps[K] : unknown };
+```
+
+- **A match is equality, per Field.** Each key reads through `entry.read(key)` and compares with that Field's own `equals` (`Field.equals`, `model/field.ts`), which is what makes `{ start: someInstant }` and `{ status: 'blocked' }` behave the same way a Grid comparison does. With no `equals` declared, the comparison is `Object.is`.
+- **Several keys are AND.** `{ milestone: true, locked: false }` claims a row that answers both.
+- **A match never means "has a value".** `when: { 'demo:phaseId': true }` claims the rows whose `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with the predicate: `(entry) => entry.read('demo:phaseId') !== undefined`.
+- **The shorthand is what core can index.** A field match names its keys, so a future pass can group rules by key. A predicate is opaque and runs per row. That is the trade, and the shorthand is the common case (refuted item 7 in [`plans/row-redesign/README.md`](../../plans/row-redesign/README.md)).
+
+**`EntryVariant` carries `TProps`, so the predicate compiles.** `entry.read('slack')` on an `Entry<unknown>` answers `unknown`, and the sample `entry.read('slack') > 0` does not compile. `GanttOptions<TProps>` already has the Dataset's type, so `variants: readonly EntryVariant<TProps>[]` hands it to every rule the app author writes. The registry inside `view/` holds the erased shape and casts once at the façade, the way `api/dataset.ts` already re-types the whole store for `TProps`.
 
 An app author installs a variant with no plugin at all:
 
@@ -52,22 +70,28 @@ new Gantt({
 });
 ```
 
-A plugin ships the same object through `ctx.addVariant(variant)`. One type, two doors, one shape.
+A plugin ships the same object through `ctx.variants.add(variant)`. One type, two doors, one shape.
 
-**Core registers its own two variants last**, and they are ordinary `EntryVariant` objects with nothing special about them:
+**The plugin door is namespaced, like every other one on that context.** A plugin context reads `ctx.fields.register`, `ctx.edits.setExtender`, `ctx.commands.register`, `ctx.interaction.registerKeybinding`. A bare `ctx.addVariant` would be the one verb hanging off the root. `ctx.variants.add(variant)` reads as the sentence it is, and it gives the variant seam a namespace to grow in.
+
+**Core registers its own two variants first**, and they are ordinary `EntryVariant` objects with nothing special about them:
 
 ```ts
 { name: 'parent', when: (entry) => entry.hasChildren, paint: summaryBar }
-{ name: 'leaf' } // no `when` — the last-resort variant, so every row resolves
+{ name: 'leaf' } // no `when` — it answers for every row, so every row resolves
 ```
 
-**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.read('duration') === 0` compiles at all. That is the whole reason 0017 lands first.
+**First, not last — the newest rule wins** (`Q5`, ruled 2026-09-11). Core registers before anything else, so every plugin variant and every consumer variant is newer and overrides it. Core is the floor. A `leaf` variant with no `when` answers for every row, so the floor is total and no row falls through. **Registering core last would make core beat every plugin**, which is the opposite of what its two variants are for.
 
-**A variant is a function of the row, and it runs per layout pass** (`layout/items/produce-items.ts:248`). Core caches nothing new. The one input core's own rules read is `hasChildren`, which `#byParent` already caches per commit (`data/entry-store.ts:155-163`). Nothing about a variant can cache on the Dataset, because variants are per Gantt (I2, refuted item 5).
+**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
+
+**A variant is a function of the row, and it runs per layout pass** (`layout/items/produce-items.ts:248`). Core caches nothing new. The one input core's own rules read is `hasChildren`, which `#byParent` already caches per commit (`data/entry-store.ts:155-163`). Nothing about a variant can cache on the Dataset, because variants are per Gantt (I2, refuted item 5 in [`plans/row-redesign/README.md`](../../plans/row-redesign/README.md)).
 
 **`name` is an identity, not a value.** It has three jobs, and storage is not one of them. `render/dom/index.ts:1186` stamps it onto the painted element, which `CONTEXT.md:517` publishes as a selector a consumer may style. The registry keys on it. A double-claim diagnostic names it.
 
-**`can` takes the same predicates `interactions` takes.** `KindDefaults` is boolean-only today for one stated reason: _"a registering plugin never sees an `entry`"_ (`view/capability.ts:83-90`). [ADR 0017](0017-the-entry-answers-questions-about-itself.md) hands it one. So the mapped boolean type dies and `Interactions` serves both levels. The resolution order is unchanged: consumer `interactions`, then the variant's `can`, then the library rule. The variant level stays view-level, so refuted item 6 still holds — this is not a second door onto `Field.editable`.
+**`can` takes the same predicates `interactions` takes.** `KindDefaults` is boolean-only today for one stated reason: _"a registering plugin never sees an `entry`"_ (`view/capability.ts:83-90`). [ADR 0017](0017-the-entry-answers-questions-about-itself.md) hands it one. So the mapped boolean type dies and `Interactions` serves both levels. The resolution order is unchanged: consumer `interactions`, then the variant's `can`, then the library rule. The variant level stays view-level, so refuted item 6 in [`plans/field-redesign/shared/refuted.md`](../../plans/field-redesign/shared/refuted.md) still holds — this is not a second door onto `Field.editable`.
+
+**A gesture predicate gains the answer a write predicate already has: `undefined` — no opinion.** `CapabilityRule` is `boolean | ((entry) => boolean)` today (`view/capability.ts:20`), so a rule that speaks at all must answer every row. Put it one level down and that bites: a variant's `can: { resize: (entry) => !entry.hasChildren }` means "not on a parent", and it also says **yes** to every other row, over the library rule underneath it. `WriteRule` learned this on #256, where the harness's own first call site opened every derived cell by accident. So `CapabilityRule` becomes `boolean | ((entry) => boolean | undefined)`, at both levels, and `undefined` falls through to the next answer. A `boolean` still pins every row, which is what a consumer who wants that writes.
 
 ## How an app pins one row
 
@@ -117,11 +141,11 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **This widens no type.** The alias already ends in `(string & {})`, which accepts any string. Take the two literals out and `string` is what is left.
 
-**What the deletion takes with it.** Core's two built-ins become two ordinary `EntryVariant` objects, registered last. Then:
+**What the deletion takes with it.** Core's two built-ins become two ordinary `EntryVariant` objects, registered first. Then:
 
 - **The two structural names stop being special.** They are two names in the same registry as every other variant. There is no reserved list, because nothing can store a name.
 - **`BAR_SHAPE_CLASS` goes** (`render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
-- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
+- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers for every row and nothing newer is obliged to.
 
 ## What ADR 0013 keeps
 
@@ -131,6 +155,34 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **An Entry carries no stored classification.** The earlier draft of this ADR spent that sentence. This one gives it back.
 
+## A command asks which variant a row resolved to
+
+**The owned-id `Set` answers a fifth question, and the four registrations above do not reach it.** `harness/plugins/buffer-kind.ts:52` is a command's `when`: `({ entry }) => entry !== undefined && owned.has(entry.id)`. The rule above deletes the `Set` that four other lines read. Leave the command as it is and the `Set` survives for one caller; restate the `when` rule inside the command and the harness re-derives what the library just resolved — which is the case `CLAUDE.md`'s stop rule exists to catch.
+
+**So a command context names the variant this Gantt resolved for the Entry it is about.**
+
+```ts
+interface CommandContextOf<TGantt, TDataset> {
+  entry?: Entry;
+  /** The variant this Gantt resolved for `entry`. `undefined` when the invocation names no Entry. */
+  variant?: string;
+  …
+}
+```
+
+```ts
+ctx.commands.register({
+  id: 'demo.bufferKind.markConsumed',
+  label: 'Mark buffer consumed',
+  when: ({ variant }) => variant === 'buffer', // the rows my variant claimed
+  run: …,
+});
+```
+
+**This is not `entry.variant` under another name, and the refusal at 0017 still holds.** A variant is per Gantt, so a row cannot answer it (I2). A command context **is** one Gantt's, holds that Gantt, and runs off the hot path — so it is the seam that can answer without giving the Dataset a view's opinion.
+
+**One shape was refused: `EntryVariant.commands`.** It would make the name appear once instead of twice, and it costs more. A command has an id, a label, a keybinding and a lifetime of its own, and `when` must also answer for an invocation that names no Entry at all. Two lifetimes under one member is the trap this ADR just spent a whole section removing.
+
 ## Consequences
 
 **The word changes at every site, DOM included.** `data-kind` becomes `data-variant`, and the `'look-claimed-twice'` report becomes `'variant-claimed-twice'`. Both are published surface — `CONTEXT.md:517` documents the attribute, and `view/gantt-shell.ts:1475` raises the report — so the rename is part of the build, not a tidy-up after it. `fg-bar-summary` keeps its name: it is a CSS class, and it comes from the `parent` variant's own `paint`.
@@ -139,7 +191,16 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **Deleting `EntryLook` touches 47 references in 12 files under `src/`**, most of them a type argument on a registration table. The tables retire anyway, so the build deletes the type and its uses in one change.
 
-**Double-claim arbitration stays, and shrinks.** Two rules may both answer yes, so `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive. Registration order resolves it and the diagnostic reports it. See `open:`.
+**Double-claim arbitration stays, and shrinks.** Two rules may both answer yes, so `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive. Setup order resolves it and the diagnostic reports it.
+
+**Setup order comes from `requires`, and that was decided on 2026-09-01.** D-S5-31 gives a plugin `requires: readonly PluginId[]`, and the host topologically sorts the installed set before any `setup` runs (`extensions/install-dataset-plugins.ts`). `[a, b]` and `[b, a]` install identically, a missing prerequisite throws `MissingPluginError`, and a ring throws `PluginRequirementCycleError`. **Two plugins with an edge between them are already ordered. Two with no edge are siblings, and a sibling must not depend on load order** (`plans/01` §12). A sibling collision is an authoring error, and the diagnostic exists to name it. [0019](0019-one-plugin-one-install-site.md) gives one plugin one `requires`, so one resolved order serves both halves.
+
+**The newest rule wins — ruled 2026-09-11.** HEAD contradicted itself. `registerClaim` and `register` both say the newest registration wins (`layout/items/produce-items.ts:134-144`). `claimedLookFor` said *"the first yes is the whole answer"* across two different looks (`:197`). **The third one changes, so all three agree.** A fourth seam already votes the same way: `extensions/keymap.test.ts:124` pins *"the handler registered last wins over an earlier command binding."* `requires` argues the same way: `b.requires = ['a']` says b builds on a, so b is the one that should override it. Under first-wins, declaring a dependency made you lose.
+
+**Two things follow, and both are load-bearing.**
+
+- **Core registers its own two variants first**, not last. See *Core registers its own two variants first*. Under the old rule, last meant fallback. Under this one, last would mean core beats every plugin.
+- **`claimedVariantFor` walks newest-first and stops at the first yes.** It must not walk oldest-first and keep the last yes: the read runs on every hover change, where the budget is zero allocation and an early exit is the point (`produce-items.ts:182`). Reversing the walk keeps the early exit. A reporter still walks the whole list, because a diagnostic has to see both claimants.
 
 **[ADR 0015](0015-what-the-write-door-refuses.md) is owed nothing.** The earlier draft added two refusals to the write door — a reserved name, and an unregistered name. Both die with the stored value.
 

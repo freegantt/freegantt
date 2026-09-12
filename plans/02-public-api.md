@@ -315,6 +315,8 @@ not write.
 
 ## 4. Customization ladder
 
+> **This section describes HEAD.** [ADRs 0017–0020](../docs/adr/) rewrite it — the live `Entry`, the `EntryVariant` rule, `definePlugin`, and the hierarchy source. Until those four builds land, read this as what ships today, and **do not update it halfway through a build**. [`plans/row-redesign/build/`](row-redesign/build/) names the edits each build owes.
+
 Documented in this order; each level solves what the previous can't, and consumers stop at the shallowest level that works.
 
 | Level | Mechanism | Example |
@@ -464,7 +466,7 @@ The object form overrides this Gantt's presentation and never the data half — 
 { key: 'duration', compute: (e, ctx) => /* Duration | undefined from start/end through time/ */ }
 ```
 
-A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. Aggregators read duration with `ctx.read(entry, 'duration')`. There is no `durationOf`.
+A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. Aggregators read duration with `ctx.read(entry, 'duration')`, which is a shipped `compute` Field over `ctx.durationOf(entry)` (`data/fields/core-fields.ts:105`). Both `FieldContext` members ship today, and **both leave the public surface**: [ADR 0017](../docs/adr/0017-the-entry-answers-questions-about-itself.md) retires them, ruled 2026-09-11. A row answers a Field by key through `entry.read(key)` and its duration through `entry.duration()`. That ADR is **proposed** and not built, so the members stay in the code until it lands. The Rollup, the ChangeSet and every `compute` Field hold a row the store does not hold, so they keep stored values and read the tree through `ctx.children()`.
 
 **Editing crosses core and consumer fields freely** — one call, one transaction, one undo step:
 
@@ -708,6 +710,8 @@ choices, and `contextMenu()` took the worse one: leave two `document` listeners 
 ---
 
 ## 5. Shared axes and scroll (multi-Gantt, D9)
+
+> **This section describes HEAD**, for the same reason §4 does. [ADRs 0017–0020](../docs/adr/) have not landed.
 
 ```ts
 import { TimeScaleModel, ScrollModel } from 'freegantt';

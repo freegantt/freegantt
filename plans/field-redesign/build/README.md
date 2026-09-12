@@ -50,7 +50,7 @@ The order is fixed. Build 0016 lands first because it makes the five after it sm
 - **`meta` becomes `props`.** A Field key is the whole address. Nothing declares a `source`.
 - **`kind` leaves `Entry`.** An Entry derives when it has children.
 - **Dates are optional.** An Entry spans if and only if it holds both dates. It draws a bar only when it spans.
-- **`entries.fieldValue` becomes `entries.read`.** `durationOf` goes away.
+- **`entries.fieldValue` stays.** Build 4 was withdrawn, so no rename landed and `durationOf` still ships. [ADR 0017](../../../docs/adr/0017-the-entry-answers-questions-about-itself.md) takes both, in the row redesign.
 - **`editable` becomes an enum.** `'anywhere'` is the default.
 
 **No build spends a schema number.** ADR 0016 deletes the format that carried them.

@@ -4,6 +4,8 @@ One row has three names. It is a stored value in `model/`, a set of questions on
 
 Opened 2026-09-11, out of a design session on the plugin variant surface.
 
+> **The plan of record is [`build/`](build/README.md).** This folder is the reasoning behind it. An implementer reads `build/README.md` once, then one build file. Open questions and lone calls are in [`BUILD-LOG.md`](BUILD-LOG.md).
+
 ## The four, in landing order
 
 ```mermaid
@@ -24,7 +26,7 @@ flowchart LR
 
 0017 lands first. A variant rule and a plugin half both read questions off the row, and neither can be written until the row answers.
 
-0020 lands last, and it is the one that pays 0017 back. Four sites outside the store read `entry.parentId` to ask what the tree is (`layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77`, `view/tree-collapse.ts:111,153`, `data/rollup.ts:46,52`). A plugin can only own the tree once those four ask one door.
+0020 lands last, and it is the one that pays 0017 back. Four sites outside the store read `entry.parentId` to ask what the tree is. **Three move with 0017** — `layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77` and `view/tree-collapse.ts:111,153` — and they ask `parent()`, `children()` or `hasChildren` instead. **The fourth is 0020's own work.** `data/rollup.ts:46,52` reads a stored map to find the **former** parent of a moved row, so a live `parent()` there misses it and skips a Rollup. That invalidation belongs with the hierarchy source. A plugin can only own the tree once all four ask one door.
 
 ## The evidence
 
@@ -41,8 +43,8 @@ The field-redesign build reviewed the first draft and raised seven problems. **A
 | P3 | `ProposedEdit` derives from `Entry` too | same |
 | P4 | `EditRequest.entries` and `entryAfterEdits` are deliberately different states (D-S5-45); one live object collapses them | same |
 | P5 | `.children` means two things inside an open transaction | 0017 rule 2 — live means the committed index overlaid with the open write set |
-| P6 | `hasChildren` has a cheap path and an expensive one | 0017 rule 4 — a getter answers one value, a collection is a method |
-| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — ADR 0014 is `not planned` since 2026-09-11, so 0017 owns the rename outright |
+| P6 | `hasChildren` has a cheap path and an expensive one | 0017 rule 4 — a member that does no work is a property, a member that computes or walks carries parentheses. **The first draft said "a getter answers one value", and that wording is withdrawn** — the rule is about cost |
+| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — the one ADR that also proposed this rename was withdrawn and deleted on 2026-09-11 ([the gap at 0014](../../docs/adr/README.md#the-gap-at-0014)), so 0017 owns it outright |
 
 ## Rulings — 2026-09-11
 
@@ -64,8 +66,9 @@ Settled in the session that opened this folder. Do not re-derive them.
 | The data side may change what the tree is, and the Rollup follows it. One seam, not two. | [0020](../../docs/adr/0020-a-plugin-may-own-the-hierarchy.md) |
 | No new type parameter on the `Dataset` constructor. TypeScript has no partial type-argument inference, so module augmentation stays the route. | [0019](../../docs/adr/0019-one-plugin-one-install-site.md) |
 | `Field.editable` and `interactions` stay two questions. Merging them deletes the read-only view. 0018 reuses the type, not the seam. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
-| `EntryLook` goes away. A variant name is a `string`, and it names a DOM identity, never a stored value. Core's `'parent'` and `'leaf'` become two ordinary variants, registered last. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
-| **The concept is a Variant, not a look.** `EntryVariant` is the type, `variants` the config key, `ctx.addVariant` the plugin door. `data-kind` becomes `data-variant`. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
+| `EntryLook` goes away. A variant name is a `string`, and it names a DOM identity, never a stored value. Core's `'parent'` and `'leaf'` become two ordinary variants, **registered first** — the newest rule wins, so core is the floor. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
+| **The newest rule wins a double claim**, so all three registration seams agree. `requires` sets the order (D-S5-31); this decides which end of it takes the row. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
+| **The concept is a Variant, not a look.** `EntryVariant` is the type, `variants` the config key, `ctx.variants.add` the plugin door. `data-kind` becomes `data-variant`. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
 
 ## Refuted here — do not re-derive
 
@@ -77,10 +80,10 @@ Each one came up in the design session and lost.
 | 2 | `dataset.entries.hasChildren(id)` | Better than nothing, and still two types for one thought. It answers this question and leaves the next one — a Field read, a child walk — unanswered. |
 | 3 | Rebuild the live `Entry` per store revision (snapshot semantics) | It allocates per Entry per frame on the hover path (I5). Its tree questions then read a live index at a dead revision, which is worse than the staleness it set out to fix. |
 | 4 | `entry.update({ start })` | A second write door, three days after [0015](../../docs/adr/0015-what-the-write-door-refuses.md) decided the first one. The `Entry` reads. The store writes. |
-| 5 | `entry.variant` on the live `Entry` | The variant is per Gantt. Two Gantts on one Dataset may install different variants, so a data-side `Entry` cannot carry one without breaking I2. |
+| 5 | `entry.variant` on the live `Entry` | The variant is per Gantt. Two Gantts on one Dataset may install different variants, so a data-side `Entry` cannot carry one without breaking I2. **A command context may name it** (`J11`), because that context is one Gantt's own — the refusal is about the row, not about the question. |
 | 6 | One object for the `Dataset` and the `Gantt` | It kills the headless Dataset — the DOM-free core, the worker seam, and two Gantts on one Dataset. |
 | 8 | One type: the live one **is** the stored one | The first draft said this, and four findings killed it. `CoreFieldKey` and `ProposedEdit` both derive from `Entry` by `keyof`, core spreads `StoredEntry` on the drag path, and two `EditRequest` members are deliberately different states. See the review table above. |
-| 7 | A selector language for variants, with no predicate escape | `when: { milestone: true }` serves the common case and core can index it. It cannot express `!entry.hasChildren && entry.read('duration') === 0`. Ship the shorthand **and** the predicate. |
+| 7 | A selector language for variants, with no predicate escape | `when: { milestone: true }` serves the common case and core can index it. It cannot express `!entry.hasChildren && entry.duration()?.value === 0`. Ship the shorthand **and** the predicate. **Read the duration through `duration()`** — a `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false. |
 | 9 | A stored `variant` on the Entry, resolved before any rule | The first draft of 0018 did this. It is ADR 0013's stored `kind` under a new word: a childless row could store `variant: 'parent'` and paint as a summary while rolling nothing up. Guarding it cost a reserved-name list, two write-door refusals and a new core Field key. An app pins a row with its own Field instead — `when: { milestone: true }`. |
 
 ## The names — ruled 2026-09-11
@@ -127,7 +130,7 @@ The call sites:
 
 ```ts
 variants: [{ name: 'milestone', when: { milestone: true }, paint, can: { resize: false } }];
-ctx.addVariant({ name: 'buffer', when: (entry) => entry.read('slack') > 0, paint });
+ctx.variants.add({ name: 'buffer', when: (entry) => entry.read('slack') > 0, paint });
 ```
 
 "This Gantt has a milestone variant." "Add the buffer variant." Both sentences are true.
@@ -138,6 +141,8 @@ ctx.addVariant({ name: 'buffer', when: (entry) => entry.read('slack') > 0, paint
 
 ## Open
 
-Each ADR's frontmatter carries its own. What still needs the author:
+**Nothing. Every question closed on 2026-09-11.** Each ADR's frontmatter says so, and [`BUILD-LOG.md`](BUILD-LOG.md) carries each answer with its reasoning.
 
-1. **The hierarchy seam's name.** [0020](../../docs/adr/0020-a-plugin-may-own-the-hierarchy.md) writes `setHierarchySource`, beside `setExtender`. The glossary term is Hierarchy (`CONTEXT.md:47`), and that entry needs an edit either way — it defines the tree as `parentId`.
+**A plan review the same day closed ten more holes in the plugin-author surface**, and every one is a `J` entry — a call made alone, and reversible. `J5` is the largest: a `compute` Field keeps its by-key read and its duration, bound to the pass, and the contexts split by lifetime. Read `J5`–`J14` before you change one of them back.
+
+The last two went together. `requires` sets the setup order — D-S5-31, ruled 2026-09-01, and no build adds a knob. **The newest rule wins**, so `claimedLookFor` flips to agree with `registerClaim` and `register`, and core registers `parent` and `leaf` **first** (`Q5`). The hierarchy seam is the hierarchy source, set through `ctx.hierarchy.setSource` (`Q3`, and `J7` for the namespace). `CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`, and Build 4 edits that entry.
