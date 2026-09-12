@@ -75,9 +75,9 @@ Use the ADR's *Which seam gets which* table. A seam that asks about now takes an
 - [ ] `resolveItems` loses its positional `hasChildren` boolean (`src/layout/items/produce-items.ts:235`). So does `produceItemsForRow` (`:272`).
 - [ ] **Delete `frame-memory.ts`'s `#parentIds` (`:53-54,75,77`).** It exists for one reason: to feed `produceItemsForRow`'s `hasChildren` callback at `:115`. The box above deletes that callback, so the whole `Set` and the rebuild that fills it go with it. Unit E's `:77` box is this deletion, not a rewrite.
 - [ ] `Aggregator` loses its `children` argument (`src/model/field.ts:333` — **not `:303`, which is `RollUpContext.values`**). It becomes `(parent, ctx) => …`. `FieldDistributor` (`:325`) loses it the same way.
-- [ ] **The child list moves onto `ctx`, never onto `parent.children()`.** Read this before you write the line. `rollup.ts:262-279` builds each child as `effectiveEntry(childId, entries, merged, computed)` — the store, plus this transaction's `merged` edits, plus the values this same bottom-up pass already computed for that child. `computed` never reaches the store, so a live `parent.children()` inside an Aggregator reads a child **without** the value the pass just gave it, and bottom-up rollup stops working. Add `ctx.children` and keep the Rollup's own list in it.
-- [ ] **Keep `RollUpContext.values()`, and bind it.** `values()` and `numericValues()` read `ctx.children` and take no argument. `data/rollup.ts:23-26` holds two edit sets for two questions — `body` and `merged` — and deleting these reads is a bug, not a tidy-up.
-- [ ] `entry-store.ts:467`'s `distribute(value, children, parent, ctx)` loses `children` the same way. Its list is `this.childrenOf(id)` — the store's own — so bind it into the same `ctx.children`.
+- [ ] **The child list moves onto `ctx.children()`, never onto `parent.children()`.** Read this before you write the line. `rollup.ts:262-279` builds each child as `effectiveEntry(childId, entries, merged, computed)` — the store, plus this transaction's `merged` edits, plus the values this same bottom-up pass already computed for that child. `computed` never reaches the store, so a live `parent.children()` inside an Aggregator reads a child **without** the value the pass just gave it, and bottom-up rollup stops working. Unit D declares `ctx.children()`; keep the Rollup's own list behind it.
+- [ ] **Keep `RollUpContext.values()`, and bind it.** `values(key?)` and `numericValues(key?)` read `ctx.children()` and take no child list. `data/rollup.ts:23-26` holds two edit sets for two questions — `body` and `merged` — and deleting these reads is a bug, not a tidy-up.
+- [ ] `entry-store.ts:467`'s `distribute(value, children, parent, ctx)` loses `children` the same way. Its list is `this.childrenOf(id)` — the store's own — so bind it behind the same `ctx.children()`.
 - [ ] Delete `dataset.entries.childrenOf`. Call sites become `entries.get(id)?.children() ?? []`.
 - [ ] Delete the re-derivations in `src/view/gantt-shell.ts:1141,1148`. **`:1142` holds a third `childrenOf`**, inside `descendantsOf` — it goes with the `descendantsOf` input, so read all three lines, not two.
 - [ ] **Leave `#hasChildren` private** (`src/data/entry-store.ts:248`). The ADR's *"`#hasChildren` stops being private"* is withdrawn: `layout/` may not import `data/`, so nothing outside the store gains a caller, and a public one is a second door onto `entry.hasChildren`. The live getter calls it.
@@ -87,15 +87,17 @@ Use the ADR's *Which seam gets which* table. A seam that asks about now takes an
 
 ## Unit D — one value door
 
-> **`Q7` blocks the second half of this unit. Read it in [`../BUILD-LOG.md`](../BUILD-LOG.md) before you start.**
->
-> The first two boxes are decided and unblocked. The four boxes that delete `FieldContext.read` and `FieldContext.durationOf` are not: three of their callers read a row the store does not hold — the Rollup's effective child, the ChangeSet's post-edit row, and every `compute` Field. `entry.read(key)` answers for the row **now**, so it cannot serve them. **Do the first two boxes, stop at the third, and report.** Do not invent the replacement.
+> **Three seams here hold a row the store does not hold.** The Rollup's effective child, the ChangeSet's post-edit row, and every `compute` Field. `entry.read(key)` answers for the row **now**, so it serves none of them. `Q7` ruled how they read instead, on 2026-09-11 — **read it in [`../BUILD-LOG.md`](../BUILD-LOG.md) before you delete either door.** The boxes below carry the answer.
 
 - [ ] Delete `dataset.entries.fieldValue` (`src/model/dataset.ts:28`). **77 references in 14 `src/` files**, plus 23 more in `harness/` and `e2e/` — 100 in 21 files. Each becomes `entry.read(key)`.
 - [ ] Take `entry.props` off the read surface. `read()` is the one value door. `entry.props` is storage: it misses a `compute` Field and it does not know the Field's type.
 - [ ] **Change `harness/planner.ts:69,85,174` to `entry.read(...)` when you take `props` off.** Those three casts are `entry.props as PlannerEntryProps`, and the box above stops them compiling. **Leave the three at `:104,114,116`** — `fieldValue as Instant` on `ColumnCellRendererContext.fieldValue`, which this build does not touch. Those three are `Q2`'s evidence, and they are the ones the *"leave the six casts"* instruction is really about.
-- [ ] Delete `FieldContext.durationOf` (`src/model/field.ts:286`, `src/data/fields/field-access.ts:133`). **Ruled 2026-09-11.** Callers: `core-fields.ts:106` becomes `compute: (entry) => entry.duration()`; `aggregators.ts:14` becomes `entry.duration()`.
-- [ ] Delete `FieldContext.read` (`src/model/field.ts:283`, `src/data/fields/field-access.ts:126`). Callers: `aggregators.ts:51` becomes `child.read(ctx.field)`; `change-set.ts:72` becomes `current.read(key)`.
+- [ ] **Give `FieldContext` its one new member: `children(): readonly StoredEntry[]`** — the children of the row this pass is computing. It walks, so it carries parentheses (rule 4). `RollUpContext` extends `FieldContext`, so **one name answers for an Aggregator and for a `compute` Field**. `Q7`, ruled 2026-09-11.
+- [ ] **A `compute` Field keeps two arguments: `compute: (entry, ctx) => …`.** `entry` stays a `StoredEntry`, because the row may be hypothetical. A `compute` that needs the tree reads `ctx.children()`. **This is what closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214)**, and it is why the argument is not a live `Entry`.
+- [ ] Delete `FieldContext.durationOf` (`src/model/field.ts:286`, `src/data/fields/field-access.ts:133`). **Ruled 2026-09-11.** `core-fields.ts:106` — the duration Field's own `compute` — computes from `entry.start` and `entry.end` through `time/`, the same way `field-access.ts:133` does today. It must not call `entry.duration()`: its argument is a `StoredEntry` and has no such member. **`entry.duration()` on the live row delegates to this same computation.** One implementation, two doors.
+- [ ] `RollUpContext` gains `durations(): readonly (Duration | undefined)[]`. `aggregators.ts:14`'s `weightedMeanByDuration` reads `ctx.values()` beside `ctx.durations()` and needs no per-child door.
+- [ ] Delete `FieldContext.read` (`src/model/field.ts:283`, `src/data/fields/field-access.ts:126`). `aggregators.ts:51` becomes `ctx.values()`. `change-set.ts:72` calls **`readField` directly** — `diffEdit` sits in `data/` and already imports `entryAfterEdit` from that same file, so it needs no public door. **Read `change-set.ts:72` before you change it**: it calls `ctx.read` twice on one line, on `current` and on `next`, and `next` is the row no commit has taken.
+- [ ] `values` and `numericValues` take an optional key — `values(key?: FieldKey)`, defaulting to `ctx.field` — and read the pass's own child list. **Neither takes a `children` argument any more**, and neither reads `parent.children()`.
 - [ ] **Delete `fieldContextFor()` in `src/extensions/features/inline-editing.ts:109-126`.** It hand-builds a `FieldContext` out of public reads, and `read` and `durationOf` are its only two members. Both now live on the row, so the function has nothing left to build. Delete its comment at `:110-111` too — it names a `durationOf` in `layout/` that does not exist.
 - [ ] Check what `FieldContext` has left. With `read` and `durationOf` gone it holds `timeZone` alone. **Ask whether it still earns a type** before you keep it. `RollUpContext` extends it and keeps `field`, `values()` and `numericValues()`.
 - [ ] Confirm `entry.duration()` computes from `start` and `end` through `time/`. **It must not route through `read('duration')` and the Field registry**, or the circle has only moved. The Field declaration delegates to the row, not the reverse.
@@ -117,7 +119,7 @@ Build 4 cannot land until this unit is complete. A site left reading the stored 
 
 ## What this build does not do
 
-- [ ] **Do not file a `Q` for either open question. Both already exist** — `Q2` (the renderer contexts and `TProps`) and `Q7` (what reads a Field off a row the store does not hold). Add to the entry in [`../BUILD-LOG.md`](../BUILD-LOG.md); never open a second one.
+- [ ] **One question is still open, and it already has an entry.** It is `Q2` — the renderer contexts and `TProps`. Add to it in [`../BUILD-LOG.md`](../BUILD-LOG.md); never open a second one. `Q7` closed on 2026-09-11 and Unit D carries its answer.
 - [ ] `Q2` stays open and is **deferred past this redesign**. Leave `harness/planner.ts:104,114,116` — `fieldValue as Instant` — exactly as they are. They are the evidence of the gap, and tidying them hides it. The other three casts are `entry.props`, and Unit D's box changes them because they stop compiling.
 
 ---
@@ -136,7 +138,9 @@ Build 4 cannot land until this unit is complete. A site left reading the stored 
 - [ ] `entry.duration()` always answers `unit: 'millisecond'`. **This is #274's second half** — `formatDuration` (`core-fields.ts:52`) divides by `MS.DAY` and `compareDuration` (`:59`) subtracts raw values, and neither reads `unit`. One producer makes both correct by construction.
 - [ ] A `parseValue` that reads a sibling Field still works after `fieldContextFor()` is deleted.
 - [ ] An `Entry` for a removed id keeps its last values, and `entries.has(id)` answers false.
-- [ ] A `compute` Field walks `entry.children()`. This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
+- [ ] A `compute` Field walks `ctx.children()`. This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
+- [ ] **A `compute` Field reads the hypothetical row, not the store.** Open a transaction, edit a child, and assert the parent's computed value follows the edit before the commit lands. This is the test `Q7` exists for.
+- [ ] An Aggregator reads the value this same pass gave a child, not the committed one. Two levels of rolling-up parents prove it.
 
 ---
 
@@ -157,7 +161,8 @@ Build 4 cannot land until this unit is complete. A site left reading the stored 
 
 - [ ] `CONTEXT.md` — keep **one** Entry entry. Name `StoredEntry` inside it, as what the Entry's stored values are called. It is not a second concept. `CONTEXT.md:37`'s *Avoid* list still bans "record" and "row", so the prose says *stored values*.
 - [ ] `plans/02` — `entries.fieldValue` and `entries.childrenOf` leave the surface. Four call sites at `:352`, `:473-475`, `:751`. `UnknownFieldError` and `EntryNotFoundError` both name that door.
-- [ ] `plans/01` — the `Aggregator` signature loses `children`, and `RollUpContext` gains `ctx.children`.
+- [ ] `plans/01` — the `Aggregator` signature loses `children`. `FieldContext` gains `children()`, and `RollUpContext` gains `durations()` and the optional key on `values`.
+- [ ] `plans/02` — a `compute` Field's signature is `(entry, ctx)`, `entry` is a `StoredEntry`, and `ctx.children()` is how a computed value depends on the tree.
 - [ ] `harness/docs/plugin-authoring.html` — three places state a question this build closes. `:245` still says *"Open: two names"*, and the names were ruled. `:678-684` says two doors *"retire"* as a proposal, and they are ruled. `:683` teaches duration as `entry.read('duration')` alone, and the row now has `duration()`. **Correct the prose only.** Build 4 owns extending `scripts/check-doc-examples.mjs` to this page, so no sample here is typechecked yet.
 - [ ] `plans/02` and `CONTEXT.md` — the `duration` Field gains the `'span'` / `'segments'` setting.
 - [ ] `plans/02:467` — it says `durationOf` stays and names `ctx.read(entry, 'duration')`. Both go. Aggregators read `entry.duration()`.

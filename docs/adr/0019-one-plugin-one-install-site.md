@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: a chrome-only plugin — one with no `data` half — keeps its own install site on the `Gantt`, and `gantt.plugins` stays live-reconfigurable (2026-09-11). Every plugin with a `data` half installs on the `Dataset`.
-open: which error a plugin with a `data` half raises when it is handed to a `Gantt`, and what it says. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
+open: nothing. A plugin with a `data` half, handed to a `Gantt`, raises **`PluginSetupError`**, and the message says where to install it (2026-09-11, author's ruling — `Q4`). No new error type ships. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
 ---
 
 # One plugin, one install site

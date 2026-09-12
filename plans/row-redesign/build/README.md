@@ -58,20 +58,20 @@ The order is fixed. Each ADR states it in its own "Lands after" line.
 
 ## What is still open
 
-Five questions wait on the author. **Do not answer one alone. Do not file one that already exists** — add to it. Every one is in [`../BUILD-LOG.md`](../BUILD-LOG.md) under the id below, and each build file says what to do meanwhile.
+**Three questions wait on the author. Nothing blocks a build.** Do not answer one alone. **Do not file one that already exists** — add to it. Every one is in [`../BUILD-LOG.md`](../BUILD-LOG.md) under the id below.
 
-| Id | Question | Build | Does it block? |
-|---|---|---|---|
-| `Q2` | Do the renderer contexts become generic over `TProps`? **Deferred past this redesign.** Leave the three `fieldValue as Instant` casts in place; they are the evidence | 1 | no |
-| `Q7` | What reads a Field off a row the store does not hold — the Rollup's effective child, the ChangeSet's post-edit row, and every `compute` Field? | 1 | **yes — Unit D stops here** |
-| `Q5` | Which rule wins when two plugins both answer yes? Registration order decides it today | 2 | no |
-| `Q4` | Which error does a misplaced plugin raise, and what does it say? | 3 | no |
-| `Q3` | What is the hierarchy seam called? `setHierarchySource` is the draft word | 4 | no |
+| Id | Question | Build |
+|---|---|---|
+| `Q2` | Do the renderer contexts become generic over `TProps`? **Deferred past this redesign.** Leave the three `fieldValue as Instant` casts in place; they are the evidence | 1 |
+| `Q5` | Which rule wins when two plugins both answer yes? Registration order decides it today | 2 |
+| `Q3` | What is the hierarchy seam called? `setHierarchySource` is the draft word | 4 |
 
-**Two things were ruled on 2026-09-11. Do not re-open either.**
+**Four things were ruled on 2026-09-11. Do not re-open one.**
 
-- All three Field-read doors retire — `entries.fieldValue`, `FieldContext.read` and `FieldContext.durationOf` — into `entry.read(key)` and `entry.duration()`. `Q7` decides how, not whether (`Q1`, closed).
-- A segmented Entry's duration is an option: `duration: 'span' | 'segments'` on the `Dataset`, default `'span'`. **Build 1 writes it** (`Q6`, closed). Only the config key's name wants a nod.
+- All three Field-read doors retire — `entries.fieldValue`, `FieldContext.read` and `FieldContext.durationOf` — into `entry.read(key)` and `entry.duration()` (`Q1`).
+- **The read binds to the pass.** A seam that holds a row the store does not hold — the Rollup, the ChangeSet, every `compute` Field — carries `StoredEntry` values and reads the tree through `ctx.children()`. `RollUpContext` adds `values(key?)`, `numericValues(key?)` and `durations()` (`Q7`). This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
+- A segmented Entry's duration is an option. The key is `duration`, the values are `'span' | 'segments'`, it sits on the `Dataset`, and the default is `'span'`. **Build 1 writes it** (`Q6`).
+- A `data` plugin handed to a `Gantt` raises `PluginSetupError`, and the message says where to install it. No new error type ships (`Q4`).
 
 ---
 

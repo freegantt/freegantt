@@ -221,7 +221,8 @@ export const phases = definePlugin({
               <td>
                 the Rollup hands each one a child it has already given this pass's value to. That
                 row is not in the store, so a live one would read the value the pass just replaced.
-                The child list rides on <code>ctx</code>, so nothing is handed over twice.
+                Ask the tree through <code>ctx.children()</code> — the pass's children, not the
+                store's.
               </td>
             </tr>
             <tr>

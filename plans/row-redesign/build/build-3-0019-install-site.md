@@ -37,7 +37,7 @@
 - [ ] **A silent partial install is refused.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove.
 - [ ] Use `PluginSetupError` unless the author rules otherwise. It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. No new type is needed.
 - [ ] The message must say **where to install it**, not only that it failed.
-- [ ] **The `Q` entry exists — it is `Q4`.** Add to it in [`../BUILD-LOG.md`](../BUILD-LOG.md) if the error choice or its wording needs more than the recommendation there. Do not open a second one.
+- [ ] **`Q4` is ruled, 2026-09-11: raise `PluginSetupError`.** It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. **No new error type ships.** The message must say where to install it.
 
 ---
 
