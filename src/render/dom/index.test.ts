@@ -41,7 +41,7 @@ const preset: ViewPreset = {
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
   preferredTickWidthPx: 24,
 };
-const variantRegistry = createVariantRegistry();
+const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
 /** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
  *  Segment spans the whole Entry, so a fixed row still packs them onto one line. */

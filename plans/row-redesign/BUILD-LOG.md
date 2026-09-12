@@ -1376,3 +1376,35 @@ applies here.
 
 **To reverse:** restore it beside `ancestorsOf`, with the `seen` set `LiveEntry.descendants()` now
 carries.
+
+---
+
+## J59 — a field match reads the Field registry first, and `fieldFor` is a required port
+
+**Review fixes, F2.**
+
+`valueMatches` called `entry.read(key)` before it looked the Field up. `entry.read` throws on a key
+no Field declares, and a `when` match runs on every row of every layout pass, so one typo took the
+frame down from inside `layout/`, with nothing between `frame-memory.ts` and the throw.
+
+**The call.** The lookup runs first, and **a key no Field declares claims no row.** J41 said an
+undeclared key was "accepted, and that is the ADR's own `FieldKey` arm, not a hole" — `tsc` accepted
+it, the runtime refused it. It is now accepted at both ends, and it matches nothing.
+
+**`VariantRegistryPorts.fieldFor` became required to make that honest.** It was optional, so
+`undefined` meant both "this registry has no Field registry" and "no Field declares this key". A
+registry built outside a Dataset now says which it means with `fieldFor: () => undefined`, and the
+suites that match on a key declare that key. Guarding on the optional port instead would have turned
+every bare registry's match silently false — `variants.test.ts` proved it, and four of its cases went
+red on the first run.
+
+**A plugin still matches on its own key, by declaring it.** The Dataset declares the key, which is
+what `harness/plugins.ts:36–46` already does and says: a chrome plugin installs after the Dataset's
+registration closes, so the page declares `buffer`, `risk` and `milestone` for it.
+
+**Not done, and deliberate: a typo reports nothing.** Naming it needs a second report port beside
+`reportDoubleClaim`, and the answer is live — a Gantt rebound to another Dataset changes which keys
+are declared, so a check at registration would report a key that later becomes real. Left for the
+Fault pass that F4 and F5 already touch.
+
+**To reverse:** make `fieldFor` optional again, restore `fieldFor?.(key)`, and read the row first.

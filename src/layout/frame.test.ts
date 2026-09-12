@@ -33,7 +33,7 @@ const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
-const variantRegistry = createVariantRegistry();
+const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
 describe('computeFrame', () => {
   it('emits one row and one bar per entry, positioned by time (S0 scope)', () => {

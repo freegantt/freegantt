@@ -40,7 +40,7 @@ const scale = createTimeScale({
 });
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
-const variantRegistry = createVariantRegistry();
+const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
 function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
   return {
@@ -154,7 +154,7 @@ describe('FrameLayout', () => {
   it('itemIdsForEntry answers a plugin variant that draws its own Items (#185)', () => {
     // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
     const variant = 'twin';
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: variant,
       when: () => true,
@@ -204,7 +204,7 @@ describe('FrameLayout', () => {
   it('segmentIdsForItem names every Segment of the Entry for a whole-entry variant (#212)', () => {
     // A whole-entry variant (a parent, a milestone) draws one bar over the whole Entry, so it drew
     // no single Segment. It still stands for all of them: a click on it selects the Entry's work.
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: 'milestone',
       when: () => true,

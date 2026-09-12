@@ -42,7 +42,7 @@ function harness(): Harness {
     },
   };
   return {
-    registrations: new PluginRegistrations(ports, createVariantRegistry()),
+    registrations: new PluginRegistrations(ports, createVariantRegistry({ fieldFor: () => undefined })),
     counts,
     columns,
   };

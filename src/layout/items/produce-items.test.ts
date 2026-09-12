@@ -29,7 +29,7 @@ describe('wholeEntryItem (review P3)', () => {
 
   it('is what a variant with no `items` of its own draws (ADR 0018)', () => {
     const t1 = spanEntry('t1');
-    const own = createVariantRegistry();
+    const own = createVariantRegistry({ fieldFor: () => undefined });
     own.addPluginVariant({ name: 'buffer', when: () => true });
     expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
       wholeEntryItem(t1, 'buffer'),
@@ -62,7 +62,7 @@ function entryByIdFor(entries: readonly Entry[]): ReadonlyMap<EntryId, Entry> {
   return new Map(entries.map((entry) => [entry.id, entry]));
 }
 
-const registry = createVariantRegistry();
+const registry = createVariantRegistry({ fieldFor: () => undefined });
 
 describe('produceItemsForRow', () => {
   it('produces one Item per Segment with ids t1:0, t1:1, t1:2', () => {
