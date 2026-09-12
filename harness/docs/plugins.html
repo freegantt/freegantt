@@ -473,16 +473,10 @@
             <td>held provider list drops; next frame repaints</td>
           </tr>
           <tr>
-            <td class="mono">item producer</td>
-            <td class="mono">ctx.layout.registerItemProducer(kind, fn)</td>
-            <td>newest registration for that <code>EntryKind</code> wins</td>
-            <td>per-row Item cache invalidates; next frame repaints</td>
-          </tr>
-          <tr>
-            <td class="mono">kind defaults</td>
-            <td class="mono">ctx.interaction.registerKindDefaults(kind, defaults)</td>
-            <td>newest registration for that <code>EntryKind</code> wins</td>
-            <td>capabilities re-resolve (affordances, not paint)</td>
+            <td class="mono">variant</td>
+            <td class="mono">ctx.variants.add(variant)</td>
+            <td>newest registration for that <code>name</code> wins (ADR 0018)</td>
+            <td>per-row Item cache invalidates, capabilities re-resolve, next frame repaints</td>
           </tr>
           <tr>
             <td class="mono">grid column</td>

@@ -985,3 +985,31 @@ beats every plugin's (`J33`), and that says which rows in one place instead of p
 `harness/planner.ts` now states one variant, `checkpoint`. The phase rail is core's.
 
 **To reverse:** put `barRenderer` back in front, and give the planner page its `parent` entry again.
+
+---
+
+## J41 — the generic demo page reads the fixture's own props type, and states none of its own
+
+**Build 2. `harness/main.ts`'s API-gap review, which `CLAUDE.md` requires on every commit.**
+
+**No gap in `src/` this round.** The page's own variant is four clean lines: one `EntryVariant` with
+a `when` that reads a Field, no id set, and `gantt.variants = []` to drop it. A probe (written, run,
+deleted) checked the one claim Unit A rests on — that `TProps` reaches a rule. It does: a wrong
+value type, a predicate reading a declared key, and a foreign `TProps` list are all rejected at
+`tsc`. An undeclared key is accepted, and that is the ADR's own `FieldKey` arm, not a hole — a
+plugin's `'scheduling:progress'` is a legal match key and sits on nobody's `TProps`.
+
+**One re-derivation found, and closed in the harness.** `main.ts` built its Dataset as
+`new Dataset<{ cost?: number; team?: string }>`, a hand-written copy of a type
+`fixtures/demo-dataset.ts` already publishes as `DemoEntryProps`. Build 2 made the copy wrong: the
+fixture gained `milestone?: boolean`, the copy did not, and the file then carried two different
+props types for one Dataset — the copy on line 57, `EntryVariant<DemoEntryProps>` on line 431. The
+page now names `DemoEntryProps` and states nothing of its own.
+
+This is a harness fix with no library change behind it, which the stop rule allows: it **removes** a
+re-derivation rather than adding one to compensate for `src/`.
+
+**Two known gaps were left exactly as they are, on purpose.** `String(entry.read('team') ?? …)` is
+`Q2`/[#284](https://github.com/Pawel-IT/FreeGantt/issues/284), which says do not tidy it — the cast
+is the evidence. `sortByName` as a page-local flag is [#254](https://github.com/Pawel-IT/FreeGantt/issues/254),
+already filed with its own comment at the site.

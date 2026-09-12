@@ -103,28 +103,28 @@
 - [x] A variant with no `when` is last-resort, and every row resolves.
 - [x] Two rules that both answer yes raise `'variant-claimed-twice'` once, not per read.
 - [x] Two Gantts on one Dataset install different variants and do not interfere (I2).
-- [ ] The pin path: `update(id, { milestone: true })` lands in a `ChangeSet`, undoes, and repaints.
+- [x] The pin path: `update(id, { milestone: true })` lands in a `ChangeSet`, undoes, and repaints.
 
 ---
 
 ## Gate
 
-- [ ] `grep -rn 'EntryLook\|registerLookClaim\|registerItemProducer\|registerLookDefaults\|RendererByLook\|KindDefaults' src/ harness/ | wc -l` → 0.
+- [x] `grep -rn 'EntryLook\|registerLookClaim\|registerItemProducer\|registerLookDefaults\|RendererByLook\|KindDefaults' src/ harness/ | wc -l` → 0.
 - [x] `grep -rn "data-kind\|dataset\['kind'\]" src/ e2e/ | wc -l` → 0.
 - [x] `grep -rn "'look-claimed-twice'" src/ | wc -l` → 0.
-- [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
+- [x] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → `verify:full PASS — all 16 checks green, test:e2e included (70s)`.
 
 ---
 
 ## Locked-spec edits this build owes
 
-- [ ] `CONTEXT.md` — add a **Variant** glossary entry, beside Field and Grid column. The naming skill requires the glossary entry before the name.
-- [ ] `CONTEXT.md:517` — the `data-kind` State attribute becomes `data-variant`. The line still reads "the bar look a producer claimed", which quotes the retired word.
-- [ ] `CONTEXT.md:47` — the **Hierarchy** entry says "draw the parent look". Change the word. Build 4 changes the rest of that entry.
-- [ ] `CONTEXT.md:44` — the retired **Kind** entry says a plugin *"stores which ids it owns"*. That is the thing this ADR just removed: a variant is a rule, and nothing stores one. The sentence becomes a variant whose `when` claims the rows. Leave the rest of the entry, `_Avoid_` list included.
-- [ ] `plans/01` §2.5 — "Seams key on structure or on plugin-owned ids" needs the variant rule's wording.
-- [ ] `plans/02` — add `variants` to `GanttOptions`; retire `barRenderer: RendererByLook`; add `variant` to the command context; state that a `CapabilityRule` predicate may answer `undefined`.
-- [ ] `docs/06-plugin-authoring.md` — it teaches the four seams and the owned-id `Set`. It is the **only** file `scripts/check-doc-examples.mjs` gates, so every sample in it must compile.
+- [x] `CONTEXT.md` — add a **Variant** glossary entry, beside Field and Grid column. The naming skill requires the glossary entry before the name.
+- [x] `CONTEXT.md:517` — the `data-kind` State attribute becomes `data-variant`. The line still reads "the bar look a producer claimed", which quotes the retired word.
+- [x] `CONTEXT.md:47` — the **Hierarchy** entry says "draw the parent look". Change the word. Build 4 changes the rest of that entry.
+- [x] `CONTEXT.md:44` — the retired **Kind** entry says a plugin *"stores which ids it owns"*. That is the thing this ADR just removed: a variant is a rule, and nothing stores one. The sentence becomes a variant whose `when` claims the rows. Leave the rest of the entry, `_Avoid_` list included.
+- [x] `plans/01` §2.5 — "Seams key on structure or on plugin-owned ids" needs the variant rule's wording.
+- [x] `plans/02` — add `variants` to `GanttOptions`; retire `barRenderer: RendererByLook`; add `variant` to the command context; state that a `CapabilityRule` predicate may answer `undefined`.
+- [x] `docs/06-plugin-authoring.md` — it teaches the four seams and the owned-id `Set`. It is the **only** file `scripts/check-doc-examples.mjs` gates, so every sample in it must compile.
 
 ---
 

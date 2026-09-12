@@ -1,5 +1,5 @@
 ---
-status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The working material is in `plans/row-redesign/`.
+status: accepted — built and green on `row-redesign`, 2026-09-12: `verify:full PASS — all 16 checks green, test:e2e included (70s)`. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The build is `plans/row-redesign/build/build-2-0018-variants.md`, and the calls made during it are `J32`–`J41` in `plans/row-redesign/BUILD-LOG.md`.
 decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
 open: nothing. **The newest rule wins** (2026-09-11, author's ruling — `Q5`), so all three registration seams agree and core registers its own two variants first. **What sets the order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
 ---
@@ -82,6 +82,8 @@ A plugin ships the same object through `ctx.variants.add(variant)`. One type, tw
 ```
 
 **First, not last — the newest rule wins** (`Q5`, ruled 2026-09-11). Core registers before anything else, so every plugin variant and every consumer variant is newer and overrides it. Core is the floor. A `leaf` variant with no `when` answers for every row, so the floor is total and no row falls through. **Registering core last would make core beat every plugin**, which is the opposite of what its two variants are for.
+
+**`leaf` registers before `parent`, and the order inside core's own pair is load-bearing too** (added on acceptance; `J37`). The same newest-first walk applies inside core's rank, and `leaf` carries no `when`, so it claims every row. Register it second and it answers before `parent`'s rule ever runs, and no row is ever a summary. The general rule: **a variant with no `when` registers before every rule it is the floor for.**
 
 **A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
 
@@ -201,6 +203,8 @@ ctx.commands.register({
 
 - **Core registers its own two variants first**, not last. See *Core registers its own two variants first*. Under the old rule, last meant fallback. Under this one, last would mean core beats every plugin.
 - **`claimedVariantFor` walks newest-first and stops at the first yes.** It must not walk oldest-first and keep the last yes: the read runs on every hover change, where the budget is zero allocation and an early exit is the point (`produce-items.ts:182`). Reversing the walk keeps the early exit. A reporter still walks the whole list, because a diagnostic has to see both claimants.
+
+**A variant's `paint` answers before `barRenderer`** (added on acceptance; `J40`). A variant names the rows it covers, so it is the specific answer; `barRenderer` is the catch-all for every bar no variant paints, which is what the retired map's `'*'` entry meant. D-S5-11 still orders that catch-all: a consumer's own `barRenderer` beats a plugin's whole-point `bar` renderer. To take a row a plugin's variant claimed, a consumer declares a variant of the same name, which says *which rows* in one place instead of painting over them. `harness/planner.ts` is the evidence: under the other order it had to restate core's own `parent` rule, with a paint that returned nothing, purely to hold its own `barRenderer` off a row the library already painted.
 
 **[ADR 0015](0015-what-the-write-door-refuses.md) is owed nothing.** The earlier draft added two refusals to the write door — a reserved name, and an unregistered name. Both die with the stored value.
 

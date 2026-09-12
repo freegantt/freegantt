@@ -147,9 +147,8 @@ plugins claim the same key.
 | --- | --- | --- | --- |
 | `commands.register(command)` | `command.id` | Newest wins; falls back to the older one on dispose | `src/extensions/commands.test.ts` |
 | `interaction.registerKeybinding(binding)` | `binding.chord` | Newest-first resolution; falls back on dispose | `src/extensions/keymap.test.ts` |
-| `interaction.registerKindDefaults(kind, defaults)` | `EntryKind` | Last registration wins; falls back on dispose | `src/view/plugin-registrations.test.ts` (#154) |
-| `layout.registerItemProducer(kind, producer)` | `EntryKind` | Last registration wins; falls back to the built-in span producer | `src/layout/items/produce-items.test.ts`, "disposing the first of two registrations on one kind leaves the second producing" |
-| `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`, optionally keyed by kind) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: second plugin claiming whole bar point throws, naming both plugin ids" |
+| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/items/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
+| `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: second plugin claiming whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
 | `fields.register(field)` | `field.key` | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |

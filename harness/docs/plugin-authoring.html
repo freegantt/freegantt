@@ -648,18 +648,20 @@ the newest rule to answer wins and the other is reported; nothing stores a varia
           </table>
 
           <p>
-            <strong>Four calls retire.</strong> <code>registerLookClaim</code>,
-            <code>registerItemProducer</code>, <code>registerLookDefaults</code> and the
-            <code>barRenderer: RendererByLook</code> option are all keys on the one
-            <code>EntryVariant</code> object now. <code>KindDefaults</code> retires with them: it was
-            boolean-only because a registering plugin never saw an Entry, and §2 hands it one, so
-            <code>can</code> takes the same predicates <code>interactions</code> takes.
+            <strong>One object answers four questions.</strong> A variant used to cost four
+            registrations, and each one repeated its name. <code>ctx.variants.add(variant)</code> is
+            the whole seam now: <code>when</code> says which rows wear it, <code>items</code> what
+            shape it draws, <code>paint</code> how it looks, and <code>can</code> what you can do to
+            it. <code>can</code> takes the same predicates <code>interactions</code> takes, because
+            §2 hands a rule the live Entry. ADR 0018 lists what retired.
           </p>
           <p>
             The <code>view</code> half declares no Field. It <em>shows</em> one with
-            <code>registerGridColumn</code>; the <code>data</code> half declares it. A consumer's own
-            <code>barRenderer</code> or <code>cellRenderer</code> always beats a plugin's paint: if
-            the page wants the plugin's, it omits its own.
+            <code>registerGridColumn</code>; the <code>data</code> half declares it. A variant's
+            <code>paint</code> names the rows it covers, so it answers before a page's own
+            <code>barRenderer</code>, which is the catch-all for every bar no variant paints. To take
+            a row a plugin's variant claimed, the page declares a variant of the same name: a
+            consumer's rules outrank every plugin's.
           </p>
         </section>
 
