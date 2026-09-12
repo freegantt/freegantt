@@ -37,8 +37,7 @@ export interface ColumnCellRendererContext {
   entry?: Entry | undefined;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
-  /** The same Field value before formatting — what `dataset.entries.fieldValue(id, field)` answers
-   *  (review H3). One vocabulary with the Gantt-wide `CellRendererContext`. */
+  /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `CellRendererContext`. */
   fieldValue: unknown;
 }
 export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;

@@ -97,7 +97,7 @@ export interface DatasetOptions<TProps = unknown> {
 // it actually matters (`GanttOptions.dataset`, `GanttShell`) is still checked structurally.
 //
 // TProps is the documented generic (`plans/02` §1.6, ADR 0011) — it types both `entry.props` and the
-// declared-key map `entries.fieldValue` resolves against; TypeScript does not infer a later type
+// declared-key map `entry.read` resolves against; TypeScript does not infer a later type
 // parameter once an earlier one is written, so a plugin generic cannot join it without breaking
 // inference on this one (#123).
 // TProps trust boundary (plans/02): the internal store (`DatasetState`, `data/`'s `EntryStore`) is
@@ -202,7 +202,7 @@ export class Dataset<TProps = unknown> {
   }
 
   /** The resolved Field for this key, or `undefined` when the key is not declared. This is the
-   *  declaration, not an Entry value; `entries.fieldValue` reads the value. */
+   *  declaration, not an Entry value; `entry.read(key)` reads the value. */
   field(key: FieldKey): Field | undefined {
     return this.#state.fields.get(key);
   }

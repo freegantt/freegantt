@@ -31,7 +31,7 @@ export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues
   ? CoreFieldValues[K]
   : unknown;
 
-/** A Field's value on a Dataset that declared `TProps` — what `entries.fieldValue` answers. A core
+/** A Field's value on a Dataset that declared `TProps` — what `entry.read(key)` answers. A core
  *  key reads as its shipped type, a declared key as the type the consumer wrote, and any other key
  *  as `unknown`. One generic types both `entry.props` and this (ADR 0011); `TProps` stops at the
  *  Dataset (ADR 0005). */
