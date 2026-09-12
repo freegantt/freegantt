@@ -1,7 +1,8 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
-import type { StoredEntry, EntryId, ProposedEdits } from '../model/index.js';
+import type { HierarchySource, StoredEntry, EntryId, ProposedEdits } from '../model/index.js';
 import { entryAfterEdit } from './fields/field-access.js';
+import { parentIdFrom } from './hierarchy-source.js';
 
 export function buildEffectiveEntries(
   committed: ReadonlyMap<EntryId, StoredEntry>,
@@ -53,42 +54,52 @@ export function entryAfterEdits(
   return edit === undefined ? current : entryAfterEdit(current, edit);
 }
 
-export function childIdsByParent(entries: ReadonlyMap<EntryId, StoredEntry>): Map<EntryId, EntryId[]> {
+/** Every walk below asks `parentIdOf` which Entry is the parent (ADR 0020), never `entry.parentId`
+ *  — core's own source answers that field, and a plugin's source answers something else. Hand these
+ *  a **checked** source (`checkHierarchySource`): a chain that loops never terminates otherwise. */
+export function childIdsByParent(
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {
-    if (entry.parentId === undefined) continue;
-    const siblings = byParent.get(entry.parentId);
+    const parentId = parentIdFrom(parentIdOf, entry);
+    if (parentId === undefined) continue;
+    const siblings = byParent.get(parentId);
     if (siblings) siblings.push(entry.id);
-    else byParent.set(entry.parentId, [entry.id]);
+    else byParent.set(parentId, [entry.id]);
   }
   return byParent;
 }
 
-export function childCountByParent(entries: ReadonlyMap<EntryId, StoredEntry>): Map<EntryId, number> {
-  const counts = new Map<EntryId, number>();
-  for (const entry of entries.values()) {
-    if (entry.parentId === undefined) continue;
-    counts.set(entry.parentId, (counts.get(entry.parentId) ?? 0) + 1);
-  }
-  return counts;
-}
-
-export function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, StoredEntry>): number {
+export function depthOf(
+  id: EntryId,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): number {
   let depth = 0;
   let current = entries.get(id);
-  while (current?.parentId !== undefined) {
+  let parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
+  while (parentId !== undefined) {
     depth += 1;
-    current = entries.get(current.parentId);
+    current = entries.get(parentId);
+    parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
   }
   return depth;
 }
 
-export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, StoredEntry>): readonly EntryId[] {
+export function ancestorsOf(
+  id: EntryId,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): readonly EntryId[] {
   const result: EntryId[] = [];
-  let current = entries.get(id)?.parentId;
-  while (current !== undefined) {
-    result.push(current);
-    current = entries.get(current)?.parentId;
+  let current = entries.get(id);
+  let parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
+  while (parentId !== undefined) {
+    result.push(parentId);
+    current = entries.get(parentId);
+    parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
   }
   return result;
 }

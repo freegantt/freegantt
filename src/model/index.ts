@@ -32,6 +32,7 @@ export type {
 // The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
 // ids.ts and errors.ts — see `spansTime`'s own comment for why the carve-out admits it.
 export { spansTime } from './stored-entry.js';
+export type { HierarchySource, HierarchySourceWrapper } from './hierarchy-source.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
 export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';

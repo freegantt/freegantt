@@ -5,11 +5,19 @@
 // (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type { StoredEntry, EntryId, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
+import type {
+  StoredEntry,
+  EntryId,
+  FieldUpdated,
+  HierarchySource,
+  SegmentId,
+  TimeSpan,
+} from '../model/index.js';
 import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
+import { checkHierarchySource, parentIdFrom } from './hierarchy-source.js';
 import {
   createRollUpContext,
   editProposesField,
@@ -35,25 +43,39 @@ export interface PendingRollUp {
   readonly edits: RollUpEditSets;
 }
 
+/**
+ * Which rows this operation makes stale. `entries` is the tree **before** the operation, and
+ * `parentIdOf` reads it the way the rest of the library does (ADR 0020).
+ *
+ * The former parent of a row that moved is the reason this asks a pre-edit row at all: a live
+ * `parent()` answers the new parent, so the old one would never be recomputed and a move would leave
+ * a stale aggregate behind. It reads the **source**, unconditionally, rather than asking whether the
+ * edit named `parentId` — a plugin source may answer out of a `props` key, so a row can move with no
+ * `parentId` write to spot. The new parent needs no entry here: `parentsToRecompute` walks the
+ * ancestors of every touched id in the post-operation tree.
+ */
 function collectTouchedIds(
   entries: ReadonlyMap<EntryId, StoredEntry>,
   added: readonly StoredEntry[],
   removed: readonly StoredEntry[],
   proposed: ProposedEdits,
+  parentIdOf: HierarchySource,
 ): ReadonlySet<EntryId> {
+  const formerParentOf = (id: EntryId): EntryId | undefined => {
+    const before = entries.get(id);
+    return before === undefined ? undefined : parentIdFrom(parentIdOf, before);
+  };
   const touched = new Set<EntryId>();
   for (const entry of added) touched.add(entry.id);
   for (const entry of removed) {
     touched.add(entry.id);
-    const parentId = entries.get(entry.id)?.parentId;
+    const parentId = formerParentOf(entry.id);
     if (parentId !== undefined) touched.add(parentId);
   }
-  for (const id of proposed.keys()) touched.add(id);
-  for (const [id, edit] of proposed) {
-    if ('parentId' in edit) {
-      const former = entries.get(id)?.parentId;
-      if (former !== undefined) touched.add(former);
-    }
+  for (const id of proposed.keys()) {
+    touched.add(id);
+    const former = formerParentOf(id);
+    if (former !== undefined) touched.add(former);
   }
   return touched;
 }
@@ -68,6 +90,7 @@ function parentsToRecompute(
   byParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   touched: ReadonlySet<EntryId> | undefined,
+  parentIdOf: HierarchySource,
 ): readonly EntryId[] {
   const isParent = (id: EntryId): boolean => (byParent.get(id)?.length ?? 0) > 0;
   const wasParent = (id: EntryId): boolean => (priorByParent.get(id)?.length ?? 0) > 0;
@@ -80,7 +103,7 @@ function parentsToRecompute(
     }
   } else {
     for (const id of touched) {
-      for (const ancestor of ancestorsOf(id, entries)) candidates.add(ancestor);
+      for (const ancestor of ancestorsOf(id, entries, parentIdOf)) candidates.add(ancestor);
       if (needsVisit(id)) candidates.add(id);
     }
   }
@@ -88,7 +111,7 @@ function parentsToRecompute(
   const filtered = Array.from(candidates).filter(needsVisit);
 
   const depthById = new Map<EntryId, number>();
-  for (const id of filtered) depthById.set(id, depthOf(id, entries));
+  for (const id of filtered) depthById.set(id, depthOf(id, entries, parentIdOf));
 
   return filtered.sort((a, b) => depthById.get(b)! - depthById.get(a)!);
 }
@@ -212,6 +235,12 @@ export interface RollUpResult {
 
 const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], cascadeDropped: [] });
 
+/** A checked parent index, read back as a `HierarchySource` — the shape every walk in
+ *  `entry-tree.ts` takes (ADR 0020). */
+function parentIdIn(parentById: ReadonlyMap<EntryId, EntryId>): HierarchySource {
+  return (entry) => parentById.get(entry.id);
+}
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
@@ -222,6 +251,7 @@ export function rollUpFields(
   registry: FieldRegistry,
   access: FieldAccess,
   mintSegmentId: () => SegmentId,
+  hierarchySource: HierarchySource,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
@@ -235,11 +265,18 @@ export function rollUpFields(
   // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
   const entries =
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
-  const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
+  // The tree this pass walks, checked once (ADR 0020): a source that loops would make `ancestorsOf`
+  // and `depthOf` below run forever. Nothing is reported from here — this is a tree no commit has
+  // landed yet, and the store reports the committed one once per revision.
+  const parentOfPrior = parentIdIn(checkHierarchySource(committed, hierarchySource));
+  const parentOfEffective =
+    pending === undefined ? parentOfPrior : parentIdIn(checkHierarchySource(entries, hierarchySource));
+  const touched =
+    pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged, parentOfPrior);
 
-  const byParent = childIdsByParent(entries);
-  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed);
-  const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
+  const byParent = childIdsByParent(entries, parentOfEffective);
+  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed, parentOfPrior);
+  const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective
   // children — the store does not hold the value this bottom-up walk just gave a child (ADR 0017).

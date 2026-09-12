@@ -11,6 +11,7 @@ import type {
   StoredEntry,
   EntryId,
   FieldUpdated,
+  HierarchySource,
   SegmentId,
   ProposedEdit,
   StoreRowUpdated,
@@ -65,6 +66,8 @@ export interface CommitChangeSetInput {
   extraEditsReadingFor(request: EditRequest): EditsReading;
   readonly fields: FieldRegistry;
   readonly fieldAccess: FieldAccess;
+  /** The tree the Rollup walks (ADR 0020) — see `TransactionData.hierarchySource`. */
+  readonly hierarchySource: HierarchySource;
   nextChangeSetId(): ChangeSetId;
   /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
    *  spanning for the first time always mints a real `SegmentId` here, because this path always
@@ -313,6 +316,7 @@ export function buildCommitChangeSet(
     data.fields,
     data.fieldAccess,
     () => data.mintSegmentId(),
+    data.hierarchySource,
   );
 
   // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the

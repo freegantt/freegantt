@@ -71,7 +71,7 @@ export interface BarRendererContext {
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'variant-claimed-twice' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
@@ -352,6 +352,11 @@ export interface DatasetFieldRegistrations {
     registerType(name: FieldTypeName, type: FieldType): void;
 }
 
+// @public
+export interface DatasetHierarchy {
+    setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
+}
+
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
@@ -382,6 +387,8 @@ export interface DatasetPluginContextOf<TDataset> {
     events: DatasetEvents;
     // (undocumented)
     fields: DatasetFieldRegistrations;
+    // (undocumented)
+    hierarchy: DatasetHierarchy;
     // (undocumented)
     store: DatasetStoreAccess;
 }
@@ -1296,6 +1303,12 @@ export interface HeaderRendererContext {
     // (undocumented)
     column: ResolvedColumn;
 }
+
+// @public
+export type HierarchySource<TProps = Record<string, unknown>> = (entry: StoredEntry<TProps>) => EntryId | string | undefined;
+
+// @public
+export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: HierarchySource<TProps>) => HierarchySource<TProps>;
 
 // @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
