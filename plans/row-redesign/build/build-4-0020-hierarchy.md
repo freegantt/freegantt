@@ -57,9 +57,9 @@
 - `:51`'s `'parentId' in edit` asks what the **edit wrote**. That is a write-shape check on `ProposedEdit`, and it stays exactly as it is. `parentId` is still stored and `update()` still writes it (Unit B).
 
 - [x] Invalidate the former parent through the **hierarchy source**, applied to the pre-edit row, not through `entry.parentId`. Core's own source is `(entry) => entry.parentId`, so nothing changes with no plugin installed.
-- [ ] Keep `'parentId' in edit` as a write-shape check. **Do not turn it into a tree read.**
-- [ ] A plugin whose source reads a `props` key must invalidate the same way when that key changes. **Say what happens when it does not** — a source that answers a new parent with no `parentId` edit has changed the tree without telling the Rollup. Report it, or state why it cannot happen.
-- [ ] Test: a plugin owns the tree, a row moves under it, and **both** the old parent and the new parent roll up again.
+- [x] Keep `'parentId' in edit` as a write-shape check. **Do not turn it into a tree read.**
+- [x] A plugin whose source reads a `props` key must invalidate the same way when that key changes. **Say what happens when it does not** — a source that answers a new parent with no `parentId` edit has changed the tree without telling the Rollup. Report it, or state why it cannot happen.
+- [x] Test: a plugin owns the tree, a row moves under it, and **both** the old parent and the new parent roll up again.
 
 ---
 
@@ -73,20 +73,20 @@
 
 ## Tests this build adds
 
-- [ ] A plugin source overrides `parentId`, and `children()`, `parent()`, `depth` and `descendants()` all follow it.
-- [ ] The Rollup follows the plugin's tree, with no second registration.
-- [ ] Two sources compose: the second receives the first and may call it.
-- [ ] A cyclic answer raises a Fault with `by: 'plugin'`, and the Entry reads as a root.
-- [ ] An unknown parent id reads as a root, and reports once per revision.
-- [ ] A write to `parentId` still works, and raises no warning, while a source ignores it.
-- [ ] **A cost test.** `#childrenOfWriteSet` stays O(children + edits) with a source installed. This guards the O(n²) shape.
+- [x] A plugin source overrides `parentId`, and `children()`, `parent()`, `depth` and `descendants()` all follow it.
+- [x] The Rollup follows the plugin's tree, with no second registration.
+- [x] Two sources compose: the second receives the first and may call it.
+- [x] A cyclic answer raises a Fault with `by: 'plugin'`, and the Entry reads as a root.
+- [x] An unknown parent id reads as a root, and reports once per revision.
+- [x] A write to `parentId` still works, and raises no warning, while a source ignores it.
+- [x] **A cost test.** `#childrenOfWriteSet` stays O(children + edits) with a source installed. This guards the O(n²) shape.
 
 ---
 
 ## Gate
 
 - [ ] The three read sites named in the precondition still read no `.parentId`, and `rollup.ts:46,52` reads the source.
-- [ ] The cost test passes with a source installed.
+- [x] The cost test passes with a source installed.
 - [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
 
 ---
