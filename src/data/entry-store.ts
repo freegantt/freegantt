@@ -691,24 +691,41 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** `id`'s current descendants, deepest included — read before any removal in this call is staged,
-   *  so a self-referential write set never confuses the walk (S2.3 §1.4). */
+   *  so a self-referential write set never confuses the walk (S2.3 §1.4).
+   *
+   *  A worklist with the `seen` guard `#depthOf` carries: inside an open transaction the tree is the
+   *  raw source's answer, and a source that loops would otherwise walk forever. Each row is staged
+   *  once, and how deep the tree goes never reaches the stack. */
   #subtreeOf(id: EntryId): readonly EntryId[] {
-    const result: EntryId[] = [];
-    for (const child of this.storedChildrenOf(id)) {
-      result.push(child.id);
-      result.push(...this.#subtreeOf(child.id));
+    const found: EntryId[] = [];
+    const seen = new Set<EntryId>([id]);
+    const pending: EntryId[] = [id];
+    while (pending.length > 0) {
+      for (const child of this.storedChildrenOf(pending.pop()!)) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
+        found.push(child.id);
+        pending.push(child.id);
+      }
     }
-    return result;
+    return found;
   }
 
   /** `parentId` must name a known entry and must not make `id` its own ancestor, self-parenting
    *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
-   *  is seen. */
+   *  is seen.
+   *
+   *  `seen` is the same guard `#depthOf` carries. Ingest checks no authored `parentId`, so a
+   *  consumer can construct a loop with no plugin at all; without the guard the next edit that names
+   *  a row inside that loop walks it forever. A loop the edit is not part of stops the walk and
+   *  passes — the committed check reports it as one `hierarchy-cycle` Fault (ADR 0020). */
   #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
     if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
     let current: EntryId | undefined = parentId;
-    while (current !== undefined) {
+    const seen = new Set<EntryId>();
+    while (current !== undefined && !seen.has(current)) {
       if (current === id) throw new ParentCycleError(id);
+      seen.add(current);
       current = this.storedEntry(current)?.parentId;
     }
   }
