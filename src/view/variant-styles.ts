@@ -3,9 +3,16 @@
 // is not this module's job to repeat that — this one is a `VariantRegistry`'s own answer, restated
 // as one `<style>` node.
 //
-// **One node per Gantt, never one shared and refcounted per document** (I2). Two Gantts must be
-// fully independent: a summary rule on one page must not un-paint a diamond on another. The cost is
-// duplicated text when two Gantts install one variant — that is bytes, not behaviour, because the
+// **One node per Gantt, never one shared and refcounted per document** (I2). No two Gantts share a
+// mutable node: each owns its own, so disposing one Gantt removes exactly its own rules and leaves
+// every other Gantt's node untouched. That is lifecycle independence, and it is what this shape buys.
+//
+// It does not buy cascade independence, and cannot: CSS is document-global, the same as the base
+// sheet already is. Two Gantts' variant rules land in the same document, in the same `@layer
+// freegantt`, so a class one Gantt's variant styles is the same class any Gantt in the document
+// paints with — a `diamond()` installed on one Gantt restyles every `.fg-bar-diamond` in the
+// document, this Gantt's included (`plans/shipped-variants/README.md` Q6). The cost of one node each
+// is duplicated text when two Gantts install one variant — that is bytes, not behaviour, because the
 // rules are identical and land in one layer either way. `ensureBaseStyles`'s own document-wide marker
 // is a different shape for a different reason: the base sheet holds no variant's own choice, so every
 // Gantt in the document is content with the one copy already there.

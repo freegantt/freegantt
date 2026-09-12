@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 
 declare global {
   interface Window {
-    __gantt: import('../src/api/index.js').Gantt;
+    __gantt: import('freegantt').Gantt;
   }
 }
 

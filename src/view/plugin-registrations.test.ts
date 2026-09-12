@@ -73,9 +73,9 @@ describe('PluginRegistrations — what each seam invalidates', () => {
     expect(counts.frames).toBe(2);
   });
 
-  // ADR 0018: one variant answers four questions, so one registration invalidates all three passes
-  // — the Items every row produces, every capability, and the frame. ADR 0022 §5 adds a fifth: a
-  // variant's own `css` reaches the document on this same edge.
+  // ADR 0018 and ADR 0022 §5: one variant answers five questions, so one registration invalidates
+  // all three passes — the Items every row produces, every capability, and the frame — and rewrites
+  // its own `css`, which reaches the document on this same edge.
   it('a variant re-produces every row, re-resolves every capability, rewrites its own css and repaints, on both edges', () => {
     const { registrations, counts } = harness();
 

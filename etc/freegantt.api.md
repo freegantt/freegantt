@@ -1892,6 +1892,7 @@ export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSourc
 // @public
 export interface ResolvedVariant extends DrawnVariant {
     readonly can: Interactions | undefined;
+    readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
 }
 

@@ -257,4 +257,44 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
+  {
+    // #287, review finding F7: `harness-public-api-only` (.dependency-cruiser.cjs) matches
+    // *resolved* paths, so it cannot tell a relative path naming `src/api/index.ts` from the
+    // `freegantt` alias resolving to the same file — the exception that lets the alias through lets
+    // a hand-written `'../src/api/index.js'` through with it. This rule reads the specifier *text*
+    // an author wrote instead, which is the rule dependency-cruiser can't state: never a relative
+    // path into src/, whatever position it appears in. Belt and braces with the cruiser rule, not a
+    // replacement — the cruiser rule still catches an internal
+    // (`'../src/layout/items/variants.js'`) through a spelling this text match could miss.
+    //
+    // Three positions, because #287 shipped with one covered and two not: a value import and a
+    // type import (`import type { X } from '../src/...'`) are the same `ImportDeclaration` node, so
+    // `no-restricted-imports` already caught both. A type-position inline `import(...)` is a
+    // different node (`TSImportType`) that neither the built-in rule nor
+    // `@typescript-eslint/no-restricted-imports` visits — the exact shape
+    // `e2e/variant-styles.spec.ts` shipped (`Window['__gantt']: import('../src/api/index.js').Gantt`
+    // inside a `declare global` block). `no-restricted-syntax` reads the AST node text rule can't.
+    files: ['harness/**/*.ts', 'e2e/**/*.ts', 'fixtures/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../src/**', '../../src/**', '../../../src/**'],
+              message: "#287: import from 'freegantt', not a relative path into src/.",
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSImportType > Literal[value=/^(\\.\\.\\/)+src(\\/|$)/]',
+          message:
+            "#287: import from 'freegantt', not a relative path into src/ — including a type-position `import(...)`.",
+        },
+      ],
+    },
+  },
 );
