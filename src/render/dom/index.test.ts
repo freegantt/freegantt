@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
-import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
+import { computeFrame, createVariantRegistry } from '../../layout/index.js';
 import type {
   BarRenderer,
   Entry,
@@ -40,7 +40,7 @@ const preset: ViewPreset = {
   headers: [{ unit: 'day', increment: 1, format: () => 'tick' }],
   preferredTickWidthPx: 24,
 };
-const itemProducerRegistry = createItemProducerRegistry();
+const variantRegistry = createVariantRegistry();
 
 /** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
  *  Segment spans the whole Entry, so a fixed row still packs them onto one line. */
@@ -86,7 +86,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -116,7 +116,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
@@ -141,7 +141,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -170,7 +170,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -192,7 +192,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -215,7 +215,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     // computeFrame never sets a flag true today (no scheduling plugin wired yet) — mutate the frame's
     // own bar object, same shape a future scheduling plugin would produce, to prove the generator path.
@@ -240,7 +240,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
     backend.sync(frame);
@@ -264,7 +264,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
         columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
@@ -289,7 +289,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
 
@@ -317,7 +317,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
@@ -381,7 +381,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
@@ -430,7 +430,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
@@ -483,7 +483,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -508,7 +508,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -536,7 +536,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(scrolled);
 
@@ -566,7 +566,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -609,7 +609,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -635,7 +635,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -658,7 +658,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -709,7 +709,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -739,7 +739,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -778,7 +778,7 @@ describe('render/dom backend', () => {
           rowHeight: 32,
           revision: 0,
           datasetRevision: 0,
-          itemProducerRegistry,
+          variants: variantRegistry,
         }),
       );
 
@@ -829,7 +829,7 @@ describe('render/dom backend', () => {
           rowHeight: 32,
           revision: 0,
           datasetRevision: 0,
-          itemProducerRegistry,
+          variants: variantRegistry,
         }),
       );
 
@@ -858,7 +858,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     // A dataset far taller than the pane's own visible window: `.fg-timeline-pane` is both the
@@ -895,7 +895,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     backend.sync({
@@ -937,7 +937,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     backend.sync({
@@ -969,7 +969,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     backend.sync({
@@ -1013,7 +1013,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(base);
 
@@ -1054,7 +1054,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -1089,7 +1089,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -1132,7 +1132,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: oneRowForBoth,
     });
     backend.sync(frame);
@@ -1163,7 +1163,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     expect(frame.bars).toHaveLength(3);
@@ -1214,7 +1214,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const bar = frame.bars.find((b) => b.entryId === drawn.id)!;
     expect(bar.segmentId).toBeUndefined();
@@ -1259,7 +1259,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const bar = frame.bars.find((b) => b.entryId === parent.id)!;
@@ -1291,7 +1291,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const stateOf = (id: ItemId): string =>
@@ -1326,7 +1326,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const selected = frame.bars[1]!.segmentId!;
@@ -1363,7 +1363,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
@@ -1397,7 +1397,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const everySegment = frame.bars.map((bar) => bar.segmentId!);
@@ -1433,7 +1433,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
@@ -1463,7 +1463,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -1491,7 +1491,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -1521,7 +1521,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -1559,7 +1559,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a] = frame.bars;
@@ -1597,7 +1597,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a] = frame.bars;
@@ -1631,7 +1631,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     backend.applyState({ resizableEntryId: frame.bars[0]!.entryId });
@@ -1681,7 +1681,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [first, last] = frame.bars;
@@ -1733,7 +1733,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [first, last] = frame.bars;
@@ -1786,7 +1786,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [first, last] = frame.bars;
@@ -1827,7 +1827,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     // resizableEntryId never set — handles stay hidden.
@@ -1857,7 +1857,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
@@ -1890,7 +1890,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -1931,7 +1931,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'entries', tree: true },
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
@@ -1969,7 +1969,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -2001,7 +2001,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       }),
     );
 
@@ -2033,7 +2033,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -2075,7 +2075,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     expect(() => backend.sync(frame)).not.toThrow();
@@ -2114,7 +2114,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     backend.sync(frame);
@@ -2149,7 +2149,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     backend.sync(frame);
 
@@ -2220,7 +2220,7 @@ describe('render/dom backend', () => {
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       });
     }
 
@@ -2435,7 +2435,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
@@ -2472,7 +2472,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
@@ -2511,7 +2511,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
@@ -2540,7 +2540,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     backend.sync({
@@ -2586,7 +2586,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const row = frame.rows[0]!;
 
@@ -2624,7 +2624,7 @@ describe('render/dom backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'cost', header: 'Cost', align: 'end', format: () => '500' },
