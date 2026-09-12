@@ -49,8 +49,10 @@ export type BuiltInErrorCode =
   | 'scale-options-ignored'
   | 'rollup-corrected'
   // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops
-  // back on itself. Core refuses the answer, reads that Entry as a root and carries on — `by` is
-  // `'plugin'`, because core's own source reads a `parentId` that `entries.update` already checked.
+  // back on itself. Core refuses the answer, reads that Entry as a root and carries on. `by` names
+  // whoever the **answer** came from (`F4`): `'consumer'` when it is the row's own authored
+  // `parentId` — which a composing plugin hands straight back when it falls through — and
+  // `'plugin'` for any other answer.
   | 'unknown-parent'
   | 'hierarchy-cycle'
   // Q10, ADR 0018: two rules from one source both claimed one Entry's variant. The newest paints,
@@ -106,8 +108,9 @@ export interface Refusable {
   readonly refuse: (reason: string) => false;
 }
 
-/** Who refused, or who broke. `'core'` is the library itself; `'consumer'` is a handler someone
- *  registered on `beforeChange`/`before*`; a `PluginId` is the plugin that raised it.
+/** Who refused, or who broke. `'core'` is the library itself; `'consumer'` is the consumer's own
+ *  code — a handler they registered on `beforeChange`/`before*`, or data they authored, as
+ *  `'unknown-parent'` reports; a `PluginId` is the plugin that raised it.
  *
  *  Named `by` because `origin` is taken (`ChangeOrigin`) and a bare `source` is barred (Field source,
  *  Row source). `PluginId` is a plain `string`, so it is intersected with `{}` here to keep the two

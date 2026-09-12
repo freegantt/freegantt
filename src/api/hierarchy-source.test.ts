@@ -108,6 +108,18 @@ describe('a plugin source answers the tree, and every door follows it', () => {
 });
 
 describe('core refuses an answer it cannot use, and keeps drawing', () => {
+  /** Core raises a refused answer where it happens (`F5`), and construction happens before a
+   *  consumer can subscribe — so the `console` fallback is what a construction-time refusal reaches,
+   *  exactly as the construction Rollup's own `derived-values-dropped` report does. Every case below
+   *  reads the fallback for the construction half and the `error` event for every revision after. */
+  function captureWarnings(): string[] {
+    const lines: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((line: unknown) => {
+      lines.push(String(line));
+    });
+    return lines;
+  }
+
   it('a cyclic answer reports a Fault by "plugin", and the Entry reads as a root', () => {
     const loop = () =>
       definePlugin({
@@ -116,7 +128,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
           ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'b' : 'a'));
         },
       });
-    const reports: ErrorReport[] = [];
+    const warnings = captureWarnings();
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
@@ -125,13 +137,20 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       ],
       plugins: [loop()],
     });
-    dataset.on('error', (report) => {
-      reports.push(report);
-    });
+
+    // The plugin composed the seam, and that alone is the news — nothing has read a row yet (`F5`).
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('the source makes "b" its own ancestor');
 
     // `a` claims `b`, `b` claims `a`. The chain walks from `a`, so `b`'s answer closes it.
     expect(dataset.entries.get('b')?.parent()).toBeUndefined();
     expect(dataset.entries.get('a')?.parent()?.id).toBe('b');
+
+    const reports: ErrorReport[] = [];
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
+    dataset.entries.update('a', { name: 'A2' });
     expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
       ['hierarchy-cycle', 'plugin', 'b'],
     ]);
@@ -145,7 +164,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
           ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'nobody' : undefined));
         },
       });
-    const reports: ErrorReport[] = [];
+    const warnings = captureWarnings();
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
@@ -154,23 +173,99 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       ],
       plugins: [ghost()],
     });
+
+    expect(warnings).toEqual([
+      'FreeGantt: hierarchy: the source names "nobody" as the parent of "a", and no Entry holds that id. "a" reads as a root.',
+    ]);
+
+    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
+    expect(dataset.entries.get('a')?.depth).toBe(0);
+    // Four reads, one revision, and not one more report: reading asks the memoized answer (`F5`).
+    dataset.entries.get('a')?.children();
+    dataset.entries.get('b')?.parent();
+    expect(warnings).toHaveLength(1);
+
+    const reports: ErrorReport[] = [];
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
+    dataset.entries.update('b', { name: 'B2' });
+    dataset.entries.get('a')?.parent();
+    expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
+      ['unknown-parent', 'plugin', 'a'],
+    ]);
+  });
+
+  it('a commit that nothing reads still reports (`F5`)', () => {
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        data(ctx) {
+          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'c' ? 'nobody' : undefined));
+        },
+      });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A' }],
+      plugins: [ghost()],
+    });
+    const reports: ErrorReport[] = [];
     dataset.on('error', (report) => {
       reports.push(report);
     });
 
-    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
-    expect(dataset.entries.get('a')?.depth).toBe(0);
-    // Four reads, one revision, one report.
-    dataset.entries.get('a')?.children();
-    dataset.entries.get('b')?.parent();
+    // No row is read after this add, and no Gantt is bound. The commit is the report's occasion.
+    dataset.entries.add({ id: 'c', name: 'C' });
+
     expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
-      ['unknown-parent', 'plugin', 'a'],
+      ['unknown-parent', 'plugin', 'c'],
+    ]);
+  });
+
+  it("a consumer's own bad parentId is reported as theirs, with no plugin installed (`F4`)", () => {
+    const warnings = captureWarnings();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A', parentId: 'nope' }],
+    });
+
+    expect(warnings).toEqual([
+      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "a", and no Entry holds that id. "a" reads as a root.',
+    ]);
+    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
+
+    const reports: ErrorReport[] = [];
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
+    dataset.entries.update('a', { name: 'A2' });
+    expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
+      ['unknown-parent', 'consumer', 'a'],
+    ]);
+  });
+
+  it("a plugin that falls through still names the consumer's own parentId (`F4`)", () => {
+    const warnings = captureWarnings();
+    // The ADR's own composing shape: it answers for the rows it owns and hands the rest back.
+    const dataset = new Dataset<PhaseProps>({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'design', name: 'Design' },
+        { id: 'sketch', name: 'Sketch', parentId: 'nope' },
+      ],
+      plugins: [phases()],
+    });
+
+    expect(warnings).toEqual([
+      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "sketch", and no Entry holds that id. "sketch" reads as a root.',
     ]);
 
-    reports.length = 0;
-    dataset.entries.update('b', { name: 'B2' });
-    dataset.entries.get('a')?.parent();
-    expect(reports.filter((report) => report.code === 'unknown-parent')).toHaveLength(1);
+    const reports: ErrorReport[] = [];
+    dataset.on('error', (report) => {
+      reports.push(report);
+    });
+    dataset.entries.update('design', { name: 'Design 2' });
+    expect(reports.map((report) => [report.code, report.by])).toEqual([['unknown-parent', 'consumer']]);
   });
 
   it('a write to parentId still lands, and raises no warning, while a source ignores it', () => {

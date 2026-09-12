@@ -37,12 +37,15 @@ import {
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
+import type { ParentIndex } from './hierarchy-source.js';
 import { isDevMode } from './dev-mode.js';
 
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
  *  importing `transaction.ts` (cycle avoidance). */
 export interface CommitChangeSetEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
+  committedParents(): ParentIndex;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): ProposedEdits;
@@ -316,7 +319,7 @@ export function buildCommitChangeSet(
     data.fields,
     data.fieldAccess,
     () => data.mintSegmentId(),
-    data.hierarchySource,
+    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
   );
 
   // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the

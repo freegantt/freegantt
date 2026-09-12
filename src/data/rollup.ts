@@ -17,7 +17,8 @@ import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
-import { checkHierarchySource, parentIdFrom } from './hierarchy-source.js';
+import { checkHierarchyAnswers, parentIdFrom } from './hierarchy-source.js';
+import type { ParentIndex } from './hierarchy-source.js';
 import {
   createRollUpContext,
   editProposesField,
@@ -34,6 +35,18 @@ export interface RollUpEditSets {
   readonly body: ProposedEdits;
   /** Body plus extension-hook edits — used to read effective child values. */
   readonly merged: ProposedEdits;
+}
+
+/** The two trees the Rollup walks (ADR 0020).
+ *
+ *  The committed one is the store's own checked index, memoized per revision — the pass reads it
+ *  rather than re-deriving the same answer (`F6`), so the store and the Rollup can never disagree
+ *  about who a row's parent was. The source answers for the **effective** tree instead: the one this
+ *  commit leaves once its adds, removes and cascades land, which no revision holds and no index
+ *  can hold. */
+export interface RollUpTree {
+  readonly committedParents: ParentIndex;
+  readonly source: HierarchySource;
 }
 
 /** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
@@ -251,7 +264,7 @@ export function rollUpFields(
   registry: FieldRegistry,
   access: FieldAccess,
   mintSegmentId: () => SegmentId,
-  hierarchySource: HierarchySource,
+  tree: RollUpTree,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
@@ -265,12 +278,14 @@ export function rollUpFields(
   // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
   const entries =
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
-  // The tree this pass walks, checked once (ADR 0020): a source that loops would make `ancestorsOf`
-  // and `depthOf` below run forever. Nothing is reported from here — this is a tree no commit has
-  // landed yet, and the store reports the committed one once per revision.
-  const parentOfPrior = parentIdIn(checkHierarchySource(committed, hierarchySource));
+  // The tree this pass walks, checked (ADR 0020): a source that loops would make `ancestorsOf` and
+  // `depthOf` below run forever. The committed half is the store's own index, already checked and
+  // memoized per revision (`F6`) — this pass reads it rather than walking the whole Dataset a
+  // second time to reach the same answer. Nothing is reported from either half: the effective tree
+  // is one no commit has landed yet, and the store raises the committed one's refusals itself.
+  const parentOfPrior = parentIdIn(tree.committedParents);
   const parentOfEffective =
-    pending === undefined ? parentOfPrior : parentIdIn(checkHierarchySource(entries, hierarchySource));
+    pending === undefined ? parentOfPrior : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
   const touched =
     pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged, parentOfPrior);
 
