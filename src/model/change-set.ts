@@ -4,7 +4,7 @@
 // import data/, so a type a public model/ export needs to name must itself live in model/.
 
 import type { ChangeSetId, EntryId } from './ids.js';
-import type { Entry } from './entry.js';
+import type { StoredEntry } from './stored-entry.js';
 import type { FieldKey } from './field.js';
 import type { PluginId } from './plugin.js';
 import type { ErrorReport, Refusable } from './error-report.js';
@@ -19,12 +19,12 @@ export type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arri
 
 export interface EntityAdded {
   store: 'entries';
-  entity: Entry;
+  entity: StoredEntry;
 }
 
 export interface EntityRemoved {
   store: 'entries';
-  entity: Entry;
+  entity: StoredEntry;
 }
 
 export interface FieldUpdated {

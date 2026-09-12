@@ -8,14 +8,13 @@ import {
   invertChangeSet,
   mergeEntryEdits,
   InvalidReplayOriginError,
-  EntryNotFoundError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -41,7 +40,7 @@ describe('new Dataset()', () => {
       entries: [oneEntry({ id: 'root' }), oneEntry({ id: 't1', parentId: 'root' })],
     });
     expect(first(dataset).id).toBe(entryId('root'));
-    expect(dataset.entries.all[1]?.parentId).toBe(entryId('root'));
+    expect(dataset.entries.all[1]?.parent()?.id).toBe(entryId('root'));
   });
 
   it("takes date strings and reads them in the dataset's zone", () => {
@@ -133,7 +132,8 @@ describe('new Dataset()', () => {
       timeZone: 'UTC',
       entries: [oneEntry({ props: { team: 'A' } })],
     });
-    const entry = first(dataset);
+    // The shape a row *stores* is this test's subject, so it reads the stored values (ADR 0017).
+    const entry = dataset.entries.storedValues.get(first(dataset).id)!;
     expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
     // `segments` is always present (#212): every Entry stores at least one Segment.
@@ -217,12 +217,12 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(fired).toBe(false);
   });
 
-  it('entries.childrenOf returns direct children', () => {
+  it('entry.children() returns direct children', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1' })],
     });
-    expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
+    expect((dataset.entries.get('p1')?.children() ?? []).map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
   it('off() stops a handler from seeing further events', () => {
@@ -247,17 +247,19 @@ describe('Dataset transaction/on/off delegation', () => {
         oneEntry({ id: 'leaf', parentId: 'root', props: { cost: 100 } }),
       ],
     });
-    expect(dataset.entries.fieldValue('root', 'cost')).toBe(100);
+    expect(dataset.entries.get('root')?.read('cost')).toBe(100);
     const restored = new Dataset({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: dataset.entries.all,
+      // `toInput()` is the copy door (ADR 0017): a live row answers questions, and the stored values
+      // a rebuild needs — `props` included — are what `entries.add()` takes.
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
     });
-    expect(restored.entries.fieldValue('root', 'cost')).toBe(100);
+    expect(restored.entries.get('root')?.read('cost')).toBe(100);
     restored.entries.update('leaf', { cost: 250 });
-    expect(restored.entries.fieldValue('leaf', 'cost')).toBe(250);
-    expect(restored.entries.fieldValue('root', 'cost')).toBe(250);
+    expect(restored.entries.get('leaf')?.read('cost')).toBe(250);
+    expect(restored.entries.get('root')?.read('cost')).toBe(250);
   });
 });
 
@@ -284,8 +286,13 @@ describe('Dataset.replay / invertChangeSet (consumer-surface undo)', () => {
       timeZone: 'UTC',
       entries: [{ id: 'parent', name: 'Sitework' }, oneEntry({ id: 'child', parentId: 'parent' })],
     });
-    const parentBefore = dataset.entries.get('parent')!;
-    const childBefore = dataset.entries.get('child')!;
+    // A "before" reading is a value, never a row: one `Entry` per id, and every read is live, so a
+    // held row always agrees with itself (ADR 0017 rule 2).
+    const parentBefore = {
+      start: dataset.entries.get('parent')!.start,
+      end: dataset.entries.get('parent')!.end,
+    };
+    const childBefore = { end: dataset.entries.get('child')!.end };
     const history = new ConsumerHistory(dataset);
 
     dataset.entries.update('child', { end: '2026-10-01' });
@@ -396,7 +403,7 @@ describe('Dataset fields (S4.1)', () => {
     const updated = dataset.entries.update('t1', { start: '2026-09-05', cost: 500 });
 
     expect(changes).toHaveLength(1);
-    expect(updated.props).toEqual({ cost: 500 });
+    expect(updated.read('cost')).toBe(500);
     const fields = fieldRowsOf(changes[0]!)
       .map((row) => row.field)
       .sort();
@@ -467,12 +474,12 @@ describe('Dataset fields (S4.1)', () => {
     dataset.entries.update('a', { cost: 50 });
 
     expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
-    expect(dataset.entries.get('b')?.props).toEqual({ cost: 60, team: 'B' });
-    expect(dataset.entries.get('root')?.props).toEqual({ cost: 110 });
+    expect(dataset.entries.get('b')?.toInput().props).toEqual({ cost: 60, team: 'B' });
+    expect(dataset.entries.get('root')?.toInput().props).toEqual({ cost: 110 });
   });
 });
 
-describe('entries.fieldValue', () => {
+describe('entry.read — the one value door (ADR 0017)', () => {
   it('reads a props-addressed Field without going through entry.props directly', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -481,13 +488,13 @@ describe('entries.fieldValue', () => {
       entries: [oneEntry()],
     });
     dataset.entries.update('t1', { cost: 500 });
-    expect(dataset.entries.fieldValue('t1', 'cost')).toBe(500);
+    expect(dataset.entries.get('t1')?.read('cost')).toBe(500);
   });
 
   it('reads an entry-sourced Field', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(dataset.entries.fieldValue('t1', 'start')).toBe(first(dataset).start);
-    expect(dataset.entries.fieldValue('t1', 'name')).toBe('Design');
+    expect(dataset.entries.get('t1')?.read('start')).toBe(first(dataset).start);
+    expect(dataset.entries.get('t1')?.read('name')).toBe('Design');
   });
 
   it('reads duration on a headless Dataset before any Gantt exists', () => {
@@ -497,18 +504,21 @@ describe('entries.fieldValue', () => {
       entries: [oneEntry({ start: 0, end: 1 })],
     });
     // `duration` computes its value and owns no `Entry` key, and still reads back as a `Duration`.
-    const duration: Duration | undefined = dataset.entries.fieldValue('t1', 'duration');
+    const duration: Duration | undefined = dataset.entries.get('t1')?.read('duration');
     expect(duration).toEqual({ value: 1, unit: 'millisecond' });
   });
 
   it('throws UnknownFieldError for an unregistered key', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(() => dataset.entries.fieldValue('t1', 'cost')).toThrow(UnknownFieldError);
+    expect(() => dataset.entries.get('t1')?.read('cost')).toThrow(UnknownFieldError);
   });
 
-  it('throws EntryNotFoundError for a missing id', () => {
+  // A missing id has one door, and it is `entries.get`. The read door is on the row, so a caller
+  // that holds no row never reaches it, and no error names the id (ADR 0017).
+  it('answers no row for a missing id, so there is nothing to read from', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(() => dataset.entries.fieldValue('missing', 'name')).toThrow(EntryNotFoundError);
+    expect(dataset.entries.get('missing')).toBeUndefined();
+    expect(dataset.entries.has('missing')).toBe(false);
   });
 
   it('reads a staged write inside an open transaction', () => {
@@ -519,38 +529,43 @@ describe('entries.fieldValue', () => {
     });
     dataset.transaction(() => {
       dataset.entries.update('t1', { cost: 40 });
-      expect(dataset.entries.fieldValue('t1', 'cost')).toBe(40);
+      expect(dataset.entries.get('t1')?.read('cost')).toBe(40);
     });
   });
 });
 
 describe('Dataset generics (#123)', () => {
   it('types props from one TProps generic — declared Field keys and passenger keys alike', () => {
-    const dataset = new Dataset<{ team: string; cost: number }>({
+    const dataset = new Dataset<{ team: string; cost: number; note: string }>({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
-      fields: [{ key: 'cost', type: 'money' }],
+      // `entry.read` refuses a key no Field declares (ADR 0017), so both props keys are declared.
+      fields: [{ key: 'cost', type: 'money' }, { key: 'team' }],
       entries: [
         {
           id: 't1',
           name: 'Design',
           start: '2026-09-01',
           end: '2026-09-08',
-          props: { team: 'A' },
+          props: { team: 'A', note: 'carried' },
         },
       ],
     });
 
-    const team: string | undefined = dataset.entries.get('t1')?.props?.team;
+    const team: string | undefined = dataset.entries.get('t1')?.read('team');
     expect(team).toBe('A');
 
+    // `note` is a passenger key: it is in `TProps`, and no Field declares it. No read door answers
+    // it (ADR 0017), and the row still carries it.
+    expect(dataset.entries.get('t1')?.toInput().props?.note).toBe('carried');
+
     const updated = dataset.entries.update('t1', { cost: 500 });
-    expect(updated.props?.team).toBe('A');
+    expect(updated.read('team')).toBe('A');
 
     // The key types the read — no type argument at the call, and no `as` (#144, ADR 0005).
-    const cost: number | undefined = dataset.entries.fieldValue('t1', 'cost');
+    const cost: number | undefined = dataset.entries.get('t1')?.read('cost');
     expect(cost).toBe(500);
-    const name: string | undefined = dataset.entries.fieldValue('t1', 'name');
+    const name: string | undefined = dataset.entries.get('t1')?.read('name');
     expect(name).toBe('Design');
 
     // Compile-time only: a string is not a number for `cost`, and `bogus` is not a Field key.
@@ -572,10 +587,10 @@ describe('Dataset plugins (S5.10)', () => {
 
   /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
    *  touches it — the same shape harness/plugins/lock-entries.ts ships (D-S5-24's refusal note). */
-  function lockEntries(ids: readonly string[]): DatasetPlugin {
+  function lockEntries(ids: readonly string[]): DataPlugin {
     return {
       id: 'demo.lock',
-      setup(ctx) {
+      data(ctx) {
         const store = ctx.store.reserve<LockRow>();
         for (const id of ids) store.set(entryId(id), { locked: true });
         ctx.events.on('beforeChange', ({ changeSet }) =>
@@ -614,9 +629,9 @@ describe('Dataset plugins (S5.10)', () => {
 
   it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
     let registerLate = (): void => undefined;
-    const late: DatasetPlugin = {
+    const late: DataPlugin = {
       id: 'demo.late',
-      setup(ctx) {
+      data(ctx) {
         registerLate = () => ctx.fields.register({ key: 'cost' });
       },
     };
@@ -625,9 +640,9 @@ describe('Dataset plugins (S5.10)', () => {
   });
 
   it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4)', () => {
-    const declaresCost: DatasetPlugin = {
+    const declaresCost: DataPlugin = {
       id: 'demo.cost',
-      setup(ctx) {
+      data(ctx) {
         ctx.fields.registerType('money', { rollUp: 'sum' });
         ctx.fields.register({ key: 'cost', type: 'money' });
       },
@@ -641,22 +656,22 @@ describe('Dataset plugins (S5.10)', () => {
       plugins: [declaresCost],
     });
     expect(dataset.field('cost')?.type).toBe('money');
-    expect(dataset.entries.fieldValue('p1', 'cost')).toBe(500);
+    expect(dataset.entries.get('p1')?.read('cost')).toBe(500);
   });
 
   it('sets up in requires order, whichever order the array writes (D-S5-31)', () => {
     const order: string[] = [];
-    const base: DatasetPlugin = {
+    const base: DataPlugin = {
       id: 'demo.base',
-      setup(ctx) {
+      data(ctx) {
         order.push('base');
         ctx.store.reserve<{ note: string }>().set(entryId('t1'), { note: 'from base' });
       },
     };
-    const reader: DatasetPlugin = {
+    const reader: DataPlugin = {
       id: 'demo.reader',
       requires: ['demo.base'],
-      setup(ctx) {
+      data(ctx) {
         order.push('reader');
         // The store its prerequisite reserved is already there to read (D-S5-30).
         seen = ctx.store.read<{ note: string }>('demo.base')?.get(entryId('t1'))?.note;
@@ -670,17 +685,17 @@ describe('Dataset plugins (S5.10)', () => {
   });
 
   it('throws MissingPluginError naming both ids when a prerequisite is absent', () => {
-    const orphan: DatasetPlugin = { id: 'demo.reader', requires: ['demo.base'], setup: () => undefined };
+    const orphan: DataPlugin = { id: 'demo.reader', requires: ['demo.base'], data: () => undefined };
     expect(() => new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [orphan] })).toThrow(
       MissingPluginError,
     );
   });
 
   it('composes the extension hook in that same order, rather than evicting it (D-S5-23)', () => {
-    const cascadesTo = (id: string, to: string): DatasetPlugin => ({
+    const cascadesTo = (id: string, to: string): DataPlugin => ({
       id,
       ...(id === 'demo.second' ? { requires: ['demo.first'] } : {}),
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           (next) => (request) => mergeEntryEdits(next(request), new Map([[entryId(to), { name: to }]])),
         );
@@ -701,9 +716,9 @@ describe('Dataset plugins (S5.10)', () => {
   // #197: composing with a `Map` spread stayed green only because each wrapper wrote a different
   // Entry. Two extenders on one Entry lost the earlier write, and the Rollup then read a stale child.
   it('a second extender writing the same child still leaves the first write for the Rollup (#197)', () => {
-    const proposesCost: DatasetPlugin = {
+    const proposesCost: DataPlugin = {
       id: 'demo.cost',
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           // #209 C3: the plugin writes the Field by name, the same object `entries.update()` takes.
           // Core derives `proposedKeys` from the composed result, so this plugin cannot get it wrong.
@@ -711,10 +726,10 @@ describe('Dataset plugins (S5.10)', () => {
         );
       },
     };
-    const movesLeaf: DatasetPlugin = {
+    const movesLeaf: DataPlugin = {
       id: 'demo.move',
       requires: ['demo.cost'],
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(
           (next) => (request) =>
             mergeEntryEdits(
@@ -747,18 +762,18 @@ describe('Dataset plugins (S5.10)', () => {
     dataset.entries.update('leaf', { name: 'Renamed' });
 
     // Both extender writes landed on the one child...
-    expect(dataset.entries.fieldValue('leaf', 'cost')).toBe(500);
+    expect(dataset.entries.get('leaf')?.read('cost')).toBe(500);
     expect(dataset.entries.get('leaf')?.start).toBe(instant(utc('2026-02-01')));
     // ...and the Rollup read the child both of them wrote, not the one the last wrapper left.
-    expect(dataset.entries.fieldValue('root', 'cost')).toBe(500);
+    expect(dataset.entries.get('root')?.read('cost')).toBe(500);
     expect(dataset.entries.get('root')?.start).toBe(instant(utc('2026-02-01')));
   });
 
   it('releases every plugin on destroy()', () => {
     const released: string[] = [];
-    const noisy: DatasetPlugin = {
+    const noisy: DataPlugin = {
       id: 'demo.noisy',
-      setup: () => () => released.push('demo.noisy'),
+      data: () => () => released.push('demo.noisy'),
     };
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
     dataset.destroy();
@@ -768,9 +783,9 @@ describe('Dataset plugins (S5.10)', () => {
 
 describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
-  const declaresRisk: DatasetPlugin = {
+  const declaresRisk: DataPlugin = {
     id: 'demo.risk',
-    setup(ctx) {
+    data(ctx) {
       ctx.fields.register({ key: 'risk', rollUp: 'none' });
     },
   };
@@ -784,7 +799,7 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     });
 
   it('keeps the plugin’s values, which live in props and never needed the declaration', () => {
-    expect(withRisk().entries.get('t1')?.props).toEqual({ risk: 'high' });
+    expect(withRisk().entries.get('t1')?.toInput().props).toEqual({ risk: 'high' });
   });
 
   it('authors no orphan Field when the reading application leaves the plugin out', () => {
@@ -792,13 +807,13 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     const reloaded = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'note' }],
-      entries: dataset.entries.all,
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
     });
 
     expect(reloaded.field('risk')).toBeUndefined();
     expect(reloaded.field('note')).toBeDefined();
     // The plugin's data is still there, opaque, waiting for the plugin to come back.
-    expect(reloaded.entries.get('t1')?.props).toEqual({ risk: 'high' });
+    expect(reloaded.entries.get('t1')?.toInput().props).toEqual({ risk: 'high' });
   });
 
   it('re-declares cleanly when the reading application installs the same plugin again', () => {
@@ -806,11 +821,12 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     const reloaded = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'note' }],
-      entries: dataset.entries.all,
+      // `all` hands back live rows (ADR 0017), and a row is copied through `toInput()`.
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
       plugins: [declaresRisk],
     });
 
     expect(reloaded.field('risk')).toBeDefined();
-    expect(reloaded.entries.fieldValue('t1', 'risk')).toBe('high');
+    expect(reloaded.entries.get('t1')?.read('risk')).toBe('high');
   });
 });

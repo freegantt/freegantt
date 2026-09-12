@@ -17,15 +17,15 @@ import {
   entryId,
   itemId,
   contextMenu,
-  wholeEntryItem,
 } from './index.js';
 import type {
-  DatasetPlugin,
+  ChangeSet,
+  DataPlugin,
   EditExtender,
   Entry,
   ErrorReport,
   GanttDom,
-  GanttPlugin,
+  ChromePlugin,
   GridColumnInput,
   PluginContext,
   SegmentId,
@@ -33,6 +33,12 @@ import type {
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { instant } from '../time/index.js';
+
+/** What a row's dates read now. A "before" reading is a value, never a row: one `Entry` per id, and
+ *  every read is live, so a held row always agrees with itself (ADR 0017 rule 2). */
+function datesOf(entry: Entry): { start: Entry['start']; end: Entry['end'] } {
+  return { start: entry.start, end: entry.end };
+}
 
 // [S5-A3]: the acceptance object is the harness plugin itself, not a re-implementation of its four
 // seams — a regression in bufferKind() must fail this test (issue #153).
@@ -163,11 +169,11 @@ describe('Gantt.dataset (#226)', () => {
     });
     const gantt = new Gantt({ container, dataset });
 
-    const cost: number | undefined = gantt.dataset.entries.fieldValue('a', 'cost');
+    const cost: number | undefined = gantt.dataset.entries.get('a')?.read('cost');
     expect(cost).toBe(42);
     // And the write half: `cost` is a declared key on this Dataset, so it is legal here.
     gantt.dataset.entries.update('a', { cost: 43 });
-    expect(gantt.dataset.entries.fieldValue('a', 'cost')).toBe(43);
+    expect(gantt.dataset.entries.get('a')?.read('cost')).toBe(43);
 
     gantt.destroy();
   });
@@ -1678,7 +1684,9 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
     });
     const gantt = new Gantt({
       container,
@@ -1713,7 +1721,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
       plugins: [
         {
           id: 'demo.cell-renderer',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerRenderer('cell', () => ({ text: 'plugin' }));
             return () => {};
           },
@@ -1738,7 +1746,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry.toInput(), props: { cost: 1500 } })),
     });
     const seen: { value: string; fieldValue: unknown }[] = [];
     const gantt = new Gantt({
@@ -1765,7 +1773,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         money: { formatValue: (value) => (typeof value === 'number' ? `$${value}` : '') },
       },
       fields: [{ key: 'cost', type: 'money', column: { header: 'Cost' } }],
-      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry, props: { cost: 1500 } })),
+      entries: sampleEntries.slice(0, 1).map((entry) => ({ ...entry.toInput(), props: { cost: 1500 } })),
     });
     const gantt = new Gantt({
       container,
@@ -1797,7 +1805,9 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         },
       },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry, props: { cost: 500 } } : entry)),
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
     });
     const gantt = new Gantt({
       container,
@@ -2101,42 +2111,135 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
-  it('a custom milestone barRenderer paints a diamond, and reassigning it repaints with no bar remount (I8)', async () => {
+  it("a milestone variant's own paint draws a diamond, and dropping it repaints with no bar remount (I8)", async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
       container,
       dataset,
-      // ADR 0013: core ships no diamond and no 'milestone' look — a plugin owns which id draws one
-      // (`harness/plugins/milestone-kind.ts` follows the same pattern), so this test installs the
-      // smallest version of that plugin inline rather than reach into `harness/`.
-      plugins: [
+      // ADR 0018: core ships no diamond and no 'milestone' variant. The consumer says which rows
+      // wear one and how it looks, in one object, and needs no plugin at all.
+      variants: [
         {
-          id: 'demo.milestone',
-          setup(ctx) {
-            ctx.layout.registerLookClaim('milestone', (entry) => entry.id === sampleEntries[0]!.id);
-            ctx.layout.registerItemProducer('milestone', (entry) => [wholeEntryItem(entry, 'milestone')]);
-            return () => {};
-          },
+          name: 'milestone',
+          when: (entry) => entry.id === sampleEntries[0]!.id,
+          paint: () => ({ class: { 'my-diamond': true }, text: '◆' }),
         },
       ],
-      barRenderer: {
-        milestone: () => ({ class: { 'my-diamond': true }, text: '◆' }),
-      },
     });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.classList.contains('my-diamond')).toBe(true);
     expect(bar.textContent).toBe('◆');
+    expect(bar.dataset['variant']).toBe('milestone');
 
-    gantt.barRenderer = undefined;
+    gantt.variants = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(container.querySelector('.fg-bar')).toBe(bar);
     expect(bar.classList.contains('my-diamond')).toBe(false);
     expect(bar.textContent).toBe(sampleEntries[0]!.name);
+    expect(bar.dataset['variant']).toBe('leaf');
+
+    gantt.destroy();
+  });
+
+  it('paints a summary row with core’s own `parent` rule, not the consumer’s catch-all barRenderer (J61)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'P', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'solo', name: 'Solo', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    const painted: string[] = [];
+    // `J40`: a rule that names the rows it covers beats a catch-all that names none. Core's `parent`
+    // is such a rule, so the summary rail stands and `barRenderer` paints every other bar.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      barRenderer: ({ entry }) => {
+        painted.push(String(entry.id));
+        return { text: 'mine' };
+      },
+    });
+
+    expect(painted.sort()).toEqual(['c', 'solo']);
+    expect(container.querySelector('.fg-bar-summary')).not.toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('lets a consumer’s own rule claim the summary row, which is how they paint it (J61)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'P', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    const painted: string[] = [];
+    // The door D-S5-11 asks for: the consumer's own rule outranks core's, so their paint answers.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [
+        {
+          name: 'summary',
+          when: (entry) => entry.hasChildren,
+          paint: ({ entry }) => {
+            painted.push(String(entry.id));
+            return { class: { mine: true } };
+          },
+        },
+      ],
+    });
+
+    expect(painted).toEqual(['p']);
+    expect(container.querySelector('.fg-bar-summary')).toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('a field match on a key no Field declares never matches, and the Gantt keeps drawing (F2)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [sampleEntries[0]!.toInput()],
+      timeZone: 'UTC',
+    });
+    // A chrome plugin installs after the Dataset closes its Field gate, so it cannot declare the key
+    // it matches on. The rule answers no for every row; it never takes the layout pass down.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [{ name: 'phased', when: { 'demo:phaseId': true }, paint: () => ({ text: 'P' }) }],
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['variant']).toBe('leaf');
+
+    gantt.destroy();
+  });
+
+  it('the same match claims the row once a Field declares the key (F2)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { 'demo:phaseId': true } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'demo:phaseId' }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [{ name: 'phased', when: { 'demo:phaseId': true }, paint: () => ({ text: 'P' }) }],
+    });
+
+    expect(container.querySelector<HTMLElement>('.fg-bar')!.dataset['variant']).toBe('phased');
 
     gantt.destroy();
   });
@@ -2173,7 +2276,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       plugins: [
         {
           id: 'demo.header-renderer',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerRenderer('header', () => ({ text: 'plugin-header' }));
             return () => {};
           },
@@ -2192,7 +2295,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
 
-    // PluginRuntime.install() wraps a setup() throw in PluginSetupError (C1) — the collision itself
+    // PluginRuntime.install() wraps a view() throw in PluginSetupError (C1) — the collision itself
     // is the wrapped cause.
     let cause: unknown;
     try {
@@ -2202,14 +2305,14 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
         plugins: [
           {
             id: 'demo.renderer-one',
-            setup(ctx) {
+            view(ctx) {
               ctx.view.registerRenderer('cell', () => undefined);
               return () => {};
             },
           },
           {
             id: 'demo.renderer-two',
-            setup(ctx) {
+            view(ctx) {
               ctx.view.registerRenderer('cell', () => undefined);
               return () => {};
             },
@@ -2224,11 +2327,11 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   });
 });
 
-describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', () => {
-  it("ctx.layout.registerItemProducer draws a registered look's own shape; disposal restores the fallback", async () => {
+describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)', () => {
+  it("ctx.variants.add draws a variant's own shape; disposal restores the library's", async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2236,21 +2339,24 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       dataset,
       plugins: [
         {
-          id: 'demo.bufferProducer',
-          setup(ctx) {
-            // A custom-look producer claims an Entry by returning items for it and declines every
-            // other one — there is no stored classification to key on any more (ADR 0013, J16).
-            ctx.layout.registerLookClaim('buffer', (entry) => entry.id === sampleEntries[0]!.id);
-            ctx.layout.registerItemProducer('buffer', (entry) => [
-              {
-                id: itemId(entry.id, 0),
-                entryId: entry.id,
-                look: 'buffer',
-                label: `buffer: ${entry.name}`,
-                start: entry.start!,
-                end: entry.end!,
-              },
-            ]);
+          id: 'demo.bufferVariant',
+          view(ctx) {
+            // One object answers every question about the variant: which rows wear it, and what
+            // shape it draws. There is no stored classification to key on (ADR 0013, ADR 0018).
+            ctx.variants.add({
+              name: 'buffer',
+              when: (entry) => entry.id === sampleEntries[0]!.id,
+              items: (entry) => [
+                {
+                  id: itemId(entry.id, 0),
+                  entryId: entry.id,
+                  variant: 'buffer',
+                  label: `buffer: ${entry.name}`,
+                  start: entry.start!,
+                  end: entry.end!,
+                },
+              ],
+            });
             return () => {};
           },
         },
@@ -2271,10 +2377,10 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     gantt.destroy();
   });
 
-  it('ctx.interaction.registerLookDefaults refuses resize for its own look; disposal restores the library default', () => {
+  it("a variant's own `can` refuses resize for the rows it claims; disposal restores the library default", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2282,11 +2388,13 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       dataset,
       plugins: [
         {
-          id: 'demo.bufferDefaults',
-          setup(ctx) {
-            ctx.layout.registerLookClaim('buffer', (entry) => entry.id === sampleEntries[0]!.id);
-            ctx.layout.registerItemProducer('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-            ctx.interaction.registerLookDefaults('buffer', { resize: false });
+          id: 'demo.bufferVariant',
+          view(ctx) {
+            ctx.variants.add({
+              name: 'buffer',
+              when: (entry) => entry.id === sampleEntries[0]!.id,
+              can: { resize: false },
+            });
             return () => {};
           },
         },
@@ -2312,35 +2420,33 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     gantt.destroy();
   });
 
-  it('disposing the second of two plugins registering the same look restores the first (#146)', () => {
+  // #146: a Disposer freed a slot by position, so disposing one plugin's registration freed
+  // another's. The two tests below stage both disposal orders end to end, through
+  // `gantt.plugins = [...]`, because the unit registry never rebuilds a frame.
+  //
+  // Both stage two sibling plugins whose rules cover one row. That collision is what
+  // `'variant-claimed-twice'` names (`J36`), so a console warning here is the design speaking.
+  const bufferVariant = (pluginId: string, resize: boolean) => ({
+    id: pluginId,
+    view(ctx: PluginContext) {
+      ctx.variants.add({
+        name: 'buffer',
+        when: (entry) => entry.id === sampleEntries[0]!.id,
+        can: { resize },
+      });
+      return () => {};
+    },
+  });
+
+  it('disposing the newest of two plugin variants restores the older one (#146)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
-    const bufferProducer = {
-      id: 'demo.bufferProducer',
-      setup(ctx: PluginContext) {
-        ctx.layout.registerLookClaim('buffer', (entry) => entry.id === sampleEntries[0]!.id);
-        ctx.layout.registerItemProducer('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-        return () => {};
-      },
-    };
-    const pluginA = {
-      id: 'demo.bufferDefaultsA',
-      setup(ctx: PluginContext) {
-        ctx.interaction.registerLookDefaults('buffer', { resize: false });
-        return () => {};
-      },
-    };
-    const pluginB = {
-      id: 'demo.bufferDefaultsB',
-      setup(ctx: PluginContext) {
-        ctx.interaction.registerLookDefaults('buffer', { resize: true });
-        return () => {};
-      },
-    };
-    const gantt = new Gantt({ container, dataset, plugins: [bufferProducer, pluginA, pluginB] });
+    const refusesResize = bufferVariant('demo.bufferA', false);
+    const allowsResize = bufferVariant('demo.bufferB', true);
+    const gantt = new Gantt({ container, dataset, plugins: [refusesResize, allowsResize] });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -2348,20 +2454,18 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
-    // B is installed last and overrides A: resize affordance visible.
+    // B registers last and wins (`Q5`): resize affordance visible.
     let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
 
-    // Disposing only B must restore A's registration, not fall through to the library default.
-    // `bufferProducer` stays installed: it holds the look claim, and retracting that would take the
-    // 'buffer' look off the entry entirely (Q10), which is a different question from this one.
-    gantt.plugins = [bufferProducer, pluginA];
+    // Dropping B must restore A's own rule, not fall through to the library default.
+    gantt.plugins = [refusesResize];
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
     start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(true);
 
-    // Disposing A too falls back to the library default.
-    gantt.plugins = [bufferProducer];
+    // Dropping A too falls back to the library default.
+    gantt.plugins = [];
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
     start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
@@ -2370,38 +2474,17 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     gantt.destroy();
   });
 
-  it('disposing the first of two plugins registering the same look still resolves the second, not the library default (#146)', () => {
+  it('disposing the older of two plugin variants leaves the newest resolving, never the library default (#146)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
-    const bufferProducer = {
-      id: 'demo.bufferProducer',
-      setup(ctx: PluginContext) {
-        ctx.layout.registerLookClaim('buffer', (entry) => entry.id === sampleEntries[0]!.id);
-        ctx.layout.registerItemProducer('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-        return () => {};
-      },
-    };
-    const pluginA = {
-      id: 'demo.bufferDefaultsA',
-      setup(ctx: PluginContext) {
-        ctx.interaction.registerLookDefaults('buffer', { resize: true });
-        return () => {};
-      },
-    };
-    const pluginB = {
-      id: 'demo.bufferDefaultsB',
-      setup(ctx: PluginContext) {
-        // B's own setting (resize refused) must differ from the library default (resize allowed,
-        // `.fg-bar-handle` visible) — otherwise a bug that falls through to the library default
-        // would read as B's registration still resolving, by coincidence.
-        ctx.interaction.registerLookDefaults('buffer', { resize: false });
-        return () => {};
-      },
-    };
-    const gantt = new Gantt({ container, dataset, plugins: [bufferProducer, pluginA, pluginB] });
+    const allowsResize = bufferVariant('demo.bufferA', true);
+    // B's own answer (resize refused) must differ from the library default (resize allowed), or a
+    // fall-through bug would read as B's rule still resolving, by coincidence.
+    const refusesResize = bufferVariant('demo.bufferB', false);
+    const gantt = new Gantt({ container, dataset, plugins: [allowsResize, refusesResize] });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -2409,14 +2492,10 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
-    // B is installed last and overrides A: resize refused, start handle hidden.
     let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(true);
 
-    // Dropping A (the earlier registration, not the winner) must leave B's own registration
-    // resolving — never fall through to the library default (#146). `bufferProducer` stays: it
-    // holds the look claim, and the question here is about look defaults, not about the look.
-    gantt.plugins = [bufferProducer, pluginB];
+    gantt.plugins = [refusesResize];
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
     start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(true);
@@ -2425,10 +2504,10 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     gantt.destroy();
   });
 
-  it("the consumer's own interactions still wins over a registered look default", () => {
+  it("the consumer's own interactions still wins over a variant's own `can`", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }],
+      entries: [sampleEntries[0]!.toInput()],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({
@@ -2437,11 +2516,13 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       interactions: { resize: true },
       plugins: [
         {
-          id: 'demo.bufferDefaults',
-          setup(ctx) {
-            ctx.layout.registerLookClaim('buffer', (entry) => entry.id === sampleEntries[0]!.id);
-            ctx.layout.registerItemProducer('buffer', (entry) => [wholeEntryItem(entry, 'buffer')]);
-            ctx.interaction.registerLookDefaults('buffer', { resize: false });
+          id: 'demo.bufferVariant',
+          view(ctx) {
+            ctx.variants.add({
+              name: 'buffer',
+              when: (entry) => entry.id === sampleEntries[0]!.id,
+              can: { resize: false },
+            });
             return () => {};
           },
         },
@@ -2469,7 +2550,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2478,7 +2559,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       plugins: [
         {
           id: 'demo.riskColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk' });
             return () => {};
           },
@@ -2513,7 +2594,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2522,14 +2603,14 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       plugins: [
         {
           id: 'demo.riskColumnA',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
             return () => {};
           },
         },
         {
           id: 'demo.riskColumnB',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
             return () => {};
           },
@@ -2551,7 +2632,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const gantt = new Gantt({
       container,
@@ -2560,7 +2641,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       plugins: [
         {
           id: 'demo.riskColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'risk' });
             return () => {};
           },
@@ -2571,7 +2652,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
 
     // A resize drag on the plugin's own grip: `commitWidth` rewrites every column on screen, so the
     // commit stores "risk" as a plugin-declared column of its own (D-S5-33) — the same seam
-    // `api/plugin.ts`'s disposal promise has to reach through.
+    // `api/plugin-context.ts`'s disposal promise has to reach through.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
@@ -2607,18 +2688,18 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2655,18 +2736,18 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2680,7 +2761,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     // A resize drag on B's own grip (B is the winner) commits "risk" as a plugin-declared column at
-    // width 200 (D-S5-33) — the same seam `api/plugin.ts`'s disposal promise reaches.
+    // width 200 (D-S5-33) — the same seam `api/plugin-context.ts`'s disposal promise reaches.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
@@ -2720,7 +2801,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     // `GridColumnInput` is `string | GridColumn`, so both plugins hand `registerGridColumn` the
     // very same value. A disposer that asks "is the column on screen mine?" by comparing that
@@ -2731,14 +2812,14 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     };
     const pluginA = {
       id: 'demo.riskSharedA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         registerRisk(ctx);
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskSharedB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         registerRisk(ctx);
         return () => {};
       },
@@ -2790,18 +2871,18 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
         risk: { rollUp: 'max', column: { header: 'Risk' } },
       },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     const pluginA = {
       id: 'demo.riskColumnA',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk A' });
         return () => {};
       },
     };
     const pluginB = {
       id: 'demo.riskColumnB',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'risk', header: 'Risk B' });
         return () => {};
       },
@@ -2865,7 +2946,7 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
       plugins: [
         {
           id: 'demo.duplicateColumn',
-          setup(ctx) {
+          view(ctx) {
             ctx.view.registerGridColumn({ field: 'name', header: 'Plugin name' });
             return () => {};
           },
@@ -2879,23 +2960,40 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     gantt.destroy();
   });
 
-  it('[S5-A3] a consumer-defined look renders, refuses resize, and offers its own menu item — one plugin, zero core edits', async () => {
+  /** The page's own words for a row, which is the whole of how a variant is pinned now (ADR 0018).
+   *  `bufferKind()` and `riskKind()` keep no list of the ids they own: each declares a Field and
+   *  matches on it, so a test says which rows carry which mark and the rules read it back. */
+  const markedDataset = (marks: Readonly<Record<string, readonly string[]>>, entryCount = 2): Dataset => {
+    const marksOf = (id: string): Record<string, true> =>
+      Object.fromEntries(
+        Object.entries(marks)
+          .filter(([, ids]) => ids.includes(id))
+          .map(([key]) => [key, true as const]),
+      );
+    return new Dataset({
+      timeZone: 'UTC',
+      fields: Object.keys(marks).map((key) => ({ key })),
+      entries: sampleEntries.slice(0, entryCount).map((entry) => {
+        const input = entry.toInput();
+        return { ...input, props: { ...input.props, ...marksOf(entry.id) } };
+      }),
+    });
+  };
+
+  it('[S5-A3] a consumer-defined variant renders, refuses resize, and offers its own menu item — one plugin, zero core edits', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
-      timeZone: 'UTC',
-    });
+    const dataset = markedDataset({ buffer: [sampleEntries[0]!.id] });
     const gantt = new Gantt({
       container,
       dataset,
-      plugins: [contextMenu(), bufferKind([sampleEntries[0]!.id])],
+      plugins: [contextMenu(), bufferKind()],
     });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
-    const bufferBar = bars.find((bar) => bar.getAttribute('data-kind') === 'buffer')!;
-    const spanBar = bars.find((bar) => bar.getAttribute('data-kind') !== 'buffer')!;
+    const bufferBar = bars.find((bar) => bar.getAttribute('data-variant') === 'buffer')!;
+    const spanBar = bars.find((bar) => bar.getAttribute('data-variant') !== 'buffer')!;
     expect(bufferBar.classList.contains('demo-buffer-bar')).toBe(true);
 
     bufferBar.dispatchEvent(
@@ -2926,24 +3024,21 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     container.remove();
   });
 
-  it('[review P2] two plugins that each define a look both install, both paint, and dropping one leaves the other', async () => {
+  it('[review P2] two plugins that each define a variant both install, both paint, and dropping one leaves the other', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
-      timeZone: 'UTC',
-    });
     const bufferEntryId = sampleEntries[0]!.id;
     const riskEntryId = sampleEntries[1]!.id;
-    const buffer = bufferKind([bufferEntryId]);
-    const risk = riskKind([riskEntryId]);
+    const dataset = markedDataset({ buffer: [bufferEntryId], risk: [riskEntryId] });
+    const buffer = bufferKind();
+    const risk = riskKind();
     const gantt = new Gantt({ container, dataset, plugins: [buffer, risk] });
     const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
     await paint();
 
-    // Keyed by `data-item-id` (the Entry's own id), not `data-kind`: under ADR 0013 a look is
-    // resolved fresh every frame from the installed producers, so `data-kind` reverts to `leaf`
-    // the moment a plugin drops — the bar itself (and the Entry it draws) does not move.
+    // Keyed by `data-item-id` (the Entry's own id), not `data-variant`: a variant is a rule
+    // resolved fresh every frame (ADR 0018), so `data-variant` reverts to `leaf` the moment a
+    // plugin drops — the bar itself (and the Entry it draws) does not move.
     const barFor = (entryId: string): HTMLElement =>
       Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).find((bar) =>
         bar.getAttribute('data-item-id')?.startsWith(`${entryId}:`),
@@ -2976,14 +3071,14 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
   it('[Q10] two plugins claiming the same entry: the first claim paints, and the collision is reported', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const dataset = new Dataset({ entries: [{ ...sampleEntries[0]! }], timeZone: 'UTC' });
-    // The same Entry, owned by both plugins. The `[review P2]` test above holds disjoint id sets,
-    // so it never exercises this — nothing in the suite pinned a collision before Q10.
+    // The same Entry, marked for both plugins' rules. The `[review P2]` test above marks disjoint
+    // rows, so it never exercises this — nothing in the suite pinned a collision before Q10.
     const sharedEntryId = sampleEntries[0]!.id;
-    const buffer = bufferKind([sharedEntryId]);
-    const risk = riskKind([sharedEntryId]);
+    const dataset = markedDataset({ buffer: [sharedEntryId], risk: [sharedEntryId] }, 1);
+    const buffer = bufferKind();
+    const risk = riskKind();
     const reports: ErrorReport[] = [];
-    // Subscribed before the plugins install: a look resolves during the constructor's own first
+    // Subscribed before the plugins install: a variant resolves during the constructor's own first
     // paint, so a handler added after that call has already missed the first collision.
     const gantt = new Gantt({ container, dataset });
     gantt.on('error', (report) => {
@@ -2995,14 +3090,14 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
 
-    // First claim wins. `bufferKind` installed first, so the bar wears 'buffer' and not 'risk'.
-    expect(bar.getAttribute('data-kind')).toBe('buffer');
-    expect(bar.classList.contains('demo-buffer-bar')).toBe(true);
-    expect(bar.classList.contains('demo-risk-bar')).toBe(false);
+    // The newest rule wins (`Q5`). `riskKind` installed last, so the bar wears 'risk', not 'buffer'.
+    expect(bar.getAttribute('data-variant')).toBe('risk');
+    expect(bar.classList.contains('demo-risk-bar')).toBe(true);
+    expect(bar.classList.contains('demo-buffer-bar')).toBe(false);
 
     // The library reports and continues; it never arbitrates between two plugins the consumer
-    // chose to install. The report names both looks and both plugin ids.
-    const collision = reports.find((report) => report.code === 'look-claimed-twice');
+    // chose to install. The report names both variants and both plugin ids.
+    const collision = reports.find((report) => report.code === 'variant-claimed-twice');
     expect(collision).toBeDefined();
     expect(collision?.severity).toBe('warning');
     expect(collision?.by).toBe('core');
@@ -3010,35 +3105,120 @@ describe('Gantt plugin look registrations (S5.9, D-S5-21/D-S5-22, ADR 0013)', ()
     expect(collision?.message).toContain('demo.bufferKind');
     expect(collision?.message).toContain('demo.riskKind');
 
-    // Dropping the winner hands the Entry to the claim that was losing.
-    gantt.plugins = [risk];
+    // Dropping the winner hands the Entry to the rule that was losing.
+    gantt.plugins = [buffer];
     await paint();
     const afterDrop = container.querySelector<HTMLElement>('.fg-bar')!;
-    expect(afterDrop.getAttribute('data-kind')).toBe('risk');
+    expect(afterDrop.getAttribute('data-variant')).toBe('buffer');
 
     gantt.destroy();
     container.remove();
   });
 
-  it('[Q10] one report per colliding pair, however many times a look resolves', async () => {
+  it('[Q10] one report per colliding pair, however many times a variant resolves', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const dataset = new Dataset({
-      entries: [{ ...sampleEntries[0]! }, { ...sampleEntries[1]! }],
-      timeZone: 'UTC',
-    });
-    // Both plugins own both entries, and a look resolves once per Entry per frame. A collision
+    // Both rules claim both entries, and a variant resolves once per Entry per frame. A collision
     // reported per resolution would bury the consumer's console.
     const owned = [sampleEntries[0]!.id, sampleEntries[1]!.id];
+    const dataset = markedDataset({ buffer: owned, risk: owned });
     const reports: ErrorReport[] = [];
     const gantt = new Gantt({ container, dataset });
     gantt.on('error', (report) => {
       reports.push(report);
     });
-    gantt.plugins = [bufferKind(owned), riskKind(owned)];
+    gantt.plugins = [bufferKind(), riskKind()];
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    expect(reports.filter((report) => report.code === 'look-claimed-twice')).toHaveLength(1);
+    expect(reports.filter((report) => report.code === 'variant-claimed-twice')).toHaveLength(1);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('[J59] reports a variant rule that matches on a key no Field declares', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    // A typo in a `when` claims no row, and it must not take the layout pass down. Silence was the
+    // remaining half of `J59`: the rule stopped matching and nothing said why.
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const reports: ErrorReport[] = [];
+    const gantt = new Gantt({ container, dataset });
+    gantt.on('error', (report) => {
+      reports.push(report);
+    });
+    // Assigned after the subscription, not passed to the constructor: a variant in `GanttOptions`
+    // resolves during the constructor's own first paint, the same trap `Q10`'s test above names.
+    gantt.variants = [{ name: 'typo', when: { notAField: true }, paint: () => ({ class: { typo: true } }) }];
+    // One report for the rule and the key, however many rows resolve and however many frames run.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.rowSource = { ...gantt.rowSource };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const missing = reports.filter((report) => report.code === 'unknown-variant-field');
+    expect(missing).toHaveLength(1);
+    expect(missing[0]?.severity).toBe('warning');
+    expect(missing[0]?.field).toBe('notAField');
+    expect(missing[0]?.message).toContain("'typo'");
+    expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
+  // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
+  // write, and the rule reads it back.
+  it('pins one row by writing the data: the write lands in a ChangeSet, undoes, and repaints', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const pinned = sampleEntries[0]!.id;
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'milestone' }],
+      entries: [sampleEntries[0]!.toInput()],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [
+        {
+          name: 'milestone',
+          when: { milestone: true },
+          paint: () => ({ class: { 'my-diamond': true } }),
+        },
+      ],
+    });
+    const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['variant']).toBe('leaf');
+
+    const changes: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+
+    dataset.entries.update(pinned, { milestone: true });
+    await paint();
+
+    // The write is an ordinary Field write, so it arrives as one `{ from, to }` like any other.
+    expect(changes).toHaveLength(1);
+    const written = changes[0]!.updated.filter((row) => 'field' in row);
+    expect(written).toContainEqual(
+      expect.objectContaining({ id: pinned, field: 'milestone', from: undefined, to: true }),
+    );
+
+    // The rule read it back, and the same node repainted (I8).
+    expect(container.querySelector('.fg-bar')).toBe(bar);
+    expect(bar.dataset['variant']).toBe('milestone');
+    expect(bar.classList.contains('my-diamond')).toBe(true);
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    await paint();
+    expect(bar.dataset['variant']).toBe('leaf');
+    expect(bar.classList.contains('my-diamond')).toBe(false);
 
     gantt.destroy();
     container.remove();
@@ -3360,9 +3540,9 @@ describe('Gantt selection over Segments (ADR 0010, #212)', () => {
     document.body.append(container);
     const dataset = new Dataset({ entries: SEGMENTED_ENTRIES, timeZone: 'UTC' });
     let dom: GanttDom | undefined;
-    const grabDom: GanttPlugin = {
+    const grabDom: ChromePlugin = {
       id: 'test.grabDom',
-      setup: (ctx) => {
+      view: (ctx) => {
         dom = ctx.view.dom;
       },
     };
@@ -3573,14 +3753,14 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
       // stored classification (ADR 0013): having a child already draws the parent look.
       entries: [
         { id: 'g1', name: 'Group' },
-        { ...sampleEntries[0]!, parentId: 'g1' },
+        { ...sampleEntries[0]!.toInput(), parentId: 'g1' },
         ...sampleEntries.slice(1),
       ],
       timeZone: 'UTC',
     });
     const gantt = new Gantt({ container, dataset });
 
-    const groupBar = container.querySelector<HTMLElement>('[data-kind="parent"]')!;
+    const groupBar = container.querySelector<HTMLElement>('[data-variant="parent"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = () => groupBar;
@@ -3717,27 +3897,16 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
       entries: [{ id: 'm1', name: 'Ship', start: '2026-09-01', end: '2026-09-01' }, ...sampleEntries],
       timeZone: 'UTC',
     });
-    // ADR 0013: core ships no diamond and no default resize refusal for any look — a plugin owns
-    // that default now (`harness/plugins/milestone-kind.ts` pairs the same two registrations for
-    // its own ids), so this test installs one inline to give `clearCapabilityRule` a non-`true`
-    // table to fall back to.
+    // ADR 0018: core ships no 'milestone' variant and no default resize refusal for any row. A
+    // variant owns that default now, so this test states one inline to give `clearCapabilityRule`
+    // a non-`true` answer to fall back to.
     const gantt = new Gantt({
       container,
       dataset,
-      plugins: [
-        {
-          id: 'demo.milestone',
-          setup(ctx) {
-            ctx.layout.registerLookClaim('milestone', (entry) => entry.id === 'm1');
-            ctx.layout.registerItemProducer('milestone', (entry) => [wholeEntryItem(entry, 'milestone')]);
-            ctx.interaction.registerLookDefaults('milestone', { resize: false });
-            return () => {};
-          },
-        },
-      ],
+      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', can: { resize: false } }],
     });
 
-    const milestoneBar = container.querySelector<HTMLElement>('[data-kind="milestone"]')!;
+    const milestoneBar = container.querySelector<HTMLElement>('[data-variant="milestone"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = () => milestoneBar;
@@ -3764,7 +3933,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
       // child to roll up from — it needs no stored classification to draw the parent look (ADR 0013).
       entries: [
         { id: 'g1', name: 'Group' },
-        { ...sampleEntries[0]!, parentId: 'g1' },
+        { ...sampleEntries[0]!.toInput(), parentId: 'g1' },
         ...sampleEntries.slice(1),
       ],
       timeZone: 'UTC',
@@ -3775,7 +3944,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     // the drag committed a write the Rollup pass immediately took back.
     const gantt = new Gantt({ container, dataset, interactions: { resize: true } });
 
-    const groupBar = container.querySelector<HTMLElement>('[data-kind="parent"]')!;
+    const groupBar = container.querySelector<HTMLElement>('[data-variant="parent"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = () => groupBar;
@@ -3822,7 +3991,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3875,7 +4044,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.on('beforeEntryMove', () => false);
 
     const afterEvents: unknown[] = [];
@@ -3888,7 +4057,7 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
 
     expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(dataset.canUndo).toBe(false);
 
     document.elementFromPoint = original;
@@ -3921,7 +4090,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
 
     const beforeEvents: unknown[] = [];
     const afterEvents: unknown[] = [];
@@ -3980,7 +4149,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 10 && y === 5 ? endHandle : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.on('beforeEntryResize', () => false);
 
     const afterEvents: unknown[] = [];
@@ -3993,7 +4162,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5010, clientY: 5, pointerId: 1 }));
 
     expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(dataset.canUndo).toBe(false);
 
     document.elementFromPoint = original;
@@ -4019,17 +4188,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      plugins: [
-        {
-          id: 'demo.milestone',
-          setup(ctx) {
-            ctx.layout.registerLookClaim('milestone', (entry) => entry.id === 'm1');
-            ctx.layout.registerItemProducer('milestone', (entry) => [wholeEntryItem(entry, 'milestone')]);
-            ctx.interaction.registerLookDefaults('milestone', { resize: false });
-            return () => {};
-          },
-        },
-      ],
+      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', can: { resize: false } }],
     });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
@@ -4056,7 +4215,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const beforeEvents: unknown[] = [];
@@ -4112,7 +4271,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id]);
 
     const afterEvents: { edge: string }[] = [];
@@ -4226,7 +4385,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
     const id = entryId(sampleEntries[0]!.id);
-    const before = dataset.entries.get(id)!;
+    const before = datesOf(dataset.entries.get(id)!);
     let resolveVeto!: () => void;
     gantt.on(
       'beforeEntryMove',
@@ -4243,7 +4402,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     resolveVeto();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(dataset.entries.get(id)).toEqual(before);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
     expect(bar.dataset['state']).not.toContain('pending');
     expect(dataset.canUndo).toBe(false);
 
@@ -4448,6 +4607,8 @@ describe('Gantt rows and collapse (S4.6)', () => {
   it('collapseAll uses expandable planned row ids, including grouped headers', async () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
+      // `entry.read` refuses a key no Field declares (ADR 0017), so the group key is declared here.
+      fields: [{ key: 'category' }],
       entries: [
         { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', props: { category: 'group' } },
         {
@@ -4479,7 +4640,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     gantt.expandAll();
     expect(gantt.collapsed).toEqual([]);
 
-    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.props['category'] as string };
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gantt.collapseAll();
     expect(gantt.collapsed.map(String)).toEqual(['group:group', 'group:span', 'group:milestone']);
@@ -4554,7 +4715,7 @@ describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
 });
 
 describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
-  function makeGantt(container: HTMLElement, plugins?: import('./gantt.js').GanttPlugin[]) {
+  function makeGantt(container: HTMLElement, plugins?: import('./gantt.js').ChromePlugin[]) {
     return new Gantt({
       container,
       dataset: new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' }),
@@ -4569,7 +4730,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const gantt = makeGantt(container, [
       {
         id: 'demo.log',
-        setup(ctx) {
+        view(ctx) {
           seenGantt = ctx.gantt;
           log.push('setup');
           return () => log.push('dispose');
@@ -4596,7 +4757,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
       plugins: [
         {
           id: 'demo.reader',
-          setup(ctx) {
+          view(ctx) {
             sawEntryCount = ctx.dataset.entries.all.length;
             ctx.events.on('gridWidthChange', () => {
               firedGridWidthChange = true;
@@ -4621,7 +4782,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const barBefore = container.querySelector('.fg-bar');
 
     let disposed = false;
-    gantt.plugins = [...gantt.plugins, { id: 'demo.added', setup: () => () => (disposed = true) }];
+    gantt.plugins = [...gantt.plugins, { id: 'demo.added', view: () => () => (disposed = true) }];
     expect(gantt.plugins.map((p) => p.id)).toEqual(['demo.added']);
     expect(container.querySelector('.fg-bar')).toBe(barBefore);
 
@@ -4638,12 +4799,12 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('installPlugin adds one plugin and leaves the running ones untouched (#195)', () => {
     const log: string[] = [];
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.first', setup: () => () => log.push('first disposed') }]);
+    const gantt = makeGantt(container, [{ id: 'demo.first', view: () => () => log.push('first disposed') }]);
     const barBefore = container.querySelector('.fg-bar');
 
     gantt.installPlugin({
       id: 'demo.second',
-      setup: () => {
+      view: () => {
         log.push('second setup');
         return () => log.push('second disposed');
       },
@@ -4658,13 +4819,13 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('installPlugin refuses an id that is already installed, and installs nothing (#195)', () => {
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+    const gantt = makeGantt(container, [{ id: 'demo.only', view: () => () => {} }]);
 
     let secondSetupRan = false;
     expect(() =>
       gantt.installPlugin({
         id: 'demo.only',
-        setup: () => {
+        view: () => {
           secondSetupRan = true;
         },
       }),
@@ -4678,8 +4839,8 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('uninstallPlugin disposes the one named, by the object the caller holds (#195)', () => {
     const log: string[] = [];
     const container = document.createElement('div');
-    const kept: GanttPlugin = { id: 'demo.kept', setup: () => () => log.push('kept disposed') };
-    const dropped: GanttPlugin = { id: 'demo.dropped', setup: () => () => log.push('dropped disposed') };
+    const kept: ChromePlugin = { id: 'demo.kept', view: () => () => log.push('kept disposed') };
+    const dropped: ChromePlugin = { id: 'demo.dropped', view: () => () => log.push('dropped disposed') };
     const gantt = makeGantt(container, [kept, dropped]);
 
     gantt.uninstallPlugin(dropped);
@@ -4693,7 +4854,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
   it('uninstallPlugin takes the id on its own, for a plugin the page no longer holds (#195)', () => {
     let disposed = false;
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.byId', setup: () => () => (disposed = true) }]);
+    const gantt = makeGantt(container, [{ id: 'demo.byId', view: () => () => (disposed = true) }]);
 
     gantt.uninstallPlugin('demo.byId');
 
@@ -4705,7 +4866,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('hasPlugin answers what a toggle reads, by id or by the object the caller holds (#195)', () => {
     const container = document.createElement('div');
-    const plugin: GanttPlugin = { id: 'demo.toggled', setup: () => () => {} };
+    const plugin: ChromePlugin = { id: 'demo.toggled', view: () => () => {} };
     const gantt = makeGantt(container, []);
 
     expect(gantt.hasPlugin('demo.toggled')).toBe(false);
@@ -4724,7 +4885,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
 
   it('uninstallPlugin throws for an id nothing installs, rather than doing nothing (#195)', () => {
     const container = document.createElement('div');
-    const gantt = makeGantt(container, [{ id: 'demo.only', setup: () => () => {} }]);
+    const gantt = makeGantt(container, [{ id: 'demo.only', view: () => () => {} }]);
 
     expect(() => gantt.uninstallPlugin('demo.typo')).toThrow(PluginNotInstalledError);
     expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.only']);
@@ -4738,7 +4899,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const gantt = makeGantt(container, [
       {
         id: 'demo.check',
-        setup: () => () => {
+        view: () => () => {
           containerHadChildrenAtDispose = container.children.length > 0;
         },
       },
@@ -4753,9 +4914,9 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     const containerA = document.createElement('div');
     const containerB = document.createElement('div');
     const setups: string[] = [];
-    const plugin = (label: string): import('./gantt.js').GanttPlugin => ({
+    const plugin = (label: string): import('./gantt.js').ChromePlugin => ({
       id: 'demo.shared-id',
-      setup: () => {
+      view: () => {
         setups.push(label);
         return () => {};
       },
@@ -4829,7 +4990,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.override-select-all',
-          setup(ctx) {
+          view(ctx) {
             ctx.commands.register({
               id: 'demo.selectAllOverride',
               label: 'Demo override',
@@ -4864,7 +5025,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
-  it('ctx.commands.register() called after setup() returns throws RegistrationClosedError (C2)', () => {
+  it('ctx.commands.register() called after view() returns throws RegistrationClosedError (C2)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
     let capturedCommands: PluginContext['commands'] | undefined;
@@ -4874,7 +5035,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.late-register',
-          setup(ctx) {
+          view(ctx) {
             capturedCommands = ctx.commands;
             return () => {};
           },
@@ -4889,7 +5050,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
     gantt.destroy();
   });
 
-  it('registerItemProducer/registerLookDefaults/registerGridColumn called after setup() returns each throw RegistrationClosedError (#152)', () => {
+  it('variants.add/registerGridColumn called after view() returns each throw RegistrationClosedError (#152)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
     let capturedCtx: PluginContext | undefined;
@@ -4899,7 +5060,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       plugins: [
         {
           id: 'demo.late-register-s5.9',
-          setup(ctx) {
+          view(ctx) {
             capturedCtx = ctx;
             return () => {};
           },
@@ -4907,10 +5068,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       ],
     });
 
-    expect(() => capturedCtx!.layout.registerItemProducer('buffer', () => [])).toThrow(
-      RegistrationClosedError,
-    );
-    expect(() => capturedCtx!.interaction.registerLookDefaults('buffer', { resize: false })).toThrow(
+    expect(() => capturedCtx!.variants.add({ name: 'buffer', can: { resize: false } })).toThrow(
       RegistrationClosedError,
     );
     expect(() => capturedCtx!.view.registerGridColumn({ field: 'name' })).toThrow(RegistrationClosedError);
@@ -4938,7 +5096,7 @@ describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue
       plugins: [
         {
           id: 'demo.outside-escape',
-          setup(ctx) {
+          view(ctx) {
             const unregister = ctx.interaction.registerKeyHandler('Escape', () => {
               handlerRuns += 1;
             });
@@ -4970,7 +5128,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const plugin = {
       id: 'demo.cellRenderer',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerRenderer('cell', () => ({ text: 'from the plugin' }));
         return () => {};
       },
@@ -5000,7 +5158,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     let hijacked = 0;
     const plugin = {
       id: 'demo.commands',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.commands.register({
           id: 'freegantt.selectAll',
           label: 'Select all, the plugin way',
@@ -5038,7 +5196,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
     let retract = (): void => {};
     const gantt = new Gantt({
@@ -5048,7 +5206,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
       plugins: [
         {
           id: 'demo.retractable',
-          setup(ctx: PluginContext) {
+          view(ctx: PluginContext) {
             retract = ctx.view.registerGridColumn({ field: 'risk', header: 'Risk' });
             return () => {};
           },
@@ -5097,12 +5255,12 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
       timeZone: 'UTC',
       fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
       fields: [{ key: 'risk', type: 'risk' }],
-      entries: [{ ...sampleEntries[0]!, props: { risk: 'high' } }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
     });
 
   const riskColumnPlugin = {
     id: 'demo.riskColumn',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       ctx.view.registerGridColumn({ field: 'risk' });
       return () => {};
     },
@@ -5223,9 +5381,9 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
     let savedWidth: number | undefined;
     let readMyColumn: (() => number | undefined) | undefined;
 
-    const riskColumnThatRemembers = (width?: number): GanttPlugin => ({
+    const riskColumnThatRemembers = (width?: number): ChromePlugin => ({
       id: 'demo.riskColumn',
-      setup(ctx) {
+      view(ctx) {
         ctx.view.registerGridColumn({ field: 'risk', ...(width !== undefined ? { width } : {}) });
         const myWidth = (): number | undefined =>
           ctx.view.resolvedColumns().find((column) => column.field === 'risk')?.width;
@@ -5273,7 +5431,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
 });
 
 describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #184)', () => {
-  const threeColumnGantt = (container: HTMLElement, plugins: GanttPlugin[] = []): Gantt =>
+  const threeColumnGantt = (container: HTMLElement, plugins: ChromePlugin[] = []): Gantt =>
     new Gantt({
       container,
       dataset: new Dataset({ timeZone: 'UTC', entries: sampleEntries }),
@@ -5353,9 +5511,9 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
 
   it('hiding a plugin’s own column never reaches the consumer’s configuration (D-S5-33)', async () => {
     const container = document.createElement('div');
-    const endColumnPlugin: GanttPlugin = {
+    const endColumnPlugin: ChromePlugin = {
       id: 'demo.endColumn',
-      setup(ctx: PluginContext) {
+      view(ctx: PluginContext) {
         ctx.view.registerGridColumn({ field: 'end' });
         return () => {};
       },
@@ -5391,7 +5549,7 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
     const gantt = threeColumnGantt(container, [
       {
         id: 'demo.reader',
-        setup(ctx: PluginContext) {
+        view(ctx: PluginContext) {
           seen = ctx;
           return () => {};
         },
@@ -5455,10 +5613,10 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
    *  (#250 A2: `extraEditsFor` is no longer a `Dataset` method, so a test can no longer intercept it
    *  by subclassing). Nothing else installs here, so the wrapper discards the occupant it composes
    *  onto — `data/edit-extension.test.ts` is where composition order is asserted (D-S5-23). */
-  function extenderPlugin(cascade: EditExtender): DatasetPlugin {
+  function extenderPlugin(cascade: EditExtender): DataPlugin {
     return {
       id: 'test.extender',
-      setup(ctx) {
+      data(ctx) {
         ctx.edits.setExtender(() => cascade);
       },
     };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { editableOf, FieldRegistry } from './field-registry.js';
-import { createFieldContext, writeField } from './field-access.js';
+import { createFieldAccess, readFieldByKey, writeField } from './field-access.js';
 import type { Field, FieldType } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
@@ -14,7 +14,7 @@ import {
 } from '../../model/index.js';
 
 function ctx(registry: FieldRegistry) {
-  return createFieldContext(registry, 'UTC');
+  return createFieldAccess({ fields: registry, timeZone: 'UTC' });
 }
 
 describe('FieldRegistry type merge (D-S4-3)', () => {
@@ -47,7 +47,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'props' }] })).toThrow(ReservedFieldKeyError);
   });
 
-  it('{ key: cost, type: money } reads entry.props.cost, unmediated', () => {
+  it('{ key: cost, type: money } reads entry.read(cost), unmediated', () => {
     const registry = new FieldRegistry({
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
@@ -61,7 +61,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
       segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
       props: { cost: 500 },
     };
-    expect(ctx(registry).read(entry, 'cost')).toBe(500);
+    expect(readFieldByKey(entry, 'cost', ctx(registry))).toBe(500);
   });
 
   it('{ key: start } with no other key is a no-op override and does not throw', () => {
@@ -120,7 +120,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     const written = writeField({ __brand: 'ProposedEdit', props: {}, proposedKeys: new Set() }, cost, 500);
     expect(written.props).toEqual({ cost: 500 });
     const next = { ...entry, props: written.props };
-    expect(context.read(next, 'cost')).toBe(500);
+    expect(readFieldByKey(next, 'cost', context)).toBe(500);
   });
 });
 

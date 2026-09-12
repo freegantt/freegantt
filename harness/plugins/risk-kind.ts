@@ -1,40 +1,35 @@
 // harness/plugins/ — written as if by a third party: everything below comes from 'freegantt', the
 // package's own public entry, never a path inside 'freegantt/src' (review P2). This plugin is
-// `bufferKind()`'s peer. Two plugins each define their own look, and both install: the `bar` point
-// keys on the look, so `'buffer'` and `'risk'` are neighbours rather than rivals.
+// `bufferKind()`'s peer. Two plugins each define their own variant, and both install: two rules that
+// claim different rows are neighbours rather than rivals.
 
-import { wholeEntryItem } from 'freegantt';
-import type { EntryEdit, EntryId, GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
+import type { EntryEdit } from 'freegantt';
 
-const RISK_KIND = 'risk';
+const RISK_VARIANT = 'risk';
 
-/** A consumer-defined `'risk'` look, over the same seams D-S5-22 names — and the proof that a
- *  second look-defining plugin is an ordinary install, not a collision. ADR 0013: this plugin, like
- *  `bufferKind()`, stores which ids it owns itself — see that file's own comment. */
-export function riskKind(ownedIds: Iterable<string>): GanttPlugin {
-  const owned = new Set<EntryId>(ownedIds as Iterable<EntryId>);
-  return {
+/** A consumer-defined `'risk'` variant, over the same two doors — and the proof that a second
+ *  variant-defining plugin is an ordinary install, not a collision. Like `bufferKind()`, its rule
+ *  reads the row, so it keeps no list of the ids it owns. */
+export function riskKind() {
+  return definePlugin({
     id: 'demo.riskKind',
-    setup(ctx) {
-      // Which entries are mine? The ids this plugin owns (Q10).
-      ctx.layout.registerLookClaim(RISK_KIND, (entry) => owned.has(entry.id));
+    view(ctx) {
+      ctx.variants.add({
+        // Which rows are mine? The ones the page marked as risk.
+        name: RISK_VARIANT,
+        when: { risk: true },
+        // How does it look? Its own class. `bufferKind()` installs its own variant, and both stand.
+        paint: () => ({ class: { 'demo-risk-bar': true } }),
+        // What can you do to it? Move refuses — a risk band sits where the plan puts it.
+        can: { move: false },
+      });
 
-      // What shape does it draw? One Item over the whole entry. `wholeEntryItem` is the library's
-      // own, so this plugin never restates the Item id convention (review P3).
-      ctx.layout.registerItemProducer(RISK_KIND, (entry) => [wholeEntryItem(entry, RISK_KIND)]);
-
-      // How does it look? Its own class, through the ordinary bar renderer seam. `bufferKind()`
-      // registers on the same point for its own look, and both registrations stand (review P2).
-      ctx.view.registerRenderer('bar', { [RISK_KIND]: () => ({ class: { 'demo-risk-bar': true } }) });
-
-      // What can you do to it? Move refuses — a risk band sits where the plan puts it.
-      ctx.interaction.registerLookDefaults(RISK_KIND, { move: false });
-
-      // What actions does it offer? One menu item, scoped to the ids this plugin owns alone.
+      // What actions does it offer? One menu item, scoped to the rows this variant claimed.
       ctx.commands.register({
         id: 'demo.riskKind.markAccepted',
         label: 'Mark risk accepted',
-        when: ({ entry }) => entry !== undefined && owned.has(entry.id),
+        when: ({ variant }) => variant === RISK_VARIANT,
         run: ({ entry }) => {
           if (entry === undefined) return;
           // See buffer-kind.ts's own comment: `accepted` is declared on the harness's Dataset, and this
@@ -43,7 +38,7 @@ export function riskKind(ownedIds: Iterable<string>): GanttPlugin {
         },
       });
 
-      // No disposer: `ctx.disposables` already retracts all four registrations (review P4).
+      // No disposer: `ctx.disposables` already retracts both registrations (review P4).
     },
-  };
+  });
 }

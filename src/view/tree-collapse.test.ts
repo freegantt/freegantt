@@ -1,27 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { entryId, rowId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, Instant, RowId } from '../model/index.js';
+import { entryId, rowId } from '../model/index.js';
+import type { Entry, EntryId, RowId } from '../model/index.js';
+import type { EntryDoubleValues } from '../layout/entry-double.js';
+import { entryDoubles } from '../layout/entry-double.js';
 import { TreeCollapse } from './tree-collapse.js';
 import type { TreeCollapseContext, TreeCollapseRow } from './tree-collapse.js';
 import type { CollapseChange } from './collapse-state.js';
 
-function instant(n: number): Instant {
-  return n as Instant;
-}
-
-function entry(id: string, parentId?: string): Entry {
-  const start = instant(0);
-  const end = instant(1);
-  const record: Entry = {
-    id: entryId(id),
-    name: id,
-    start,
-    end,
-    segments: [{ id: segmentId(`${id}-1`), start, end }],
-    props: {},
-  };
-  if (parentId !== undefined) record.parentId = entryId(parentId);
-  return record;
+function stored(id: string, parentId?: string): EntryDoubleValues {
+  return { id, start: 0, end: 1, ...(parentId !== undefined ? { parentId } : {}) };
 }
 
 function row(
@@ -41,7 +28,7 @@ function row(
 function makeCollapse(
   options: {
     plannedRows?: TreeCollapseRow[];
-    entries?: Entry[];
+    entries?: readonly Entry[];
     selected?: EntryId;
     canSelect?: (id: EntryId) => boolean;
     rowIdForEntry?: (id: EntryId) => RowId | undefined;
@@ -72,10 +59,9 @@ function makeCollapse(
       ((id) => {
         const ids: RowId[] = [];
         let current = entries.find((candidate) => candidate.id === id);
-        while (current?.parentId !== undefined) {
-          const parentId = current.parentId;
-          ids.push(rowId(parentId));
-          current = entries.find((candidate) => candidate.id === parentId);
+        for (let above = current?.parent(); above !== undefined; above = above.parent()) {
+          ids.push(rowId(String(above.id)));
+          current = above;
         }
         return ids;
       }),
@@ -150,7 +136,7 @@ describe('TreeCollapse', () => {
   it('handleArrow right expands a collapsed expandable row', () => {
     const { tree, confirm } = makeCollapse({
       plannedRows: [row('p', true, false)],
-      entries: [entry('p'), entry('c', 'p')],
+      entries: entryDoubles([stored('p'), stored('c', 'p')]),
       selected: entryId('p'),
     });
     tree.hydrate(['p']);
@@ -162,7 +148,7 @@ describe('TreeCollapse', () => {
   it('handleArrow right on an expanded row selects the first child', () => {
     const { tree, confirm, proposeSelection } = makeCollapse({
       plannedRows: [row('p', true, true)],
-      entries: [entry('p'), entry('c', 'p')],
+      entries: entryDoubles([stored('p'), stored('c', 'p')]),
       selected: entryId('p'),
     });
 
@@ -174,7 +160,7 @@ describe('TreeCollapse', () => {
   it('handleArrow left collapses an expanded row', () => {
     const { tree, confirm } = makeCollapse({
       plannedRows: [row('p', true, true)],
-      entries: [entry('p')],
+      entries: entryDoubles([stored('p')]),
       selected: entryId('p'),
     });
 
@@ -185,7 +171,7 @@ describe('TreeCollapse', () => {
   it('handleArrow left on a leaf selects a selectable parent', () => {
     const { tree, proposeSelection } = makeCollapse({
       plannedRows: [row('c', false, false)],
-      entries: [entry('p'), entry('c', 'p')],
+      entries: entryDoubles([stored('p'), stored('c', 'p')]),
       selected: entryId('c'),
     });
 
@@ -196,7 +182,7 @@ describe('TreeCollapse', () => {
   it('expandAncestorsOf drops collapsed ancestor row ids, including group headers (D4)', () => {
     const header = rowId('group:red');
     const { tree, confirm } = makeCollapse({
-      entries: [entry('a')],
+      entries: entryDoubles([stored('a')]),
       rowIdForEntry: () => rowId('a'),
       ancestorRowIds: () => [header],
     });
@@ -211,7 +197,7 @@ describe('TreeCollapse', () => {
 
   it('expandAncestorsOf is a no-op when no ancestor is collapsed', () => {
     const { tree, confirm } = makeCollapse({
-      entries: [entry('p'), entry('c', 'p')],
+      entries: entryDoubles([stored('p'), stored('c', 'p')]),
     });
     tree.hydrate(['other']);
 

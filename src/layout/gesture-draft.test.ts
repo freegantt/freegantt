@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
 import type { Entry, Instant, ProposedEdit, ProposedEdits } from '../model/index.js';
 import { entryId, itemId, segmentId } from '../model/index.js';
+import { entryDouble } from './entry-double.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
 const ZONE = 'America/New_York';
@@ -12,16 +13,7 @@ const scale = createTimeScale({
 });
 
 function entry(id: string, start: string, end: string): Entry {
-  const startInstant = instant(start);
-  const endInstant = instant(end);
-  return {
-    id: entryId(id),
-    name: id,
-    start: startInstant,
-    end: endInstant,
-    segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
-    props: {},
-  };
+  return entryDouble({ id, start: instant(start), end: instant(end) });
 }
 
 /** The edit a one-Segment entry produces: its lone Segment always moves or resizes with it, so the

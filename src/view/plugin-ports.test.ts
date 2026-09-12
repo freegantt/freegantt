@@ -87,12 +87,11 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     registrations: {
       registerRenderer: (point) => registry.add(`renderer:${point}`),
       registerDecoration: (layer) => registry.add(`decoration:${layer}`),
-      registerItemProducer: (kind) => registry.add(`producer:${kind}`),
-      registerLookClaim: (look) => registry.add(`claim:${look}`),
-      registerLookDefaults: (kind) => registry.add(`defaults:${kind}`),
+      registerVariant: (variant) => registry.add(`variant:${variant.name}`),
       registerGridColumn: () => registry.add('column'),
     },
     resolveTooltipRenderer: () => undefined,
+    variantOf: () => 'leaf',
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],
@@ -117,12 +116,10 @@ const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts
     'interaction.registerKeybinding',
     (p) => p.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.run' }),
   ],
-  ['interaction.registerLookDefaults', (p) => p.interaction.registerLookDefaults('buffer', {})],
   ['view.registerRenderer', (p) => p.view.registerRenderer('cell', () => ({ text: '' }))],
   ['view.registerDecoration', (p) => p.view.registerDecoration('underBars', () => [])],
   ['view.registerGridColumn', (p) => p.view.registerGridColumn('cost')],
-  ['layout.registerItemProducer', (p) => p.layout.registerItemProducer('buffer', () => [])],
-  ['layout.registerLookClaim', (p) => p.layout.registerLookClaim('buffer', () => false)],
+  ['variants.add', (p) => p.variants.add({ name: 'buffer' })],
 ];
 
 describe('buildPluginPorts — the D-S5-4 gate', () => {
@@ -165,15 +162,15 @@ describe('buildPluginPorts — disposal (#155)', () => {
   it('each Disposer removes exactly its own registration, in any order', () => {
     const harness = makeHarness();
 
-    const span = harness.parts.layout.registerItemProducer('span', () => []);
-    const buffer = harness.parts.layout.registerItemProducer('buffer', () => []);
-    const risk = harness.parts.layout.registerItemProducer('risk', () => []);
+    const span = harness.parts.variants.add({ name: 'span' });
+    const buffer = harness.parts.variants.add({ name: 'buffer' });
+    const risk = harness.parts.variants.add({ name: 'risk' });
 
     buffer();
-    expect(harness.registry.live).toEqual(['producer:span', 'producer:risk']);
+    expect(harness.registry.live).toEqual(['variant:span', 'variant:risk']);
 
     risk();
-    expect(harness.registry.live).toEqual(['producer:span']);
+    expect(harness.registry.live).toEqual(['variant:span']);
 
     span();
     expect(harness.registry.live).toEqual([]);

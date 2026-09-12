@@ -4,7 +4,7 @@ import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 import * as packLanes from './lanes/pack-lanes.js';
-import { createItemProducerRegistry } from './items/produce-items.js';
+import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
@@ -21,6 +21,7 @@ import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
+import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
@@ -32,7 +33,7 @@ const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
-const itemProducerRegistry = createItemProducerRegistry();
+const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
 describe('computeFrame', () => {
   it('emits one row and one bar per entry, positioned by time (S0 scope)', () => {
@@ -44,7 +45,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.rows).toHaveLength(sampleEntries.length);
     expect(frame.bars).toHaveLength(sampleEntries.length);
@@ -62,7 +63,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: {
         source: 'custom',
         resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
@@ -82,7 +83,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'group', groupBy: () => 'all' },
     });
 
@@ -100,7 +101,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.rows.length).toBeLessThan(sampleEntries.length);
     expect(frame.rowCount).toBe(sampleEntries.length);
@@ -115,7 +116,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
@@ -133,7 +134,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const second = computeFrame({
       entries: sampleEntries,
@@ -143,7 +144,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 1,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(first.bars.map((b) => b.id)).toEqual(second.bars.map((b) => b.id));
     expect(new Set(first.bars.map((b) => b.id)).size).toBe(sampleEntries.length);
@@ -158,7 +159,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
     expect(frame.rows[0]?.cells).toEqual([]);
@@ -180,7 +181,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         {
           field: 'name',
@@ -211,7 +212,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       columns: [
         { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
         { field: 'id', header: 'Id', align: 'start', format: (entry) => entry.id },
@@ -231,7 +232,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
     // contentHeight still covers every row, from the height index — not just the windowed ones.
@@ -249,7 +250,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(windowed.rows.map((r) => r.index)).toEqual([0, 1, 2, 3, 4]);
   });
@@ -266,7 +267,7 @@ describe('computeFrame', () => {
       rowHeight: 10,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     };
     const plan = resolveLayoutRows(input);
     const memory = new FrameMemory();
@@ -275,7 +276,7 @@ describe('computeFrame', () => {
       rowHeight: 10,
       laneGap: DEFAULT_LANE_GAP_PX,
       entries,
-      registry: itemProducerRegistry,
+      registry: variantRegistry,
       datasetRevision: 0,
       heightAt: (i) => rowHeights[i]!,
     });
@@ -293,7 +294,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(windowed.rows).toHaveLength(sampleEntries.length);
   });
@@ -307,7 +308,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const windowed = computeFrame({
       entries: sampleEntries,
@@ -318,7 +319,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(windowed.contentHeight).toBe(full.contentHeight);
     expect(windowed.contentWidth).toBe(full.contentWidth);
@@ -334,7 +335,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.header.bands).toHaveLength(1);
     expect(frame.header.bands[0]?.ticks.length).toBeGreaterThan(0);
@@ -359,7 +360,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.header.bands).toHaveLength(2);
     expect(frame.header.bands[0]?.unit).toBe('week');
@@ -380,7 +381,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
 
     expect(windowed.rows.map((r) => r.index)).toEqual([1]);
@@ -397,7 +398,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.bars).toMatchSnapshot();
   });
@@ -412,7 +413,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const after = computeFrame({
       entries: sampleEntries,
@@ -423,7 +424,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     // The overlap of [0, 64) and [32, 96) is [32, 64) — row index 1 only.
     const idsInOverlap = (frame: ReturnType<typeof computeFrame>): string[] =>
@@ -435,8 +436,10 @@ describe('computeFrame', () => {
   });
 
   it('I8: item ids stay stable across a row-source switch', () => {
-    const parent = sampleEntries[0]!;
-    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
     const entries = [parent, child, ...sampleEntries.slice(2, 5)];
     const base = {
       entries,
@@ -446,7 +449,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     };
     const tree = computeFrame({ ...base, rows: { source: 'entries', tree: true } });
     const grouped = computeFrame({
@@ -464,13 +467,12 @@ describe('computeFrame', () => {
   });
 
   it("names a segmented bar as 'part N of M'", () => {
-    const entry = {
-      ...sampleEntries[0]!,
+    const entry = entryDoubleLike(sampleEntries[0]!, {
       segments: [
         { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
         { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
-    };
+    });
     const frame = computeFrame({
       entries: [entry],
       scale,
@@ -479,7 +481,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
@@ -487,17 +489,21 @@ describe('computeFrame', () => {
   });
 
   it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
-    const entry = {
-      ...sampleEntries[0]!,
-      segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
-      ],
-    };
-    // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
-    // marker, to draw the parent's own summary bar instead of a Segment bar.
-    const grouped = { ...sampleEntries[1]! };
-    const groupedChild = { ...sampleEntries[2]!, id: entryId('grouped-child'), parentId: grouped.id };
+    const [entry, grouped, groupedChild] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!, {
+        segments: [
+          { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+          { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
+        ],
+      }),
+      // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
+      // marker, to draw the parent's own summary bar instead of a Segment bar.
+      entryValuesOf(sampleEntries[1]!),
+      entryValuesOf(sampleEntries[2]!, {
+        id: 'grouped-child',
+        parentId: String(sampleEntries[1]!.id),
+      }),
+    ]) as readonly [Entry, Entry, Entry];
     const frame = computeFrame({
       entries: [entry, grouped, groupedChild],
       scale,
@@ -506,7 +512,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const segmentedBars = frame.bars.filter((bar) => bar.entryId === entry.id);
     expect(segmentedBars.map((bar) => bar.segmentId)).toEqual(entry.segments.map((segment) => segment.id));
@@ -524,16 +530,7 @@ describe('computeFrame — horizontal culling', () => {
   });
 
   function entryAt(id: string, x: number, width: number): Entry {
-    const start = instant(x);
-    const end = instant(x + width);
-    return {
-      id: entryId(id),
-      name: id,
-      start,
-      end,
-      segments: [{ id: segmentId(`${id}-1`), start, end }],
-      props: {},
-    };
+    return entryDouble({ id, start: x, end: x + width });
   }
 
   const entries: Entry[] = [
@@ -554,7 +551,7 @@ describe('computeFrame — horizontal culling', () => {
       rowHeight: 10,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.rows).toHaveLength(entries.length);
     expect(frame.bars.map((b) => b.entryId)).toEqual([
@@ -574,7 +571,7 @@ describe('computeFrame — horizontal culling', () => {
       rowHeight: 10,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
   });
@@ -589,7 +586,7 @@ describe('computeFrame — horizontal culling', () => {
       rowHeight: 10,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.bars).toHaveLength(entries.length);
   });
@@ -606,7 +603,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       todayLine: false,
       dateLines: [{ placeAt, label: 'Ship', className: 'fg-deadline-line' }],
     });
@@ -625,7 +622,7 @@ describe('computeFrame — Date lines (S1.13)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       todayLine: outside,
     });
     expect(frame.decorations).toEqual([]);
@@ -641,12 +638,18 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     pxPerMs: 1 / (60 * 60 * 1000),
   });
   const gridEntries: readonly Entry[] = [
-    {
-      ...sampleEntries[0]!,
-      id: entryId('grid-1'),
+    entryDoubleLike(sampleEntries[0]!, {
+      id: 'grid-1',
       start: instant('2026-08-24T00:00:00Z'),
       end: instant('2026-08-25T00:00:00Z'),
-    },
+      segments: [
+        {
+          id: segmentId('grid-1-1'),
+          start: instant('2026-08-24T00:00:00Z'),
+          end: instant('2026-08-25T00:00:00Z'),
+        },
+      ],
+    }),
   ];
   const dayAndWeekHeaders = {
     ...preset,
@@ -665,7 +668,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const weekStartXs = new Set(frame.header.bands[0]!.ticks.map((tick) => tick.x));
     expect(frame.tickLines.length).toBe(frame.header.bands[1]!.ticks.length);
@@ -695,7 +698,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const majors = frame.tickLines.filter((line) => line.major);
     expect(majors.length).toBe(1);
@@ -720,7 +723,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.tickLines.length).toBeGreaterThan(0);
     expect(frame.tickLines.every((line) => !line.major)).toBe(true);
@@ -737,7 +740,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.tickLines.length).toBeGreaterThan(0);
     for (const line of frame.tickLines) {
@@ -755,7 +758,7 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     expect(frame.tickLines.length).toBeGreaterThan(0);
     expect(frame.tickLines.every((line) => !line.major)).toBe(true);
@@ -773,7 +776,7 @@ describe('computeFrame — the tick step a decoration provider reads', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       decorationProviders: [
         {
           layer: 'underBars',
@@ -825,7 +828,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
 
@@ -855,7 +858,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
     // Tick at 120 has remainder 8 (< shipped floor 9) — keeps true x.
@@ -873,7 +876,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     });
     const ticks = frame.header.bands[0]!.ticks;
     expect(ticks.find((t) => t.width === 9)).toMatchObject({ x: 171, width: 9 });
@@ -890,7 +893,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
     };
     const atDefault = computeFrame(input);
     expect(atDefault.header.bands[0]!.ticks.find((t) => t.width === 50)).toMatchObject({ x: 130, width: 50 });
@@ -907,19 +910,14 @@ describe(
   'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
-    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => {
-      const start = instant(input.start as Date);
-      const end = instant(input.end as Date);
-      return {
-        id: entryId(input.id),
+    const large: readonly Entry[] = entryDoubles(
+      seededEntryInputs({ count: 5000 }).map((input) => ({
+        id: input.id,
         name: input.name,
-        start,
-        end,
-        kind: 'span',
-        segments: [{ id: segmentId(`${input.id}-1`), start, end }],
-        props: {},
-      };
-    });
+        start: instant(input.start as Date),
+        end: instant(input.end as Date),
+      })),
+    );
     const largeScale = createTimeScale({ timeZone: 'UTC', range: spanOf(large[0]!), pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
@@ -932,7 +930,7 @@ describe(
         rowHeight: 32,
         revision: 0,
         datasetRevision: 0,
-        itemProducerRegistry,
+        variants: variantRegistry,
       });
       expect(frame.rows.length).toBeLessThan(large.length);
       expect(frame.rowCount).toBe(large.length);
@@ -943,8 +941,10 @@ describe(
 
 describe('computeFrame row sources (S4.6)', () => {
   it('rowCount counts resolved rows, not entries, and collapse shrinks the plan', () => {
-    const parent = sampleEntries[0]!;
-    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
     const rest = sampleEntries.slice(2);
     const entries = [parent, child, ...rest];
     const tree = computeFrame({
@@ -956,7 +956,7 @@ describe('computeFrame row sources (S4.6)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'entries', tree: true },
     });
     expect(tree.rowCount).toBe(entries.length);
@@ -972,7 +972,7 @@ describe('computeFrame row sources (S4.6)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'entries', tree: true },
       collapsed: [parent.id],
     });
@@ -982,14 +982,13 @@ describe('computeFrame row sources (S4.6)', () => {
 });
 
 describe('computeFrame lanes (S4.8)', () => {
-  const overlapping: Entry = {
-    ...sampleEntries[0]!,
+  const overlapping: Entry = entryDoubleLike(sampleEntries[0]!, {
     segments: [
       { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
       { id: segmentId('lane-2'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
       { id: segmentId('lane-3'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
     ],
-  };
+  });
 
   it("a 'fixed' source never calls the packer", () => {
     const spy = vi.spyOn(packLanes, 'packRow');
@@ -1001,7 +1000,7 @@ describe('computeFrame lanes (S4.8)', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'entries', heightMode: 'fixed' },
     });
     expect(spy).not.toHaveBeenCalled();
@@ -1009,7 +1008,7 @@ describe('computeFrame lanes (S4.8)', () => {
   });
 
   it('culls through the height index when pack-mode rows have different heights', () => {
-    const short: Entry = { ...sampleEntries[1]!, id: sampleEntries[1]!.id };
+    const short: Entry = entryDoubleLike(sampleEntries[1]!);
     const frame = computeFrame({
       entries: [overlapping, short],
       scale,
@@ -1020,7 +1019,7 @@ describe('computeFrame lanes (S4.8)', () => {
       laneGapPx: 2,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry,
+      variants: variantRegistry,
       rows: { source: 'entries', heightMode: 'pack' },
     });
     expect(frame.rows).toHaveLength(1);
@@ -1032,7 +1031,7 @@ describe('computeFrame lanes (S4.8)', () => {
 
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps minimumSpan', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
     const { x, width, minimumSpan } = barSpan(spanOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
@@ -1040,7 +1039,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
   });
 
   it('honours a custom minBarWidthPx', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
     const { width } = barSpan(spanOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
@@ -1049,7 +1048,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
-    const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
+    const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
     const { x, width, minimumSpan } = barSpan(spanOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);

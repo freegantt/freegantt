@@ -1,12 +1,12 @@
 // model/ — the plugin primitives that name nothing outside `model/`, zero-dependency (CLAUDE.md:
-// model/ is a zero-dependency leaf). `GanttPlugin`/`PluginContext` live in api/plugin.ts, and
-// `DatasetPlugin`/`DatasetPluginContext` live in api/dataset-plugin.ts — each names api/ and
+// model/ is a zero-dependency leaf). The plugin shapes live in api/plugin.ts, `PluginContext` in
+// api/plugin-context.ts, and `DatasetPluginContext` in api/dataset-plugin.ts — each names api/ and
 // extensions/ types `model/` may never import (issue #137 F1, plans/s5-extensibility-and-editing/
 // s5.1-plugin-runtime.md D-S5-1). What stays here is what both contracts share, plus the two store
 // types a plugin author holds but never constructs.
 
 import type { EntryId } from './ids.js';
-import type { EditExtender } from './entry.js';
+import type { EditExtender } from './stored-entry.js';
 
 /** A plugin's own identity, unique within the `plugins` list that installs it (D-S5-3). */
 export type PluginId = string;

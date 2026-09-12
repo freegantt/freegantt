@@ -1,8 +1,12 @@
 // data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21), and (S2.3
-// §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to. `all` stays
-// committed-only by design (D-S2-3's cached-identity rule); `get`/`has`/`size`/`childrenOf`/`fieldValue`
-// read through an open write set first, so a read-then-write helper inside a transaction body sees its
-// own edits.
+// §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to.
+//
+// Two questions hide in one word, and `all` answers them differently (ADR 0017, rule 2). *Which*
+// rows exist is the collection's question, and `all` answers it as of the last commit — the array is
+// a `computed` bound to `#revision`, and `ScaleBinding` compares it by reference (D-S1.5-4, D-S2-3).
+// *What a row is worth* is the row's question, and every `Entry` in that array answers it now.
+// `get`/`has`/`size` read through an open write set, so a read-then-write helper inside a
+// transaction body sees its own edits.
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
 // mutation outside a transaction does not typecheck (docs/02 §3.6). `add`/`update`/`remove` never
 // mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
@@ -10,13 +14,15 @@
 
 import type {
   Entry,
+  StoredEntry,
   EntryId,
   EntryInput,
   EntryEdit,
   EntryEdits,
-  FieldContext,
   FieldKey,
-  FieldValue,
+  HierarchySource,
+  HierarchySourceWrapper,
+  RaiseError,
   Segment,
   SegmentId,
 } from '../model/index.js';
@@ -42,12 +48,19 @@ import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
-  createFieldContext,
+  createFieldAccess,
   createRollUpContext,
+  measureEntryDuration,
   mergeProposedEdits,
   entryAfterEdit,
+  readField,
+  readingChildrenFrom,
   writeOntoEntry,
 } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
+import { LiveEntries, unknownFieldError } from './live-entry.js';
+import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
+import type { CheckedHierarchy, ParentIndex } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
@@ -55,17 +68,22 @@ import { isApiEditable, resolveWriteTarget } from './write-rule.js';
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
  *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
  *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. */
-function applyFieldRow(current: Entry, field: FieldKey, value: unknown, registry: FieldRegistry): Entry {
+function applyFieldRow(
+  current: StoredEntry,
+  field: FieldKey,
+  value: unknown,
+  registry: FieldRegistry,
+): StoredEntry {
   const declared = registry.get(field);
   if (declared) return writeOntoEntry(current, declared, value);
   const next: Record<string, unknown> = { ...current };
   if (value === undefined) delete next[field];
   else next[field] = value;
-  return next as unknown as Entry;
+  return next as unknown as StoredEntry;
 }
 
 interface WriteSet {
-  added: Map<EntryId, Entry>;
+  added: Map<EntryId, StoredEntry>;
   removed: Set<EntryId>;
   edits: Map<EntryId, ProposedEdit>;
   /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
@@ -80,11 +98,22 @@ interface WriteSet {
    *  never a scan of the write set. An id absent from this map was never touched this transaction,
    *  so `#segmentOwnerInWriteSet` falls through to the committed index for it. */
   segmentOwner: Map<SegmentId, EntryId | null>;
-  /** Every id a staged add or update pointed a `parentId` at, in this transaction. A filter, not an
-   *  index: it over-answers (an id whose child was later reparented away stays in it), and a miss is
-   *  the only answer it is trusted for. `#hasChildren` runs on every consumer write, and without this
-   *  it would walk the staged edits each time — the O(n²) shape finding S1 (#212) already killed once
-   *  for Segment ids. Kept current by `stageAdd`/`stageUpdate`, the same way `segmentOwner` is. */
+  /** Every id the hierarchy source named as a parent of a staged add or update, in this transaction.
+   *  A filter, not an index: it over-answers (an id whose child was later reparented away stays in
+   *  it), and a miss is the only answer it is trusted for. `#hasChildren` runs on every consumer
+   *  write, and without this it would walk the staged edits each time — the O(n²) shape finding S1
+   *  (#212) already killed once for Segment ids. Kept current by `stageAdd`/`stageUpdate`, the same
+   *  way `segmentOwner` is.
+   *
+   *  It reads the **source**, never `edit.parentId` (ADR 0020). A plugin source may answer out of a
+   *  `props` key, so an edit that moves a row names no `parentId` at all — a filter built from the
+   *  write shape would miss that move and `#hasChildren` would answer a stale `false`.
+   *
+   *  That source call is not free, and the cost is accepted (`V2`). A source reads a whole
+   *  `StoredEntry`, so asking it about a staged row materialises that row: one `entryAfterEdit`
+   *  copy per staged update, at `pointerup`. A parent-bar drag over a 5,000-row subtree allocates
+   *  5,000 of them in one commit. It stays off the hot path — one transaction per gesture, at
+   *  commit, never once per frame (I5). */
   stagedParents: Set<EntryId>;
 }
 
@@ -110,11 +139,32 @@ function recordSegmentOwnership(
 }
 
 export class EntryStore implements EntryStoreContract {
-  #byId: Map<EntryId, Entry>;
+  #byId: Map<EntryId, StoredEntry>;
   /** One write per commit; every derived value below invalidates from it (D-S2-4). */
   #revision = signal(0);
-  #all: () => readonly Entry[];
-  #byParent: () => ReadonlyMap<EntryId | undefined, readonly Entry[]>;
+  #all: () => readonly StoredEntry[];
+  /** The same array identity rule as `#all`, one revision at a time — the elements are the live
+   *  rows `layout/` receives (`gantt-shell.ts` hands this straight on). */
+  #allLive: () => readonly Entry[];
+  /** Which Entry the hierarchy source says is the parent of this one (ADR 0020). A `signal`, not a
+   *  plain field, because a plugin claims the seam after this store is built — every index below
+   *  reads it, so composing a source invalidates them all. */
+  #hierarchySource = signal<HierarchySource>(storedParentSource);
+  /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
+   *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
+   *  never depends on who read first (`F5`). `#reportRefusedHierarchyAnswers` raises. */
+  #hierarchy: () => CheckedHierarchy;
+  /** Which answers have already been raised, and for which revision. A revision is the documented
+   *  unit — one report per refused answer per revision — and a plugin that composes the seam checks
+   *  again inside the same revision, so the same bad answer must not be raised twice for it. */
+  #reportedRefusals = { revision: -1, messages: new Set<string>() };
+  #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
+  /** Ancestor count per committed row, cached beside `#byParent` for the same reason `hasChildren`
+   *  is: `entry.depth` is a property, and a walk inside a getter breaks ADR 0017's rule 4. */
+  #depthById: () => ReadonlyMap<EntryId, number>;
+  /** One `Entry` per id, for the store's lifetime (ADR 0017, rule 2). */
+  #live: LiveEntries;
+  #access: FieldAccess;
   /** `SegmentId → EntryId` (finding 6, #212): the answer `entryIdOfSegment`/`entryIdsOfSegments`
    *  publish, and the one place that answer is computed. Maintained alongside `#byId` on every
    *  commit — `#reindexSegments`, `#rememberSegmentsOf`, `#forgetSegmentsOf` are the only writers —
@@ -127,22 +177,42 @@ export class EntryStore implements EntryStoreContract {
    *  restoration, so this survives an unrelated `'user'` re-add of the same id in between — an
    *  id-keyed map would let that second object's index clobber the first's (undo-all then restores
    *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
-  #removedAtIndex = new Map<Entry, number>();
+  #removedAtIndex = new Map<StoredEntry, number>();
   #context: EntryReadContext;
   readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
-  readonly #fieldContext: FieldContext;
+  /** Where a refused hierarchy answer goes (ADR 0020). The default keeps each site's own `console`
+   *  line, the same posture `render/dom`'s backend options take. */
+  readonly #raiseError: RaiseError;
 
   constructor(
-    entries: readonly Entry[],
+    entries: readonly StoredEntry[],
     context: EntryReadContext,
     registry: FieldRegistry = new FieldRegistry(),
-    fieldContext: FieldContext = createFieldContext(registry, context.timeZone),
+    access: FieldAccess = createFieldAccess({ fields: registry, timeZone: context.timeZone }),
     runner?: TransactionData,
+    raiseError: RaiseError = (_report, fallback) => fallback?.(),
   ) {
+    this.#raiseError = raiseError;
     this.#context = context;
     this.#registry = registry;
-    this.#fieldContext = fieldContext;
+    // The store is the tree a Field read walks: a `compute` Field asking `ctx.children()` outside a
+    // Rollup pass means the row the store holds now (#214).
+    this.#access = readingChildrenFrom(access, (id) => this.storedChildrenOf(id));
+    this.#live = new LiveEntries({
+      storedEntry: (id) => this.storedEntry(id),
+      storedChildrenOf: (id) => this.storedChildrenOf(id),
+      hasChildren: (id) => this.#hasChildren(id),
+      depthOf: (id) => this.#depthOf(id),
+      parentIdOf: (entry) => this.parentIdOf(entry),
+      entryFor: (id) => this.#live.for(id),
+      readField: (entry, key) => {
+        const field = this.#registry.get(key);
+        if (field === undefined) throw unknownFieldError(key);
+        return readField(entry, field, this.#access);
+      },
+      durationOf: (entry) => measureEntryDuration(entry, this.#access.measureDuration),
+    });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
     for (const entry of entries) this.#rememberSegmentsOf(entry);
@@ -152,23 +222,152 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.get();
       return Array.from(this.#byId.values());
     });
+    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
+    this.#hierarchy = computed(() => {
+      this.#revision.get();
+      return checkHierarchyAnswers(this.#byId, this.#hierarchySource.get());
+    });
     this.#byParent = computed(() => {
-      const byParent = new Map<EntryId | undefined, Entry[]>();
+      // Core inverts the source's answer (ADR 0020). One parent per Entry goes in, so nothing can
+      // produce two parents for one row, and sibling order stays the order the rows are in.
+      const parentById = this.committedParents();
+      const byParent = new Map<EntryId | undefined, StoredEntry[]>();
       for (const entry of this.#all()) {
-        const siblings = byParent.get(entry.parentId);
+        const parentId = parentById.get(entry.id);
+        const siblings = byParent.get(parentId);
         if (siblings) siblings.push(entry);
-        else byParent.set(entry.parentId, [entry]);
+        else byParent.set(parentId, [entry]);
       }
       return byParent;
     });
+    this.#depthById = computed(() => {
+      const byParent = this.#byParent();
+      const depthById = new Map<EntryId, number>();
+      const walk = (parentId: EntryId | undefined, depth: number): void => {
+        for (const child of byParent.get(parentId) ?? []) {
+          if (depthById.has(child.id)) continue;
+          depthById.set(child.id, depth);
+          walk(child.id, depth + 1);
+        }
+      };
+      walk(undefined, 0);
+      return depthById;
+    });
+    // The authored rows are answers too, and nobody has read a row yet (`F5`).
+    this.#reportRefusedHierarchyAnswers();
   }
 
-  /** Committed only — a write set open on a transaction in progress is not reflected here (D-S2-21). */
+  /** The checked tree for the committed rows. Memoized per revision, so the commit path, the Rollup
+   *  and every live row read one index rather than three walks that happen to agree (`F6`). */
+  committedParents(): ParentIndex {
+    return this.#hierarchy().parents;
+  }
+
+  /** Raises every answer core refused, once (ADR 0020, `F5`).
+   *
+   *  Called where the answers can change and nowhere else — at construction, on every commit, and
+   *  each time a plugin composes the seam. Not from the read path: a Fault that waits for somebody
+   *  to look is a Fault a headless Dataset never sees, and a plugin's own tests run headless.
+   *  A construction-time refusal reaches the `console` fallback and no `error` handler, because no
+   *  consumer can subscribe before the constructor returns — the same posture the construction
+   *  Rollup's own `derived-values-dropped` report already takes (ADR 0013, decision 5).
+   *
+   *  The raise lands after the write set closes and before `change` fans out, so a handler that
+   *  writes in response is outside the notification window `data/` forbids a mutation in. */
+  #reportRefusedHierarchyAnswers(): void {
+    const revision = this.#revision.get();
+    if (this.#reportedRefusals.revision !== revision) {
+      this.#reportedRefusals = { revision, messages: new Set<string>() };
+    }
+    const raised = this.#reportedRefusals.messages;
+    for (const report of this.#hierarchy().refused) {
+      if (raised.has(report.message)) continue;
+      raised.add(report.message);
+      this.#raiseError(report, () => console.warn(`FreeGantt: ${report.message}`));
+    }
+  }
+
+  /** How many ancestors `id` has. The committed index answers it for free; an open transaction
+   *  walks the live parent chain, which no frame ever does. */
+  #depthOf(id: EntryId): number {
+    if (!this.#writeSet) return this.#depthById().get(id) ?? 0;
+    let depth = 0;
+    let parentId = this.#parentIdInWriteSet(id);
+    const seen = new Set<EntryId>([id]);
+    while (parentId !== undefined && !seen.has(parentId)) {
+      seen.add(parentId);
+      depth += 1;
+      parentId = this.#parentIdInWriteSet(parentId);
+    }
+    return depth;
+  }
+
+  /** The parent of `id` as this transaction leaves it — the raw source, guarded by the caller's own
+   *  `seen` set. The committed index runs the full check once per revision (ADR 0020); a walk inside
+   *  an open transaction must stay O(chain), so it guards against a loop rather than finding one. */
+  #parentIdInWriteSet(id: EntryId): EntryId | undefined {
+    const entry = this.storedEntry(id);
+    return entry === undefined ? undefined : this.#askSource(entry);
+  }
+
+  /** One call to whichever source is current, branded. Every tree read inside an open transaction
+   *  goes through this — the committed index goes through `checkHierarchyAnswers` instead. */
+  #askSource(entry: StoredEntry): EntryId | undefined {
+    return parentIdFrom(this.#hierarchySource.get(), entry);
+  }
+
+  /** Which Entry is the parent of this row, as the rest of the library must read it (ADR 0020).
+   *  Committed, it is the checked answer the index holds. Inside an open transaction, it is what the
+   *  source says about the row this transaction leaves. */
+  parentIdOf(entry: StoredEntry): EntryId | undefined {
+    if (!this.#writeSet) return this.committedParents().get(entry.id);
+    return this.#askSource(entry);
+  }
+
+  /** The source every tree read in this store goes through. `data/`'s commit path and the Rollup
+   *  read the same one, so the tree and the Rollup can never disagree (ADR 0020). */
+  get hierarchySource(): HierarchySource {
+    return this.#hierarchySource.get();
+  }
+
+  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
+   *  Installing composes onto the current occupant rather than evicting it, the same way
+   *  `setExtender` does (D-S5-23) — core's own `(entry) => entry.parentId` is the first occupant and
+   *  has no special claim on the seam. Not on `EntryStoreView`: this is a plugin-author door, and it
+   *  reaches a plugin through `ctx.hierarchy` alone. */
+  setHierarchySource(wrap: HierarchySourceWrapper): void {
+    this.#hierarchySource.set(wrap(this.#hierarchySource.get()));
+    // A new occupant answers about the rows already here, so its refused answers are news now
+    // (`F5`) — not when the next commit or the next read happens to ask.
+    this.#reportRefusedHierarchyAnswers();
+  }
+
+  /** Live rows; *which* rows is committed-only, so this array does not grow inside an open
+   *  transaction (D-S2-21, ADR 0017 rule 2). Each row in it reads the write set. */
   get all(): readonly Entry[] {
+    return this.#allLive();
+  }
+
+  /** The committed rows as the store holds them — what the commit path and the Rollup read. */
+  get allStored(): readonly StoredEntry[] {
     return this.#all();
   }
 
+  /** The committed rows as stored values, keyed by id (ADR 0017, P4). The store's own index, handed
+   *  out read-only — never a copy, so a drag preview reading it every frame allocates nothing. */
+  get storedValues(): ReadonlyMap<EntryId, StoredEntry> {
+    return this.#byId;
+  }
+
+  /** The live row for `id`, or `undefined` once nothing by that id exists. */
   get(id: EntryId | string): Entry | undefined {
+    const key = entryId(id);
+    return this.storedEntry(key) === undefined ? undefined : this.#live.for(key);
+  }
+
+  /** The row as this transaction leaves it — what the edit pipeline carries (ADR 0017). `get`
+   *  below hands back the live `Entry` a reader asks its questions of. */
+  storedEntry(id: EntryId | string): StoredEntry | undefined {
     const key = entryId(id);
     if (!this.#writeSet) return this.#byId.get(key);
     if (this.#writeSet.removed.has(key)) return undefined;
@@ -196,22 +395,8 @@ export class EntryStore implements EntryStoreContract {
     return size;
   }
 
-  /** The store is monomorphic — it never learns one consumer's field map — so the open default
-   *  (`Record<string, unknown>`) is what it can promise here. `api/dataset.ts` re-types the whole
-   *  store to the caller's `TFields` at the façade, in the one trusted cast documented there. */
-  fieldValue<K extends FieldKey>(
-    id: EntryId | string,
-    field: K,
-  ): FieldValue<Record<string, unknown>, K> | undefined {
-    const key = String(field);
-    if (!this.#registry.has(key)) throw new UnknownFieldError(key, 'entries.fieldValue');
-    const entry = this.get(id);
-    if (!entry) throw new EntryNotFoundError(entryId(id), 'entries.fieldValue');
-    return this.#fieldContext.read(entry, field) as FieldValue<Record<string, unknown>, K> | undefined;
-  }
-
   /** Children of an entry, in insertion order. An entry with no children returns an empty array. */
-  childrenOf(id: EntryId | string): readonly Entry[] {
+  storedChildrenOf(id: EntryId | string): readonly StoredEntry[] {
     const parent = entryId(id);
     if (!this.#writeSet) return this.#byParent().get(parent) ?? [];
     return this.#childrenOfWriteSet(parent);
@@ -219,21 +404,21 @@ export class EntryStore implements EntryStoreContract {
 
   /** Overlay the write set onto the committed `byParent` index — O(children + edits + adds),
    *  not O(dataset). `remove` walks this while a transaction is already open (S2.3 §1.4). */
-  #childrenOfWriteSet(parent: EntryId): readonly Entry[] {
+  #childrenOfWriteSet(parent: EntryId): readonly StoredEntry[] {
     const writeSet = this.#writeSet;
     if (!writeSet) return [];
     const seen = new Set<EntryId>();
-    const result: Entry[] = [];
-    const pushIfChild = (entry: Entry | undefined): void => {
-      if (!entry || entry.parentId !== parent || seen.has(entry.id)) return;
+    const result: StoredEntry[] = [];
+    const pushIfChild = (entry: StoredEntry | undefined): void => {
+      if (!entry || this.#askSource(entry) !== parent || seen.has(entry.id)) return;
       seen.add(entry.id);
       result.push(entry);
     };
     for (const committed of this.#byParent().get(parent) ?? []) {
-      pushIfChild(this.get(committed.id));
+      pushIfChild(this.storedEntry(committed.id));
     }
     for (const editedId of writeSet.edits.keys()) {
-      pushIfChild(this.get(editedId));
+      pushIfChild(this.storedEntry(editedId));
     }
     for (const added of writeSet.added.values()) {
       pushIfChild(added);
@@ -243,27 +428,26 @@ export class EntryStore implements EntryStoreContract {
 
   /** Does this Entry derive — has it at least one child, as this transaction leaves it (ADR 0013)?
    *  The consumer door asks this on every write, so it answers without building one overlay Entry per
-   *  staged edit, which is what `childrenOf` above does: it reads the committed index first, and
+   *  staged edit, which is what `storedChildrenOf` above does: it reads the committed index first, and
    *  reaches the staged edits only when `stagedParents` says some edit named this id as a parent. */
   #hasChildren(parent: EntryId): boolean {
     const writeSet = this.#writeSet;
     for (const committed of this.#byParent().get(parent) ?? []) {
       if (!writeSet) return true;
       if (writeSet.removed.has(committed.id)) continue;
-      const staged = writeSet.added.get(committed.id);
-      if (staged) {
-        if (staged.parentId === parent) return true;
-        continue;
-      }
-      const edit = writeSet.edits.get(committed.id);
-      if (edit === undefined || !('parentId' in edit) || edit.parentId === parent) return true;
+      // One row as this transaction leaves it, and one source call on it. `storedEntry` allocates
+      // only for a row this transaction actually edited, so this stays O(children).
+      const now = this.storedEntry(committed.id);
+      if (now !== undefined && this.#askSource(now) === parent) return true;
     }
     if (!writeSet || !writeSet.stagedParents.has(parent)) return false;
     for (const added of writeSet.added.values()) {
-      if (added.parentId === parent) return true;
+      if (this.#askSource(added) === parent) return true;
     }
-    for (const [id, edit] of writeSet.edits) {
-      if (edit.parentId === parent && !writeSet.removed.has(id)) return true;
+    for (const id of writeSet.edits.keys()) {
+      if (writeSet.removed.has(id)) continue;
+      const edited = this.storedEntry(id);
+      if (edited !== undefined && this.#askSource(edited) === parent) return true;
     }
     return false;
   }
@@ -271,7 +455,7 @@ export class EntryStore implements EntryStoreContract {
   /** Call: `dataset.entries.entryIdOfSegment(segmentId)`. The Entry that draws `id`, or `undefined`
    *  when no Entry does (ADR 0010, #212, finding 6) — one map lookup against `#entryIdBySegmentId`,
    *  never a walk of `all`. Read through the write set inside an open transaction, the same
-   *  read-your-own-writes posture `get`/`has`/`childrenOf` already take. */
+   *  read-your-own-writes posture `get`/`has` and every live row already take. */
   entryIdOfSegment(id: SegmentId | string): EntryId | undefined {
     const key = segmentId(id);
     if (!this.#writeSet) return this.#entryIdBySegmentId.get(key);
@@ -306,7 +490,7 @@ export class EntryStore implements EntryStoreContract {
     const seen = new Set<EntryId>();
     const result: SegmentId[] = [];
     for (const id of ids) {
-      const entry = this.get(id);
+      const entry = this.storedEntry(id);
       if (entry === undefined || seen.has(entry.id)) continue;
       seen.add(entry.id);
       for (const segment of entry.segments) result.push(segment.id);
@@ -316,7 +500,7 @@ export class EntryStore implements EntryStoreContract {
 
   /** `entryIdOfSegment` inside an open transaction: one lookup at the write set's own
    *  `segmentOwner` map (finding S1, #212), the pair to `#childrenOfWriteSet`'s overlay for
-   *  `childrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the
+   *  `storedChildrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the
    *  write set. `stageAdd`/`stageUpdate`/`stageRemove` keep the map current as each stages, so a
    *  Segment id this transaction touched already carries the right answer, `null` included for one
    *  it dropped. An id this transaction never touched is absent from the map, so the committed
@@ -331,7 +515,7 @@ export class EntryStore implements EntryStoreContract {
   /** Adds every Segment `entity` draws to `#entryIdBySegmentId`, pointing each at `entity.id`.
    *  Construction's initial seeding and a committed add both call this — the one place a Segment
    *  starts being findable through the index. */
-  #rememberSegmentsOf(entity: Entry): void {
+  #rememberSegmentsOf(entity: StoredEntry): void {
     for (const segment of entity.segments) this.#entryIdBySegmentId.set(segment.id, entity.id);
   }
 
@@ -341,7 +525,7 @@ export class EntryStore implements EntryStoreContract {
    *  (finding B3, #212): a Segment id `entity` once drew but the index now credits to a different
    *  Entry — handed off in the same commit — is that Entry's, not `entity`'s, to delete. Without the
    *  guard, processing `entity`'s row after the new owner's row deletes the new owner's live entry. */
-  #forgetSegmentsOf(entity: Entry): void {
+  #forgetSegmentsOf(entity: StoredEntry): void {
     for (const segment of entity.segments) {
       if (this.#entryIdBySegmentId.get(segment.id) === entity.id) this.#entryIdBySegmentId.delete(segment.id);
     }
@@ -368,7 +552,7 @@ export class EntryStore implements EntryStoreContract {
 
   /** The committed by-id map a transaction diffs against — never the write set (D-S2-6, D-S2-7).
    *  Distinct from Snapshot (`entries.all`), which is the cached array. */
-  committedById(): ReadonlyMap<EntryId, Entry> {
+  committedById(): ReadonlyMap<EntryId, StoredEntry> {
     return this.#byId;
   }
 
@@ -405,7 +589,7 @@ export class EntryStore implements EntryStoreContract {
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
-      const current = this.get(key)!;
+      const current = this.storedEntry(key)!;
       if (Object.keys(own).length > 0) {
         const reading = toEditReading(own, this.#context, current, this.#registry, operation);
         const stored = reading.stored;
@@ -456,19 +640,19 @@ export class EntryStore implements EntryStoreContract {
     if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
     const own: Record<string, unknown> = { ...edit };
     const toChildren: EntryEdits[] = [];
-    let children: readonly Entry[] | undefined;
+    let children: readonly StoredEntry[] | undefined;
     for (const [field, value] of Object.entries(edit)) {
       const declared = this.#registry.get(field)!;
       if (resolveWriteTarget(true, declared) === 'entry') continue;
       if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, operation);
-      children ??= this.childrenOf(id);
+      children ??= this.storedChildrenOf(id);
       // Called on its own declaration, never detached from it — the same way `equals` and
       // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
+      const parent = this.storedEntry(id)!;
       const edits = declared.distribute(
         value,
-        children,
-        this.get(id)!,
-        createRollUpContext(this.#fieldContext, field),
+        parent,
+        createRollUpContext(this.#access, parent, children, field),
       );
       // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
       // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
@@ -528,7 +712,7 @@ export class EntryStore implements EntryStoreContract {
    *  `toEditReading` is the one owner) — this call names no `start` or `end` of its own, so there is
    *  nothing here that could disagree with them. */
   #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
-    const entry = this.get(id)!;
+    const entry = this.storedEntry(id)!;
     const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
     if (remaining.length === 0) {
       // Only an Entry that owns its own dates has dates to clear. On one with children the dates are
@@ -552,25 +736,42 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** `id`'s current descendants, deepest included — read before any removal in this call is staged,
-   *  so a self-referential write set never confuses the walk (S2.3 §1.4). */
+   *  so a self-referential write set never confuses the walk (S2.3 §1.4).
+   *
+   *  A worklist with the `seen` guard `#depthOf` carries: inside an open transaction the tree is the
+   *  raw source's answer, and a source that loops would otherwise walk forever. Each row is staged
+   *  once, and how deep the tree goes never reaches the stack. */
   #subtreeOf(id: EntryId): readonly EntryId[] {
-    const result: EntryId[] = [];
-    for (const child of this.childrenOf(id)) {
-      result.push(child.id);
-      result.push(...this.#subtreeOf(child.id));
+    const found: EntryId[] = [];
+    const seen = new Set<EntryId>([id]);
+    const pending: EntryId[] = [id];
+    while (pending.length > 0) {
+      for (const child of this.storedChildrenOf(pending.pop()!)) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
+        found.push(child.id);
+        pending.push(child.id);
+      }
     }
-    return result;
+    return found;
   }
 
   /** `parentId` must name a known entry and must not make `id` its own ancestor, self-parenting
    *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
-   *  is seen. */
+   *  is seen.
+   *
+   *  `seen` is the same guard `#depthOf` carries. Ingest checks no authored `parentId`, so a
+   *  consumer can construct a loop with no plugin at all; without the guard the next edit that names
+   *  a row inside that loop walks it forever. A loop the edit is not part of stops the walk and
+   *  passes — the committed check reports it as one `hierarchy-cycle` Fault (ADR 0020). */
   #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
     if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
     let current: EntryId | undefined = parentId;
-    while (current !== undefined) {
+    const seen = new Set<EntryId>();
+    while (current !== undefined && !seen.has(current)) {
       if (current === id) throw new ParentCycleError(id);
-      current = this.get(current)?.parentId;
+      seen.add(current);
+      current = this.storedEntry(current)?.parentId;
     }
   }
 
@@ -611,13 +812,21 @@ export class EntryStore implements EntryStoreContract {
    *  staging saw them a moment ago (read-your-own-writes, `get`) before overwriting the maps, so a
    *  Segment the replaced object drew and `entry` does not is released, not left pointing stale
    *  (finding B4, #212) — `recordSegmentOwnership` does that release-then-claim in one call. */
-  stageAdd(_token: TxToken, entry: Entry): void {
+  /** Files the parent the source names for a row this transaction just staged — one source call per
+   *  stage, which is what keeps `#hasChildren` honest under a source that reads anything but
+   *  `parentId` (ADR 0020). */
+  #recordStagedParent(writeSet: WriteSet, entry: StoredEntry): void {
+    const parentId = this.#askSource(entry);
+    if (parentId !== undefined) writeSet.stagedParents.add(parentId);
+  }
+
+  stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
-    const replaced = this.get(entry.id);
+    const replaced = this.storedEntry(entry.id);
     writeSet.added.set(entry.id, entry);
     writeSet.removed.delete(entry.id);
     writeSet.edits.delete(entry.id);
-    if (entry.parentId !== undefined) writeSet.stagedParents.add(entry.parentId);
+    this.#recordStagedParent(writeSet, entry);
     recordSegmentOwnership(writeSet, entry.id, replaced?.segments, entry.segments);
   }
 
@@ -633,16 +842,18 @@ export class EntryStore implements EntryStoreContract {
     authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
   ): void {
     const writeSet = this.#openWriteSet();
-    const before = edit.segments !== undefined ? this.get(id)?.segments : undefined;
-    if (edit.parentId !== undefined) writeSet.stagedParents.add(edit.parentId);
+    const before = edit.segments !== undefined ? this.storedEntry(id)?.segments : undefined;
     const staged = writeSet.added.get(id);
     if (staged) {
       const merged = entryAfterEdit(staged, edit);
       writeSet.added.set(id, merged);
+      this.#recordStagedParent(writeSet, merged);
       if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, merged.segments);
       return;
     }
     writeSet.edits.set(id, mergeProposedEdits(writeSet.edits.get(id), edit));
+    const edited = this.storedEntry(id);
+    if (edited !== undefined) this.#recordStagedParent(writeSet, edited);
     if (authoredEnvelopeKeys.size > 0) {
       const existing = writeSet.authoredEnvelopeKeys.get(id);
       writeSet.authoredEnvelopeKeys.set(
@@ -655,21 +866,21 @@ export class EntryStore implements EntryStoreContract {
 
   stageRemove(_token: TxToken, id: EntryId): void {
     const writeSet = this.#openWriteSet();
-    const before = this.get(id)?.segments;
+    const before = this.storedEntry(id)?.segments;
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);
     recordSegmentOwnership(writeSet, id, before, undefined);
   }
 
-  pendingAdded(): readonly { store: 'entries'; entity: Entry }[] {
+  pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[] {
     if (!this.#writeSet) return [];
     return Array.from(this.#writeSet.added.values(), (entity) => ({ store: 'entries' as const, entity }));
   }
 
-  pendingRemoved(): readonly { store: 'entries'; entity: Entry }[] {
+  pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[] {
     if (!this.#writeSet) return [];
-    const result: { store: 'entries'; entity: Entry }[] = [];
+    const result: { store: 'entries'; entity: StoredEntry }[] = [];
     for (const id of this.#writeSet.removed) {
       const entity = this.#byId.get(id);
       if (entity) result.push({ store: 'entries', entity });
@@ -693,6 +904,9 @@ export class EntryStore implements EntryStoreContract {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
     this.#revision.set(this.#revision.get() + 1);
+    // A rolled-up Field write can move the tree: a source may read any `props` key, and this is a
+    // revision like any other.
+    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
@@ -709,6 +923,7 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
+    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
@@ -750,7 +965,7 @@ export class EntryStore implements EntryStoreContract {
    *  `stageAdd` clears it — so without this the old object's Segments stay indexed forever, findable
    *  under an id nothing draws any more. `#forgetSegmentsOf`'s own ownership guard makes the order
    *  against other rows in this same commit safe. */
-  #forgetReplacedEntity(entity: Entry): void {
+  #forgetReplacedEntity(entity: StoredEntry): void {
     const replaced = this.#byId.get(entity.id);
     if (replaced !== undefined && replaced !== entity) this.#forgetSegmentsOf(replaced);
   }

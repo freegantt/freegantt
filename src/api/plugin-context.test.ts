@@ -11,16 +11,16 @@
 import { describe, expect, it } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
-import type { GanttPlugin, PluginContextParts } from './index.js';
+import type { ChromePlugin, PluginContextParts } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 
 describe('PluginContextParts is the plugin surface, with both type arguments bound (#191)', () => {
   it('a plugin reads its own context through the Parts type, and both members stay typed', () => {
     let selectionCount = -1;
 
-    const plugin: GanttPlugin = {
+    const plugin: ChromePlugin = {
       id: 'demo.parts',
-      setup(ctx) {
+      view(ctx) {
         // The one assignment this test exists for: a `PluginContext` *is* a bound
         // `PluginContextParts`, with no member re-typed on the way out.
         const parts: PluginContextParts<Gantt, Dataset> = ctx;

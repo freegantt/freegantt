@@ -3,9 +3,11 @@
 // under its own key. Every other layer asks by Field key and never learns which of the three it is.
 
 import type {
+  ComputeContext,
   CoreFieldValue,
   Duration,
-  Entry,
+  DurationMeasure,
+  StoredEntry,
   EntryEdit,
   EntryId,
   FieldContext,
@@ -115,64 +117,142 @@ function storesInProps(field: ResolvedField): boolean {
   return !isCoreFieldKey(field.key) && !('compute' in field);
 }
 
-/** Call: `createFieldContext(registry, 'UTC')` — bind Field read to this lookup. */
-export function createFieldContext(
-  fields: FieldLookup,
-  timeZone: string,
-  memo?: () => FieldReadMemo | undefined,
-): FieldContext {
-  const ctx: FieldContext = {
-    timeZone,
-    read<K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined {
-      const field = fields.get(key);
-      if (field === undefined) return undefined;
-      // The registry is heterogeneous and string-keyed (ADR 0005), so nothing here narrows the
-      // stored value to the key's declared type — the cast is where the Field key's type is claimed.
-      return readField(entry, field, ctx, memo?.()) as CoreFieldValue<K> | undefined;
-    },
-    durationOf(entry: Entry): Duration | undefined {
-      // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is
-      // plain subtraction — an absent date yields `NaN`, never a throw — so this asks first.
-      if (!spansTime(entry)) return undefined;
-      return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
-    },
-  };
-  return ctx;
+/**
+ * The ambient half of every Field read, plus the two things `model/`'s public `FieldContext` must
+ * not carry: the registry to look a key up in, and the tree to walk. It is `data/`'s own type — a
+ * consumer never receives one.
+ *
+ * `storedChildrenOf` is what makes one `readField` serve two callers. The store answers with the
+ * children it holds now; a Rollup pass answers with its own **effective** children, which carry the
+ * values that same bottom-up pass has already produced and the store has not (ADR 0017).
+ */
+export interface FieldAccess {
+  readonly fields: FieldLookup;
+  readonly timeZone: string;
+  readonly measureDuration: DurationMeasure;
+  storedChildrenOf(id: EntryId): readonly StoredEntry[];
+  memo?(): FieldReadMemo | undefined;
 }
 
-/** Call: `createRollUpContext(fieldCtx, field.key)` — the one place a `RollUpContext` is built, so
- *  `values`/`numericValues` route through the same `ctx.read` every other Field access uses (issue
- *  #124, D-S4-8: one path for shipped and consumer Aggregators). */
-export function createRollUpContext(ctx: FieldContext, field: FieldKey): RollUpContext {
-  const rollUpCtx: RollUpContext = {
-    ...ctx,
-    field,
-    values(children: readonly Entry[]): readonly unknown[] {
-      return children.map((child) => rollUpCtx.read(child, field));
+const NO_CHILDREN: readonly StoredEntry[] = Object.freeze([]);
+
+export interface FieldAccessOptions {
+  fields: FieldLookup;
+  timeZone: string;
+  measureDuration?: DurationMeasure;
+  storedChildrenOf?: (id: EntryId) => readonly StoredEntry[];
+  memo?: () => FieldReadMemo | undefined;
+}
+
+/** Call: `createFieldAccess({ fields: registry, timeZone: 'UTC' })`. */
+export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
+  return {
+    fields: options.fields,
+    timeZone: options.timeZone,
+    measureDuration: options.measureDuration ?? 'span',
+    storedChildrenOf: options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN),
+    ...(options.memo !== undefined ? { memo: options.memo } : {}),
+  };
+}
+
+/** The same access, reading the tree a pass holds instead of the one the store holds. */
+export function readingChildrenFrom(
+  access: FieldAccess,
+  storedChildrenOf: (id: EntryId) => readonly StoredEntry[],
+): FieldAccess {
+  return { ...access, storedChildrenOf };
+}
+
+/** What a consumer receives: the zone, and nothing that belongs to one row (ADR 0017, J5). */
+export function ambientFieldContext(access: FieldAccess): FieldContext {
+  return { timeZone: access.timeZone };
+}
+
+/**
+ * The one duration computation, and three doors reach it: the core `duration` Field's own `compute`,
+ * `entry.duration()` on a live row, and `ctx.duration()` inside a pass (ADR 0017). Each door hands
+ * it a different row; none of them hands it a Field key, so the circle cannot close.
+ *
+ * The unit is always `'millisecond'`, which is what makes `formatDuration` and `compareDuration`
+ * correct by construction rather than by luck (#274).
+ */
+export function measureEntryDuration(
+  entry: Pick<StoredEntry, 'start' | 'end' | 'segments'>,
+  measure: DurationMeasure,
+): Duration | undefined {
+  // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is plain
+  // subtraction — an absent date yields `NaN`, never a throw — so this asks first.
+  if (!spansTime(entry)) return undefined;
+  if (measure === 'span') return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
+  let total = 0;
+  for (const segment of entry.segments) total += diffMs(segment.end, segment.start);
+  return { value: total, unit: 'millisecond' };
+}
+
+/** What a `compute` Field runs inside — bound to one row, so no member takes an entry (ADR 0017). */
+export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
+  return {
+    timeZone: access.timeZone,
+    read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined {
+      return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
     },
-    numericValues(children: readonly Entry[]): readonly number[] {
+    duration(): Duration | undefined {
+      return measureEntryDuration(entry, access.measureDuration);
+    },
+    children(): readonly StoredEntry[] {
+      return access.storedChildrenOf(entry.id);
+    },
+  };
+}
+
+/** Call: `createRollUpContext(access, parent, children, field.key)` — the one place a
+ *  `RollUpContext` is built, so `values`/`numericValues` route through the same read every other
+ *  Field access uses (issue #124, D-S4-8: one path for shipped and consumer Aggregators). */
+export function createRollUpContext(
+  access: FieldAccess,
+  parent: StoredEntry,
+  children: readonly StoredEntry[],
+  field: FieldKey,
+): RollUpContext {
+  // `access` reads each row through its own children, and both callers already hand one that does —
+  // the Rollup's pass access, and the store's. A second binding that answered `children` for every
+  // id would tell a child's own `compute` Field about the parent (F22).
+  return {
+    ...createComputeContext(access, parent),
+    children: (): readonly StoredEntry[] => children,
+    field,
+    values(key: FieldKey = field): readonly unknown[] {
+      return children.map((child) => readFieldByKey(child, key, access));
+    },
+    numericValues(key: FieldKey = field): readonly number[] {
       const out: number[] = [];
       for (const child of children) {
-        const value = rollUpCtx.read(child, field);
+        const value = readFieldByKey(child, key, access);
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;
     },
+    durations(): readonly (Duration | undefined)[] {
+      return children.map((child) => measureEntryDuration(child, access.measureDuration));
+    },
   };
-  return rollUpCtx;
 }
 
-export function readField(
-  entry: Entry,
-  field: ResolvedField,
-  ctx: FieldContext,
-  memo?: FieldReadMemo,
-): unknown {
+/** `key` on `entry`, through the registry. An undeclared key answers `undefined` — the by-key door
+ *  that refuses one is `entry.read`, which a consumer holds. */
+export function readFieldByKey(entry: StoredEntry, key: FieldKey, access: FieldAccess): unknown {
+  const field = access.fields.get(key);
+  if (field === undefined) return undefined;
+  return readField(entry, field, access);
+}
+
+export function readField(entry: StoredEntry, field: ResolvedField, access: FieldAccess): unknown {
   if ('compute' in field) {
     // A closure capturing the parameter `field` does not keep the `'compute' in field` narrowing
     // TypeScript applied one line up — a fresh `const` does, because it can never be reassigned.
     const computeField = field;
-    const compute = (): unknown => computeField.compute(entry, ctx);
+    const compute = (): unknown => computeField.compute(entry, createComputeContext(access, entry));
+    const memo = access.memo?.();
     if (!memo) return compute();
     return memo.cache.read(entry.id, field.key, memo.datasetRevision, compute);
   }
@@ -201,7 +281,7 @@ export function writeField(edit: ProposedEdit, field: ResolvedField, value: unkn
 }
 
 /** Writes `value` onto a copy of `entry`. Call: `writeOntoEntry(parent, costField, 300)`. */
-export function writeOntoEntry(entry: Entry, field: ResolvedField, value: unknown): Entry {
+export function writeOntoEntry(entry: StoredEntry, field: ResolvedField, value: unknown): StoredEntry {
   return entryAfterEdit(entry, writeField(emptyProposedEdit(), field, value));
 }
 
@@ -226,7 +306,7 @@ export function writeDeclaredPropsFields(
  *  accumulated in `edit.props` onto a copy of `entry.props`, the same per-key rule `entryAfterEdit`
  *  applies. Call once, at the end of `toEditReading` — every earlier step may leave `props` a sparse
  *  patch of only the keys it touched so far. */
-export function completeProps(entry: Entry, edit: ProposedEdit): ProposedEdit {
+export function completeProps(entry: StoredEntry, edit: ProposedEdit): ProposedEdit {
   const props = propsAfterEdit(entry.props, edit.props, edit.proposedKeys);
   return props === edit.props ? edit : { ...edit, props };
 }
@@ -238,8 +318,8 @@ export function editProposesField(edit: ProposedEdit | undefined, field: Resolve
 }
 
 /** Applies a stored overlay the way `EntryStore.get` must: core keys and `props`, never proposedKeys. */
-export function entryAfterEdit(entry: Entry, edit: ProposedEdit): Entry {
-  const next: Entry = { ...entry };
+export function entryAfterEdit(entry: StoredEntry, edit: ProposedEdit): StoredEntry {
+  const next: StoredEntry = { ...entry };
   const bag = edit as Record<string, unknown>;
   for (const field of CORE_FIELDS) {
     const key = String(field.key);

@@ -11,7 +11,7 @@ import type {
   DatasetEventMap,
   EntryInput,
   Field,
-  FieldContext,
+  DurationMeasure,
   FieldKey,
   FieldType,
   Instant,
@@ -21,6 +21,8 @@ import type {
   EditRequest,
   ProposedEdits,
   ExtenderWrapper,
+  HierarchySource,
+  HierarchySourceWrapper,
 } from '../model/index.js';
 import { changeSetId, mintedSegmentId } from '../model/index.js';
 import { now } from '../time/index.js';
@@ -31,11 +33,13 @@ import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
+import { createErrorRaiser } from './error-reporting.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
-import { createFieldContext } from './fields/field-access.js';
+import { createFieldAccess } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';
 
@@ -51,13 +55,15 @@ export interface DatasetStateOptions {
   history?: HistoryOptions;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
+  /** How core measures a duration (ADR 0017, Q6/J12). Defaults to `'span'`. */
+  measureDuration?: DurationMeasure;
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
   referenceDate?: Instant;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map. S5 shipped the plugin-facing route instead: a
-   *  `DatasetPlugin` installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
+   *  plugin's `data` half installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
    *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (D-S2-6,
    *  "How it is tested without a public claim") — S3's drag preview and undo tests take it. Defaults
    *  to `identityExtender`: an unoccupied hook is the identity function (D4).
@@ -66,7 +72,7 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Installs this Dataset's `DatasetPlugin` list and returns the disposer for the whole set. Called
+  /** Installs this Dataset's plugin list and returns the disposer for the whole set. Called
    *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
    *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
    *  must exist before the Rollup first walks (D-S5-4).
@@ -102,7 +108,9 @@ export class DatasetState implements Dataset {
   notifying = false;
   readonly #entryContext: EntryReadContext;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  /** `data/`'s own ambient read scope (ADR 0017, J16) — the zone, the registry, the duration
+   *  policy and the tree. A consumer receives `ambientFieldContext(access)`, which is the zone. */
+  readonly fieldAccess: FieldAccess;
   readonly computedCache = new ComputedFieldCache();
   /** Bumped on every committed changeset — the computed-field cache key (D-S4-10). */
   #datasetRevision = 0;
@@ -130,10 +138,18 @@ export class DatasetState implements Dataset {
       fieldTypes: options.fieldTypes ?? {},
       aggregators: options.aggregators ?? {},
     });
-    this.fieldContext = createFieldContext(this.fields, this.timeZone, () => ({
-      cache: this.computedCache,
-      datasetRevision: this.#datasetRevision,
-    }));
+    this.fieldAccess = createFieldAccess({
+      fields: this.fields,
+      timeZone: this.timeZone,
+      measureDuration: options.measureDuration ?? 'span',
+      // A row inside an open transaction is hypothetical, and `#datasetRevision` does not move
+      // until the commit lands (D-S4-10). A memo there answers a `compute` Field with the committed
+      // value for a staged row, so the memo stands down until the transaction closes (ADR 0017).
+      memo: () =>
+        this.openTransactions > 0
+          ? undefined
+          : { cache: this.computedCache, datasetRevision: this.#datasetRevision },
+    });
     this.#reservedSegmentIds = authoredSegmentIdsOf(options.entries);
     this.#entryContext = {
       timeZone: this.timeZone,
@@ -144,8 +160,9 @@ export class DatasetState implements Dataset {
       toEntries(options.entries, this.#entryContext, this.fields),
       this.#entryContext,
       this.fields,
-      this.fieldContext,
+      this.fieldAccess,
       this,
+      createErrorRaiser(this.bus),
     );
     this.#entryStoreReady = true;
     this.pluginStores = new PluginStores(this);
@@ -205,6 +222,19 @@ export class DatasetState implements Dataset {
       (id) => request.entryAfterEdits(id),
       this.fields,
     );
+  }
+
+  /** The tree every read and every Rollup goes through (ADR 0020). Core's own source is
+   *  `(entry) => entry.parentId`; the store holds whichever occupant plugins composed onto it. */
+  get hierarchySource(): HierarchySource {
+    return this.entries.hierarchySource;
+  }
+
+  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setExtender` below does (D-S5-23, ADR 0020). */
+  setHierarchySource(wrap: HierarchySourceWrapper): void {
+    this.entries.setHierarchySource(wrap);
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.

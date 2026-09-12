@@ -161,7 +161,7 @@
               <td class="mono">PluginId, Disposer, PluginStore, ExtenderWrapper</td>
               <td>
                 Plugin primitives that name nothing outside <code>model/</code>.
-                <code>GanttPlugin</code> lives in <code>api/plugin.ts</code>.
+                <code>ChromePlugin</code> lives in <code>api/plugin.ts</code>.
               </td>
             </tr>
             <tr>
@@ -1144,7 +1144,7 @@
             </tr>
             <tr>
               <td class="mono">api/plugin.ts</td>
-              <td class="mono">GanttPluginOf, PluginContextOf</td>
+              <td class="mono">ChromePluginOf, DataPluginOf, PluginOf</td>
               <td>
                 The public Gantt-plugin contract, generic over <code>TGantt</code> so this file never
                 imports <code>Gantt</code> (no cycle).
@@ -1152,7 +1152,7 @@
             </tr>
             <tr>
               <td class="mono">api/dataset-plugin.ts</td>
-              <td class="mono">DatasetPluginOf, mergeEntryEdits(), moveEntryTo()</td>
+              <td class="mono">DatasetPluginContextOf, mergeEntryEdits(), moveEntryTo()</td>
               <td>
                 The public Dataset-plugin contract, plus the one legal merge of two extenders' writes.
               </td>
@@ -1251,7 +1251,7 @@
             <tr>
               <td class="mono">extensions/features/tooltips.ts</td>
               <td class="mono">tooltips()</td>
-              <td>Shipped tooltip plugin. Ordinary <code>GanttPlugin</code>; dogfoods the public contract.</td>
+              <td>Shipped tooltip plugin. Ordinary <code>ChromePlugin</code>; dogfoods the public contract.</td>
             </tr>
             <tr>
               <td class="mono">extensions/features/context-menu.ts</td>

@@ -1,53 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, rowId, segmentId } from '../../model/index.js';
-import type { CoreFieldValue, Entry, FieldContext, FieldKey, Instant } from '../../model/index.js';
+import { rowId } from '../../model/index.js';
+import type { EntryDoubleValues } from '../entry-double.js';
+import { entryDoubles } from '../entry-double.js';
 import { applyFilter } from './filter.js';
 import { resolveEntriesSource } from './entries-source.js';
 
-function instant(n: number): Instant {
-  return n as Instant;
-}
-
-function entry(
+function stored(
   id: string,
   opts?: { parentId?: string; team?: string; start?: number; cost?: number },
-): Entry {
-  const start = instant(opts?.start ?? 0);
-  const end = instant((opts?.start ?? 0) + 1);
-  const row: Entry = {
-    id: entryId(id),
-    name: id,
-    start,
-    end,
-    segments: [{ id: segmentId(`${id}-1`), start, end }],
-    props: {},
+): EntryDoubleValues {
+  return {
+    id,
+    start: opts?.start ?? 0,
+    end: (opts?.start ?? 0) + 1,
+    ...(opts?.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    props: {
+      ...(opts?.team !== undefined ? { team: opts.team } : {}),
+      ...(opts?.cost !== undefined ? { cost: opts.cost } : {}),
+    },
   };
-  if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
-  if (opts?.team !== undefined || opts?.cost !== undefined) {
-    row.props = {
-      ...(opts.team !== undefined ? { team: opts.team } : {}),
-      ...(opts.cost !== undefined ? { cost: opts.cost } : {}),
-    };
-  }
-  return row;
 }
 
 describe('applyFilter (S4.9)', () => {
-  const entries = [
-    entry('root'),
-    entry('child', { parentId: 'root', team: 'A' }),
-    entry('grand', { parentId: 'child', team: 'B' }),
-    entry('other'),
-  ];
+  const entries = entryDoubles([
+    stored('root'),
+    stored('child', { parentId: 'root', team: 'A' }),
+    stored('grand', { parentId: 'child', team: 'B' }),
+    stored('other'),
+  ]);
 
   it('[S4-A7] a deep match keeps its whole ancestor chain, each ancestor marked unmatched', () => {
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
-    const filtered = applyFilter(
-      built,
-      entries,
-      (row) => (row.props as { team?: string } | undefined)?.team === 'B',
-      'keepAncestors',
-    );
+    const filtered = applyFilter(built, entries, (row) => row.read('team') === 'B', 'keepAncestors');
     expect(filtered.map((row) => row.id)).toEqual([rowId('root'), rowId('child'), rowId('grand')]);
     expect(filtered.find((row) => row.id === rowId('grand'))?.matched).toBe(true);
     expect(filtered.find((row) => row.id === rowId('root'))?.matched).toBe(false);
@@ -56,34 +40,15 @@ describe('applyFilter (S4.9)', () => {
 
   it('[S4-A10] filterPolicy matchOnly returns the matches alone, with no ancestor rows', () => {
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
-    const filtered = applyFilter(
-      built,
-      entries,
-      (row) => (row.props as { team?: string } | undefined)?.team === 'B',
-      'matchOnly',
-    );
+    const filtered = applyFilter(built, entries, (row) => row.read('team') === 'B', 'matchOnly');
     expect(filtered.map((row) => row.id)).toEqual([rowId('grand')]);
     expect(filtered[0]?.depth).toBe(0);
     expect(filtered[0]?.expandable).toBe(false);
   });
 
-  it('passes the Field reader so a filter can read a declared key', () => {
+  it('a filter reads a declared key off the row, with no reader riding beside it (ADR 0017)', () => {
     const built = resolveEntriesSource(entries, { source: 'entries', tree: true });
-    const fields: FieldContext = {
-      timeZone: 'UTC',
-      read<K extends FieldKey>(row: Entry, key: K): CoreFieldValue<K> | undefined {
-        if (key !== 'team') return undefined;
-        return (row.props as { team?: string } | undefined)?.team as CoreFieldValue<K> | undefined;
-      },
-      durationOf: () => ({ value: 1, unit: 'millisecond' }),
-    };
-    const filtered = applyFilter(
-      built,
-      entries,
-      (_row, reader) => reader?.read(_row, 'team') === 'B',
-      'keepAncestors',
-      fields,
-    );
+    const filtered = applyFilter(built, entries, (row) => row.read('team') === 'B', 'keepAncestors');
     expect(filtered.map((row) => row.id)).toEqual([rowId('root'), rowId('child'), rowId('grand')]);
   });
 

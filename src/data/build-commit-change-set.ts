@@ -8,10 +8,10 @@ import type {
   ChangeSetId,
   EntityAdded,
   EntityRemoved,
-  Entry,
+  StoredEntry,
   EntryId,
-  FieldContext,
   FieldUpdated,
+  HierarchySource,
   SegmentId,
   ProposedEdit,
   StoreRowUpdated,
@@ -34,14 +34,18 @@ import {
   proposedKeysOf,
   withProposedKeys,
 } from './fields/field-access.js';
+import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
+import type { ParentIndex } from './hierarchy-source.js';
 import { isDevMode } from './dev-mode.js';
 
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
  *  importing `transaction.ts` (cycle avoidance). */
 export interface CommitChangeSetEntryStore {
-  committedById(): ReadonlyMap<EntryId, Entry>;
+  committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
+  committedParents(): ParentIndex;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): ProposedEdits;
@@ -64,7 +68,9 @@ export interface CommitChangeSetInput {
    *  `TransactionData.extraEditsReadingFor`. */
   extraEditsReadingFor(request: EditRequest): EditsReading;
   readonly fields: FieldRegistry;
-  readonly fieldContext: FieldContext;
+  readonly fieldAccess: FieldAccess;
+  /** The tree the Rollup walks (ADR 0020) — see `TransactionData.hierarchySource`. */
+  readonly hierarchySource: HierarchySource;
   nextChangeSetId(): ChangeSetId;
   /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
    *  spanning for the first time always mints a real `SegmentId` here, because this path always
@@ -77,13 +83,13 @@ export interface CommitChangeSetInput {
 }
 
 export function diffEdits(
-  byId: ReadonlyMap<EntryId, Entry>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
   fields: FieldRegistry,
-  ctx: FieldContext,
+  access: FieldAccess,
 ): FieldUpdated[] {
   const updated: FieldUpdated[] = [];
-  for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, fields, ctx));
+  for (const [id, edit] of edits) updated.push(...diffEdit(byId, id, edit, fields, access));
   return updated;
 }
 
@@ -161,7 +167,7 @@ function guardExtensionHookDoesNotOverwriteBody(
  *  disagree throw `SegmentsOutOfSyncError('conflicting', ...)` instead of one silently overwriting
  *  the other's Segment. */
 function reconcileSharedEnvelope(
-  original: Entry,
+  original: StoredEntry,
   bodyEdit: ProposedEdit,
   bodyAuthoredKeys: ReadonlySet<string>,
   extenderEdit: ProposedEdit,
@@ -192,7 +198,7 @@ function reconcileSharedEnvelope(
  *  commit path diffs, replacing the two separate diffs of `proposed` and `extenderEdits` that used to
  *  let one field reach the `ChangeSet` twice with two different `to` values (#232). */
 function mergeBodyAndExtenderEdits(
-  byId: ReadonlyMap<EntryId, Entry>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
   extenderEdits: ProposedEdits,
@@ -289,7 +295,7 @@ export function buildCommitChangeSet(
     extenderEdits,
     extenderReading.authoredEnvelopeKeys,
   );
-  const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldContext);
+  const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldAccess);
 
   // An added entity folds in its own extender cascade — an `EditExtender` that rewrites `segments`
   // on an entity this same transaction adds must still land on the entity the changeset publishes
@@ -311,8 +317,9 @@ export function buildCommitChangeSet(
       edits: { body: proposed, merged: mergedBodyAndExtender },
     },
     data.fields,
-    data.fieldContext,
+    data.fieldAccess,
     () => data.mintSegmentId(),
+    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
   );
 
   // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the

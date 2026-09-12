@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
-import type { Entry, Instant, ProposedEdit } from '../../model/index.js';
+import type { StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
-  createFieldContext,
+  createFieldAccess,
   createRollUpContext,
   editProposesField,
   emptyProposedEdit,
@@ -15,8 +15,9 @@ import {
   writeOntoEntry,
 } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
+import { DatasetState } from '../dataset-state.js';
 
-const span = (props?: Record<string, unknown>): Entry => {
+const span = (props?: Record<string, unknown>): StoredEntry => {
   return {
     id: entryId('t1'),
     name: 't1',
@@ -45,7 +46,7 @@ describe('readField / writeField (D-S4-2)', () => {
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: 'cost', type: 'money' }],
   });
-  const fieldCtx = createFieldContext(registry, 'UTC');
+  const fieldCtx = createFieldAccess({ fields: registry, timeZone: 'UTC' });
   const cost = registry.get('cost')!;
   const start = registry.get('start')!;
   const duration = registry.get('duration')!;
@@ -88,7 +89,7 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 
   it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
-    const dateless: Entry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
+    const dateless: StoredEntry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
     expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 
@@ -138,28 +139,131 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: 'cost', type: 'money' }],
   });
-  const fieldCtx = createFieldContext(registry, 'UTC');
+  const access = createFieldAccess({ fields: registry, timeZone: 'UTC' });
   const cost = registry.get('cost')!;
+  const parent = span();
 
   const children = [span({ cost: 1 }), span({ cost: 'not a number' }), span({ cost: 3 }), span()];
 
   it('values reads the rolling field off each child, in order, holes included', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.values(children)).toEqual([1, 'not a number', 3, undefined]);
+    const rollUpCtx = createRollUpContext(access, parent, children, cost.key);
+    expect(rollUpCtx.values()).toEqual([1, 'not a number', 3, undefined]);
   });
 
   it('numericValues keeps only finite numbers, dropping holes and non-numeric values', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.numericValues(children)).toEqual([1, 3]);
+    const rollUpCtx = createRollUpContext(access, parent, children, cost.key);
+    expect(rollUpCtx.numericValues()).toEqual([1, 3]);
   });
 
   it('numericValues is empty, not thrown, when no child has a numeric value', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.numericValues([span(), span({ cost: 'x' })])).toEqual([]);
+    const empty = [span(), span({ cost: 'x' })];
+    const rollUpCtx = createRollUpContext(access, parent, empty, cost.key);
+    expect(rollUpCtx.numericValues()).toEqual([]);
   });
 
-  it('routes through the same read path as ctx.read (D-S4-8)', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.values([children[0]!])).toEqual([rollUpCtx.read(children[0]!, cost.key)]);
+  it('routes through the same read path as the pass\u2019s own read (D-S4-8)', () => {
+    const one = [children[0]!];
+    const rollUpCtx = createRollUpContext(access, parent, one, cost.key);
+    const childCtx = createRollUpContext(access, children[0]!, [], cost.key);
+    expect(rollUpCtx.values()).toEqual([childCtx.read(cost.key)]);
+  });
+});
+
+// ADR 0017, *What a hypothetical row reads with*: `readField` hands a `compute` Field a row the
+// store does not hold, so every question it asks binds to the pass, not to a row it names.
+describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () => {
+  it('reads a sibling Field through ctx.read, and this row’s duration through ctx.duration', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      dateOnlyEnd: 'exclusive',
+      entries: [{ id: 't1', name: 'Design', start: 0, end: 5 }],
+      fields: [
+        { key: 'cost' },
+        {
+          key: 'summary',
+          compute: (_entry, ctx) => `${String(ctx.read('name'))}/${String(ctx.duration()?.value)}`,
+        },
+      ],
+    });
+
+    expect(state.entries.get('t1')?.read('summary')).toBe('Design/5');
+  });
+
+  it('builds no ComputeContext for a stored-Field read, and one for a compute arm', () => {
+    const registry = new FieldRegistry({
+      fields: [{ key: 'cost' }, { key: 'label', compute: () => 'x' }],
+    });
+    const built = createFieldAccess({ fields: registry, timeZone: 'UTC' });
+    let contextsBuilt = 0;
+    // Building a context reads the ambient zone off the access, and nothing else does.
+    const counting = {
+      ...built,
+      get timeZone(): string {
+        contextsBuilt += 1;
+        return 'UTC';
+      },
+    };
+    const entry = span({ cost: 40 });
+
+    expect(readField(entry, registry.get('cost')!, counting)).toBe(40);
+    expect(contextsBuilt).toBe(0);
+
+    expect(readField(entry, registry.get('label')!, counting)).toBe('x');
+    expect(contextsBuilt).toBe(1);
+  });
+
+  it('walks its own children through ctx.children (#214)', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'a', name: 'A', parentId: 'p' },
+        { id: 'b', name: 'B', parentId: 'p' },
+      ],
+      fields: [
+        {
+          key: 'childNames',
+          compute: (_entry, ctx) =>
+            ctx
+              .children()
+              .map((c) => c.name)
+              .join(','),
+        },
+      ],
+    });
+
+    expect(state.entries.get('p')?.read('childNames')).toBe('A,B');
+    expect(state.entries.get('a')?.read('childNames')).toBe('');
+  });
+
+  it('reads the hypothetical row inside an open transaction, before the commit lands', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'a', name: 'A', parentId: 'p' },
+      ],
+      fields: [
+        {
+          key: 'childNames',
+          compute: (_entry, ctx) =>
+            ctx
+              .children()
+              .map((c) => c.name)
+              .join(','),
+        },
+      ],
+    });
+
+    // Primed first, so a memo keyed on the committed revision would answer 'A' here and hide the
+    // hypothetical row entirely.
+    expect(state.entries.get('p')?.read('childNames')).toBe('A');
+
+    state.transaction(() => {
+      state.entries.update('a', { name: 'Renamed' });
+      expect(state.entries.get('p')?.read('childNames')).toBe('Renamed');
+    });
+
+    expect(state.entries.get('p')?.read('childNames')).toBe('Renamed');
   });
 });

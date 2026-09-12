@@ -1,14 +1,15 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
-import type { Entry, EntryId, ProposedEdits } from '../model/index.js';
+import type { HierarchySource, StoredEntry, EntryId, ProposedEdits } from '../model/index.js';
 import { entryAfterEdit } from './fields/field-access.js';
+import { parentIdFrom } from './hierarchy-source.js';
 
 export function buildEffectiveEntries(
-  committed: ReadonlyMap<EntryId, Entry>,
-  added: readonly Entry[],
-  removed: readonly Entry[],
+  committed: ReadonlyMap<EntryId, StoredEntry>,
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
   proposed: ProposedEdits,
-): ReadonlyMap<EntryId, Entry> {
+): ReadonlyMap<EntryId, StoredEntry> {
   const map = new Map(committed);
   for (const entry of removed) map.delete(entry.id);
   for (const entry of added) map.set(entry.id, entry);
@@ -24,11 +25,11 @@ export function buildEffectiveEntries(
  *  hot path allocates only what it uses (I5). `buildEffectiveEntries` above stays the commit path's
  *  form: a commit must also apply `added` and `removed`, which a per-id read cannot see. */
 export function effectiveEntriesFor(
-  committed: ReadonlyMap<EntryId, Entry>,
+  committed: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   ids: Iterable<EntryId>,
-): ReadonlyMap<EntryId, Entry> {
-  const map = new Map<EntryId, Entry>();
+): ReadonlyMap<EntryId, StoredEntry> {
+  const map = new Map<EntryId, StoredEntry>();
   for (const id of ids) {
     const current = committed.get(id);
     if (current === undefined) continue;
@@ -43,73 +44,62 @@ export function effectiveEntriesFor(
  *  named few ids at once) would still allocate a one-entry `Map` on every call. `entryAfterEdit`
  *  itself allocates only when `id` actually has an edit pending. */
 export function entryAfterEdits(
-  committed: ReadonlyMap<EntryId, Entry>,
+  committed: ReadonlyMap<EntryId, StoredEntry>,
   proposed: ProposedEdits,
   id: EntryId,
-): Entry | undefined {
+): StoredEntry | undefined {
   const current = committed.get(id);
   if (current === undefined) return undefined;
   const edit = proposed.get(id);
   return edit === undefined ? current : entryAfterEdit(current, edit);
 }
 
-export function childIdsByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, EntryId[]> {
+/** Every walk below asks `parentIdOf` which Entry is the parent (ADR 0020), never `entry.parentId`
+ *  — core's own source answers that field, and a plugin's source answers something else. Hand these
+ *  a **checked** source (`checkHierarchyAnswers`): a chain that loops never terminates otherwise. */
+export function childIdsByParent(
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): Map<EntryId, EntryId[]> {
   const byParent = new Map<EntryId, EntryId[]>();
   for (const entry of entries.values()) {
-    if (entry.parentId === undefined) continue;
-    const siblings = byParent.get(entry.parentId);
+    const parentId = parentIdFrom(parentIdOf, entry);
+    if (parentId === undefined) continue;
+    const siblings = byParent.get(parentId);
     if (siblings) siblings.push(entry.id);
-    else byParent.set(entry.parentId, [entry.id]);
+    else byParent.set(parentId, [entry.id]);
   }
   return byParent;
 }
 
-export function childCountByParent(entries: ReadonlyMap<EntryId, Entry>): Map<EntryId, number> {
-  const counts = new Map<EntryId, number>();
-  for (const entry of entries.values()) {
-    if (entry.parentId === undefined) continue;
-    counts.set(entry.parentId, (counts.get(entry.parentId) ?? 0) + 1);
-  }
-  return counts;
-}
-
-export function depthOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): number {
+export function depthOf(
+  id: EntryId,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): number {
   let depth = 0;
   let current = entries.get(id);
-  while (current?.parentId !== undefined) {
+  let parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
+  while (parentId !== undefined) {
     depth += 1;
-    current = entries.get(current.parentId);
+    current = entries.get(parentId);
+    parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
   }
   return depth;
 }
 
-export function ancestorsOf(id: EntryId, entries: ReadonlyMap<EntryId, Entry>): readonly EntryId[] {
+export function ancestorsOf(
+  id: EntryId,
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  parentIdOf: HierarchySource,
+): readonly EntryId[] {
   const result: EntryId[] = [];
-  let current = entries.get(id)?.parentId;
-  while (current !== undefined) {
-    result.push(current);
-    current = entries.get(current)?.parentId;
+  let current = entries.get(id);
+  let parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
+  while (parentId !== undefined) {
+    result.push(parentId);
+    current = entries.get(parentId);
+    parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
   }
   return result;
-}
-
-/** Every Entry below `id`, deepest included, read one level at a time through `childrenOf` — the
- *  walk `view/capability.ts` needs to answer what a parent bar's drag writes (ADR 0013). Call:
- *  `descendantsOf(parent.id, (id) => dataset.entries.childrenOf(id))`.
- *
- *  A worklist, never recursion: how deep a tree goes is the consumer's to author, and a stack
- *  overflow answers no question. */
-export function descendantsOf(
-  id: EntryId,
-  childrenOf: (parent: EntryId) => readonly Entry[],
-): readonly Entry[] {
-  const found: Entry[] = [];
-  const pending: EntryId[] = [id];
-  while (pending.length > 0) {
-    for (const child of childrenOf(pending.pop()!)) {
-      found.push(child);
-      pending.push(child.id);
-    }
-  }
-  return found;
 }

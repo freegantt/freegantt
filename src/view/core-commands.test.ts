@@ -39,7 +39,10 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
   };
 }
 
-function makeRegistry(entry?: Entry): { registry: CommandRegistry<unknown>; ctx: CommandContext<unknown> } {
+function makeRegistry(entry?: Entry): {
+  registry: CommandRegistry<unknown>;
+  ctx: CommandContext<unknown>;
+} {
   const ctx = {
     dataset: {} as CommandContext<unknown>['dataset'],
     gantt: {},
@@ -89,7 +92,13 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
 
   it('collapseRow/expandRow forward the invocation entry id, and no-op with no entry', () => {
     const ports = fakePorts();
-    const entry = { id: entryId('e1'), kind: 'span', name: 'Row', start: 0, end: 1 } as unknown as Entry;
+    const entry = {
+      id: entryId('e1'),
+      kind: 'span',
+      name: 'Row',
+      start: 0,
+      end: 1,
+    } as unknown as Entry;
     const { registry: withEntry } = makeRegistry(entry);
     registerCoreCommands(withEntry, ports);
     withEntry.run('freegantt.collapseRow');

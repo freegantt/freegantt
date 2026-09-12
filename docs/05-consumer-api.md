@@ -10,7 +10,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`plans/02-public-api.md`](../plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
 | [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
 | [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); rendered at [`harness/docs/api-reference.html`](../harness/docs/api-reference.html) |
-| [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
+| [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 
 ## S4 surface (hierarchy and rows)
 
@@ -19,10 +19,9 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 ### Dataset
 
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's
-- `rollUpKinds` — which Entry kinds get rolled-up parent values (default `['group']`; `'none'` opts out)
-- `hierarchy: { autoGroup: true }` — promote a `'span'` parent to `'group'` when it gains its first child
-- `entries.fieldValue(id, key)`, `dataset.field(key)`, `dataset.fields.all`
-- `toJSON()` / `fromJSON(doc, { aggregators })` — `schema: 2`
+- A parent rolls up because it has children (ADR 0013). An Entry carries no stored classification, so nothing opts a row in or out by kind.
+- `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door (ADR 0017)
+- `plugins` — a plugin with a `data` half installs here (ADR 0019)
 
 ### Gantt
 
@@ -53,11 +52,12 @@ of resolved rows.
 
 ## S5 (plugins)
 
-FreeGantt takes two plugin contracts: `GanttPlugin` on a `Gantt`, `DatasetPlugin`
-on a `Dataset`. Install one at construction (`plugins: [...]`), or reconfigure
-a `Gantt`'s plugins live (`gantt.plugins = [...]`). `docs/06-plugin-authoring.md`
-covers both contracts, every `register*` seam, the registration gate, disposal,
-`requires`, and the errors an author meets. `tooltips()`, `contextMenu()`, and
+FreeGantt takes one plugin type with two halves (ADR 0019). `definePlugin`
+writes it: a `data` half installs on a `Dataset`, a `view`-only half installs on
+a `Gantt`. Install at construction (`plugins: [...]`), or reconfigure a `Gantt`'s
+plugins live (`gantt.plugins = [...]`). `docs/06-plugin-authoring.md` covers both
+halves, every registration seam, the registration gate, disposal, `requires`, and
+the errors an author meets. `tooltips()`, `contextMenu()`, and
 `inlineEditing()` are the three built-in plugins that ship with the package,
 none of them loaded unless a consumer installs them.
 

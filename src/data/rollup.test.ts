@@ -27,9 +27,7 @@ function treeDataset(
 }
 
 function costOf(state: DatasetState, id: string): number | undefined {
-  const entry = state.entries.get(id);
-  if (!entry) return undefined;
-  return state.fieldContext.read(entry, 'cost') as number | undefined;
+  return state.entries.get(id)?.read('cost') as number | undefined;
 }
 
 describe('rollUpFields (S4.2)', () => {
@@ -41,7 +39,7 @@ describe('rollUpFields (S4.2)', () => {
     ]);
 
     expect(costOf(state, 'root')).toBe(100);
-    expect((state.entries.get('root')!.props as { cost: number }).cost).toBe(100);
+    expect(state.entries.get('root')!.read('cost')).toBe(100);
   });
 
   it('sum rolls cost up two levels in one commit', () => {
@@ -93,14 +91,11 @@ describe('rollUpFields (S4.2)', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       aggregators: {
-        sum: (children) => {
+        sum: (_parent, ctx) => {
           rollupCalls += 1;
           if (rollupCalls > 1) throw new Error('boom');
           let total = 0;
-          for (const child of children) {
-            const value = (child.props as { cost?: number } | undefined)?.cost;
-            if (typeof value === 'number') total += value;
-          }
+          for (const value of ctx.numericValues('cost')) total += value;
           return total;
         },
       },
@@ -148,7 +143,7 @@ describe('rollUpFields (S4.2)', () => {
     state.entries.update('c1', { start: '2026-06-01', end: '2026-06-05', notes: 9 });
 
     const parent = state.entries.get('p1')!;
-    expect(state.fieldContext.read(parent, 'notes')).toBe(5);
+    expect(parent.read('notes')).toBe(5);
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
   it('reparenting recomputes both the old and new parent', () => {
@@ -260,7 +255,7 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.remove('b');
 
       expect(costOf(state, 'p')).toBe(10);
-      expect((state.entries.get('p')!.props as { cost: number }).cost).toBe(10);
+      expect(state.entries.get('p')!.read('cost')).toBe(10);
     });
 
     it('[P1 regression] removing the child that extended the parent span shrinks start/end', () => {
@@ -355,5 +350,63 @@ describe('rollUpFields (S4.2)', () => {
     state.entries.update('visible', { cost: 50 });
     expect(costOf(state, 'hidden')).toBe(60);
     expect(costOf(state, 'root')).toBe(110);
+  });
+});
+
+// ADR 0017: each child a Rollup reads is an *effective* row — the store, plus this transaction's
+// edits, plus the values this same bottom-up pass already produced for that child. A pass that read
+// the committed row instead would stop rolling up at the first level.
+describe('an Aggregator reads this pass’s own children (ADR 0017)', () => {
+  it('reads the value the same pass gave a child, not the committed one, across two levels', () => {
+    const state = treeDataset([
+      { id: 'root' },
+      { id: 'mid', parentId: 'root' },
+      { id: 'leafA', parentId: 'mid', props: { cost: 10 } },
+      { id: 'leafB', parentId: 'mid', props: { cost: 20 } },
+    ]);
+    expect(costOf(state, 'mid')).toBe(30);
+    expect(costOf(state, 'root')).toBe(30);
+
+    // One edit, one commit. `mid` is recomputed to 120 inside this pass, and `root` must read that
+    // 120 — the committed `mid` still says 30 while the pass runs.
+    state.entries.update('leafA', { cost: 100 });
+
+    expect(costOf(state, 'mid')).toBe(120);
+    expect(costOf(state, 'root')).toBe(120);
+  });
+});
+
+describe('the Rollup context reads each row through its own children (F22)', () => {
+  /** `kidCount` computes from the row's own children; `kidSum` rolls the children's `kidCount` up.
+   *  Over `p → {a, b}` and `a → {a1, a2, a3}`, `p.kidSum` is `a`'s 3 plus `b`'s 0. */
+  function twoLevelDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'a', name: 'a', parentId: 'p' },
+        { id: 'b', name: 'b', parentId: 'p' },
+        { id: 'a1', name: 'a1', parentId: 'a' },
+        { id: 'a2', name: 'a2', parentId: 'a' },
+        { id: 'a3', name: 'a3', parentId: 'a' },
+      ],
+      fields: [
+        { key: 'kidCount', compute: (_entry, ctx) => ctx.children().length },
+        { key: 'kidSum', rollUp: 'sumKidCounts' },
+      ],
+      aggregators: {
+        sumKidCounts: (_parent, ctx) =>
+          ctx.values('kidCount').reduce((total: number, value) => total + Number(value), 0),
+      },
+    });
+  }
+
+  it('answers a child’s compute Field about that child, not about the parent', () => {
+    const state = twoLevelDataset();
+
+    // The store's own answer, for the same two rows the Rollup read.
+    expect(state.entries.get('a')!.read('kidCount')).toBe(3);
+    expect(state.entries.get('b')!.read('kidCount')).toBe(0);
+    expect(state.entries.get('p')!.read('kidSum')).toBe(3);
   });
 });

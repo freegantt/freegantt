@@ -122,10 +122,10 @@ test('Set cost 500 on a rolling-up parent splits to its children and rolls back 
 
   const costs = await page.evaluate((id) => {
     const dataset = window.__dataset;
-    const children = dataset.entries.childrenOf(id);
+    const parent = dataset.entries.get(id);
     return {
-      parent: Number(dataset.entries.fieldValue(id, 'cost')),
-      children: children.map((child) => Number(dataset.entries.fieldValue(child.id, 'cost'))),
+      parent: Number(parent?.read('cost')),
+      children: (parent?.children() ?? []).map((child) => Number(child.read('cost'))),
     };
   }, parentId);
 

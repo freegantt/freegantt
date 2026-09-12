@@ -1,13 +1,13 @@
-// extensions/features/ — the tooltip built-in (S5.5, D-S5-13). An ordinary `GanttPlugin`, confined
+// extensions/features/ — the tooltip built-in (S5.5, D-S5-13). An ordinary `ChromePlugin`, confined
 // by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood gate this
 // step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
 // `api/index.ts` barrel. That barrel re-exports `tooltips` itself (D-S5-13). `extensions/popup.ts`
-// imports `api/plugin.ts` directly instead of that barrel, for the same reason (no-circular).
+// imports `api/plugin-context.ts` directly instead of that barrel, for the same reason (no-circular).
 
 import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
-import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import type { DomTarget } from '../../api/plugin.js';
+import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
+import type { DomTarget } from '../../api/plugin-context.js';
 import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
 import { spansTime } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
@@ -60,13 +60,13 @@ function defaultContent(
  *  than this popup. Content resolves through the `tooltip` renderer point (S5.4) via
  *  `ctx.view.resolveTooltipContent`, so a consumer's `tooltipRenderer` replaces the body with no change to
  *  the show/hide behaviour. */
-export function tooltips(options: TooltipsOptions = {}): GanttPlugin {
+export function tooltips(options: TooltipsOptions = {}): ChromePlugin {
   const delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
   const placement = options.placement ?? DEFAULT_PLACEMENT;
 
   return {
     id: 'freegantt.tooltips',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       const popup: Popup = createPopup(ctx.view, ctx.interaction.registerKeyHandler);
       let timer: ReturnType<typeof setTimeout> | undefined;
       let openTarget: DomTarget | undefined;

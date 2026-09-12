@@ -275,7 +275,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
     dataset.entries.update('e1', { owner: 'bo' });
 
-    expect(dataset.entries.fieldValue('e1', 'owner')).toBe('bo');
+    expect(dataset.entries.get('e1')?.read('owner')).toBe('bo');
     gantt.destroy();
     container.remove();
   });
@@ -355,7 +355,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const el = input(container);
     el.value = '$650';
     enter(el);
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(650);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(650);
     gantt.destroy();
     container.remove();
   });
@@ -367,7 +367,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     el.value = 'not a number';
     enter(el);
     expect(container.querySelector('.fg-cell-editor[data-state="invalid"]')).not.toBeNull();
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(500);
     gantt.destroy();
     container.remove();
   });
@@ -1047,7 +1047,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     // Exactly one live control — the budget editor, still holding the value it refused.
     expect(container.querySelectorAll('.fg-cell-editor-control')).toHaveLength(1);
     expect(input(container).value).toBe('not a number');
-    expect(dataset.entries.get('e1')!.props?.budget).toBe(500);
+    expect(dataset.entries.get('e1')!.read('budget')).toBe(500);
 
     gantt.destroy();
     container.remove();
@@ -1499,5 +1499,57 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
     notice.dismiss();
     expect(detached()).toBe(1);
     expect(notice.element.isConnected).toBe(false);
+  });
+});
+
+// ADR 0017 deleted `fieldContextFor()`: `FieldContext` is `{ timeZone }`, which is public, and a
+// `parseValue` that needs a sibling value reads it off the live `entry` it is parsing into.
+describe('parseValue reads the ambient zone and the row it parses into (ADR 0017)', () => {
+  /** A Field whose parse depends on two things `extensions/` used to build a shim to reach. */
+  function makeSiblingReadingGantt(): { container: HTMLElement; gantt: Gantt; dataset: Dataset } {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      timeZone: 'Europe/Warsaw',
+      entries: [
+        { id: 'e1', name: 'One', start: '2026-01-01', end: '2026-01-05', props: { unit: 'day', span: 2 } },
+      ],
+      fields: [
+        { key: 'unit' },
+        {
+          key: 'span',
+          editable: true,
+          column: { header: 'Span' },
+          formatValue: (value) => (typeof value === 'number' ? String(value) : ''),
+          // The zone is ambient; the unit is a sibling Field on the row this text is typed into.
+          parseValue: (text, ctx, entry) => {
+            const typed = Number(text);
+            if (!Number.isFinite(typed)) return undefined;
+            return entry.read('unit') === 'day' && ctx.timeZone === 'Europe/Warsaw' ? typed : -1;
+          },
+        },
+      ],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'span' }],
+      plugins: [inlineEditing()],
+    });
+    return { container, gantt, dataset };
+  }
+
+  it('parses with a sibling Field off the entry, and with the Dataset zone off the context', () => {
+    const { container, gantt, dataset } = makeSiblingReadingGantt();
+
+    dblclick(cellFor(container, 'e1', 'span'));
+    const el = input(container);
+    el.value = '7';
+    enter(el);
+
+    expect(dataset.entries.get('e1')!.read('span')).toBe(7);
+
+    gantt.destroy();
+    container.remove();
   });
 });

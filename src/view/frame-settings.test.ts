@@ -14,9 +14,16 @@ import {
   DEFAULT_LANE_GAP_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_TICK_BOX_FLOOR_PX,
-  createItemProducerRegistry,
+  createVariantRegistry,
 } from '../layout/index.js';
-import type { BarRenderer, RowSource, TimeScale, ViewPreset } from '../layout/index.js';
+import type { DateLine, RowSource, TimeScale, ViewPreset } from '../layout/index.js';
+import type { Instant } from '../model/index.js';
+
+/** `view/` may not import `time/` (`view-boundary`), and a date line only needs a stamp to compare.
+ *  Every other `view/` test builds one the same way. */
+function instant(iso: string): Instant {
+  return Date.parse(iso) as Instant;
+}
 
 /** Records the ports in call order, so a test asserts the whole answer and not one half of it. */
 function recordingPorts(pixels: Record<string, number> = {}): {
@@ -57,7 +64,7 @@ function perFrame(): PerFrameLayoutInput {
     revision: 7,
     datasetRevision: 0,
     columns: [],
-    itemProducerRegistry: createItemProducerRegistry(),
+    variants: createVariantRegistry({ fieldFor: () => undefined }),
   };
 }
 
@@ -102,21 +109,17 @@ describe('FrameSettings — the invalidation table', () => {
   // assigns it again gets nothing. `plans/02` §2 states the rule and names the copy that asks for
   // the repaint. These two cases are what would fail if the check ever grew an object exemption.
   it('mutating a held object and assigning it back invalidates nothing (#187)', () => {
-    const paintSpan: BarRenderer = () => undefined;
-    const paintMilestone: BarRenderer = () => undefined;
-    const byKind: Record<string, BarRenderer> = { span: paintSpan };
-    const { settings, calls } = settingsWith({ barRenderer: byKind });
-    byKind['milestone'] = paintMilestone;
-    settings.set({ barRenderer: byKind });
+    const held: DateLine[] = [{ placeAt: instant('2024-01-01T00:00:00Z') }];
+    const { settings, calls } = settingsWith({ dateLines: held });
+    held.push({ placeAt: instant('2024-01-02T00:00:00Z') });
+    settings.set({ dateLines: held });
     expect(calls).toEqual([]);
   });
 
   it('a copy of that object carries the same mutation and does invalidate (#187)', () => {
-    const paintSpan: BarRenderer = () => undefined;
-    const paintMilestone: BarRenderer = () => undefined;
-    const byKind: Record<string, BarRenderer> = { span: paintSpan };
-    const { settings, calls } = settingsWith({ barRenderer: byKind });
-    settings.set({ barRenderer: { ...byKind, milestone: paintMilestone } });
+    const held: DateLine[] = [{ placeAt: instant('2024-01-01T00:00:00Z') }];
+    const { settings, calls } = settingsWith({ dateLines: held });
+    settings.set({ dateLines: [...held, { placeAt: instant('2024-01-02T00:00:00Z') }] });
     expect(calls).toEqual(['requestFrame']);
   });
 
@@ -205,7 +208,7 @@ describe('FrameSettings — toLayoutInput', () => {
     const input = settings.toLayoutInput(frame);
     expect(input.entries).toBe(frame.entries);
     expect(input.revision).toBe(7);
-    expect(input.itemProducerRegistry).toBe(frame.itemProducerRegistry);
+    expect(input.variants).toBe(frame.variants);
   });
 
   it('spells `rowSource` as `LayoutInput`’s own `rows`', () => {

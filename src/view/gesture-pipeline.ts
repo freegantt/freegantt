@@ -9,6 +9,7 @@ import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '.
 import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type {
   Entry,
+  StoredEntry,
   EntryId,
   ErrorCode,
   Instant,
@@ -42,7 +43,7 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
  *  allocates nothing (I5). */
 const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
-const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
+const NO_ENTRIES: ReadonlyMap<EntryId, StoredEntry> = Object.freeze(new Map<EntryId, StoredEntry>());
 /** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
 const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
 
@@ -87,7 +88,7 @@ export interface GesturePipelineDeps {
    *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
    *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
    *  `datasetRevision`, which rises once per committed change. */
-  committedEntriesById?(): ReadonlyMap<EntryId, Entry>;
+  committedEntriesById?(): ReadonlyMap<EntryId, StoredEntry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar

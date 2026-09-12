@@ -1071,7 +1071,7 @@
             </p>
             <dl>
               <dt>entries CRUD</dt>
-              <dd><code>entries.all</code>, <code>entries.add/update/remove</code>, <code>childrenOf</code>, <code>fieldValue</code>.</dd>
+              <dd><code>entries.all</code>, <code>entries.add/update/remove</code>, and the row's own doors — <code>entry.read(key)</code>, <code>entry.children()</code>, <code>entry.hasChildren</code>.</dd>
               <dt>transactions</dt>
               <dd><code>transaction(fn)</code> batches several edits into one changeset, one render.</dd>
               <dt>events</dt>
@@ -1166,7 +1166,7 @@ gantt.rowSource = { source: 'entries', tree: true };</code></pre>
             <p>
               The three shipped built-ins. Values a consumer imports
               (<code>plugins: [tooltips(), contextMenu(), inlineEditing()]</code>), never names in a config
-              table. Each is an ordinary <code>GanttPlugin</code>.
+              table. Each is an ordinary <code>ChromePlugin</code>.
             </p>
           </div>
         </div>

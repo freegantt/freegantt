@@ -2,7 +2,8 @@
 // package's own public entry, never a path inside 'freegantt/src' (S5.6, [S5-A2]). This is the
 // gate box's whole point — the plugin only compiles because the public surface is enough.
 
-import type { GanttPlugin, Instant } from 'freegantt';
+import { definePlugin } from 'freegantt';
+import type { Instant } from 'freegantt';
 
 /** A weekend-shading plugin, buildable against `dataset.time`/`ctx.view.registerDecoration` alone
  *  (D-S5-15/D-S5-16). Shades Saturday and Sunday under the bars, in the dataset's own zone — no
@@ -12,10 +13,10 @@ import type { GanttPlugin, Instant } from 'freegantt';
  *  slice of a column instead of a column, so the stripe reads as a smear across the grid rather than
  *  "these two days are the weekend". The plugin decides that on its own — not a config key, not page
  *  CSS — because the plugin is what knows the stripe means two days. */
-export function weekendShading(): GanttPlugin {
-  return {
+export function weekendShading() {
+  return definePlugin({
     id: 'demo.weekendShading',
-    setup(ctx) {
+    view(ctx) {
       ctx.view.registerDecoration('underBars', ({ span, time, tickUnit, tickIncrement }) => {
         if (tickUnit !== 'day' || tickIncrement !== 1) return [];
         // One band per weekend, not one per weekend day. Saturday and Sunday as two adjacent rects
@@ -33,7 +34,7 @@ export function weekendShading(): GanttPlugin {
       });
       // No disposer: `ctx.disposables` already retracts the registration (review P4).
     },
-  };
+  });
 }
 
 /** Call: `weekendRuns(days, { isWeekend, nextDay })`. Runs of neighbouring weekend days, each one

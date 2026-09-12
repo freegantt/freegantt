@@ -1,32 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, rowId, segmentId } from '../../model/index.js';
-import type { Entry, Instant } from '../../model/index.js';
+import { entryId, rowId } from '../../model/index.js';
+import type { EntryDoubleValues } from '../entry-double.js';
+import { entryDoubles } from '../entry-double.js';
 import { resolveEntriesSource } from './entries-source.js';
 import { resolveRows } from './resolve-rows.js';
 
-function instant(n: number): Instant {
-  return n as Instant;
-}
-
-function entry(id: string, parentId?: string, team?: string): Entry {
-  const start = instant(0);
-  const end = instant(1);
-  const row: Entry = {
-    id: entryId(id),
-    name: id,
-    start,
-    end,
-    segments: [{ id: segmentId(`${id}-1`), start, end }],
-    props: {},
+function row(id: string, parentId?: string, team?: string): EntryDoubleValues {
+  return {
+    id,
+    start: 0,
+    end: 1,
+    ...(parentId !== undefined ? { parentId } : {}),
+    ...(team !== undefined ? { props: { team } } : {}),
   };
-  if (parentId !== undefined) row.parentId = entryId(parentId);
-  if (team !== undefined) row.props = { team };
-  return row;
 }
 
 describe('resolveEntriesSource', () => {
   it('flat matches S1: one row per entry, insertion order, depth 0, no twisty', () => {
-    const rows = resolveEntriesSource([entry('a'), entry('b'), entry('c')], { source: 'entries' });
+    const rows = resolveEntriesSource(entryDoubles([row('a'), row('b'), row('c')]), {
+      source: 'entries',
+    });
     expect(rows.map((r) => r.id)).toEqual([rowId('a'), rowId('b'), rowId('c')]);
     expect(rows.every((r) => r.depth === 0 && r.expandable === false)).toBe(true);
     expect(rows[0]?.entryIds).toEqual([entryId('a')]);
@@ -34,7 +27,7 @@ describe('resolveEntriesSource', () => {
 
   it('tree order is depth-first in insertion order, with correct depth', () => {
     const rows = resolveEntriesSource(
-      [entry('p'), entry('c1', 'p'), entry('c2', 'p'), entry('g', 'c1'), entry('q')],
+      entryDoubles([row('p'), row('c1', 'p'), row('c2', 'p'), row('g', 'c1'), row('q')]),
       { source: 'entries', tree: true },
     );
     expect(rows.map((r) => `${r.id}:${r.depth}`)).toEqual(['p:0', 'c1:1', 'g:2', 'c2:1', 'q:0']);
@@ -46,7 +39,7 @@ describe('resolveEntriesSource', () => {
 describe('resolveRows collapse', () => {
   it('a collapsed parent omits descendants — they are absent, not hidden', () => {
     const rows = resolveRows({
-      entries: [entry('p'), entry('c1', 'p'), entry('g', 'c1'), entry('q')],
+      entries: entryDoubles([row('p'), row('c1', 'p'), row('g', 'c1'), row('q')]),
       rows: { source: 'entries', tree: true },
       collapsed: [rowId('p')],
     });

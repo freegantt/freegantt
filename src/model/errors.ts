@@ -131,8 +131,9 @@ export class InvalidPresetError extends FreeGanttError {
 }
 
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6), `entries.fieldValue`, or a mutator (`entries.update`/`remove`, or a `parentId` naming a
- * missing entry — S2.3 §1.3). `operation` names the call that failed, so the message points at what
+ * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry —
+ * S2.3 §1.3). A read never raises it: a row is how a value is read, and `entries.get` answers
+ * `undefined` for an id the Dataset has no entry for (ADR 0017). `operation` names the call that failed, so the message points at what
  * the caller asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
   readonly entryId: EntryId;
@@ -319,7 +320,7 @@ export class InvertedSpanError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field'` — an edit or `entries.fieldValue` naming a key that is not a declared
+/** `code: 'unknown-field'` — an edit or `entry.read(key)` naming a key that is not a declared
  *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
 export class UnknownFieldError extends FreeGanttError {
   readonly field: FieldKey;
@@ -662,8 +663,9 @@ export class DuplicateRowIdError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-plugin-id'` — two entries of a `plugins` list (a `GanttPlugin[]`, or a
- *  `DatasetPlugin[]` in S5.10) share one `PluginId` (D-S5-3). */
+/** `code: 'duplicate-plugin-id'` — two entries of one `plugins` list share one `PluginId` (D-S5-3).
+ *  A `Gantt`'s own list and the Dataset's are checked together, because one `requires` graph covers
+ *  both (ADR 0019). */
 export class DuplicatePluginIdError extends FreeGanttError {
   readonly pluginId: PluginId;
 
@@ -695,7 +697,7 @@ export class PluginNotInstalledError extends FreeGanttError {
   }
 }
 
-/** `code: 'missing-plugin'` — a `DatasetPlugin` names a `requires` id that the same `plugins` list
+/** `code: 'missing-plugin'` — a plugin names a `requires` id that the same `plugins` list
  *  does not install (D-S5-31). Thrown at construction, naming both ids. `requires` is a check, never
  *  a supplier: a missing prerequisite is this error, not a quiet default. */
 export class MissingPluginError extends FreeGanttError {
@@ -750,14 +752,32 @@ export class RegistrationClosedError extends FreeGanttError {
 export class PluginSetupError extends FreeGanttError {
   readonly pluginId: PluginId;
 
-  constructor(pluginId: PluginId, cause: unknown) {
+  constructor(pluginId: PluginId, cause: unknown, message?: string) {
     super(
       'plugin-setup-failed',
-      `plugins: the setup of "${pluginId}" threw, so no plugin in this batch is installed. Read the "cause" of this error.`,
+      message ??
+        `plugins: the setup of "${pluginId}" threw, so no plugin in this batch is installed. Read the "cause" of this error.`,
       { cause },
     );
     this.name = 'PluginSetupError';
     this.pluginId = pluginId;
+  }
+
+  /** ADR 0019, `Q4`: a plugin with a `data` half was handed to a `Gantt`. It arrived too late to
+   *  declare a Field, so it fails loudly and says where it goes instead. Same error, same `code` —
+   *  a misplaced plugin is a setup that did not happen, and it needs no type of its own.
+   *
+   *  The message quotes the id and shows the **site**, never a call (`F26`). A `PluginId` is a dotted
+   *  string, so `plugins: [acme.locks]` reads as a property access on an object named `acme` — it is
+   *  not pasteable, and the library cannot know the name of the variable the author holds. */
+  static wrongInstallSite(pluginId: PluginId): PluginSetupError {
+    return new PluginSetupError(
+      pluginId,
+      undefined,
+      `plugins: the plugin with id "${pluginId}" has a "data" half, so it installs on the Dataset, ` +
+        'not on the Gantt. Pass it to new Dataset({ entries, plugins: […] }) instead of ' +
+        'GanttOptions.plugins. A Field must exist before the first Rollup, and a Gantt mounts after that.',
+    );
   }
 }
 

@@ -7,6 +7,14 @@
 **Builds on:** S2's extension hook (`data/edit-extension.ts`, D-S2-6), S3's capability resolver and gesture pipeline, S4's Field registry, Grid columns and `ItemProducer` seam.
 **Review fixes — closed 2026-09-04:** [`plans/reviews/2026-09-04-s5-extensibility-fixes.md`](../reviews/2026-09-04-s5-extensibility-fixes.md) records what the branch review asked and what landed. All seven slices R1–R7 are done, so the review HTML is deleted. R2 lifted the plugin ports into `view/plugin-ports.ts` before S5.10, which is what that step builds on.
 **Review fixes — closed 2026-09-06:** [`plans/reviews/2026-09-05-212-segment-selection-fixes.md`](../reviews/2026-09-05-212-segment-selection-fixes.md) records the #212 branch review (`830800d..c305e3a`) and what landed. All seven slices R1–R7 are done, so the review HTML is deleted. R1–R3 fixed correctness defects in `data/` that every gate passed: a duplicate `SegmentId` was representable, the documented way to move a Segment minted a new id, and the envelope invariant had no owner.
+> **Superseded in part — ADR 0019 (row-redesign, 2026-09).** This file is S5's own record, and it
+> keeps the words S5 decided in. `GanttPlugin` and `DatasetPlugin` no longer exist. One plugin type
+> ships, written with `definePlugin({ id, requires, data, view })`: the `data` half is what
+> `DatasetPlugin` was and installs on a `Dataset`, the `view` half is what `GanttPlugin` was and runs
+> once per bound Gantt. `DatasetPluginContext` is `PluginContext['data']` and `PluginContext` is the
+> view half's. Read a `GanttPlugin`/`DatasetPlugin` below as the half it names. `plans/01` §10 and
+> `plans/02` §4.4 state the shipped contract; `docs/adr/0019` states why it changed.
+
 **Closes:** issue #15 (the install API for the extension hook), `plans/s2-data-core/OPEN-QUESTIONS.md` OQ8, `plans/03` §S5's six acceptance boxes, S4's deferred list rows 1–5.
 
 **Start constraint (from `plans/03` §S5):** the `GanttShell` split in [`c4-split-gantt-shell.md`](../s4-hierarchy-and-rows/c4-split-gantt-shell.md) has landed. Plugin wiring must not grow tree-collapse policy back into `view/gantt-shell.ts`. Do not name a new extract `GanttViewport` — `layout/` already owns `Viewport`. The shell gains **one** wiring list (S5.1, D-S5-5); every attach point goes in it.

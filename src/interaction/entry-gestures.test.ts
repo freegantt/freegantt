@@ -8,7 +8,17 @@ import type {
   SelectionForGestures,
 } from '../view/index.js';
 import { entryId, entryIdOfItem, itemId, rowId, segmentId, segmentIndexOfItem } from '../model/index.js';
-import type { Entry, EntryEdits, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import type {
+  Entry,
+  EntryEdits,
+  EntryId,
+  Instant,
+  ItemId,
+  Segment,
+  SegmentId,
+  StoredEntry,
+} from '../model/index.js';
+import { EntryStore } from '../data/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -31,10 +41,35 @@ function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
-function entryFor(id: EntryId): Entry {
+/** The rows a gesture reads, built through the real store. `interaction/` may reach `data/`
+ *  (`.dependency-cruiser.cjs`), and the store is the one place a live `Entry` is built (ADR 0017),
+ *  so nothing here stands one in. */
+function storeOf(rows: readonly StoredEntry[]): EntryStore {
+  let minted = 0;
+  return new EntryStore(rows, {
+    timeZone: 'UTC',
+    dateOnlyEnd: 'inclusive',
+    mintSegmentId: () => segmentId(`minted-${++minted}`),
+  });
+}
+
+function storedFor(id: EntryId, segments?: readonly Segment[]): StoredEntry {
   const start = toInstant(0);
   const end = toInstant(1);
-  return { id, name: id, start, end, segments: [{ id: segmentOf(id), start, end }], props: {} };
+  return {
+    id,
+    name: id,
+    start,
+    end,
+    segments: segments ?? [{ id: segmentOf(id), start, end }],
+    props: {},
+  };
+}
+
+const rows = storeOf(ORDER.map((id) => storedFor(id)));
+
+function entryFor(id: EntryId): Entry {
+  return rows.get(id)!;
 }
 
 function up(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent {
@@ -878,14 +913,13 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     mockPointerCapture(pane);
     const middle = itemId(A, 1);
     const grabbedIds: EntryId[] = [];
-    const segmented: Entry = {
-      ...entryFor(A),
-      segments: [
+    const segmented = storeOf([
+      storedFor(A, [
         { id: segmentId('seg-1'), start: toInstant(0), end: toInstant(1) },
         { id: segmentId('seg-2'), start: toInstant(2), end: toInstant(3) },
         { id: segmentId('seg-3'), start: toInstant(4), end: toInstant(5) },
-      ],
-    };
+      ]),
+    ]).get(A)!;
     const { ctx } = makeContext({
       hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
       entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),

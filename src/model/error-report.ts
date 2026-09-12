@@ -48,12 +48,23 @@ export type BuiltInErrorCode =
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
-  // Q10: two plugins claimed one Entry's look. The first claim paints, the second is ignored, and
-  // this names both. Raised in every build, not behind `isDevMode()` — that flag resolves when this
-  // repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41). The cost
-  // is avoided by asking, not by building: with no report sink wired, the claim scan stops at the
-  // first yes and never looks for a second.
-  | 'look-claimed-twice'
+  // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops
+  // back on itself. Core refuses the answer, reads that Entry as a root and carries on. `by` names
+  // whoever the **answer** came from (`F4`): `'consumer'` when it is the row's own authored
+  // `parentId` — which a composing plugin hands straight back when it falls through — and
+  // `'plugin'` for any other answer.
+  | 'unknown-parent'
+  | 'hierarchy-cycle'
+  // Q10, ADR 0018: two rules from one source both claimed one Entry's variant. The newest paints,
+  // the other is ignored, and this names both. Raised in every build, not behind `isDevMode()` —
+  // that flag resolves when this repo builds `dist/`, so gating it would delete the line from every
+  // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
+  // the rule walk stops at the first yes and never looks for a second.
+  | 'variant-claimed-twice'
+  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule claims no
+  // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
+  // down, and a plugin whose key the Dataset never declared is the same case.
+  | 'unknown-variant-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.
@@ -71,7 +82,7 @@ export type BuiltInErrorCode =
 
 /** The machine-readable half of an Error report — kebab-case, and open at the tail so a plugin can
  *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
- *  the `(string & {})` tail is the same shape `EntryLook` already uses.
+ *  the `(string & {})` tail is the same shape a `FieldKey` already uses.
  *
  *  A code that names a thrown `FreeGanttError` matches that class's own `code`, so a consumer that
  *  already switches on `error.code` reads the report the same way. */
@@ -101,8 +112,9 @@ export interface Refusable {
   readonly refuse: (reason: string) => false;
 }
 
-/** Who refused, or who broke. `'core'` is the library itself; `'consumer'` is a handler someone
- *  registered on `beforeChange`/`before*`; a `PluginId` is the plugin that raised it.
+/** Who refused, or who broke. `'core'` is the library itself; `'consumer'` is the consumer's own
+ *  code — a handler they registered on `beforeChange`/`before*`, or data they authored, as
+ *  `'unknown-parent'` reports; a `PluginId` is the plugin that raised it.
  *
  *  Named `by` because `origin` is taken (`ChangeOrigin`) and a bare `source` is barred (Field source,
  *  Row source). `PluginId` is a plain `string`, so it is intersected with `{}` here to keep the two

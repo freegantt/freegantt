@@ -22,8 +22,7 @@ import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
-import type { EntryLook, Item } from './items/produce-items.js';
-import type { ItemProducerRegistry } from './items/produce-items.js';
+import type { Item, VariantItems } from './items/item.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
@@ -90,10 +89,11 @@ export interface FrameBar {
   id: ItemId;
   entryId: EntryId;
   rowId: RowId;
-  look: EntryLook;
+  /** The variant this bar draws as (ADR 0018) — the `data-variant` `render/` stamps. */
+  variant: string;
   /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Item
    *  that produced it. Absent for a bar that draws the Entry's whole span (a parent, or a plugin's
-   *  own look) — that bar draws no single Segment. */
+   *  own variant) — that bar draws no single Segment. */
   segmentId?: SegmentId;
   /** Every Segment this bar **stands for** (#212, #230, ADR 0010) — the Segments that select it and
    *  paint it. A bar that drew one Segment stands for that Segment alone, so this holds it and
@@ -113,8 +113,8 @@ export interface FrameBar {
   lane: number;
   flags: BarFlags;
   /** `true` when `barSpan` widened this bar's true `[x, x + width)` extent to reach `minBarWidthPx`.
-   *  States a fact about the paint, not a judgement on the look (plans/01 §2.5 bans a look check
-   *  here); a consumer tells a floored bar apart by pairing this with `look`. `render/` stamps it
+   *  States a fact about the paint, not a judgement on the variant (plans/01 §2.5 bans a variant
+   *  check here); a consumer tells a floored bar apart by pairing this with `variant`. `render/` stamps it
    *  as `data-span="minimum"` (`02` §4). */
   minimumSpan: boolean;
   /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
@@ -254,8 +254,8 @@ export interface LayoutInput {
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
   collapsed?: readonly string[];
-  /** Per-Gantt Item producer registry (D-S4-24). The shell passes one per Gantt (I2). */
-  itemProducerRegistry: ItemProducerRegistry;
+  /** Per-Gantt variant registry (D-S4-24, ADR 0018). The shell passes one per Gantt (I2). */
+  variants: VariantItems;
   /** Every declared Field's stored-value read and compare, bound at this Gantt's locale (D-S4-13). */
   fieldCompares?: readonly FieldCompare[];
   /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
@@ -334,7 +334,7 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
     rowHeight: input.rowHeight,
     laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
     entries: input.entries,
-    registry: input.itemProducerRegistry,
+    registry: input.variants,
     datasetRevision: input.datasetRevision,
   });
   return mem;
@@ -465,7 +465,7 @@ export function placeFrame(
         id: item.id,
         entryId: item.entryId,
         rowId: planned.id,
-        look: item.look,
+        variant: item.variant,
         label: item.label,
         x,
         // Centred in its own lane band: yForLane answers the band's own top, at rowHeight tall, and

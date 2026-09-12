@@ -8,13 +8,14 @@ import type {
   DatasetEventMap,
   Entry,
   EntryInput,
-  FieldContext,
   GridColumnsChange,
   GridColumnInput,
   RowHeightMode,
   RowSource,
 } from '../src/api/index.js';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
+import { phaseHierarchy } from './plugins/phase-hierarchy.js';
+import type { PhaseProps } from './plugins/phase-hierarchy.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { mountPageBrief } from './docs/page-brief.js';
@@ -52,6 +53,7 @@ const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')
 const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
+const phaseBtn = document.querySelector<HTMLButtonElement>('#phase-btn')!;
 const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-editor-checkbox')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
@@ -69,17 +71,24 @@ const gantt = mountGantt(dataset);
 window.__dataset = dataset;
 window.__gantt = gantt;
 
+/** The page's own keys, plus the one the hierarchy plugin declares (ADR 0020). */
+type HierarchyProps = { cost: number } & PhaseProps;
+
 function createDataset(
   entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
-): Dataset<{ cost: number }> {
-  return new Dataset<{ cost: number }>({
+): Dataset<HierarchyProps> {
+  return new Dataset<HierarchyProps>({
     entries: structuredClone([...entries]),
     timeZone: 'UTC',
     ...hierarchyFieldOptions,
+    // ADR 0020: the tree is whatever the hierarchy source answers. This plugin answers `phaseId`
+    // first and `parentId` after it, so the fixture nests exactly as authored until the
+    // `phase-btn` below writes a phase id.
+    plugins: [phaseHierarchy()],
   });
 }
 
-function mountGantt(next: Dataset<{ cost: number }>): Gantt {
+function mountGantt(next: Dataset<HierarchyProps>): Gantt {
   return new Gantt({
     container: '#gantt',
     dataset: next,
@@ -98,7 +107,7 @@ function buildRowSource(): RowSource {
   const shared = {
     heightMode,
     ...(filterTeam !== null && rowsMode !== 'grouped'
-      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
       : {}),
     ...(sortField !== 'none' && rowsMode !== 'grouped'
       ? { sort: { field: sortField as 'start' | 'cost' | 'name' } }
@@ -108,7 +117,7 @@ function buildRowSource(): RowSource {
   if (rowsMode === 'grouped') {
     return {
       source: 'group',
-      groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
+      groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
       ...shared,
     };
   }
@@ -228,6 +237,19 @@ reparentBtn.addEventListener('click', () => {
   attemptMutation(() => {
     dataset.entries.update('task-beta', { parentId: 'plain-parent' });
   });
+});
+
+// ADR 0020: one `phaseId` write moves the row, with no `parentId` edit anywhere. "Empty phase"
+// gains a child, so it derives: the Rollup gives it the gate review's span and cost, and the
+// `parent` variant paints it as a summary. A second click hands the row back.
+phaseBtn.addEventListener('click', () => {
+  const nested = dataset.entries.get('gate')?.parent()?.id === 'phase-empty';
+  attemptMutation(() => {
+    dataset.entries.update('gate', { phaseId: nested ? undefined : 'phase-empty' });
+  });
+  phaseBtn.textContent = nested
+    ? 'Nest gate review under Empty phase (plugin tree)'
+    : 'Hand gate review back to Phase A';
 });
 
 costBtn.addEventListener('click', () => {

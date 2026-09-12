@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, itemId } from '../../model/index.js';
 import type { Instant } from '../../model/index.js';
-import type { Item } from '../items/produce-items.js';
+import type { Item } from '../items/item.js';
 import { packRow } from './pack-lanes.js';
 
 function asInstant(ms: number): Instant {
@@ -12,7 +12,7 @@ function item(id: string, start: number, end: number, segment = 0): Item {
   return {
     id: itemId(entryId(id), segment),
     entryId: entryId(id),
-    look: 'leaf',
+    variant: 'leaf',
     label: id,
     start: asInstant(start),
     end: asInstant(end),

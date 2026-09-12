@@ -1,5 +1,5 @@
 // api/ — the public command and keybinding contract (S5.2, D-S5-6, D-S5-7). Generic over `TGantt`
-// here for the same reason `api/plugin.ts`'s `GanttPluginOf`/`PluginContextOf` are (S5.1 file header):
+// here for the same reason `api/plugin-context.ts`'s `PluginContextOf` is (S5.1 file header):
 // `api/gantt.ts` already imports this file for the generic shape, and if this file also imported
 // `Gantt` the two would close an import cycle (`extensions/commands.ts` needs the generic form too,
 // and `api/gantt.ts` imports `extensions/commands.ts` to build the real registry). `api/gantt.ts`
@@ -128,7 +128,17 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  right-click landed in — the Entry whose Fields that row's cells show. A row that owns several
    *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
    *  landed on no Entry at all. */
-  entry?: Entry;
+  entry?: Entry | undefined;
+  /** The variant this Gantt resolved for `entry` (ADR 0018). `undefined` when the invocation names
+   *  no Entry at all.
+   *
+   *  A command scoped to one variant reads it: `when: ({ variant }) => variant === MY_VARIANT`. That
+   *  is the same answer the layout pass painted with, so a plugin never restates its own `when` rule
+   *  here, and never keeps a list of the ids it owns.
+   *
+   *  This is not `entry.variant` under another name. A variant is per Gantt, so a row cannot answer
+   *  it (I2). A command context **is** one Gantt's, and it runs off the hot path. */
+  variant?: string | undefined;
   target?: CommandTarget;
 }
 

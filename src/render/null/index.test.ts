@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createNullBackend } from './index.js';
-import { computeFrame, createItemProducerRegistry } from '../../layout/index.js';
+import { computeFrame, createVariantRegistry } from '../../layout/index.js';
 import type { TimeScale, ViewPreset } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 
@@ -35,7 +35,7 @@ describe('null render backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      itemProducerRegistry: createItemProducerRegistry(),
+      variants: createVariantRegistry({ fieldFor: () => undefined }),
     });
     backend.mount({ grid: undefined, timeline: undefined });
     backend.sync(frame);

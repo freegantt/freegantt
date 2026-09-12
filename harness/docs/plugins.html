@@ -17,59 +17,68 @@
         <script type="module" src="./docs-nav.ts"></script>
         <h1>Plugin lifecycle</h1>
         <p class="tagline">
-          What <code>installPlugin</code> does, when a plugin's own <code>setup()</code> may call a
-          <code>register*</code>, and what <code>uninstallPlugin</code> tears down. Two contracts share this
-          shape — a <code>GanttPlugin</code> and a <code>DatasetPlugin</code> — and §4 is where they differ.
+          What <code>installPlugin</code> does, when a plugin's own half may call a
+          <code>register*</code>, and what <code>uninstallPlugin</code> tears down. One plugin has two
+          halves — <code>view</code> and <code>data</code> — and §4 is where the <code>data</code> half
+          differs.
         </p>
         <div class="updated"><span class="k">updated</span> 2026-09-06 — slice S5</div>
         <div class="meta">
           <span>slice: S5.1–S5.10</span>
           <span>one <code>PluginRuntime</code> per Gantt, one install per Dataset</span>
-          <span>a plugin's gate is open for exactly one call: its own setup()</span>
+          <span>a plugin's gate is open for exactly one call: its own half</span>
         </div>
         <nav aria-label="Sections on this page">
-          <a href="#s1"><b>1</b>Two plugin contracts</a>
+          <a href="#s1"><b>1</b>Two halves, one install site</a>
           <a href="#s2"><b>2</b>Install, setup, dispose</a>
           <a href="#s3"><b>3</b>Diffing by id — <code>install()</code></a>
-          <a href="#s4"><b>4</b>A Dataset plugin installs once</a>
+          <a href="#s4"><b>4</b>A <code>data</code> half installs once</a>
         </nav>
       </header>
       <main>
 
       <!-- ══════════════════════════════════════════════════════════ 1 -->
       <section id="s1">
-        <h2><span class="num">1</span>Two plugin contracts</h2>
+        <h2><span class="num">1</span>Two halves, one install site</h2>
         <p class="lede">
-          A <code>GanttPlugin</code> sees panes, the overlay and gestures. A <code>DatasetPlugin</code> sees
-          only what a document holds, so it stays DOM-free and runs wherever a <code>Dataset</code> runs —
-          the same core-vs-view split every other layer keeps. Nothing else is shared between them: two
-          different context shapes, two different runtimes, on purpose.
+          A <code>view</code> half sees panes, the overlay and gestures. A <code>data</code> half sees only
+          what the Dataset holds, so it stays DOM-free and runs wherever a <code>Dataset</code> runs — the
+          same core-vs-view split every other layer keeps. One <code>definePlugin</code> object may fill
+          both. The install site is where the state lives: a plugin with a <code>data</code> half installs
+          on the <code>Dataset</code>, and every Gantt bound to that Dataset then runs its
+          <code>view</code> half once, each with its own context.
         </p>
         <p class="src">
-          <b>derived from</b> api/plugin.ts, api/dataset-plugin.ts, extensions/plugin-runtime.ts,
-          extensions/install-dataset-plugins.ts
+          <b>derived from</b> api/plugin.ts, api/plugin-context.ts, api/dataset-plugin.ts,
+          extensions/plugin-runtime.ts, extensions/install-dataset-plugins.ts
         </p>
 
         <div class="scroller" style="padding: 0">
           <table style="margin: 0; min-width: 700px">
             <tr>
               <th class="mono">question</th>
-              <th><code>GanttPlugin</code></th>
-              <th><code>DatasetPlugin</code></th>
+              <th><code>view</code> half</th>
+              <th><code>data</code> half</th>
             </tr>
             <tr>
               <td>installed through</td>
-              <td class="mono">GanttOptions.plugins, gantt.installPlugin, gantt.plugins =</td>
+              <td class="mono">
+                DatasetOptions.plugins, or — chrome-only — GanttOptions.plugins, gantt.installPlugin,
+                gantt.plugins =
+              </td>
               <td class="mono">DatasetOptions.plugins — read-only after construction</td>
             </tr>
             <tr>
-              <td>when <code>setup()</code> runs</td>
+              <td>when it runs</td>
               <td>once, after the Gantt mounts</td>
               <td>once, while the Dataset constructs</td>
             </tr>
             <tr>
               <td>can it be added or removed later?</td>
-              <td>yes — <code>installPlugin</code>/<code>uninstallPlugin</code>, live, no remount</td>
+              <td>
+                a chrome-only plugin, yes — <code>installPlugin</code>/<code>uninstallPlugin</code>, live,
+                no remount
+              </td>
               <td>
                 no — a Field a plugin declares must exist before the first Rollup, so a different plugin
                 set means a new <code>Dataset</code>
@@ -77,10 +86,9 @@
             </tr>
             <tr>
               <td>setup order</td>
-              <td>array order — later entries setup after earlier ones</td>
-              <td>
+              <td colspan="2">
                 resolved from <code>requires</code> alone (§4) — <code>[a, b]</code> and <code>[b, a]</code>
-                install identically
+                install identically, and one list covers both halves
               </td>
             </tr>
             <tr>
@@ -100,21 +108,21 @@
         </div>
 
         <p>
-          Both share the same three-part shape underneath, which is why the rest of this page reads almost
-          the same for either one: a plugin names an <code>id</code>; its <code>setup(ctx)</code> runs
-          exactly once and may return a <code>Disposer</code>; every <code>register*</code> it calls is
-          legal only while that one call is on the stack (D-S5-4). What differs is what triggers install,
-          whether it can be undone, and what order plugins see each other in.
+          Both halves share the same three-part shape underneath, which is why the rest of this page reads
+          almost the same for either one: a plugin names an <code>id</code>; each half runs exactly once
+          and may return a <code>Disposer</code>; every <code>register*</code> it calls is legal only while
+          that one call is on the stack (D-S5-4). What differs is what triggers install and whether it can
+          be undone.
         </p>
       </section>
 
       <!-- ══════════════════════════════════════════════════════════ 2 -->
       <section id="s2">
-        <h2><span class="num">2</span>Install, setup, dispose — one <code>GanttPlugin</code></h2>
+        <h2><span class="num">2</span>Install, setup, dispose — one <code>view</code> half</h2>
         <p class="lede">
           <code>gantt.installPlugin(plugin)</code> forwards into <code>PluginRuntime.install</code>, which
-          builds one fresh context, calls <code>setup()</code> once, then closes that plugin's own
-          registration gate the moment <code>setup()</code> returns. Nothing the plugin registered survives
+          builds one fresh context, calls <code>view()</code> once, then closes that plugin's own
+          registration gate the moment <code>view()</code> returns. Nothing the plugin registered survives
           past its own <code>uninstallPlugin</code> call — <code>PluginRuntime</code> disposes it for the
           plugin, whether or not the plugin returned a <code>Disposer</code> of its own.
         </p>
@@ -473,16 +481,10 @@
             <td>held provider list drops; next frame repaints</td>
           </tr>
           <tr>
-            <td class="mono">item producer</td>
-            <td class="mono">ctx.layout.registerItemProducer(kind, fn)</td>
-            <td>newest registration for that <code>EntryKind</code> wins</td>
-            <td>per-row Item cache invalidates; next frame repaints</td>
-          </tr>
-          <tr>
-            <td class="mono">kind defaults</td>
-            <td class="mono">ctx.interaction.registerKindDefaults(kind, defaults)</td>
-            <td>newest registration for that <code>EntryKind</code> wins</td>
-            <td>capabilities re-resolve (affordances, not paint)</td>
+            <td class="mono">variant</td>
+            <td class="mono">ctx.variants.add(variant)</td>
+            <td>newest registration for that <code>name</code> wins (ADR 0018)</td>
+            <td>per-row Item cache invalidates, capabilities re-resolve, next frame repaints</td>
           </tr>
           <tr>
             <td class="mono">grid column</td>
@@ -588,12 +590,12 @@
         </figure>
 
         <div class="note">
-          <strong>Why setup order matters for a Dataset plugin and not for a Gantt plugin.</strong> A
-          <code>DatasetPlugin</code> can declare a Field and wrap the mutation extension hook
+          <strong>Why setup order matters more for a <code>data</code> half.</strong> A
+          <code>data</code> half can declare a Field and wrap the mutation extension hook
           (<code>setExtender</code>) — a second plugin's wrapper receives the first's output, so which one
-          ran first changes what the composed hook does. A <code>GanttPlugin</code> registers into slots
-          that resolve by <em>newest wins</em> or by <em>kind</em>, not by wrapping, so array order there is
-          only ever the order two plugins claiming the same kind or slot were installed in.
+          ran first changes what the composed hook does. A <code>view</code> half registers into slots that
+          resolve by <em>newest wins</em>, not by wrapping. Both halves read one <code>requires</code>
+          list, so a Gantt sorts the Dataset's plugins together with its own chrome.
         </div>
       </section>
 

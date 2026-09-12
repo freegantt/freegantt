@@ -1,23 +1,23 @@
-// api/ — the public Dataset-plugin contract (S5.10, D-S5-23/24/30/31). `DatasetPluginOf`/
-// `DatasetPluginContextOf` stay generic over `TDataset` here, so this file never imports `./dataset.js`
-// for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the generic shape,
-// and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a runtime one.
-// `api/dataset.ts` binds the type argument once — `export type DatasetPlugin = DatasetPluginOf<Dataset>`
-// — and `api/index.ts` re-exports both. `api/plugin.ts` and `api/command.ts` use the same pairing.
+// api/ — what a plugin's `data` half sees (S5.10, D-S5-23/24/30/31, ADR 0019).
+// `DatasetPluginContextOf` stays generic over `TDataset` here, so this file never imports
+// `./dataset.js` for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the
+// generic shape, and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a
+// runtime one. `api/dataset.ts` binds the type argument once — `export type DatasetPluginContext =
+// DatasetPluginContextOf<Dataset>`. `api/plugin-context.ts` and `api/command.ts` use that pairing.
 //
-// A Gantt plugin and a Dataset plugin are different contracts on purpose. A Gantt plugin sees panes,
-// the overlay and gestures; a Dataset plugin sees only what a document holds, so it stays DOM-free and
-// runs wherever a Dataset runs.
+// The two halves see different worlds on purpose. A `view` half sees panes, the overlay and gestures;
+// a `data` half sees only what the Dataset holds, so it stays DOM-free and runs wherever a Dataset
+// runs. `api/plugin.ts` holds the plugin shapes that carry both halves.
 
 import type {
   Aggregator,
   AggregatorName,
   DatasetEventMap,
-  Disposer,
   ExtenderWrapper,
   Field,
   FieldType,
   FieldTypeName,
+  HierarchySourceWrapper,
   PluginId,
   PluginStore,
   PluginStoreView,
@@ -27,6 +27,10 @@ import type { DisposableStore } from '../extensions/disposables.js';
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
 export type { PluginStore, PluginStoreView, ExtenderWrapper };
+// A plugin author writing a hierarchy source names both: the wrapper `setSource` takes, and the
+// source it composes onto. Here for the same reason the store types are — beside the contract that
+// hands them over.
+export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js';
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
@@ -48,7 +52,7 @@ export interface DatasetEvents {
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
 
-/** Field declarations a plugin adds to the Dataset it installs into (D-S5-21). Legal while `setup()`
+/** Field declarations a plugin adds to the Dataset it installs into (D-S5-21). Legal while `data()`
  *  runs and not after — a later call throws `RegistrationClosedError` (D-S5-4). */
 export interface DatasetFieldRegistrations {
   register(field: Field): void;
@@ -63,6 +67,27 @@ export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
 }
 
+/** The tree, as a plugin claims it (ADR 0020). Installing composes: the wrapper receives the current
+ *  occupant, so a second plugin answers over the first's tree instead of evicting it. Core's own
+ *  occupant is `(entry) => entry.parentId` and has no special claim on the seam (D-S5-23).
+ *
+ *  **This is an expert door.** An app author never meets it: they write `parentId` on the Entry, and
+ *  core's own source answers it. */
+export interface DatasetHierarchy {
+  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))` —
+   *  "set the hierarchy source: the phase id when there is one, otherwise whatever the next source
+   *  says."
+   *
+   *  Core owns everything downstream of the answer — the child index, `depth`, `descendants()` and
+   *  the Rollup all follow it, so a plugin that changes the tree has changed the Rollup and the two
+   *  can never disagree. Name the `props` shape to read a consumer key with no cast:
+   *  `ctx.hierarchy.setSource<PlannerProps>(…)`.
+   *
+   *  Legal while `data()` runs and not after — a later call throws `RegistrationClosedError`, because
+   *  the construction Rollup has already walked the tree by then (D-S5-4). */
+  setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
+}
+
 /** This plugin's own store, plus a read-only view of anybody else's (D-S5-24, D-S5-30). */
 export interface DatasetStoreAccess {
   /** This plugin's own reserved store, namespaced by its id. Idempotent: a second call returns the
@@ -72,33 +97,13 @@ export interface DatasetStoreAccess {
   read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
 }
 
-/** What a Dataset plugin's `setup()` receives, once, while the Dataset constructs. */
+/** What a plugin's `data()` half receives, once, while the Dataset constructs. */
 export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;
   events: DatasetEvents;
   fields: DatasetFieldRegistrations;
   edits: DatasetEditHook;
+  hierarchy: DatasetHierarchy;
   store: DatasetStoreAccess;
   disposables: DisposableStore;
-}
-
-/**
- * A plugin installed through `DatasetOptions.plugins`.
- *
- * ```ts
- * const dataset = new Dataset({ entries, plugins: [lockEntries(['t2'])] });
- * ```
- *
- * `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
- * must exist before the first Rollup (D-S5-4), so adding one later would mean re-rolling the whole
- * dataset under a Field its earlier Rollups never summed. A consumer that wants a different plugin
- * set builds a Dataset with it.
- */
-export interface DatasetPluginOf<TDataset> {
-  id: PluginId;
-  /** Plugin ids that must also be installed. Does not imply an order in the array: installation resolves
-   *  setup order from `requires` alone, so `[a, b]` and `[b, a]` install identically (D-S5-31). A
-   *  required id nobody installs throws `MissingPluginError`. */
-  requires?: readonly PluginId[];
-  setup(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
 }

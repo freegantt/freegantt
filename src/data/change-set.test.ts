@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
 import { changeSetId, entryId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, Instant } from '../model/index.js';
+import type { StoredEntry, EntryId, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
-import { createFieldContext, withProposedKeys, writeField } from './fields/field-access.js';
+import { createFieldAccess, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
 function span(start: number, end: number): { start: Instant; end: Instant } {
   return { start: start as Instant, end: end as Instant };
 }
 
-function entry(id: string, props?: Record<string, unknown>): Entry {
+function entry(id: string, props?: Record<string, unknown>): StoredEntry {
   return {
     id: entryId(id),
     name: id,
@@ -25,7 +25,7 @@ const registry = new FieldRegistry({
   fieldTypes: { money: { rollUp: 'sum' } },
   fields: [{ key: 'cost', type: 'money' }],
 });
-const fieldCtx = createFieldContext(registry, 'UTC');
+const fieldCtx = createFieldAccess({ fields: registry, timeZone: 'UTC' });
 
 describe('FieldRegistry.valuesEqual', () => {
   it('compares primitives by reference', () => {
@@ -61,7 +61,7 @@ describe('FieldRegistry.valuesEqual', () => {
 });
 
 describe('diffEdit', () => {
-  function entries(...list: Entry[]): ReadonlyMap<EntryId, Entry> {
+  function entries(...list: StoredEntry[]): ReadonlyMap<EntryId, StoredEntry> {
     return new Map(list.map((item) => [item.id, item]));
   }
 

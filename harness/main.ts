@@ -10,19 +10,19 @@ import {
   contextMenu,
   inlineEditing,
   watchAllErrors,
+  definePlugin,
 } from '../src/api/index.js';
 import type {
   Entry,
-  FieldContext,
   GridColumnInput,
   RowSource,
   DatasetEventMap,
-  GanttPlugin,
-  RendererByLook,
+  EntryVariant,
   CellRenderer,
   HeaderRenderer,
 } from '../src/api/index.js';
-import { demoFieldOptions, demoTreeEntryInputs, MILESTONE_ENTRY_ID } from '../fixtures/demo-dataset.js';
+import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -30,7 +30,6 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
-import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
@@ -55,7 +54,9 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 // `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost?: number; team?: string }>({
+// `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
+// hand-written copy here drifted from it the moment ADR 0018 added `milestone` (`J41`).
+const dataset = new Dataset<DemoEntryProps>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
@@ -201,14 +202,14 @@ function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
   const shared = {
     heightMode,
     ...(filterTeam !== null && !next.grouped
-      ? { filter: (entry: Entry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
       : {}),
     ...(sortByName && !next.grouped ? { sort: { field: 'name' as const } } : {}),
   };
   const source: RowSource = next.grouped
     ? {
         source: 'group',
-        groupBy: (entry: Entry, fields?: FieldContext) => String(fields?.read(entry, 'team') ?? 'unassigned'),
+        groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
         ...shared,
       }
     : { source: 'entries', tree: true, ...shared };
@@ -300,11 +301,16 @@ lockCheckbox.addEventListener('change', () => {
   else locks.unlock(id);
 });
 
-// A read-only dump — every stored Entry, as `dataset.entries.all` reports it. The library holds no
+// A read-only dump — every stored Entry, through the row's own copy door. The library holds no
 // save format to round-trip through (ADR 0016); an application that persists a Dataset reads this
 // door and its own plugins' stores, and restores by handing the same shape back to `new Dataset()`.
+// `toInput()` is that shape, and it is exactly what `entries.add()` takes (ADR 0017).
 exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.entries.all, null, 2);
+  documentJson.value = JSON.stringify(
+    dataset.entries.all.map((entry) => entry.toInput()),
+    null,
+    2,
+  );
 });
 
 // ---- Direct manipulation extras (S3): mobilization veto, async hold, resize lock ----
@@ -413,20 +419,24 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
-// ADR 0013: core ships no diamond and no `'milestone'` kind, so "Requirements review" (`entry-4`)
-// reaches the `'milestone'` key below through `milestoneKind()`, a plugin that owns that one id the
-// same way `bufferKind()`/`riskKind()` do (`plugins.ts`) — installed below, once, at page load.
+// S5.4, D-S5-10/11: `cellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
+// ADR 0018: core ships no diamond and no `'milestone'` variant, so this page states one itself —
+// four lines of config and no plugin at all. The rule reads the `milestone` Field the fixture
+// writes on "Requirements review" (`fixtures/demo-dataset.ts`), so `update(id, { milestone: true })`
+// would pin a second row with no code change here.
 // Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
 // existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
-gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 const BUDGET_THRESHOLD = 5000;
 
-const demoBarRenderer: RendererByLook = {
-  milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
-};
+const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [
+  {
+    name: 'milestone',
+    when: { milestone: true },
+    paint: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+  },
+];
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
@@ -441,11 +451,11 @@ const demoHeaderRenderer: HeaderRenderer = ({ column }) => ({
 const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-toggle')!;
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
-    gantt.barRenderer = demoBarRenderer;
+    gantt.variants = demoVariants;
     gantt.cellRenderer = demoCellRenderer;
     gantt.headerRenderer = demoHeaderRenderer;
   } else {
-    gantt.barRenderer = undefined;
+    gantt.variants = [];
     gantt.cellRenderer = undefined;
     gantt.headerRenderer = undefined;
   }
@@ -486,10 +496,10 @@ weekendToggle.addEventListener('change', () => {
 // picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
-function entryContextActions(): GanttPlugin {
-  return {
+function entryContextActions() {
+  return definePlugin({
     id: 'harness.entryContextActions',
-    setup(ctx) {
+    view(ctx) {
       ctx.commands.register({
         id: 'demo.lockEntry',
         label: 'Lock',
@@ -523,7 +533,7 @@ function entryContextActions(): GanttPlugin {
       });
       // No disposer: `ctx.disposables` already retracts both commands (review P4).
     },
-  };
+  });
 }
 
 // S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config

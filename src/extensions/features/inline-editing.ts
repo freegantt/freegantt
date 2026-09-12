@@ -1,4 +1,4 @@
-// extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `GanttPlugin`,
+// extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `ChromePlugin`,
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports, same as
 // `tooltips()`/`contextMenu()`. Every import below names its own narrow source file, never the
 // `api/index.js` barrel. That barrel re-exports `inlineEditing` itself. Importing it back would
@@ -32,21 +32,14 @@
 // states (#169). `inlineEditing()` below is then wiring: it resolves the target, applies the policy,
 // asks the veto question, and delegates.
 
-import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
-import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
-import {
-  EntryNotFoundError,
-  MutationCancelledError,
-  spansTime,
-  UnreadableCellValueError,
-} from '../../model/index.js';
+import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
+import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin-context.js';
+import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
 import type {
-  CoreFieldValue,
   Disposer,
   Entry,
   EntryId,
   Field,
-  FieldContext,
   FieldKey,
   Instant,
   PluginErrorReport,
@@ -103,25 +96,6 @@ function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
  *  harness's `team`. Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
   return field.parseValue !== undefined || field.type === undefined || field.type === 'text';
-}
-
-/** A real `FieldContext`, built from public reads alone — not a stub. A `parseValue` that reads a
- *  sibling field through `ctx.read` gets the true stored value (`entries.fieldValue`). `durationOf`
- *  goes through `dataset.time.diffDays` (I10: no arithmetic on an `Instant` outside `time/`), and
- *  approximates in whole days. A segmented entry's true duration is `layout/`'s own `durationOf`,
- *  which `extensions/` cannot reach. A `parseValue` that calls this is expected to be rare. */
-function fieldContextFor(ctx: PluginContext): FieldContext {
-  return {
-    timeZone: ctx.dataset.timeZone,
-    read: <K extends FieldKey>(entry: Entry, key: K): CoreFieldValue<K> | undefined =>
-      ctx.dataset.entries.fieldValue(entry.id, key),
-    durationOf: (entry: Entry) => {
-      // An Entry that does not span (`spansTime`, ADR 0012) has no duration; `diffDays` needs two
-      // real dates.
-      if (!spansTime(entry)) return undefined;
-      return { value: ctx.dataset.time.diffDays(entry.start, entry.end), unit: 'day' };
-    },
-  };
 }
 
 /** The four classes this plugin writes, and `view/styles.ts` styles. The session dresses the
@@ -654,10 +628,10 @@ export class CellEditing {
 
 /** D-S5-19/D-S5-20: a cost cell edits in place, in one transaction, and a consumer replaces the whole
  *  editor through `beforeEntryEdit` (`[S5-A5]`). Call: `new Gantt({ plugins: [inlineEditing()] })`. */
-export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
+export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin {
   return {
     id: 'freegantt.inlineEditing',
-    setup(ctx: PluginContext) {
+    view(ctx: PluginContext) {
       const ports: CellEditorPorts = {
         mountLayer: ctx.view.rowLayer,
         dom: ctx.view.dom,
@@ -671,7 +645,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
             { captureInEditable: true },
           ),
         entryById: (id) => ctx.dataset.entries.get(id),
-        storedValue: (id, field) => ctx.dataset.entries.fieldValue(id, field),
+        storedValue: (id, field) => ctx.dataset.entries.get(id)?.read(field),
         writeValue: (id, field, value) => {
           ctx.dataset.entries.update(id, { [field]: value });
         },
@@ -737,7 +711,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
 
       function openGeneric(pending: PendingOpen, entry: Entry, field: Field, cell: HTMLElement): void {
-        const fieldValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
+        const fieldValue = entry.read(field.key);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
         input.value = seedText(field, fieldValue, cell);
@@ -746,7 +720,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
           element: input,
           read: (): CellEditorValue => {
             if (field.parseValue !== undefined) {
-              const value = field.parseValue(input.value, fieldContextFor(ctx));
+              const value = field.parseValue(input.value, { timeZone: ctx.dataset.timeZone }, entry);
               return value === undefined ? { ok: false, text: input.value } : { ok: true, value };
             }
             return { ok: true, value: input.value };
@@ -762,11 +736,11 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
       }
 
       function openDate(pending: PendingOpen, entry: Entry, field: Field): void {
-        // `isDateField` already vouched for this Field's type; `fieldValue` types core keys only,
-        // so a consumer-declared date Field reads back as `unknown` without this.
+        // `isDateField` already vouched for this Field's type; `read` types core keys only, so a
+        // consumer-declared date Field reads back as `unknown` without this.
         // A blank cell (ADR 0012: the Entry does not hold this date) opens empty. This is the same
         // as any other empty cell — it is not broken, so nothing refuses it.
-        const raw = ctx.dataset.entries.fieldValue(entry.id, field.key) as Instant | undefined;
+        const raw = entry.read(field.key) as Instant | undefined;
         const factory = options.dateInput;
         let dateInput: DateInput;
         if (factory !== undefined) {
@@ -834,7 +808,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): GanttPlugin {
         }
 
         const pending = editing.beginOpen(edited, cell);
-        const currentValue = ctx.dataset.entries.fieldValue(entry.id, field.key);
+        const currentValue = entry.read(field.key);
         const payload: EntryFieldEdit = { entry, field: field.key, from: currentValue, to: currentValue };
         const result = ctx.interaction.proposeEntryEdit(payload);
         const openNow = (): void => {
