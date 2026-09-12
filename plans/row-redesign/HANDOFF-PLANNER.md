@@ -31,8 +31,8 @@ Four ADRs are drafted and none is built. No line of `src/` has changed for them.
 
 ## 3. Repo state
 
-- Branch `field-redesign-build`. **Nothing is committed** for these four ADRs.
-- Untracked: `docs/adr/0017`–`0020`, `harness/docs/plugin-authoring.html`, `plans/row-redesign/`.
+- Branch `main`, at `f61e1a5` (the `field-redesign-build` merge, PR #282). Everything below is committed.
+- The four ADRs, `harness/docs/plugin-authoring.html` and `plans/row-redesign/` all landed. Nothing is in flight.
 - `pnpm verify:full` is green at handoff: *verify:full PASS — all 16 checks green, test:e2e included (71s)*.
 - All four ADRs are `status: proposed`. The build flips each to `accepted`.
 
@@ -71,7 +71,8 @@ Counts are `grep -rn '\bSYMBOL\b' src/ | wc -l`. Treat them as scale, not as a w
 
 | Symbol | refs | files | Fate |
 |---|---|---|---|
-| `fieldValue` | 77 | 14 | becomes `entry.read(key)` — see §7, this collides with ADR 0014 |
+| `fieldValue` | 77 | 14 | becomes `entry.read(key)`. Build 1 owns this rename outright — see §7 |
+| `durationOf` | 13 | 9 | **stays.** Its deletion was ADR 0014 decision 13, and that ADR is `not planned` |
 | `EntryStoreView.childrenOf` | — | — | deleted; `entry.children()` replaces it |
 | `CapabilityInputs` | — | `src/view/capability.ts:92-118` | five injected functions collapse into one `Entry` |
 
@@ -114,15 +115,24 @@ Nine plugins live in `harness/plugins/`. Each one is a consumer of the new `defi
 
 ---
 
-## 7. The one sequencing decision you must make
+## 7. The `read` rename belongs to Build 1, and nothing else touches it
 
-**ADR 0014 is still `proposed`, and Build 4 of the field redesign has not landed.** HEAD ships `dataset.entries.fieldValue(id, key)`. `entries.read` does not exist (`src/api/dataset.ts:198`).
+**This was an open sequencing question until 2026-09-11. It is closed.** Do not re-open it.
 
-ADR 0017 publishes `entry.read('duration')`, and its Consequences say ADR 0014 is **not** a precondition (P7).
+HEAD ships `dataset.entries.fieldValue(id, key)`. `entries.read` does not exist (`src/api/dataset.ts:198`).
+ADR 0017 publishes `entry.read(key)` and deletes `fieldValue` (P7).
 
-So: does the row redesign land its own `read`, or does it wait for `plans/field-redesign/build/build-4-0014-plugin-surface.md`? Both builds rename the same 77 references. **Decide it, state the reason, and put the rename in exactly one build.** A rename planned into two builds is a merge conflict with a spec argument attached.
+[ADR 0014](../../docs/adr/0014-the-plugin-author-surface.md) named `read` first, and it renamed the same door.
+The author withdrew that ADR on 2026-09-11 (`343fbf6`), and its Build 4 never started.
+So no second build renames this door, and Build 1 has nobody to coordinate with.
 
----
+Three facts to carry into the plan:
+
+1. **Build 1 does the whole rename.** 77 references in 14 `src/` files, re-measured against `f61e1a5`. `harness/` and `e2e/` add 23 more, for 100 in 21 files. Plan for both numbers — the harness is a consumer and the gate compiles it.
+2. **`durationOf` stays on `FieldContext`** (`data/fields/field-access.ts:133`), 13 references in 9 `src/` files. Only ADR 0014 deleted it, and no row-redesign ADR asks for that. A build that removes it is out of scope.
+3. **No build enforces a plugin key prefix.** That was ADR 0014 too. `docs/adr/0011-consumer-values-live-in-props.md:57` carries the rule that is actually in force.
+
+`plans/field-redesign/build/README.md:40` shows Build 4 struck through. Read that row before you cite any ADR 0014 decision.
 
 ## 8. Landing order
 
@@ -156,6 +166,8 @@ None of these is done. Name the owning build for each.
 
 | What is owed | Likely owner |
 |---|---|
+| `plans/02:352`, `:473-475`, `:751` — four `entries.fieldValue` call sites, and `UnknownFieldError`/`EntryNotFoundError` both name that door | 0017 |
+| `plans/02:467` — it said "There is no `durationOf`". Corrected on 2026-09-11: the member stays, and the `duration` compute Field reads through it. **Do not re-delete it** | — |
 | `plans/01` §2.5 — "Seams key on structure or on plugin-owned ids" needs the variant rule's wording | 0018 |
 | `plans/02` — `variants` on `GanttOptions`, and `barRenderer: RendererByLook` retiring (`api/gantt.ts:154`) | 0018 |
 | `plans/02` — `definePlugin`, and the `GanttPlugin`/`DatasetPlugin` pair retiring | 0019 |
@@ -172,6 +184,7 @@ None of these is done. Name the owning build for each.
 - **The O(n²) hierarchy shape.** ADR 0020's source is a pure one-Entry function on purpose, so `#childrenOfWriteSet` keeps its O(children + edits) cost. #212 and slice S1 already killed the O(n²) shape once. Do not plan a source that takes the whole dataset.
 - **The circularity in ADR 0020.** The hierarchy source takes a `StoredEntry`, never a live `Entry`, because it computes the very answers the live row exposes. This is load-bearing, not a style choice.
 - **The two-shallow-spread trap.** `props` merges per key, never whole-object (`data/fields/field-access.ts:65-78`, ADR 0011). `entryAfterEdit` spreads `StoredEntry` on the drag path, which is why a prototype getter cannot live on the stored type (ADR 0017 P2).
+- **No sample on `harness/docs/plugin-authoring.html` is typechecked.** `scripts/check-doc-examples.mjs` gates `docs/06-plugin-authoring.md` and nothing else. The page describes a design that is not built, so extending the gate to it now fails by construction. Put the extension in the **last** build, after 0020 lands and the page finally describes `src/`. Until then, treat every sample on that page as prose.
 - **`sentence-length` covers 15 declared files in `src/` only.** ADRs and specs are not gated. ASD-STE100 still applies to every line you write.
 - **`check-vendor-names.mjs`** scans 496 files. An ADR may name a vendor Gantt; a spec, `CONTEXT.md` and `src/**` may not.
 - **The refuted list.** Fourteen items in `plans/field-redesign/shared/refuted.md`, nine more in [`README.md`](README.md). Read both before proposing an alternative.
