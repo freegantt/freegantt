@@ -63,19 +63,19 @@ This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard one l
 
 ## Tests this build adds
 
-- [ ] A plugin with both halves installs once on the `Dataset`, and its Fields exist before the first Rollup.
-- [ ] Two Gantts on one Dataset each run `view(ctx)` once, with separate state (I2).
-- [ ] A chrome-only plugin still installs on the `Gantt`, and `gantt.plugins` still reconfigures live.
-- [ ] A plugin with a `data` half handed to a `Gantt` throws, and the message names the right install site.
-- [ ] The same combination does not typecheck. Pin it with a `@ts-expect-error` in the test, so the type-level refusal cannot regress silently.
-- [ ] `requires` is honoured across both halves.
-- [ ] A failed install unwinds the plugins set up before it.
+- [x] A plugin with both halves installs once on the `Dataset`, and its Fields exist before the first Rollup.
+- [x] Two Gantts on one Dataset each run `view(ctx)` once, with separate state (I2).
+- [x] A chrome-only plugin still installs on the `Gantt`, and `gantt.plugins` still reconfigures live.
+- [x] A plugin with a `data` half handed to a `Gantt` throws, and the message names the right install site.
+- [x] The same combination does not typecheck. Pin it with a `@ts-expect-error` in the test, so the type-level refusal cannot regress silently.
+- [x] `requires` is honoured across both halves.
+- [x] A failed install unwinds the plugins set up before it.
 
 ---
 
 ## Gate
 
-- [ ] `grep -rn '\bGanttPlugin\b\|\bDatasetPlugin\b' src/ harness/ | wc -l` → 0. Use the word boundaries: `PluginContextOf` and `DatasetPluginContextOf` survive as the two halves' context types.
+- [x] `grep -rn '\bGanttPlugin\b\|\bDatasetPlugin\b' src/ harness/ | wc -l` → 0. Use the word boundaries: `PluginContextOf` and `DatasetPluginContextOf` survive as the two halves' context types.
 - [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
 
 ---
