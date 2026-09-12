@@ -65,9 +65,9 @@
 
 ## Unit D — the demo that proves it
 
-- [ ] Add a harness plugin that states the parent from a `props` key, the way the ADR's example does.
-- [ ] Show that a named Entry becomes a parent **in fact**: it has children, it derives, it rolls up, and Build 2's `parent` variant paints it as a summary — because it **is** one, not because a stored word said so.
-- [ ] Review `harness/main.ts` for an API gap, changed or not.
+- [x] Add a harness plugin that states the parent from a `props` key, the way the ADR's example does.
+- [x] Show that a named Entry becomes a parent **in fact**: it has children, it derives, it rolls up, and Build 2's `parent` variant paints it as a summary — because it **is** one, not because a stored word said so.
+- [x] Review `harness/main.ts` for an API gap, changed or not.
 
 ---
 
@@ -85,7 +85,7 @@
 
 ## Gate
 
-- [ ] The three read sites named in the precondition still read no `.parentId`, and `rollup.ts:46,52` reads the source.
+- [x] The three read sites named in the precondition still read no `.parentId`, and `rollup.ts:46,52` reads the source.
 - [x] The cost test passes with a source installed.
 - [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
 

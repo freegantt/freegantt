@@ -201,6 +201,20 @@ describe('the Rollup follows the source when a row moves', () => {
     expect(dataset.entries.get('build')?.read('cost')).toBe(17);
   });
 
+  it("clearing the key hands the row back to the tree core's own source answers", () => {
+    const dataset = phaseDataset([
+      { id: 'design', name: 'Design' },
+      { id: 'build', name: 'Build' },
+      { id: 'sketch', name: 'Sketch', parentId: 'design', props: { phaseId: 'build' } },
+    ]);
+    expect(dataset.entries.get('sketch')?.parent()?.id).toBe('build');
+
+    dataset.entries.update('sketch', { phaseId: undefined });
+
+    expect(dataset.entries.get('sketch')?.parent()?.id).toBe('design');
+    expect(dataset.entries.get('build')?.hasChildren).toBe(false);
+  });
+
   it('a row that leaves its last sibling behind demotes the parent it left', () => {
     const dataset = phaseDataset();
 

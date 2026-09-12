@@ -483,3 +483,60 @@ test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012
   const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(after).toBe('task-alpha-1');
 });
+
+// ADR 0020: a plugin states the parent of an Entry out of a `props` key, and everything downstream
+// follows one answer. `harness/plugins/phase-hierarchy.ts` is the plugin; `#phase-btn` is the one
+// write. Nothing here names a fixture row: the test reads the tree before the click and finds the
+// row that moved by comparing it with the tree after.
+test('a plugin tree makes a childless Entry a parent in fact, not by a stored word', async ({ page }) => {
+  await gotoHierarchy(page);
+
+  const readTree = async (): Promise<Record<string, string>> =>
+    page.evaluate(() => {
+      const tree: Record<string, string> = {};
+      for (const entry of window.__dataset.entries.all) tree[entry.id] = String(entry.parent()?.id);
+      return tree;
+    });
+
+  const before = await readTree();
+  await page.locator('#phase-btn').click();
+  await expect.poll(async () => JSON.stringify(await readTree())).not.toBe(JSON.stringify(before));
+  const after = await readTree();
+
+  const movedId = Object.keys(after).find((id) => after[id] !== before[id]);
+  expect(movedId).toBeDefined();
+  const hostId = after[movedId!]!;
+
+  const state = await page.evaluate(
+    ({ hostId, movedId }: { hostId: string; movedId: string }) => {
+      const host = window.__dataset.entries.get(hostId);
+      const moved = window.__dataset.entries.get(movedId);
+      return {
+        hasChildren: host?.hasChildren,
+        // It derives: the Rollup gave it its child's span, which it never authored.
+        spans: host?.start !== undefined && host?.end !== undefined,
+        childDepth: moved?.depth,
+        // No `parentId` was written anywhere — the move is a `phaseId` edit alone.
+        storedParentId: String(moved?.toInput().parentId),
+      };
+    },
+    { hostId, movedId: movedId! },
+  );
+
+  expect(state.hasChildren).toBe(true);
+  expect(state.spans).toBe(true);
+  expect(state.childDepth).toBe((await hostDepth(page, hostId)) + 1);
+  // The stored field still says what it always said: the plugin owns the tree, not the field.
+  expect(state.storedParentId).toBe(before[movedId!]);
+
+  // It paints as a summary because it *is* one (ADR 0018, step 3) — no variant was registered here.
+  // The pane mounts the rows it can show, so bring this one into view before asking about its bar.
+  await page.evaluate((id: string) => {
+    window.__gantt.reveal(id);
+  }, hostId);
+  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${hostId}:"]`)).toHaveCount(1);
+});
+
+async function hostDepth(page: import('@playwright/test').Page, id: string): Promise<number> {
+  return page.evaluate((hostId: string) => window.__dataset.entries.get(hostId)?.depth ?? 0, id);
+}
