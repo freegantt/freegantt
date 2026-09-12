@@ -54,7 +54,8 @@ dataset.setFieldEditable('start', 'never')
 - [ ] Refuse an unknown key at `setFieldEditable`. A new Field key stays refused.
 - [ ] Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`, for `'never'` and for `'api'`.
 - [ ] Rewrite the comment at `src/model/field.ts:125-127`. It still says the default is `false`, and it claims I14.
-- [ ] Ask the author for the two `plans/02` edits and the I14 reread. See [`README.md#still-owed-to-the-author`](README.md).
+- [x] The two `plans/02` edits landed 2026-09-11, before the code: §2 scopes the `fields` hole to adding or removing a **key**, and the verb list carries `dataset.setFieldEditable`. Do not ask for them again.
+- [ ] Reread `plans/01` I14 (`:917`) and `plans/02` §4.2 against what you built. **If the build cannot honour the wording, the wording is wrong** — edit it and say so. Do not ask first.
 - [ ] Close the build — see [`README.md#close-every-build`](README.md).
 
 **Slices it touches.** S3 (drag-resize arming), S4 (the Field registry), S5 (inline editing, the capability resolver, `write-refusal`). **Re-run the S3, S4 and S5 slice gates. I14 is claimed here, so re-run the slice gate that names it.**
