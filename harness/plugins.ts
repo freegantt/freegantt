@@ -39,8 +39,9 @@ const dataset = new Dataset({
   // Dataset must (ADR 0011: an undeclared key is refused at `entries.update()`).
   fields: [{ key: 'cost', type: 'money' }, { key: 'consumed' }, { key: 'accepted' }],
   entries: sampleEntries.map((entry) => {
-    if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...entry, props: { cost: 1500 } };
-    return entry;
+    const input = entry.toInput();
+    if (entry.id === OVER_BUDGET_ENTRY_ID) return { ...input, props: { cost: 1500 } };
+    return input;
   }),
 });
 const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: ['name', 'cost'] });

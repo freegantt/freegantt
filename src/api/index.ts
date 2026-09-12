@@ -60,6 +60,7 @@ export type {
   Field,
   FieldEditable,
   FieldType,
+  ComputeContext,
   FieldContext,
   FormatContext,
   RollUpContext,
@@ -257,6 +258,7 @@ export type { PluginId, Disposer, KeyChord } from '../model/index.js';
 // S5.1, D-S5-1: `PluginContext.disposables`'s own type — a plugin author's cleanup list.
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
+  Entry,
   StoredEntry,
   EntryId,
   EntryLook,

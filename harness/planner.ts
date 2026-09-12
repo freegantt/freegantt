@@ -66,11 +66,11 @@ function phaseFill(phase: unknown): string | undefined {
  *  bar already says which phase they are. */
 function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (entry === undefined) return undefined;
-  const props = entry.props as PlannerEntryProps | undefined;
-  const isPhase = dataset.entries.childrenOf(entry.id).length > 0;
+  const phase = entry.read('phase');
+  const isPhase = entry.hasChildren;
   const isCheckpoint = checkpointEntryIds.has(String(entry.id));
   const children: (ElementDescription & { key?: string })[] = [];
-  const fill = phaseFill(props?.phase);
+  const fill = phaseFill(phase);
   if (fill !== undefined && !isPhase && !isCheckpoint) {
     children.push({ key: 'tag', class: { 'demo-phase-tag': true }, style: { background: fill } });
   }
@@ -82,7 +82,7 @@ function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescripti
  *  be — a photo rather than initials — which has no declared Field type yet. Initials until it does. */
 function ownerCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (value === '') return { text: '' };
-  const fill = phaseFill((entry?.props as PlannerEntryProps | undefined)?.phase);
+  const fill = phaseFill(entry?.read('phase'));
   return {
     class: { 'demo-avatar': true },
     ...(fill === undefined ? {} : { style: { background: fill } }),
@@ -162,7 +162,7 @@ function barLabel(label: ResolvedBarLabel, styleClass?: string): ElementDescript
 /** How far along one row is, as the percentage the design paints. `undefined` for a row that
  *  declares no progress at all, which is not the same fact as `0`. */
 function progressOf(entryId: EntryId): number | undefined {
-  const progress = dataset.entries.fieldValue(entryId, 'progress');
+  const progress = dataset.entries.get(entryId)?.read('progress');
   return typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined;
 }
 
@@ -171,9 +171,8 @@ function progressOf(entryId: EntryId): number | undefined {
  *  its label, and an inset ring when the row is on the critical path. `'*'` registers it as the
  *  catch-all, so any kind this page does not answer for by name lands here. */
 function phaseBar({ entry, label }: BarRendererContext): ElementDescription | undefined {
-  const props = entry.props as PlannerEntryProps | undefined;
-  const fill = phaseFill(props?.phase);
-  const description: ElementDescription = { class: { 'demo-critical': props?.critical === true } };
+  const fill = phaseFill(entry.read('phase'));
+  const description: ElementDescription = { class: { 'demo-critical': entry.read('critical') === true } };
   if (fill !== undefined) description.style = { '--fg-bar-fill': fill };
 
   const children: (ElementDescription & { key?: string })[] = [];
@@ -185,7 +184,7 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   // The critical ring is a child, not a box-shadow on the bar. The bar's own shadow slot belongs to
   // the library — `hovered` and `dragging` both paint there — and a second box-shadow rule on
   // `.fg-bar` would replace theirs rather than join it. A nested ring composes with both for free.
-  if (props?.critical === true) {
+  if (entry.read('critical') === true) {
     children.push({ key: 'critical', class: { 'demo-critical-ring': true } });
   }
   if (children.length > 0) description.children = children;
@@ -343,7 +342,7 @@ function renderSelection(): void {
         : first.end !== undefined
           ? `— → ${formatDate(zone, first.end)}`
           : 'No dates';
-  const done = dataset.entries.fieldValue(first.id, 'progress');
+  const done = first.read('progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
   setReadout(`${first.name} · ${span}${percent}${more}`);

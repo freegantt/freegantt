@@ -12,8 +12,7 @@ import {
   watchAllErrors,
 } from '../src/api/index.js';
 import type {
-  StoredEntry,
-  FieldContext,
+  Entry,
   GridColumnInput,
   RowSource,
   DatasetEventMap,
@@ -201,15 +200,14 @@ function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
   const shared = {
     heightMode,
     ...(filterTeam !== null && !next.grouped
-      ? { filter: (entry: StoredEntry, fields?: FieldContext) => fields?.read(entry, 'team') === filterTeam }
+      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
       : {}),
     ...(sortByName && !next.grouped ? { sort: { field: 'name' as const } } : {}),
   };
   const source: RowSource = next.grouped
     ? {
         source: 'group',
-        groupBy: (entry: StoredEntry, fields?: FieldContext) =>
-          String(fields?.read(entry, 'team') ?? 'unassigned'),
+        groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
         ...shared,
       }
     : { source: 'entries', tree: true, ...shared };
