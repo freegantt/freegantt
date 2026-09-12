@@ -107,7 +107,13 @@ interface WriteSet {
    *
    *  It reads the **source**, never `edit.parentId` (ADR 0020). A plugin source may answer out of a
    *  `props` key, so an edit that moves a row names no `parentId` at all — a filter built from the
-   *  write shape would miss that move and `#hasChildren` would answer a stale `false`. */
+   *  write shape would miss that move and `#hasChildren` would answer a stale `false`.
+   *
+   *  That source call is not free, and the cost is accepted (`V2`). A source reads a whole
+   *  `StoredEntry`, so asking it about a staged row materialises that row: one `entryAfterEdit`
+   *  copy per staged update, at `pointerup`. A parent-bar drag over a 5,000-row subtree allocates
+   *  5,000 of them in one commit. It stays off the hot path — one transaction per gesture, at
+   *  commit, never once per frame (I5). */
   stagedParents: Set<EntryId>;
 }
 
