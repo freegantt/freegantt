@@ -1,6 +1,6 @@
 # ADR 0014 — the plugin-author surface
 
-**The decision:** [`docs/adr/0014-…`](../../../docs/adr/0014-the-plugin-author-surface.md)
+**The decision:** the withdrawal note in [`docs/adr/README.md`](../../../docs/adr/README.md#the-gap-at-0014) — the ADR file was deleted on 2026-09-11
 
 Where a plugin's own Field values live, whether a Field key carries a namespace marker, what the read doors are called, and what an extender returns.
 
