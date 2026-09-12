@@ -17,7 +17,7 @@ flowchart LR
 
 | ADR | one question it answers | Supersedes |
 |---|---|---|
-| [**0017** — the Entry answers questions](../../docs/adr/0017-the-entry-answers-questions-about-itself.md) | Can you answer by looking at the row? | [0014](../../docs/adr/0014-the-plugin-author-surface.md) decision 13 — one `read` door, not two |
+| [**0017** — the Entry answers questions](../../docs/adr/0017-the-entry-answers-questions-about-itself.md) | Can you answer by looking at the row? | `EntryStoreView.fieldValue` and `EntryStoreView.childrenOf` — they become `Entry` members |
 | [**0018** — a variant is a rule](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) | How does a row get a variant? | the four variant-registration seams. [0013](../../docs/adr/0013-what-decides-that-a-row-derives-its-values.md) stands whole |
 | [**0019** — one install site](../../docs/adr/0019-one-plugin-one-install-site.md) | Where does a plugin install? | the `GanttPlugin` / `DatasetPlugin` pair |
 | [**0020** — a plugin may own the hierarchy](../../docs/adr/0020-a-plugin-may-own-the-hierarchy.md) | What makes an Entry a parent? | nothing — `parentId` was the only tree |
@@ -42,7 +42,7 @@ The field-redesign build reviewed the first draft and raised seven problems. **A
 | P4 | `EditRequest.entries` and `entryAfterEdits` are deliberately different states (D-S5-45); one live object collapses them | same |
 | P5 | `.children` means two things inside an open transaction | 0017 rule 2 — live means the committed index overlaid with the open write set |
 | P6 | `hasChildren` has a cheap path and an expensive one | 0017 rule 4 — a getter answers one value, a collection is a method |
-| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — 0014 is not a precondition |
+| P7 | HEAD ships `fieldValue`, not `read` | 0017 Consequences — ADR 0014 is `not planned` since 2026-09-11, so 0017 owns the rename outright |
 
 ## Rulings — 2026-09-11
 

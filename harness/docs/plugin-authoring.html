@@ -55,12 +55,17 @@
       <main>
         <div class="note">
           <strong>Draft — this page publishes ADRs 0017–0020, and none of them is accepted yet.</strong>
-          It is here to be read and argued with, not to be copied. Four things change from the page
-          it replaces. One plugin has a <code>data</code> half and a <code>view</code> half, and
-          installs once. An Entry answers questions about itself, so a rule reads
-          <code>entry.hasChildren</code>. A variant is one object, and an app can store one with
-          <code>update()</code>. A plugin may say what the tree is. Two type names are still open —
-          see §2.
+          It is here to be read and argued with, not to be copied.
+          <strong>It is ahead of <code>src/</code>.</strong> The library ships
+          <code>entries.fieldValue(id, key)</code> where this page writes <code>entry.read(key)</code>,
+          and the four seams one variant replaces are still the installed API. No sample on this page
+          is typechecked against the built package. The samples that are typechecked live in
+          <a href="../../docs/06-plugin-authoring.md"><code>docs/06-plugin-authoring.md</code></a>,
+          and that guide describes HEAD.
+          Four things change from the page it replaces. One plugin has a <code>data</code> half and a
+          <code>view</code> half, and installs once. An Entry answers questions about itself, so a rule
+          reads <code>entry.hasChildren</code>. A variant is one object, matched by a rule, and nothing
+          stores one. A plugin may say what the tree is.
           <a href="./plugins.html">Plugin lifecycle</a> is the install machinery, not this page.
         </div>
 
@@ -645,7 +650,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             the tree itself. It stays DOM-free.
           </p>
           <p class="src">
-            <b>derived from</b> ADR 0020, ADR 0014, ADR 0015, ADR 0016, api/dataset-plugin.ts
+            <b>derived from</b> ADR 0020, ADR 0011, ADR 0015, ADR 0016, api/dataset-plugin.ts
           </p>
 
           <h3>A Field the plugin owns</h3>
@@ -861,7 +866,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
       shape. Install internals are <a href="./plugins.html">Plugin lifecycle</a>. The typechecked
       HEAD examples are in
       <a href="../../docs/06-plugin-authoring.md"><code>docs/06-plugin-authoring.md</code></a>.
-      Decisions: ADR 0013, ADR 0014, ADR 0016, and the drafts 0017–0020.
+      Decisions: ADR 0011, ADR 0013, ADR 0016, and the drafts 0017–0020.
     </footer>
   </body>
 </html>
