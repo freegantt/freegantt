@@ -11,14 +11,7 @@ import {
   RevealTargetNotFoundError,
   ContainerNotFoundError,
 } from '../model/index.js';
-import type {
-  EntryId,
-  Field,
-  Instant,
-  ItemId,
-  SegmentId,
-  StoredEntry,
-} from '../model/index.js';
+import type { EntryId, Field, Instant, ItemId, SegmentId, StoredEntry } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { createDomBackend } from '../render/dom/index.js';

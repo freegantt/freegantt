@@ -111,10 +111,7 @@ function translate(zone: string, instant: Instant, by: Translation): Instant {
  *  An Entry the Selection names none of moves whole — a hover resize grabs a bar nobody selected,
  *  and it still has to act on something. The answer is a list of indexes into `entry.segments`, so
  *  every rewrite below can keep each Segment's own id.  */
-function gesturedSegments(
-  entry: Entry,
-  selected: ReadonlySet<SegmentId> | undefined,
-): readonly number[] {
+function gesturedSegments(entry: Entry, selected: ReadonlySet<SegmentId> | undefined): readonly number[] {
   const everySegment = entry.segments.map((_segment, index) => index);
   if (selected === undefined) return everySegment;
   const held = everySegment.filter((index) => selected.has(entry.segments[index]!.id));
@@ -147,11 +144,7 @@ function gesturedEdgeInstant(
 /** Which reached Segment holds the dragged edge — the earliest `start` or the latest `end` among
  *  them. A multi-Segment resize moves that one Segment and leaves its siblings where they are.
  *  Segments are authored in any order, so the answer is a comparison, never the first index (#200). */
-function segmentIndexAtEnvelopeEdge(
-  entry: Entry,
-  indexes: readonly number[],
-  edge: 'start' | 'end',
-): number {
+function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], edge: 'start' | 'end'): number {
   let found = indexes[0]!;
   for (const index of indexes) {
     const segment = entry.segments[index]!;

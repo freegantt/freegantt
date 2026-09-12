@@ -15,7 +15,7 @@ import {
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, Entry, StoredEntry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetPlugin, Duration, Entry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -133,7 +133,8 @@ describe('new Dataset()', () => {
       timeZone: 'UTC',
       entries: [oneEntry({ props: { team: 'A' } })],
     });
-    const entry = first(dataset);
+    // The shape a row *stores* is this test's subject, so it reads the stored values (ADR 0017).
+    const entry = dataset.entries.storedValues.get(first(dataset).id)!;
     expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
     // `segments` is always present (#212): every Entry stores at least one Segment.

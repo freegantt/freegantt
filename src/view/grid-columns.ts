@@ -1,13 +1,6 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns where a Field's value lives.
 
-import type {
-  Dataset,
-  Entry,
-  Field,
-  FormatContext,
-  GridColumn,
-  GridColumnInput,
-} from '../model/index.js';
+import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
 
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
