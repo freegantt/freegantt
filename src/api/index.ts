@@ -106,14 +106,8 @@ export type {
 // The generic shapes behind the Gantt-bound aliases above (S5.1/S5.2). A plugin author writing
 // against `Gantt` names the bound forms; code parameterizing over its own Gantt type names these —
 // the same `*Of` pairing `api/command.ts`'s and `api/plugin.ts`'s file headers describe.
-export type {
-  ChromePluginOf,
-  DataPluginOf,
-  PluginIdentity,
-  PluginOf,
-  PluginContextOf,
-  PluginContextParts,
-} from './plugin.js';
+export type { ChromePluginOf, DataPluginOf, PluginIdentity, PluginOf } from './plugin.js';
+export type { PluginContextOf, PluginContextParts } from './plugin-context.js';
 // ADR 0019: one plugin, one install site. `definePlugin` narrows to the arm the object fills, so a
 // plugin with a `data` half never type-checks into `GanttOptions.plugins`.
 export { definePlugin } from './define-plugin.js';

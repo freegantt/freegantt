@@ -9,7 +9,7 @@
 // members `view/` may not name (D-S5-5). A member that lands in the wrong group no longer compiles.
 //
 // #191: `PluginContextParts` below carries `TGantt`/`TDataset`, so the two members that bind them
-// are declared once, here, with the rest. `api/plugin.ts` then binds both and adds `dataset`/`gantt`.
+// are declared once, here, with the rest. `api/plugin-context.ts` then binds both and adds `dataset`/`gantt`.
 // `view/` still names neither type: they arrive as type arguments and stay unbound in this file.
 
 import type {
@@ -132,13 +132,13 @@ export interface GanttShellPorts {
  *  `etc/freegantt.api.md` (#166, I11). `PlainParts` sets the suffix: the pieces a composite is
  *  made of.
  *
- *  #166: this is **the** member list for the plugin surface. `api/plugin.ts`'s public
+ *  #166: this is **the** member list for the plugin surface. `api/plugin-context.ts`'s public
  *  `PluginContextOf` is `PluginContextParts<TGantt, TDataset>` plus `dataset` and `gantt`, and
  *  nothing else. It used to be a hand-typed copy of all twenty-five, doc comments included, with
  *  nothing checking the copy. So the doc a plugin author reads lives here now, beside the one
  *  declaration.
  *
- *  #191: `TGantt`/`TDataset` are what `commands` and `registerKeybinding` bind. `api/plugin.ts`
+ *  #191: `TGantt`/`TDataset` are what `commands` and `registerKeybinding` bind. `api/plugin-context.ts`
  *  bound them instead. So this interface published two members that were wrong for every consumer,
  *  and `PluginContextOf` had to `Omit` both back out. Both arguments default to `unknown`. A caller
  *  that binds neither — `buildPluginPorts` below is the only one — reads the two members unbound.

@@ -47,7 +47,8 @@ import { PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import { extraEditsFor, type Dataset } from './dataset.js';
-import type { ChromePluginOf, DataPluginOf, PluginContextOf, PluginOf } from './plugin.js';
+import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
+import type { PluginContextOf } from './plugin-context.js';
 import type {
   CommandOf,
   CommandContextOf,
@@ -231,15 +232,15 @@ function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): rea
   return plugins;
 }
 
-/** S5.1, D-S5-1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class — see
+/** S5.1, D-S5-1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class. See
  *  `api/plugin.ts`'s file header for why the generic forms live there and the binding happens here.
- *  This file is the one that sees both `Gantt` and `Dataset`, so all four names bind here, the
- *  Dataset-installed ones included. These are the types a plugin author actually writes:
+ *  This file is the one that sees both `Gantt` and `Dataset`. So all four names bind here, the
+ *  Dataset-installed ones included. These are the types a plugin author actually writes, and
  *  `api/index.ts` re-exports them alongside the generic `*Of` shapes. */
-export type ChromePlugin<TProps = unknown> = ChromePluginOf<Gantt<TProps>, Dataset<TProps>>;
-export type DataPlugin<TProps = unknown> = DataPluginOf<Gantt<TProps>, Dataset<TProps>>;
-export type Plugin<TProps = unknown> = PluginOf<Gantt<TProps>, Dataset<TProps>>;
 export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
+export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps>>;
+export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
+export type Plugin<TProps = unknown> = PluginOf<PluginContext<TProps>, Dataset<TProps>>;
 
 /** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
@@ -339,7 +340,7 @@ export class Gantt<TProps = unknown> {
             });
           }),
         // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
-        // `api/Dataset` and `gantt` is `this`. See `api/plugin.ts`'s file header for why `view/` may
+        // `api/Dataset` and `gantt` is `this`. See `api/plugin-context.ts`'s file header for why `view/` may
         // name neither. `this` is captured, not read (N7): a plugin's `setup()` runs *inside* the
         // `new GanttShell(...)` call above, before this constructor reaches its own closing brace,
         // so `#shell` is not yet assigned — but `ctx.gantt` only needs `this` to exist, not `#shell`

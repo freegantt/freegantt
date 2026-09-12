@@ -1,5 +1,5 @@
 // extensions/ — the plugin runtime (S5.1, D-S5-1..D-S5-5). Generic over its own context type so this
-// file never imports `api/plugin.ts` or `api/gantt.ts`: `view/gantt-shell.ts` (which builds the real,
+// file never imports `api/plugin-context.ts` or `api/gantt.ts`: `view/gantt-shell.ts` (which builds the real,
 // api-level `PluginContext`) is itself imported BY `api/gantt.ts`, so a `PluginRuntime` that named the
 // concrete `PluginContext`/`Gantt` types here would close an import cycle (api -> view -> extensions
 // -> api). `ShellPlugin<TContext>` stays structurally identical to the public `Plugin` — same

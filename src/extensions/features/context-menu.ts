@@ -2,7 +2,7 @@
 // confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood
 // gate this step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
 // `api/index.ts` barrel. That barrel re-exports `contextMenu` itself (D-S5-13). `extensions/popup.ts`
-// imports `api/plugin.ts` directly instead of that barrel, for the same reason (no-circular).
+// imports `api/plugin-context.ts` directly instead of that barrel, for the same reason (no-circular).
 //
 // Review A3/A4: this file names no `.fg-*` class and no `data-*` key of the rendered Gantt. It asks
 // `ctx.view.dom` what a node is, and `ctx.view.onDomEvent` scopes every document listener to this
@@ -20,7 +20,7 @@ import type {
   PluginContext,
 } from '../../api/gantt.js';
 import { resolveActedOn } from '../../api/command.js';
-import type { DomTarget } from '../../api/plugin.js';
+import type { DomTarget } from '../../api/plugin-context.js';
 import type { Entry } from '../../model/index.js';
 import { DisposableStore } from '../disposables.js';
 import { buildMenu, menuItemUnder, menuItemsIn, resolveMenuEntries } from './menu-view.js';

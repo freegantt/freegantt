@@ -60,7 +60,7 @@ export interface DatasetStateOptions {
   referenceDate?: Instant;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map. S5 shipped the plugin-facing route instead: a
-   *  `DatasetPlugin` installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
+   *  A plugin's `data` half installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
    *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (D-S2-6,
    *  "How it is tested without a public claim") — S3's drag preview and undo tests take it. Defaults
    *  to `identityExtender`: an unoccupied hook is the identity function (D4).
@@ -69,7 +69,7 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Installs this Dataset's `DatasetPlugin` list and returns the disposer for the whole set. Called
+  /** Installs this Dataset's plugin list and returns the disposer for the whole set. Called
    *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
    *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
    *  must exist before the Rollup first walks (D-S5-4).

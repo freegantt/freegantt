@@ -2554,7 +2554,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
     // A resize drag on the plugin's own grip: `commitWidth` rewrites every column on screen, so the
     // commit stores "risk" as a plugin-declared column of its own (D-S5-33) — the same seam
-    // `api/plugin.ts`'s disposal promise has to reach through.
+    // `api/plugin-context.ts`'s disposal promise has to reach through.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
@@ -2663,7 +2663,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     // A resize drag on B's own grip (B is the winner) commits "risk" as a plugin-declared column at
-    // width 200 (D-S5-33) — the same seam `api/plugin.ts`'s disposal promise reaches.
+    // width 200 (D-S5-33) — the same seam `api/plugin-context.ts`'s disposal promise reaches.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;

@@ -33,7 +33,7 @@
 // asks the veto question, and delegates.
 
 import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
-import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
+import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin-context.js';
 import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
 import type {
   Disposer,
