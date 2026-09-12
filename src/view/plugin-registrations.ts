@@ -126,7 +126,7 @@ export class PluginRegistrations implements PluginRegistrar {
 
   /** S5.9, D-S5-21. The one seam whose refresh stays with its own module. `ColumnChrome` strips the
    *  baked-in copy of an abandoned field *between* removing the registration and rebinding, so the
-   *  two cannot be pulled apart (D-S5-18, #155). This entry is here so a reader finds all five
+   *  two cannot be pulled apart (D-S5-18, #155). This entry is here so a reader finds all four
    *  seams in one list, not so the refresh moves.
    *
    *  `pluginId` travels with the column, for the reason `registerRenderer` already takes one. A

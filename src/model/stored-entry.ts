@@ -18,12 +18,23 @@ export interface SegmentInput extends TimeSpanInput {
   id?: string;
 }
 
+/** The values one row stores at one moment (ADR 0017). `Entry` (`entry.ts`) is the other half of
+ *  the pair: it answers questions about a row **now** — `read(key)`, `children()`, `duration()`,
+ *  `hasChildren`. This type answers none of them, and that is deliberate. A pass may hold a row no
+ *  store holds — the Rollup's own effective tree is one — so the questions belong to the pass, and
+ *  every pass that hands a `StoredEntry` hands the answers beside it: an Aggregator reads
+ *  `ctx.read(key)` and `ctx.children()`, a `compute` Field reads `ComputeContext` the same way.
+ *
+ *  It is not a second concept. It is one row, with no questions attached.
+ *
+ *  An app author meets it in `DatasetOptions.aggregators`, in a Field's `compute` and `distribute`,
+ *  and on `ChangeSet.added[].entity` / `.removed[].entity`. */
 export interface StoredEntry<TProps = Record<string, unknown>> {
   id: EntryId;
-  /** Hierarchy; roots have none. */
+  /** Hierarchy; roots have none. An Entry has no stored classification (ADR 0013): it derives when
+   *  it has children, and `Entry.hasChildren` is what answers that. */
   parentId?: EntryId;
-  /** No stored classification (ADR 0013). An Entry derives when it has children — `entry.hasChildren`
-   *  answers that; there is nothing to read off the Entry itself. */
+  /** What this row is called. Core reads it for the Grid's default label and for nothing else. */
   name: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
    * Segment and draws a bar. */

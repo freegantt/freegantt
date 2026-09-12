@@ -63,7 +63,7 @@ export interface DatasetStateOptions {
   referenceDate?: Instant;
   /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
    *  unreachable through the package's `exports` map. S5 shipped the plugin-facing route instead: a
-   *  A plugin's `data` half installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
+   *  plugin's `data` half installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
    *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (D-S2-6,
    *  "How it is tested without a public claim") — S3's drag preview and undo tests take it. Defaults
    *  to `identityExtender`: an unoccupied hook is the identity function (D4).

@@ -156,7 +156,9 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
     expect(thrown).toBeInstanceOf(PluginSetupError);
     expect((thrown as PluginSetupError).pluginId).toBe('demo.costing');
     expect((thrown as Error).message).toMatch(/installs on the Dataset, not on the Gantt/);
-    expect((thrown as Error).message).toMatch(/new Dataset\(/);
+    // The id is quoted, and the site is shown with no fake call around it (`F26`).
+    expect((thrown as Error).message).toContain('id "demo.costing"');
+    expect((thrown as Error).message).toMatch(/new Dataset\(\{ entries, plugins: \[…\] \}\)/);
   });
 
   it('throws the same error from the live setter and from installPlugin', () => {

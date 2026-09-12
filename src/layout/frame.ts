@@ -93,7 +93,7 @@ export interface FrameBar {
   variant: string;
   /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Item
    *  that produced it. Absent for a bar that draws the Entry's whole span (a parent, or a plugin's
-   *  own look) — that bar draws no single Segment. */
+   *  own variant) — that bar draws no single Segment. */
   segmentId?: SegmentId;
   /** Every Segment this bar **stands for** (#212, #230, ADR 0010) — the Segments that select it and
    *  paint it. A bar that drew one Segment stands for that Segment alone, so this holds it and

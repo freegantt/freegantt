@@ -343,7 +343,7 @@ export interface GanttShellOptions {
   /** The consumer's own variants — `GanttOptions.variants`, already erased to the untyped shape
    *  (ADR 0018). They outrank every plugin's, whatever order the plugins install in. */
   variants?: readonly EntryVariant[];
-  /** Installed before this shell's first paint (N7). A plugin-defined look, keybinding or command
+  /** Installed before this shell's first paint (N7). A plugin-defined variant, keybinding or command
    *  reaches frame 1, the same as every other constructor option. Before N7, `Gantt.plugins`'s live
    *  setter ran after this constructor returned, so frame 1 missed them.
    *
@@ -909,7 +909,7 @@ export class GanttShell {
     }
     // N7: applied through the same live setters `api/gantt.ts` used to call *after* this
     // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
-    // plugin's look, keybinding or command now reaches frame 1, and so does a zoom or a selection.
+    // plugin's variant, keybinding or command now reaches frame 1, and so does a zoom or a selection.
     // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
     // `#segmentSelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
     // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
