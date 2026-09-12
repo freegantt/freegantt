@@ -92,7 +92,11 @@ export const phases = definePlugin({
 
   // What does it variant like? Runs once per bound Gantt, with that Gantt's own context.
   view(ctx) {
-    ctx.addVariant({ name: 'phase', when: { 'demo:phaseId': true }, paint: phaseBar });
+    ctx.variants.add({
+      name: 'phase',
+      when: (entry) =&gt; entry.read('demo:phaseId') !== undefined,
+      paint: phaseBar,
+    });
   },
 });</code></pre>
 
@@ -438,7 +442,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
   id: 'demo.milestones',
   view(ctx) {
     // Which entries wear it? A rule, not a list — a row added tomorrow gets it too.
-    ctx.addVariant({
+    ctx.variants.add({
       name: 'milestone',
       when: (entry) =&gt; !entry.hasChildren &amp;&amp; entry.duration()?.value === 0,
       paint: () =&gt; ({ class: { 'demo-milestone': true } }),
@@ -451,11 +455,18 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             It also takes the shorthand the app author used above — a Field match core can index,
             which never runs a function per row.
           </p>
+          <p>
+            <strong>A field match is equality, one Field at a time.</strong>
+            <code>{ milestone: true, locked: false }</code> claims the rows that answer both, and each
+            key compares through that Field's own <code>equals</code>. It never means "has a value":
+            <code>{ phaseId: true }</code> claims the rows whose <code>phaseId</code> <em>is</em>
+            <code>true</code>. Ask "has a value" with a predicate, the way the plugin above does.
+          </p>
 
           <h3>The one object</h3>
-          <pre><code>interface EntryVariant {
+          <pre><code>interface EntryVariant&lt;TProps&gt; {
   name: string;          // this variant's identity: the `data-variant` you style, and the registry key
-  when?: VariantRule;       // a predicate or a field match; omit it on a last-resort variant
+  when?: VariantRule&lt;TProps&gt;;  // a field match or a predicate; omit it on a last-resort variant
   items?: ItemProducer;  // default: one Item over the Entry's whole span
   paint?: BarRenderer;
   can?: Interactions;    // per variant, one level under the consumer's own
@@ -482,7 +493,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
                 aria-labelledby="pa-variant-title pa-variant-desc"
                 preserveAspectRatio="xMidYMid meet"
               >
-                <title id="pa-variant-title">Core asks each variant in order, and the first yes wins</title>
+                <title id="pa-variant-title">Core asks the newest variant first, and stops at the first yes</title>
                 <desc id="pa-variant-desc">
                   Core asks each registered variant in turn whether it matches the Entry. Your variants are
                   asked first, then core's own parent variant, then core's leaf variant, which carries no
@@ -554,7 +565,7 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
               </svg>
             </div>
             <figcaption>
-              Diagram 2 — one ordered list, and the first yes wins. Every box in the middle column is
+              Diagram 2 — one ordered list, walked newest first, and the first yes is the answer. Every box in the middle column is
               a function of the row. Nothing in it is stored, so no row can wear a variant its own data
               does not earn.
             </figcaption>
@@ -579,9 +590,11 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             rolls up like one.
           </p>
           <p>
-            Two variants can both answer yes. The first registered wins, and the library raises a
-            <code>'variant-claimed-twice'</code> report naming both plugins. Core does not pick a
-            winner on merit — it picks the one you installed first, and it tells you.
+            Two variants can both answer yes. <strong>The newest registered wins</strong>, and the library
+            raises a <code>'variant-claimed-twice'</code> report naming both plugins. Core does not pick
+            a winner on merit — it picks the one that was registered last, and it tells you. That is why
+            core registers its own <code>parent</code> and <code>leaf</code> first: they are the floor,
+            and everything you add is newer.
           </p>
         </section>
 
@@ -602,10 +615,9 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
             </tr>
             <tr>
               <td>variant</td>
-              <td class="mono">ctx.addVariant(variant)</td>
+              <td class="mono">ctx.variants.add(variant)</td>
               <td>
-                first rule to answer wins and the second is reported; a stored value beats every
-                rule
+the newest rule to answer wins and the other is reported; nothing stores a variant
               </td>
             </tr>
             <tr>
@@ -685,7 +697,9 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
             <code>entry.read(key)</code>, and that is the same call an app author writes and a
             plugin writes. <code>entries.fieldValue(id, key)</code> and
             <code>ctx.read(entry, key)</code> both retire — they were the same question with two
-            doors. <code>entry.props.k</code> is storage, not a resolver: it misses a
+            doors. A <code>compute</code> Field still reads a sibling Field, and a duration: it asks
+            the pass it runs in, which names no row because it is computing exactly one —
+            <code>ctx.read(key)</code>, <code>ctx.duration()</code>, <code>ctx.children()</code>. <code>entry.props.k</code> is storage, not a resolver: it misses a
             <code>compute</code> Field and it does not know the Field's type. Duration is a core
             Field, so it has both doors: <code>entry.duration()</code> is the typed one, and
             <code>entry.read('duration')</code> answers the same value by key. It carries
@@ -746,7 +760,7 @@ gantt.gridColumns = ['name', DEMO_NOTE];</code></pre>
           </p>
           <pre><code>data(ctx) {
   // Which Entry is the parent of this one?
-  ctx.setHierarchySource((next) =&gt; (entry) =&gt; entry.props.phaseId ?? next(entry));
+  ctx.hierarchy.setSource((next) =&gt; (entry) =&gt; entry.props.phaseId ?? next(entry));
 }</code></pre>
           <p>
             One Entry in, one parent id out. Core's own source is

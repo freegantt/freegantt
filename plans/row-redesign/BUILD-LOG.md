@@ -30,9 +30,9 @@ ADR 0017 rule 5 says `read()` is *the one* value door. Three doors answer the sa
 
 ---
 
-## Q2 — do the renderer contexts become generic over `TProps`?
+## Q2 — do the renderer contexts become generic over `TProps`? — DEFERRED to #284
 
-**Raised in ADR 0017's own `open:`. Sharpened 2026-09-11. Build 1. Open.**
+**Raised in ADR 0017's own `open:`. Sharpened 2026-09-11. Build 1. Answered the same day, and deferred to [#284](https://github.com/Pawel-IT/FreeGantt/issues/284), after Build 4.** No build in this redesign waits on it.
 
 `ColumnCellRendererContext.entry?: Entry` and `fieldValue: unknown` carry no `TProps` (`src/model/field.ts:67-74`).
 
@@ -64,9 +64,9 @@ ADR 0017 rule 5 says `read()` is *the one* value door. Three doors answer the sa
 
 ## Q3 — what is the hierarchy seam called?
 
-**Raised in ADR 0020's own `open:`. Build 4. RULED 2026-09-11: the seam is `setHierarchySource`.**
+**Raised in ADR 0020's own `open:`. Build 4. RULED 2026-09-11: the seam is the hierarchy source.**
 
-It sits beside `setExtender` on the `data` half, and it reads the same way: `ctx.setHierarchySource((entry) => …)`. The author accepted the draft word.
+The author accepted the draft word. The call site is `ctx.hierarchy.setSource((next) => (entry) => …)`, beside `ctx.edits.setExtender` on the `data` half — the namespace came later the same day, in `J7`. The concept keeps the name the author ruled.
 
 `CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`. Build 4 edits that entry: the tree is what the hierarchy source answers, and `parentId` is core's own source.
 
@@ -129,7 +129,7 @@ This strengthens **Q1**. With `entry.duration()` on the row, `FieldContext.durat
 
 ## Q6 — does a segmented Entry's duration count the gaps?
 
-**Raised 2026-09-11, while closing Q1. Build 1. CLOSED the same day: it is an option, and the key is `duration`.** The author took the call site below whole.
+**Raised 2026-09-11, while closing Q1. Build 1. CLOSED the same day: it is an option.** The author took the call site below whole. **The key is `measureDuration`** — the author's ruling left the name open (ADR 0017's *Open*), and `J12` settled it the same day.
 
 Core answers the **span** today — `diffMs(entry.end, entry.start)` (`src/data/fields/field-access.ts:133`), gaps included. ADR 0017 changes nothing about that, and Build 1 must not change it either.
 
@@ -142,8 +142,8 @@ This is a Field semantics question, not a door question. It does not block Build
 **The call site — ruled 2026-09-11.**
 
 ```ts
-new Dataset({ entries });                        // default: 'span' — end minus start, gaps counted
-new Dataset({ entries, duration: 'segments' });  // the sum of the Segments, gaps not counted
+new Dataset({ entries });                               // default: 'span' — end minus start, gaps counted
+new Dataset({ entries, measureDuration: 'segments' });  // the sum of the Segments, gaps not counted
 ```
 
 **Why a string union and not `durationIncludesGaps: boolean`.** A boolean reads well today and ages badly. A calendar-aware third answer is plausible at S7 — duration in working time, skipping weekends — and a union takes `'working'` later without deleting a published key. Two states that may become three want a union.
@@ -257,3 +257,152 @@ It is the largest job in Build 1, and `CLAUDE.md`'s rename recipe does not prote
 | 10 | Eight smaller traps | Rule 4's stale first statement, `field.ts:303` → `:333`, the third `childrenOf` at `gantt-shell.ts:1142`, `#hasChildren` staying private, `read('parentId')` never answering the tree, ADR 0018's `=== 0` on a `{value, unit}`, two more stale spots on the authoring page, and `CONTEXT.md:44`. |
 
 One finding in the review was already stale when it was written: Build 1's close-out names both #214 and #274.
+
+---
+
+## The 2026-09-11 plan review — `J5`–`J14`
+
+**One review, read against HEAD `66c6b72`, found ten holes in the plugin-author surface and a set of plan boxes that still carried yesterday's sentence beside today's ruling.** The author was away and gave standing permission to decide. So every call below is a **J** — a call made alone, and reversible. **None of them reopens a ruling in `Q1`–`Q7`.** Each one closes a hole those rulings left.
+
+The stale plan text the same review found is fixed in place and is not logged here: Build 2's Q5 boxes, Build 4's precondition pointing at the wrong unit, ADR 0018's opening sentence, ADR 0017's `ctx.children` property, and the `Q2` heading above.
+
+---
+
+## J5 — a `compute` Field keeps its by-key read, and the contexts split by lifetime
+
+**Build 1, Unit D. Done in the plan.**
+
+`Q1` retired `FieldContext.read` and `FieldContext.durationOf`. `Q7` then gave a pass `ctx.children()` alone. Together they left a `compute` Field with no way to read another Field and no way to read a duration: its `entry` is a `StoredEntry`, so it holds `props` and the two dates and nothing else.
+
+**What the gap costs.** `src/data/computed-cache.test.ts:30` is a live `compute` that reads a sibling Field. `src/model/field.ts:224-226` publishes the promise in the type's own doc. An author without the door writes millisecond arithmetic by hand, which `CLAUDE.md`'s time rule forbids outside `time/`.
+
+**The call, in two halves.**
+
+- **Only the `entry` argument retires.** The pass is computing one row, so it asks with no argument: `ctx.read(key)` and `ctx.duration()`, beside `ctx.children()`. `entry.read(key)` stays the one by-key door on a row a caller names.
+- **Three contexts, because there are three lifetimes.** `FieldContext` is `{ timeZone }`, one per Dataset. `ComputeContext extends FieldContext` is per pass and carries the three bound members. `FormatContext extends FieldContext` is untouched — it is built once per column resolve and reused for every cell (D-S4-13), so a per-row member on the type it extends would answer the wrong row or force a rebuild on the paint path.
+
+`readField` binds the `ComputeContext`, because it is the one function that holds the row and the registry together. `createFieldContext` keeps the ambient half alone.
+
+**`parseValue` takes the row: `parseValue?(text, ctx: FieldContext, entry: Entry)`** — the shape `formatValue` already has. This is what makes `fieldContextFor()` deletable: `extensions/` holds the Entry, and `{ timeZone: dataset.timeZone }` is public.
+
+**To reverse:** put `read`/`durationOf` back on one `FieldContext` with an entry argument, and give `FormatContext` a per-cell rebuild.
+
+---
+
+## J6 — `VariantRule` is published, and a field match is equality
+
+**Build 2, Unit A. Done in the plan.**
+
+`EntryVariant.when?: VariantRule` shipped a name with no declaration, and the two samples meant two different things — `{ milestone: true }` as equality on a boolean, and `{ 'demo:phaseId': true }` as "has a value". An app author cannot guess which one `{ status: 'blocked' }` follows.
+
+**The call.** `VariantRule<TProps> = FieldMatch<TProps> | ((entry) => boolean)`. A field match compares each named key through that Field's own `equals`, and several keys are AND. **It never means "has a value"** — that question is a predicate. The authoring page's `phaseId` sample is now a predicate.
+
+**`LookClaim` becomes `VariantPredicate`, not `VariantRule`.** `LookClaim` is the predicate arm. Giving it the union's name would ship one type with two meanings, which is the bug this whole redesign keeps finding.
+
+**`EntryVariant` carries `TProps`**, so the ADR's own `entry.read('slack') > 0` sample compiles. `GanttOptions<TProps>` already holds the Dataset's type. `layout/` does not become generic — that is ADR 0005's refusal, and `Q2` still defers the renderer half.
+
+**To reverse:** drop `FieldMatch` and ship the predicate alone.
+
+---
+
+## J7 — the two new plugin doors are namespaced
+
+**Builds 2 and 4. Done in the plan.**
+
+`ctx.addVariant` and `ctx.setHierarchySource` were the only bare verbs on two contexts that are namespaced everywhere else: `ctx.fields.register`, `ctx.edits.setExtender`, `ctx.store.reserve`, `ctx.commands.register`, `ctx.interaction.registerKeybinding`.
+
+**The call.** `ctx.variants.add(variant)` and `ctx.hierarchy.setSource(wrap)`. The concept keeps the name `Q3` ruled — the hierarchy source — and each seam gains a namespace to grow in.
+
+**To reverse:** flatten both onto the root.
+
+---
+
+## J8 — `definePlugin` makes the wrong install site unrepresentable
+
+**Build 3, Unit C. Done in the plan.**
+
+`Q4` ruled the error. A throw at mount is still a runtime refusal of a combination the type can refuse at the call: `definePlugin` sees both halves, and `GanttOptions.plugins` can take `readonly ChromePlugin[]` with `data?: never`. That is the rule a shared `scale` beside a `preset` already follows.
+
+**`PluginSetupError` stays.** The compiler never meets the plain-JavaScript caller or the list a helper widened. A library refuses in both languages it is read in.
+
+**To reverse:** publish one `Plugin` type on both option keys.
+
+---
+
+## J9 — `entry.read('parentId')` answers `parent()?.id`
+
+**Build 1, Units B and E. Done in the plan.**
+
+`parentId` is a core Field, so `read` must answer it — `read` is the one by-key door, and a Grid column goes through it. Build 1 had `read` answering the **stored** field while `parent()` answered the tree, plus a box saying "never write it". Two doors, two answers, one row: a WBS column would print a stale id beside live indentation the moment ADR 0020 lands.
+
+**The call.** A live row answers one tree through every door. `update(id, { parentId })` still writes the stored field, and `StoredEntry.parentId` is still what it wrote. The `→ 0` grep gate on `read('parentId')` is retired; core still prefers `parent()`, because it answers with the row.
+
+**To reverse:** make `read('parentId')` answer the stored field, and keep the ban.
+
+---
+
+## J10 — `entries.all` hands back live rows, and its membership stays committed
+
+**Build 1, Unit B. Done in the plan.**
+
+ADR 0017's table put `all` in the `Entry` column while rule 2 called it committed-only. Both are right, about different questions, and neither said so.
+
+**The call.** *Which* rows exist is the collection's question, and `all` answers it as of the last commit — the array is a `computed` bound to `#revision`, and `ScaleBinding` compares it by reference (D-S1.5-4). *What a row is worth* is the row's question, and every `Entry` answers it now. `has`, `get` and `size` are the live membership doors, and all three follow the write set today; `all.length` never did.
+
+**The review asked for `all: readonly StoredEntry[]` instead, and it is refused.** `gantt-shell.ts:725` hands that array to `layout/`, and `entries-source.ts:55` then rebuilds the tree out of `parentId` — the re-derivation ADR 0020 cannot survive. Stored values stay reachable where they belong: `entry.toInput()` for a copy, and the edit pipeline for an edit.
+
+**To reverse:** type `all` as `StoredEntry[]` and give `layout/` a second, live list door.
+
+---
+
+## J11 — a command context names the resolved variant
+
+**Build 2, Unit E. Done in the plan.**
+
+The owned-id `Set` answers a fifth question the four registrations never reached: `buffer-kind.ts:52` is a command's `when`. Delete the `Set` and the command has nothing to ask; keep it and the harness holds a list the library just made unnecessary; restate the `when` rule inside the command and the harness re-derives the library's own answer. `CLAUDE.md`'s stop rule names that third one.
+
+**The call.** `CommandContextOf.variant?: string` — the variant this Gantt resolved for the Entry the invocation is about. This is not `entry.variant`: a variant is per Gantt (I2), and a command context **is** one Gantt's, off the hot path.
+
+**`EntryVariant.commands` was refused.** A command has an id, a label, a keybinding and a lifetime of its own, and its `when` must also answer when no Entry is named.
+
+**To reverse:** keep the owned-id `Set` in both harness plugins.
+
+---
+
+## J12 — the duration option's key is `measureDuration`
+
+**Build 1, Unit B. Done in the plan.**
+
+`Q6` ruled the option, the union, the host and the default. ADR 0017's *Open* left only the key's name. Read the call: `new Dataset({ entries, duration: 'segments' })` announces a duration where a consumer writes data, and the word already names the core Field and `entry.duration()`.
+
+**The call.** `measureDuration: 'span' | 'segments'`, on `DatasetOptions`. It names the job — how core measures a duration — and spends no third meaning. **It is not a `Field` key**: per Field, two Fields on one Dataset could disagree about what a duration is.
+
+**To reverse:** rename the key to `duration`.
+
+---
+
+## J13 — a `CapabilityRule` predicate may answer `undefined`
+
+**Build 2, Unit C. Done in the plan.**
+
+`CapabilityRule` is `boolean | ((entry) => boolean)` (`view/capability.ts:20`), so a rule that speaks at all must answer every row. ADR 0018 puts that type one level down, on a variant's `can`. A variant's `can: { resize: (entry) => !entry.hasChildren }` then means "not on a parent" **and** says yes to every other row, over the library rule below it.
+
+**The call.** `boolean | ((entry) => boolean | undefined)`, at both levels. `WriteRule` already answers this way, for the same bug on #256, where the harness's own first call site opened every derived cell. `isOffered` already falls through on `undefined`; the predicate's return type is what widens. A bare `boolean` still pins every row.
+
+**To reverse:** keep the two-state predicate and document the override.
+
+---
+
+## J14 — `toInput()` keeps its place, and publishes its caller
+
+**Build 1, Unit B. Done in the plan.**
+
+The review asked for a named caller or a deletion. A copy needs the values a copy stores, `props` included, and `read()` answers a Field and not the input shape. So the member stays and the ADR publishes the line it exists for:
+
+```ts
+entries.add({ ...entry.toInput(), id: 'copy-1' });
+```
+
+It is not a second read door. Nothing in a renderer, a rule or a capability calls it.
+
+**To reverse:** delete the member, and copy a row from `entries.all`.

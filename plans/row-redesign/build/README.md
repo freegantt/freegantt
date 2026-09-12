@@ -16,7 +16,7 @@ Four ADRs give one row one object. None is built. This folder is the work.
    ```
    Report the verdict line. Never report `EXIT: $?`. A run with no verdict line is unproven.
 4. **Each build lands as one change.** Do not stage a rename behind the old interface. This library has never shipped.
-5. **Rename with a word-boundary replace (`\bOldName\b`), then `pnpm typecheck`.** Read each hit before you change it. Never a blind text replace. **Build 1 has one rename this rule does not protect — its file says so.**
+5. **Rename with `pk-rename-symbol`, then `pnpm typecheck`.** It renames through the language service, so it follows re-exports and aliases and skips prose (`CLAUDE.md`, `.claude/skills/pk-rename-symbol/SKILL.md`). A same-named string in a comment or a doc is a separate decision. **Build 1 has one rename that stays green while its meaning inverts — its file says so.**
 6. **A line number here is a hint, not a fact.** Every number was measured against `f61e1a5` on 2026-09-11. Open the file.
 7. **Never work around a gap in `src/` from `harness/`.** Stop. Report the gap. Ask the author whether core closes it first. This is `CLAUDE.md`'s stop rule.
 8. **Review `harness/main.ts` on every commit, changed or not.** `CLAUDE.md` requires it.
@@ -50,7 +50,7 @@ The order is fixed. Each ADR states it in its own "Lands after" line.
 
 - **One row is one object.** `Entry` answers questions about now. `StoredEntry` carries the stored values. A read seam takes an `Entry`; the edit pipeline carries `StoredEntry`.
 - **`entries.fieldValue` and `entries.childrenOf` go.** The doors move onto the row: `entry.read(key)`, `entry.children()`, `entry.hasChildren`.
-- **A variant is a rule.** Four registrations become one `EntryVariant` object. Nothing stores a variant. `EntryLook` is deleted, and a variant name is a `string`.
+- **A variant is a rule.** Four registrations become one `EntryVariant` object — `variants` on the `Gantt`, `ctx.variants.add` in a plugin. Nothing stores a variant. `EntryLook` is deleted, and a variant name is a `string`.
 - **A plugin has one install site.** `definePlugin({ data, view })` replaces the `GanttPlugin` / `DatasetPlugin` pair.
 - **A data plugin may own the tree.** A `HierarchySource` states one parent per Entry, and core inverts it.
 
@@ -64,13 +64,25 @@ The order is fixed. Each ADR states it in its own "Lands after" line.
 
 **Seven things were ruled on 2026-09-11. Do not re-open one.**
 
-- All three Field-read doors retire — `entries.fieldValue`, `FieldContext.read` and `FieldContext.durationOf` — into `entry.read(key)` and `entry.duration()` (`Q1`).
-- **The read binds to the pass.** A seam that holds a row the store does not hold — the Rollup, the ChangeSet, every `compute` Field — carries `StoredEntry` values and reads the tree through `ctx.children()`. `RollUpContext` adds `values(key?)`, `numericValues(key?)` and `durations()` (`Q7`). This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
-- A segmented Entry's duration is an option. The key is `duration`, the values are `'span' | 'segments'`, it sits on the `Dataset`, and the default is `'span'`. **Build 1 writes it** (`Q6`).
-- A `data` plugin handed to a `Gantt` raises `PluginSetupError`, and the message says where to install it. No new error type ships (`Q4`).
-- The hierarchy seam is **`setHierarchySource`**, beside `setExtender` on the `data` half (`Q3`).
+- All three Field-read doors leave the **row** surface — `entries.fieldValue`, `FieldContext.read(entry, key)` and `FieldContext.durationOf(entry)` — into `entry.read(key)` and `entry.duration()` (`Q1`).
+- **The read binds to the pass.** A seam that holds a row the store does not hold — the Rollup, the ChangeSet, every `compute` Field — carries `StoredEntry` values and asks the pass, not the row: `ctx.read(key)`, `ctx.duration()` and `ctx.children()`, none of them taking an entry (`Q7`, corrected by `J5`). `RollUpContext` adds `values(key?)`, `numericValues(key?)` and `durations()`. This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
+- **Three contexts, three lifetimes**: `FieldContext` is `{ timeZone }` per Dataset, `ComputeContext` is per pass, `FormatContext` stays per column resolve (`J5`). `parseValue` takes the live `Entry` as a third argument.
+- A segmented Entry's duration is an option on the `Dataset`: **`measureDuration: 'span' | 'segments'`**, default `'span'` (`Q6`, and the key name in `J12`). **Build 1 writes it.**
+- A `data` plugin handed to a `Gantt` raises `PluginSetupError`, and the message says where to install it. No new error type ships (`Q4`). **The type refuses the combination first** (`J8`).
+- The hierarchy seam is the **hierarchy source**, set through `ctx.hierarchy.setSource`, beside `ctx.edits.setExtender` on the `data` half (`Q3`, `J7`).
 - **Setup order comes from `requires`, and no build adds an ordering knob.** D-S5-31 ruled this on 2026-09-01: the host topologically sorts the installed set before any `setup` runs. Siblings must not depend on load order.
 - **The newest rule wins a double claim** (`Q5`). Build 2 flips `claimedLookFor`, walks newest-first, and keeps the early exit. **Core registers `parent` and `leaf` first, not last** — every earlier draft said last, and under this ruling that would make core beat every plugin.
+
+**A plan review on 2026-09-11 closed six more. Each is a `J` entry in [`../BUILD-LOG.md`](../BUILD-LOG.md) — reversible, and none of them reopens a ruling above.**
+
+| What | Where it lands |
+|---|---|
+| A `compute` Field keeps its by-key read and its duration, bound to the pass (`J5`) | Build 1, Unit D |
+| `VariantRule` is published: a field match is equality, AND across keys, never "has a value" (`J6`) | Build 2, Unit A |
+| `entry.read('parentId')` answers `parent()?.id` (`J9`) | Build 1, Units B and E |
+| `entries.all` hands back live rows; which rows stays committed-only (`J10`) | Build 1, Unit B |
+| `ctx.variants.add` and `ctx.hierarchy.setSource` — namespaced, like every other plugin door (`J7`) | Builds 2 and 4 |
+| A command context names the resolved variant, so the owned-id `Set` goes (`J11`) | Build 2, Unit E |
 
 ---
 

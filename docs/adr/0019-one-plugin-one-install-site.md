@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: a chrome-only plugin — one with no `data` half — keeps its own install site on the `Gantt`, and `gantt.plugins` stays live-reconfigurable (2026-09-11). Every plugin with a `data` half installs on the `Dataset`.
-open: nothing. A plugin with a `data` half, handed to a `Gantt`, raises **`PluginSetupError`**, and the message says where to install it (2026-09-11, author's ruling — `Q4`). No new error type ships. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
+open: nothing. A plugin with a `data` half, handed to a `Gantt`, raises **`PluginSetupError`**, and the message says where to install it (2026-09-11, author's ruling — `Q4`). No new error type ships. **The type refuses it before the runtime does** — `GanttOptions.plugins` takes a chrome-only plugin alone (2026-09-11, review fix) — see *The compiler refuses it first*. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
 ---
 
 # One plugin, one install site
@@ -56,6 +56,21 @@ A plugin author reads one table row, not two. `docs/06-plugin-authoring.md` lose
 **The failure mode needs a name.** A plugin with a `data` half, installed on a `Gantt`, has arrived too late to declare a Field. It must fail loudly and say where to install it. That is the open question in the frontmatter.
 
 **A silent partial install is refused, so the open question is narrower than it looks.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove. So the answer is a throw; what is open is only which error and what it says. `PluginSetupError` (`model/`, raised at `extensions/install-dataset-plugins.ts:124`) already names a plugin id and already unwinds the plugins installed before it, so it is the candidate with no new type behind it.
+
+### The compiler refuses it first
+
+**A throw at mount is the second line of defence, not the first.** `definePlugin` sees both halves at the call, so the type knows which install sites a plugin has. An illegal combination stays unrepresentable — the same rule that keeps a shared `scale` off a `Gantt` that names `preset` (`plans/02`, `CLAUDE.md`).
+
+```ts
+interface ChromePlugin { id: PluginId; requires?: readonly PluginId[]; view(ctx): Disposer | void; data?: never }
+interface DataPlugin   { id: PluginId; requires?: readonly PluginId[]; data(ctx): Disposer | void; view?(ctx): Disposer | void }
+type Plugin = ChromePlugin | DataPlugin;
+
+GanttOptions.plugins:   readonly ChromePlugin[];   // a `data` half does not typecheck here
+DatasetOptions.plugins: readonly Plugin[];         // both halves install here
+```
+
+`definePlugin` keeps the narrower type at the call site, so `new Gantt({ plugins: [scheduling()] })` is a red squiggle in the editor and never a runtime discovery. **`PluginSetupError` stays**, for the caller the compiler never met: plain JavaScript, a plugin list built at runtime, a `Plugin` widened by a helper. A library refuses in both languages it is read in.
 
 ## The hazard this ADR inherits
 
