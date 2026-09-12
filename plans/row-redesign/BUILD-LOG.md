@@ -86,7 +86,7 @@ A plugin with a `data` half, handed to a `Gantt`, has arrived too late to declar
 
 ## Q5 — which rule wins when two plugins both answer yes?
 
-**Raised in ADR 0018's own `open:`. Build 2. Half of it was never open, and the author said so on 2026-09-11.**
+**Raised in ADR 0018's own `open:`. Build 2. CLOSED 2026-09-11. Half of it was never open, and the author said so.**
 
 **What sets the order was decided on 2026-09-01: `requires`.** D-S5-31 — `plans/s5-extensibility-and-editing/README.md` Q19, `plans/01:892`. A plugin declares `requires: readonly PluginId[]`, and the host topologically sorts the installed set by that graph before any `setup` runs (`extensions/install-dataset-plugins.ts`, `resolveSetupOrder`). `[a, b]` and `[b, a]` install identically. A missing prerequisite throws `MissingPluginError`, a ring throws `PluginRequirementCycleError`, and **there is no `PluginOrderError`, because there is no wrong order left to write.**
 
@@ -102,9 +102,14 @@ So the order is inferred, not authored. Two plugins with an edge between them ar
 | `register(look, producer)` (`:138-144`) | **newest wins** — it replaces whatever the look resolved to |
 | `claimedLookFor(entry)` across two different looks (`:188-198`) | **first yes wins** — *"the first yes is the whole answer"* |
 
-**Recommendation: last wins, so all three seams agree.** It also matches what `requires` means. `b.requires = ['a']` says b builds on a, so b installs second — and b is the one that should be able to override. Under first-wins, declaring a dependency makes you lose, which reads backwards.
+**RULED 2026-09-11: the newest wins.** All three seams agree, and it matches what `requires` means. `b.requires = ['a']` says b builds on a, so b installs second — and b is the one that should be able to override. Under first-wins, declaring a dependency made you lose, which reads backwards.
 
-**Until the author answers that one word:** Build 2 keeps `claimedLookFor`'s first-yes behaviour and keeps the double-claim diagnostic. `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive the rename for this reason.
+**Build 2 changes `claimedLookFor`, and two things ride on it.**
+
+- **Core registers its own two variants first, not last.** Every draft said *"registered last"*, which was right under first-wins: last meant fallback. Under this ruling last would mean **core beats every plugin**, which is the opposite of what `parent` and `leaf` are for. ADR 0018, `plans/row-redesign/README.md` and the authoring page are all corrected. The `leaf` variant carries no `when`, so it answers for every row and the floor stays total.
+- **Walk newest-first and stop at the first yes.** Do not walk oldest-first and keep the last yes. `claimedLookFor` runs on every hover change, where the budget is zero allocation and the early exit is the point (`produce-items.ts:182,197`). Reversing the walk keeps the early exit at the same cost. A reporter still walks the whole list — a diagnostic has to see both claimants.
+
+The double-claim diagnostic stays. `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive the rename, because two sibling plugins with no `requires` edge can still both answer yes, and that is an authoring error worth naming.
 
 ---
 

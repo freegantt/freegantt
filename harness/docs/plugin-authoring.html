@@ -561,8 +561,9 @@ dataset.entries.update('launch', { milestone: true });</code></pre>
           </figure>
 
           <p>
-            <strong>Core's two variants are ordinary variants.</strong> They are registered last, and they
-            carry no privilege. <code>'parent'</code> and <code>'leaf'</code> are not reserved words,
+            <strong>Core's two variants are ordinary variants.</strong> They are registered first, and
+            they carry no privilege. The newest rule wins, so your variant overrides core's on any row
+            it claims. <code>'parent'</code> and <code>'leaf'</code> are not reserved words,
             because nothing can store a variant name in the first place. Delete the stored value and
             the whole reservation goes with it.
           </p>

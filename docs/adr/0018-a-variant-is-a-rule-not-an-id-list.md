@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The working material is in `plans/row-redesign/`.
 decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
-open: which **end** of the setup order wins when two rules both answer yes. **What sets that order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
+open: nothing. **The newest rule wins** (2026-09-11, author's ruling — `Q5`), so all three registration seams agree and core registers its own two variants first. **What sets the order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
 ---
 
 # A variant is a rule, not an id list
@@ -54,12 +54,14 @@ new Gantt({
 
 A plugin ships the same object through `ctx.addVariant(variant)`. One type, two doors, one shape.
 
-**Core registers its own two variants last**, and they are ordinary `EntryVariant` objects with nothing special about them:
+**Core registers its own two variants first**, and they are ordinary `EntryVariant` objects with nothing special about them:
 
 ```ts
 { name: 'parent', when: (entry) => entry.hasChildren, paint: summaryBar }
-{ name: 'leaf' } // no `when` — the last-resort variant, so every row resolves
+{ name: 'leaf' } // no `when` — it answers for every row, so every row resolves
 ```
+
+**First, not last — the newest rule wins** (`Q5`, ruled 2026-09-11). Core registers before anything else, so every plugin variant and every consumer variant is newer and overrides it. Core is the floor. A `leaf` variant with no `when` answers for every row, so the floor is total and no row falls through. **Registering core last would make core beat every plugin**, which is the opposite of what its two variants are for.
 
 **A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
 
@@ -117,11 +119,11 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **This widens no type.** The alias already ends in `(string & {})`, which accepts any string. Take the two literals out and `string` is what is left.
 
-**What the deletion takes with it.** Core's two built-ins become two ordinary `EntryVariant` objects, registered last. Then:
+**What the deletion takes with it.** Core's two built-ins become two ordinary `EntryVariant` objects, registered first. Then:
 
 - **The two structural names stop being special.** They are two names in the same registry as every other variant. There is no reserved list, because nothing can store a name.
 - **`BAR_SHAPE_CLASS` goes** (`render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
-- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
+- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers for every row and nothing newer is obliged to.
 
 ## What ADR 0013 keeps
 
@@ -143,7 +145,12 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **Setup order comes from `requires`, and that was decided on 2026-09-01.** D-S5-31 gives a plugin `requires: readonly PluginId[]`, and the host topologically sorts the installed set before any `setup` runs (`extensions/install-dataset-plugins.ts`). `[a, b]` and `[b, a]` install identically, a missing prerequisite throws `MissingPluginError`, and a ring throws `PluginRequirementCycleError`. **Two plugins with an edge between them are already ordered. Two with no edge are siblings, and a sibling must not depend on load order** (`plans/01` §12). A sibling collision is an authoring error, and the diagnostic exists to name it. [0019](0019-one-plugin-one-install-site.md) gives one plugin one `requires`, so one resolved order serves both halves.
 
-**One word is open: which end of that order wins.** HEAD contradicts itself. `registerClaim` and `register` both say the newest registration wins (`layout/items/produce-items.ts:134-144`). `claimedLookFor` says *"the first yes is the whole answer"* across two different looks (`:197`). The three should agree, and `requires` argues for the newest: `b.requires = ['a']` says b builds on a, so b should be able to override it.
+**The newest rule wins — ruled 2026-09-11.** HEAD contradicted itself. `registerClaim` and `register` both say the newest registration wins (`layout/items/produce-items.ts:134-144`). `claimedLookFor` said *"the first yes is the whole answer"* across two different looks (`:197`). **The third one changes, so all three agree.** A fourth seam already votes the same way: `extensions/keymap.test.ts:124` pins *"the handler registered last wins over an earlier command binding."* `requires` argues the same way: `b.requires = ['a']` says b builds on a, so b is the one that should override it. Under first-wins, declaring a dependency made you lose.
+
+**Two things follow, and both are load-bearing.**
+
+- **Core registers its own two variants first**, not last. See *Core registers its own two variants first*. Under the old rule, last meant fallback. Under this one, last would mean core beats every plugin.
+- **`claimedVariantFor` walks newest-first and stops at the first yes.** It must not walk oldest-first and keep the last yes: the read runs on every hover change, where the budget is zero allocation and an early exit is the point (`produce-items.ts:182`). Reversing the walk keeps the early exit. A reporter still walks the whole list, because a diagnostic has to see both claimants.
 
 **[ADR 0015](0015-what-the-write-door-refuses.md) is owed nothing.** The earlier draft added two refusals to the write door — a reserved name, and an unregistered name. Both die with the stored value.
 

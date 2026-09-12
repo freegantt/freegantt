@@ -66,7 +66,8 @@ Settled in the session that opened this folder. Do not re-derive them.
 | The data side may change what the tree is, and the Rollup follows it. One seam, not two. | [0020](../../docs/adr/0020-a-plugin-may-own-the-hierarchy.md) |
 | No new type parameter on the `Dataset` constructor. TypeScript has no partial type-argument inference, so module augmentation stays the route. | [0019](../../docs/adr/0019-one-plugin-one-install-site.md) |
 | `Field.editable` and `interactions` stay two questions. Merging them deletes the read-only view. 0018 reuses the type, not the seam. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
-| `EntryLook` goes away. A variant name is a `string`, and it names a DOM identity, never a stored value. Core's `'parent'` and `'leaf'` become two ordinary variants, registered last. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
+| `EntryLook` goes away. A variant name is a `string`, and it names a DOM identity, never a stored value. Core's `'parent'` and `'leaf'` become two ordinary variants, **registered first** — the newest rule wins, so core is the floor. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
+| **The newest rule wins a double claim**, so all three registration seams agree. `requires` sets the order (D-S5-31); this decides which end of it takes the row. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
 | **The concept is a Variant, not a look.** `EntryVariant` is the type, `variants` the config key, `ctx.addVariant` the plugin door. `data-kind` becomes `data-variant`. | [0018](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md) |
 
 ## Refuted here — do not re-derive
@@ -140,8 +141,6 @@ ctx.addVariant({ name: 'buffer', when: (entry) => entry.read('slack') > 0, paint
 
 ## Open
 
-Each ADR's frontmatter carries its own. One thing still needs the author, and it blocks no build:
+**Nothing. Every question closed on 2026-09-11.** Each ADR's frontmatter says so, and [`BUILD-LOG.md`](BUILD-LOG.md) carries each answer with its reasoning.
 
-1. **Which end of the setup order wins a double claim.** `requires` sets the order — D-S5-31, ruled 2026-09-01, and no build adds a knob. What is open is one word: the **first** registration wins, or the **newest**. HEAD says both. `registerClaim` and `register` say newest (`layout/items/produce-items.ts:134-144`); `claimedLookFor` says *"the first yes is the whole answer"* (`:197`). See `Q5` in [`BUILD-LOG.md`](BUILD-LOG.md).
-
-**Closed 2026-09-11.** The hierarchy seam is `setHierarchySource` (`Q3`). `CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`, and Build 4 edits that entry.
+The last two went together. `requires` sets the setup order — D-S5-31, ruled 2026-09-01, and no build adds a knob. **The newest rule wins**, so `claimedLookFor` flips to agree with `registerClaim` and `register`, and core registers `parent` and `leaf` **first** (`Q5`). The hierarchy seam is `setHierarchySource` (`Q3`). `CONTEXT.md:47` still defines the Hierarchy as the tree via `parentId`, and Build 4 edits that entry.
