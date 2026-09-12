@@ -127,6 +127,11 @@ class EntryDouble implements Entry {
     return found;
   }
 
+  /** The same platform hook the live row answers: a serialized row is its stored values. */
+  toJSON(): EntryInput {
+    return this.toInput();
+  }
+
   toInput(): EntryInput {
     const values = this.#values;
     return {

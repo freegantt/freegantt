@@ -204,7 +204,7 @@ describe('runTransaction', () => {
     expect(changeCount).toBe(1);
   });
 
-  it('read-your-own-writes: get/size/childrenOf see a staged add; all does not, until commit (D-S2-21)', () => {
+  it('read-your-own-writes: get/size and a row’s children see a staged add; all does not, until commit (D-S2-21)', () => {
     const state = dataset([{ id: 'root' }]);
     let sizeDuring = -1;
     let childDuring: unknown;
@@ -235,7 +235,7 @@ describe('runTransaction', () => {
     expect(allDuring.map((e) => (e as { id: unknown }).id)).toEqual([entryId('root')]);
   });
 
-  it('childrenOf sees a parentId edit in the write set', () => {
+  it('entry.children() sees a parentId edit in the write set', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a' }]);
     state.transaction(() => {
       state.entries.update('c', { parentId: 'b' });

@@ -678,3 +678,66 @@ also protects the Rollup: that pass reads effective rows the store does not hold
 under the committed revision would have poisoned the cache for every later read of that id.
 
 **To reverse:** hand the memo back unconditionally, and accept a stale read inside a transaction.
+
+---
+
+## J30 — the `childrenOf` gate grep is not a zero, and three names stay
+
+**Build 1, the Gate. Done in the code.**
+
+The build file asks for `grep -rn '\bchildrenOf\b' src/ harness/ | wc -l` → 0, and records that two
+internal names are not the deleted public door. Read at the end of Build 1, five kinds of hit remain.
+Three stay, and two were wrong prose and are fixed.
+
+**What stays, and why each name is right at its own call site:**
+
+- `data/entry-tree.ts:104,109` — a **callback parameter** on `descendantsOf(id, childrenOf)`. Read
+  the call aloud: "descendants of this id, through this children-of lookup." It names the question
+  the caller answers, and no public door shares the name any more.
+- `layout/rows/sort.ts:37-71` — a **local `Map` of Rows**, not of Entries. `layout/` cannot reach the
+  store, and a Row is a different concept from an Entry (`CONTEXT.md`).
+- `layout/entry-double.ts` — `DoubleTree.childrenOf`, the private wiring one test double asks its
+  set. Same reasoning as the parameter above.
+- `data/live-entry.ts:6` and `harness/docs/plugin-authoring.html:166,700` — prose that names the
+  **deleted** door on purpose, to say what replaced it. Deleting the word there deletes the
+  explanation.
+- `#childrenOfWriteSet` stays, as the build file requires: ADR 0020 depends on its cost shape.
+
+**What was fixed:** `data/entry-store.ts:317,345,390` named `childrenOf` as a live store door. The
+store's reader is `storedChildrenOf` (`J17`), so the prose now names that, and the read-your-own-writes
+sentence names `get`/`has` and the live row instead. Four test titles named the deleted door while
+their bodies already called `entry.children()` or `storedChildrenOf` — the titles now say what the
+test asserts.
+
+**The ruling.** The gate stays a **read**, not a number. A grep on a bare word cannot tell a deleted
+public door from a well-named local, and driving it to zero would cost three good names.
+
+**To reverse:** rename the three, and the grep reads zero.
+
+---
+
+## J31 — a live row answers `JSON.stringify`, and the harness export names the copy door
+
+**Build 1, the `harness/main.ts` review. Done in the code. This closes an API gap.**
+
+`harness/main.ts:306` exported the Dataset with `JSON.stringify(dataset.entries.all, null, 2)`.
+After the live row landed, every value on a row is a getter, and `JSON.stringify` reads own
+enumerable properties only. So the export wrote `[{"id":"entry-1"}, …]` — every name, date and
+Segment silently gone, with no error and no type complaint. A consumer hits this the first time they
+persist a Dataset.
+
+**The call, in two halves.**
+
+- `harness/main.ts` names the copy door the library publishes: `entries.all.map((entry) =>
+  entry.toInput())`. That is the shape `new Dataset()` takes, which is what the comment beside it
+  already promised. This is the harness calling the library, not compensating for it.
+- `LiveEntry.toJSON()` delegates to `toInput()`, so the platform hook cannot lose data for the
+  consumer who does not know to call it. `EntryDouble` answers the same way, so a test double and a
+  live row serialize alike.
+
+**`toJSON` is deliberately not on the `Entry` interface.** ADR 0017 rule 5 keeps one read door and
+one copy door, and a third member that hands back stored values would spend that. `toJSON` is not a
+name a caller writes — it is the platform calling `toInput()`. Keeping it off the type leaves the
+published surface exactly as the ADR drew it.
+
+**To reverse:** delete both methods. The harness line stays correct either way.

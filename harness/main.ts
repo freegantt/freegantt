@@ -299,11 +299,16 @@ lockCheckbox.addEventListener('change', () => {
   else locks.unlock(id);
 });
 
-// A read-only dump — every stored Entry, as `dataset.entries.all` reports it. The library holds no
+// A read-only dump — every stored Entry, through the row's own copy door. The library holds no
 // save format to round-trip through (ADR 0016); an application that persists a Dataset reads this
 // door and its own plugins' stores, and restores by handing the same shape back to `new Dataset()`.
+// `toInput()` is that shape, and it is exactly what `entries.add()` takes (ADR 0017).
 exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.entries.all, null, 2);
+  documentJson.value = JSON.stringify(
+    dataset.entries.all.map((entry) => entry.toInput()),
+    null,
+    2,
+  );
 });
 
 // ---- Direct manipulation extras (S3): mobilization veto, async hold, resize lock ----

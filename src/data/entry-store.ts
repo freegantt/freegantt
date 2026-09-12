@@ -314,7 +314,7 @@ export class EntryStore implements EntryStoreContract {
 
   /** Does this Entry derive — has it at least one child, as this transaction leaves it (ADR 0013)?
    *  The consumer door asks this on every write, so it answers without building one overlay Entry per
-   *  staged edit, which is what `childrenOf` above does: it reads the committed index first, and
+   *  staged edit, which is what `storedChildrenOf` above does: it reads the committed index first, and
    *  reaches the staged edits only when `stagedParents` says some edit named this id as a parent. */
   #hasChildren(parent: EntryId): boolean {
     const writeSet = this.#writeSet;
@@ -342,7 +342,7 @@ export class EntryStore implements EntryStoreContract {
   /** Call: `dataset.entries.entryIdOfSegment(segmentId)`. The Entry that draws `id`, or `undefined`
    *  when no Entry does (ADR 0010, #212, finding 6) — one map lookup against `#entryIdBySegmentId`,
    *  never a walk of `all`. Read through the write set inside an open transaction, the same
-   *  read-your-own-writes posture `get`/`has`/`childrenOf` already take. */
+   *  read-your-own-writes posture `get`/`has` and every live row already take. */
   entryIdOfSegment(id: SegmentId | string): EntryId | undefined {
     const key = segmentId(id);
     if (!this.#writeSet) return this.#entryIdBySegmentId.get(key);
@@ -387,7 +387,7 @@ export class EntryStore implements EntryStoreContract {
 
   /** `entryIdOfSegment` inside an open transaction: one lookup at the write set's own
    *  `segmentOwner` map (finding S1, #212), the pair to `#childrenOfWriteSet`'s overlay for
-   *  `childrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the
+   *  `storedChildrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the
    *  write set. `stageAdd`/`stageUpdate`/`stageRemove` keep the map current as each stages, so a
    *  Segment id this transaction touched already carries the right answer, `null` included for one
    *  it dropped. An id this transaction never touched is absent from the map, so the committed

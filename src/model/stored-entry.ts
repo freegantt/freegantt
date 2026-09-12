@@ -29,7 +29,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
   id: EntryId;
   /** Hierarchy; roots have none. */
   parentId?: EntryId;
-  /** No stored classification (ADR 0013). An Entry derives when it has children — `childrenOf`
+  /** No stored classification (ADR 0013). An Entry derives when it has children — `entry.hasChildren`
    *  answers that; there is nothing to read off the Entry itself. */
   name: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a

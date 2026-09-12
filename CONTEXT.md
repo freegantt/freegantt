@@ -331,6 +331,16 @@ _Avoid_: Date input, raw date, loose instant
 An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
+**Duration measure**:
+How core measures a duration: `'span'` counts from `start` to `end`, gaps included, and `'segments'`
+sums the Segments and counts no gap. It is `DatasetOptions.measureDuration`, and `'span'` is the
+default (ADR 0017). It sits on the Dataset, never on a Field and never on a Gantt: a per-Field
+setting would let two Fields on one Dataset disagree about what a duration is, and a view may not
+change what a value **is**. **The word "duration" now names three things, and only this one is a
+policy** — the core `duration` Field, `entry.duration()` on a live row, and this measurement policy.
+_Avoid_: `duration` as the option key (`new Dataset({ entries, duration: 'segments' })` announces a
+duration where a consumer writes data), duration mode, gap policy
+
 **TimeUnit**:
 The named grain a Duration or a tick step counts in: `'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'`. Spelled out in full — the prior single-letter codes (`'m'` minute vs `'M'` month) collapsed two units onto case alone, a typo trap the review behind issue #84 flagged.
 _Avoid_: `'m'`/`'M'`/`'d'`/`'w'`/`'y'`/`'ms'` (the retired short codes)
