@@ -2864,10 +2864,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   /** The page's own words for a row, which is the whole of how a variant is pinned now (ADR 0018).
    *  `bufferKind()` and `riskKind()` keep no list of the ids they own: each declares a Field and
    *  matches on it, so a test says which rows carry which mark and the rules read it back. */
-  const markedDataset = (
-    marks: Readonly<Record<string, readonly string[]>>,
-    entryCount = 2,
-  ): Dataset => {
+  const markedDataset = (marks: Readonly<Record<string, readonly string[]>>, entryCount = 2): Dataset => {
     const marksOf = (id: string): Record<string, true> =>
       Object.fromEntries(
         Object.entries(marks)
