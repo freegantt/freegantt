@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from './ids.js';
-import { spansTime } from './entry.js';
-import type { StoredEntry } from './entry.js';
+import { spansTime } from './stored-entry.js';
+import type { StoredEntry } from './stored-entry.js';
 import type { Instant } from './time.js';
 
 const instant = (value: number): Instant => value as Instant;

@@ -103,7 +103,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'duration',
-    compute: (entry, ctx) => ctx.durationOf(entry),
+    compute: (_entry, ctx) => ctx.duration(),
     compare: compareDuration,
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end', width: 100 },

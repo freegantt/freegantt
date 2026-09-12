@@ -2,43 +2,12 @@
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
 import type { Duration } from './time.js';
-import type { StoredEntry, EntryEdits } from './entry.js';
+import type { StoredEntry, EntryEdits } from './stored-entry.js';
+import type { Entry } from './entry.js';
+import type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValue } from './field-key.js';
+
+export type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValue };
 import type { ElementDescription } from './render.js';
-
-/** The shipped subset — keys of `Entry` except `id` and `props`. The comparator exhaustiveness check
- *  stays over this set (ADR 0005 §28). `props` omits alongside this, or neither does (ADR 0011):
- *  change one and not the other, and `read(id, 'props')` types as the whole bag while the registry
- *  refuses the key at runtime. */
-export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
-
-/** A Field's name, and the changeset's `field`. Open by construction (D-S2-26, ADR 0005). */
-export type FieldKey = CoreFieldKey | (string & {});
-
-/** What each shipped Field reads as: the `Entry` keys (minus `props`, ADR 0011's one reserved key),
- *  plus `duration` — the one core Field that computes its value and owns no `Entry` key
- *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
- *  `entries.get(id)?.props`. */
-export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
-  /** `end - start`, computed on read (`CORE_FIELDS`) — the one core Field with no `Entry` key. */
-  duration: Duration;
-}
-
-/** A core Field's value, and `unknown` for every other key. This is all a `FieldContext` can
- *  promise: it flows into `layout/` and `view/`, and threading a consumer's field map through those
- *  layers is the option ADR 0005 rejected. */
-export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues
-  ? CoreFieldValues[K]
-  : unknown;
-
-/** A Field's value on a Dataset that declared `TProps` — what `entries.fieldValue` answers. A core
- *  key reads as its shipped type, a declared key as the type the consumer wrote, and any other key
- *  as `unknown`. One generic types both `entry.props` and this (ADR 0011); `TProps` stops at the
- *  Dataset (ADR 0005). */
-export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldValues
-  ? CoreFieldValues[K]
-  : K extends keyof TProps
-    ? TProps[K]
-    : unknown;
 
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 export type FieldTypeName = string & {};
@@ -175,7 +144,6 @@ export type Field<TValue = unknown> =
        *  `Field`. `FieldDistributor` is the type a consumer writes one against. */
       distribute?(
         value: TValue | undefined,
-        children: readonly StoredEntry[],
         parent: StoredEntry,
         ctx: RollUpContext,
       ): EntryEdits | undefined;
@@ -198,7 +166,7 @@ export type Field<TValue = unknown> =
        *  at all) reads and writes the raw string, and every other named `type` refuses to open the
        *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
        *  routes it through the `dateInput` seam instead (D-S5-20). */
-      parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+      parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
       /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
        *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
        *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
@@ -222,10 +190,12 @@ export type Field<TValue = unknown> =
       rollUp?: never;
       editable?: never;
       /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
-       *  read a value through `entry.props`, and read a Field — a core key, `duration`, or another
-       *  Field's own `compute` arm — through `ctx.read`. `entry.props` alone cannot reach those.
+       *  read a stored value off `entry`, and read a Field — a core key, `duration`, or another
+       *  Field's own `compute` arm — through `ctx.read(key)`. A computed value may also depend on
+       *  the tree: `ctx.children()` (#214). `entry` is a `StoredEntry` because the row may be
+       *  hypothetical — a post-edit row, or a Rollup's effective child.
        *  Named `compute`, not `get`: `get` already names three unrelated jobs in this codebase. */
-      compute(entry: StoredEntry, ctx: FieldContext): TValue | undefined;
+      compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
       compare?(a: TValue | undefined, b: TValue | undefined): number;
       formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
       column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
@@ -255,14 +225,13 @@ export interface FieldType<TValue = unknown> {
    *  variance reason `Field.distribute` states. */
   distribute?(
     value: TValue | undefined,
-    children: readonly StoredEntry[],
     parent: StoredEntry,
     ctx: RollUpContext,
   ): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: StoredEntry): string;
-  parseValue?(text: string, ctx: FieldContext): TValue | undefined;
+  parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
   column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
 }
@@ -272,38 +241,51 @@ export type FieldLookup = {
   get(key: FieldKey): Field | undefined;
 };
 
-/** Compute and store access. No locale — a headless Dataset does not format.
+/** Ambient. One per Dataset, reused by every read — the zone, and nothing that belongs to one row
+ *  (ADR 0017, J5). `FormatContext` and `ComputeContext` both extend it, and `parseValue` receives it.
  *
- *  `read` types core keys and answers `unknown` for the rest. It does not take the consumer's field
- *  map: a `FieldContext` reaches `layout/` and `view/`, and making those layers generic over one
- *  consumer's fields is what ADR 0005 rejected. Read a declared key through
- *  `dataset.entries.fieldValue`, which the Dataset does type. */
+ *  It does not take the consumer's field map: a `FieldContext` reaches `layout/` and `view/`, and
+ *  making those layers generic over one consumer's fields is what ADR 0005 rejected. A row's own
+ *  value reads off the row — `entry.read(key)`. */
 export interface FieldContext {
   readonly timeZone: string;
-  read<K extends FieldKey>(entry: StoredEntry, key: K): CoreFieldValue<K> | undefined;
-  /** `undefined` iff `entry` does not span (ADR 0012) — an Entry with no `start`/`end` has no
-   *  duration to state. */
-  durationOf(entry: StoredEntry): Duration | undefined;
 }
 
-/** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13). */
+/** What a `compute` Field runs inside. Built per pass, bound to the row being computed, so **no
+ *  member takes an entry argument** (ADR 0017, *What a hypothetical row reads with*). The row the
+ *  pass holds may be one the store does not hold — a post-edit row, or a Rollup's effective child —
+ *  which is why the pass answers these and `entry.read(key)` cannot. */
+export interface ComputeContext extends FieldContext {
+  /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. */
+  read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
+  /** This row's duration, through `time/` and the Dataset's `measureDuration`. */
+  duration(): Duration | undefined;
+  /** The children of the row this pass is computing. It walks, so it carries parentheses. */
+  children(): readonly StoredEntry[];
+}
+
+/** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13), and reused
+ *  for every cell — which is why it extends the ambient half and never the per-pass one. */
 export interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }
 
-/** FieldContext plus the Field currently rolling up. Shipped Aggregators (`sum`, `min`) read
- *  `ctx.field`; a consumer Aggregator reads any declared key through the same `ctx.read`.
+/** ComputeContext plus the Field currently rolling up. Shipped Aggregators (`sum`, `min`) read
+ *  `ctx.field`; a consumer Aggregator names any declared key.
  *
- *  `values`/`numericValues` cover the common "one field off my children" case (issue #124) — read
- *  `ctx.field` off each child in order. A multi-field or non-numeric Aggregator still reads each
- *  field it needs through `ctx.read` directly. */
-export interface RollUpContext extends FieldContext {
+ *  `values`/`numericValues` cover the common "one field off my children" case (issue #124) — they
+ *  read the pass's own child list, never `parent.children()`, because a Rollup child carries the
+ *  value this same bottom-up pass just gave it and the store does not (ADR 0017). */
+export interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
-  /** `ctx.field` read off each child, in order. A child with no value is a hole (`undefined`). */
-  values(children: readonly StoredEntry[]): readonly unknown[];
+  /** `key` read off each child, in order, defaulting to `ctx.field`. A child with no value is a
+   *  hole (`undefined`). */
+  values(key?: FieldKey): readonly unknown[];
   /** Like `values`, but keeps only finite numbers — holes and non-numeric values drop, same rule
    *  shipped `sum`/`min`/`max` already follow. */
-  numericValues(children: readonly StoredEntry[]): readonly number[];
+  numericValues(key?: FieldKey): readonly number[];
+  /** Each child's duration, in the same order — what `weightedMeanByDuration` weighs with. */
+  durations(): readonly (Duration | undefined)[];
 }
 
 /** What a write to a rolling-up parent's cell **means** (ADR 0013, amendment 2026-09-11). Read the
@@ -324,14 +306,12 @@ export interface RollUpContext extends FieldContext {
  *  absent `distribute` gives. A policy with nothing to write is a policy that says no. */
 export type FieldDistributor<TValue = unknown> = (
   value: TValue | undefined,
-  children: readonly StoredEntry[],
   parent: StoredEntry,
   ctx: RollUpContext,
 ) => EntryEdits | undefined;
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
 export type Aggregator<TValue = unknown> = (
-  children: readonly StoredEntry[],
   parent: StoredEntry,
   ctx: RollUpContext,
 ) => TValue | undefined;

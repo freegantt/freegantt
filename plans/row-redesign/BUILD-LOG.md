@@ -406,3 +406,63 @@ entries.add({ ...entry.toInput(), id: 'copy-1' });
 It is not a second read door. Nothing in a renderer, a rule or a capability calls it.
 
 **To reverse:** delete the member, and copy a row from `entries.all`.
+
+---
+
+## J15 — `StoredEntry` moved to its own file, so the live `Entry` has a home with no import ring
+
+**Build 1, Unit B. Done in the code.**
+
+The live `Entry` names `FieldKey` and `FieldValue`, and `field.ts` names `StoredEntry`. Declaring
+`Entry` in `model/entry.ts` beside `StoredEntry` made `entry.ts ↔ field.ts` a ring, and
+`.dependency-cruiser.cjs`'s `no-circular` rule reads type-only imports (`tsPreCompilationDeps`).
+
+**The call.** Three files instead of two, in one direction:
+
+- `model/stored-entry.ts` — every stored and edit-shaped type, exactly what `entry.ts` held before.
+- `model/field-key.ts` — `CoreFieldKey`, `FieldKey`, `CoreFieldValues`, `CoreFieldValue`,
+  `FieldValue`. They derive from `StoredEntry`, and both `entry.ts` and `field.ts` name them.
+- `model/entry.ts` — the live `Entry` alone.
+
+`field.ts` re-exports the five key types, so no caller outside `model/` changed an import.
+
+**To reverse:** fold the three back into one file, and type `parseValue`'s third argument as
+`unknown`.
+
+---
+
+## J16 — `data/` reads Fields through a `FieldAccess`, and `FieldContext` stays `{ timeZone }`
+
+**Build 1, Unit D. Done in the code.**
+
+`J5` split the contexts by lifetime and left `FieldContext` as `{ timeZone }`. A Field read still
+needs two things that must never reach a consumer: the registry to look a key up in, and the tree to
+walk for `ctx.children()`. Threading both as extra parameters would have touched every `readField`
+caller twice.
+
+**The call.** `data/fields/field-access.ts` publishes `FieldAccess` — `{ fields, timeZone,
+measureDuration, storedChildrenOf, memo }` — and `data/` passes one wherever it used to pass a
+`FieldContext`. `ambientFieldContext(access)` is what a consumer receives. `createFieldContext` is
+retired; `createFieldAccess` replaces it.
+
+**`storedChildrenOf` is what makes one `readField` serve two callers.** The store answers with the
+children it holds now; a Rollup pass answers with its own effective children, which carry the values
+that same bottom-up pass produced (ADR 0017). `readingChildrenFrom(access, …)` binds the second.
+
+**To reverse:** put `fields` and `children` back on `FieldContext` and delete `FieldAccess`.
+
+---
+
+## J17 — the store keeps `storedEntry` and `storedChildrenOf` beside the live doors
+
+**Build 1, Units B and C. Done in the code.**
+
+`entries.get(id)` now answers an `Entry`, and `entries.childrenOf` is deleted. The commit path, the
+Rollup and the store's own guards all need the stored row, and `entry.toInput()` is not that.
+
+**The call.** `EntryStore` keeps two internal readers under names that say which half they answer —
+`storedEntry(id)` and `storedChildrenOf(id)` — and neither is on `EntryStoreView`, so no consumer
+reaches one. `allStored` is the same for the committed array. `#hasChildren` stays private, as the
+build file requires; the live row reaches it through the `EntrySource` seam.
+
+**To reverse:** publish `childrenOf` again and drop the `Entry` factory.
