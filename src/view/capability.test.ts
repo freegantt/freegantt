@@ -2,35 +2,38 @@ import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
 import type { CapabilityInputs, Interactions, KindDefaults } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
-import type { Entry, Field, FieldKey, Instant } from '../model/index.js';
+import type { Entry, Field, FieldKey } from '../model/index.js';
 import type { EntryLook } from '../layout/index.js';
-import { entryId, segmentId } from '../model/index.js';
+import type { EntryDoubleValues } from '../layout/entry-double.js';
+import { entryDouble, entryDoubles } from '../layout/entry-double.js';
+import { entryId } from '../model/index.js';
 
-function entry(overrides: Partial<Entry> = {}): Entry {
-  const start = 0 as Instant;
-  const end = 1 as Instant;
-  return {
-    id: entryId('e1'),
-    name: 'e1',
-    start,
-    end,
-    segments: [{ id: segmentId('e1-1'), start, end }],
-    props: {},
-    ...overrides,
-  };
+function entry(overrides: Partial<EntryDoubleValues> = {}): Entry {
+  return entryDouble({ id: 'e1', start: 0, end: 1, ...overrides });
 }
 
-// ADR 0013: neither structural fact below is a property of `Entry` any more — `GanttShell` normally
-// derives `hasChildren` from `dataset.entries.childrenOf` and `lookOf` from `resolveLook`
-// (`layout/items/produce-items.ts`). This file has no Dataset to ask, so it marks the one fact each
-// test cares about on the Entry's own `props` and reads the mark straight back.
-const isMarkedParent = (entry: Entry): boolean => entry.read('isParent') === true;
-/** ADR 0013: what a parent bar's own drag would write. A test that cares hands over its own subtree;
- *  every other test here marks a parent with no children to find, which is what an empty list says. */
-const markedChildren = (entry: Entry): readonly Entry[] =>
-  (entry.read('children') as readonly Entry[] | undefined) ?? [];
-const markedLook = (entry: Entry): EntryLook =>
-  (entry.read('look') as EntryLook | undefined) ?? 'leaf';
+/** A parent and the rows below it, wired — the parent is first. `hasChildren` and `descendants()`
+ *  answer off the row now (ADR 0017), so a test states the tree it means instead of marking a prop
+ *  and handing capability resolution a second list beside the row. */
+function family(...children: readonly Partial<EntryDoubleValues>[]): readonly Entry[] {
+  return entryDoubles([
+    { id: 'e1', start: 0, end: 1 },
+    ...children.map((child, index) => ({ id: `c${index + 1}`, ...child, parentId: 'e1' })),
+  ]);
+}
+
+/** A child that holds both dates. A child written without it holds none, and nothing below the
+ *  parent is then movable (ADR 0012). */
+const DATED = { start: 0, end: 1 } as const;
+
+/** A parent with one ordinary dated child — what most tests here mean by "a roll-up parent". */
+function rollUpParent(): Entry {
+  return family(DATED)[0]!;
+}
+
+/** ADR 0013: the look `layout/` would resolve. Build 2 deletes this input; until then a test marks
+ *  the one look it cares about and reads the mark straight back. */
+const markedLook = (entry: Entry): EntryLook => (entry.read('look') as EntryLook | undefined) ?? 'leaf';
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
  *  registers — `start`/`end` roll up and are editable, `duration` computes, `kind` is neither. One
@@ -49,8 +52,6 @@ function capabilities(
   ...fieldOverrides: readonly Partial<Field>[]
 ): ReturnType<typeof resolveCapabilities> {
   return resolveCapabilities({
-    hasChildren: isMarkedParent,
-    descendantsOf: markedChildren,
     lookOf: markedLook,
     fieldFor: fieldsWith(...fieldOverrides),
     ...overrides,
@@ -70,8 +71,7 @@ describe('resolveCapabilities — gestures', () => {
 
   it('defaults a roll-up parent to move true, resize false, select true (ADR 0013)', () => {
     const caps = capabilities();
-    const child = entry({ id: entryId('c1'), name: 'c1' });
-    const parent = entry({ props: { isParent: true, children: [child] } });
+    const parent = rollUpParent();
     // The move translates the child below it. The resize stays closed: one edge of a derived
     // envelope names no descendant to resize.
     expect(caps.can('move', parent)).toBe(true);
@@ -81,8 +81,7 @@ describe('resolveCapabilities — gestures', () => {
 
   it('refuses a parent move when nothing below it holds a date — there is nothing to translate', () => {
     const caps = capabilities();
-    const dateless: Entry = { id: entryId('c1'), name: 'c1', segments: [], props: {} };
-    const parent = entry({ props: { isParent: true, children: [dateless] } });
+    const parent = family({ name: 'c1' })[0]!;
     expect(caps.can('move', parent)).toBe(false);
     expect(caps.entriesMovedBy(parent)).toEqual([]);
   });
@@ -102,8 +101,8 @@ describe('resolveCapabilities — gestures', () => {
   });
 
   it('a predicate rule is evaluated per entry (U4)', () => {
-    const caps = capabilities({ interactions: { resize: (e) => !isMarkedParent(e) } });
-    expect(caps.can('resize', entry({ props: { isParent: true } }))).toBe(false);
+    const caps = capabilities({ interactions: { resize: (e) => !e.hasChildren } });
+    expect(caps.can('resize', rollUpParent())).toBe(false);
     expect(caps.can('resize', entry())).toBe(true);
   });
 
@@ -181,19 +180,19 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
   // value came from the rows below it while nothing rolled it up.
   it("treats rollUp: 'none' as not rolling up, the same way the Rollup pass does", () => {
     const caps = capabilities({}, { key: 'cost', rollUp: 'none', editable: true });
-    expect(caps.canWrite(entry({ props: { isParent: true } }), 'cost')).toEqual({ ok: true });
+    expect(caps.canWrite(rollUpParent(), 'cost')).toEqual({ ok: true });
   });
 
   it("refuses a roll-up parent's rolling-up Field, and says why", () => {
     const caps = capabilities();
-    const parent = entry({ props: { isParent: true } });
+    const parent = rollUpParent();
     expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
     expect(caps.canWrite(parent, 'end')).toEqual({ ok: false, reason: 'derived-value' });
   });
 
   it("leaves a roll-up parent's own non-rolling Fields writable (D-S5-19)", () => {
     const caps = capabilities();
-    expect(caps.canWrite(entry({ props: { isParent: true } }), 'name').ok).toBe(true);
+    expect(caps.canWrite(rollUpParent(), 'name').ok).toBe(true);
   });
 
   it('a refusal with no reason is one the UI already shows, so it carries no words', () => {
@@ -238,10 +237,10 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
 
   it('interactions.edit opens a roll-up parent cell it would otherwise refuse', () => {
     const caps = capabilities({ interactions: { edit: true } });
-    const parent = entry({ props: { isParent: true } });
+    const parent = family({})[0]!;
     expect(caps.canWrite(parent, 'start').ok).toBe(true);
     // ADR 0013: the parent's own cell is open, and its move still does not write it. What a parent
-    // bar's move writes is the subtree below it, which this marked parent has none of.
+    // bar's move writes is the subtree below it, and nothing below this one holds a date.
     expect(caps.can('move', parent)).toBe(false);
   });
 });
@@ -256,7 +255,7 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
     expect(caps.canWrite(entry(), 'name').ok).toBe(false);
     expect(caps.canWrite(entry(), 'start').ok).toBe(true);
     expect(caps.canWrite(entry(), 'end').ok).toBe(false);
-    expect(caps.canWrite(entry({ props: { isParent: true } }), 'start')).toEqual({
+    expect(caps.canWrite(rollUpParent(), 'start')).toEqual({
       ok: false,
       reason: 'derived-value',
     });
@@ -318,7 +317,7 @@ describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
 
   it('a registered default still loses to the library rule for an unrelated look', () => {
     const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { resize: false }) });
-    expect(caps.can('resize', entry({ props: { isParent: true } }))).toBe(false);
+    expect(caps.can('resize', rollUpParent())).toBe(false);
   });
 
   it('an unregistered look falls straight through to the library rule', () => {
@@ -348,59 +347,45 @@ describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
 });
 
 describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", () => {
-  const dated = (id: string): Entry => entry({ id: entryId(id), name: id });
-  /** One date and no Segment (ADR 0012): the row shows in the grid and draws no bar. */
-  const startOnly = (id: string): Entry => ({
-    id: entryId(id),
-    name: id,
-    start: 0 as Instant,
-    segments: [],
-    props: {},
-  });
-
   it('answers an ordinary bar with itself', () => {
     const caps = capabilities();
-    const leaf = dated('e1');
+    const leaf = entry();
     expect(caps.entriesMovedBy(leaf)).toEqual([leaf]);
   });
 
   it('answers a parent with the dated descendants below it, and never with the parent', () => {
-    const child = dated('c1');
-    const grandchild = dated('g1');
-    const middle = entry({
-      id: entryId('m1'),
-      name: 'm1',
-      props: { isParent: true, children: [grandchild] },
-    });
-    const parent = entry({ props: { isParent: true, children: [child, middle] } });
-    const caps = capabilities({
-      descendantsOf: (e) => (e.id === parent.id ? [child, middle, grandchild] : markedChildren(e)),
-    });
-    // `middle` derives its own dates from `grandchild`, so the walk passes over it and writes the
-    // rows that hold their own dates.
+    // `m1` derives its own dates from `g1`, so the walk passes over it and writes the rows that hold
+    // their own dates. The tree is what says so — nothing rides beside the row (ADR 0017).
+    const [parent, child, middle, grandchild] = entryDoubles([
+      { id: 'e1', start: 0, end: 1 },
+      { id: 'c1', name: 'c1', parentId: 'e1', start: 0, end: 1 },
+      { id: 'm1', name: 'm1', parentId: 'e1' },
+      { id: 'g1', name: 'g1', parentId: 'm1', start: 0, end: 1 },
+    ]) as readonly [Entry, Entry, Entry, Entry];
+    expect(middle.hasChildren).toBe(true);
+    const caps = capabilities();
     expect(caps.entriesMovedBy(parent)).toEqual([child, grandchild]);
   });
 
   it("moves a child that holds only a start — the author's own case", () => {
-    const child = startOnly('c1');
+    // One date and no Segment (ADR 0012): the row shows in the grid and draws no bar.
+    const [parent, child] = family({ name: 'c1', start: 0 }) as readonly [Entry, Entry];
     const caps = capabilities();
-    const parent = entry({ props: { isParent: true, children: [child] } });
     expect(caps.entriesMovedBy(parent)).toEqual([child]);
     expect(caps.can('move', parent)).toBe(true);
   });
 
   it('refuses the whole gesture when one descendant may not be written', () => {
     const caps = capabilities({}, lockedEnd);
-    const parent = entry({ props: { isParent: true, children: [dated('c1')] } });
+    const parent = family({ name: 'c1', ...DATED })[0]!;
     // A parent bar that moved part of its own subtree would land somewhere the drag never showed.
     expect(caps.entriesMovedBy(parent)).toEqual([]);
     expect(caps.can('move', parent)).toBe(false);
   });
 
   it('still moves a start-only child whose end is locked — it has no end to write', () => {
-    const child = startOnly('c1');
     const caps = capabilities({}, lockedEnd);
-    const parent = entry({ props: { isParent: true, children: [child] } });
+    const [parent, child] = family({ name: 'c1', start: 0 }) as readonly [Entry, Entry];
     expect(caps.entriesMovedBy(parent)).toEqual([child]);
   });
 });
