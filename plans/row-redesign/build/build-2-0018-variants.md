@@ -37,7 +37,9 @@
 - [ ] `LookClaim` becomes `VariantRule` (11 refs, 5 files).
 - [ ] `resolveLook` becomes `resolveVariant` (10 refs, 5 files) and **loses its structural fallback** (`src/layout/items/produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
 - [ ] `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`src/view/capability.ts:113-115`). Build 1 removed the other three.
-- [ ] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Registration order resolves it and the diagnostic reports it.
+- [ ] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Setup order resolves it and the diagnostic reports it.
+- [ ] **Do not invent an ordering knob. `requires` already is one** (D-S5-31, ruled 2026-09-01). The host topologically sorts the installed set before any `setup` runs, so `[a, b]` and `[b, a]` install identically. Two plugins with no edge between them are siblings, and a sibling must not depend on load order — that collision is what the diagnostic names.
+- [ ] **Keep `claimedLookFor`'s first-yes behaviour** (`layout/items/produce-items.ts:188-198`). `Q5` is open on one word only: whether the first or the newest registration wins. **Do not change it alone** — `registerClaim` and `register` both say newest today, so the three seams disagree, and settling that is the author's call.
 
 ---
 

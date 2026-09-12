@@ -28,7 +28,7 @@
 - [ ] Register core's own source as `(entry) => entry.parentId`, like any other, with no special claim on the seam (D-S5-23).
 - [ ] A plugin composes, the same way an `EditExtender` composes: it receives the current occupant and may call it.
 - [ ] Put the door on the `data` half of `definePlugin`, beside `setExtender`. **This is an expert door. An app author never meets it.**
-- [ ] The draft name is `setHierarchySource`. **The name is open, and the `Q` entry exists — it is `Q3`.** Use the draft word until the author answers. Do not open a second entry.
+- [ ] **The seam is `setHierarchySource`** — ruled 2026-09-11 (`Q3`). Write it. The call site is `ctx.setHierarchySource((entry) => …)`, beside `ctx.setExtender`.
 
 ---
 

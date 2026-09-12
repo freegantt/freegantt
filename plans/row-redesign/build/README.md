@@ -58,20 +58,22 @@ The order is fixed. Each ADR states it in its own "Lands after" line.
 
 ## What is still open
 
-**Three questions wait on the author. Nothing blocks a build.** Do not answer one alone. **Do not file one that already exists** — add to it. Every one is in [`../BUILD-LOG.md`](../BUILD-LOG.md) under the id below.
+**One question waits on the author, and it blocks nothing.** Do not answer it alone. **Do not file one that already exists** — add to it in [`../BUILD-LOG.md`](../BUILD-LOG.md).
 
 | Id | Question | Build |
 |---|---|---|
-| `Q2` | Do the renderer contexts become generic over `TProps`? **Deferred past this redesign.** Leave the three `fieldValue as Instant` casts in place; they are the evidence | 1 |
-| `Q5` | Which rule wins when two plugins both answer yes? Registration order decides it today | 2 |
-| `Q3` | What is the hierarchy seam called? `setHierarchySource` is the draft word | 4 |
+| `Q5` | When two rules both answer yes, does the **first** registration win or the **newest**? `requires` already sets the order — only this one word is open | 2 |
 
-**Four things were ruled on 2026-09-11. Do not re-open one.**
+**`Q2` is answered and deferred.** The renderer contexts do not become generic over `TProps` in this redesign. It settles on [#284](https://github.com/Pawel-IT/FreeGantt/issues/284) after Build 4. Build 1 leaves `harness/planner.ts:104,114,116` exactly as they are — that is the evidence, and tidying it hides the gap.
+
+**Six things were ruled on 2026-09-11. Do not re-open one.**
 
 - All three Field-read doors retire — `entries.fieldValue`, `FieldContext.read` and `FieldContext.durationOf` — into `entry.read(key)` and `entry.duration()` (`Q1`).
 - **The read binds to the pass.** A seam that holds a row the store does not hold — the Rollup, the ChangeSet, every `compute` Field — carries `StoredEntry` values and reads the tree through `ctx.children()`. `RollUpContext` adds `values(key?)`, `numericValues(key?)` and `durations()` (`Q7`). This closes [#214](https://github.com/Pawel-IT/FreeGantt/issues/214).
 - A segmented Entry's duration is an option. The key is `duration`, the values are `'span' | 'segments'`, it sits on the `Dataset`, and the default is `'span'`. **Build 1 writes it** (`Q6`).
 - A `data` plugin handed to a `Gantt` raises `PluginSetupError`, and the message says where to install it. No new error type ships (`Q4`).
+- The hierarchy seam is **`setHierarchySource`**, beside `setExtender` on the `data` half (`Q3`).
+- **Setup order comes from `requires`, and no build adds an ordering knob.** D-S5-31 ruled this on 2026-09-01: the host topologically sorts the installed set before any `setup` runs. Siblings must not depend on load order (`Q5`, half).
 
 ---
 

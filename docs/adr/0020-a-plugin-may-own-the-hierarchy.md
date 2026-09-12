@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not a decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: one seam, not two — a plugin states the parent of an Entry, and the Rollup follows (2026-09-11, from the author's "from the data side it should be able to change how our rollup and parents/children work"). The source reads a `StoredEntry`, never the live `Entry`. Grouping stays a row source and does not come here.
-open: the seam's name (`setHierarchySource` is the draft's word). The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
+open: nothing. The seam is **`setHierarchySource`** (2026-09-11, author's ruling — `Q3`), and it sits beside `setExtender` on the `data` half. The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
 ---
 
 # A plugin may own the hierarchy

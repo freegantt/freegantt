@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not decision. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The working material is in `plans/row-redesign/`.
 decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
-open: which rule wins when two plugins both answer yes. Registration order decides it today. Nobody has ruled on what sets that order across plugins.
+open: which **end** of the setup order wins when two rules both answer yes. **What sets that order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
 ---
 
 # A variant is a rule, not an id list
@@ -139,7 +139,11 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 **Deleting `EntryLook` touches 47 references in 12 files under `src/`**, most of them a type argument on a registration table. The tables retire anyway, so the build deletes the type and its uses in one change.
 
-**Double-claim arbitration stays, and shrinks.** Two rules may both answer yes, so `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive. Registration order resolves it and the diagnostic reports it. See `open:`.
+**Double-claim arbitration stays, and shrinks.** Two rules may both answer yes, so `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim` survive. Setup order resolves it and the diagnostic reports it.
+
+**Setup order comes from `requires`, and that was decided on 2026-09-01.** D-S5-31 gives a plugin `requires: readonly PluginId[]`, and the host topologically sorts the installed set before any `setup` runs (`extensions/install-dataset-plugins.ts`). `[a, b]` and `[b, a]` install identically, a missing prerequisite throws `MissingPluginError`, and a ring throws `PluginRequirementCycleError`. **Two plugins with an edge between them are already ordered. Two with no edge are siblings, and a sibling must not depend on load order** (`plans/01` §12). A sibling collision is an authoring error, and the diagnostic exists to name it. [0019](0019-one-plugin-one-install-site.md) gives one plugin one `requires`, so one resolved order serves both halves.
+
+**One word is open: which end of that order wins.** HEAD contradicts itself. `registerClaim` and `register` both say the newest registration wins (`layout/items/produce-items.ts:134-144`). `claimedLookFor` says *"the first yes is the whole answer"* across two different looks (`:197`). The three should agree, and `requires` argues for the newest: `b.requires = ['a']` says b builds on a, so b should be able to override it.
 
 **[ADR 0015](0015-what-the-write-door-refuses.md) is owed nothing.** The earlier draft added two refusals to the write door — a reserved name, and an unregistered name. Both die with the stored value.
 
