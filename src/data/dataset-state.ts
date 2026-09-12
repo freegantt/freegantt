@@ -35,7 +35,7 @@ import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
-import { createFieldAccess, readingChildrenFrom } from './fields/field-access.js';
+import { createFieldAccess } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';

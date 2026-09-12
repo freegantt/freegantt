@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
 import type { StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
-  createFieldContext,
+  createFieldAccess,
   createRollUpContext,
   editProposesField,
   emptyProposedEdit,
@@ -45,7 +45,7 @@ describe('readField / writeField (D-S4-2)', () => {
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: 'cost', type: 'money' }],
   });
-  const fieldCtx = createFieldContext(registry, 'UTC');
+  const fieldCtx = createFieldAccess({ fields: registry, timeZone: 'UTC' });
   const cost = registry.get('cost')!;
   const start = registry.get('start')!;
   const duration = registry.get('duration')!;
@@ -138,28 +138,32 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
     fieldTypes: { money: { rollUp: 'sum' } },
     fields: [{ key: 'cost', type: 'money' }],
   });
-  const fieldCtx = createFieldContext(registry, 'UTC');
+  const access = createFieldAccess({ fields: registry, timeZone: 'UTC' });
   const cost = registry.get('cost')!;
+  const parent = span();
 
   const children = [span({ cost: 1 }), span({ cost: 'not a number' }), span({ cost: 3 }), span()];
 
   it('values reads the rolling field off each child, in order, holes included', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.values(children)).toEqual([1, 'not a number', 3, undefined]);
+    const rollUpCtx = createRollUpContext(access, parent, children, cost.key);
+    expect(rollUpCtx.values()).toEqual([1, 'not a number', 3, undefined]);
   });
 
   it('numericValues keeps only finite numbers, dropping holes and non-numeric values', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.numericValues(children)).toEqual([1, 3]);
+    const rollUpCtx = createRollUpContext(access, parent, children, cost.key);
+    expect(rollUpCtx.numericValues()).toEqual([1, 3]);
   });
 
   it('numericValues is empty, not thrown, when no child has a numeric value', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.numericValues([span(), span({ cost: 'x' })])).toEqual([]);
+    const empty = [span(), span({ cost: 'x' })];
+    const rollUpCtx = createRollUpContext(access, parent, empty, cost.key);
+    expect(rollUpCtx.numericValues()).toEqual([]);
   });
 
-  it('routes through the same read path as ctx.read (D-S4-8)', () => {
-    const rollUpCtx = createRollUpContext(fieldCtx, cost.key);
-    expect(rollUpCtx.values([children[0]!])).toEqual([rollUpCtx.read(children[0]!, cost.key)]);
+  it('routes through the same read path as the pass\u2019s own read (D-S4-8)', () => {
+    const one = [children[0]!];
+    const rollUpCtx = createRollUpContext(access, parent, one, cost.key);
+    const childCtx = createRollUpContext(access, children[0]!, [], cost.key);
+    expect(rollUpCtx.values()).toEqual([childCtx.read(cost.key)]);
   });
 });

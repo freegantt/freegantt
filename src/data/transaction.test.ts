@@ -363,7 +363,7 @@ describe('runTransaction', () => {
       'user',
     );
 
-    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500 });
+    expect(state.entries.get(entryId('t1'))?.toInput().props).toEqual({ cost: 500 });
   });
 
   it('I4 still fires when body and extender propose the same props-addressed Field', () => {
@@ -422,7 +422,7 @@ describe('runTransaction', () => {
       ),
     ).not.toThrow();
 
-    expect(state.entries.get(entryId('t1'))?.props).toEqual({ cost: 500, risk: 1 });
+    expect(state.entries.get(entryId('t1'))?.toInput().props).toEqual({ cost: 500, risk: 1 });
   });
 
   it('the changeset is frozen in dev mode — a beforeChange handler cannot edit it', () => {
@@ -731,11 +731,8 @@ describe('runTransaction', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
     });
-    const costOf = (id: string): number | undefined => {
-      const entry = state.entries.get(id);
-      if (!entry) return undefined;
-      return state.fieldContext.read(entry, 'cost') as number | undefined;
-    };
+    const costOf = (id: string): number | undefined =>
+      state.entries.get(id)?.read('cost') as number | undefined;
 
     let changeCount = 0;
     const updatedIds = new Set<string>();

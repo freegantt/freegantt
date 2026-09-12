@@ -27,9 +27,7 @@ function treeDataset(
 }
 
 function costOf(state: DatasetState, id: string): number | undefined {
-  const entry = state.entries.get(id);
-  if (!entry) return undefined;
-  return state.fieldContext.read(entry, 'cost') as number | undefined;
+  return state.entries.get(id)?.read('cost') as number | undefined;
 }
 
 describe('rollUpFields (S4.2)', () => {
@@ -41,7 +39,7 @@ describe('rollUpFields (S4.2)', () => {
     ]);
 
     expect(costOf(state, 'root')).toBe(100);
-    expect((state.entries.get('root')!.props as { cost: number }).cost).toBe(100);
+    expect(state.entries.get('root')!.read('cost')).toBe(100);
   });
 
   it('sum rolls cost up two levels in one commit', () => {
@@ -93,14 +91,11 @@ describe('rollUpFields (S4.2)', () => {
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       aggregators: {
-        sum: (children) => {
+        sum: (_parent, ctx) => {
           rollupCalls += 1;
           if (rollupCalls > 1) throw new Error('boom');
           let total = 0;
-          for (const child of children) {
-            const value = (child.props as { cost?: number } | undefined)?.cost;
-            if (typeof value === 'number') total += value;
-          }
+          for (const value of ctx.numericValues('cost')) total += value;
           return total;
         },
       },
@@ -148,7 +143,7 @@ describe('rollUpFields (S4.2)', () => {
     state.entries.update('c1', { start: '2026-06-01', end: '2026-06-05', notes: 9 });
 
     const parent = state.entries.get('p1')!;
-    expect(state.fieldContext.read(parent, 'notes')).toBe(5);
+    expect(parent.read('notes')).toBe(5);
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
   it('reparenting recomputes both the old and new parent', () => {
@@ -260,7 +255,7 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.remove('b');
 
       expect(costOf(state, 'p')).toBe(10);
-      expect((state.entries.get('p')!.props as { cost: number }).cost).toBe(10);
+      expect(state.entries.get('p')!.read('cost')).toBe(10);
     });
 
     it('[P1 regression] removing the child that extended the parent span shrinks start/end', () => {
