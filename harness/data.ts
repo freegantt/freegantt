@@ -57,7 +57,11 @@ const COST_FIELDS = {
   fieldTypes: {
     money: {
       rollUp: 'sum' as const,
-      distribute(total: number | undefined, _parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined {
+      distribute(
+        total: number | undefined,
+        _parent: StoredEntry,
+        ctx: RollUpContext,
+      ): EntryEdits | undefined {
         const children = ctx.children();
         if (total === undefined || children.length === 0) return undefined;
         const share = Math.floor(total / children.length);
