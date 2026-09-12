@@ -36,11 +36,13 @@ layer is the smaller change and it carries no decisions, so it goes in ahead.
   `plans/02` §4's level-2 worked example becomes true.
 - **Core ships three looks as factories.** `bar()`, `summary()` and `diamond()`. Each takes
   `Partial<EntryVariant>` and answers a complete one. No row wears `diamond()` until a rule claims it.
-- **A glyph holds its size at every zoom.** `Item.fixedWidthPx` states a painted width, and
+- **A glyph holds its size at every zoom.** `Item.box` states a painted width and an anchor, and
   `render/` stamps `data-span="fixed"`.
 - **A Gantt answers which variant a row wears**, as one object — `gantt.variantFor(entry)`.
 - **Core's `parent` variant is named `summary`**, so `data-variant="summary"` and `.fg-bar-summary`
   tell one story.
+- **A variant owns the CSS behind its class.** `EntryVariant.css` is the fragment; one `<style>`
+  node per Gantt writes it inside `@layer freegantt`.
 - **`harness/planner.ts` holds no glyph code.** It says `diamond({ when: { checkpoint: true } })`.
 
 ---
@@ -225,9 +227,8 @@ layer. CSS is document-global either way, which is already true of the base shee
 
 #### The record
 
-ADR 0022 is `proposed` and unbuilt, so nothing here supersedes an accepted decision. **It is amended
-in place**: a new section states that a variant owns its CSS, and the `decided:` line names it. The
-`status:` line carries the date and the reason. Logged as a **J** entry.
+ADR 0022 holds this. It is `proposed` and unbuilt, so the body was amended in place rather than
+superseded (J2, J9). Do not re-amend it.
 
 ### Q7 — where a fixed-width box sits, and who decides
 
@@ -235,12 +236,13 @@ in place**: a new section states that a variant owns its CSS, and the `decided:`
 it renders.** The same sentence that answered Q6 answers this. An anchor core hardcodes is a
 rendering decision taken outside the variant. Logged as **J7**.
 
-What stays a build task and not a question: ADR 0022's *"centred on the Item's own start"* disagrees
-with `barSpan`'s own midpoint rule, so that sentence does not go in the doc comment.
+What stays a build task and not a question: do not put a start-centred sentence in the doc comment.
+`barSpan` centres a floored bar on its midpoint.
 
-**Raised 2026-09-12 by the author, against ADR 0022's wording.**
+**Raised 2026-09-12 by the author, against the first draft of ADR 0022.**
 
-ADR 0022 says `fixedWidthPx` is "centred on the Item's own start". Two problems sit in that sentence.
+The first draft said `fixedWidthPx` is "centred on the Item's own start". Two problems sit in that
+sentence. The record now holds this answer instead.
 
 **It disagrees with the rule already in the code.** `barSpan` centres a floored bar on its
 **midpoint**, not its start — `src/layout/frame.ts:72`, pinned by `src/layout/frame.test.ts:1047`

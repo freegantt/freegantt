@@ -6,8 +6,8 @@ Every question and every judgement call, written the moment it comes up.
   reverse it.
 - A **Q** entry is a question for the author. It states what is blocked until the answer lands.
 
-`README.md` holds five open questions already, as Q1–Q5. Their answers land here, under the same
-numbers. Number a new question from Q8.
+`README.md` holds Q1–Q7, all answered. Number a new question from Q8. Their answers land here,
+under the same numbers.
 
 ---
 
@@ -47,3 +47,4 @@ Each one is reversible. The reasoning is here so a reviewer can undo it.
 | J6 | 3 | `FrameBar.minimumSpan` becomes `span: 'exact' \| 'minimum' \| 'fixed'`. | `data-span` is one attribute slot, so the type mirrors the DOM it feeds. Two booleans make an illegal pair writable. |
 | J7 | 3 | The Item states its own anchor: `box?: { widthPx, anchor: 'start' \| 'center' \| 'end' }`, replacing `fixedWidthPx`. | The author's Q6 principle: a variant owns how it renders, and an anchor core hardcodes is a rendering decision taken outside it. `'center'` is the spelling already on the surface (`panToDate`). |
 | J8 | 3 | `harness/main.ts` and `harness/plugins.ts` switch their hand-built milestone diamonds to `diamond()`. | Each one's stated reason is *core ships no diamond*, and this build deletes that reason. Hand-building a look core ships re-derives what the library computes, which `CLAUDE.md` names an API gap. `plugins.ts`'s `buffer` and `risk` stay: core ships neither look. |
+| J9 | 3 | ADR 0022's body now states Q6 and Q7. | The record is `proposed` and unbuilt (J2). `fixedWidthPx`, the start-centred sentence, and the `#286` deferral are out of it. `#286` closes here. |

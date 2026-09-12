@@ -66,14 +66,14 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 **Decided: Q3, Q5, Q7 — J6 and J7.**
 
 - [ ] The Item states a painted box the time scale does not size (`src/layout/items/item.ts`).
-      **J7 states its shape and its anchor.** ADR 0022's "centred on the Item's own start" disagrees
-      with `barSpan`'s own midpoint rule, so do not copy that sentence into the doc comment.
+      **J7 states its shape and its anchor.** ADR 0022 holds that type. `diamond()` writes
+      `anchor: 'center'`. A flag writes `'start'`.
 - [ ] `barSpan` honours it ahead of the span-and-floor path.
 - [ ] The third span state reaches `render/`, and `render/` stamps `data-span="fixed"` beside the
       existing `data-span="minimum"`.
-- [ ] Export `fixedWidthItem(px): ItemProducer` from `layout/`, and publish it from
-      `src/api/index.ts` beside `wholeEntryItem`. It answers one whole-entry Item that carries
-      `fixedWidthPx`.
+- [ ] Export `fixedWidthItem(px, anchor?: 'start' | 'center' | 'end')` from `layout/`, and publish
+      it from `src/api/index.ts` beside `wholeEntryItem`. Omitted, the anchor is `'center'`. It
+      answers one whole-entry Item that carries `box`.
 - [ ] Unit tests in `src/layout/frame.test.ts`: a fixed box keeps its width when the scale changes,
       and each anchor puts it where J7 says. `:1047` already pins the floored-bar rule beside it —
       the two must not contradict each other.
@@ -110,10 +110,10 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 
 ### E1 — the record
 
-- [ ] Amend `docs/adr/0022` in place. It is `proposed` and unbuilt, so nothing is superseded. Add the
+- [x] Amend `docs/adr/0022` in place. It is `proposed` and unbuilt, so nothing is superseded. Add the
       section that states a variant owns its CSS. Name it on the `decided:` line. Put the date and
-      the reason on `status:`.
-- [ ] Log the amendment as a **J** entry.
+      the reason on `status:`. Q7's `box` / anchor lands in the same amendment.
+- [x] Log the amendment as a **J** entry (J9).
 
 ### E2 — the key
 
@@ -155,7 +155,7 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 - [ ] `diamond()`'s `css` holds the glyph: the box is the hit target, a `::before` is the ink, and
       the box's own state paint is cancelled so the glyph wears it.
 - [ ] **The CSS restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it
-      follows the box `fixedWidthPx` set. A literal `13px` would leave a 20px hit box around a 13px
+      follows the box `box.widthPx` set. A literal `13px` would leave a 20px hit box around a 13px
       glyph the moment an author writes `diamond({ items: fixedWidthItem(20) })`.
 - [ ] Check the label. A fixed 13px box holds no label, so `barLabels: 'fitBar'` must place it outside
       through the library's own path. **If it does not, that is a gap — report it.**
@@ -263,8 +263,8 @@ carry `status:` amendments, and ADR 0013 carries a banner. Do not redo these.
       the base sheet into a seeded factory. Run `pnpm size-limit`, read the number, then set
       `.size-limit.json` from what it says. Say the measured figure in the PR.
 - [ ] Update `etc/freegantt.api.md` with `api-extractor run --local`. Say in the PR that the report
-      diff is intended, and name the four additions: the three factories, `fixedWidthItem`,
-      `ResolvedVariant` and `variantFor`.
+      diff is intended, and name the additions: the three factories, `fixedWidthItem`, `Item.box`,
+      `FrameBar.span`, `ResolvedVariant` and `variantFor`.
 
 ---
 
@@ -278,7 +278,7 @@ carry `status:` amendments, and ADR 0013 carries a banner. Do not redo these.
 ## Close the issues
 
 - [ ] Close [#289](https://github.com/Pawel-IT/FreeGantt/issues/289). Name what landed, and say that
-      ADR 0022 was amended in place (J2).
+      ADR 0022 was amended in place (J2, J9).
 - [ ] Close [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) — unit E7 holds its wording.
 - [ ] Apply the labels to both with the `label-issues` skill.
 
