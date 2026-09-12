@@ -45,8 +45,8 @@
         <table class="w-full text-sm">
           <tr class="text-left border-b border-emerald-300"><th class="p-2">State</th><th class="p-2">Ids</th><th class="p-2">Where</th></tr>
           <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span></td>
-            <td class="p-2 font-mono text-xs">F1 F2 F3 F4 F5 F6 F12 F13 F14 F17 F18 F20 F22 F23 F24 F25 F26 F28 F29</td>
-            <td class="p-2 font-mono text-xs">613c6fe · 3554abd · 84df494 · 3e1f5c0 · b410045 · 126bbe1 · c256099 · d51a578</td></tr>
+            <td class="p-2 font-mono text-xs">F1 F2 F3 F4 F5 F6 F11 F12 F13 F14 F17 F18 F19 F20 F22 F23 F24 F25 F26 F27 F28 F29</td>
+            <td class="p-2 font-mono text-xs">613c6fe · 3554abd · 84df494 · 3e1f5c0 · b410045 · 126bbe1 · c256099 · d51a578 · 083e295</td></tr>
           <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-semibold text-xs">Fixed in part</span></td>
             <td class="p-2 font-mono text-xs">F7 F8</td>
             <td class="p-2 text-xs">F7: the hang is fixed, the write-shape wording is open. F8: renamed to
@@ -58,7 +58,7 @@
           <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold text-xs">Deferred</span></td>
             <td class="p-2 font-mono text-xs">F16</td><td class="p-2 text-xs">→ <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/284">#284</a>; it re-opens <span class="font-mono">Q2</span>.</td></tr>
           <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span></td>
-            <td class="p-2 font-mono text-xs">F9 F10 F11 F19 F27</td><td class="p-2 text-xs">Five nits, each stated on its own card. None is a defect; each is a name, a guard's reach or an unwritten rule.</td></tr>
+            <td class="p-2 font-mono text-xs">F9 F10</td><td class="p-2 text-xs">Two naming nits, each stated on its own card. Neither is a defect: three structural names for one plugin concept, and a one-line function that exists to be the subject of a sentence.</td></tr>
           <tr><td class="p-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Verdict accepted</span></td>
             <td class="p-2 font-mono text-xs">V1 V2 V3</td><td class="p-2 text-xs">No code changed for any of them. The two one-sentence asks in V1 and V2 landed in <span class="font-mono">0998b96</span>.</td></tr>
         </table>
@@ -417,8 +417,8 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
         <article id="F11" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
         <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
-          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
-          <p class="mt-2">Not done. The gate still prints a count of skipped blocks rather than their names.</p>
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">083e295</span>
+          <p class="mt-2">The gate prints the name of every skipped block, so a block being silenced shows up in a diff of the output rather than as one digit changing. The <code class="font-mono">type-sketch</code> escape hatch stays; the place it could hide is gone.</p>
         </div>
 
           <h3 class="font-bold"><span class="font-mono">F11</span> — <span class="font-mono">data-check="type-sketch"</span> is a silent-by-attribute escape hatch</h3>
@@ -571,10 +571,8 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
         <article id="F19" class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
         <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
-          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
-          <p class="mt-2">Not done. The loose-id split — loose on a scalar id, branded on a collection key — is still unwritten in
-  <span class="font-mono">plans/02</span>. The finding's own recommendation (do not widen the maps) is what the code does; only the
-  sentence that makes it a rule is missing.</p>
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">083e295</span>
+          <p class="mt-2"><span class="font-mono">plans/02</span> §2.1 now states the split the finding recommended: loose on a scalar id a caller passes or returns, branded on a collection key, because a map key that admits <span class="font-mono">string</span> stops telling a reader anything. No type widened, and the next seam has a rule to follow.</p>
         </div>
 
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F19</span><h3 class="text-xl font-bold">The loose-id rule got two opposite readings on one branch</h3></div>
@@ -850,9 +848,8 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
       <!-- ================= F27 ================= -->
       <article id="F27" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
         <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
-          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
-          <p class="mt-2">Not done. The gate still matches <span class="font-mono">&lt;pre&gt;&lt;code&gt;</span> only. Every block on the
-  page is that shape today, so nothing is unchecked; the guard is still narrower than its own doc comment.</p>
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">083e295</span>
+          <p class="mt-2">The script counts every <span class="font-mono">&lt;pre&gt;</span> opening in the markup and refuses a mismatch against the blocks it reached. A <span class="font-mono">&lt;pre&gt;</span> the regex cannot see now fails the gate instead of passing it silently, and the doc comment above it is true.</p>
         </div>
 
         <h3 class="font-bold"><span class="font-mono">F27</span> &mdash; the new doc-example gate claims every <span class="font-mono">&lt;pre&gt;</span> is checked; it checks every <span class="font-mono">&lt;pre&gt;&lt;code&gt;</span></h3>
