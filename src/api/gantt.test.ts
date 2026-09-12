@@ -22,7 +22,7 @@ import {
 import type {
   DatasetPlugin,
   EditExtender,
-  StoredEntry,
+  Entry,
   ErrorReport,
   GanttDom,
   GanttPlugin,
@@ -4400,7 +4400,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const itemId = bar.dataset['itemId'];
 
-    gantt.rowSource = { source: 'group', groupBy: (entry: StoredEntry) => entry.name };
+    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name };
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
@@ -4479,7 +4479,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     gantt.expandAll();
     expect(gantt.collapsed).toEqual([]);
 
-    gantt.rowSource = { source: 'group', groupBy: (item: StoredEntry) => item.read('category') as string };
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gantt.collapseAll();
     expect(gantt.collapsed.map(String)).toEqual(['group:group', 'group:span', 'group:milestone']);
@@ -4495,7 +4495,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
       dataset,
       rowSource: {
         source: 'custom',
-        resolve: ({ entries }: { entries: readonly StoredEntry[] }) => [
+        resolve: ({ entries }: { entries: readonly Entry[] }) => [
           { id: 'h', label: 'All' },
           { id: 'r0', entryIds: [entries[0]!.id] },
         ],

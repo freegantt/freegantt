@@ -46,10 +46,7 @@ function entryRow(
   };
 }
 
-export function resolveEntriesSource(
-  entries: readonly Entry[],
-  source: EntriesRowSource,
-): UnindexedRow[] {
+export function resolveEntriesSource(entries: readonly Entry[], source: EntriesRowSource): UnindexedRow[] {
   const heightMode = heightModeOf(source);
   if (source.tree !== true) {
     return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));

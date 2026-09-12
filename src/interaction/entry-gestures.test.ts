@@ -89,12 +89,7 @@ function move(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEve
  *  build the fake `session` this file's `ctx.session` returns. */
 interface SessionOverrides {
   entriesForGesture?: (grabbed: EntryId, capability: 'move' | 'resize') => Entry[];
-  draftFor?: (
-    gesture: EntryGesture,
-    entries: Entry[],
-    dxPx: number,
-    options?: DraftOptions,
-  ) => EntryEdits;
+  draftFor?: (gesture: EntryGesture, entries: Entry[], dxPx: number, options?: DraftOptions) => EntryEdits;
   commit?: (gesture: EntryGesture, draft: EntryEdits) => Promise<boolean>;
 }
 

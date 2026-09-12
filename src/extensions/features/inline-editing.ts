@@ -34,11 +34,7 @@
 
 import type { GanttPlugin, PluginContext } from '../../api/gantt.js';
 import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
-import {
-  EntryNotFoundError,
-  MutationCancelledError,
-  UnreadableCellValueError,
-} from '../../model/index.js';
+import { EntryNotFoundError, MutationCancelledError, UnreadableCellValueError } from '../../model/index.js';
 import type {
   Disposer,
   Entry,

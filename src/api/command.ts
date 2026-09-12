@@ -8,15 +8,7 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type {
-  Disposer,
-  Entry,
-  EntryId,
-  FieldKey,
-  KeyChord,
-  SegmentId,
-  TargetKind,
-} from '../model/index.js';
+import type { Disposer, Entry, EntryId, FieldKey, KeyChord, SegmentId, TargetKind } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
 /** Every command id the library itself registers (#236). One place names them, so
