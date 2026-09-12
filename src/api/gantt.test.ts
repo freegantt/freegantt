@@ -19,6 +19,7 @@ import {
   contextMenu,
 } from './index.js';
 import type {
+  ChangeSet,
   DatasetPlugin,
   EditExtender,
   Entry,
@@ -3032,6 +3033,64 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(reports.filter((report) => report.code === 'variant-claimed-twice')).toHaveLength(1);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
+  // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
+  // write, and the rule reads it back.
+  it('pins one row by writing the data: the write lands in a ChangeSet, undoes, and repaints', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const pinned = sampleEntries[0]!.id;
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'milestone' }],
+      entries: [sampleEntries[0]!.toInput()],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [
+        {
+          name: 'milestone',
+          when: { milestone: true },
+          paint: () => ({ class: { 'my-diamond': true } }),
+        },
+      ],
+    });
+    const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['variant']).toBe('leaf');
+
+    const changes: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+
+    dataset.entries.update(pinned, { milestone: true });
+    await paint();
+
+    // The write is an ordinary Field write, so it arrives as one `{ from, to }` like any other.
+    expect(changes).toHaveLength(1);
+    const written = changes[0]!.updated.filter((row) => 'field' in row);
+    expect(written).toContainEqual(
+      expect.objectContaining({ id: pinned, field: 'milestone', from: undefined, to: true }),
+    );
+
+    // The rule read it back, and the same node repainted (I8).
+    expect(container.querySelector('.fg-bar')).toBe(bar);
+    expect(bar.dataset['variant']).toBe('milestone');
+    expect(bar.classList.contains('my-diamond')).toBe(true);
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    await paint();
+    expect(bar.dataset['variant']).toBe('leaf');
+    expect(bar.classList.contains('my-diamond')).toBe(false);
 
     gantt.destroy();
     container.remove();

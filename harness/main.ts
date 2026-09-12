@@ -54,7 +54,9 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 // `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost?: number; team?: string }>({
+// `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
+// hand-written copy here drifted from it the moment ADR 0018 added `milestone` (`J41`).
+const dataset = new Dataset<DemoEntryProps>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
