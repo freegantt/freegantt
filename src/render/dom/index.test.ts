@@ -3,6 +3,7 @@ import { createDomBackend } from './index.js';
 import { computeFrame, createVariantRegistry } from '../../layout/index.js';
 import type {
   BarRenderer,
+  ResolvedRenderer,
   Entry,
   ErrorReportInput,
   ItemId,
@@ -56,10 +57,13 @@ function segmentsOf(entry: Entry, count: number) {
  *  A row paints from that answer, and so does a bar that draws an Entry's whole span. `entries`
  *  defaults to none — `DomBackendOptions.entryById` is mandatory, so every backend built by this
  *  file names its Entry lookup explicitly, even a test that never asks it a question. */
-function paintingBackend(entries: readonly Entry[] = []) {
+function paintingBackend(
+  entries: readonly Entry[] = [],
+  resolveBarRenderer: (variant: string) => ResolvedRenderer<BarRenderer> | undefined = () => undefined,
+) {
   return createDomBackend({
     entryById: (id) => entries.find((entry) => entry.id === id),
-    resolveBarRenderer: () => undefined,
+    resolveBarRenderer,
     resolveCellRenderer: () => undefined,
     resolveHeaderRenderer: () => undefined,
   });
@@ -1982,16 +1986,22 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('applies the summary class off data-kind, for a structural parent only (ADR 0013: no stored kind, no core diamond)', () => {
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
+  it("applies the summary class off the parent variant's own paint, for a structural parent only (ADR 0018)", () => {
     const [leafSeed, parentSeed, childSeed] = sampleEntries;
     const [leaf, parent, child] = entryDoubles([
       entryValuesOf(leafSeed!),
       entryValuesOf(parentSeed!),
       entryValuesOf(childSeed!, { parentId: String(parentSeed!.id) }),
     ]) as readonly [Entry, Entry, Entry];
+    // The same ladder `GanttShell` wires: no consumer renderer, so the resolved variant's own
+    // `paint` answers. Core's `parent` names a class and no content, so the bar keeps its own
+    // label (`J34`).
+    const backend = paintingBackend([leaf, parent, child], (variant) => {
+      const paint = variantRegistry.paintFor(variant);
+      return paint === undefined ? undefined : { renderer: paint };
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
     backend.sync(
       computeFrame({
         entries: [leaf, parent, child],
@@ -2005,10 +2015,12 @@ describe('render/dom backend', () => {
       }),
     );
 
-    const parentBar = timeline.querySelector<HTMLElement>('[data-kind="parent"]')!;
-    const leafBar = timeline.querySelector<HTMLElement>('[data-kind="leaf"]')!;
+    const parentBar = timeline.querySelector<HTMLElement>('[data-variant="parent"]')!;
+    const leafBar = timeline.querySelector<HTMLElement>('[data-variant="leaf"]')!;
     expect(parentBar.className.split(' ')).toContain('fg-bar-summary');
     expect(leafBar.className.split(' ')).not.toContain('fg-bar-summary');
+    // J34: a paint that names only a class decorates, so the library still paints the label.
+    expect(parentBar.textContent).toBe(parent.name);
 
     backend.destroy();
     grid.remove();

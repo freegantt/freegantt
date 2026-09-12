@@ -53,7 +53,7 @@ export interface CapabilityInputs {
    *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
   /** ADR 0018: what this row's own variant allows — the variant's `can`, for the variant this Gantt
-   *  resolved for this Entry. It is one question, so it is one member: the shell resolves the
+   *  resolved for this Entry. It is one question, so it is one member. The shell resolves the
    *  variant and reads its `can` in one step, and this file never learns a variant's name. That is
    *  what keeps `plans/01` §2.5 — no `if (variant === …)` in core — true here by construction.
    *

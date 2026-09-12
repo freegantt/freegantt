@@ -108,11 +108,11 @@ export class PluginRegistrations implements PluginRegistrar {
     );
   }
 
-  /** ADR 0018: one variant is one object, so one registration changes what a row wears, what it
-   *  draws, how it looks and what every gesture may do to it. Every pass those four answers feed
+  /** ADR 0018: one variant is one object. So one registration changes what a row wears, what it
+   *  draws, how it looks, and what every gesture may do to it. Every pass those four answers feed
    *  therefore runs again, on both edges. `FrameLayout`'s per-row Item cache forgets a row on a
-   *  dataset, row-count or metrics change only, and a variant registration is none of those, so
-   *  every row produces its Items again. */
+   *  dataset, row-count or metrics change only. A variant registration is none of those, so every
+   *  row produces its Items again. */
   registerVariant(variant: EntryVariant, pluginId: PluginId): Disposer {
     return this.#onBothEdges(
       () => this.variants.addPluginVariant(variant, pluginId),

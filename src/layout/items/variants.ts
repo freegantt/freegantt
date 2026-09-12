@@ -154,16 +154,21 @@ const LEAF_VARIANT_NAME = 'leaf';
 
 /** Core's two, as ordinary `EntryVariant` objects with nothing special about them. They register
  *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
- *  overrides. `leaf` carries no `when`, so it answers for every row and the floor is total. */
+ *  overrides. `leaf` carries no `when`, so it answers for every row and the floor is total.
+ *
+ *  **`leaf` registers before `parent`, and the order inside this list is load-bearing** (`J37`).
+ *  The walk is newest-first, and a variant with no `when` claims every row. Put `leaf` second and
+ *  it answers before `parent` ever runs, so no row is ever a summary. The floor registers first,
+ *  and every rule — core's own `parent` included — stands on it. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([
+  {
+    name: LEAF_VARIANT_NAME,
+    items: produceLeafItems,
+  },
   {
     name: PARENT_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
     paint: () => SUMMARY_BAR,
-  },
-  {
-    name: LEAF_VARIANT_NAME,
-    items: produceLeafItems,
   },
 ]);
 

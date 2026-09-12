@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
-import type { CapabilityInputs, Interactions, KindDefaults } from './capability.js';
+import type { CapabilityInputs, Interactions } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
-import type { EntryLook } from '../layout/index.js';
 import type { EntryDoubleValues } from '../layout/entry-double.js';
 import { entryDouble, entryDoubles } from '../layout/entry-double.js';
 import { entryId } from '../model/index.js';
@@ -31,9 +30,16 @@ function rollUpParent(): Entry {
   return family(DATED)[0]!;
 }
 
-/** ADR 0013: the look `layout/` would resolve. Build 2 deletes this input; until then a test marks
- *  the one look it cares about and reads the mark straight back. */
-const markedLook = (entry: Entry): EntryLook => (entry.read('look') as EntryLook | undefined) ?? 'leaf';
+/** ADR 0018: the variant this Gantt resolved for the row. The registry answers it in the shipped
+ *  path; a test marks the one variant it cares about and reads the mark straight back. */
+const markedVariant = (entry: Entry): string => (entry.read('variant') as string | undefined) ?? 'leaf';
+
+/** What one variant's own `can` contributes — the shape `CapabilityInputs.variantInteractionsFor`
+ *  takes. Every other row answers "no opinion". */
+const variantAllows =
+  (variant: string, can: Interactions) =>
+  (entry: Entry): Interactions | undefined =>
+    markedVariant(entry) === variant ? can : undefined;
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
  *  registers — `start`/`end` roll up and are editable, `duration` computes, `kind` is neither. One
@@ -52,7 +58,6 @@ function capabilities(
   ...fieldOverrides: readonly Partial<Field>[]
 ): ReturnType<typeof resolveCapabilities> {
   return resolveCapabilities({
-    lookOf: markedLook,
     fieldFor: fieldsWith(...fieldOverrides),
     ...overrides,
   });
@@ -88,7 +93,7 @@ describe('resolveCapabilities — gestures', () => {
 
   it('defaults a childless entry the same as any other — there is no consumer-defined kind to name', () => {
     const caps = capabilities();
-    const e = entry({ props: { look: 'phase' } });
+    const e = entry({ props: { variant: 'phase' } });
     expect(caps.can('move', e)).toBe(true);
     expect(caps.can('resize', e)).toBe(true);
     expect(caps.can('select', e)).toBe(true);
@@ -212,7 +217,7 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
   it('closes the bar move too, because a move writes both dates', () => {
     const caps = capabilities({}, lockedEnd);
     expect(caps.can('move', entry())).toBe(false);
-    expect(caps.can('move', entry({ props: { look: 'milestone' } }))).toBe(false);
+    expect(caps.can('move', entry({ props: { variant: 'milestone' } }))).toBe(false);
   });
 
   it('asked with no edge, resize answers whether either handle may resize', () => {
@@ -297,52 +302,66 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
   });
 });
 
-describe('registered look defaults (S5.9, D-S5-22, ADR 0013)', () => {
-  const registerFor = (look: EntryLook, defaults: KindDefaults) => (asked: EntryLook) =>
-    asked === look ? defaults : undefined;
-
-  it('a registered default answers a look the library rule would otherwise resolve', () => {
-    const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { resize: false }) });
-    expect(caps.can('resize', entry({ props: { look: 'buffer' } }))).toBe(false);
-    expect(caps.can('move', entry({ props: { look: 'buffer' } }))).toBe(true);
+describe("a variant's own `can` (ADR 0018)", () => {
+  it('a variant default answers a row the library rule would otherwise resolve', () => {
+    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { resize: false }) });
+    expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(false);
+    expect(caps.can('move', entry({ props: { variant: 'buffer' } }))).toBe(true);
   });
 
-  it("the consumer's own interactions still wins over a registered default", () => {
+  it("the consumer's own interactions still wins over a variant default", () => {
     const caps = capabilities({
       interactions: { resize: true },
-      registeredDefaultsFor: registerFor('buffer', { resize: false }),
+      variantInteractionsFor: variantAllows('buffer', { resize: false }),
     });
-    expect(caps.can('resize', entry({ props: { look: 'buffer' } }))).toBe(true);
+    expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(true);
   });
 
-  it('a registered default still loses to the library rule for an unrelated look', () => {
-    const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { resize: false }) });
+  it('a variant default still loses to the library rule for an unrelated row', () => {
+    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { resize: false }) });
     expect(caps.can('resize', rollUpParent())).toBe(false);
   });
 
-  it('an unregistered look falls straight through to the library rule', () => {
-    const caps = capabilities({ registeredDefaultsFor: () => undefined });
+  it('a row whose variant states nothing falls straight through to the library rule', () => {
+    const caps = capabilities({ variantInteractionsFor: () => undefined });
     expect(caps.can('resize', entry())).toBe(true);
   });
 
-  it('a registered edit default closes every cell of that look, and the gestures with it', () => {
-    const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { edit: false }) });
-    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'start').ok).toBe(false);
-    expect(caps.can('resize', entry({ props: { look: 'buffer' } }), 'start')).toBe(false);
+  it('a variant edit default closes every cell of that row, and the gestures with it', () => {
+    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { edit: false }) });
+    expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'start').ok).toBe(false);
+    expect(caps.can('resize', entry({ props: { variant: 'buffer' } }), 'start')).toBe(false);
     expect(caps.canWrite(entry(), 'start').ok).toBe(true);
   });
 
-  it('a registered edit default loses to the consumer’s own interactions.edit', () => {
+  it('a variant edit default loses to the consumer\u2019s own interactions.edit', () => {
     const caps = capabilities({
       interactions: { edit: true },
-      registeredDefaultsFor: registerFor('buffer', { edit: false }),
+      variantInteractionsFor: variantAllows('buffer', { edit: false }),
     });
-    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'start').ok).toBe(true);
+    expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'start').ok).toBe(true);
   });
 
-  it('a registered edit default opens a Field the library would have refused', () => {
-    const caps = capabilities({ registeredDefaultsFor: registerFor('buffer', { edit: true }) }, lockedEnd);
-    expect(caps.canWrite(entry({ props: { look: 'buffer' } }), 'end').ok).toBe(true);
+  it('a variant edit default opens a Field the library would have refused', () => {
+    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { edit: true }) }, lockedEnd);
+    expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'end').ok).toBe(true);
+  });
+
+  it('a variant `can` predicate that answers undefined falls through to the library rule', () => {
+    const caps = capabilities({
+      variantInteractionsFor: variantAllows('buffer', { resize: (row) => (row.hasChildren ? false : undefined) }),
+    });
+    // No opinion for a childless row, so the library rule answers, and it says yes.
+    expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(true);
+  });
+
+  it('a variant `can` predicate that answers false refuses, and the library rule never runs', () => {
+    const caps = capabilities({
+      variantInteractionsFor: variantAllows('buffer', { resize: (row) => (row.hasChildren ? undefined : false) }),
+    });
+    expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(false);
+    // The same predicate answers nothing for a row of another variant.
+    expect(caps.can('resize', entry())).toBe(true);
   });
 });
 
