@@ -1094,7 +1094,7 @@ export class Gantt<TProps = unknown> {
         start: InstantInput;
         end: InstantInput;
     });
-    reveal(id: EntryId | SegmentId): void;
+    reveal(id: EntryId | SegmentId | string): void;
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry<TProps>[];

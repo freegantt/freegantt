@@ -601,8 +601,28 @@ the compiler never met: plain JavaScript, or a list a helper widened. No new err
 together with its own chrome under that one graph (D-S5-31), so a chrome plugin may require a plugin
 whose only half is `data`. There is no ordering knob.
 
+**The `data` half's own doors are namespaced, and every one is expert.** `ctx.fields.register` declares
+a Field, `ctx.store.reserve` takes this plugin's store, `ctx.edits.setExtender` claims the extension
+hook, and `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020). An app author never meets
+one: they write `parentId` on an Entry, and core's own source answers it. Each door takes one
+occupant that composes — a plugin receives the current occupant and may call it — so a second plugin
+adds to the first rather than evicting it (D-S5-23). All four are legal while `data()` runs and not
+after (D-S5-4).
+
+```ts
+ctx.hierarchy.setSource<PlannerProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
+```
+
+That reads: the phase id when there is one, otherwise whatever the next source says. A source reads a
+`StoredEntry` and answers one parent id — never the live `Entry`, whose `parent()`, `children()`,
+`depth` and `descendants()` are all built from this answer, and never the whole dataset, which would
+make a child query O(dataset). Core owns everything downstream: the child index, the walks, and the
+Rollup. `parentId` is still stored and `update()` still writes it; a source that ignores the field is
+a plugin taking the tree over on purpose, and core does not warn about it.
+
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
-and the generic `*Of` shapes behind each. The retired pair is `GanttPlugin` / `DatasetPlugin`.
+`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, and the generic `*Of` shapes behind
+each. The retired pair is `GanttPlugin` / `DatasetPlugin`.
 
 ### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 

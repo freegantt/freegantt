@@ -803,8 +803,9 @@ export class Gantt<TProps = unknown> {
   }
 
   /** An `EntryId` reveals that Entry's whole envelope; a `SegmentId` reveals that one Segment alone.
-   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). */
-  reveal(id: EntryId | SegmentId): void {
+   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). A plain
+   *  `string` is legal. The Dataset resolves the reading; nothing reads the brand. */
+  reveal(id: EntryId | SegmentId | string): void {
     this.#shell.reveal(id);
   }
 

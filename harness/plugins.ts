@@ -1,5 +1,5 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, entryId, contextMenu } from '../src/api/index.js';
+import { Gantt, Dataset, contextMenu } from '../src/api/index.js';
 import type { CellRenderer, ChromePlugin, EntryVariant } from '../src/api/index.js';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
@@ -58,7 +58,7 @@ const dataset = new Dataset({
   }),
 });
 const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: ['name', 'cost'] });
-gantt.reveal(entryId(MILESTONE_ENTRY_ID));
+gantt.reveal(MILESTONE_ENTRY_ID);
 
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toggleBtn = document.querySelector<HTMLButtonElement>('#toggle-plugin-btn')!;
