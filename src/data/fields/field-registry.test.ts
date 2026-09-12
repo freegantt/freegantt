@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FieldRegistry } from './field-registry.js';
+import { editableOf, FieldRegistry } from './field-registry.js';
 import { createFieldContext, writeField } from './field-access.js';
 import type { Field, FieldType } from '../../model/index.js';
 import {
@@ -9,6 +9,7 @@ import {
   ReservedFieldKeyError,
   segmentId,
   UnknownAggregatorError,
+  UnknownFieldError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
 
@@ -124,9 +125,11 @@ describe('ADR 0011 — a Field key is the whole address', () => {
 });
 
 describe("#142 a consumer may override a core Field's editable, and nothing else", () => {
-  it('{ key: start, editable: false } merges onto the core Field', () => {
+  // ADR 0015: `false` is an input alias, so the stored Field holds the enum and every reader — the
+  // write door, the grid, and `dataset.fields.all` — reads one word back.
+  it("{ key: start, editable: false } merges onto the core Field, and stores as 'never'", () => {
     const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
-    expect(registry.get('start')?.editable).toBe(false);
+    expect(registry.get('start')?.editable).toBe('never');
   });
 
   it('the merged Field keeps its declaration-order position in `all`', () => {
@@ -164,9 +167,60 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
     ).toThrow(DuplicateFieldKeyError);
   });
 
+  it("a registration writing editable: true stores 'anywhere', the word it aliases", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost', editable: true }] });
+    expect(registry.get('cost')?.editable).toBe('anywhere');
+  });
+
+  it('a Field that declares no editable stores none, because editableOf answers the default', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    expect(registry.get('cost')).not.toHaveProperty('editable');
+    expect(editableOf(registry.get('cost')!)).toBe('anywhere');
+  });
+
   it('a core-key override does not affect a sibling core Field', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'start', editable: false }] });
-    expect(registry.get('end')?.editable).not.toBe(false);
+    expect(registry.get('end')?.editable).toBe('anywhere');
+  });
+});
+
+describe('setEditable — the one attribute that changes after setup (ADR 0015, Q16)', () => {
+  it("reads the new value back, and 'all' carries a new array identity so a subscriber notices", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    const before = registry.all;
+
+    registry.setEditable('cost', 'never');
+
+    expect(registry.get('cost')?.editable).toBe('never');
+    expect(registry.all).not.toBe(before);
+    expect(registry.all.map((field) => field.key)).toEqual(before.map((field) => field.key));
+  });
+
+  it('leaves the Field a caller already holds alone — it is a snapshot, not a signal', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost', editable: 'api' }] });
+    const held = registry.get('cost')!;
+
+    registry.setEditable('cost', 'never');
+
+    expect(held.editable).toBe('api');
+  });
+
+  it('takes the boolean aliases, and stores the word', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+    registry.setEditable('cost', false);
+    expect(registry.get('cost')?.editable).toBe('never');
+    registry.setEditable('cost', true);
+    expect(registry.get('cost')?.editable).toBe('anywhere');
+  });
+
+  it('refuses a key no Field declares — this door changes a Field, it never adds one', () => {
+    const registry = new FieldRegistry();
+    expect(() => registry.setEditable('nothing-declares-this', 'never')).toThrow(UnknownFieldError);
+  });
+
+  it('refuses a compute Field, the same answer the registration door gives', () => {
+    const registry = new FieldRegistry();
+    expect(() => registry.setEditable('duration', 'never')).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 

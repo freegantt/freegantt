@@ -9,6 +9,7 @@ import {
   mergeEntryEdits,
   InvalidReplayOriginError,
   EntryNotFoundError,
+  FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
   RegistrationClosedError,
@@ -347,6 +348,37 @@ describe('Dataset fields (S4.1)', () => {
     expect(keys).toContain('start');
     expect(keys).toContain('cost');
     expect(dataset.fields).not.toHaveProperty('get');
+  });
+
+  // ADR 0015: the override merges into the resolved Field, so the list a consumer reads answers with
+  // it. Nothing carries the lock anywhere else — there is no save format to encode it into.
+  it("fields.all reads { key: 'end', editable: false } back, as the word it aliases", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'end', editable: false }],
+      entries: [oneEntry()],
+    });
+
+    expect(dataset.fields.all.find((field) => field.key === 'end')?.editable).toBe('never');
+    expect(dataset.field('end')?.editable).toBe('never');
+  });
+
+  it('setFieldEditable locks a Field after setup, and entries.update() then refuses it', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    const before = dataset.fields.all;
+
+    dataset.setFieldEditable('start', 'never');
+
+    expect(dataset.field('start')?.editable).toBe('never');
+    // A reader that cached the list by identity sees a new one (#187).
+    expect(dataset.fields.all).not.toBe(before);
+    expect(() => dataset.entries.update('t1', { start: '2026-06-01' })).toThrow(FieldNotEditableError);
+  });
+
+  it('setFieldEditable refuses a key no Field declares — the Field set stays fixed', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+
+    expect(() => dataset.setFieldEditable('nothing-declares-this', 'never')).toThrow(UnknownFieldError);
   });
 
   it("update('t1', { start, cost }) is one transaction and one changeset", () => {

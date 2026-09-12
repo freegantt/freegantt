@@ -1,15 +1,15 @@
 // data/ — the one write resolver three questions meet at (ADR 0011, "The write resolver moves into
-// data/"): does this Field exist, is it editable, is it derived here. Three arms, three owners —
-// ADR 0011 moved this arm with no policy change, ADR 0013 fills the derived arm, ADR 0015 fills the
-// editable arm and claims I14. Fill only the arm your own change owns.
+// data/"): does this Field exist, is it editable, is it derived here. Three arms, three owners, all
+// landed — ADR 0011 moved the function here, ADR 0013 filled the derived arm, ADR 0015 filled the
+// editable arm and claimed I14.
 //
-// This ADR moves `libraryWriteRule` here with no policy change: it already held the editable and
-// derived arms in one function, and already read `rollsUp` from `data/`. `entries.update()` keeps
-// `UnknownFieldError` for the existence arm and does not call this function — ADR 0013 wires the
-// derived arm, ADR 0015 wires the editable arm and claims I14.
+// Two readers ask, and one file answers both, which is what I14 buys: `view/capability.ts` asks the
+// grid threshold before it opens a cell or paints a handle, and `data/entry-store.ts`'s `update()`
+// asks the API threshold before it stages a write. `entries.update()` keeps `UnknownFieldError` for
+// the existence arm.
 
 import type { Field, WriteRefusalReason, WriteVerdict } from '../model/index.js';
-import { rollsUp } from './fields/field-registry.js';
+import { editableOf, rollsUp } from './fields/field-registry.js';
 
 /** `model/write-verdict.ts` declares the verdict pair under its public names, so a consumer can import
  *  what `view/capability.ts` republishes (F1, `ae-forgotten-export`). This file keeps its own
@@ -43,6 +43,23 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTar
   return field.distribute ? 'children' : 'refused';
 }
 
+/** May a person change this value by hand — the cell editor, a bar handle, a bar move? The **grid
+ *  threshold** (ADR 0015): `'anywhere'`, and nothing else. `'api'` keeps the cell dead on purpose,
+ *  for a value the app owns and the user does not type. */
+export function isUserEditable(field: Field): boolean {
+  return editableOf(field) === 'anywhere';
+}
+
+/** May `entries.update()` change this value? The **API threshold** (ADR 0015): anything but
+ *  `'never'`. One key answers both thresholds, which is what keeps the two doors from disagreeing
+ *  (I14). A `'never'` Field is a lock, and `entries.update()` throws `FieldNotEditableError`.
+ *
+ *  It names what a *caller* may write, never what the library may: construction, `entries.add()`
+ *  and History replay all still write a locked Field. */
+export function isApiEditable(field: Field): boolean {
+  return editableOf(field) !== 'never';
+}
+
 /** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
  *
  *  The Rollup pass writes a rolling-up parent's rolling-up Field off its children — a parent is any
@@ -55,8 +72,9 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTar
  *  — the write lands on the children (ADR 0013 amendment). `editable` still has the last word:
  *  a policy for the write does not make the value editable.
  *
- *  Everything else is the Field's own `editable`, which defaults to `false`. */
+ *  Everything else is the Field's own `editable`, read at the grid threshold. A Field that declares
+ *  nothing is editable: `'anywhere'` is the default (ADR 0015). */
 export function libraryWriteRule(hasChildren: boolean, field: Field): FieldWriteVerdict {
   if (resolveWriteTarget(hasChildren, field) === 'refused') return DERIVED;
-  return field.editable === true ? WRITABLE : NOT_WRITABLE;
+  return isUserEditable(field) ? WRITABLE : NOT_WRITABLE;
 }

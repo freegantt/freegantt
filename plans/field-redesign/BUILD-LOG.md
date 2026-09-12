@@ -2198,3 +2198,136 @@ not to `git add -A` over that work; `-u` is the same mistake with a quieter flag
 `test/guards/retired-words.test.ts` caught F1's comment saying "hosts" — `host` is retired
 (D-S1.11-6, #64). Its sibling "Hosting" in `model/write-verdict.ts` slips the `\bhosts?\b` regex.
 Both are changed to "declares", because the word is retired, not the regex match.
+
+---
+
+## Build 5 — ADR 0015, what the write door refuses
+
+### J37 — a lock holds at `entries.removeSegments()` too, and the message names that door
+
+**The call I made alone.** `entries.update()` now refuses a `'never'` Field. Two internal calls to the
+public `update()` sit inside `#removeSegmentsFrom` (`src/data/entry-store.ts`): removing the last
+Segment clears both dates, and removing one of several rewrites `segments`. `/data.html` ships
+`{ key: 'end', editable: false }` today, so the refusal became reachable from a call the consumer
+wrote as `entries.removeSegments`.
+
+**Two options.** Route the removal below the public door — it already holds a `TxToken` — or thread
+the real door name through. I took the second.
+
+**Why.** ADR 0015 rules that un-dating is a change, so a locked `end` must refuse a last-Segment
+removal; routing below the door would have let a Segment removal un-date a locked Field, which is the
+lock leaking. It would also have duplicated `toEditReading`'s envelope reconciliation, the one owner
+of that job (#212, finding 4). So the body is now `#updateFrom(operation, id, edit)`, `update()`
+calls it with `'entries.update'`, and `#removeSegmentsFrom` calls it with `'entries.removeSegments'`.
+Every refusal from that path — `FieldNotEditableError`, `UnknownFieldError`, `InvertedSpanError` —
+now names the call the consumer actually wrote. Pinned by two tests in
+`src/data/entry-store.mutation.test.ts` ("a lock holds at every caller-facing door").
+
+**Reverse it by** making `#removeSegmentsFrom` stage directly and accepting that a lock does not
+reach Segment removal.
+
+### J38 — Build 5 landed before Build 4, by the author's ruling
+
+**Ruled 2026-09-11 by the author.** The landing order in `build/README.md` is 0016, 0012, 0011, 0013,
+0014, 0015. Build 5 (ADR 0015) landed ahead of Build 4 (ADR 0014). It is safe: build 5's "Lands
+after" names Builds 2 and 3, both landed, and its work list never touches `fieldValue`/`durationOf`,
+the plugin prefix, or the `text`+`value` renderer pair, which is all Build 4 owns. `compute` Fields
+already exist. Build 4 is untouched by this build.
+
+### J39 — I14 comes off `PLANNED` with a lint, not with the test its row described
+
+**The vice.** The build plan claims I14 here. `docs/01-invariant-guard-matrix.md`'s I14 row was
+`PLANNED (S3)`, and the test it described is table-driven "over the shipped **kinds** + one
+consumer-defined kind". ADR 0013 deleted `Entry.kind`, so that test is unbuildable. And
+`test/guards/matrix-coverage.test.ts` lets a row name no working job only while the row is honestly
+marked `PLANNED`. So the row could stay planned (and the claim would be false), or it could name a
+real job.
+
+**The call.** It names a real job. `freegantt/editable-has-one-reader`
+(`eslint/rules/editable-has-one-reader.cjs`, docs/02 §3.12) pins every read of `Field.editable` to
+`src/data/fields/field-registry.ts`, where `editableOf` resolves the aliases and the default. Every
+other caller asks `isUserEditable` (the grid) or `isApiEditable` (`entries.update()`), both in
+`src/data/write-rule.ts`. That is the check that would have caught #256: two files read the key two
+ways, and the grid hid a handle over a write that still landed.
+
+The row is now `AUTO-PARTIAL`, jobs `lint`, `test:node`, `test:dom`, `e2e`. The residue is stated in
+the row: the lint reads syntax, so a `Field` spread into another object and read there escapes it.
+The thresholds themselves stay tests — `view/capability.test.ts` for the grid,
+`entry-store.mutation.test.ts` for the API door, `e2e/write-refusal.spec.ts` for both in a browser.
+
+### J40 — `editableOf` lives beside `rollsUp`, and the two thresholds live in the write rule
+
+**The call.** `Field` is a union, so a resolved-type alias for `editable` fights it. Instead there is
+one accessor and two predicates:
+
+- `editableOf(field)` (`data/fields/field-registry.ts`, beside `rollsUp`) answers the enum. It owns
+  the boolean aliases and the absent-key default, and it is the only raw reader of the key.
+- `isUserEditable(field)` and `isApiEditable(field)` (`data/write-rule.ts`) are the two thresholds.
+
+**Why not a door argument.** The build file forbids one, and it would let a caller pick its own
+threshold — the split I14 exists to close. Two named functions read at the call site:
+`if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation)`.
+
+**Why the key is not normalized onto every Field.** Ingest rewrites `true`/`false` to the word, so
+`dataset.fields.all` reads one spelling back. An **absent** key stays absent: writing `'anywhere'`
+onto `parentId` and `segments` would restate a default in a second place with nothing checking the
+two agree, which the build file forbids.
+
+### J41 — the write door's order is existence, `compute`, `editable`, then derived
+
+**The call.** `entries.update()` asks four questions, in that order.
+
+`compute` before `editable` is ADR 0015's own rule: the register door refuses `editable` on a
+`compute` Field, so an editable-first message would send the consumer to a key that door rejects.
+
+`editable` **before** derived is mine. `libraryWriteRule` checks derived first, so the two doors
+differ here: a locked, rolling-up Field on a parent answers `FieldNotEditableError` at `update()` and
+`{ ok: false, reason: 'derived-value' }` at the grid. The reason is the ADR 0013 amendment — a Field
+that declares `distribute` leaves `#splitDerivedWrites` before any editable check could see it, and
+*"`editable` still has the last word: a policy for the write does not make the value editable."*
+Checking `editable` over the whole patch, ahead of the split, is what keeps that sentence true.
+
+**Reverse it by** moving the `editable` check below `#splitDerivedWrites` and accepting that a locked
+Field with a `distribute` writes its children.
+
+### N14 — `harness/data.ts` is now the page that demonstrates all three `editable` states
+
+**Owed to whoever writes the harness page copy.** `/data.html` declares `end: false` (a lock) and
+`cost: 'api'` (the page's own button writes it; no cell does). `data.html`'s visible prose names
+neither. The page brief (`harness/docs/page-brief.ts`, `'mutation'`) is the author's own uncommitted
+work in this tree, so this build did not touch it. A reader of that page cannot see why Cost refuses
+a cell until one of the two says so.
+
+### N15 — `e2e/write-refusal.spec.ts` proves the `'api'` grid half in a unit test, not in the browser
+
+**Owed to S5.** The browser assertion for `'api'` covers `entries.update()` only. `/data.html`
+installs no `inlineEditing()`, so every cell there is dead and a "the cell stays dead" assertion on
+that page would prove nothing. The DOM half is
+`src/extensions/features/inline-editing.test.ts` — *"an `editable: 'api'` column keeps its cell dead,
+while `entries.update()` writes the value"* — which drives a real double-click over a real grid cell
+in happy-dom. Close this by giving one browser-driven page an `'api'` column with the editor
+installed.
+
+### N16 — the spike gate's `field-redesign` grep is not zero, and this build is not why
+
+**Raised 2026-09-11, owed to Build 4.** `build/README.md#close-every-build` asks for
+`grep -rn 'field-redesign' src/ harness/ e2e/ vitest.workspace.ts | wc -l` → 0. It returns 4, and all
+four are provenance citations earlier builds wrote: `src/layout/items/produce-items.ts` (N10),
+`src/model/entry.ts` (Q5), `e2e/parent-bar-drag.spec.ts` (N13) and `src/data/write-rule.ts` (Q7).
+None is spike scaffolding. Build 5 added none and removed none, because a pointer to a real,
+surviving working file is worth more than a green grep. **Decide it with Build 4, the last build:**
+either the citations move to the ADR they belong to, or the gate says "no spike branch and no spike
+fixture", which is what it means.
+
+### N17 — `/data.html` changed which `editable` state it demonstrates, and why
+
+**Recorded, not owed.** Before this build, `/data.html` declared `{ key: 'end', editable: false }` and
+also shipped Move buttons that write `start` **and** `end`. That was consistent only while the lock
+closed the grid alone. The moment `entries.update()` read the same key, `e2e/data.spec.ts`'s
+`[S2-A4] move +1 day` went red — the page refused its own demo.
+
+The page now declares `end: 'api'` (the Move buttons write it; the cell and the handle stay dead) and
+locks a new `contractId` Field instead (`'never'`: it arrives with the entry and nothing in the app
+rewrites it). Both e2e halves hold: the end handle is still hidden on every row, and the lock is now
+refused at `entries.update()` too. **The failure was the page's, not the library's** — a page cannot
+lock a value and offer a button that writes it.

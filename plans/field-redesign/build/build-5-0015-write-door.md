@@ -40,23 +40,23 @@ dataset.setFieldEditable('start', 'never')
 
 ## Work
 
-- [ ] Widen `Field.editable` to `'never' | 'api' | 'anywhere' | boolean`. Normalize at ingest.
-- [ ] Make absent mean `'anywhere'`. Alias `true` and `false`.
-- [ ] Declare `'anywhere'` on the core `name`, `start` and `end`.
-- [ ] Declare **nothing** on `parentId` and `segments`. The absent `column` is what keeps them out of the grid.
-- [ ] Fill the resolver's **editable** arm. The grid is writable iff `'anywhere'`. `update()` refuses `'never'` only.
-- [ ] Check `compute` **before** `editable`.
-- [ ] Declare `FieldNotEditableError`, and throw it at `entries.update()`.
-- [ ] Throw `ComputedFieldCannotBeWrittenError` at `entries.update()`.
-- [ ] Point `src/view/capability.ts:120` at the moved resolver. Do not restate the enum there.
-- [ ] Assert that `dataset.fields.all` reads `{ key: 'end', editable: false }` back. `#mergeCoreFieldOverride` (`src/data/fields/field-registry.ts:211-225`) already merges into `#resolved`.
-- [ ] Ship `dataset.setFieldEditable(key, editable)`. Copy the Field. Replace `FieldRegistry.all`'s array identity, so a subscriber notices.
-- [ ] Refuse an unknown key at `setFieldEditable`. A new Field key stays refused.
-- [ ] Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`, for `'never'` and for `'api'`.
-- [ ] Rewrite the comment at `src/model/field.ts:125-127`. It still says the default is `false`, and it claims I14.
+- [x] Widen `Field.editable` to `'never' | 'api' | 'anywhere' | boolean`. Normalize at ingest.
+- [x] Make absent mean `'anywhere'`. Alias `true` and `false`.
+- [x] Declare `'anywhere'` on the core `name`, `start` and `end`.
+- [x] Declare **nothing** on `parentId` and `segments`. The absent `column` is what keeps them out of the grid.
+- [x] Fill the resolver's **editable** arm. The grid is writable iff `'anywhere'`. `update()` refuses `'never'` only.
+- [x] Check `compute` **before** `editable`.
+- [x] Declare `FieldNotEditableError`, and throw it at `entries.update()`.
+- [x] Throw `ComputedFieldCannotBeWrittenError` at `entries.update()`.
+- [x] Point `src/view/capability.ts:120` at the moved resolver. Do not restate the enum there.
+- [x] Assert that `dataset.fields.all` reads `{ key: 'end', editable: false }` back. `#mergeCoreFieldOverride` (`src/data/fields/field-registry.ts:211-225`) already merges into `#resolved`.
+- [x] Ship `dataset.setFieldEditable(key, editable)`. Copy the Field. Replace `FieldRegistry.all`'s array identity, so a subscriber notices.
+- [x] Refuse an unknown key at `setFieldEditable`. A new Field key stays refused.
+- [x] Add an `entries.update()` assertion to `e2e/write-refusal.spec.ts`, for `'never'` and for `'api'`.
+- [x] Rewrite the comment at `src/model/field.ts:125-127`. It still says the default is `false`, and it claims I14.
 - [x] The two `plans/02` edits landed 2026-09-11, before the code: §2 scopes the `fields` hole to adding or removing a **key**, and the verb list carries `dataset.setFieldEditable`. Do not ask for them again.
-- [ ] Reread `plans/01` I14 (`:917`) and `plans/02` §4.2 against what you built. **If the build cannot honour the wording, the wording is wrong** — edit it and say so. Do not ask first.
-- [ ] Close the build — see [`README.md#close-every-build`](README.md).
+- [x] Reread `plans/01` I14 (`:917`) and `plans/02` §4.2 against what you built. **If the build cannot honour the wording, the wording is wrong** — edit it and say so. Do not ask first.
+- [x] Close the build — see [`README.md#close-every-build`](README.md).
 
 **Slices it touches.** S3 (drag-resize arming), S4 (the Field registry), S5 (inline editing, the capability resolver, `write-refusal`). **Re-run the S3, S4 and S5 slice gates. I14 is claimed here, so re-run the slice gate that names it.**
 
