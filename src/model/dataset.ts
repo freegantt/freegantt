@@ -4,7 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry } from './entry.js';
-import type { EntryEdit, EntryInput } from './stored-entry.js';
+import type { EntryEdit, EntryInput, StoredEntry } from './stored-entry.js';
 import type { Field, FieldKey } from './field.js';
 import type { EntryId, SegmentId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
@@ -22,6 +22,14 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
   get(id: EntryId | string): Entry<TProps> | undefined;
   has(id: EntryId | string): boolean;
   readonly size: number;
+  /** The committed rows as **stored values**, keyed by id — what the edit pipeline carries (ADR
+   *  0017, P4). A drag preview hands this straight to the extension hook as `EditRequest.entries`,
+   *  which is committed-only by contract (D-S5-45). One map identity per commit, so a frame that
+   *  reads it allocates nothing (I5).
+   *
+   *  A reader asking what a row is worth **now** wants `get(id)` and the live `Entry`. This door
+   *  exists for the one caller that must not read now: a cascade computing a delta. */
+  readonly storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>;
   /** The Entry that draws `id`, or `undefined` when no Entry does (ADR 0010, #212). Call:
    *  `dataset.entries.entryIdOfSegment(segmentId)`. */
   entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
