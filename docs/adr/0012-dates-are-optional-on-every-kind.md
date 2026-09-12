@@ -1,6 +1,6 @@
 ---
 status: accepted — built and verified 2026-09-11, in the field redesign. Verdict: [BUILD-SPEC.md §Build 1](../../plans/field-redesign/BUILD-SPEC.md#build-1--adr-0012-optional-dates). Spike report: [reviews/2026-09-09-0012-optional-dates-spikes](../../plans/field-redesign/reviews/2026-09-09-0012-optional-dates-spikes/README.md).
-decided: an Entry spans iff both `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans; one date without the other is legal (decision 4, grill 2026-09-10); default `gridColumns` is `['name', 'start', 'end']`; core does not paint a diamond.
+decided (*"core does not paint a diamond"* narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md), proposed — core paints no diamond **for a zero-length span on its own**; it ships `diamond()`, which claims one only once an author writes it): an Entry spans iff both `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans; one date without the other is legal (decision 4, grill 2026-09-10); default `gridColumns` is `['name', 'start', 'end']`; core does not paint a diamond.
 open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The working material is in `plans/field-redesign/0012-optional-dates/`.
 ---
 
