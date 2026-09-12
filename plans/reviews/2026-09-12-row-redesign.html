@@ -19,6 +19,10 @@
       <header class="space-y-4">
         <h1 class="text-3xl font-bold tracking-tight">Branch review — <span class="font-mono">row-redesign</span></h1>
         <p class="text-slate-600">Pass 1 of <span class="font-mono">pk-branch-review</span>. Fixed point: <span class="font-mono">git diff main...HEAD</span>, 48 commits, ADR 0017–0020. Date 2026-09-12.</p>
+        <p class="text-sm font-semibold text-emerald-800">Closed. Every finding below carries its own state — Fixed, Fixed in
+          part, Kept by decision, Struck, Deferred or Open — with the commit that closed it. Read the
+          <a class="underline" href="#" onclick="document.querySelectorAll('h2')[0].scrollIntoView();return false;">Disposition</a>
+          table first.</p>
         <p class="text-sm text-slate-600">Gate verdict, run by the coordinator: <span class="font-mono">verify:full PASS — all 16 checks green, test:e2e included (73s).</span> I did not re-run it; every finding below is reproduced with a throwaway test or read directly in the file it cites.</p>
         <div class="flex flex-wrap gap-2 text-xs">
           <span class="px-2 py-1 rounded bg-red-100 text-red-800 font-semibold">Blocker — fix before merge</span>
@@ -28,6 +32,49 @@
           <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">Verdict — asked for</span>
         </div>
       </header>
+
+
+      <!-- ================= DISPOSITION ================= -->
+      <section class="rounded-lg border-2 border-emerald-400 bg-emerald-50 p-6 space-y-3">
+        <h2 class="text-xl font-bold">Disposition — what happened to every finding</h2>
+        <p class="text-sm">Closed 2026-09-12, on <span class="font-mono">row-redesign</span>. Every id below carries its state on
+          its own card too. Where the second pass corrected a finding's account, the card says so and the wrong repro is replaced,
+          not left standing — <span class="font-mono">F1</span>, <span class="font-mono">F4</span>,
+          <span class="font-mono">F5</span>. Each build decision behind a fix is a <span class="font-mono">J</span> in
+          <a class="underline" href="../row-redesign/BUILD-LOG.md"><span class="font-mono">plans/row-redesign/BUILD-LOG.md</span></a>.</p>
+        <table class="w-full text-sm">
+          <tr class="text-left border-b border-emerald-300"><th class="p-2">State</th><th class="p-2">Ids</th><th class="p-2">Where</th></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span></td>
+            <td class="p-2 font-mono text-xs">F1 F2 F3 F4 F5 F6 F12 F13 F14 F17 F18 F20 F22 F23 F24 F25 F26 F28 F29</td>
+            <td class="p-2 font-mono text-xs">613c6fe · 3554abd · 84df494 · 3e1f5c0 · b410045 · 126bbe1 · c256099 · d51a578</td></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-semibold text-xs">Fixed in part</span></td>
+            <td class="p-2 font-mono text-xs">F7 F8</td>
+            <td class="p-2 text-xs">F7: the hang is fixed, the write-shape wording is open. F8: renamed to
+              <span class="font-mono">checkHierarchyAnswers</span>, not to <span class="font-mono">parentIndexFrom</span>.</td></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold text-xs">Kept by decision</span></td>
+            <td class="p-2 font-mono text-xs">F21</td><td class="p-2 text-xs"><span class="font-mono">J61</span>, pinned by two tests in <span class="font-mono">9e54171</span>. Do not re-open.</td></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-300 text-slate-800 font-semibold text-xs">Struck — wrong</span></td>
+            <td class="p-2 font-mono text-xs">F15</td><td class="p-2 text-xs">Struck by pass 2, confirmed at HEAD: the line names a deleted door to say it is deleted.</td></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold text-xs">Deferred</span></td>
+            <td class="p-2 font-mono text-xs">F16</td><td class="p-2 text-xs">→ <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/284">#284</a>; it re-opens <span class="font-mono">Q2</span>.</td></tr>
+          <tr class="border-b border-emerald-200"><td class="p-2"><span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span></td>
+            <td class="p-2 font-mono text-xs">F9 F10 F11 F19 F27</td><td class="p-2 text-xs">Five nits, each stated on its own card. None is a defect; each is a name, a guard's reach or an unwritten rule.</td></tr>
+          <tr><td class="p-2"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Verdict accepted</span></td>
+            <td class="p-2 font-mono text-xs">V1 V2 V3</td><td class="p-2 text-xs">No code changed for any of them. The two one-sentence asks in V1 and V2 landed in <span class="font-mono">0998b96</span>.</td></tr>
+        </table>
+        <p class="text-sm"><strong>A finding the second pass raised itself.</strong> <span class="font-mono">P2-1</span> (an orphaned
+          <span class="font-mono">descendantsOf</span>), <span class="font-mono">P2-2</span> (F1 needs no plugin) and
+          <span class="font-mono">P2-3</span> (a floor outranked a claim) were all fixed —
+          <span class="font-mono">1655449</span>, <span class="font-mono">613c6fe</span>, <span class="font-mono">84df494</span>.
+          <span class="font-mono">J59</span>'s own deferred half — a typo'd <span class="font-mono">when</span> key claiming no row and
+          saying nothing — is closed by <span class="font-mono">23b86f4</span>: the new
+          <span class="font-mono">'unknown-variant-field'</span> report, deduped inside the compiled rule so the hover path allocates
+          nothing after the first row (<span class="font-mono">J65</span>).</p>
+        <p class="text-sm"><strong>Gate after the close:</strong> <span class="font-mono">verify:full PASS</span> — see the branch's
+          last run. The <span class="font-mono">core</span> <span class="font-mono">size-limit</span> budget moved 78 kB → 79 kB to hold
+          <span class="font-mono">F4</span>/<span class="font-mono">F5</span>/<span class="font-mono">F6</span>, which cost 250 B
+          together; <span class="font-mono">J62</span> records that call and its measurements.</p>
+      </section>
 
       <!-- ================= COVERAGE ================= -->
       <section class="rounded-lg border-2 border-amber-300 bg-amber-50 p-5 space-y-3">
@@ -81,6 +128,16 @@
 
       <!-- ================= F1 ================= -->
       <article id="F1" class="rounded-lg border-2 border-red-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">613c6fe</span>
+          <p class="mt-2"><strong>Corrected account (pass 2):</strong> the repro above needs no plugin at all. An authored
+  <span class="font-mono">parentId</span> loop reaches the same two unguarded walks, so "any data plugin that owns the tree" understates it.
+  <span class="font-mono">descendants()</span>, the removal walk and <span class="font-mono">#assertParentValid</span> each carry the
+  <span class="font-mono">seen</span> set now, and every walk in the new test is bounded by a step budget so a regression fails fast
+  instead of wedging the run. <span class="font-mono">1655449</span> then deleted the orphaned
+  <span class="font-mono">descendantsOf</span> (pass 2's P2-1, <span class="font-mono">J58</span>).</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F1</span>
           <h2 class="text-xl font-bold">A hierarchy source that loops hangs the library inside an open transaction</h2>
@@ -131,6 +188,14 @@ flowchart LR
 
       <!-- ================= F2 ================= -->
       <article id="F2" class="rounded-lg border-2 border-red-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">3554abd</span>
+          <p class="mt-2">The Field lookup runs first, and a key no Field declares claims no row.
+  <span class="font-mono">VariantRegistryPorts.fieldFor</span> became required, because "no port" and "no Field" were one answer.
+  <span class="font-mono">J59</span> records the call. Its deferred half — saying so out loud — landed later in
+  <span class="font-mono">23b86f4</span>; see <a class="underline" href="#F2-report">below</a>.</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F2</span>
           <h2 class="text-xl font-bold">A <span class="font-mono">when</span> field match on an undeclared key throws from the layout pass</h2>
@@ -163,6 +228,14 @@ registry.variantFor(entry);
 
       <!-- ================= F3 ================= -->
       <article id="F3" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">84df494</span>
+          <p class="mt-2">The registry answers one <span class="font-mono">ResolvedVariant</span>, off the registration the walk stopped at, so
+  the string round trip is gone. Pass 2's P2-3 landed with it: a rule with no <span class="font-mono">when</span> is a last resort and
+  sorts after every rule that states a claim, so the documented re-skin no longer hides core's <span class="font-mono">parent</span>.
+  <span class="font-mono">J60</span> records both.</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F3</span>
           <h2 class="text-xl font-bold">A variant's paint, items and <span class="font-mono">can</span> resolve by name, not by the rule that won</h2>
@@ -195,6 +268,18 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
       <!-- ================= F4 ================= -->
       <article id="F4" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">3e1f5c0</span>
+          <p class="mt-2"><strong>Corrected account (pass 2):</strong> remedy (a) above is not enough. A boolean set when a plugin claims the
+  seam is wrong, because a source <em>composes</em>: <span class="font-mono">entry.props.phaseId ?? next(entry)</span> sets the flag and
+  then hands back the row's own <span class="font-mono">parentId</span>, so a consumer-authored bad id still reads as a plugin's fault.
+  <strong>What landed is a source-identity check, not a flag:</strong> core compares the answer with
+  <span class="font-mono">entry.parentId</span>. Equal means the consumer stored it, so the report says
+  <span class="font-mono">by: 'consumer'</span> and names <span class="font-mono">parentId</span>; anything else keeps the source wording
+  and <span class="font-mono">by: 'plugin'</span>. Two tests pin it, one of them through a composing plugin that falls through.
+  <span class="font-mono">J63</span>.</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F4</span>
           <h2 class="text-xl font-bold">A consumer's own bad <span class="font-mono">parentId</span> is reported as <span class="font-mono">by: 'plugin'</span> with no plugin installed</h2>
@@ -217,6 +302,20 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
       <!-- ================= F5 ================= -->
       <article id="F5" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">3e1f5c0</span>
+          <p class="mt-2"><strong>Corrected account (pass 2):</strong> it is not "arbitrarily many commits". Any
+  <span class="font-mono">entries.update()</span> forces the computed to evaluate. The real silent window is <strong>construction</strong>,
+  plus an <span class="font-mono">add</span>/<span class="font-mono">remove</span> that nothing reads after.
+  <strong>The remedy above is also wrong on its own:</strong> raising from the commit path alone silences the construction case
+  entirely, which is the only case <span class="font-mono">F4</span> reaches. <strong>What landed:</strong>
+  <span class="font-mono">checkHierarchyAnswers</span> is pure and hands back <span class="font-mono">{ parents, refused }</span>;
+  <span class="font-mono">EntryStore#reportRefusedHierarchyAnswers()</span> raises, and it is called at construction, at every
+  <span class="font-mono">setSource</span>, and on every revision — never from a read. A construction-time refusal reaches the
+  <span class="font-mono">console</span> fallback, the posture the construction Rollup already takes. Deduped per revision by message.
+  <span class="font-mono">J62</span>.</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F5</span>
           <h2 class="text-xl font-bold">The tree check runs inside an <span class="font-mono">alien-signals</span> computed, so a Fault reports only when something reads</h2>
@@ -241,6 +340,16 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
       <!-- ================= F6 ================= -->
       <article id="F6" class="rounded-lg border border-sky-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">3e1f5c0</span>
+          <p class="mt-2"><span class="font-mono">rollUpFields</span> takes a <span class="font-mono">RollUpTree</span> —
+  <span class="font-mono">{ committedParents, source }</span> — and the committed half is the store's own memoized index. Four sweeps,
+  not five. <strong>Pass 2's warning, decided and not inherited:</strong> reading that index from the commit path does evaluate the
+  computed there — but under <span class="font-mono">J62</span> the computed raises nothing, so no Fault fires as a side effect of this
+  change. The commit path reports because <span class="font-mono">endTransaction</span> asks it to, on purpose.
+  <span class="font-mono">J64</span>.</p>
+        </div>
+
         <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F6</span><h2 class="text-xl font-bold">The Rollup now walks the whole dataset five times per commit</h2></div>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">D-S4-8</span></div>
         <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">src/data/rollup.ts:266–279</span> · <span class="font-mono text-xs">src/data/entry-store.ts:216–219</span> (<span class="font-mono">#parentById</span>, already memoized).</p>
@@ -251,6 +360,15 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
       <!-- ================= F7 ================= -->
       <article id="F7" class="rounded-lg border border-sky-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-semibold text-xs">Fixed in part</span> <span class="font-mono text-xs text-slate-600">613c6fe</span>
+          <p class="mt-2">The hang half is fixed: <span class="font-mono">#assertParentValid</span> carries the
+  <span class="font-mono">seen</span> guard, so a stored <span class="font-mono">parentId</span> cycle reached through
+  <span class="font-mono">replay</span> no longer walks forever. <strong>Half (a) is open:</strong> the guard still walks
+  <span class="font-mono">entry.parentId</span> rather than the source, so it guards the write shape and not the tree, and neither the
+  error message nor ADR 0020 says so. Left as a nit for a later pass — it is a wording-or-move decision, not a defect.</p>
+        </div>
+
         <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F7</span><h2 class="text-xl font-bold"><span class="font-mono">#assertParentValid</span> still walks <span class="font-mono">entry.parentId</span>, not the hierarchy source</h2></div>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ADR 0020</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Body unchanged on this branch</span></div>
         <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">src/data/entry-store.ts:707–714</span> (body, unchanged by this branch) · call sites <span class="font-mono text-xs">entry-store.ts:521–523, 544–546</span> · <span class="font-mono text-xs">BUILD-LOG.md</span> J54.</p>
@@ -263,21 +381,45 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         <h2 class="text-2xl font-bold">Nits — optional, listed so pass 2 can dismiss them by id</h2>
 
         <article id="F8" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-semibold text-xs">Fixed in part</span> <span class="font-mono text-xs text-slate-600">3e1f5c0</span>
+          <p class="mt-2">Renamed, but not to <span class="font-mono">parentIndexFrom</span>. The function's product is now two things —
+  the accepted tree and the answers core refused — so it is <span class="font-mono">checkHierarchyAnswers</span>, returning
+  <span class="font-mono">CheckedHierarchy</span>. The call site reads "checked hierarchy = check hierarchy answers", and the product is
+  named by the type.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F8</span> — <span class="font-mono">checkHierarchySource</span> is named for its guard and hides its product</h3>
           <p class="text-sm"><span class="font-mono text-xs">src/data/hierarchy-source.ts:41–45</span>. Naming skill, step 2 — write the call site and read it aloud. <span class="font-mono text-xs">entry-store.ts:218</span> reads <em>"parent-by-id is check-hierarchy-source"</em>, which is a false sentence: the function's product is a <span class="font-mono">ParentIndex</span>, and checking is how it gets there. <span class="font-mono">parentIndexFrom(entries, source, report)</span> reads <em>"the parent index from this source"</em> and passes all five checks; <span class="font-mono">ParentIndex</span> is already the declared return type at line 26, so the domain word is on hand.</p>
         </article>
 
         <article id="F9" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
+          <p class="mt-2">Not done. Three structural names for one plugin concept still stand in
+  <span class="font-mono">src/extensions/</span>. A rename with no behaviour behind it, left for a later pass.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F9</span> — three structural names for one plugin concept in one layer</h3>
           <p class="text-sm"><span class="font-mono text-xs">src/extensions/plugin-order.ts:13</span> (<span class="font-mono">OrderedPlugin</span>) · <span class="font-mono text-xs">src/extensions/install-dataset-plugins.ts:22</span> (<span class="font-mono">InstallablePlugin</span>) · <span class="font-mono text-xs">src/extensions/plugin-runtime.ts</span> (<span class="font-mono">ShellPlugin</span>). Three names for "a plugin, as this file needs to see it", in one folder. <span class="font-mono">InstallablePlugin</span> is the weak one: read the call — <span class="font-mono">installDatasetPlugins(plugins: readonly InstallablePlugin[])</span> is "install these installable plugins", a tautology, and every plugin is installable. What actually distinguishes it is that it may carry a <span class="font-mono">data</span> half. Naming skill step 5 wants a domain term before the category word, and there is one available. <span class="font-mono">OrderedPlugin</span> already lives next door and reads correctly ("a plugin as the order sort sees it"); <span class="font-mono">installDatasetPlugins</span> could take <span class="font-mono">OrderedPlugin &amp; { data?(ctx): Disposer | void }</span> and the third name goes away.</p>
         </article>
 
         <article id="F10" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
+          <p class="mt-2">Not done. <span class="font-mono">gestureIsOffered()</span> still exists.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F10</span> — <span class="font-mono">gestureIsOffered()</span> takes no argument and returns <span class="font-mono">true</span></h3>
           <p class="text-sm"><span class="font-mono text-xs">src/view/capability.ts:91–93</span>, called at line 212. Speculative generality: <span class="font-mono">return gestureIsOffered();</span> says what <span class="font-mono">return true;</span> says, and the whole meaning lives in the eleven-line doc comment above it. The comment is worth keeping — it records why a parent needs no special case — but it belongs on <span class="font-mono">isOffered</span>'s final line, not on a function that exists to be the subject of a sentence. Deleting it concentrates nothing and moves nothing.</p>
         </article>
 
         <article id="F11" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
+          <p class="mt-2">Not done. The gate still prints a count of skipped blocks rather than their names.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F11</span> — <span class="font-mono">data-check="type-sketch"</span> is a silent-by-attribute escape hatch</h3>
           <p class="text-sm"><span class="font-mono text-xs">scripts/check-doc-examples.mjs:54–63, 88–89, 106, 263</span> · two uses in <span class="font-mono text-xs">harness/docs/plugin-authoring.html</span>. The design is right: a block with <em>no</em> <span class="font-mono">data-check</span> fails the script, so "unchecked" is never the default, and the skipped count is printed. The rot vector is that the count is a number. Changing one attribute from <span class="font-mono">module</span> to <span class="font-mono">type-sketch</span> silences a block that should compile, and the only thing that moves is "1 type sketch(es) skipped" → "2". A human has to notice a digit in a passing gate's output. <strong>Cheap hardening:</strong> print the <em>name</em> of every skipped block, not the count — the script already reads <span class="font-mono">names</span> at line 106 — so a diff of the gate output shows a block being silenced. That keeps the escape hatch and removes the place it can hide.</p>
         </article>
@@ -290,6 +432,12 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         <p class="text-sm text-slate-600">Found by reading the <span class="font-mono">plans/01</span> and <span class="font-mono">plans/02</span> diffs, then sweeping every locked spec and <span class="font-mono">docs/</span> for the words this branch retired: <span class="font-mono">RendererByLook</span>, <span class="font-mono">EntryLook</span>, <span class="font-mono">data-kind</span>, <span class="font-mono">GanttPlugin</span>, <span class="font-mono">DatasetPlugin</span>, <span class="font-mono">entries.fieldValue</span>, <span class="font-mono">entries.childrenOf</span>.</p>
 
         <article id="F12" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">b410045</span>
+          <p class="mt-2"><span class="font-mono">plans/01</span> §10 now states one plugin type with two halves, the two context
+  halves, and the hierarchy seam ADR 0020 shipped.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F12</span><h3 class="text-xl font-bold"><span class="font-mono">plans/01</span> §10 still declares the retired plugin pair, and contradicts <span class="font-mono">plans/02</span> §4.4</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold">Major</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ADR 0019</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Locked spec</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">plans/01-domain-architecture.md:730–732</span> (the two-contract sentence) · <span class="font-mono text-xs">:735–742</span> (§10.1, <span class="font-mono">interface GanttPlugin { setup(ctx) }</span>) · <span class="font-mono text-xs">:788–802</span> (§10.2, <span class="font-mono">interface DatasetPlugin { setup(ctx) }</span>) · <span class="font-mono text-xs">:~825</span> ("legal only while <span class="font-mono">setup</span> runs") — against <span class="font-mono text-xs">plans/02-public-api.md</span> §4.4 (added on this branch) and <span class="font-mono text-xs">plans/02:625</span>.</p>
@@ -299,6 +447,12 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F13" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">c256099</span>
+          <p class="mt-2">The fenced block is now one <span class="font-mono">variants</span> entry plus one
+  <span class="font-mono">barRenderer</span> catch-all, which is what the paragraph above it says.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F13</span><h3 class="text-xl font-bold"><span class="font-mono">plans/02</span> §4.3 still prints the retired <span class="font-mono">RendererByLook</span> map as the level-3 example</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold">Major</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ADR 0018</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Locked spec</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">plans/02-public-api.md:378–385</span> · the paragraph above it at <span class="font-mono text-xs">:376</span>, which the branch <em>did</em> rewrite · <span class="font-mono text-xs">:653</span>, which records the retirement · <span class="font-mono text-xs">src/view/gantt-shell.ts</span>, where <span class="font-mono">barRenderer</span> is now <span class="font-mono">BarRenderer</span> alone.</p>
@@ -314,6 +468,15 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F14" class="rounded-lg border border-sky-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">c256099</span>
+          <p class="mt-2">The three lines this branch made stale are corrected — the index row, the value door, and the
+  two-contract paragraph. The two older ones the finding names as pre-existing (ADR 0013's
+  <span class="font-mono">rollUpKinds</span>/<span class="font-mono">autoGroup</span>, ADR 0016's save format) were deleted in the same
+  pass rather than filed: a consumer-facing doc that publishes four deleted doors is worse than the scope rule it would have
+  protected.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F14</span><h3 class="text-xl font-bold"><span class="font-mono">docs/05-consumer-api.md</span> was never opened, and publishes four deleted doors</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Partly pre-existing</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">docs/05-consumer-api.md:13, 21–25, 50–56</span>. <strong>Not in <span class="font-mono">git diff main...HEAD</span> at all.</strong></p>
@@ -328,6 +491,16 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F15" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-slate-300 text-slate-800 font-semibold text-xs">Struck — wrong</span>
+          <p class="mt-2"><strong>Struck by pass 2 as wrong, and this pass confirmed it at HEAD.</strong>
+  <span class="font-mono">harness/docs/plugin-authoring.html:718</span> does not tell an author to use
+  <span class="font-mono">entries.fieldValue</span>. It reads "<em><span class="font-mono">entries.fieldValue(id, key)</span> and
+  <span class="font-mono">ctx.read(entry, key)</span> are both gone — they were the same question with two doors</em>": the deleted
+  door is named in order to say it is deleted. That is exactly the <span class="font-mono">J30</span> pattern the finding itself excuses
+  at <span class="font-mono">:166</span>. No action taken, and none needed.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F15</span> — a retired door survives in <span class="font-mono">plugin-authoring.html</span> prose, where the new gate cannot see it</h3>
           <p class="text-sm"><span class="font-mono text-xs">harness/docs/plugin-authoring.html:718</span> still tells a plugin author to use <span class="font-mono">entries.fieldValue(id, key)</span>. J57's new gate typechecks every <span class="font-mono">&lt;pre&gt;</span> on this page and found eight stale samples — good work — but this hit is inside a <span class="font-mono">&lt;code&gt;</span> in a paragraph, which the gate does not read. It is the concrete illustration of F11's point: the gate is exactly as wide as the blocks it can reach, and prose is not one of them. <strong>Cheap hardening:</strong> the same script already walks the page; a grep pass over the whole file for a small list of retired door names would have caught this one and cost nothing. (The other <span class="font-mono">childrenOf</span> hit on this page, at <span class="font-mono text-xs">:166</span>, is J30's deliberate "names the deleted door to say what replaced it" — correct, and not a finding.)</p>
         </article>
@@ -340,6 +513,14 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         <p class="text-sm text-slate-600">From <span class="font-mono">git diff main...HEAD -- etc/freegantt.api.md</span>, read line by line. <strong>The surface passes the two questions that matter most.</strong> No new knob, hook or handle is required to get default behaviour — core's two variants register themselves, the hierarchy seam ships with a default occupant, and a Gantt with no <span class="font-mono">variants</span> key draws exactly as it did on <span class="font-mono">main</span>. And a new variant, field or plugin extends through a seam: <span class="font-mono">ctx.variants.add</span>, <span class="font-mono">ctx.hierarchy.setSource</span>, <span class="font-mono">ctx.fields.register</span> — no <span class="font-mono">if</span> chain anywhere in core, and <span class="font-mono">registerItemProducer</span>, <span class="font-mono">registerLookClaim</span>, <span class="font-mono">registerLookDefaults</span>, <span class="font-mono">RendererByLook</span>, <span class="font-mono">EntryLook</span>, <span class="font-mono">LookClaim</span> and <span class="font-mono">KindDefaults</span> all leave the surface for one object. Five findings, none of them blocking.</p>
 
         <article id="F16" class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold text-xs">Deferred</span>
+          <p class="mt-2"><strong>Deferred to <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/284">#284</a>.</strong>
+  Threading <span class="font-mono">TProps</span> through <span class="font-mono">ItemProducer</span>,
+  <span class="font-mono">BarRendererContext</span> and <span class="font-mono">Interactions</span> re-opens
+  <span class="font-mono">Q2</span>, which that issue holds with its reasons. Not touched on this branch.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F16</span><h3 class="text-xl font-bold"><span class="font-mono">EntryVariant&lt;TProps&gt;</span> types one of its four members</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ADR 0018</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">src/layout/items/variants.ts:56–71</span> · <span class="font-mono text-xs">src/layout/items/item.ts:25</span> (<span class="font-mono">ItemProducer</span>, ungeneric) · <span class="font-mono text-xs">src/layout/renderer.ts:29–38</span> (<span class="font-mono">BarRendererContext.entry: Entry</span>, ungeneric) · <span class="font-mono text-xs">src/model/interactions.ts</span> (<span class="font-mono">Interactions</span>, ungeneric) · the <span class="font-mono">EntryVariant</span> block in <span class="font-mono text-xs">etc/freegantt.api.md</span>.</p>
@@ -356,6 +537,12 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F17" class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2"><span class="font-mono">StoredEntry</span> carries a TSDoc block now: one row's values at one moment, the
+  questions belong to the pass, and the four places an app author meets it. It is <span class="font-mono">@public</span> in the report.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F17</span><h3 class="text-xl font-bold"><span class="font-mono">StoredEntry</span> ships <span class="font-mono">@public (undocumented)</span>, on the app-author surface</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ADR 0017</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">src/model/stored-entry.ts:21</span> — the interface, with no TSDoc above it — and <span class="font-mono text-xs">etc/freegantt.api.md</span>, which marks it <span class="font-mono">// @public (undocumented)</span>.</p>
@@ -371,11 +558,24 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F18" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">The orphaned comment moved onto <span class="font-mono">parentId</span>, where the classification rule
+  belongs, and <span class="font-mono">name</span> got a line of its own.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F18</span> — <span class="font-mono">StoredEntry.name</span> carries the doc comment of the deleted <span class="font-mono">kind</span> field</h3>
           <p class="text-sm"><span class="font-mono text-xs">src/model/stored-entry.ts:24–26</span>. The comment directly above <span class="font-mono">name: string</span> reads: <em>"No stored classification (ADR 0013). An Entry derives when it has children — <span class="font-mono">entry.hasChildren</span> answers that; there is nothing to read off the Entry itself."</em> That is the note for the <strong>removed</strong> <span class="font-mono">kind</span> member, left behind when the member above it went. It now renders on <span class="font-mono">name</span>'s hover in every editor, and in the generated API reference. Fix: move it onto the interface (where F17 wants a comment anyway), or delete it — <span class="font-mono text-xs">CONTEXT.md</span>'s <em>Kind (retired)</em> entry already holds the whole rule.</p>
         </article>
 
         <article id="F19" class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
+          <p class="mt-2">Not done. The loose-id split — loose on a scalar id, branded on a collection key — is still unwritten in
+  <span class="font-mono">plans/02</span>. The finding's own recommendation (do not widen the maps) is what the code does; only the
+  sentence that makes it a rule is missing.</p>
+        </div>
+
           <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F19</span><h3 class="text-xl font-bold">The loose-id rule got two opposite readings on one branch</h3></div>
           <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Re-opens Q9</span></div>
           <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">plans/row-redesign/BUILD-LOG.md</span> J51, J56 and Q9 · <span class="font-mono text-xs">etc/freegantt.api.md</span>: <span class="font-mono">reveal(id: EntryId | SegmentId | string)</span> and <span class="font-mono">HierarchySource = (entry) =&gt; EntryId | string | undefined</span>, against <span class="font-mono">EntryEdits = ReadonlyMap&lt;EntryId, EntryEdit&gt;</span>.</p>
@@ -385,6 +585,13 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="F20" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">Overload 2 carries its own doc block, naming the arm, its install site and why. It is
+  <span class="font-mono">@public</span> in the report. The <span class="font-mono">Plugin_2</span> half was already accepted in
+  <span class="font-mono">Q8</span> and is unchanged.</p>
+        </div>
+
           <h3 class="font-bold"><span class="font-mono">F20</span> — <span class="font-mono">Plugin</span> publishes as <span class="font-mono">Plugin_2</span>, and <span class="font-mono">definePlugin</span>'s data overload carries no doc</h3>
           <p class="text-sm"><span class="font-mono text-xs">etc/freegantt.api.md</span>: <span class="font-mono">type Plugin_2&lt;TProps&gt; = …; export { Plugin_2 as Plugin }</span>, and <span class="font-mono">// @public (undocumented)</span> on the second <span class="font-mono">definePlugin</span> signature.</p>
           <p class="text-sm"><strong>On <span class="font-mono">Plugin_2</span>.</strong> Q8 filed this and shipped the ADR's name, which I agree is right — an import shadows the global and nothing breaks. One cost Q8 does not state: the generated report is rendered at <span class="font-mono text-xs">harness/docs/api-reference.html</span>, so <span class="font-mono">Plugin_2</span> is what a reader of the published surface actually meets. And an author who writes <span class="font-mono">const p: Plugin = …</span> <em>without</em> the import silently gets <span class="font-mono">lib.dom</span>'s legacy <span class="font-mono">navigator.plugins</span> entry instead, with a structural error that names neither library. Not blocking, and not worth a rename on its own — worth one line in the plugin guide telling an author to import the name.</p>
@@ -397,6 +604,13 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         <h2 class="text-2xl font-bold">Verdicts asked for</h2>
 
         <article id="V1" class="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Verdict accepted</span> <span class="font-mono text-xs text-slate-600">0998b96</span>
+          <p class="mt-2">Verdict accepted: the deletion stands and nothing is restored. The one thing it left unwritten is now
+  written — <span class="font-mono">collectTouchedIds</span>' doc says that a row whose former parent link core dropped as a
+  cycle-closer has no former parent to invalidate, and why that is the right answer.</p>
+        </div>
+
           <h3 class="text-lg font-bold"><span class="font-mono">V1</span> — J53: deleting the <span class="font-mono">'parentId' in edit</span> check</h3>
           <p class="text-sm font-semibold text-emerald-900">Verdict: the deletion is right, and the build file was wrong. Do not restore it.</p>
           <p class="text-sm"><span class="font-mono text-xs">src/data/rollup.ts:57–81</span> (<span class="font-mono">collectTouchedIds</span>) · <span class="font-mono text-xs">src/data/entry-store.ts:753–759</span> (<span class="font-mono">#recordStagedParent</span>) · <span class="font-mono text-xs">src/data/entry-store.ts:101–111</span> (<span class="font-mono">stagedParents</span>' own comment).</p>
@@ -406,6 +620,14 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
         </article>
 
         <article id="V2" class="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Verdict accepted</span> <span class="font-mono text-xs text-slate-600">0998b96</span>
+          <p class="mt-2">Verdict accepted: not an I5 breach, and it is recorded as accepted rather than fixed. No code changed.
+  The one sentence it asked for is now in <span class="font-mono">WriteSet.stagedParents</span>' comment — the source call costs one
+  <span class="font-mono">entryAfterEdit</span> row copy per staged update, at <span class="font-mono">pointerup</span>, and it stays off
+  the per-frame path.</p>
+        </div>
+
           <h3 class="text-lg font-bold"><span class="font-mono">V2</span> — <span class="font-mono">stageUpdate</span>'s allocation on the drag-commit path</h3>
           <p class="text-sm font-semibold text-emerald-900">Verdict: not an I5 breach. It is the price of ADR 0020, and it should be recorded as accepted, not "fixed".</p>
           <p class="text-sm"><span class="font-mono text-xs">src/data/entry-store.ts:792–794</span> · <span class="font-mono text-xs">entry-store.ts:756–759</span> (<span class="font-mono">#recordStagedParent</span>) · <span class="font-mono text-xs">entry-store.ts:325–335</span> (<span class="font-mono">storedEntry</span> → <span class="font-mono">entryAfterEdit</span>) · <span class="font-mono text-xs">entry-store.ts:101–111</span>.</p>
@@ -465,6 +687,18 @@ paintFor('x')               // {"class":{"P2":true}}   — the SECOND registrati
 
       <!-- ================= F21 ================= -->
       <article id="F21" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold text-xs">Kept by decision</span> <span class="font-mono text-xs text-slate-600">9e54171</span>
+          <p class="mt-2"><strong>Investigated and kept as it is (<span class="font-mono">J61</span>).</strong> Core's own
+  <span class="font-mono">parent</span> paint answers before a consumer's <span class="font-mono">barRenderer</span> because a variant's
+  paint beats a catch-all <em>by specificity</em>, not by rank: <span class="font-mono">parent</span> names the rows it covers and
+  <span class="font-mono">barRenderer</span> names none. Reversing it was written, run and reverted —
+  <span class="font-mono">e2e/planner.spec.ts</span> and <span class="font-mono">e2e/parent-bar-drag.spec.ts</span> both went red.
+  What the finding was right about is that it was unstated and unguarded: two tests in
+  <span class="font-mono">api/gantt.test.ts</span> pin it, and <span class="font-mono">GanttOptions.barRenderer</span>'s doc names the
+  rows it covers. <strong>Do not re-open.</strong></p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F21</span>
           <h2 class="text-xl font-bold">A consumer&rsquo;s <span class="font-mono">barRenderer</span> silently stops painting every parent row</h2>
@@ -503,6 +737,12 @@ bars: [ 'p:0|fg-bar fg-bar-summary',
 
       <!-- ================= F22 ================= -->
       <article id="F22" class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">126bbe1</span>
+          <p class="mt-2"><span class="font-mono">createRollUpContext</span>'s rebound access is deleted; both callers already pass an
+  id-aware one. Pinned by the probe, as a real test.</p>
+        </div>
+
         <div class="flex items-baseline gap-3">
           <span class="font-mono font-bold text-xl">F22</span>
           <h2 class="text-xl font-bold">The Rollup&rsquo;s context rebinds <span class="font-mono">children()</span> to the parent&rsquo;s list, so a <span class="font-mono">compute</span> Field read for a child answers about the wrong row</h2>
@@ -541,6 +781,13 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F23 ================= -->
       <article id="F23" class="rounded-lg border border-sky-300 bg-white p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">c256099</span>
+          <p class="mt-2">The "not accepted yet" sentence is gone, and the seam table gained
+  <span class="font-mono">hierarchy.setSource</span> and <span class="font-mono">edits.setExtender</span>, each naming its composing
+  behaviour and the test that proves it.</p>
+        </div>
+
         <div class="flex items-baseline gap-3"><span class="font-mono font-bold text-xl">F23</span><h2 class="text-lg font-bold"><span class="font-mono">docs/06-plugin-authoring.md</span> says ADR 0020 is not accepted, and its seam table omits the seam ADR 0020 shipped</h2></div>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Spec drift</span></div>
         <p class="text-sm"><strong>Files.</strong> <span class="font-mono text-xs">docs/06-plugin-authoring.md:7&ndash;9</span> and its seam table at <span class="font-mono text-xs">:159&ndash;172</span> &middot; <span class="font-mono text-xs">docs/adr/0020-a-plugin-may-own-the-hierarchy.md:2</span> &middot; <span class="font-mono text-xs">etc/freegantt.api.md:357, 391</span>.</p>
@@ -551,6 +798,12 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F24 ================= -->
       <article id="F24" class="rounded-lg border border-sky-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">c256099</span>
+          <p class="mt-2">The §2 example now uses <span class="font-mono">gantt.interactions</span>, which is still object-valued, so
+  the rule it illustrates has a live type under it.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F24</span> &mdash; a second retired <span class="font-mono">barRenderer</span> map survives in <span class="font-mono">plans/02</span> &sect;2, where F13&rsquo;s fix does not reach it</h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-semibold">Medium</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Extends F13</span></div>
         <p class="text-sm"><span class="font-mono text-xs">plans/02-public-api.md:192&ndash;194</span>, under <em>Reconfiguration is just assignment</em> &rarr; <em>A config value is a value, not a mutable object (#187)</em>:</p>
@@ -561,6 +814,13 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F25 ================= -->
       <article id="F25" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">All three: the seam count reads four, the <span class="font-mono">duration</span> Field is documented under the
+  Dataset's <span class="font-mono">measureDuration</span> and points at <span class="font-mono">measureEntryDuration</span>, and the
+  test double's header says which measure it states and what a green layout test therefore did not cover.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F25</span> &mdash; three doc comments count seams and measure durations the way the code did before this branch</h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Nit</span></div>
         <ul class="text-sm list-disc pl-5 space-y-2">
@@ -572,6 +832,12 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F26 ================= -->
       <article id="F26" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">The message quotes the id and shows the site with no fake call around it, and the test asserts both
+  halves.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F26</span> &mdash; <span class="font-mono">PluginSetupError.wrongInstallSite</span> prints a plugin id where a factory call goes</h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Nit</span></div>
         <p class="text-sm"><span class="font-mono text-xs">src/model/errors.ts:767&ndash;777</span>. ADR 0019 says the message &ldquo;names the Dataset and shows the call&rdquo;. What it prints for the harness&rsquo;s own plugin is:</p>
@@ -582,6 +848,12 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F27 ================= -->
       <article id="F27" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-semibold text-xs">Open — not done</span>
+          <p class="mt-2">Not done. The gate still matches <span class="font-mono">&lt;pre&gt;&lt;code&gt;</span> only. Every block on the
+  page is that shape today, so nothing is unchecked; the guard is still narrower than its own doc comment.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F27</span> &mdash; the new doc-example gate claims every <span class="font-mono">&lt;pre&gt;</span> is checked; it checks every <span class="font-mono">&lt;pre&gt;&lt;code&gt;</span></h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Nit</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">J57</span></div>
         <p class="text-sm"><span class="font-mono text-xs">scripts/check-doc-examples.mjs:52&ndash;68</span>. The doc block is emphatic and right about why: &ldquo;<strong>Every <span class="font-mono">&lt;pre&gt;</span> on that page must carry a <span class="font-mono">data-check</span> attribute</strong> &hellip; a page where &lsquo;unchecked&rsquo; is the silent default goes straight back to that.&rdquo; The regex underneath is <span class="font-mono">/&lt;pre([^&gt;]*)&gt;&lt;code&gt;([\s\S]*?)&lt;\/code&gt;&lt;\/pre&gt;/g</span>. A <span class="font-mono">&lt;pre&gt;</span> with no <span class="font-mono">&lt;code&gt;</span> inside it, or with a newline between the two tags, never matches, so it is never counted and never refused &mdash; the silent default the comment set out to remove, for one shape of block.</p>
@@ -591,6 +863,13 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= V3 ================= -->
       <article id="V3" class="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-6 space-y-3">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Verdict accepted</span>
+          <p class="mt-2">Verdict accepted. Nothing to do: every deleted test guarded a rule ADR 0018 deleted, and both surviving rules
+  moved rather than died. The two holes it names are closed — <span class="font-mono">F1</span> by
+  <span class="font-mono">613c6fe</span>, <span class="font-mono">F21</span> by <span class="font-mono">9e54171</span>'s two tests.</p>
+        </div>
+
         <h3 class="text-lg font-bold"><span class="font-mono">V3</span> &mdash; J39: the nine tests deleted from <span class="font-mono">renderer-registry.test.ts</span></h3>
         <p class="text-sm font-semibold text-emerald-900">Verdict: nothing goes unguarded. Every deletion guarded a rule ADR 0018 deleted, and the two rules that outlived the map are both still pinned.</p>
         <p class="text-sm"><span class="font-mono text-xs">src/view/renderer-registry.test.ts</span> (whole file, 93 lines) &middot; <span class="font-mono text-xs">src/layout/items/produce-items.test.ts</span> (whole file) &middot; <span class="font-mono text-xs">src/layout/items/variants.test.ts:16&ndash;228</span>.</p>
@@ -608,6 +887,12 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
       <section class="space-y-6">
       <!-- ================= F28 ================= -->
       <article id="F28" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">All three comments say <em>variant</em>. <span class="font-mono">plugin-registrations.ts:7</span> is left alone,
+  as the finding asks — it names the retired word in a sentence about the retirement.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F28</span> &mdash; the retired noun <em>look</em> still names the live concept in three <span class="font-mono">src/</span> comments</h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Nit</span><span class="px-2 py-1 rounded bg-slate-200 text-slate-700">Extends F15</span></div>
         <p class="text-sm">F14 and F15 found the retired vocabulary in <span class="font-mono text-xs">docs/</span> and in the harness page. I swept <span class="font-mono text-xs">src/**</span> for the same words. The identifiers are all clean &mdash; <span class="font-mono">EntryLook</span>, <span class="font-mono">registerLookClaim</span>, <span class="font-mono">registerItemProducer</span>, <span class="font-mono">data-kind</span>, <span class="font-mono">entries.fieldValue</span> and <span class="font-mono">EntryStoreView.childrenOf</span> are gone from every non-test file. Three comments still use <em>look</em> as the domain noun for something that exists today, which <span class="font-mono text-xs">CONTEXT.md:240</span> now lists under <em>Avoid</em>:</p>
@@ -621,6 +906,11 @@ a.kidCount via read  3        // the same Field, read off the store, is right</p
 
       <!-- ================= F29 ================= -->
       <article id="F29" class="rounded-lg border border-slate-300 bg-white p-5 space-y-2">
+        <div class="rounded border border-slate-300 bg-slate-50 p-3 text-sm">
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold text-xs">Fixed</span> <span class="font-mono text-xs text-slate-600">d51a578</span>
+          <p class="mt-2">The doubled article is gone.</p>
+        </div>
+
         <h3 class="font-bold"><span class="font-mono">F29</span> &mdash; a mechanical rename left a dangling article in <span class="font-mono">DatasetStateOptions.editExtender</span></h3>
         <div class="flex gap-2 text-xs"><span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Nit</span></div>
         <p class="text-sm"><span class="font-mono text-xs">src/data/dataset-state.ts:64&ndash;66</span>. Build 3 replaced the noun and left the article that introduced it:</p>
