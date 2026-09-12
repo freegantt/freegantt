@@ -280,6 +280,7 @@ export class Dataset<TProps = unknown> {
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
     redo(): void;
     replay(changeSet: ChangeSet): void;
+    setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void;
     get time(): ZonedTime;
     // (undocumented)
     get timeZone(): string;
@@ -770,7 +771,7 @@ export type Field<TValue = unknown> = {
     key: FieldKey;
     type?: FieldTypeName;
     rollUp?: AggregatorName;
-    editable?: boolean;
+    editable?: FieldEditable | boolean;
     distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
@@ -806,6 +807,9 @@ export interface FieldContext {
 export type FieldDistributor<TValue = unknown> = (value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext) => EntryEdits | undefined;
 
 // @public
+export type FieldEditable = 'never' | 'api' | 'anywhere';
+
+// @public
 export type FieldKey = CoreFieldKey | (string & {});
 
 // @public
@@ -813,6 +817,15 @@ export class FieldNotColumnableError extends FreeGanttError {
     constructor(key: string);
     // (undocumented)
     readonly key: string;
+}
+
+// @public
+export class FieldNotEditableError extends FreeGanttError {
+    constructor(field: FieldKey, operation: string);
+    // (undocumented)
+    readonly field: FieldKey;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -825,8 +838,7 @@ export interface FieldType<TValue = unknown> {
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     distribute?(value: TValue | undefined, children: readonly Entry[], parent: Entry, ctx: RollUpContext): EntryEdits | undefined;
-    // (undocumented)
-    editable?: boolean;
+    editable?: FieldEditable | boolean;
     // (undocumented)
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     // (undocumented)
