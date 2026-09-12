@@ -12,7 +12,7 @@ function item(id: string, start: number, end: number, segment = 0): Item {
   return {
     id: itemId(entryId(id), segment),
     entryId: entryId(id),
-    kind: 'span',
+    look: 'leaf',
     label: id,
     start: asInstant(start),
     end: asInstant(end),

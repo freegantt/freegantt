@@ -16,14 +16,13 @@ import type {
   FieldContext,
   GridColumnInput,
   RowSource,
-  DatasetDocument,
   DatasetEventMap,
   GanttPlugin,
-  RendererByKind,
+  RendererByLook,
   CellRenderer,
   HeaderRenderer,
 } from '../src/api/index.js';
-import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import { demoFieldOptions, demoTreeEntryInputs, MILESTONE_ENTRY_ID } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -31,6 +30,7 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { weekendShading } from './plugins/weekend-shading.js';
+import { milestoneKind } from './plugins/milestone-kind.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
@@ -40,7 +40,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'generic-
 // S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Budget take their Fields' own defaults and are editable.
 //
-// Duration still shows a refused cell: it is `compute`-sourced and has no stored home to write back
+// Duration still shows a refused cell: it is a `compute` Field and has no stored home to write back
 // to (ADR 0005: the Rollup would overwrite an edit on the next commit).
 const GRID_COLUMNS: readonly GridColumnInput[] = [
   'name',
@@ -55,7 +55,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 // `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost?: number; team?: string }, { cost: number; team?: string }>({
+const dataset = new Dataset<{ cost?: number; team?: string }>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
@@ -79,14 +79,10 @@ const gantt = new Gantt({
 gantt.panToToday();
 
 // A test seam only (`hierarchy.ts` writes the same two globals): it hands an e2e test the public
-// `Gantt` and `Dataset`, nothing else. `Window.__dataset` binds to `hierarchy.ts`'s field shape;
-// this page declares its own fields, so the cast stands in for that one shared declaration. Every
-// e2e read of it (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's fields.
-// The double cast through `unknown` is evidence, not a shortcut: `Dataset<TFields>` gives no common
-// type two differently-fielded instances both satisfy, so no single cast bridges them. #226's
-// `gantt.dataset` getter does not close it, and was not expected to: the mismatch is between two
-// harness pages' declared field shapes, not between a Gantt and the Dataset it holds.
-window.__dataset = dataset as unknown as typeof window.__dataset;
+// `Gantt` and `Dataset`, nothing else. `Window.__dataset` is a bare `Dataset` — every e2e read of it
+// (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so
+// no cast is needed to bridge two harness pages' differently-fielded instances.
+window.__dataset = dataset;
 window.__gantt = gantt;
 
 mountGanttToolbar({
@@ -257,13 +253,12 @@ sortNameBtn.addEventListener('click', () => {
 
 refreshRowSourceUi();
 
-// ---- Mutation extras (S2): add entry, set cost, lock/veto, export/import (data.ts's own demo) ----
+// ---- Mutation extras (S2): add entry, set cost, lock/veto, entries dump ----
 
 const addEntryBtn = document.querySelector<HTMLButtonElement>('#add-entry')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 
 let nextNewId = 1;
@@ -305,31 +300,11 @@ lockCheckbox.addEventListener('change', () => {
   else locks.unlock(id);
 });
 
+// A read-only dump — every stored Entry, as `dataset.entries.all` reports it. The library holds no
+// save format to round-trip through (ADR 0016); an application that persists a Dataset reads this
+// door and its own plugins' stores, and restores by handing the same shape back to `new Dataset()`.
 exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-// Proves the round trip through the public `toJSON()`/`fromJSON()` surface alone (D-S2-6's own
-// shape) without swapping this page's live `Gantt` — this page already wires a dozen other features
-// straight to the one `gantt`/`dataset` pair, so a live rebind-on-import would mean re-attaching
-// every one of those listeners to a fresh instance for one narrow proof. `data.html` already owns
-// that fuller "swap the whole page" demo; this button stays a lighter, honest check: parse, rebuild
-// a `Dataset` from the document, and log what came back — a `fromJSON` that throws (malformed JSON,
-// a field the current `fieldTypes` doesn't declare) surfaces here exactly as it would for a consumer.
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost?: number; team?: string }>;
-    const imported = Dataset.fromJSON<{ cost?: number; team?: string }, { cost: number; team?: string }>(
-      doc,
-      demoFieldOptions,
-    );
-    prependLogLine(
-      log,
-      `[import] parsed ${imported.entries.all.length} entries — see data.html to load them live`,
-    );
-  } catch (error) {
-    prependLogLine(log, `import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  documentJson.value = JSON.stringify(dataset.entries.all, null, 2);
 });
 
 // ---- Direct manipulation extras (S3): mobilization veto, async hold, resize lock ----
@@ -439,16 +414,17 @@ popupBtn.addEventListener('click', () => {
 });
 
 // S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` as plain `GanttOptions.*` — no plugin needed.
-// The demo tree's own "Requirements review" (`entry-4`) is already `kind: 'milestone'`, and every
-// leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the existing
-// dataset rather than adding renderer-only fixture data. `fg-bar-diamond`'s own shape is structural,
-// from `entry.kind` alone (D-S4-24), outside a renderer's bounded scope (I13) — the demo renderer
-// recolors it via the `--fg-bar-fill` custom property its own `::before` already reads.
+// ADR 0013: core ships no diamond and no `'milestone'` kind, so "Requirements review" (`entry-4`)
+// reaches the `'milestone'` key below through `milestoneKind()`, a plugin that owns that one id the
+// same way `bufferKind()`/`riskKind()` do (`plugins.ts`) — installed below, once, at page load.
+// Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
+// existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
+gantt.installPlugin(milestoneKind([MILESTONE_ENTRY_ID]));
 const BUDGET_THRESHOLD = 5000;
 
-const demoBarRenderer: RendererByKind = {
+const demoBarRenderer: RendererByLook = {
   milestone: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
 };
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
@@ -501,8 +477,9 @@ weekendToggle.addEventListener('change', () => {
 //
 // Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
 // 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
-// `ctx.target.segmentIds`: a grid-row Delete removes every Segment the row owns, and an Entry with
-// no Segments left is gone too, with no special case.
+// `ctx.target.segmentIds` for a bar and removes only that Segment, keeping the Entry dateless
+// rather than gone (ADR 0012); every other target reads `ctx.target.entryIds` and removes the whole
+// record (`src/view/core-commands.ts` states the dispatch rule).
 //
 // What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
 // a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record, so

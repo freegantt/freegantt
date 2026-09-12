@@ -1,5 +1,5 @@
 // layout/ — the pure gesture math a drag needs (plans/s3-direct-manipulation/s3.3-drag-move.md
-// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (a `StoredEdits`,
+// D-S3-4). `interaction/` performs no arithmetic of its own — it receives a `Draft` (a `ProposedEdits`,
 // D-S3-2) from `GesturePipeline.session()` (`#draftFor`), which calls `draftForMove` here.
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
@@ -10,11 +10,11 @@ import type {
   Instant,
   ItemId,
   SegmentId,
-  StoredEdit,
-  StoredEdits,
+  ProposedEdit,
+  ProposedEdits,
   TimeUnit,
 } from '../model/index.js';
-import { itemId } from '../model/index.js';
+import { itemId, spansTime } from '../model/index.js';
 import {
   addMs,
   diffMs,
@@ -35,7 +35,12 @@ export interface DraftInput {
   snap: SnapUnit;
   /** The entries this gesture moves, grabbed entry first (D-S3-22) — `entries[0]`'s own `start` is
    *  the anchor every other entry's delta is measured against, so a multi-selection drag moves as one
-   *  rigid group instead of each row snapping independently. */
+   *  rigid group instead of each row snapping independently.
+   *
+   *  A parent bar's drag hands over the grabbed parent *and* the descendants it translates (ADR
+   *  0013). Every one of them gets an edit here; which of those edits commit is the caller's own
+   *  answer (`view/gesture-pipeline.ts`), because a parent's dates roll up rather than being
+   *  written. */
   entries: readonly Entry[];
   /** Horizontal pointer travel since the gesture armed, in content px (D-S3-11: vertical is ignored). */
   dxPx: number;
@@ -50,37 +55,15 @@ export interface DraftInput {
  *  (D-S3-3, D-S3-19). What paints selected is what moves (#211, #212): an Entry moves the Segments
  *  the Selection holds, and rewrites the envelope around them. A Selection that holds every Segment
  *  moves the whole Entry. Empty when `input.entries` is empty — a gesture with nothing to move. */
-export function draftForMove(input: DraftInput): StoredEdits {
-  const { zone, scale, snap, entries, dxPx, selectedSegmentIds } = input;
+export function draftForMove(input: DraftInput): ProposedEdits {
+  const { zone, entries, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = gesturedEdgeInstant(anchor, 'start', selectedSegmentIds);
-  const anchorX = scale.xForInstant(anchorInstant);
-  const rawCandidate = scale.instantForX(anchorX + dxPx);
-  const snappedCandidate = snapInstant(zone, rawCandidate, snap);
-
-  const edits = new Map<EntryId, StoredEdit>();
-  if (snap === 'none') {
-    const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (const entry of entries) {
-      edits.set(entry.id, moveEdit(entry, deltaMs, gesturedSegments(entry, selectedSegmentIds)));
-    }
-    return edits;
-  }
-
-  const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
+  const by = translationOf(input, gesturedEdgeInstant(anchor, 'start', selectedSegmentIds));
+  const edits = new Map<EntryId, ProposedEdit>();
   for (const entry of entries) {
-    edits.set(
-      entry.id,
-      stepMoveEdit(
-        zone,
-        entry,
-        snap.unit,
-        steps * snap.increment,
-        gesturedSegments(entry, selectedSegmentIds),
-      ),
-    );
+    edits.set(entry.id, translatedEdit(zone, entry, by, gesturedSegments(entry, selectedSegmentIds)));
   }
   return edits;
 }
@@ -90,38 +73,38 @@ export function draftForMove(input: DraftInput): StoredEdits {
  *  is what the handles bracket (#211, #212). A resize reaches only the one selected Segment that
  *  holds the dragged edge: the `start` handle moves the earliest selected Segment's start, the `end`
  *  handle moves the latest selected Segment's end, and every sibling stays where it is. */
-export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): StoredEdits {
-  const { zone, scale, snap, entries, dxPx, edge, selectedSegmentIds } = input;
+export function draftForResize(input: DraftInput & { edge: 'start' | 'end' }): ProposedEdits {
+  const { zone, entries, edge, selectedSegmentIds } = input;
   const anchor = entries[0];
   if (!anchor) return new Map();
 
-  const anchorInstant = gesturedEdgeInstant(anchor, edge, selectedSegmentIds);
-  const anchorX = scale.xForInstant(anchorInstant);
-  const rawCandidate = scale.instantForX(anchorX + dxPx);
-  const snappedCandidate = snapInstant(zone, rawCandidate, snap);
-
-  const edits = new Map<EntryId, StoredEdit>();
-
-  if (snap === 'none') {
-    const deltaMs = diffMs(snappedCandidate, anchorInstant);
-    for (const entry of entries) {
-      const gestured = gesturedSegments(entry, selectedSegmentIds);
-      const current = edgeInstantOf(entry, gestured, edge);
-      edits.set(entry.id, resizeEdit(entry, edge, addMs(current, deltaMs), gestured));
-    }
-    return edits;
-  }
-
-  const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, snappedCandidate);
+  const by = translationOf(input, gesturedEdgeInstant(anchor, edge, selectedSegmentIds));
+  const edits = new Map<EntryId, ProposedEdit>();
   for (const entry of entries) {
     const gestured = gesturedSegments(entry, selectedSegmentIds);
     const current = edgeInstantOf(entry, gestured, edge);
-    edits.set(
-      entry.id,
-      resizeEdit(entry, edge, stepBy(zone, current, snap.unit, steps * snap.increment), gestured),
-    );
+    edits.set(entry.id, resizeEdit(entry, edge, translate(zone, current, by), gestured));
   }
   return edits;
+}
+
+/** How far this gesture moves what it grabbed: raw milliseconds when nothing snaps, else a count of
+ *  calendar steps in the snap's own unit. One gesture resolves this once, against the grabbed edge's
+ *  own instant, and every entry it touches then takes the same translation — that is what keeps a
+ *  multi-entry drag rigid (D-S3-19) instead of letting each row snap on its own. */
+type Translation = { readonly ms: number } | { readonly unit: TimeUnit; readonly steps: number };
+
+function translationOf(input: DraftInput, anchorInstant: Instant): Translation {
+  const { zone, scale, snap, dxPx } = input;
+  const anchorX = scale.xForInstant(anchorInstant);
+  const candidate = snapInstant(zone, scale.instantForX(anchorX + dxPx), snap);
+  if (snap === 'none') return { ms: diffMs(candidate, anchorInstant) };
+  const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, candidate);
+  return { unit: snap.unit, steps: steps * snap.increment };
+}
+
+function translate(zone: string, instant: Instant, by: Translation): Instant {
+  return 'ms' in by ? addMs(instant, by.ms) : stepBy(zone, instant, by.unit, by.steps);
 }
 
 /** Which Segments of `entry` this gesture reaches (#212, ADR 0010): the ones the Selection holds.
@@ -171,39 +154,52 @@ function segmentIndexAtEnvelopeEdge(entry: Entry, indexes: readonly number[], ed
   return found;
 }
 
-/** Moves the reached Segments of `entry` by `deltaMs` and rewrites the envelope around them. Every
- *  Segment keeps its own id: a Selection points at ids, so a rewrite that dropped them would unselect
- *  the very bar the user is dragging (#212). */
-function moveEdit(entry: Entry, deltaMs: number, indexes: readonly number[]): StoredEdit {
-  const moving = new Set(indexes);
-  const segments = entry.segments.map((segment, index) =>
-    moving.has(index)
-      ? { ...segment, start: addMs(segment.start, deltaMs), end: addMs(segment.end, deltaMs) }
-      : segment,
-  );
-  return { segments, ...envelopeOfSegments(segments) };
-}
-
-/** Same as `moveEdit`, stepped by a calendar unit instead of a millisecond delta (keyboard nudge,
- *  D-S3-13). */
-function stepMoveEdit(
+/** Moves the reached Segments of `entry` and rewrites the envelope around them. Every Segment keeps
+ *  its own id: a Selection points at ids, so a rewrite that dropped them would unselect the very bar
+ *  the user is dragging (#212). A keyboard nudge (D-S3-13) arrives here too — it differs only in the
+ *  `Translation` it carries. */
+function translatedEdit(
   zone: string,
   entry: Entry,
-  unit: TimeUnit,
-  amount: number,
+  by: Translation,
   indexes: readonly number[],
-): StoredEdit {
+): ProposedEdit {
+  if (entry.segments.length === 0) return translatedDatesEdit(zone, entry, by);
   const moving = new Set(indexes);
   const segments = entry.segments.map((segment, index) =>
     moving.has(index)
-      ? {
-          ...segment,
-          start: stepBy(zone, segment.start, unit, amount),
-          end: stepBy(zone, segment.end, unit, amount),
-        }
+      ? { ...segment, start: translate(zone, segment.start, by), end: translate(zone, segment.end, by) }
       : segment,
   );
-  return { segments, ...envelopeOfSegments(segments) };
+  // `ProposedEdit`'s brand/`props`/`proposedKeys` are required (ADR 0011); `layout/` may not import
+  // `data/`'s `emptyProposedEdit` (layout-boundary), so this is the one place that shape is inlined.
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments,
+    ...envelopeOfSegments(segments),
+  };
+}
+
+/** The same translation for an Entry that holds no Segment: it moves the date it holds, and proposes
+ *  nothing for the date it lacks (ADR 0013, Q9).
+ *
+ *  An Entry holds a Segment if and only if it spans (ADR 0012), so this is the half-dated row — a
+ *  descendant of a dragged parent bar that shows in the grid and draws no bar. It is unreachable by a
+ *  direct drag, because there is no bar to grab. */
+function translatedDatesEdit(zone: string, entry: Entry, by: Translation): ProposedEdit {
+  const proposedKeys = new Set<string>();
+  const dates: { start?: Instant; end?: Instant } = {};
+  if (entry.start !== undefined) {
+    dates.start = translate(zone, entry.start, by);
+    proposedKeys.add('start');
+  }
+  if (entry.end !== undefined) {
+    dates.end = translate(zone, entry.end, by);
+    proposedKeys.add('end');
+  }
+  return { __brand: 'ProposedEdit', props: {}, proposedKeys, ...dates };
 }
 
 /** Resizes `entry`'s `edge` to `moved`. Only the reached Segment holding that edge moves. Zero-length
@@ -214,7 +210,7 @@ function resizeEdit(
   edge: 'start' | 'end',
   moved: Instant,
   indexes: readonly number[],
-): StoredEdit {
+): ProposedEdit {
   const dragged = segmentIndexAtEnvelopeEdge(entry, indexes, edge);
   const segments = entry.segments.map((segment, index) => {
     if (index !== dragged) return segment;
@@ -225,7 +221,15 @@ function resizeEdit(
     const end = moved < segment.start ? segment.start : moved;
     return { ...segment, start: segment.start, end };
   });
-  return { segments, ...envelopeOfSegments(segments) };
+  // `ProposedEdit`'s brand/`props`/`proposedKeys` are required (ADR 0011); `layout/` may not import
+  // `data/`'s `emptyProposedEdit` (layout-boundary), so this is the one place that shape is inlined.
+  return {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(['segments', 'start', 'end']),
+    segments,
+    ...envelopeOfSegments(segments),
+  };
 }
 
 /** What the hot-path paint needs to preview a draft with no frame rebuild (D-S3-18): a pixel offset
@@ -241,9 +245,9 @@ export interface ItemPreview {
 
 export interface PreviewOffsetsInput {
   /** The caller's own draft. */
-  proposed: StoredEdits;
+  proposed: ProposedEdits;
   /** Extension-hook extras layered on top (S3.6). Empty until then. */
-  extra: StoredEdits;
+  extra: ProposedEdits;
   /** Committed entries `proposed`/`extra` are diffed against — one lookup per row, not a dataset scan. */
   entries: readonly Entry[];
   scale: TimeScale;
@@ -254,7 +258,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const out: ItemPreview[] = [];
 
-  function pushOffset(id: EntryId, edit: StoredEdit, isExtra: boolean): void {
+  function pushOffset(id: EntryId, edit: ProposedEdit, isExtra: boolean): void {
     const original = byId.get(id);
     if (!original) return;
     if (edit.segments !== undefined) {
@@ -270,7 +274,11 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
       }
       return;
     }
-    if (edit.start === undefined || edit.end === undefined) return;
+    if (!spansTime(edit)) return;
+    // A gesture reaches this branch only for an Entry that already has a grip to grab, which means
+    // it already spans (`spansTime`, ADR 0012) — but nothing narrows `original` here, so this asks
+    // the question rather than asserting it: a dateless Entry paints no offset instead of a crash.
+    if (!spansTime(original)) return;
     const x0 = scale.xForInstant(original.start);
     const x1 = scale.xForInstant(edit.start);
     const width0 = scale.xForInstant(original.end) - x0;

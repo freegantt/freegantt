@@ -32,7 +32,6 @@ function assertParentsMatchAggregator(
 ): void {
   const aggregator = SHIPPED_AGGREGATORS[rollUp];
   for (const parent of state.entries.all) {
-    if (!state.isRollUpKind(parent.kind)) continue;
     const children = state.entries.childrenOf(parent.id);
     if (children.length === 0) continue;
     const expected = aggregator?.(children, parent, createRollUpContext(state.fieldContext, 'cost'));
@@ -61,15 +60,15 @@ describe('rollUpFields property (S4.2 §3)', () => {
         fc.property(treeArb, ({ nest, costs, edits, removes }) => {
           const parentId = nest ? 'mid' : 'root';
           const entries: EntryInput[] = [
-            { id: 'root', kind: 'group', name: 'root' },
-            ...(nest ? [{ id: 'mid', parentId: 'root', kind: 'group' as const, name: 'mid' }] : []),
+            { id: 'root', name: 'root' },
+            ...(nest ? [{ id: 'mid', parentId: 'root', name: 'mid' }] : []),
             ...costs.map((cost, i) => ({
               id: `l${i}`,
               parentId,
               name: `l${i}`,
               start: '2026-01-01',
               end: `2026-01-${String(2 + (i % 4)).padStart(2, '0')}`,
-              meta: { cost },
+              props: { cost },
             })),
           ];
           const state = metricDataset(entries, rollUp);

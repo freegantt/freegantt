@@ -121,7 +121,7 @@ describe('the envelope has one owner (#212, finding 4)', () => {
           const state = new DatasetState({
             timeZone: 'UTC',
             entries: [
-              { id: 'p', name: 'P', kind: 'group', segments: parentSegments },
+              { id: 'p', name: 'P', segments: parentSegments },
               {
                 id: 'c',
                 name: 'C',

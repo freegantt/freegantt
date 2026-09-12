@@ -1,33 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
-import type { Entry, StoredEdit } from '../../model/index.js';
+import type { Entry, Instant, ProposedEdit } from '../../model/index.js';
 import {
   createFieldContext,
   createRollUpContext,
   editProposesField,
-  mergeStoredEdits,
+  emptyProposedEdit,
+  mergeProposedEdits,
   entryAfterEdit,
   proposedKeysOf,
   readField,
-  statesProposedKeys,
   withProposedKeys,
   writeField,
   writeOntoEntry,
 } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 
-const span = (meta?: unknown): Entry => {
-  const entry: Entry = {
+const span = (props?: Record<string, unknown>): Entry => {
+  return {
     id: entryId('t1'),
     name: 't1',
-    kind: 'span',
-    start: 0 as Entry['start'],
-    end: 1 as Entry['end'],
-    segments: [{ id: segmentId('t1-seg'), start: 0 as Entry['start'], end: 1 as Entry['end'] }],
+    start: 0 as Instant,
+    end: 1 as Instant,
+    segments: [{ id: segmentId('t1-seg'), start: 0 as Instant, end: 1 as Instant }],
+    props: props ?? {},
   };
-  if (meta !== undefined) entry.meta = meta;
-  return entry;
 };
+
+/** A `ProposedEdit` fixture: fills the required brand/`props`/`proposedKeys` a raw patch no longer
+ *  carries, inferring `proposedKeys` from the patch's own keys when the caller does not state one. */
+function edit(patch: Record<string, unknown> = {}): ProposedEdit {
+  const { props, proposedKeys, ...envelope } = patch as {
+    props?: Record<string, unknown>;
+    proposedKeys?: Set<string>;
+  } & Record<string, unknown>;
+  return withProposedKeys(
+    { __brand: 'ProposedEdit', props: props ?? {}, proposedKeys: new Set(), ...envelope },
+    proposedKeys ?? new Set(Object.keys(envelope)),
+  );
+}
 
 describe('readField / writeField (D-S4-2)', () => {
   const registry = new FieldRegistry({
@@ -42,96 +53,83 @@ describe('readField / writeField (D-S4-2)', () => {
   it('reads and writes an entry source', () => {
     const entry = span();
     expect(readField(entry, start, fieldCtx)).toBe(0);
-    const edited = entryAfterEdit(entry, writeField({}, entry, start, 10));
+    const edited = entryAfterEdit(entry, writeField(emptyProposedEdit(), start, 10));
     expect(edited.start).toBe(10);
   });
 
-  it('creates meta on the first declared write and merges later writes', () => {
+  it('creates props on the first declared write and merges later writes', () => {
     const entry = span();
     expect(readField(entry, cost, fieldCtx)).toBeUndefined();
-    const first = writeField({}, entry, cost, 500);
-    expect(first.meta).toEqual({ cost: 500 });
-    const second = writeField(first, entryAfterEdit(entry, first), cost, 600);
-    expect(second.meta).toEqual({ cost: 600 });
-    const withPassenger = span({ team: 'A' });
-    const merged = writeField({}, withPassenger, cost, 500);
-    expect(merged.meta).toEqual({ team: 'A', cost: 500 });
+    const first = writeField(emptyProposedEdit(), cost, 500);
+    expect(first.props).toEqual({ cost: 500 });
+    const second = writeField(first, cost, 600);
+    expect(second.props).toEqual({ cost: 600 });
+    const merged = writeField(emptyProposedEdit(), cost, 500);
+    expect(merged.props).toEqual({ cost: 500 });
   });
 
-  it('does not replace meta when writing a declared key', () => {
+  it('does not replace props when writing a declared key — the passenger key survives (ADR 0011)', () => {
     const entry = span({ team: 'A', cost: 400 });
-    const written = writeField({}, entry, cost, 500);
-    expect(written.meta).toEqual({ team: 'A', cost: 500 });
+    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), cost, 500));
+    expect(written.props).toEqual({ team: 'A', cost: 500 });
   });
 
-  it('clears meta when the last declared key is cleared', () => {
+  it('clears the declared key from props, leaving props an object, never undefined (ADR 0011)', () => {
     const entry = span({ cost: 500 });
-    const written = writeField({}, entry, cost, undefined);
-    expect('meta' in written).toBe(true);
-    expect(written.meta).toBeUndefined();
-    expect('meta' in writeOntoEntry(entry, cost, undefined)).toBe(false);
+    const written = entryAfterEdit(entry, writeField(emptyProposedEdit(), cost, undefined));
+    expect('cost' in written.props).toBe(false);
+    expect(written.props).toEqual({});
+    expect('cost' in writeOntoEntry(entry, cost, undefined).props).toBe(false);
   });
 
-  it('reads a compute Field through durationOf', () => {
+  it('reads a compute Field through the guarded durationOf', () => {
     const entry = span();
     expect(readField(entry, duration, fieldCtx)).toEqual({ value: 1, unit: 'millisecond' });
+  });
+
+  it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
+    const dateless: Entry = { id: entryId('t2'), name: 't2', segments: [], props: {} };
+    expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 
   it('writeOntoEntry writes cost onto parent', () => {
     const parent = span();
     const next = writeOntoEntry(parent, cost, 300);
-    expect(next.meta).toEqual({ cost: 300 });
+    expect(next.props).toEqual({ cost: 300 });
     expect(readField(next, cost, fieldCtx)).toBe(300);
   });
 
-  it('mergeStoredEdits keeps proposed keys through a spread', () => {
-    const authored = withProposedKeys(writeField({}, span(), cost, 3), ['cost']);
+  it('mergeProposedEdits keeps proposed keys through a spread', () => {
+    const authored = withProposedKeys(writeField(emptyProposedEdit(), cost, 3), ['cost']);
     const spread = { ...authored };
-    expect(spread.proposedKeys?.has('cost')).toBe(true);
-    const merged = mergeStoredEdits({ name: 'x' }, authored);
+    expect(spread.proposedKeys.has('cost')).toBe(true);
+    const merged = mergeProposedEdits(edit({ name: 'x' }), authored);
     expect(editProposesField(merged, cost)).toBe(true);
   });
 
-  // #197: the two sides may state their writes differently. One extender proposes Field keys; another
-  // returns a raw storage patch. The merged edit must still show every write, or `diffEdit` emits no
-  // row for the raw side and that write is lost.
-  it('mergeStoredEdits states a raw patch keys when the other side proposes Field keys', () => {
-    const authored = withProposedKeys(writeField({}, span(), cost, 3), ['cost']);
-    const raw: StoredEdit = { name: 'Moved' };
+  // #197: the two sides may each name different Fields. The merged edit must show every write, or
+  // `diffEdit` emits no row for one side and that write is lost.
+  it('mergeProposedEdits keeps both sides’ proposed keys', () => {
+    const authored = withProposedKeys(writeField(emptyProposedEdit(), cost, 3), ['cost']);
+    const raw = edit({ name: 'Moved' });
 
-    const rawFirst = mergeStoredEdits(raw, authored);
+    const rawFirst = mergeProposedEdits(raw, authored);
     expect([...proposedKeysOf(rawFirst)].sort()).toEqual(['cost', 'name']);
 
-    const authoredFirst = mergeStoredEdits(authored, raw);
+    const authoredFirst = mergeProposedEdits(authored, raw);
     expect([...proposedKeysOf(authoredFirst)].sort()).toEqual(['cost', 'name']);
   });
 
-  it('mergeStoredEdits leaves two raw patches on the raw path, where an undeclared key survives', () => {
-    const merged = mergeStoredEdits({ name: 'a' }, { end: 9 as Entry['end'] });
-    expect(proposedKeysOf(merged).size).toBe(0);
+  it('mergeProposedEdits keeps every key of both edits, whichever named itself', () => {
+    const merged = mergeProposedEdits(edit({ name: 'a' }), edit({ end: 9 }));
+    expect([...proposedKeysOf(merged)].sort()).toEqual(['end', 'name']);
     expect(merged.name).toBe('a');
     expect(merged.end).toBe(9);
   });
 
-  // #238: the merged edit must stay *unstated*, not state the empty set. A third merge asks whether
-  // the base states its keys; a stamped empty set answered "it writes nothing", and the first two
-  // plugins' writes were dropped there.
-  it('mergeStoredEdits states nothing when neither side does, so a third merge still reads raw keys', () => {
-    const first = mergeStoredEdits({ name: 'a' }, { kind: 'milestone' });
-    expect(statesProposedKeys(first)).toBe(false);
-
-    const second = mergeStoredEdits(first, { parentId: entryId('p') });
-    expect(statesProposedKeys(second)).toBe(false);
-    expect(second.name).toBe('a');
-    expect(second.kind).toBe('milestone');
-    expect(second.parentId).toBe(entryId('p'));
-  });
-
-  it('statesProposedKeys tells an edit that stated the empty set from one that stated nothing', () => {
-    expect(statesProposedKeys({ name: 'a' })).toBe(false);
-    expect(statesProposedKeys(withProposedKeys({ name: 'a' }, []))).toBe(true);
-    expect(statesProposedKeys(undefined)).toBe(false);
-    expect(proposedKeysOf({ name: 'a' }).size).toBe(proposedKeysOf(withProposedKeys({}, [])).size);
+  it('proposedKeysOf reads the keys an edit states it writes', () => {
+    expect(proposedKeysOf(edit({ name: 'a' })).size).toBe(1);
+    expect(proposedKeysOf(withProposedKeys(edit(), [])).size).toBe(0);
   });
 });
 

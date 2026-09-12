@@ -1,13 +1,13 @@
-// data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving a
-// roll-up-kind parent every rolling-up Field from its children, bottom-up, on every commit
-// (`01` §2.5/§2.6, S4.2). A leaf module — only `data/build-commit-change-set.ts` (commit path) and
-// `data/transaction.ts` (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file
-// and every entry keeps its authored values — the same stored result a consumer gets from
-// `rollUpKinds: 'none'`.
+// data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving every
+// parent (an Entry with at least one child, ADR 0013 — there is no stored classification) its
+// rolling-up Fields from its children, bottom-up, on every commit (`01` §2.5/§2.6, S4.2). A leaf
+// module — only `data/build-commit-change-set.ts` (commit path) and `data/transaction.ts`
+// (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
+// its authored values.
 
-import type { Entry, EntryId, EntryKind, FieldContext, FieldUpdated } from '../model/index.js';
-import { AggregatorFailedError } from '../model/index.js';
-import type { StoredEdits } from './edit-extension.js';
+import type { Entry, EntryId, FieldContext, FieldUpdated, SegmentId, TimeSpan } from '../model/index.js';
+import { AggregatorFailedError, spansTime } from '../model/index.js';
+import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
 import {
@@ -21,9 +21,9 @@ import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** The transaction body's edits — the Rollup yields to a field proposed here (D-S2-22). */
-  readonly body: StoredEdits;
+  readonly body: ProposedEdits;
   /** Body plus extension-hook edits — used to read effective child values. */
-  readonly merged: StoredEdits;
+  readonly merged: ProposedEdits;
 }
 
 /** Adds, removes and body edits the commit path has not written yet. Construction omits this. */
@@ -37,7 +37,7 @@ function collectTouchedIds(
   entries: ReadonlyMap<EntryId, Entry>,
   added: readonly Entry[],
   removed: readonly Entry[],
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
 ): ReadonlySet<EntryId> {
   const touched = new Set<EntryId>();
   for (const entry of added) touched.add(entry.id);
@@ -56,30 +56,34 @@ function collectTouchedIds(
   return touched;
 }
 
+/**
+ * `priorByParent` reads the tree as it stood before this operation. An id that had children there
+ * and has none in `byParent` (the post-operation tree) just lost its last child — ADR 0013 demotes
+ * it, so it still needs a visit even though `isParent` on the new tree says no.
+ */
 function parentsToRecompute(
   entries: ReadonlyMap<EntryId, Entry>,
-  kinds: ReadonlySet<EntryKind>,
+  byParent: ReadonlyMap<EntryId, readonly EntryId[]>,
+  priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>,
   touched: ReadonlySet<EntryId> | undefined,
 ): readonly EntryId[] {
-  if (kinds.size === 0) return [];
+  const isParent = (id: EntryId): boolean => (byParent.get(id)?.length ?? 0) > 0;
+  const wasParent = (id: EntryId): boolean => (priorByParent.get(id)?.length ?? 0) > 0;
+  const needsVisit = (id: EntryId): boolean => isParent(id) || wasParent(id);
 
-  const parents = new Set<EntryId>();
+  const candidates = new Set<EntryId>();
   if (touched === undefined) {
-    for (const entry of entries.values()) {
-      if (kinds.has(entry.kind)) parents.add(entry.id);
+    for (const id of entries.keys()) {
+      if (isParent(id)) candidates.add(id);
     }
   } else {
     for (const id of touched) {
-      for (const ancestor of ancestorsOf(id, entries)) parents.add(ancestor);
-      const entry = entries.get(id);
-      if (entry !== undefined && kinds.has(entry.kind)) parents.add(id);
+      for (const ancestor of ancestorsOf(id, entries)) candidates.add(ancestor);
+      if (needsVisit(id)) candidates.add(id);
     }
   }
 
-  const filtered = Array.from(parents).filter((id) => {
-    const entry = entries.get(id);
-    return entry !== undefined && kinds.has(entry.kind);
-  });
+  const filtered = Array.from(candidates).filter(needsVisit);
 
   const depthById = new Map<EntryId, number>();
   for (const id of filtered) depthById.set(id, depthOf(id, entries));
@@ -117,12 +121,30 @@ function widenSegmentsToEnvelope(
   registry: FieldRegistry,
   ctx: FieldContext,
   parentId: EntryId,
+  mintSegmentId: () => SegmentId,
   updated: FieldUpdated[],
 ): Entry {
   const segmentsField = registry.get('segments');
-  if (!segmentsField || parent.segments.length === 0) return parent;
+  if (!segmentsField) return parent;
+  // Not spanning — nothing to hold a Segment over (`spansTime`, ADR 0012). A dateless parent
+  // (every child dateless too) already stores `segments: []`; there is nothing to widen or mint.
+  if (!spansTime(parent)) return parent;
 
-  const nextSegments = fitSegmentsToEnvelope(parent.segments, parent);
+  const target: TimeSpan = { start: parent.start, end: parent.end };
+
+  if (parent.segments.length === 0) {
+    // ADR 0013 (BUILD-LOG J3/J9): the Rollup can give a parent a real `start`/`end` from its
+    // children with no Segment of its own — ingest only fills one for an *authored* span (ADR
+    // 0012 retired that fill for everything else), and this parent never authored one. A bar with
+    // no Segment cannot be selected, so mint the one Segment ingest would have minted had this
+    // envelope been authored, over the derived span.
+    const minted = [{ id: mintSegmentId(), start: target.start, end: target.end }];
+    const from = readField(parent, segmentsField, ctx);
+    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: minted });
+    return writeOntoEntry(parent, segmentsField, minted);
+  }
+
+  const nextSegments = fitSegmentsToEnvelope(parent.segments, target);
   if (nextSegments === parent.segments) return parent;
 
   const from = readField(parent, segmentsField, ctx);
@@ -130,10 +152,42 @@ function widenSegmentsToEnvelope(
   return writeOntoEntry(parent, segmentsField, nextSegments);
 }
 
+/**
+ * A demoted Entry — a parent that just lost its last child — has nothing left to calculate from
+ * (ADR 0013: "demotion leaves no dates"). It keeps its name and drops every rolling-up Field and its
+ * Segments, the same "Aggregator says no value" clear the main loop runs, run here with no Aggregator
+ * to ask because there are no children left to ask one.
+ */
+function clearDerivedValues(
+  parent: Entry,
+  registry: FieldRegistry,
+  ctx: FieldContext,
+  parentId: EntryId,
+  updated: FieldUpdated[],
+): Entry {
+  let effectiveParent = parent;
+
+  for (const field of registry.rollingUpFields()) {
+    const from = readField(effectiveParent, field, ctx);
+    if (from === undefined) continue;
+    updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
+    effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
+  }
+
+  const segmentsField = registry.get('segments');
+  if (segmentsField && effectiveParent.segments.length > 0) {
+    const from = readField(effectiveParent, segmentsField, ctx);
+    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: [] });
+    effectiveParent = writeOntoEntry(effectiveParent, segmentsField, []);
+  }
+
+  return effectiveParent;
+}
+
 function effectiveEntry(
   id: EntryId,
   entries: ReadonlyMap<EntryId, Entry>,
-  merged: StoredEdits,
+  merged: ProposedEdits,
   computed: ReadonlyMap<EntryId, Entry>,
 ): Entry | undefined {
   const rolled = computed.get(id);
@@ -144,6 +198,18 @@ function effectiveEntry(
   return edit ? entryAfterEdit(current, edit) : current;
 }
 
+/** What one Rollup pass produced. `cascadeDropped` names the rows where an extension-hook cascade —
+ *  never the transaction body, which already yields (D-S2-22) — proposed a rolling-up Field on a
+ *  parent and the Rollup overwrote it anyway (ADR 0013, decision 5). A caller with no extension hook
+ *  installed never sees a row here: `merged` equals `body` with nothing installed, so no edit can
+ *  reach a parent through `merged` alone. */
+export interface RollUpResult {
+  readonly updated: readonly FieldUpdated[];
+  readonly cascadeDropped: readonly FieldUpdated[];
+}
+
+const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], cascadeDropped: [] });
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
@@ -152,36 +218,41 @@ export function rollUpFields(
   committed: ReadonlyMap<EntryId, Entry>,
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
-  rollUpKinds: ReadonlySet<EntryKind>,
   ctx: FieldContext,
-): readonly FieldUpdated[] {
-  if (rollUpKinds.size === 0) return [];
-
+  mintSegmentId: () => SegmentId,
+): RollUpResult {
   const rollingFields = registry.rollingUpFields();
-  if (rollingFields.length === 0) return [];
+  if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
 
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
-  const emptyEdits: StoredEdits = new Map();
+  const emptyEdits: ProposedEdits = new Map();
   const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
-  // Effective tree includes extender and autoGroup overlays so a parent promoted on this commit
-  // is already a roll-up Kind when `parentsToRecompute` reads `entry.kind` (D-S4-17).
+  // Effective tree includes extender overlays, so a parent promoted on this commit (a `parentId`
+  // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
   const entries =
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
   const touched = pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged);
 
   const byParent = childIdsByParent(entries);
-  const parents = parentsToRecompute(entries, rollUpKinds, touched);
+  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed);
+  const parents = parentsToRecompute(entries, byParent, priorByParent, touched);
   const computed = new Map<EntryId, Entry>();
   const updated: FieldUpdated[] = [];
+  const cascadeDropped: FieldUpdated[] = [];
 
   for (const parentId of parents) {
     const parent = entries.get(parentId);
     if (!parent) continue;
 
     const childIds = byParent.get(parentId);
-    if (!childIds || childIds.length === 0) continue;
+    if (!childIds || childIds.length === 0) {
+      // Demoted: `parentsToRecompute` only visits this id with no children left when it had
+      // children before this operation (ADR 0013 — losing the last child demotes).
+      computed.set(parentId, clearDerivedValues(parent, registry, ctx, parentId, updated));
+      continue;
+    }
 
     const children: Entry[] = [];
     for (const childId of childIds) {
@@ -195,6 +266,11 @@ export function rollUpFields(
     for (const field of rollingFields) {
       if (editProposesField(body.get(parentId), field)) continue;
 
+      // A cascade — never the body, which already yielded above — proposed this cell. The Rollup
+      // still owns it (decision 5): the write below runs anyway, and this parent+field pair is
+      // reported once for the whole commit if it turns out to actually overwrite something.
+      const cascadeProposed = editProposesField(merged.get(parentId), field);
+
       const aggregator = registry.aggregator(field.rollUp);
       if (!aggregator) continue;
 
@@ -205,18 +281,39 @@ export function rollUpFields(
         throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
       }
 
-      if (value === undefined) continue;
-
       const from = readField(effectiveParent, field, ctx);
+
+      if (value === undefined) {
+        // ADR 0013, decision 5/6 and #270: an Aggregator with no opinion means *no value* on a
+        // parent — never "keep whatever is stored," which is stale by construction the moment
+        // nothing but the Rollup may write this cell. `from === undefined` is already clear; there
+        // is nothing to drop.
+        if (from === undefined) continue;
+        const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: undefined };
+        updated.push(row);
+        if (cascadeProposed) cascadeDropped.push(row);
+        effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
+        continue;
+      }
+
       if (registry.valuesEqual(String(field.key), from, value)) continue;
 
-      updated.push({ store: 'entries', id: parentId, field: field.key, from, to: value });
+      const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: value };
+      updated.push(row);
+      if (cascadeProposed) cascadeDropped.push(row);
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
-    effectiveParent = widenSegmentsToEnvelope(effectiveParent, registry, ctx, parentId, updated);
+    effectiveParent = widenSegmentsToEnvelope(
+      effectiveParent,
+      registry,
+      ctx,
+      parentId,
+      mintSegmentId,
+      updated,
+    );
     computed.set(parentId, effectiveParent);
   }
 
-  return updated;
+  return { updated, cascadeDropped };
 }

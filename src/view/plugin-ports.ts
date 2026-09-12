@@ -17,7 +17,6 @@ import type {
   ElementDescription,
   Entry,
   EntryId,
-  EntryKind,
   FieldKey,
   GridColumn,
   GridColumnInput,
@@ -29,8 +28,10 @@ import type {
 import type {
   DecorationLayer,
   DecorationProvider,
+  EntryLook,
   FrameBar,
   ItemProducer,
+  LookClaim,
   RendererFor,
   RendererPoint,
   ResolvedColumn,
@@ -95,7 +96,7 @@ export interface GanttShellPorts {
   keymap: KeyHandlerRegistrar & {
     register(binding: KeyBinding<unknown>): Disposer;
   };
-  /** The five seams a plugin registers into, each already carrying the refresh it owes (#170). */
+  /** The seams a plugin registers into, each already carrying the refresh it owes (#170). */
   registrations: PluginRegistrar;
   /** D-S5-11's precedence, already merged with the consumer's own live `tooltipRenderer`. */
   resolveTooltipRenderer(): ResolvedRenderer<TooltipRenderer> | undefined;
@@ -205,13 +206,13 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  It tells, it does not ask — no veto, and nothing to return. */
     announceEntryEdit(payload: EntryFieldEdit): void;
     /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
-     *  consumer's own `interactions`, above the library's per-kind table. `defaults` answers only
-     *  the kinds it names; an omitted gesture still falls through to the library table for `kind`.
-     *  Legal only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed.
-     *  When two plugins register defaults for the same Kind, the newest registration wins, and
-     *  disposing one plugin never disturbs the other plugin's registration. The returned `Disposer`
-     *  removes it sooner (#155). */
-    registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+     *  consumer's own `interactions`, above the library's structure-or-look table. `defaults`
+     *  answers only the looks it names ('parent', 'leaf', or a plugin's own). An omitted gesture
+     *  still falls through to the library table for that look. Legal only while `setup` runs
+     *  (D-S5-4); removed automatically when this plugin is disposed. When two plugins register
+     *  defaults for the same look, the newest registration wins, and disposing one plugin never
+     *  disturbs the other plugin's registration. The returned `Disposer` removes it sooner (#155). */
+    registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
   };
   view: {
     /** S5.3, D-S5-8: the layer a plugin's own popup, tooltip or menu mounts into — the same
@@ -360,9 +361,24 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  (review P3). `producer` is pure: it runs in `layout/`, the same DOM-free pass every other
      *  item producer runs in. Legal only while `setup` runs (D-S5-4). Disposal removes it
      *  automatically, and restores whichever registration is newest among the rest. Disposing one
-     *  plugin never disturbs another plugin's registration on the same Kind. The returned
+     *  plugin never disturbs another plugin's registration on the same look. The returned
      *  `Disposer` removes it sooner (#155). */
-    registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
+    registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
+    /** Claims which entries wear `look` (Q10). A plugin registers this beside its producer: the
+     *  claim says *which* entries are this plugin's, the producer says *what* they draw. An Entry
+     *  no claim answers yes for falls back to the structure look — parent or leaf.
+     *
+     *  The first registered claim to answer yes wins, and a second claim on the same Entry is
+     *  ignored. That second claim also raises a `'look-claimed-twice'` Error report naming both
+     *  plugins, in every build. It is not behind `isDevMode()`: that flag resolves when this repo
+     *  builds `dist/`, so gating it would delete the line from every consumer (D-S5-41). The library
+     *  never arbitrates between plugins: the consumer chose which ones to install, so core reports
+     *  and carries on.
+     *
+     *  `claim` runs on the hover path, so keep it cheap — a `Set` read is the intended shape. It is
+     *  pure: it answers a question and draws nothing. Legal only while `setup` runs (D-S5-4), and
+     *  disposal removes it the same way every other `register*` seam's does. */
+    registerLookClaim(look: EntryLook, claim: LookClaim): Disposer;
   };
 }
 
@@ -462,8 +478,8 @@ export function buildPluginPorts(
       canWrite: (entry, field) => shell.canWrite(entry, field),
       proposeEntryEdit: (payload) => shell.proposeEntryEdit(payload),
       announceEntryEdit: (payload) => shell.announceEntryEdit(payload),
-      registerKindDefaults: (kind, defaults) =>
-        registerWhileOpen(() => shell.registrations.registerKindDefaults(kind, defaults)),
+      registerLookDefaults: (look, defaults) =>
+        registerWhileOpen(() => shell.registrations.registerLookDefaults(look, defaults)),
     },
     view: {
       overlay: shell.overlay,
@@ -490,8 +506,10 @@ export function buildPluginPorts(
         registerWhileOpen(() => shell.registrations.registerGridColumn(column, pluginId)),
     },
     layout: {
-      registerItemProducer: (kind, producer) =>
-        registerWhileOpen(() => shell.registrations.registerItemProducer(kind, producer)),
+      registerItemProducer: (look, producer) =>
+        registerWhileOpen(() => shell.registrations.registerItemProducer(look, producer)),
+      registerLookClaim: (look, claim) =>
+        registerWhileOpen(() => shell.registrations.registerLookClaim(look, claim, pluginId)),
     },
   };
 

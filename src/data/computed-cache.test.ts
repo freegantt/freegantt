@@ -27,12 +27,9 @@ describe('ComputedFieldCache (D-S4-10)', () => {
       fields: [
         {
           key: 'label',
-          source: {
-            from: 'compute',
-            read(entry, ctx) {
-              calls += 1;
-              return `${ctx.read(entry, 'name')}:${calls}`;
-            },
+          compute(entry, ctx) {
+            calls += 1;
+            return `${ctx.read(entry, 'name')}:${calls}`;
           },
         },
       ],
@@ -54,12 +51,9 @@ describe('ComputedFieldCache (D-S4-10)', () => {
       fields: [
         {
           key: 'label',
-          source: {
-            from: 'compute',
-            read(entry, ctx) {
-              calls += 1;
-              return `${ctx.read(entry, 'name')}:${calls}`;
-            },
+          compute(entry, ctx) {
+            calls += 1;
+            return `${ctx.read(entry, 'name')}:${calls}`;
           },
         },
       ],

@@ -60,7 +60,7 @@ export type { PluginContextParts };
  *  is an intersection and no longer an `Omit` of a surface that published the unbound forms.
  *
  *  `TDataset` defaults to the public, untyped `Dataset`, the same way `TGantt` defaults to
- *  `unknown`. A plugin author who binds their own `Dataset<TMeta, TFields>` gets a typed
+ *  `unknown`. A plugin author who binds their own `Dataset<TProps>` gets a typed
  *  `ctx.dataset` throughout `setup()`. A plugin that binds neither type argument sees the exact
  *  surface it always has (#141 item #9). */
 export type PluginContextOf<TGantt = unknown, TDataset = Dataset> = PluginContextParts<TGantt, TDataset> & {

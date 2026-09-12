@@ -38,12 +38,8 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
   mutation: {
     demonstrates:
       'Every edit runs inside one transaction and produces one changeset. Undo and redo replay the ' +
-      'same log, and export/import round-trip the whole dataset as JSON.',
-    config: [
-      "dataset.entries.update(id, { name: '…' })",
-      'dataset.undo() / dataset.redo()',
-      'dataset.toJSON() / Dataset.fromJSON(doc, options)',
-    ],
+      'same log.',
+    config: ["dataset.entries.update(id, { name: '…' })", 'dataset.undo() / dataset.redo()'],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
       { label: 'Undo and redo', href: `${PUBLIC_API}#undo-and-redo` },
@@ -129,6 +125,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
     ],
     specLinks: [
       { label: 'plans/02 §4.4 — Plugin registrations', href: `${PUBLIC_API}#44-plugin-registrations-one-collision-policy-one-lifetime-155` },
+      { label: 'Writing a plugin', href: './docs/plugin-authoring.html' },
       { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
     ],
   },

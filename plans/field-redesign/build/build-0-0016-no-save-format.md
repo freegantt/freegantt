@@ -37,26 +37,26 @@ Every job the Document did has a door that already ships:
 
 **Build the way out before you delete anything.**
 
-- [ ] Ship `dataset.pluginStore(id)` and its no-argument form.
-- [ ] Delete `pluginRows`, the seed arm, and `toDocument` (`src/data/plugin-store.ts:220`). Keep `PluginStores`, `reserve` and `read`.
-- [ ] Delete the `PluginDocument` seed arm of the `PluginStores` constructor (`:51-56`).
-- [ ] Delete `FieldRegistry.authored`. Delete `#declaringPlugin` if nothing else wants it. **No Field door is published.**
-- [ ] Delete `serialization-is-removable` (`.dependency-cruiser.cjs:159-162`) and its red test (`scripts/guard-red-test.mjs:80-82`). Land it in the **same commit** as the folder. **Author authorized this on 2026-09-10.**
-- [ ] Delete `src/data/serialization/` whole — 6 files, about 1,200 lines.
-- [ ] Delete `src/model/document.ts`.
-- [ ] Delete `Dataset.toJSON` (`src/api/dataset.ts:312`), `Dataset.fromJSON` (`:326`), and the import at `:26`.
-- [ ] Delete `UnsupportedSchemaError` from `src/model/errors.ts`, `src/model/index.ts` and `src/api/index.ts`.
-- [ ] Delete `reportCorrectedRollUps` and its tests. Its only caller was the reader.
-- [ ] Give `src/data/history.property.test.ts` a test-local snapshot over `entries.all`. **I7 does not change** — undo still reverts user and engine effects atomically. Only the comparison changes.
-- [ ] Reword the `DatasetPluginOf` doc comment (`src/api/dataset-plugin.ts:94`). It cites *"a Field the Document never had"*. The reason for the lock is the Rollup, not the Document.
-- [ ] Rewrite the format tests in `src/api/dataset.test.ts`. Keep what survives, against the constructor.
-- [ ] Update the seven comments that cite the deleted files.
-- [ ] Replace the three harness dumps — `harness/main.ts:309`, `harness/data.ts:258`, `harness/hierarchy.ts:277` — with `JSON.stringify(dataset.entries.all, null, 2)`. Or delete the panel.
-- [ ] Delete the harness export/import feature in `harness/data.ts` — the button, the textarea, and the `fromJSON` read at `:265`. It is a feature, not a dump.
-- [ ] Delete the harness comment at `harness/data.ts:39-40`. It claims the lock rides in the Document.
-- [ ] Update `harness/docs/page-brief.ts:45`. It lists `toJSON` / `fromJSON` as public surface. `:41` makes the same claim in prose.
-- [ ] Declare `window.__dataset` as a bare `Dataset` in `harness/hierarchy.ts:28` and `harness/data.ts:30`, so the double cast at `harness/main.ts:89` goes.
-- [ ] Regenerate `etc/freegantt.api.md`. I11 gates it.
+- [x] Ship `dataset.pluginStore(id)` and its no-argument form.
+- [x] Delete `pluginRows`, the seed arm, and `toDocument` (`src/data/plugin-store.ts:220`). Keep `PluginStores`, `reserve` and `read`.
+- [x] Delete the `PluginDocument` seed arm of the `PluginStores` constructor (`:51-56`).
+- [x] Delete `FieldRegistry.authored`. Delete `#declaringPlugin` if nothing else wants it. **No Field door is published.**
+- [x] Delete `serialization-is-removable` (`.dependency-cruiser.cjs:159-162`) and its red test (`scripts/guard-red-test.mjs:80-82`). Land it in the **same commit** as the folder. **Author authorized this on 2026-09-10.**
+- [x] Delete `src/data/serialization/` whole — 6 files, about 1,200 lines.
+- [x] Delete `src/model/document.ts`.
+- [x] Delete `Dataset.toJSON` (`src/api/dataset.ts:312`), `Dataset.fromJSON` (`:326`), and the import at `:26`.
+- [x] Delete `UnsupportedSchemaError` from `src/model/errors.ts`, `src/model/index.ts` and `src/api/index.ts`.
+- [x] Delete `reportCorrectedRollUps` and its tests. Its only caller was the reader.
+- [x] Give `src/data/history.property.test.ts` a test-local snapshot over `entries.all`. **I7 does not change** — undo still reverts user and engine effects atomically. Only the comparison changes.
+- [x] Reword the `DatasetPluginOf` doc comment (`src/api/dataset-plugin.ts:94`). It cites *"a Field the Document never had"*. The reason for the lock is the Rollup, not the Document.
+- [x] Rewrite the format tests in `src/api/dataset.test.ts`. Keep what survives, against the constructor.
+- [x] Update the seven comments that cite the deleted files.
+- [x] Replace the three harness dumps — `harness/main.ts:309`, `harness/data.ts:258`, `harness/hierarchy.ts:277` — with `JSON.stringify(dataset.entries.all, null, 2)`. Or delete the panel.
+- [x] Delete the harness export/import feature in `harness/data.ts` — the button, the textarea, and the `fromJSON` read at `:265`. It is a feature, not a dump.
+- [x] Delete the harness comment at `harness/data.ts:39-40`. It claims the lock rides in the Document.
+- [x] Update `harness/docs/page-brief.ts:45`. It lists `toJSON` / `fromJSON` as public surface. `:41` makes the same claim in prose.
+- [x] Declare `window.__dataset` as a bare `Dataset` in `harness/hierarchy.ts:28` and `harness/data.ts:30`, so the double cast at `harness/main.ts:89` goes.
+- [x] Regenerate `etc/freegantt.api.md`. I11 gates it.
 - [ ] Ask the author to mark `plans/s2-data-core/s2.6-serialization.md` retired.
 - [ ] Ask the author to mark D-S5-24 and D-S5-30 retired in `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md:73`.
 - [ ] Raise [#266](https://github.com/Pawel-IT/FreeGantt/issues/266) with its owner. This build deletes one of the two things *Document* named. It does not close the issue.

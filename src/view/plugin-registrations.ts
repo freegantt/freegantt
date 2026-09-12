@@ -1,6 +1,8 @@
-// view/ — the five seams a plugin registers into, in one place, each with the refresh it owes
-// (#170). Five things share one lifetime: a renderer, a decoration provider, an Item producer, a
-// per-kind capability default and a Grid column. Register one, and the Gantt shows it. Dispose one,
+// view/ — the seams a plugin registers into, in one place, each with the refresh it owes
+// (#170). Six things share one lifetime: a renderer, a decoration provider, an Item producer, a
+// look claim (Q10), a per-look capability default and a Grid column. The claim and the producer are
+// a pair: one says which entries wear a look, the other says what that look draws. Register one,
+// and the Gantt shows it. Dispose one,
 // and the Gantt shows what wins next (#155). What differs is which pass has to run again. That is
 // the one thing a reader used to have to reassemble from three files.
 //
@@ -14,13 +16,15 @@ import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
   DecorationLayer,
   DecorationProvider,
+  EntryLook,
   ItemProducer,
   ItemProducerRegistry,
+  LookClaim,
   RegisteredDecorationProvider,
   RendererFor,
   RendererPoint,
 } from '../layout/index.js';
-import type { Disposer, EntryKind, GridColumnInput, PluginId } from '../model/index.js';
+import type { Disposer, GridColumnInput, PluginId } from '../model/index.js';
 import { RendererRegistry } from './renderer-registry.js';
 import type { KindDefaults } from './capability.js';
 
@@ -44,8 +48,9 @@ export interface PluginRegistrationPorts {
 export interface PluginRegistrar {
   registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
-  registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer;
-  registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer;
+  registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
+  registerLookClaim(look: EntryLook, claim: LookClaim, pluginId: PluginId): Disposer;
+  registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
 
@@ -57,13 +62,13 @@ export class PluginRegistrations implements PluginRegistrar {
    *  claim rules (per-kind slots, whole-point refusal) are that file's subject, not this one's. */
   readonly renderers = new RendererRegistry();
 
-  /** D-S4-24: one registry per Gantt, seeded with span/group/milestone. `LayoutInput` carries the
+  /** D-S4-24: one registry per Gantt, seeded with the two structural looks. `LayoutInput` carries the
    *  object itself, so this exposes the registry rather than a copy of its contents. */
   readonly itemProducers: ItemProducerRegistry;
 
   /** S5.9, D-S5-22: the middle precedence layer `resolveCapabilities` reads, between the consumer's
-   *  own `interactions` and the library table. Newest registration on a kind wins. */
-  #kindDefaults = createRegistrationTable<EntryKind, KindDefaults>();
+   *  own `interactions` and the library table. Newest registration on a look wins. */
+  #lookDefaults = createRegistrationTable<EntryLook, KindDefaults>();
 
   /** S5.6, D-S5-15: every registered provider, in registration order, threaded into
    *  `LayoutInput.decorationProviders`.
@@ -112,9 +117,9 @@ export class PluginRegistrations implements PluginRegistrar {
 
   /** D-S5-22. `FrameLayout`'s per-row Item cache forgets a row on a dataset, row-count or metrics
    *  change only. A producer registration is none of those, so every row produces its Items again. */
-  registerItemProducer(kind: EntryKind, producer: ItemProducer): Disposer {
+  registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer {
     return this.#onBothEdges(
-      () => this.itemProducers.register(kind, producer),
+      () => this.itemProducers.register(look, producer),
       () => {
         this.#ports.invalidateItems();
         this.#ports.requestFrame();
@@ -122,11 +127,25 @@ export class PluginRegistrations implements PluginRegistrar {
     );
   }
 
+  /** Q10. A claim changes which Entry wears which look, so it changes what paints *and* what every
+   *  gesture is allowed to do. Both edges run the item invalidation a producer registration runs,
+   *  and the capability re-resolution a look default runs. */
+  registerLookClaim(look: EntryLook, claim: LookClaim, pluginId: PluginId): Disposer {
+    return this.#onBothEdges(
+      () => this.itemProducers.registerClaim(look, claim, pluginId),
+      () => {
+        this.#ports.invalidateItems();
+        this.#ports.refreshCapabilities();
+        this.#ports.requestFrame();
+      },
+    );
+  }
+
   /** S5.9, D-S5-22. A changed default changes what every gesture is allowed to do, so the capability
    *  table re-resolves rather than the frame repainting. */
-  registerKindDefaults(kind: EntryKind, defaults: KindDefaults): Disposer {
+  registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer {
     return this.#onBothEdges(
-      () => this.#kindDefaults.register(kind, defaults),
+      () => this.#lookDefaults.register(look, defaults),
       () => this.#ports.refreshCapabilities(),
     );
   }
@@ -144,9 +163,9 @@ export class PluginRegistrations implements PluginRegistrar {
     return this.#ports.registerGridColumn(column, pluginId);
   }
 
-  /** The winning `KindDefaults` for a kind, or `undefined`. `resolveCapabilities`' third argument. */
-  kindDefaultsFor(kind: EntryKind): KindDefaults | undefined {
-    return this.#kindDefaults.get(kind);
+  /** The winning `KindDefaults` for a look, or `undefined`. `resolveCapabilities`' third argument. */
+  lookDefaultsFor(look: EntryLook): KindDefaults | undefined {
+    return this.#lookDefaults.get(look);
   }
 
   /** Every live provider, in registration order — `LayoutInput.decorationProviders`. One walk of the

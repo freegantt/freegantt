@@ -52,27 +52,27 @@ dataset.entries.add({ id, name, owner: 'Ali' })   // flat, same shape
 
 ## Work
 
-- [ ] Rename `Entry.meta` → `Entry.props` with **serena**. Make it non-optional, filled `{}` at ingest.
-- [ ] Rename `StoredEdit` → `ProposedEdit` and the whole family with **serena**. About 267 occurrences.
-- [ ] Rename `TMeta` → `TProps` with **serena**, and drop `TFields`. About 169 and 141 occurrences.
-- [ ] Write `PropsEdit`, `EntryEdit` and the branded `ProposedEdit` from `types.md`. Do not factor them.
-- [ ] Write the seven type tests from `types.md`.
-- [ ] Make `writeDeclaredMetaFields` walk the top level **and** inside `props` on a nested record.
-- [ ] Make `entryAfterEdit`, `mergeEntryEdits` (`src/data/edit-extension.ts:38`) and `mergeStoredEdits` (`src/data/fields/field-access.ts:49`) merge `props` **per key**. Fix both spreads together.
-- [ ] Make `toProposedEdit` merge the patch onto the Entry's own record, on the read side.
-- [ ] Make `diffEdit` emit one row per Field key, never a path into `props`.
-- [ ] Move `libraryWriteRule` (`src/view/capability.ts:114-121`) into `data/` with no policy change. Point `view/capability.ts` at it.
-- [ ] Change `hasSomewhereToWrite` to `!('compute' in field)`.
-- [ ] Delete `FieldSource`, `Field.source`, `source-strategy.ts`, `normalize-source.ts`, `metaRecord`, `metaKey`, `metaSlot`, `DuplicateFieldSourceError` and `InvalidFieldSourceError`.
-- [ ] Delete the `meta` core Field with no successor.
-- [ ] Set `CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>` **and** omit `'props'` from `CoreFieldValues`.
-- [ ] Refuse `{ key: 'props' }` at runtime. It is the one reserved key.
-- [ ] Declare `ComputedFieldCannotBeWrittenError`. Throw it at **registration** only.
-- [ ] Add the two ingest warnings in one `Object.keys(input)` walk per Entry: an unknown top-level key, and a key inside `props` that names a core key. Both warn. Neither throws.
-- [ ] Rewrite the `src/model/errors.ts:331` message with the new migration text.
-- [ ] Give `harness/planner.ts:31` one generic. Rename `PlannerMeta` → `PlannerEntryProps` and `DemoMeta` → `DemoEntryProps` (`fixtures/demo-dataset.ts:42`).
-- [ ] Update the `FieldSource` row at `harness/docs/files.html:130-132`. It describes ADR 0005's Field surface. This is harness documentation, not a gate.
-- [ ] Close the build — see [`README.md#close-every-build`](README.md).
+- [x] Rename `Entry.meta` → `Entry.props` with **serena**. Make it non-optional, filled `{}` at ingest.
+- [x] Rename `StoredEdit` → `ProposedEdit` and the whole family with **serena**. About 267 occurrences.
+- [x] Rename `TMeta` → `TProps` with **serena**, and drop `TFields`. About 169 and 141 occurrences.
+- [x] Write `PropsEdit`, `EntryEdit` and the branded `ProposedEdit` from `types.md`. Do not factor them.
+- [x] Write the seven type tests from `types.md`.
+- [x] Make `writeDeclaredMetaFields` walk the top level **and** inside `props` on a nested record.
+- [x] Make `entryAfterEdit`, `mergeEntryEdits` (`src/data/edit-extension.ts:38`) and `mergeStoredEdits` (`src/data/fields/field-access.ts:49`) merge `props` **per key**. Fix both spreads together.
+- [x] Make `toProposedEdit` merge the patch onto the Entry's own record, on the read side.
+- [x] Make `diffEdit` emit one row per Field key, never a path into `props`.
+- [x] Move `libraryWriteRule` (`src/view/capability.ts:114-121`) into `data/` with no policy change. Point `view/capability.ts` at it.
+- [x] Change `hasSomewhereToWrite` to `!('compute' in field)`.
+- [x] Delete `FieldSource`, `Field.source`, `source-strategy.ts`, `normalize-source.ts`, `metaRecord`, `metaKey`, `metaSlot`, `DuplicateFieldSourceError` and `InvalidFieldSourceError`.
+- [x] Delete the `meta` core Field with no successor.
+- [x] Set `CoreFieldKey = keyof Omit<Entry, 'id' | 'props'>` **and** omit `'props'` from `CoreFieldValues`.
+- [x] Refuse `{ key: 'props' }` at runtime. It is the one reserved key.
+- [x] Declare `ComputedFieldCannotBeWrittenError`. Throw it at **registration** only.
+- [x] Add the two ingest warnings in one `Object.keys(input)` walk per Entry: an unknown top-level key, and a key inside `props` that names a core key. Both warn. Neither throws.
+- [x] Rewrite the `src/model/errors.ts:331` message with the new migration text.
+- [x] Give `harness/planner.ts:31` one generic. Rename `PlannerMeta` → `PlannerEntryProps` and `DemoMeta` → `DemoEntryProps` (`fixtures/demo-dataset.ts:42`).
+- [x] Update the `FieldSource` row at `harness/docs/files.html:130-132`. It describes ADR 0005's Field surface. This is harness documentation, not a gate.
+- [x] Close the build — see [`README.md#close-every-build`](README.md).
 
 **Slices it touches.** S2 (the store, the ChangeSet), S4 (the Field registry, the Rollup's write path), S5 (plugins, the edit extension, the capability resolver). **Re-run the S2, S4 and S5 slice gates.**
 

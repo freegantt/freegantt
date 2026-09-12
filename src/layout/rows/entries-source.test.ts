@@ -16,11 +16,11 @@ function entry(id: string, parentId?: string, team?: string): Entry {
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: {},
   };
   if (parentId !== undefined) row.parentId = entryId(parentId);
-  if (team !== undefined) row.meta = { team };
+  if (team !== undefined) row.props = { team };
   return row;
 }
 

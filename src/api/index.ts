@@ -1,5 +1,5 @@
 export { Dataset } from './dataset.js';
-export type { DatasetOptions, DatasetHierarchy, DatasetPlugin, DatasetPluginContext } from './dataset.js';
+export type { DatasetOptions, DatasetPlugin, DatasetPluginContext } from './dataset.js';
 // S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
 // aliases above, plus the vocabulary a plugin author names directly — its own store, another
 // plugin's read-only view, and the wrapper that composes onto the extension hook.
@@ -22,11 +22,10 @@ export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
 // composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
 // `moveEntryTo` (D-S5-50) builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
-// (#197) takes and returns. StoredEdit is the read side — what `EditRequest.proposed` holds — and
-// StoredEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
+// (#197) takes and returns. ProposedEdit is the read side — what `EditRequest.proposed` holds — and
+// ProposedEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
 // a helper over it, needs to name the read side too).
-export type { EditRequest, EditExtender, EntryEdits, StoredEdit, StoredEdits } from '../model/index.js';
-export type { RollUpKinds } from '../model/index.js';
+export type { EditRequest, EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 // S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
 // emitter identity. Beside `attemptMutation` because it is the same kind of helper — the boilerplate
@@ -59,12 +58,13 @@ export type {
   FieldKey,
   FieldValue,
   Field,
+  FieldEditable,
   FieldType,
-  FieldSource,
   FieldContext,
   FormatContext,
   RollUpContext,
   Aggregator,
+  FieldDistributor,
   AggregatorName,
   FieldTypeName,
   GridColumn,
@@ -78,12 +78,12 @@ export type {
   EntityRemoved,
   FieldUpdated,
   EntryEdit,
+  PropsEdit,
   DatasetEventMap,
 } from '../model/index.js';
 // The consumer-History write path (`plans/s2-data-core/s2b-undo-replay-seam.md`): `invertChangeSet`
 // turns a recorded changeset into its undo; `Dataset.replay` writes it back. `data/change-set.js` is a
-// submodule of the `data` layer, not the `data` layer boundary itself — `api/` importing it directly
-// matches `api/dataset.ts`'s own import of `data/serialization/index.js`.
+// submodule of the `data` layer, not the `data` layer boundary itself — `api/` may import it directly.
 export { invertChangeSet, fieldRowsOf } from '../data/change-set.js';
 export { Gantt } from './gantt.js';
 export type {
@@ -127,6 +127,7 @@ export type {
   NavigationChange,
   SelectionChange,
   CollapseChange,
+  ProposedDates,
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,
@@ -217,9 +218,12 @@ export {
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
+  DuplicatePropsKeyError,
+  ReservedFieldKeyError,
   IllegalCoreFieldOverrideError,
-  DuplicateFieldSourceError,
-  InvalidFieldSourceError,
+  ComputedFieldCannotBeWrittenError,
+  FieldNotEditableError,
+  DerivedFieldNotWritableError,
   UnknownAggregatorError,
   AggregatorFailedError,
   UnknownFieldTypeError,
@@ -229,7 +233,6 @@ export {
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,
-  UnsupportedSchemaError,
   DuplicatePluginIdError,
   PluginNotInstalledError,
   MissingPluginError,
@@ -255,8 +258,8 @@ export type { PluginId, Disposer, KeyChord } from '../model/index.js';
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
-  EntryKind,
   EntryId,
+  EntryLook,
   Segment,
   SegmentId,
   RowId,
@@ -277,7 +280,6 @@ export type {
   TimeSpanInput,
   DateOnlyEndRule,
 } from '../model/index.js';
-export type { DatasetDocument, EntryDocument, SerializedField, PluginDocument } from '../model/index.js';
 export type {
   RowSource,
   EntriesRowSource,
@@ -316,7 +318,7 @@ export type {
   BarLabels,
   BarLabelPlacement,
   ResolvedBarLabel,
-  RendererByKind,
+  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,
@@ -345,6 +347,9 @@ export type {
 // author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
 // are exported rather than left to structural inference.
 export type { Item, ItemProducer } from '../layout/index.js';
+// Q10: `ctx.layout.registerLookClaim(look, claim)`'s own vocabulary, exported for the same reason —
+// a plugin author who names the predicate's type needs to be able to name it (J30).
+export type { LookClaim } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';

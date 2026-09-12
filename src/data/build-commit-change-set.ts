@@ -1,36 +1,40 @@
-// data/ — the five-stage commit pipeline (C1): body edits → extension hook → autoGroup promotion →
-// rollup → fold. The only module that imports `rollup.ts` and `hierarchy.ts` on the commit path
-// (`rollup-is-removable`, `autogroup-is-removable`).
+// data/ — the four-stage commit pipeline (C1, ADR 0013 dropped the autoGroup promotion stage): body
+// edits → extension hook → rollup → fold. The only module that imports `rollup.ts` on the commit path
+// (`rollup-is-removable`).
 
 import type {
   ChangeOrigin,
   ChangeSet,
   ChangeSetId,
-  DatasetHierarchy,
   EntityAdded,
   EntityRemoved,
   Entry,
   EntryId,
-  EntryKind,
   FieldContext,
   FieldUpdated,
-  StoredEdit,
+  SegmentId,
+  ProposedEdit,
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import type { EditRequest, StoredEdits } from './edit-extension.js';
+import type { EditRequest, ProposedEdits } from './edit-extension.js';
+import type { ErrorBus } from './error-reporting.js';
+import {
+  buildCascadeDroppedReport,
+  buildDerivedValuesDroppedReport,
+  raiseErrorOn,
+} from './error-reporting.js';
 import { reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
-  mergeStoredEdits,
-  mergeStoredEditsByEntry,
+  emptyProposedEdit,
+  mergeProposedEdits,
   entryAfterEdit,
   proposedKeysOf,
-  statesProposedKeys,
+  withProposedKeys,
 } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
-import { promoteNewParents } from './hierarchy.js';
 import { rollUpFields } from './rollup.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -40,7 +44,7 @@ export interface CommitChangeSetEntryStore {
   committedById(): ReadonlyMap<EntryId, Entry>;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
-  pendingEdits(): StoredEdits;
+  pendingEdits(): ProposedEdits;
   /** Which of `start`/`end`/`segments` the body itself named on each pending edit (#232) — see
    *  `EntryStore.pendingAuthoredEnvelopeKeys`. */
   pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
@@ -59,16 +63,22 @@ export interface CommitChangeSetInput {
   /** The commit path's own door onto the extension hook (#232) — see
    *  `TransactionData.extraEditsReadingFor`. */
   extraEditsReadingFor(request: EditRequest): EditsReading;
-  readonly hierarchy: DatasetHierarchy;
   readonly fields: FieldRegistry;
   readonly fieldContext: FieldContext;
-  readonly rollUpKinds: ReadonlySet<EntryKind>;
   nextChangeSetId(): ChangeSetId;
+  /** The commit path's real counter (ADR 0012): a plugin's cascade that turns a dateless Entry
+   *  spanning for the first time always mints a real `SegmentId` here, because this path always
+   *  reaches the store. `entry-reader.ts`'s `reconcileExtenderEdits` is the one caller. */
+  mintSegmentId(): SegmentId;
+  /** ADR 0013, decision 5/6: where this commit's own dropped-derived-value warnings go. Read here,
+   *  not threaded back out through the return value, because a commit that folds to `undefined`
+   *  (net-empty) still owes the warning — the drop already happened in the Rollup pass above it. */
+  readonly bus: ErrorBus;
 }
 
 export function diffEdits(
   byId: ReadonlyMap<EntryId, Entry>,
-  edits: StoredEdits,
+  edits: ProposedEdits,
   fields: FieldRegistry,
   ctx: FieldContext,
 ): FieldUpdated[] {
@@ -88,24 +98,13 @@ const NO_ENVELOPE_KEYS: ReadonlySet<string> = Object.freeze(new Set<string>());
  *  a reader debugging it. */
 const SHARED_ENVELOPE_OPERATION = 'transaction body and edit extender';
 
-/** Which Fields an edit writes, however it states them: a storage key it holds, or a proposed key.
- *  `proposedKeys` is bookkeeping on the edit, never a Field, so it is not one of them (#197).
- *
- *  `meta` is the *container* a meta-sourced Field writes through, never a Field in its own right. An
- *  edit that states `proposedKeys` already names the real Field inside `meta`, so the raw loop skips
- *  `meta` for such an edit (#209) — including it unconditionally made two different meta-sourced
- *  Fields on one Entry intersect on "meta" and I4 refuse a transaction that writes no Field twice. An
- *  edit with no stated `proposedKeys` still needs the raw `meta` key, because nothing else names what
- *  it wrote. */
-function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
-  const states = statesProposedKeys(edit);
-  const keys = new Set<string>(proposedKeysOf(edit));
-  for (const key of Object.keys(edit)) {
-    if (key === 'proposedKeys') continue;
-    if (states && key === 'meta') continue;
-    keys.add(key);
-  }
-  return keys;
+/** Which Fields an edit writes. `proposedKeys` is required on every `ProposedEdit` (ADR 0011), so it
+ *  always names the real Field — a declared `props` key by its own name, never the `props` container
+ *  itself, which is bookkeeping on the edit, not a Field in its own right (#197). There is no more
+ *  raw-key fallback: walking `Object.keys(edit)` would pick up `__brand`/`props`/`proposedKeys` as if
+ *  they were Field names, which is exactly the bug this function existed to avoid. */
+function fieldsWrittenBy(edit: ProposedEdit): ReadonlySet<string> {
+  return proposedKeysOf(edit);
 }
 
 /** Which Fields an edit's *author* stated, for the I4 guard (#232). `fieldsWrittenBy` above answers
@@ -115,7 +114,7 @@ function fieldsWrittenBy(edit: StoredEdit): ReadonlySet<string> {
  *  got paired onto a sole Segment or read back from one. Only `authoredEnvelopeKeys` — captured before
  *  `reconcileEnvelope` runs — tells the two apart. */
 function authoredFieldsWrittenBy(
-  edit: StoredEdit,
+  edit: ProposedEdit,
   authoredEnvelopeKeys: ReadonlySet<string>,
 ): ReadonlySet<string> {
   const fields = new Set(fieldsWrittenBy(edit));
@@ -125,9 +124,9 @@ function authoredFieldsWrittenBy(
 }
 
 function guardExtensionHookDoesNotOverwriteBody(
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-  extenderEdits: StoredEdits,
+  extenderEdits: ProposedEdits,
   extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
 ): void {
   if (!isDevMode()) return;
@@ -163,36 +162,47 @@ function guardExtensionHookDoesNotOverwriteBody(
  *  the other's Segment. */
 function reconcileSharedEnvelope(
   original: Entry,
-  bodyEdit: StoredEdit,
+  bodyEdit: ProposedEdit,
   bodyAuthoredKeys: ReadonlySet<string>,
-  extenderEdit: StoredEdit,
+  extenderEdit: ProposedEdit,
   extenderAuthoredKeys: ReadonlySet<string>,
-): StoredEdit {
-  const patch: Record<string, unknown> = {};
+): ProposedEdit {
+  const patch: ProposedEdit = { ...emptyProposedEdit() };
+  const bag = patch as Record<string, unknown>;
   const bodyBag = bodyEdit as Record<string, unknown>;
   const extenderBag = extenderEdit as Record<string, unknown>;
-  for (const key of bodyAuthoredKeys) patch[key] = bodyBag[key];
-  for (const key of extenderAuthoredKeys) patch[key] = extenderBag[key];
-  return reconcileEnvelope(original, patch, SHARED_ENVELOPE_OPERATION).edit;
+  for (const key of bodyAuthoredKeys) bag[key] = bodyBag[key];
+  for (const key of extenderAuthoredKeys) bag[key] = extenderBag[key];
+  const reconciled = reconcileEnvelope(original, patch, SHARED_ENVELOPE_OPERATION);
+  // `patch` already carried `__brand`/`props`/`proposedKeys` before `reconcileEnvelope` ran, so
+  // `addedKeys` never names them — only the caller's own authored keys and whatever
+  // `reconcileEnvelope` newly derived (`segments` paired on, or `start`/`end` read back) belong in
+  // the reconciled edit's own `proposedKeys` (ADR 0011: it is required now, so this states it,
+  // rather than leaving it the empty set `emptyProposedEdit()` seeded).
+  return withProposedKeys(reconciled.edit, [
+    ...bodyAuthoredKeys,
+    ...extenderAuthoredKeys,
+    ...reconciled.addedKeys,
+  ]);
 }
 
 /** Merges the body's and the extender's edits, keyed by Entry, correcting the envelope once where
- *  both authored it (#232) — `mergeStoredEditsByEntry` alone is enough everywhere else, because only
+ *  both authored it (#232) — `mergeProposedEditsByEntry` alone is enough everywhere else, because only
  *  `start`/`end`/`segments` are ever silently re-derived by reconciliation. This is the one merge the
  *  commit path diffs, replacing the two separate diffs of `proposed` and `extenderEdits` that used to
  *  let one field reach the `ChangeSet` twice with two different `to` values (#232). */
 function mergeBodyAndExtenderEdits(
   byId: ReadonlyMap<EntryId, Entry>,
-  proposed: StoredEdits,
+  proposed: ProposedEdits,
   bodyAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-  extenderEdits: StoredEdits,
+  extenderEdits: ProposedEdits,
   extenderAuthoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
-): StoredEdits {
+): ProposedEdits {
   if (extenderEdits.size === 0) return proposed;
-  const merged = new Map<EntryId, StoredEdit>(proposed);
+  const merged = new Map<EntryId, ProposedEdit>(proposed);
   for (const [id, extenderEdit] of extenderEdits) {
     const bodyEdit = proposed.get(id);
-    let combined = mergeStoredEdits(bodyEdit, extenderEdit);
+    let combined = mergeProposedEdits(bodyEdit, extenderEdit);
     const bodyEnvelope = bodyAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
     const extenderEnvelope = extenderAuthoredEnvelopeKeys.get(id) ?? NO_ENVELOPE_KEYS;
     const original =
@@ -205,7 +215,14 @@ function mergeBodyAndExtenderEdits(
         extenderEdit,
         extenderEnvelope,
       );
-      combined = { ...combined, ...reconciledEnvelope };
+      // Not a blind spread (ADR 0011, the two-shallow-spread trap): `reconciledEnvelope.props` is
+      // always `{}` — `reconcileSharedEnvelope` only ever resolves `start`/`end`/`segments` — so
+      // spreading it whole would wipe every declared key `combined` already carries. The envelope
+      // keys it resolved win; `combined`'s own `props` and the union of both `proposedKeys` survive.
+      combined = withProposedKeys(
+        { ...combined, ...reconciledEnvelope, props: combined.props },
+        new Set([...proposedKeysOf(combined), ...proposedKeysOf(reconciledEnvelope)]),
+      );
     }
     merged.set(id, combined);
   }
@@ -250,7 +267,9 @@ export function buildCommitChangeSet(
     proposed,
     entryAfterEdits: (id) => effectiveForExtender.get(id),
   });
-  const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored);
+  const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored, () =>
+    data.mintSegmentId(),
+  );
   guardExtensionHookDoesNotOverwriteBody(
     proposed,
     bodyAuthoredEnvelopeKeys,
@@ -272,45 +291,51 @@ export function buildCommitChangeSet(
   );
   const bodyAndExtenderUpdated = diffEdits(byId, mergedBodyAndExtender, data.fields, data.fieldContext);
 
-  const hierarchyEdits = promoteNewParents(
-    byId,
-    { added, removed, edits: mergedBodyAndExtender },
-    data.hierarchy,
-  );
-  const hierarchyUpdated = diffEdits(byId, hierarchyEdits, data.fields, data.fieldContext);
-
-  // An added entity folds in its own extender cascade too, not only its hierarchy promotion — an
-  // `EditExtender` that rewrites `segments` on an entity this same transaction adds must still land
-  // on the entity the changeset publishes (#212 R2 fix-plan review, finding A): the earlier code here
-  // overlaid `hierarchyEdits` alone, so a reconciled extender edit for a same-transaction add computed
-  // a correct `StoredEdit` upstream but never reached the stored entity.
-  const extraEditsForAdded = mergeStoredEditsByEntry(extenderEdits, hierarchyEdits);
+  // An added entity folds in its own extender cascade — an `EditExtender` that rewrites `segments`
+  // on an entity this same transaction adds must still land on the entity the changeset publishes
+  // (#212 R2 fix-plan review, finding A). There is no hierarchy-promotion cascade to fold in beside
+  // it any more (ADR 0013): a parent is structural, so nothing writes a Field for gaining a child.
   const addedEntitiesForFold =
-    extraEditsForAdded.size === 0
+    extenderEdits.size === 0
       ? addedEntities
       : addedEntities.map((row) => {
-          const extra = extraEditsForAdded.get(row.entity.id);
+          const extra = extenderEdits.get(row.entity.id);
           return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
-  const rollupUpdated = rollUpFields(
+  const { updated: rollupUpdated, cascadeDropped } = rollUpFields(
     byId,
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergeStoredEditsByEntry(mergedBodyAndExtender, hierarchyEdits) },
+      edits: { body: proposed, merged: mergedBodyAndExtender },
     },
     data.fields,
-    data.rollUpKinds,
     data.fieldContext,
+    () => data.mintSegmentId(),
   );
+
+  // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the
+  // Rollup overwrote it anyway. One report for the whole commit, never one per row.
+  if (cascadeDropped.length > 0) {
+    raiseErrorOn(data.bus, buildCascadeDroppedReport(cascadeDropped));
+  }
+
+  // ADR 0013, decision 6: an entity `entries.add()` just created was already a parent by the time
+  // this commit landed (a batch of `add()` calls in one transaction), and one of its rolling-up
+  // Fields had nothing to roll up to. Reparenting an *existing* entity onto a new parent is not this
+  // — that recompute stays silent (decision 6) — so only the ids this commit itself added qualify.
+  const addedIds = new Set(addedEntitiesForFold.map((row) => row.entity.id));
+  const addDropped = rollupUpdated.filter((row) => row.to === undefined && addedIds.has(row.id));
+  if (addDropped.length > 0) {
+    raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(addDropped));
+  }
 
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
   return foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
     ...bodyAndExtenderUpdated,
-    ...hierarchyUpdated,
     ...rollupUpdated,
     ...pluginRows,
   ]);

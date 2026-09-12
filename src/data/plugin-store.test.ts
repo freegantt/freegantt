@@ -99,17 +99,6 @@ describe('PluginStores.read (D-S5-30)', () => {
     const state = newState();
     expect(state.pluginStores.read('demo.neverReserved')).toBeUndefined();
   });
-
-  it('answers undefined for rows the Document carried in for an uninstalled plugin', () => {
-    // Passenger data is not a store anyone may read — it is data this Dataset only carries through.
-    const state = new DatasetState({
-      entries: twoEntries,
-      timeZone: 'UTC',
-      pluginRows: { 'demo.absent': { t1: { locked: true } } },
-    });
-    expect(state.pluginStores.read('demo.absent')).toBeUndefined();
-    expect(state.pluginStores.toDocument()).toEqual({ 'demo.absent': { t1: { locked: true } } });
-  });
 });
 
 describe('a plugin-store write on the commit path (D-S5-24)', () => {
@@ -255,34 +244,6 @@ describe('a plugin-store write while a plugin sets up (issue #137 F17)', () => {
   });
 });
 
-describe('PluginStores.toDocument', () => {
-  it('writes no plugins key when no plugin holds a row', () => {
-    expect(newState().pluginStores.toDocument()).toBeUndefined();
-  });
-
-  it('drops the store once its last row goes', () => {
-    const state = newState();
-    const lock = state.pluginStores.reserve<LockRow>(LOCK);
-    lock.set(entryId('t1'), { locked: true });
-    lock.remove(entryId('t1'));
-    expect(state.pluginStores.toDocument()).toBeUndefined();
-  });
-
-  it('carries every plugin rows, uninstalled ones included', () => {
-    const state = new DatasetState({
-      entries: twoEntries,
-      timeZone: 'UTC',
-      pluginRows: { 'demo.absent': { t2: { note: 'kept' } } },
-    });
-    state.pluginStores.reserve<LockRow>(LOCK).set(entryId('t1'), { locked: true });
-
-    expect(state.pluginStores.toDocument()).toEqual({
-      'demo.absent': { t2: { note: 'kept' } },
-      [LOCK]: { t1: { locked: true } },
-    });
-  });
-});
-
 describe('PluginStores with no transaction runner', () => {
   it('explains itself rather than dropping the write', () => {
     // `data/dataset-state.ts` always binds one; an unbound instance is a wiring mistake, so it says so.
@@ -300,7 +261,6 @@ describe('two Datasets (I2)', () => {
     first.pluginStores.reserve<LockRow>(LOCK).set(entryId('t1'), { locked: true });
 
     expect(second.pluginStores.reserve<LockRow>(LOCK).all.size).toBe(0);
-    expect(second.pluginStores.toDocument()).toBeUndefined();
   });
 });
 

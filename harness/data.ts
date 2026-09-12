@@ -10,13 +10,13 @@
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
 // one row on undo, which is the thing the design exists to guarantee.
 
-// S2.6 (plans/s2-data-core/s2.6-serialization.md §3) adds export/import over toJSON/fromJSON.
-// Import replaces the dataset and rebuilds the Gantt, which is the proof that a Gantt survives a
-// rebind (or the finding against destroy() if it does not).
+// The library holds no save format (ADR 0016): this page persists nothing across a reload. An
+// application that must keep this Dataset reads `dataset.entries.all` and its plugins' stores, and
+// restores by handing that same shape to `new Dataset()`.
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from '../src/api/index.js';
-import type { DatasetDocument, DatasetEventMap, Disposer } from '../src/api/index.js';
+import type { DatasetEventMap, Entry, EntryEdit, EntryEdits, EntryId } from '../src/api/index.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -27,35 +27,65 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'mutation
 
 declare global {
   interface Window {
-    __dataset: Dataset<{ cost: number }, { cost: number }>;
+    __dataset: Dataset;
   }
 }
 
 // #142 shipped the core-Field override, and #256 gave it its first call site. This page declares
 // End read-only for the whole Dataset, which is the blunt, document-level lock. It can, because it
-// demonstrates mutation and serialization rather than drag-resize. `main.ts` shows the other half:
-// the same answer narrowed to one row through `interactions.edit`.
+// demonstrates mutation and undo/redo rather than drag-resize. `main.ts` shows the other half: the
+// same answer narrowed to one row through `interactions.edit`.
 //
-// The lock rides in the Document too. `editable` serializes on the Field, so an exported Document
-// carries it and an import puts it back (`data/serialization/field-document.ts`).
+// `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
+// All three states sit below, and two doors read them (ADR 0015). End is `'api'`: the Move buttons
+// shift it, and no user may drag or type it. `contractId` is `'never'`: it arrives with the entry
+// and nothing in this app may change it. Cost declares nothing, so it stays open to both doors.
+// ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
+// `money` rolls up with `sum`, so the write that reverses a sum is a split — read `distribute` as the
+// Aggregator backwards. This page splits evenly and puts the rounding remainder on the last child,
+// so the Rollup reads back exactly the number the button asked for. A page that wanted a split by
+// duration, or by each child's current share, would write that here instead; the library ships no
+// guessed default, because there is none to defend.
 const COST_FIELDS = {
-  fieldTypes: { money: { rollUp: 'sum' as const } },
+  fieldTypes: {
+    money: {
+      rollUp: 'sum' as const,
+      distribute(total: number | undefined, children: readonly Entry[]): EntryEdits | undefined {
+        if (total === undefined || children.length === 0) return undefined;
+        const share = Math.floor(total / children.length);
+        const edits = new Map<EntryId, EntryEdit>();
+        children.forEach((child, index) => {
+          const last = index === children.length - 1;
+          edits.set(child.id, { cost: last ? total - share * (children.length - 1) : share });
+        });
+        return edits;
+      },
+    },
+  },
   fields: [
     { key: 'cost' as const, type: 'money' },
-    { key: 'end' as const, editable: false },
+    // #142 gave the core-Field override its first call site, and #256 its first e2e. `'api'` is what
+    // this page always meant by it: the toolbar moves a bar by a day, and the End cell and the End
+    // resize handle both stay dead.
+    { key: 'end' as const, editable: 'api' as const },
+    // The lock. A contract id comes in with the entry and nothing here may rewrite it, so
+    // `entries.update()` refuses it as flatly as the grid does.
+    { key: 'contractId' as const, editable: false },
   ],
 };
 
 // S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
+// ADR 0013: "Phase" derives because it has children. It authors no classification, and no dates —
+// the Rollup fills its span from Task A and Task B.
 const ROLLUP_TREE = [
-  { id: 'phase', name: 'Phase', kind: 'group' as const },
+  { id: 'phase', name: 'Phase' },
   {
     id: 'task-a',
     name: 'Task A',
     parentId: 'phase',
     start: '2026-01-01',
     end: '2026-01-10',
-    meta: { cost: 100 },
+    props: { cost: 100, contractId: 'C-4417' },
   },
   {
     id: 'task-b',
@@ -63,7 +93,7 @@ const ROLLUP_TREE = [
     parentId: 'phase',
     start: '2026-01-15',
     end: '2026-01-20',
-    meta: { cost: 200 },
+    props: { cost: 200, contractId: 'C-4418' },
   },
 ];
 
@@ -71,15 +101,15 @@ const ROLLUP_TREE = [
 // flag of its own, and the plugin's `beforeChange` is what refuses the write. `Dataset.plugins` is
 // read-only, so every Dataset this page builds — including the imported one below — installs a
 // fresh one at construction.
-let locks = lockEntries();
+const locks = lockEntries();
 
-let dataset = new Dataset<{ cost: number }, { cost: number }>({
+const dataset = new Dataset<{ cost: number; contractId?: string }>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
   plugins: [locks],
 });
-let gantt = new Gantt({ container: '#gantt', dataset });
+const gantt = new Gantt({ container: '#gantt', dataset });
 window.__dataset = dataset;
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
@@ -94,9 +124,6 @@ const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
-const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
-const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
@@ -165,15 +192,8 @@ function bindDataset(): void {
 
 // Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
 // plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
-// `watchAllErrors` returns a `Disposer` for exactly this: an import below replaces both `dataset`
-// and `gantt`, so the old subscription is disposed first, alongside `bindDataset`/`bindGantt`'s own
-// rebind — calling `watchAllErrors` twice on the module-scope pair would otherwise leak a stale
-// subscription to entries the import just discarded (T1-4).
-let stopWatchingErrors: Disposer = () => {};
-
 function bindErrors(): void {
-  stopWatchingErrors();
-  stopWatchingErrors = watchAllErrors([dataset, gantt], (report) => {
+  watchAllErrors([dataset, gantt], (report) => {
     const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
     logLine(`error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
   });
@@ -214,6 +234,9 @@ function move(deltaMs: number): void {
   attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) {
+        // A selected row with no bar has no dates to shift (ADR 0012) — skip it, same as a row
+        // with no grip to grab under a drag gesture.
+        if (entry.start === undefined || entry.end === undefined) continue;
         dataset.entries.update(entry.id, {
           start: addMs(entry.start, deltaMs),
           end: addMs(entry.end, deltaMs),
@@ -252,32 +275,6 @@ undoBtn.addEventListener('click', () => {
 
 redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
-});
-
-exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    locks = lockEntries();
-    dataset = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, { ...COST_FIELDS, plugins: [locks] });
-    lockCheckbox.checked = false;
-    window.__dataset = dataset;
-    gantt.destroy();
-    gantt = new Gantt({ container: '#gantt', dataset });
-    bindDataset();
-    bindGantt();
-    bindErrors();
-    toolbar.innerHTML = '';
-    mountTimelineToolbar({ gantt, container: toolbar });
-    syncSelectionUi();
-    refreshHistoryButtons();
-    logLine('[load] imported document');
-  } catch (error) {
-    logLine(`import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
 });
 
 refreshHistoryButtons();

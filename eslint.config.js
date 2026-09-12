@@ -142,6 +142,12 @@ export default tseslint.config(
       'freegantt/no-store-mutation-outside-transaction': 'error',
       // plans/04 §3.1, docs/02 §3.8: the rule's own HEADERS map is the real scope filter.
       'freegantt/require-invariant-header': 'error',
+      // I14, ADR 0015: "may this value change" has one home. `Field.editable` is read in
+      // `data/fields/field-registry.ts` alone, where `editableOf` resolves the aliases and the
+      // default; every other file asks `isUserEditable` (the grid) or `isApiEditable`
+      // (`entries.update()`) from `data/write-rule.ts`. A test legitimately reads the key back to
+      // assert what a declaration stored, which is why this is scoped off test files.
+      'freegantt/editable-has-one-reader': 'error',
     },
   },
   {

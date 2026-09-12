@@ -127,11 +127,12 @@
             </tr>
             <tr>
               <td class="mono">model/field.ts</td>
-              <td class="mono">Field, FieldSource, FieldColumnAlign</td>
+              <td class="mono">Field, FieldColumnAlign</td>
               <td>
-                What a value <em>is</em> (ADR 0005). <code>FieldSource</code> is
-                <code>'entry' | 'meta' | 'compute'</code> and decides which side a rolled-up parent value
-                falls on.
+                What a value <em>is</em> (ADR 0005). A Field key is the whole address (ADR 0011): a
+                core key reads and writes the Entry directly, a <code>compute</code> Field runs on
+                read and owns no home, and everything else lives in <code>entry.props</code> under
+                its own key. There is no more <code>source</code> to declare.
               </td>
             </tr>
             <tr>

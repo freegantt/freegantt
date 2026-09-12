@@ -1,5 +1,5 @@
 ---
-status: proposed — a draft, not a decision. Split out of ADR 0011 on 2026-09-09.
+status: **not planned — do not build, and do not cite this as the design.** Ruled 2026-09-11 by the author. Never built; Build 4 was withdrawn before it started. Split out of ADR 0011 on 2026-09-09, and it stayed a draft. Its decisions were never accepted, so `src/` is the answer wherever the two disagree: the by-key door is `entries.fieldValue`, and nothing enforces a plugin key prefix. The body stays written, because an ADR records the reasoning of its day. **Read it as history, not as a plan.**
 decided: plugin Field values share `props`; plugin keys carry a required prefix (9 and 12, 2026-09-10). App `add` / `update` name that prefixed key; the plugin exports the string as a const (Q12b, grill 2026-09-10). Two plugins' extras merge per key; a contested Field is dropped and warned (16, 2026-09-10). The by-key door is `read`; duration is a compute Field; a cell renderer reads `text` and `value` (13 and 13a, 2026-09-10). Two earlier numbers closed as downstream or out of scope — 7 and 14.
 open: none. The working material is in `plans/field-redesign/0014-plugin-author-surface/`.
 ---

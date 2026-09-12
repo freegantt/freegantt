@@ -61,7 +61,7 @@ async function showSegmentedSpan(page: import('@playwright/test').Page): Promise
       (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
     );
     if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
-    window.__gantt.zoomToSpan({ start: entry.start, end: entry.end });
+    window.__gantt.zoomToSpan({ start: entry.start!, end: entry.end! });
   });
   const entryId = await entryWithSegments(page);
   await expect(barsForEntry(page, entryId).nth(1)).toBeVisible();
@@ -463,13 +463,14 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the parent row'
   await expect(gridRow).toBeFocused();
 });
 
-test("Delete on a parent's last Segment removes the parent alone; its child survives and reparents (#212, fix plan R3)", async ({
+test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012 supersedes #212, fix plan R3)", async ({
   page,
 }) => {
   await gotoHierarchy(page);
 
   // `task-alpha-1` draws one Segment (its whole span) and owns `deep-leaf` as a child (fixtures/
-  // hierarchy-dataset.ts). Deleting it must not take `deep-leaf` down with it (#212, finding 5).
+  // hierarchy-dataset.ts). Deleting that Segment no longer removes the Entry (ADR 0012): the row
+  // stays, and never had a reason to reparent `deep-leaf` in the first place.
   const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
   expect(before).toBe('task-alpha-1');
 
@@ -477,8 +478,8 @@ test("Delete on a parent's last Segment removes the parent alone; its child surv
   await bar.click();
   await page.keyboard.press('Delete');
 
-  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(true);
   await expect(page.locator('#gantt .fg-row[data-entry-id="deep-leaf"]')).toBeVisible();
   const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parentId));
-  expect(after).toBe('phase-a');
+  expect(after).toBe('task-alpha-1');
 });

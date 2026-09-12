@@ -4,7 +4,6 @@ export {
   resolveLayoutRows,
   barSpan,
   DEFAULT_TICK_BOX_FLOOR_PX,
-  DEFAULT_DIAMOND_SIZE_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_BAR_HEIGHT_PX,
 } from './frame.js';
@@ -14,8 +13,17 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
-export { createItemProducerRegistry, wholeEntryItem } from './items/produce-items.js';
-export type { Item, ItemProducer, ItemProducerRegistry } from './items/produce-items.js';
+export { createItemProducerRegistry, wholeEntryItem, resolveLook } from './items/produce-items.js';
+export type {
+  DoubleLookClaim,
+  EntryLook,
+  Item,
+  ItemProducer,
+  ItemProducerRegistry,
+  LookClaim,
+  LookClaimant,
+  ReportDoubleClaim,
+} from './items/produce-items.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
@@ -93,7 +101,7 @@ export type {
   RendererPoint,
   BarRenderer,
   BarRendererContext,
-  RendererByKind,
+  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,

@@ -11,29 +11,40 @@ import type {
   Entry,
   EntryId,
   ErrorCode,
+  Instant,
   ItemId,
+  ProposedEdit,
   RaiseError,
   Refusable,
   SegmentId,
-  StoredEdits,
+  ProposedEdits,
 } from '../model/index.js';
-import { itemId } from '../model/index.js';
+import { itemId, spansTime } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { buildRefusalReport } from '../data/error-reporting.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
-import type { AsyncCancelableEvent, EntryMove, EntryResize, GanttEventMap } from './event-bus.js';
+import type {
+  AsyncCancelableEvent,
+  EntryMove,
+  EntryResize,
+  GanttEventMap,
+  ProposedDates,
+  ProposedSpan,
+} from './event-bus.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
 
 /** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
  *  allocates nothing (I5). */
-const NO_EXTRA_EDITS: StoredEdits = Object.freeze(new Map());
+const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
 const NO_ENTRIES: ReadonlyMap<EntryId, Entry> = Object.freeze(new Map<EntryId, Entry>());
+/** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
+const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
 
 export interface GesturePipelineDeps {
   timeZone(): string;
@@ -54,7 +65,11 @@ export interface GesturePipelineDeps {
    *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
    *  question to one handle (#142); every other capability ignores it. */
   canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean;
-  commitEntryEdits(edits: StoredEdits): boolean;
+  /** ADR 0013: which Entries a move of this bar writes — `Capabilities.entriesMovedBy`, resolved by
+   *  the shell like every other capability answer (I14). An ordinary bar answers with itself. A
+   *  parent bar answers with the dated descendants below it, because its own dates roll up. */
+  entriesMovedBy(entry: Entry): readonly Entry[];
+  commitEntryEdits(edits: ProposedEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** S5.12, D-S5-40: a vetoed gesture still draws nothing and still throws nothing, and now it also
    *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
@@ -64,7 +79,7 @@ export interface GesturePipelineDeps {
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
    *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
    *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
-  extraEditsFor?: (request: EditRequest) => StoredEdits;
+  extraEditsFor?: (request: EditRequest) => ProposedEdits;
   /** What `extraEditsFor`'s `EditRequest.entries` reads — the *committed* Entries keyed by id, never
    *  the in-flight draft (D-S5-45). An installed extender may cascade to an Entry outside the
    *  caller's own draft, so `entryById` alone cannot answer it.
@@ -84,6 +99,30 @@ export interface GesturePipelineDeps {
     pendingItemIds: readonly ItemId[] | undefined,
     cursor?: { x: number; label: string },
   ): void;
+}
+
+/** What one gesture proposes, ready to write and ready to paint.
+ *
+ *  The two differ for one gesture only. A parent bar's drag writes the dated descendants below the
+ *  bar, and never the bar's own dates, which roll up from them (ADR 0013). So the parent sits in
+ *  `paints`, where it follows the pointer, and stays out of `writes`. Every other gesture writes
+ *  exactly what it paints, and both fields hold one and the same map. */
+interface GestureProposal {
+  readonly writes: ProposedEdits;
+  readonly paints: ProposedEdits;
+  /** The bar the user grabbed — `event.entry`, and where the payload's own span comes from. It is
+   *  always a key of `paints`. */
+  readonly grabbed: EntryId;
+}
+
+/** The dates one edit proposes for one entry — what `event.entries` carries. A date the edit leaves
+ *  alone stays absent here: a half-dated descendant moves the date it holds and gains no second one
+ *  (ADR 0013, Q9). */
+function proposedDatesOf(entry: EntryId, edit: ProposedEdit): ProposedDates {
+  const dates: { entry: EntryId; start?: Instant; end?: Instant } = { entry };
+  if (edit.start !== undefined) dates.start = edit.start;
+  if (edit.end !== undefined) dates.end = edit.end;
+  return dates;
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
@@ -109,7 +148,7 @@ export class GesturePipeline {
   #deps: GesturePipelineDeps;
   /** D-S3-18: the most recent in-flight draft a drag has proposed, applied on the next animation
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
-  #scheduledDraft: StoredEdits | undefined;
+  #scheduledProposal: GestureProposal | undefined;
   #previewFrame: FrameScheduler;
   /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
@@ -122,7 +161,7 @@ export class GesturePipeline {
     this.#deps = deps;
     this.#previewFrame = new FrameScheduler(() => {
       this.#deps.applyGestureState(
-        this.#computePreview(this.#scheduledDraft),
+        this.#computePreview(this.#scheduledProposal),
         this.#heldItemIds,
         this.#computeCursor(),
       );
@@ -137,24 +176,35 @@ export class GesturePipeline {
     if (this.#heldItemIds !== undefined) return undefined;
     const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
-    const entries = this.#entriesForGesture(grabbed, capability, edge);
-    if (entries.length === 0) return undefined;
-    const anchor = entries[0]!;
+    const bars = this.#entriesForGesture(grabbed, capability, edge);
+    if (bars.length === 0) return undefined;
+    const anchor = bars[0]!;
+    const { entries, paintedOnly } = this.#draftedEntries(bars, capability);
     // Review finding 9: the Selection cannot change mid-drag — the arming grab is the last write it
     // sees before `commit`/`cancel` ends the gesture — so this `Set` is built once here, not once per
     // rAF inside `#draftFor`. A select-all held through a drag no longer allocates a Set of every
     // Segment in the Dataset sixty times a second.
     const selectedSegmentIds = new Set(this.#deps.selectedSegmentIds());
+    const proposalFor = (dxPx: number, options: DraftOptions | undefined): GestureProposal =>
+      this.#proposalFor({
+        gesture,
+        entries,
+        paintedOnly,
+        grabbed: anchor.id,
+        dxPx,
+        options,
+        selectedSegmentIds,
+      });
     return {
       preview: (dxPx, options) => {
-        this.#preview(this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds), options?.cursorX);
+        this.#preview(proposalFor(dxPx, options), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
+        return this.#commit(gesture, proposalFor(dxPx, options));
       },
       nudge: (direction, options) => {
         const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
-        return this.#commit(gesture, this.#draftFor(gesture, entries, dxPx, options, selectedSegmentIds));
+        return this.#commit(gesture, proposalFor(dxPx, options));
       },
       cancel: () => {
         this.#preview(undefined);
@@ -214,30 +264,71 @@ export class GesturePipeline {
     const preset = this.#deps.preset();
     const unit = snap === 'none' ? preset.tickUnit : snap.unit;
     const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
+    // A gesture exists only for an Entry with a grip to grab, which means it already spans
+    // (`spansTime`, ADR 0012). This was a cast until Q5 gave the rule one home; it now asks the
+    // question. A non-spanning anchor sizes its step at zero, which moves nothing — the cast sized
+    // it at `NaN`, and nothing on any reachable path produces either (J32 in BUILD-LOG.md).
+    if (!spansTime(anchor)) return 0;
     const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);
   }
 
-  #draftFor(
-    gesture: EntryGesture,
-    entries: readonly Entry[],
-    dxPx: number,
-    options: DraftOptions | undefined,
-    selectedSegmentIds: ReadonlySet<SegmentId>,
-  ): StoredEdits {
-    const snap = this.#resolveSnap(options?.suspendSnap);
+  /** Which entries the draft math works over, grabbed bar first, and which of them the gesture paints
+   *  without writing.
+   *
+   *  A parent bar is the one entry a gesture moves without writing (ADR 0013). Its `start`/`end` roll
+   *  up from its children, so its drag translates the dated descendants below it, and the Rollup
+   *  moves the parent's own envelope at commit. It still has to follow the pointer while the drag is
+   *  live, so it travels in the draft and drops out of the map that commits.
+   *
+   *  A resize reaches none of this: a parent never passes `can('resize', …)`, because one edge of a
+   *  derived envelope names no descendant to resize. */
+  #draftedEntries(
+    bars: readonly Entry[],
+    capability: GestureCapability,
+  ): { entries: readonly Entry[]; paintedOnly: ReadonlySet<EntryId> } {
+    if (capability !== 'move') return { entries: bars, paintedOnly: NOTHING_PAINTED_ONLY };
+    const entries: Entry[] = [];
+    const seen = new Set<EntryId>();
+    const paintedOnly = new Set<EntryId>();
+    const push = (entry: Entry): void => {
+      if (seen.has(entry.id)) return;
+      entries.push(entry);
+      seen.add(entry.id);
+    };
+    for (const bar of bars) {
+      const moved = this.#deps.entriesMovedBy(bar);
+      if (!moved.some((entry) => entry.id === bar.id)) paintedOnly.add(bar.id);
+      push(bar);
+      for (const entry of moved) push(entry);
+    }
+    return { entries, paintedOnly };
+  }
+
+  #proposalFor(input: {
+    gesture: EntryGesture;
+    entries: readonly Entry[];
+    paintedOnly: ReadonlySet<EntryId>;
+    grabbed: EntryId;
+    dxPx: number;
+    options: DraftOptions | undefined;
+    selectedSegmentIds: ReadonlySet<SegmentId>;
+  }): GestureProposal {
+    const { gesture, entries, paintedOnly, grabbed, dxPx, options, selectedSegmentIds } = input;
     const base = {
       zone: this.#deps.timeZone(),
       scale: this.#deps.timeScale(),
-      snap,
+      snap: this.#resolveSnap(options?.suspendSnap),
       entries,
       dxPx,
       selectedSegmentIds,
     };
-    if (gesture.kind === 'resize') {
-      return draftForResize({ ...base, edge: gesture.edge });
-    }
-    return draftForMove(base);
+    const paints =
+      gesture.kind === 'resize' ? draftForResize({ ...base, edge: gesture.edge }) : draftForMove(base);
+    if (paintedOnly.size === 0) return { writes: paints, paints, grabbed };
+    const writes = new Map(paints);
+    for (const id of paintedOnly) writes.delete(id);
+    return { writes, paints, grabbed };
   }
 
   /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
@@ -245,17 +336,20 @@ export class GesturePipeline {
    *  `commitEntryEdits` does the actual write and folds a sync veto and a `MutationCancelledError`
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles (D-S3-17). */
-  #commit(gesture: EntryGesture, draft: StoredEdits): Promise<boolean> {
+  #commit(gesture: EntryGesture, proposal: GestureProposal): Promise<boolean> {
     this.#scheduledCursorX = undefined;
-    if (draft.size === 0) return Promise.resolve(false);
-    const spans = [...draft].flatMap(([id, edit]) =>
-      edit.start !== undefined && edit.end !== undefined
-        ? [{ entry: id, start: edit.start, end: edit.end }]
-        : [],
-    );
-    const grabbed = spans[0];
-    if (!grabbed) return Promise.resolve(false);
-    const itemIds = spans.map((span) => itemId(span.entry));
+    if (proposal.writes.size === 0) return Promise.resolve(false);
+    // The grabbed bar draws, so it spans (`spansTime`, ADR 0012) — a parent bar included, whose
+    // envelope this reads off the paint side because the write side never holds it (ADR 0013).
+    const grabbedEdit = proposal.paints.get(proposal.grabbed);
+    if (grabbedEdit === undefined || !spansTime(grabbedEdit)) return Promise.resolve(false);
+    const grabbed: ProposedSpan = {
+      entry: proposal.grabbed,
+      start: grabbedEdit.start,
+      end: grabbedEdit.end,
+    };
+    const spans = [...proposal.writes].map(([id, edit]) => proposedDatesOf(id, edit));
+    const itemIds = [...proposal.paints.keys()].map((id) => itemId(id));
     // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
     // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
     // the `before*` payload alone (event-bus.ts's map already types `entryMove`/`entryResize`
@@ -283,8 +377,8 @@ export class GesturePipeline {
       entryId: grabbed.entry,
       note,
     };
-    return this.#settle(before, draft, itemIds, refusal, () => {
-      const committed = this.#deps.commitEntryEdits(draft);
+    return this.#settle(before, proposal, itemIds, refusal, () => {
+      const committed = this.#deps.commitEntryEdits(proposal.writes);
       if (committed) {
         this.#deps.emit(event.after, event.afterPayload);
       }
@@ -297,7 +391,7 @@ export class GesturePipeline {
    *  settle — `false` clears the hold and writes nothing. */
   #settle(
     result: boolean | Promise<boolean>,
-    draft: StoredEdits,
+    proposal: GestureProposal,
     itemIds: readonly ItemId[],
     refusal: GestureRefusal,
     finish: () => boolean,
@@ -312,7 +406,7 @@ export class GesturePipeline {
       this.#preview(undefined);
       return Promise.resolve(committed);
     }
-    return this.#awaitVeto(result, itemIds, draft).then((allowed) => {
+    return this.#awaitVeto(result, itemIds, proposal).then((allowed) => {
       if (allowed) {
         const committed = finish();
         this.#releaseHold();
@@ -344,9 +438,13 @@ export class GesturePipeline {
    *  the last unsnapped pointer preview, not the stored origin) and arm-locks `session()` until
    *  `result` settles. Paint is one immediate `applyGestureState`, not a rAF-cleared preview plus a
    *  separate pending write. */
-  #awaitVeto(result: Promise<boolean>, itemIds: readonly ItemId[], draft: StoredEdits): Promise<boolean> {
+  #awaitVeto(
+    result: Promise<boolean>,
+    itemIds: readonly ItemId[],
+    proposal: GestureProposal,
+  ): Promise<boolean> {
     this.#heldItemIds = itemIds;
-    this.#scheduledDraft = draft;
+    this.#scheduledProposal = proposal;
     this.#previewFrame.flush();
     return result.then(
       (allowed) => allowed,
@@ -356,15 +454,15 @@ export class GesturePipeline {
 
   #releaseHold(): void {
     this.#heldItemIds = undefined;
-    this.#scheduledDraft = undefined;
+    this.#scheduledProposal = undefined;
     this.#previewFrame.flush();
   }
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled
    *  draft, but only the last one before the next frame is ever painted. */
-  #preview(draft: StoredEdits | undefined, cursorX?: number): void {
-    this.#scheduledDraft = draft;
-    this.#scheduledCursorX = draft === undefined ? undefined : cursorX;
+  #preview(proposal: GestureProposal | undefined, cursorX?: number): void {
+    this.#scheduledProposal = proposal;
+    this.#scheduledCursorX = proposal === undefined ? undefined : cursorX;
     this.#previewFrame.request();
   }
 
@@ -382,9 +480,13 @@ export class GesturePipeline {
     };
   }
 
-  #computePreview(draft: StoredEdits | undefined): readonly ItemPreview[] | undefined {
-    if (!draft || draft.size === 0) return undefined;
-    const extra = this.#extraFor(draft);
+  /** The extension hook sees `writes` and the bars follow `paints`. A parent bar's own translated
+   *  envelope is paint and nothing else (ADR 0013): showing it to the hook would offer a plugin an
+   *  edit the commit never makes. */
+  #computePreview(proposal: GestureProposal | undefined): readonly ItemPreview[] | undefined {
+    if (!proposal || proposal.paints.size === 0) return undefined;
+    const draft = proposal.paints;
+    const extra = this.#extraFor(proposal.writes);
     const entries: Entry[] = [];
     const seen = new Set<EntryId>();
     const pushEntry = (id: EntryId): void => {
@@ -423,7 +525,7 @@ export class GesturePipeline {
    *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
    *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
    *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
-  #extraFor(draft: StoredEdits): StoredEdits {
+  #extraFor(draft: ProposedEdits): ProposedEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
     const entries = this.#deps.committedEntriesById?.() ?? NO_ENTRIES;

@@ -18,14 +18,17 @@ function entryLookup(id: string): (typeof sampleEntries)[number] | undefined {
 
 const point = (x: number, y: number) => ({ x, y });
 
+// Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
+// with both dates, so `sampleEntries[0]!.start`/`.end` are always present. `render/` may not
+// import `model/` (dependency-cruiser render-boundary), so `!` names no type — it just asserts.
 const scale: TimeScale = {
-  range: sampleEntries[0]!,
+  range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
   timeZone: 'UTC',
   pxPerMs: 1,
   xForInstant: () => 0,
-  instantForX: () => sampleEntries[0]!.start,
+  instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 100,
-  ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+  ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
   contentWidth: 100,
 };
 const preset: ViewPreset = {
@@ -42,8 +45,8 @@ const itemProducerRegistry = createItemProducerRegistry();
 function segmentsOf(entry: (typeof sampleEntries)[number], count: number) {
   return Array.from({ length: count }, (_, index) => ({
     id: segmentId(`${entry.id}-${index}`),
-    start: entry.start,
-    end: entry.end,
+    start: entry.start!,
+    end: entry.end!,
   }));
 }
 
@@ -668,7 +671,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('stamps data-span="minimum" on a floored bar only — a zero-width span and a milestone both carry it, an ordinary bar does not', () => {
+  it('stamps data-span="minimum" on a floored bar only — any zero-width span carries it, an ordinary bar does not (ADR 0013: core has no milestone of its own)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -682,14 +685,24 @@ describe('render/dom backend', () => {
     // leave the old, full-width Segment still drawing the bar.
     const zeroWidth = {
       ...sampleEntries[1]!,
-      end: sampleEntries[1]!.start,
+      end: sampleEntries[1]!.start!,
       segments: [
-        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start, end: sampleEntries[1]!.start },
+        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start!, end: sampleEntries[1]!.start! },
       ],
     };
-    const milestone = { ...sampleEntries[2]!, kind: 'milestone', end: sampleEntries[2]!.start };
+    const alsoZeroWidth = {
+      ...sampleEntries[2]!,
+      end: sampleEntries[2]!.start!,
+      segments: [
+        {
+          id: segmentId('also-zero-width-0'),
+          start: sampleEntries[2]!.start!,
+          end: sampleEntries[2]!.start!,
+        },
+      ],
+    };
     const frame = computeFrame({
-      entries: [ordinary, zeroWidth, milestone],
+      entries: [ordinary, zeroWidth, alsoZeroWidth],
       scale: realScale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -703,21 +716,21 @@ describe('render/dom backend', () => {
     const nodeFor = (id: string) => timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
     expect(nodeFor(`${ordinary.id}:0`).dataset['span']).toBeUndefined();
     expect(nodeFor(`${zeroWidth.id}:0`).dataset['span']).toBe('minimum');
-    expect(nodeFor(`${milestone.id}:0`).dataset['span']).toBe('minimum');
+    expect(nodeFor(`${alsoZeroWidth.id}:0`).dataset['span']).toBe('minimum');
     backend.destroy();
   });
 
-  it('gives a Segment bar data-segment-id; a group or milestone bar carries none (#212)', () => {
+  it('gives a Segment bar data-segment-id; a structural-parent bar carries none (#212, ADR 0013: no core group/milestone kind)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
     const base = sampleEntries[0]!;
     const segmented = { ...base, segments: segmentsOf(base, 2) };
-    const grouped = { ...sampleEntries[1]!, kind: 'group' };
-    const milestone = { ...sampleEntries[2]!, kind: 'milestone' };
+    const parentSeed = sampleEntries[1]!;
+    const child = { ...sampleEntries[2]!, parentId: parentSeed.id };
     const frame = computeFrame({
-      entries: [segmented, grouped, milestone],
+      entries: [segmented, parentSeed, child],
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -735,10 +748,8 @@ describe('render/dom backend', () => {
       segmented.segments.map((segment) => segment.id),
     );
 
-    const groupBar = bars.find((node) => node.dataset['itemId'] === `${grouped.id}:0`)!;
-    const milestoneBar = bars.find((node) => node.dataset['itemId'] === `${milestone.id}:0`)!;
-    expect(groupBar.dataset['segmentId']).toBeUndefined();
-    expect(milestoneBar.dataset['segmentId']).toBeUndefined();
+    const parentBar = bars.find((node) => node.dataset['itemId'] === `${parentSeed.id}:0`)!;
+    expect(parentBar.dataset['segmentId']).toBeUndefined();
     backend.destroy();
   });
 
@@ -785,15 +796,16 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('a bar that stops drawing a Segment loses its data-segment-id (#212)', () => {
+  it('a bar that stops drawing a Segment loses its data-segment-id (#212, ADR 0013: a parent draws whole-span, structurally)', () => {
     const base = sampleEntries[0]!;
     const segmented = { ...base, segments: segmentsOf(base, 1) };
-    // Same Entry id and same bar key, drawn as a milestone the second time — one whole-span bar,
-    // which draws no single Segment. The reused node must drop the stamp, not keep a stale one.
-    const milestone = { ...segmented, kind: 'milestone' };
-    let painted: (typeof sampleEntries)[number] = segmented;
+    // Same Entry id and same bar key, drawn as a structural parent the second time — one
+    // whole-span bar, which draws no single Segment. The reused node must drop the stamp, not
+    // keep a stale one.
+    const child = { ...sampleEntries[1]!, parentId: base.id };
+    let entries: readonly (typeof sampleEntries)[number][] = [segmented];
     const backend = createDomBackend({
-      entryById: (id) => (id === base.id ? painted : undefined),
+      entryById: (id) => entries.find((entry) => entry.id === id),
       resolveBarRenderer: () => undefined,
       resolveCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
@@ -803,7 +815,7 @@ describe('render/dom backend', () => {
     const paint = () =>
       backend.sync(
         computeFrame({
-          entries: [painted],
+          entries,
           scale,
           preset,
           visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -815,13 +827,13 @@ describe('render/dom backend', () => {
       );
 
     paint();
-    const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+    const bar = timeline.querySelector<HTMLElement>(`[data-item-id="${base.id}:0"]`)!;
     expect(bar.dataset['segmentId']).toBe(segmented.segments[0]!.id);
 
-    painted = milestone;
+    entries = [segmented, child];
     paint();
 
-    expect(timeline.querySelector('.fg-bar')).toBe(bar);
+    expect(timeline.querySelector(`[data-item-id="${base.id}:0"]`)).toBe(bar);
     expect(bar.dataset['segmentId']).toBeUndefined();
     backend.destroy();
   });
@@ -1173,13 +1185,14 @@ describe('render/dom backend', () => {
   it('a whole-span bar stands for the Segments the frame drew, not the live Dataset’s [#230-14]', () => {
     const drawn = {
       ...sampleEntries[0]!,
-      kind: 'group' as const,
       segments: segmentsOf(sampleEntries[0]!, 2),
     };
+    // A structural parent (ADR 0013: has children, not a stored kind) draws one whole-span bar.
+    const child = { ...sampleEntries[1]!, parentId: drawn.id };
     // The live roster the backend reads. It moves on after the frame is built, and never re-renders.
     let live: (typeof sampleEntries)[number] = drawn;
     const backend = createDomBackend({
-      entryById: (id) => (id === drawn.id ? live : undefined),
+      entryById: (id) => (id === drawn.id ? live : id === child.id ? child : undefined),
       resolveBarRenderer: () => undefined,
       resolveCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
@@ -1188,7 +1201,7 @@ describe('render/dom backend', () => {
     backend.mount({ grid, timeline });
 
     const frame = computeFrame({
-      entries: [drawn],
+      entries: [drawn, child],
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1197,13 +1210,12 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       itemProducerRegistry,
     });
-    expect(frame.bars).toHaveLength(1);
-    const bar = frame.bars[0]!;
+    const bar = frame.bars.find((b) => b.entryId === drawn.id)!;
     expect(bar.segmentId).toBeUndefined();
     expect(bar.segmentIds).toEqual(drawn.segments.map((segment) => segment.id));
 
     // The Dataset drops both Segments this bar drew and grows a third one. Nothing renders.
-    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start, end: drawn.end };
+    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start!, end: drawn.end! };
     live = { ...drawn, segments: [laterSegment] };
 
     backend.sync(frame);
@@ -1222,16 +1234,17 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('a bar that draws an Entry whole paints when any Segment of that Entry is selected (#212)', () => {
-    // A group and a milestone draw one bar for the whole Entry, so that bar carries no
+  it('a bar that draws an Entry whole paints when any Segment of that Entry is selected (#212, ADR 0013: a structural parent, not a stored kind)', () => {
+    // A structural parent draws one bar for the whole Entry, so that bar carries no
     // `data-segment-id`. It still has to light up when the Selection names a Segment of its Entry.
-    const group = { ...sampleEntries[0]!, kind: 'group' as const };
-    const backend = paintingBackend([group]);
+    const parent = sampleEntries[0]!;
+    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const backend = paintingBackend([parent, child]);
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
     const frame = computeFrame({
-      entries: [group],
+      entries: [parent, child],
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1241,11 +1254,11 @@ describe('render/dom backend', () => {
       itemProducerRegistry,
     });
     backend.sync(frame);
-    expect(frame.bars).toHaveLength(1);
-    expect(frame.bars[0]!.segmentId).toBeUndefined();
-    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${frame.bars[0]!.id}"]`)!;
+    const bar = frame.bars.find((b) => b.entryId === parent.id)!;
+    expect(bar.segmentId).toBeUndefined();
+    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
 
-    backend.applyState({ selectedSegmentIds: [group.segments[0]!.id] });
+    backend.applyState({ selectedSegmentIds: [parent.segments[0]!.id] });
     expect(node.dataset['state']).toBe('selected');
 
     backend.applyState({ selectedSegmentIds: [] });
@@ -1647,10 +1660,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1700,10 +1713,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1754,10 +1767,10 @@ describe('render/dom backend', () => {
     };
     const segmented = {
       ...base,
-      end: later.end,
+      end: later.end!,
       segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start, end: base.end },
-        { id: segmentId(`${base.id}-1`), start: later.start, end: later.end },
+        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
+        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
       ],
     };
     const frame = computeFrame({
@@ -1946,9 +1959,9 @@ describe('render/dom backend', () => {
         {
           ...entry,
           segments: [
-            { id: segmentId(`${entry.id}-0`), start: entry.start, end: entry.end },
-            { id: segmentId(`${entry.id}-1`), start: entry.start, end: entry.end },
-            { id: segmentId(`${entry.id}-2`), start: entry.start, end: entry.end },
+            { id: segmentId(`${entry.id}-0`), start: entry.start!, end: entry.end! },
+            { id: segmentId(`${entry.id}-1`), start: entry.start!, end: entry.end! },
+            { id: segmentId(`${entry.id}-2`), start: entry.start!, end: entry.end! },
           ],
         },
       ],
@@ -1971,14 +1984,15 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('applies summary and diamond classes off data-kind', () => {
+  it('applies the summary class off data-kind, for a structural parent only (ADR 0013: no stored kind, no core diamond)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
-    const [span, groupSeed, mileSeed] = sampleEntries;
+    const [leaf, parentSeed, childSeed] = sampleEntries;
+    const child = { ...childSeed!, parentId: parentSeed!.id };
     backend.sync(
       computeFrame({
-        entries: [span!, { ...groupSeed!, kind: 'group' }, { ...mileSeed!, kind: 'milestone' }],
+        entries: [leaf!, parentSeed!, child],
         scale,
         preset,
         visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1989,13 +2003,10 @@ describe('render/dom backend', () => {
       }),
     );
 
-    const groupBar = timeline.querySelector<HTMLElement>('[data-kind="group"]')!;
-    const mileBar = timeline.querySelector<HTMLElement>('[data-kind="milestone"]')!;
-    const spanBar = timeline.querySelector<HTMLElement>('[data-kind="span"]')!;
-    expect(groupBar.className.split(' ')).toContain('fg-bar-summary');
-    expect(mileBar.className.split(' ')).toContain('fg-bar-diamond');
-    expect(spanBar.className.split(' ')).not.toContain('fg-bar-summary');
-    expect(spanBar.className.split(' ')).not.toContain('fg-bar-diamond');
+    const parentBar = timeline.querySelector<HTMLElement>('[data-kind="parent"]')!;
+    const leafBar = timeline.querySelector<HTMLElement>('[data-kind="leaf"]')!;
+    expect(parentBar.className.split(' ')).toContain('fg-bar-summary');
+    expect(leafBar.className.split(' ')).not.toContain('fg-bar-summary');
 
     backend.destroy();
     grid.remove();
@@ -2184,16 +2195,16 @@ describe('render/dom backend', () => {
     function scaleFor(barX: number, barWidth: number, contentWidthPx: number): TimeScale {
       let call = 0;
       return {
-        range: sampleEntries[0]!,
+        range: { start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
         timeZone: 'UTC',
         pxPerMs: 1,
         xForInstant: () => {
           call += 1;
           return call % 2 === 1 ? barX : barX + barWidth;
         },
-        instantForX: () => sampleEntries[0]!.start,
+        instantForX: () => sampleEntries[0]!.start!,
         widthForDuration: () => barWidth,
-        ticks: () => [{ instant: sampleEntries[0]!.start, x: 0, width: 24 }],
+        ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
         contentWidth: contentWidthPx,
       };
     }

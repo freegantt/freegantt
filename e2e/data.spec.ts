@@ -19,10 +19,27 @@ function entryIdFromItemId(itemId: string): string {
   return colon === -1 ? itemId : itemId.slice(0, colon);
 }
 
+/** The first bar on the page, summary bar included: ADR 0013's Rollup mints a Segment for a parent
+ *  whose envelope it derived, so a click on a roll-up parent's own bar selects it like any other. */
 async function selectFirstBar(
   page: import('@playwright/test').Page,
 ): Promise<{ entryId: string; name: string }> {
-  const bar = page.locator('#gantt .fg-bar').first();
+  return selectBar(page, page.locator('#gantt .fg-bar').first());
+}
+
+/** The first bar whose Entry owns its own dates. A `fg-bar-summary` derives its span from its
+ *  children, and ADR 0013 refuses an `update()` that writes a derived Field — so a date-writing
+ *  button has nothing to write on one. */
+async function selectFirstBarWithOwnDates(
+  page: import('@playwright/test').Page,
+): Promise<{ entryId: string; name: string }> {
+  return selectBar(page, page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first());
+}
+
+async function selectBar(
+  page: import('@playwright/test').Page,
+  bar: import('@playwright/test').Locator,
+): Promise<{ entryId: string; name: string }> {
   await expect(bar).toBeVisible();
   await bar.click();
   await expect(page.locator('#rename-btn')).toBeEnabled();
@@ -53,7 +70,7 @@ test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) 
   await page.goto('/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const { entryId } = await selectFirstBar(page);
+  const { entryId } = await selectFirstBarWithOwnDates(page);
 
   await page.click('#move-fwd-btn');
 
@@ -87,4 +104,34 @@ test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', as
   const undoRow = rows.find((line) => line.startsWith('[undo]') && line.includes(`${entryId} · name`));
   expect(undoRow).toBeDefined();
   expect(undoRow).toContain(`Renamed before undo → ${original}`);
+});
+
+// ADR 0013 amendment: a rolling-up parent's cell is read-only until the Field says what a write to
+// it means. `harness/data.ts` gives `money` a `distribute` that splits evenly, so "Set cost 500" on
+// the phase row writes the children and the Rollup reads 500 back off them.
+test('Set cost 500 on a rolling-up parent splits to its children and rolls back up (ADR 0013)', async ({
+  page,
+}) => {
+  await page.goto('/data.html');
+  await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
+
+  const { entryId: parentId } = await selectBar(page, page.locator('#gantt .fg-bar-summary').first());
+
+  await expect(page.locator('#cost-btn')).toBeEnabled();
+  await page.click('#cost-btn');
+
+  const costs = await page.evaluate((id) => {
+    const dataset = window.__dataset;
+    const children = dataset.entries.childrenOf(id);
+    return {
+      parent: Number(dataset.entries.fieldValue(id, 'cost')),
+      children: children.map((child) => Number(dataset.entries.fieldValue(child.id, 'cost'))),
+    };
+  }, parentId);
+
+  expect(costs.children.length).toBeGreaterThan(1);
+  // Every child carries a share, and the shares sum back to what the button asked for.
+  for (const share of costs.children) expect(share).toBeGreaterThan(0);
+  expect(costs.children.reduce((sum, share) => sum + share, 0)).toBe(500);
+  expect(costs.parent).toBe(500);
 });

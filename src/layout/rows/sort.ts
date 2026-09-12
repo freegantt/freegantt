@@ -22,6 +22,12 @@ function comparerFor(
   return (left, right) => {
     const a = fieldCompare.readStored(left);
     const b = fieldCompare.readStored(right);
+    // A hole sorts last on `asc` **and** on `desc` (ADR 0012) — not `direction * order`, which would
+    // put it first once `direction` flips. Only a fully-absent value is a hole; a defined `start`
+    // with no `end` still orders normally when the sort field is `start`.
+    if (a === undefined && b === undefined) return 0;
+    if (a === undefined) return 1;
+    if (b === undefined) return -1;
     const order = sort.compare !== undefined ? sort.compare(a, b, fields) : fieldCompare.compareStored(a, b);
     return direction * order;
   };

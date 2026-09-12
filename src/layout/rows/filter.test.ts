@@ -19,12 +19,12 @@ function entry(
     name: id,
     start,
     end,
-    kind: 'span',
     segments: [{ id: segmentId(`${id}-1`), start, end }],
+    props: {},
   };
   if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
   if (opts?.team !== undefined || opts?.cost !== undefined) {
-    row.meta = {
+    row.props = {
       ...(opts.team !== undefined ? { team: opts.team } : {}),
       ...(opts.cost !== undefined ? { cost: opts.cost } : {}),
     };
@@ -45,7 +45,7 @@ describe('applyFilter (S4.9)', () => {
     const filtered = applyFilter(
       built,
       entries,
-      (row) => (row.meta as { team?: string } | undefined)?.team === 'B',
+      (row) => (row.props as { team?: string } | undefined)?.team === 'B',
       'keepAncestors',
     );
     expect(filtered.map((row) => row.id)).toEqual([rowId('root'), rowId('child'), rowId('grand')]);
@@ -59,7 +59,7 @@ describe('applyFilter (S4.9)', () => {
     const filtered = applyFilter(
       built,
       entries,
-      (row) => (row.meta as { team?: string } | undefined)?.team === 'B',
+      (row) => (row.props as { team?: string } | undefined)?.team === 'B',
       'matchOnly',
     );
     expect(filtered.map((row) => row.id)).toEqual([rowId('grand')]);
@@ -73,7 +73,7 @@ describe('applyFilter (S4.9)', () => {
       timeZone: 'UTC',
       read<K extends FieldKey>(row: Entry, key: K): CoreFieldValue<K> | undefined {
         if (key !== 'team') return undefined;
-        return (row.meta as { team?: string } | undefined)?.team as CoreFieldValue<K> | undefined;
+        return (row.props as { team?: string } | undefined)?.team as CoreFieldValue<K> | undefined;
       },
       durationOf: () => ({ value: 1, unit: 'millisecond' }),
     };

@@ -1,4 +1,4 @@
-// layout/ — row-source types. Pure data: no pixels, no Dataset, no FieldSource (D-S4-19, D-S4-21).
+// layout/ — row-source types. Pure data: no pixels, no Dataset, no Field registry (D-S4-19, D-S4-21).
 
 import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';

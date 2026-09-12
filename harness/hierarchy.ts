@@ -5,7 +5,6 @@
 import './harness-nav.ts';
 import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from '../src/api/index.js';
 import type {
-  DatasetDocument,
   DatasetEventMap,
   Entry,
   EntryInput,
@@ -25,7 +24,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarch
 
 declare global {
   interface Window {
-    __dataset: Dataset<{ cost: number }, { cost: number }>;
+    __dataset: Dataset;
     __gantt: Gantt;
     /** `main.ts`'s own seam (#256) — declared once, here, beside the two globals it joins. */
     __fixedFinishEntryId: string;
@@ -52,42 +51,35 @@ const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-bt
 const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')!;
 const expandAllBtn = document.querySelector<HTMLButtonElement>('#expand-all-btn')!;
 const collapseAllBtn = document.querySelector<HTMLButtonElement>('#collapse-all-btn')!;
-const autoGroupCheckbox = document.querySelector<HTMLInputElement>('#autogroup-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-editor-checkbox')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
-const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
-const importBtn = document.querySelector<HTMLButtonElement>('#import-btn')!;
-const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
 
-let autoGroup = true;
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
 const paneScroll = new ScrollModel();
-let dataset = createDataset(autoGroup);
-let gantt = mountGantt(dataset);
+const dataset = createDataset();
+const gantt = mountGantt(dataset);
 
 window.__dataset = dataset;
 window.__gantt = gantt;
 
 function createDataset(
-  autoGroupOn: boolean,
   entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
-): Dataset<{ cost: number }, { cost: number }> {
-  return new Dataset<{ cost: number }, { cost: number }>({
+): Dataset<{ cost: number }> {
+  return new Dataset<{ cost: number }>({
     entries: structuredClone([...entries]),
     timeZone: 'UTC',
-    hierarchy: { autoGroup: autoGroupOn },
     ...hierarchyFieldOptions,
   });
 }
 
-function mountGantt(next: Dataset<{ cost: number }, { cost: number }>): Gantt {
+function mountGantt(next: Dataset<{ cost: number }>): Gantt {
   return new Gantt({
     container: '#gantt',
     dataset: next,
@@ -199,17 +191,6 @@ function bindGantt(): void {
   });
 }
 
-function remountGantt(): void {
-  const collapsed = [...gantt.collapsed];
-  gantt.destroy();
-  gantt = mountGantt(dataset);
-  window.__gantt = gantt;
-  gantt.collapsed = collapsed;
-  applyRowSource();
-  mountTimelineToolbar({ gantt, container: toolbar });
-  bindGantt();
-}
-
 bindDataset();
 bindGantt();
 mountTimelineToolbar({ gantt, container: toolbar });
@@ -243,12 +224,6 @@ collapseAllBtn.addEventListener('click', () => {
   gantt.collapseAll();
 });
 
-autoGroupCheckbox.addEventListener('change', () => {
-  dataset.hierarchy = { autoGroup: autoGroupCheckbox.checked };
-  autoGroup = dataset.hierarchy.autoGroup;
-  logLine(`[load] autoGroup ${autoGroup ? 'on' : 'off'}`);
-});
-
 reparentBtn.addEventListener('click', () => {
   attemptMutation(() => {
     dataset.entries.update('task-beta', { parentId: 'plain-parent' });
@@ -271,27 +246,4 @@ undoBtn.addEventListener('click', () => {
 
 redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
-});
-
-exportBtn.addEventListener('click', () => {
-  documentJson.value = JSON.stringify(dataset.toJSON(), null, 2);
-});
-
-importBtn.addEventListener('click', () => {
-  try {
-    const doc = JSON.parse(documentJson.value) as DatasetDocument<{ cost: number }>;
-    dataset.off('change', onChange);
-    gantt.destroy();
-    const imported = Dataset.fromJSON<{ cost: number }, { cost: number }>(doc, hierarchyFieldOptions);
-    imported.hierarchy = { autoGroup };
-    dataset = imported;
-    window.__dataset = dataset;
-    bindDataset();
-    remountGantt();
-    refreshHistoryButtons();
-    renderSelection();
-    logLine('[load] imported document');
-  } catch (error) {
-    logLine(`import failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
 });

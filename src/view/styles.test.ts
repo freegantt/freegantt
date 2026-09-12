@@ -20,7 +20,6 @@ function fakeDataset(list: readonly Entry[]): GanttShellOptions['dataset'] {
     entries: new EntryStore(list, context),
     timeZone,
     datasetRevision: 0,
-    isRollUpKind: () => false,
     fields: { all: CORE_FIELDS },
     field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),
     on: () => {},
@@ -47,10 +46,10 @@ const entries: Entry[] = [
     name: 'Entry 1',
     start: instant('2026-09-01T00:00:00Z'),
     end: instant('2026-09-03T00:00:00Z'),
-    kind: 'span',
     segments: [
       { id: segmentId('t1-1'), start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-03T00:00:00Z') },
     ],
+    props: {},
   },
 ];
 
@@ -208,57 +207,9 @@ describe('ensureBaseStyles', () => {
     expect(outsideRule).not.toContain('ellipsis');
   });
 
-  // Bug hunt: color: transparent on .fg-bar-diamond hid a milestone's own painted glyph from
-  // double-painting under ::before's own fill — but J1 lets a milestone carry a label too, and a
-  // transparent inherited colour would silently hide that label as well without this override.
-  it('gives a milestone label a real colour, undoing .fg-bar-diamond’s own transparent (J1)', () => {
-    clearStyles();
-    ensureBaseStyles(document);
-    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
-    const rule = css.split('\n').find((line) => line.startsWith('.fg-bar-diamond .fg-bar-label {'));
-    expect(rule).toBeDefined();
-    expect(rule).toContain('var(--fg-bar-label-color)');
-  });
-
-  // A hollow checkpoint — "not done yet" in every Gantt that draws one — is `--fg-bar-fill` at the
-  // pane's own background behind a stroke. The stroke is the token; when a consumer sets neither,
-  // the glyph paints exactly as it always has.
-  it('paints the diamond glyph from --fg-diamond-stroke, inside its own size', () => {
-    clearStyles();
-    ensureBaseStyles(document);
-    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
-    const rule = css.split('\n').find((line) => line.startsWith('.fg-bar-diamond::before {'));
-
-    expect(rule).toBeDefined();
-    expect(rule).toContain('border: var(--fg-diamond-stroke, none)');
-    // Without border-box a 1.5px stroke would push the glyph past --fg-diamond-size, and layout's
-    // own painted-span floor (size × √2) would no longer contain it.
-    expect(rule).toContain('box-sizing: border-box');
-  });
-
-  // The same split the group rail makes: the box is the hit target, the glyph is the ink. A shared
-  // outline would frame a full-height rectangle of empty pane around a 10px diamond.
-  it('paints a diamond’s hover and selection on the glyph, not on its box', () => {
-    clearStyles();
-    ensureBaseStyles(document);
-    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
-    const lines = css.split('\n');
-    const cancel = lines.find((line) => line.startsWith('.fg-bar-diamond[data-state~="hovered"],'));
-    const selected = lines.find((line) =>
-      line.startsWith('.fg-bar-diamond[data-state~="selected"]::before {'),
-    );
-
-    expect(cancel).toBeDefined();
-    expect(cancel).toContain('outline: none');
-    expect(cancel).toContain('box-shadow: none');
-    expect(selected).toBeDefined();
-    expect(selected).toContain('var(--fg-selection-color)');
-    // Equal specificity with the shared .fg-bar rules, so the running order decides: the diamond's
-    // own rules must come last, or the box paints its outline back.
-    expect(lines.indexOf(cancel!)).toBeGreaterThan(
-      lines.findIndex((line) => line.startsWith('.fg-bar[data-state~="selected"] {')),
-    );
-  });
+  // ADR 0013 retired core's milestone diamond (`.fg-bar-diamond`) end to end — the shipped sheet
+  // never wrote it, so the three tests that once read it here are gone with the feature. A
+  // diamond look is a plugin's own CSS now, not core's.
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
   // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.

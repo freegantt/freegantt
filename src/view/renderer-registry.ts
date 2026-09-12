@@ -13,7 +13,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByKind,
+  RendererByLook,
   RendererPoint,
   RendererFor,
   ResolvedRenderer,
@@ -39,13 +39,13 @@ function isBarSlot(slot: RendererSlot): boolean {
   return slot === 'bar' || slot.startsWith('bar:');
 }
 
-function pickByKind(map: RendererByKind, kind: string): BarRenderer | undefined {
+function pickByKind(map: RendererByLook, kind: string): BarRenderer | undefined {
   return map[kind] ?? map['*'];
 }
 
 /** D-S5-12: a function is the single-renderer form; a record is the per-kind form — resolves the
  *  exact kind, then `'*'`, then "nothing" (the caller's own default). */
-function forKind(renderer: BarRenderer | RendererByKind, kind: string): BarRenderer | undefined {
+function forKind(renderer: BarRenderer | RendererByLook, kind: string): BarRenderer | undefined {
   return typeof renderer === 'function' ? renderer : pickByKind(renderer, kind);
 }
 
@@ -72,7 +72,7 @@ export class RendererRegistry {
   register<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer {
     // The two forms D-S5-12 names are told apart here, once, rather than at every use below.
     // `RendererFor<P>` gives the map form to the `bar` point alone, so a non-function is one.
-    const claimed: AnyRenderer | RendererByKind = renderer;
+    const claimed: AnyRenderer | RendererByLook = renderer;
     if (typeof claimed !== 'function') return this.#registerBarKinds(claimed, pluginId);
     if (point === 'bar') this.#refuseEveryBarSlot(pluginId);
     return this.#claim(point, claimed, pluginId);
@@ -97,7 +97,7 @@ export class RendererRegistry {
    *  nothing. */
   resolveBar(
     kind: string,
-    consumerRenderer: BarRenderer | RendererByKind | undefined,
+    consumerRenderer: BarRenderer | RendererByLook | undefined,
   ): ResolvedRenderer<BarRenderer> | undefined {
     if (consumerRenderer !== undefined) {
       const renderer = forKind(consumerRenderer, kind);
@@ -121,7 +121,7 @@ export class RendererRegistry {
   /** The per-kind form (D-S5-12). Every kind is checked before the first one registers, so a refusal
    *  leaves nothing half-registered. A whole-point `bar` claim already paints every kind, so it
    *  refuses this one too. */
-  #registerBarKinds(byKind: RendererByKind, pluginId: PluginId): Disposer {
+  #registerBarKinds(byKind: RendererByLook, pluginId: PluginId): Disposer {
     const claims = Object.entries(byKind).map(([kind, renderer]) => [barSlot(kind), renderer] as const);
     this.#refuseIfTaken('bar', pluginId);
     for (const [slot] of claims) this.#refuseIfTaken(slot, pluginId);

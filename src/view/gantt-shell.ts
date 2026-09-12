@@ -8,6 +8,7 @@ import {
   TimeScaleModel,
   Viewport,
   createItemProducerRegistry,
+  resolveLook,
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
@@ -23,12 +24,14 @@ import type {
   ViewportHandle,
   ViewPreset,
   ItemProducerRegistry,
+  LookClaimant,
+  ReportDoubleClaim,
   BarLabels,
   BarRenderer,
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByKind,
+  RendererByLook,
   FrameBar,
 } from '../layout/index.js';
 
@@ -45,6 +48,7 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
+import { descendantsOf } from '../data/entry-tree.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
@@ -76,6 +80,7 @@ import {
   entryIdOfItem,
   itemId,
   segmentId,
+  spansTime,
 } from '../model/index.js';
 import type {
   Dataset,
@@ -90,7 +95,7 @@ import type {
   RowId,
   SegmentId,
   Size,
-  StoredEdits,
+  ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
@@ -202,7 +207,7 @@ export interface GanttShellWiring {
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
    *  away, supplies this instead. It answers `false` for a sync veto and for a
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
-  commitEntryEdits?: (edits: StoredEdits) => boolean;
+  commitEntryEdits?: (edits: ProposedEdits) => boolean;
   /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
    *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset` and the
    *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same
@@ -304,7 +309,7 @@ export interface GanttShellOptions {
   /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
-  barRenderer?: BarRenderer | RendererByKind;
+  barRenderer?: BarRenderer | RendererByLook;
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. */
   cellRenderer?: CellRenderer;
@@ -327,10 +332,19 @@ export interface GanttShellOptions {
    *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
    *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
-  extraEditsFor?: (request: EditRequest) => StoredEdits;
+  extraEditsFor?: (request: EditRequest) => ProposedEdits;
   /** Internal (D-S4-24). One registry per Gantt, seeded with span/group/milestone. Tests inject a
    *  replacement; `GanttOptions` has no such field (public registration is S5). */
   itemProducerRegistry?: ItemProducerRegistry;
+  /** Installed before this shell's first paint (N7). A plugin-defined look, keybinding or command
+   *  reaches frame 1, the same as every other constructor option. Before N7, `Gantt.plugins`'s live
+   *  setter ran after this constructor returned, so frame 1 missed them. */
+  plugins?: readonly ShellPlugin<unknown>[];
+  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
+  zoomPresets?: readonly PresetRef[];
+  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
+   *  (`SegmentId | string`), same asymmetry the live `selection` setter already has. */
+  selectedSegmentIds?: readonly (SegmentId | string)[];
   /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
   wiring: GanttShellWiring;
 }
@@ -556,7 +570,7 @@ export class GanttShell {
     );
     this.#registrations = new PluginRegistrations(
       this.#pluginRegistrationPorts(),
-      options.itemProducerRegistry ?? createItemProducerRegistry(),
+      options.itemProducerRegistry ?? createItemProducerRegistry({}, this.#reportDoubleClaim()),
     );
     this.#bindColumns();
 
@@ -569,8 +583,8 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        resolveBarRenderer: (kind) =>
-          this.#registrations.renderers.resolveBar(kind, this.#frameSettings.barRenderer),
+        resolveBarRenderer: (look) =>
+          this.#registrations.renderers.resolveBar(look, this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
@@ -734,6 +748,7 @@ export class GanttShell {
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
+      entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#events.emit(name, payload),
       raiseError: this.#raiseError,
@@ -854,6 +869,17 @@ export class GanttShell {
     if (options.collapsed !== undefined) {
       this.#treeCollapse.hydrate(options.collapsed);
     }
+    // N7: applied through the same live setters `api/gantt.ts` used to call *after* this
+    // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
+    // plugin's look, keybinding or command now reaches frame 1, and so does a zoom or a selection.
+    // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
+    // `#segmentSelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
+    // post-construction assignment would have. `resolveLook`/`Capabilities` read these registries
+    // live at render time, never a cached snapshot. So applying them a few lines earlier changes
+    // only which frame the result first appears in.
+    if (options.plugins !== undefined) this.plugins = options.plugins;
+    if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
+    if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
     this.#phase = 'live';
     this.#frames.flush();
 
@@ -923,11 +949,11 @@ export class GanttShell {
   }
 
   /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
-  get barRenderer(): BarRenderer | RendererByKind | undefined {
+  get barRenderer(): BarRenderer | RendererByLook | undefined {
     return this.#frameSettings.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByKind | undefined) {
+  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
     this.#frameSettings.set({ barRenderer: renderer });
   }
 
@@ -1107,18 +1133,25 @@ export class GanttShell {
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
-   *  interactions`, and `registerKindDefaults`'s own gate all re-derive from here, rather than
+   *  interactions`, and `registerLookDefaults`'s own gate all re-derive from here, rather than
    *  repeating the three-argument call. */
   #resolveCapabilities(): Capabilities {
     return resolveCapabilities({
       interactions: this.#interactions,
-      isRollUpKind: (kind) => this.#options.dataset.isRollUpKind(kind),
+      hasChildren: (entry) => this.#options.dataset.entries.childrenOf(entry.id).length > 0,
+      descendantsOf: (entry) => descendantsOf(entry.id, (id) => this.#options.dataset.entries.childrenOf(id)),
       fieldFor: (key) => this.#options.dataset.field(key),
-      registeredDefaultsFor: (kind) => this.#registrations.kindDefaultsFor(kind),
+      lookOf: (entry) =>
+        resolveLook(
+          entry,
+          this.#registrations.itemProducers,
+          this.#options.dataset.entries.childrenOf(entry.id).length > 0,
+        ),
+      registeredDefaultsFor: (look) => this.#registrations.lookDefaultsFor(look),
     });
   }
 
-  /** `set interactions` and `registerKindDefaults`'s register/dispose pair both change an input
+  /** `set interactions` and `registerLookDefaults`'s register/dispose pair both change an input
    *  `#resolveCapabilities` reads. So both re-resolve the capability table and re-derive the
    *  affordance ids the same way (#154). This method writes that once, instead of three times. The
    *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to
@@ -1416,6 +1449,35 @@ export class GanttShell {
     };
   }
 
+  /** Where a `DoubleLookClaim` is reported (Q10). Two plugins claimed one Entry. The first claim
+   *  paints and the second draws nothing. This names both, so the consumer sees which two plugins
+   *  overlap. The library never arbitrates — the consumer chose the plugins.
+   *
+   *  One report per pair of looks, not one per hover. `resolveLook` runs on every hover change, and
+   *  the same two plugins collide on every Entry they both own. The first collision is the news.
+   *
+   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`.
+   *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
+   *  line from every consumer's build, and the warning would never fire for anybody. The
+   *  `console.warn` fallback runs only when nothing is subscribed to `error`. */
+  #reportDoubleClaim(): ReportDoubleClaim {
+    const reported = new Set<string>();
+    return ({ entryId, painted, ignored }) => {
+      const pair = `${painted.look}|${ignored.look}`;
+      if (reported.has(pair)) return;
+      reported.add(pair);
+      const by = (claimant: LookClaimant): string =>
+        claimant.pluginId === undefined ? `'${claimant.look}'` : `'${claimant.look}' (${claimant.pluginId})`;
+      const message =
+        `Two look claims both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
+        `The first registered claim paints; ${by(ignored)} draws nothing on the entries they share.`;
+      this.#raiseError(
+        { code: 'look-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
   /** S3.7's Page/Home/End/arrow pan (D-S3-14) binds here, alongside the eleven other core commands
    *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
@@ -1545,7 +1607,7 @@ export class GanttShell {
   }
 
   /** Review H3: `CellRendererContext.fieldValue`. `entries.fieldValue` is the one read that answers
-   *  an `entry`-, `meta`- or `compute`-sourced Field alike (ADR 0005). It shares the memo
+   *  a core, `props`-addressed or `compute` Field alike (ADR 0011). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */
   #fieldValueForCell(entry: Entry | undefined, key: FieldKey): unknown {
@@ -1706,21 +1768,37 @@ export class GanttShell {
   reveal(id: EntryId | SegmentId): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
-    if (entry !== undefined) return this.#revealSpan(entry.id, entry, entry.start, entry.end);
+    if (entry !== undefined) {
+      // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
+      // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
+      // covered it).
+      if (!spansTime(entry)) return this.#revealRow(entry.id);
+      return this.#revealSpan(entry.id, entry.start, entry.end);
+    }
     const ownerId = entries.entryIdOfSegment(id);
     const owner = ownerId === undefined ? undefined : entries.get(ownerId);
     const segment = owner?.segments.find((candidate) => candidate.id === id);
     if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
-    return this.#revealSpan(owner.id, owner, segment.start, segment.end);
+    return this.#revealSpan(owner.id, segment.start, segment.end);
   }
 
-  #revealSpan(ownerId: EntryId, kindSource: Pick<Entry, 'kind'>, start: Instant, end: Instant): void {
-    const { x, width } = barSpan(
-      { start, end, kind: kindSource.kind },
-      this.#viewport.timeScale,
-      this.#frameSettings.diamondSizePx,
-      this.#frameSettings.minBarWidthPx,
-    );
+  /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
+   *  stays exactly where it was (#232-adjacent gap, ADR 0012, Build 1). */
+  #revealRow(ownerId: EntryId): void {
+    let rowIndex = this.#layout.rowIndexForEntry(ownerId);
+    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
+      this.#frames.flush();
+      rowIndex = this.#layout.rowIndexForEntry(ownerId);
+    }
+    const position = this.#viewport.scroll.state.position;
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : position.y;
+    // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
+    // only y — the same no-op-on-x idiom `#rovingFocusPorts`'s own `revealRow` above already uses.
+    this.#viewport.reveal({ x: position.x, y, width: 0, height: this.#frameSettings.rowHeight });
+  }
+
+  #revealSpan(ownerId: EntryId, start: Instant, end: Instant): void {
+    const { x, width } = barSpan({ start, end }, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
     let rowIndex = this.#layout.rowIndexForEntry(ownerId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
       this.#frames.flush();

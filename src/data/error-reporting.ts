@@ -3,7 +3,14 @@
 // (I10 forbids reading a clock anywhere else). `view/` and `api/` import this directly; `render/` and
 // `extensions/` may not reach `data/` at all, so they take a `RaiseError` by injection instead.
 
-import type { EntryId, ErrorCode, ErrorReport, ErrorReportInput, RaiseError } from '../model/index.js';
+import type {
+  EntryId,
+  ErrorCode,
+  ErrorReport,
+  ErrorReportInput,
+  FieldUpdated,
+  RaiseError,
+} from '../model/index.js';
 import { FreeGanttError } from '../model/index.js';
 import { now } from '../time/index.js';
 import type { RefusalNote } from './event-bus.js';
@@ -87,4 +94,56 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
   const noun = REFUSAL_NOUN[event];
   const said = reason === undefined ? '.' : ` and said: "${reason}".`;
   return `Nothing was saved. A ${event} handler refused this ${noun}${said}`;
+}
+
+/** Up to three of `dropped`'s distinct Entry ids, quoted, plus a count of the rest — the one shared
+ *  shape `buildDerivedValuesDroppedReport` and `buildCascadeDroppedReport` both name their Entries
+ *  with, so a 500-row drop still reads as one line (ADR 0013, decision 5/6). */
+function shownEntryIds(dropped: readonly FieldUpdated[]): string {
+  const ids = [...new Set(dropped.map((row) => String(row.id)))];
+  const shown = ids.slice(0, 3);
+  const more = ids.length > shown.length ? `, and ${ids.length - shown.length} more` : '';
+  return `${shown.map((id) => `"${id}"`).join(', ')}${more}`;
+}
+
+/** ADR 0013, decision 6: an operation that gives one or more Entries children they did not have
+ *  before — `new Dataset({ entries })`, or a batch of `entries.add()` calls in one transaction — and
+ *  finds one of those new parents' rolling-up Fields with nothing to roll up to (every child
+ *  dateless, or no cost among them) drops the authored value and raises **one** report, naming the
+ *  count, the distinct Field keys, and up to three of the affected Entry ids — never one report per
+ *  value, which a 500-parent batch would otherwise turn into 500 lines. `dropped` is the Rollup's own
+ *  output, already narrowed to the rows this drop produced (`from` defined, `to` `undefined`).
+ *  Always raised at `severity: 'warning'` — no `isDevMode()` gate (D-S5-41). Reparenting an *existing*
+ *  Entry onto a new parent stays silent (decision 6: "the library never refuses this") — this report
+ *  is for a value that never reaches anyone, not for the Rollup's ordinary recompute. */
+export function buildDerivedValuesDroppedReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
+  const keys = [...new Set(dropped.map((row) => String(row.field)))];
+  return {
+    code: 'derived-values-dropped',
+    severity: 'warning',
+    by: 'core',
+    message:
+      `${dropped.length} authored value${dropped.length === 1 ? '' : 's'} on ` +
+      `${keys.map((key) => `"${key}"`).join(', ')} ${keys.length === 1 ? 'was' : 'were'} dropped: ` +
+      `${shownEntryIds(dropped)} already had children by the end of this operation, so the Rollup owns ` +
+      `${keys.length === 1 ? 'that value' : 'those values'} now.`,
+  };
+}
+
+/** ADR 0013, decision 5: an extension-hook cascade proposed a rolling-up Field on a parent, and the
+ *  Rollup overwrote it in silence — `rollup.ts`'s `body`/`merged` split means only the transaction
+ *  body's own proposal makes the Rollup yield (D-S2-22); a cascade's proposal never does. One report
+ *  per commit, never one per row, naming the count, the distinct Field keys, and up to three of the
+ *  affected Entry ids. Always raised at `severity: 'warning'` — no `isDevMode()` gate (D-S5-41). */
+export function buildCascadeDroppedReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
+  const keys = [...new Set(dropped.map((row) => String(row.field)))];
+  return {
+    code: 'derived-values-dropped',
+    severity: 'warning',
+    by: 'core',
+    message:
+      `A plugin cascade's write to ${keys.length === 1 ? 'field' : 'fields'} ` +
+      `${keys.map((key) => `"${key}"`).join(', ')} on ${dropped.length === 1 ? 'entry' : 'entries'} ` +
+      `${shownEntryIds(dropped)} was dropped: that cell rolls up from children, and the Rollup owns it.`,
+  };
 }

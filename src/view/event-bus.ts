@@ -74,21 +74,41 @@ export interface NavigationChange {
   readonly canZoomOut: boolean;
 }
 
-/** S3.3, D-S3-22: what one entry's drag proposes. Public — a `beforeEntryMove` handler reads `start`/
- *  `end` to veto or clamp a specific placement (U5). */
-export interface ProposedSpan {
+/** ADR 0013, Q9: where one entry the gesture moves lands. Both dates are optional, because a
+ *  descendant of a dragged parent bar may hold only one of them: a child with a `start` and no `end`
+ *  shows in the grid, draws no bar, and still travels with its parent. The date it holds moves, and
+ *  the date it lacks stays absent.
+ *
+ *  `ProposedSpan` below is the stricter reading, and the bar the user grabbed always gets that one. */
+export interface ProposedDates {
   readonly entry: EntryId;
+  readonly start?: Instant;
+  readonly end?: Instant;
+}
+
+/** S3.3, D-S3-22: what one entry's drag proposes for an entry that spans. Public — a
+ *  `beforeEntryMove` handler reads `start`/`end` to veto or clamp a specific placement (U5).
+ *
+ *  Both dates are required here. A bar is what the user grabs, and an entry draws a bar only when it
+ *  spans (ADR 0012), so the grabbed entry holds both (Q9's ruling). */
+export interface ProposedSpan extends ProposedDates {
   readonly start: Instant;
   readonly end: Instant;
 }
 
 /** S3.3/S3.4, D-S3-19/D-S3-22: the grabbed entry's own proposed span, plus every entry the gesture
- *  moves or resizes with it (grabbed first) — a multi-selection gesture reports one event, not one
- *  per row. Extender extras are never in `entries` (S3.6): a handler sees only what the user actually
- *  grabbed. Shared by `EntryMove` and `EntryResize` — resize is not a subtype of move, both extend
- *  this instead (D-S3-22). */
+ *  moves or resizes with it — a multi-selection gesture reports one event, not one per row. Extender
+ *  extras are never in `entries` (S3.6): a handler sees only what the user actually grabbed. Shared
+ *  by `EntryMove` and `EntryResize` — resize is not a subtype of move, both extend this instead
+ *  (D-S3-22).
+ *
+ *  `entries` is what the gesture **writes**, grabbed first. A parent bar is the one gesture where the
+ *  grabbed entry is not in that list (ADR 0013): a parent's dates roll up from its children, so
+ *  dragging it translates the dated descendants below it, and `entries` holds those descendants. The
+ *  parent's own envelope follows from the Rollup, and this payload's own `start`/`end` say where it
+ *  lands. */
 export interface EntryGestureEvent extends ProposedSpan {
-  readonly entries: readonly ProposedSpan[];
+  readonly entries: readonly ProposedDates[];
 }
 
 export type EntryMove = EntryGestureEvent;

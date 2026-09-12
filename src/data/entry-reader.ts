@@ -7,12 +7,13 @@
 
 import {
   entryId,
+  DuplicatePropsKeyError,
   DuplicateSegmentIdError,
   EmptySegmentsError,
-  InvalidInstantError,
   InvertedSpanError,
   SegmentsOutOfSyncError,
   segmentId,
+  spansTime,
   UnknownFieldError,
 } from '../model/index.js';
 import type {
@@ -21,7 +22,6 @@ import type {
   EntryEdit,
   EntryId,
   EntryInput,
-  EntryKind,
   Instant,
   Segment,
   SegmentId,
@@ -29,21 +29,20 @@ import type {
   TimeSpan,
 } from '../model/index.js';
 import { addMs, diffMs, envelopeOfSegments, toEndInstant, toInstant } from '../time/index.js';
-import type { EntryEdits, StoredEdit, StoredEdits } from './edit-extension.js';
-import { withProposedKeys, writeDeclaredMetaFields } from './fields/field-access.js';
+import type { EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
+import {
+  completeProps,
+  emptyProposedEdit,
+  withProposedKeys,
+  writeDeclaredPropsFields,
+} from './fields/field-access.js';
+import { isCoreFieldKey } from './fields/core-fields.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
-/** The Dataset context every entry is read against: one zone, one end rule, for the whole list, plus
- * what the Rollup needs to fill in a roll-up-kind entry's initial span (S2.3 §1.5). */
+/** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
 export interface EntryReadContext {
   timeZone: string;
   dateOnlyEnd: DateOnlyEndRule;
-  /** The one `Date.now()` read the owning Dataset performed — used as a deriving-kind entry's
-   * zero-length span until the rollup gives it a real one (CONTEXT.md, Reference date). */
-  referenceDate: Instant;
-  /** Kinds whose rolling-up Fields the Rollup derives from children (`01` §2.5, default `['group']`)
-   * — an entry of one of these kinds may omit `start`/`end`. */
-  rollUpKinds: ReadonlySet<EntryKind>;
   /** Call: `context.mintSegmentId()` — the id a Segment nobody named gets, from the owning Dataset's
    * own counter (I2, #212). */
   mintSegmentId(): SegmentId;
@@ -57,7 +56,7 @@ interface EditOrigin {
   readonly operation: string;
 }
 
-/** The name a plugin author knows their own write by. `reconcileEnvelope` and `toStoredEdit` serve both
+/** The name a plugin author knows their own write by. `reconcileEnvelope` and `toEditReading` serve both
  *  `entries.update()` and an `EditExtender` cascade (D-S5-44), and a message that named the wrong one
  *  sent the reader to a call they never made (#239). Exported so `build-commit-change-set.ts` can
  *  name the same call when it reconciles a body author's and an extender author's envelope keys
@@ -70,12 +69,14 @@ const ENVELOPE_KEYS = ['start', 'end', 'segments'] as const;
 
 /** Which of `start`/`end`/`segments` a caller's own loose edit named, before `reconcileEnvelope` pairs
  *  or back-derives the rest (#232). This is the fact the I4 guard and the commit's own envelope
- *  reconciliation both need and `toStoredEdit` alone can answer, because after reconciliation the same
- *  three keys sit on the `StoredEdit` whether the caller wrote one of them or none — `reconcileEnvelope`
+ *  reconciliation both need and `toEditReading` alone can answer, because after reconciliation the same
+ *  three keys sit on the `ProposedEdit` whether the caller wrote one of them or none — `reconcileEnvelope`
  *  fills in whichever the caller left out. */
 export function authoredEnvelopeKeysOf(edit: Readonly<Record<string, unknown>>): ReadonlySet<string> {
   const keys = new Set<string>();
-  for (const key of ENVELOPE_KEYS) if (edit[key] !== undefined) keys.add(key);
+  // `key in edit` — not `edit[key] !== undefined` — so an explicit `start: undefined` (the un-date
+  // verb, ADR 0012) still counts as authored: the caller named the key to clear it, not by accident.
+  for (const key of ENVELOPE_KEYS) if (key in edit) keys.add(key);
   return keys;
 }
 
@@ -107,16 +108,18 @@ function toSegment(
   return segment;
 }
 
-/** Every stored Entry has at least one Segment (#212), so nothing downstream carries a "this one
- * draws no Segment" branch. An Entry that named none stores its own envelope as its one Segment. */
+/** An Entry holds a Segment if and only if it spans (`spansTime`, ADR 0012) — so this returns `[]`
+ * when `dates` names fewer than two, unless the input named its own `segments` explicitly. An Entry
+ * that spans but named none stores its own envelope as its one Segment. */
 function toSegments(
   input: EntryInput,
-  span: TimeSpan,
+  dates: { start?: Instant; end?: Instant },
   context: EntryReadContext,
   owner: EditOrigin,
 ): readonly Segment[] {
   if (input.segments === undefined || input.segments.length === 0) {
-    return [{ id: context.mintSegmentId(), start: span.start, end: span.end }];
+    if (!spansTime(dates)) return [];
+    return [{ id: context.mintSegmentId(), start: dates.start, end: dates.end }];
   }
   return input.segments.map((segment) => toSegment(segment, context, owner));
 }
@@ -127,67 +130,104 @@ function soleSegmentOf(entry: Entry): Segment | undefined {
   return entry.segments.length === 1 ? entry.segments[0] : undefined;
 }
 
+/** Reads `input.start`/`input.end` into `Instant`s, one date at a time (ADR 0012: one date with no
+ * other is legal, so this never demands the pair the way `toEntrySpan` used to). An unreadable date
+ * is still refused by `toInstant`/`toEndInstant`; a pair that inverts is `InvertedSpanError`. */
+function toEntryDates(
+  input: EntryInput,
+  context: EntryReadContext,
+  owner: EditOrigin,
+): { start?: Instant; end?: Instant } {
+  const dates: { start?: Instant; end?: Instant } = {};
+  if (input.start !== undefined) dates.start = toInstant(context.timeZone, input.start, owner.operation);
+  if (input.end !== undefined) {
+    dates.end = toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation);
+  }
+  // Only a pair can invert (`spansTime`, ADR 0012): one date alone has nothing to invert against.
+  if (spansTime(dates) && dates.end < dates.start) {
+    throw new InvertedSpanError(owner.entryId, dates, owner.operation);
+  }
+  return dates;
+}
+
+/** Every key `EntryInput` itself declares — the envelope this walk never treats as a `props`
+ *  candidate, flat or nested. Frozen, not a `Set`: one array literal, read-only for the module's
+ *  whole life, so it carries no state a second Gantt instance could share (I2). */
+const ENTRY_INPUT_KEYS = Object.freeze(['id', 'parentId', 'name', 'start', 'end', 'segments', 'props']);
+
+function warnIngest(message: string): void {
+  console.warn(`FreeGantt: ${message}`);
+}
+
+/**
+ * `entry.props` at ingest (ADR 0011, Q15): declared Field keys may sit flat, at the top level of a
+ * constructor record or an `add()` call, the same shape `update()` takes; a nested `props` stays
+ * legal for passenger keys and for a bag a consumer already holds. A key named both ways throws
+ * (`DuplicatePropsKeyError`) — the two spellings would silently disagree about which value wins.
+ *
+ * Two ingest warnings live here, and neither throws: an unknown top-level key (this Entry may come
+ * from an API this consumer does not own), and a `props` key that names a core key (the core
+ * definition wins; the value is carried nowhere and is unreachable through `read`).
+ */
+function propsFromInput(
+  input: EntryInput,
+  registry: FieldRegistry,
+  id: EntryId,
+): Readonly<Record<string, unknown>> {
+  const props: Record<string, unknown> = {};
+  const nested: Readonly<Record<string, unknown>> = input.props ?? {};
+  for (const key of Object.keys(nested)) {
+    if (isCoreFieldKey(key)) {
+      warnIngest(`"${id}"'s "props.${key}" names a core field. The core value wins; this is ignored.`);
+      continue;
+    }
+    props[key] = nested[key];
+  }
+  const flat = input as unknown as Readonly<Record<string, unknown>>;
+  for (const key of Object.keys(flat)) {
+    if (ENTRY_INPUT_KEYS.includes(key)) continue;
+    if (!registry.has(key)) {
+      warnIngest(`"${id}" carries an undeclared key "${key}". Declare it in "fields" to make it writable.`);
+      continue;
+    }
+    if (key in props) throw new DuplicatePropsKeyError(key, id);
+    props[key] = flat[key];
+  }
+  return props;
+}
+
 /** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
  * `undefined` a different thing from an absent key, and an `Entry` must not gain keys its input
  * never had. Exported for `entries.add()` (S2.3 §1.1), which reads one input the same way
  * construction reads every entry in `entries: EntryInput[]` — one function, both call sites.
  *
- * `start`/`end` are read from the Segments, not from `input.start`/`input.end` directly (#212,
- * finding 4): an Entry that names Segments overrunning its own authored span used to keep that
- * stale span forever, because ingest was not one of the places that computed the envelope.
- * `envelopeOfSegments` is the one function every write path — this one included — calls instead. */
-export function toEntry(input: EntryInput, context: EntryReadContext, operation: string): Entry {
-  const kind = input.kind ?? 'span';
-  const owner: EditOrigin = { entryId: entryId(input.id), operation };
-  const span = toEntrySpan(input, kind, context, owner);
-  const segments = toSegments(input, span, context, owner);
-  const envelope = envelopeOfSegments(segments);
-  const entry: Entry = {
-    id: entryId(input.id),
-    name: input.name,
-    start: envelope.start,
-    end: envelope.end,
-    kind,
-    segments,
-  };
-  if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
-  if (input.meta !== undefined) entry.meta = input.meta;
-  return entry;
-}
-
-/** `start`/`end` are both required unless `kind` derives its span (S2.3 §1.5): a deriving-kind entry
- * that omits both gets a zero-length span at the reference date, which the rollup overwrites on the
- * first commit that gives it children. Omitting only one, on any kind, is `InvalidInstantError` — a
- * half-specified span is not a span the rollup or a non-deriving kind can make sense of. */
-function toEntrySpan(
+ * `start`/`end` are read from the Segments when the Entry spans, not from `input.start`/`input.end`
+ * directly (#212, finding 4): an Entry that names Segments overrunning its own authored span used to
+ * keep that stale span forever, because ingest was not one of the places that computed the envelope.
+ * `envelopeOfSegments` is the one function every write path — this one included — calls instead. A
+ * dateless or one-date Entry has no Segments to derive an envelope from, so it keeps the dates it
+ * named, read straight (ADR 0012). */
+export function toEntry(
   input: EntryInput,
-  kind: EntryKind,
   context: EntryReadContext,
-  owner: EditOrigin,
-): TimeSpan {
-  if (input.start === undefined && input.end === undefined) {
-    if (context.rollUpKinds.has(kind)) {
-      return { start: context.referenceDate, end: context.referenceDate };
-    }
-    throw new InvalidInstantError(
-      `${owner.operation}: "${input.id}" is of kind "${kind}", which does not work out its own dates. Write both a start and an end.`,
-      kind,
-    );
-  }
-  if (input.start === undefined || input.end === undefined) {
-    throw new InvalidInstantError(
-      `${owner.operation}: "${input.id}" writes only one of start and end. Write both, or write neither.`,
-      input.start ?? input.end,
-    );
-  }
-  const span: TimeSpan = {
-    start: toInstant(context.timeZone, input.start, owner.operation),
-    end: toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation),
+  registry: FieldRegistry,
+  operation: string,
+): Entry {
+  const id = entryId(input.id);
+  const owner: EditOrigin = { entryId: id, operation };
+  const dates = toEntryDates(input, context, owner);
+  const segments = toSegments(input, dates, context, owner);
+  const envelope = segments.length > 0 ? envelopeOfSegments(segments) : dates;
+  const entry: Entry = {
+    id,
+    name: input.name,
+    segments,
+    props: propsFromInput(input, registry, id),
   };
-  if (span.end < span.start) {
-    throw new InvertedSpanError(owner.entryId, span, owner.operation);
-  }
-  return span;
+  if (envelope.start !== undefined) entry.start = envelope.start;
+  if (envelope.end !== undefined) entry.end = envelope.end;
+  if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
+  return entry;
 }
 
 /** Every `SegmentId` a consumer named explicitly, anywhere in a construction-time `entries:
@@ -219,63 +259,88 @@ function assertNoDuplicateSegmentIds(entries: readonly Entry[]): void {
 export function toEntries(
   inputs: readonly EntryInput[],
   context: EntryReadContext,
+  registry: FieldRegistry,
   operation = 'construction',
 ): readonly Entry[] {
-  const entries = inputs.map((input) => toEntry(input, context, operation));
+  const entries = inputs.map((input) => toEntry(input, context, registry, operation));
   assertNoDuplicateSegmentIds(entries);
   return entries;
 }
 
 /** What `reconcileEnvelope` hands back: the reconciled edit, and which keys it wrote onto the edit
  *  itself — `segments` paired on, or `start`/`end` read back off Segments the edit already named.
- *  `toStoredEdit` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
+ *  `toEditReading` reports these keys to its own `proposed` set (#212 R2 fix-plan review, finding D): the
  *  caller of `reconcileEnvelope` is told what changed, instead of diffing `Object.keys` before and
  *  after to find out. */
 export interface EnvelopeReconciliation {
-  readonly edit: StoredEdit;
+  readonly edit: ProposedEdit;
   readonly addedKeys: readonly string[];
 }
 
 /**
- * The envelope invariant (ADR 0010, #212 finding 4), applied to a `StoredEdit` on its own: whenever
- * the edit touches `segments`, or touches the envelope (`start`/`end`) without naming `segments`, the
- * two are reconciled against each other so the result leaving this function can never disagree. One
- * Segment is the envelope's own drawing, so an envelope-only write moves it; several Segments give no
- * such answer, so an envelope-only write against several is refused (`SegmentsOutOfSyncError`,
- * `'ambiguous'`) — the same refusal `CONTEXT.md`'s Segment entry states for a consumer's direct write.
- * An edit that names both `segments` and an envelope the Segments do not produce is refused too
- * (`'conflicting'`) rather than picking a winner (finding S3).
+ * The envelope invariant (ADR 0010, #212 finding 4; revised by ADR 0012), applied to a `ProposedEdit`
+ * on its own: whenever the edit touches `segments`, or touches the envelope (`start`/`end`) without
+ * naming `segments`, the two are reconciled against each other so the result leaving this function
+ * can never disagree.
  *
- * `toStoredEdit` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
+ * An Entry spans if and only if it holds both dates, and holds a Segment if and only if it spans
+ * (ADR 0012). So an envelope-only write against zero or one Segment is no longer one question —
+ * it is three, asked in this order: does the edit leave both dates present? Mint (or keep) one
+ * Segment. Does it leave the pair broken? Drop the Segment, if there was one, and keep whichever
+ * date the edit did not touch. Does the Entry hold several Segments already? An envelope-only write
+ * names none of them, so it is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) — the same refusal
+ * `CONTEXT.md`'s Segment entry states for a consumer's direct write. An edit that names both
+ * `segments` and an envelope the Segments do not produce is refused too (`'conflicting'`) rather
+ * than picking a winner (finding S3).
+ *
+ * `toEditReading` below calls this for `entries.update()`, and `reconcileExtenderEdits` below calls it for
  * an `EditExtender`'s cascade — the same function, the same refusal, for both callers (D-S5-44). A
  * plugin's cascade cannot be asked to send a clearer edit the way `entries.update()`'s caller can,
  * but it has an author, and this refusal is how that author is told at dev time to write `segments`
  * instead — a caller-identity split, a computed answer for the extender and a refusal for
  * `entries.update()`, was tried and rejected (D-S5-44).
+ *
+ * `mintSegmentId` is optional: the drag preview (`view/gesture-pipeline.ts`'s `#extraFor`) calls
+ * this with none, because `view/` has no door to the Dataset's id counter and no plugin can turn a
+ * dateless Entry spanning mid-drag today (no scheduling plugin ships before S7). When it is missing
+ * and a second date just arrived with no existing Segment to keep, this leaves the dates set with no
+ * Segment for that one preview frame — never committed, so never a real inconsistency.
  */
 export function reconcileEnvelope(
   entry: Entry,
-  stored: StoredEdit,
+  stored: ProposedEdit,
   operation: string,
+  mintSegmentId?: () => SegmentId,
 ): EnvelopeReconciliation {
-  const writesEnvelope = stored.start !== undefined || stored.end !== undefined;
-  const sole = soleSegmentOf(entry);
-  if (writesEnvelope && stored.segments === undefined && sole === undefined) {
-    throw new SegmentsOutOfSyncError(entry.id, 'ambiguous', operation);
-  }
-
   const before = new Set(Object.keys(stored));
-  let next = stored;
-  if (writesEnvelope && stored.segments === undefined && sole !== undefined) {
-    // The bar a one-Segment Entry draws is its envelope, so both move or the bar stays where the
-    // envelope no longer is. The Segment keeps its id: this is the same stretch, moved.
-    next = {
-      ...stored,
-      segments: [{ id: sole.id, start: stored.start ?? entry.start, end: stored.end ?? entry.end }],
-    };
+  let next: ProposedEdit = stored;
+
+  if (stored.segments === undefined) {
+    const touchesStart = 'start' in stored;
+    const touchesEnd = 'end' in stored;
+    if (touchesStart || touchesEnd) {
+      if (entry.segments.length > 1) {
+        throw new SegmentsOutOfSyncError(entry.id, 'ambiguous', operation);
+      }
+      const sole = soleSegmentOf(entry);
+      const resultStart = touchesStart ? stored.start : entry.start;
+      const resultEnd = touchesEnd ? stored.end : entry.end;
+      if (resultStart !== undefined && resultEnd !== undefined) {
+        // The bar a one-Segment Entry draws is its envelope, so both move together. The Segment
+        // keeps its id when there is one to keep; a dateless or one-date Entry gaining its pair
+        // mints a fresh one.
+        const id = sole?.id ?? mintSegmentId?.();
+        if (id !== undefined) {
+          next = { ...stored, segments: [{ id, start: resultStart, end: resultEnd }] };
+        }
+      } else if (sole !== undefined) {
+        // The pair just broke: the Segment it drew no longer has two dates to span, so it goes.
+        next = { ...stored, segments: [] };
+      }
+    }
   }
 
-  if (next.segments !== undefined) {
+  if (next.segments !== undefined && next.segments.length > 0) {
     // Refused before the envelope is even computed (2026-09-06 ruling, #143): a Segment whose `end`
     // sits before its `start` is never legal, whether it came from the sole-Segment pairing above,
     // an `entries.update()` caller's own `segments`, or an `EditExtender` cascade's Instant-typed
@@ -369,12 +434,16 @@ export function fitSegmentsToEnvelope(segments: readonly Segment[], target: Time
  * plugin-author tool and not an app-author one.
  *
  * `start` is an `Instant`, not the loose `InstantInput` every way *in* takes. This is a builder, not a
- * way in: the way in is the extender's return, which `toStoredEdits` normalizes. Taking a loose date here
+ * way in: the way in is the extender's return, which `toEditsReading` normalizes. Taking a loose date here
  * would need a zone to read it, and asking a plugin author to hand back `ctx.dataset.timeZone` — a
  * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
  */
 export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
+  // Moving an Entry rigidly only makes sense for one that already spans (`spansTime`, ADR 0012):
+  // a dateless or one-date Entry holds no Segment to translate. This was a cast until Q5 gave the
+  // rule one home; the edit it returns is the same empty Segment list the map below produced.
+  if (!spansTime(entry)) return { segments: [] };
   const deltaMs = diffMs(start, entry.start);
   return {
     segments: entry.segments.map((segment) => ({
@@ -401,20 +470,45 @@ export function moveEntryTo(entry: Entry, start: Instant): EntryEdit {
  *
  * An id `entries` does not carry — nothing this caller knows the current Segments of — passes its edit
  * through unreconciled; there is nothing to reconcile against.
+ *
+ * `mintSegmentId` is the commit path's real counter (`CommitChangeSetInput.mintSegmentId`) — a
+ * cascade that turns a dateless Entry spanning always mints a real id, because this path always
+ * reaches the store. The preview path below never carries one; see `reconcileEnvelope`.
  */
-export function reconcileExtenderEdits(
+/** The one loop both `reconcileExtenderEdits` and `reconcileExtenderEditsForPreview` run — they
+ *  differ in exactly two ways, never one: whether a `SegmentsOutOfSyncError` reaches the caller
+ *  (`refuse`), and whether a real `mintSegmentId` is ever in hand (the preview path never carries
+ *  one — see `reconcileExtenderEditsForPreview`'s own docblock). `refuse: 'throw'` never reaches the
+ *  `catch` branch's drop, because `reconcileEnvelope` still throws synchronously and this rethrows it
+ *  unchanged. */
+function reconcileExtenderEditsWith(
   entries: ReadonlyMap<EntryId, Entry>,
-  edits: StoredEdits,
-): StoredEdits {
+  edits: ProposedEdits,
+  refuse: 'throw' | 'drop',
+  mintSegmentId?: () => SegmentId,
+): ProposedEdits {
   let changed = false;
-  const reconciled = new Map<EntryId, StoredEdit>();
+  const reconciled = new Map<EntryId, ProposedEdit>();
   for (const [id, edit] of edits) {
     const entry = entries.get(id);
-    const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION).edit : edit;
-    if (next !== edit) changed = true;
-    reconciled.set(id, next);
+    try {
+      const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION, mintSegmentId).edit : edit;
+      if (next !== edit) changed = true;
+      reconciled.set(id, next);
+    } catch (error) {
+      if (refuse === 'throw' || !(error instanceof SegmentsOutOfSyncError)) throw error;
+      changed = true;
+    }
   }
   return changed ? reconciled : edits;
+}
+
+export function reconcileExtenderEdits(
+  entries: ReadonlyMap<EntryId, Entry>,
+  edits: ProposedEdits,
+  mintSegmentId?: () => SegmentId,
+): ProposedEdits {
+  return reconcileExtenderEditsWith(entries, edits, 'throw', mintSegmentId);
 }
 
 /**
@@ -423,36 +517,24 @@ export function reconcileExtenderEdits(
  * screen, so this drops the offending edit instead of reconciling it — that Entry paints no ghost for
  * this frame — and leaves every other edit reconciled as `reconcileExtenderEdits` would. The commit
  * path still calls `reconcileExtenderEdits` and still throws: the refusal is real, and dropping it
- * from a preview is not the same as dropping it from the write itself.
+ * from a preview is not the same as dropping it from the write itself. It also never carries a
+ * `mintSegmentId`: a preview frame never reaches the store, so there is no real counter to mint from.
  */
 export function reconcileExtenderEditsForPreview(
   entries: ReadonlyMap<EntryId, Entry>,
-  edits: StoredEdits,
-): StoredEdits {
-  let changed = false;
-  const reconciled = new Map<EntryId, StoredEdit>();
-  for (const [id, edit] of edits) {
-    const entry = entries.get(id);
-    try {
-      const next = entry ? reconcileEnvelope(entry, edit, EXTENDER_OPERATION).edit : edit;
-      if (next !== edit) changed = true;
-      reconciled.set(id, next);
-    } catch (error) {
-      if (!(error instanceof SegmentsOutOfSyncError)) throw error;
-      changed = true;
-    }
-  }
-  return changed ? reconciled : edits;
+  edits: ProposedEdits,
+): ProposedEdits {
+  return reconcileExtenderEditsWith(entries, edits, 'drop');
 }
 
-/** `toEditReading`'s result: the `StoredEdit` `toStoredEdit` has always returned, plus which of
+/** `toEditReading`'s result: the `ProposedEdit` `.stored` has always carried, plus which of
  *  `start`/`end`/`segments` the *caller* named before `reconcileEnvelope` paired or back-derived the
  *  rest. The commit path needs that second fact to tell a body author's envelope write from an
  *  `EditExtender`'s own, which `proposedKeys` alone cannot: `reconcileEnvelope` folds its own added
  *  keys into `proposedKeys` too, so by the time an edit is stored the two are indistinguishable
  *  (#232). Internal only — never returned from a public entry point. */
 export interface EditReading {
-  readonly stored: StoredEdit;
+  readonly stored: ProposedEdit;
   readonly authoredEnvelopeKeys: ReadonlySet<string>;
 }
 
@@ -460,15 +542,15 @@ export interface EditReading {
  *  `EditExtender` cascade touches — what `DatasetState.extraEditsReadingFor` hands the commit path
  *  (#232). Internal only. */
 export interface EditsReading {
-  readonly stored: StoredEdits;
+  readonly stored: ProposedEdits;
   readonly authoredEnvelopeKeys: ReadonlyMap<EntryId, ReadonlySet<string>>;
 }
 
-/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — every present core date field
+/** Reads an `entries.update()` edit into `ProposedEdit` (S2.3 §1.1) — every present core date field
  * goes through `time/` the way `toEntry` reads a whole `Entry`. Declared Field keys fold through
  * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`.
  *
- * Returns the envelope keys the caller itself named alongside the `StoredEdit`, for the commit path
+ * Returns the envelope keys the caller itself named alongside the `ProposedEdit`, for the commit path
  * to tell a body author's envelope write from an extender's own (#232) — see `EditReading`. */
 export function toEditReading(
   edit: EntryEdit,
@@ -477,17 +559,23 @@ export function toEditReading(
   registry: FieldRegistry,
   operation: string,
 ): EditReading {
-  let stored: StoredEdit = {};
+  let stored: ProposedEdit = emptyProposedEdit();
   // Which Fields this edit writes. The caller's own keys start the set, and a Field core
   // derives below joins it. A key nobody states never reaches the changeset (#212).
   const proposed = new Set<string>(Object.keys(edit));
   const authoredEnvelopeKeys = authoredEnvelopeKeysOf(edit);
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
-  if (edit.kind !== undefined) stored.kind = edit.kind;
   if (edit.name !== undefined) stored.name = edit.name;
-  if (edit.start !== undefined) stored.start = toInstant(context.timeZone, edit.start, operation);
-  if (edit.end !== undefined)
-    stored.end = toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd, operation);
+  // `'start' in edit` — not `edit.start !== undefined` — so `update(id, { start: undefined })` (the
+  // un-date verb, ADR 0012) reaches `stored.start = undefined` rather than being read as "untouched".
+  if ('start' in edit)
+    stored.start = edit.start === undefined ? undefined : toInstant(context.timeZone, edit.start, operation);
+  if ('end' in edit) {
+    stored.end =
+      edit.end === undefined
+        ? undefined
+        : toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd, operation);
+  }
   if (edit.segments !== undefined) {
     // Every stored Entry keeps at least one Segment (#212); an update cannot write it down to zero
     // the way `entries.add({ segments: [] })` can mint one — there is no whole-span input here to
@@ -507,43 +595,28 @@ export function toEditReading(
   // `reconcileEnvelope` reports which keys it added (`segments` paired on, or `start`/`end` read
   // back), and those are proposed the same way the caller's own keys are — neither is policy, so both
   // count as stated (#212 R2 fix-plan review, finding D).
-  const reconciled = reconcileEnvelope(entry, stored, operation);
+  const reconciled = reconcileEnvelope(entry, stored, operation, () => context.mintSegmentId());
   stored = reconciled.edit;
   for (const key of reconciled.addedKeys) proposed.add(key);
 
-  if (edit.meta !== undefined) stored.meta = edit.meta;
-
-  stored = writeDeclaredMetaFields(stored, entry, edit, registry);
-  return { stored: withProposedKeys(stored, proposed), authoredEnvelopeKeys };
-}
-
-/** Reads an `entries.update()` edit into `StoredEdit` (S2.3 §1.1) — the shape every existing caller
- *  wants. `toEditReading` above is the same read; this discards the extra fact only the commit
- *  path's I4 guard needs (#232). */
-export function toStoredEdit(
-  edit: EntryEdit,
-  context: EntryReadContext,
-  entry: Entry,
-  registry: FieldRegistry,
-  operation: string,
-): StoredEdit {
-  return toEditReading(edit, context, entry, registry, operation).stored;
+  stored = writeDeclaredPropsFields(stored, edit, registry);
+  return { stored: completeProps(entry, withProposedKeys(stored, proposed)), authoredEnvelopeKeys };
 }
 
 /**
- * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toStoredEdit`
+ * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toEditReading`
  * per Entry, so a plugin's cascade takes the exact road `dataset.entries.update(id, edit)` takes: the
  * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
  *
  * An undeclared Field key is refused here for the same reason `update()` refuses one (#209 Q2): one
- * rule on every way in, and a silent drop is the fault #197 existed for. `meta` stays the escape
- * hatch for anything a Field does not declare.
+ * rule on every way in, and a silent drop is the fault #197 existed for. A `props` key with no
+ * declaration is carried at construction ingest only (ADR 0011) — it is never a live way in.
  *
  * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
  * no row for such an id either (#209 Q3, tracked as #235).
  *
- * Returns each Entry's authored envelope keys alongside its `StoredEdit`, the same fact
+ * Returns each Entry's authored envelope keys alongside its `ProposedEdit`, the same fact
  * `toEditReading` reports — the commit path's I4 guard needs to know which of `start`/`end`/
  * `segments` the hook itself named, not which `reconcileEnvelope` added on the hook's behalf (#232).
  */
@@ -553,7 +626,7 @@ export function toEditsReading(
   entryFor: (id: EntryId) => Entry | undefined,
   registry: FieldRegistry,
 ): EditsReading {
-  const stored = new Map<EntryId, StoredEdit>();
+  const stored = new Map<EntryId, ProposedEdit>();
   const authoredEnvelopeKeys = new Map<EntryId, ReadonlySet<string>>();
   for (const [id, edit] of edits) {
     // The Entry as this transaction's own body leaves it, not the pre-transaction snapshot: a cascade
@@ -570,15 +643,4 @@ export function toEditsReading(
     authoredEnvelopeKeys.set(id, reading.authoredEnvelopeKeys);
   }
   return { stored, authoredEnvelopeKeys };
-}
-
-/** Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). See
- *  `toEditsReading` above for the same read plus each Entry's authored envelope keys. */
-export function toStoredEdits(
-  edits: EntryEdits,
-  context: EntryReadContext,
-  entryFor: (id: EntryId) => Entry | undefined,
-  registry: FieldRegistry,
-): StoredEdits {
-  return toEditsReading(edits, context, entryFor, registry).stored;
 }

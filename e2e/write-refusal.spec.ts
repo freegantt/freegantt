@@ -13,7 +13,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 
 declare global {
   interface Window {
-    __dataset: import('../src/api/index.js').Dataset<{ cost: number }, { cost: number }>;
+    __dataset: import('../src/api/index.js').Dataset;
     __gantt: import('../src/api/index.js').Gantt;
     __fixedFinishEntryId: string;
   }
@@ -125,11 +125,12 @@ test('a pinned cell refuses the inline editor, and its neighbour still opens one
   await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(1);
 });
 
-// The other half of the same answer, and the blunt one: `/data.html` declares End read-only for the
-// whole Dataset through the core-Field override #142 shipped (`fields: [{ key: 'end', editable:
-// false }]`). That path had no harness call site at all until now, and no browser ever drove it.
-// Nothing on that page resizes a bar, so the lock costs the page nothing.
-test('a Field declared read-only closes the end handle on every row', async ({ page }) => {
+// The other half of the same answer, and the blunt one: `/data.html` closes End for the whole
+// Dataset through the core-Field override #142 shipped (`fields: [{ key: 'end', editable: 'api' }]`).
+// That path had no harness call site at all until #256, and no browser ever drove it. The page's own
+// Move buttons still shift the date, which is what `'api'` means and why that page can hold it
+// (ADR 0015).
+test('a Field closed to the grid closes the end handle on every row', async ({ page }) => {
   await page.goto('/data.html');
   const bars = page.locator('#gantt .fg-bar');
   await expect(bars.first()).toBeVisible();
@@ -141,4 +142,34 @@ test('a Field declared read-only closes the end handle on every row', async ({ p
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.locator('.fg-bar-handle[data-edge="end"]')).toBeHidden();
   }
+});
+
+// ADR 0015, the other door: `entries.update()` reads the same `Field.editable` the grid reads, at a
+// lower threshold. `/data.html` declares both states the two thresholds tell apart — `contractId` is
+// `editable: false` (a lock, refused at every door), and End is `'api'` (the Move buttons write it;
+// no cell and no handle do).
+//
+// A unit test proves the resolver agrees with itself. Only a browser proves the page a consumer
+// really writes gets the same two answers.
+test("entries.update() refuses a locked Field, and writes an 'api' one", async ({ page }) => {
+  await page.goto('/data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const locked = await page.evaluate(() => {
+    const dataset = window.__dataset as import('../src/api/index.js').Dataset<{ contractId?: string }>;
+    try {
+      dataset.entries.update('task-a', { contractId: 'C-0000' });
+      return 'wrote it';
+    } catch (error) {
+      return (error as { code?: string }).code ?? 'unknown error';
+    }
+  });
+  expect(locked).toBe('field-not-editable');
+
+  // The same page's End cell is dead, and this write still lands: that is the whole of `'api'`.
+  const end = await page.evaluate(() => {
+    window.__dataset.entries.update('task-a', { end: '2026-01-25' });
+    return Number(window.__dataset.entries.get('task-a')!.end);
+  });
+  expect(end).toBe(Date.parse('2026-01-26T00:00:00Z'));
 });

@@ -1,5 +1,5 @@
 ---
-status: proposed — a draft, not a decision. Supersedes ADR 0005's `meta` rulings if accepted.
+status: accepted — verdict: `verify:full PASS — all 16 checks green, test:e2e included (69s).` (Build 2, 2026-09-11). Spike report: [reviews/2026-09-09-0011-open-decision-spikes](../../plans/field-redesign/reviews/2026-09-09-0011-open-decision-spikes/README.md). Supersedes ADR 0005's `meta` rulings.
 decided: the namespace is `props`; a Field key is the whole address, so `FieldSource` retires; `add()` and `update()` are flat (decision 11, grill 2026-09-10 extends add); constructor `entries` take declared keys at the top, nested `props` stays for passengers (Q15, grill 2026-09-10); an undeclared key is carried at constructor ingest and never named at `add()` or `update()` (decision 1, grill 2026-09-10); brand the whole `ProposedEdit` (decision 22, 2026-09-10). There is no `fromJSON` — [ADR 0016](0016-the-library-holds-no-save-format.md).
 open: none. Closed decisions are in `plans/field-redesign/0011-consumer-values-in-props/`.
 ---

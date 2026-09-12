@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
-import type { Entry, EntryId, ErrorReportInput, Instant, StoredEdits } from '../model/index.js';
+import type { Entry, EntryId, ErrorReportInput, Instant, ProposedEdits } from '../model/index.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
+import type { EntryMove } from './event-bus.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
@@ -25,16 +26,26 @@ const linearScale: TimeScale = {
  *  of its own. This one stands in wherever only the tick unit is unused. */
 const barePreset = {} as unknown as ViewPreset;
 
+/** A `ProposedEdit` fixture: fills the required brand/`props`/`proposedKeys` a raw envelope patch
+ *  no longer carries (ADR 0011). */
+function pe(patch: Record<string, unknown>): {
+  __brand: 'ProposedEdit';
+  props: Record<string, unknown>;
+  proposedKeys: Set<string>;
+} & typeof patch {
+  return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(Object.keys(patch)), ...patch };
+}
+
 function entry(id: string, start: number, end: number): Entry {
   const startInstant = start as Instant;
   const endInstant = end as Instant;
   return {
     id: entryId(id),
-    kind: 'span',
     name: id,
     start: startInstant,
     end: endInstant,
     segments: [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+    props: {},
   };
 }
 
@@ -57,6 +68,9 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
     canGesture: () => true,
+    // ADR 0013: an ordinary bar writes itself. The fixtures here are childless, and a test that
+    // wants a parent bar's drag overrides this with the descendants below it.
+    entriesMovedBy: (entry) => [entry],
     commitEntryEdits: () => true,
     emit: (name, payload) => {
       emitted.push([name, payload]);
@@ -188,7 +202,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       commitEntryEdits: (edits) => {
         committed.push(edits);
@@ -206,6 +220,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [
         { ...segmented.segments[0], start: 40, end: 140 },
         { ...segmented.segments[1], start: 240, end: 340 },
@@ -223,7 +240,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps, applied } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-b')],
       commitEntryEdits: (edits) => {
@@ -245,6 +262,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     await session.commit(40);
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [segmented.segments[0], { ...segmented.segments[1], start: 240, end: 340 }],
       start: 0,
       end: 340,
@@ -266,7 +286,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('unpicked-b'), start: 400 as Instant, end: 500 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps } = withRoster([picked, unpicked], {
       selectedEntryIds: () => [picked.id, unpicked.id],
       selectedSegmentIds: () => [segmentId('picked-b')],
@@ -298,7 +318,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
       ],
     };
-    const committed: StoredEdits[] = [];
+    const committed: ProposedEdits[] = [];
     const { deps } = withRoster([segmented], {
       selectedSegmentIds: () => [segmentId('seg-a')],
       commitEntryEdits: (edits) => {
@@ -312,6 +332,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await session.commit(40);
     // The selected Segment (0) grows; the envelope-latest Segment (1) never moves.
     expect(committed[0]?.get(segmented.id)).toEqual({
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(['segments', 'start', 'end']),
       segments: [{ ...segmented.segments[0], start: 0, end: 140 }, segmented.segments[1]],
       start: 0,
       end: 300,
@@ -319,7 +342,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
-    const milestone: Entry = { ...entry('m', 50, 50), kind: 'milestone' };
+    const milestone: Entry = entry('m', 50, 50);
     const { deps } = withRoster([milestone], { canGesture: () => false });
     const pipeline = new GesturePipeline(deps);
 
@@ -688,7 +711,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const requests: unknown[] = [];
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (request) => {
         requests.push(request);
-        return new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+        return new Map([[x.id, pe({ start: 350, end: 450 })]]);
       };
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
@@ -726,7 +749,6 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const a = entry('a', 100, 200);
       const x: Entry = {
         id: entryId('x'),
-        kind: 'span',
         name: 'x',
         start: 300 as Instant,
         end: 500 as Instant,
@@ -734,15 +756,15 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
           { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
           { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
         ],
+        props: {},
       };
       const committedEntriesById = () =>
         new Map([
           [a.id, a],
           [x.id, x],
         ]);
-      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
-        new Map([[x.id, { start: 350 as unknown as Instant }]]);
-      const commitEntryEdits = vi.fn((draft: StoredEdits) => {
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => new Map([[x.id, pe({ start: 350 })]]);
+      const commitEntryEdits = vi.fn((draft: ProposedEdits) => {
         // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
         // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
         // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
@@ -786,7 +808,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const a = entry('a', 100, 200);
       const x = entry('x', 300, 400);
       const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () =>
-        new Map([[x.id, { start: 350 as unknown as Instant, end: 450 as unknown as Instant }]]);
+        new Map([[x.id, pe({ start: 350, end: 450 })]]);
       const { deps, applied } = withRoster([a, x], {
         extraEditsFor,
         committedEntriesById: () =>
@@ -909,5 +931,92 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
     expect(walks).toBe(0);
     expect(sawStart).not.toBe(0 as unknown as Instant);
+  });
+});
+
+describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
+  /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
+  function startOnly(id: string, start: number): Entry {
+    return {
+      id: entryId(id),
+      name: id,
+      start: start as Instant,
+      segments: [],
+      props: {},
+    };
+  }
+
+  /** One phase bar over two children — the shape a real roll-up parent is always in. `entriesMovedBy`
+   *  answers the way `view/capability.ts` does: the parent writes the rows below it, never itself. */
+  function withParent(children: readonly Entry[]) {
+    const parent = entry('phase', 100, 400);
+    return withRoster([parent, ...children], {
+      entriesMovedBy: (grabbed) => (grabbed.id === parent.id ? children : [grabbed]),
+    });
+  }
+
+  it('writes the descendants, leaves the parent unwritten, and names the parent in the event', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, emitted } = withParent([child]);
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('phase'), { kind: 'move' })!.commit(50);
+
+    expect(committed).toBe(true);
+    // One transaction, one undo: `commitEntryEdits` is called once, with the descendants alone.
+    expect(written).toHaveLength(1);
+    expect([...written[0]!.keys()]).toEqual([entryId('child')]);
+    const move = emitted[1]![1] as EntryMove;
+    expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove', 'entryMove']);
+    // `event.entry` is the parent you grabbed, and its span is the envelope it lands on.
+    expect(move.entry).toBe(entryId('phase'));
+    expect(move.start).toBe(150);
+    expect(move.end).toBe(450);
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150, end: 250 }]);
+  });
+
+  it('moves a child that holds only a start, and proposes no end for it', async () => {
+    const child = startOnly('child', 100);
+    const { deps, emitted } = withParent([child]);
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    await pipeline.session(entryId('phase'), { kind: 'move' })!.commit(50);
+
+    const edit = written[0]!.get(entryId('child'))!;
+    expect(edit.start).toBe(150);
+    expect(edit.end).toBeUndefined();
+    expect([...edit.proposedKeys]).toEqual(['start']);
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150 }]);
+  });
+
+  it('previews the parent bar following the pointer, though it writes nothing', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, applied } = withParent([child]);
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('phase'), { kind: 'move' })!.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied[0] as readonly { itemId: string; dx: number; extra: boolean }[];
+    // The parent's own bar is the caller's gesture, not an extender's ghost, so `extra` stays false.
+    expect(preview.map((item) => [item.itemId, item.dx, item.extra])).toEqual([
+      [itemId(entryId('phase')), 50, false],
+      [itemId(entryId('child')), 50, false],
+    ]);
   });
 });
