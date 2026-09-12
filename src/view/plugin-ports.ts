@@ -28,10 +28,8 @@ import type {
 import type {
   DecorationLayer,
   DecorationProvider,
-  EntryLook,
+  EntryVariant,
   FrameBar,
-  ItemProducer,
-  LookClaim,
   RendererFor,
   RendererPoint,
   ResolvedColumn,
@@ -48,7 +46,7 @@ import type {
   RegisterKeyHandler,
 } from '../extensions/keymap.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
-import type { KindDefaults, WriteVerdict } from './capability.js';
+import type { WriteVerdict } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import { buildElement } from '../render/dom/element-description.js';
 import type { MountLayer } from './mount-layer.js';
@@ -205,14 +203,6 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     /** S5.8, D-S5-19: announces the committed edit. This raises `entryEdit` after the commit.
      *  It tells, it does not ask — no veto, and nothing to return. */
     announceEntryEdit(payload: EntryFieldEdit): void;
-    /** S5.9, D-S5-22: fills the middle precedence layer `capability.ts` resolves — below the
-     *  consumer's own `interactions`, above the library's structure-or-look table. `defaults`
-     *  answers only the looks it names ('parent', 'leaf', or a plugin's own). An omitted gesture
-     *  still falls through to the library table for that look. Legal only while `setup` runs
-     *  (D-S5-4); removed automatically when this plugin is disposed. When two plugins register
-     *  defaults for the same look, the newest registration wins, and disposing one plugin never
-     *  disturbs the other plugin's registration. The returned `Disposer` removes it sooner (#155). */
-    registerLookDefaults(look: EntryLook, defaults: KindDefaults): Disposer;
   };
   view: {
     /** S5.3, D-S5-8: the layer a plugin's own popup, tooltip or menu mounts into — the same
@@ -350,35 +340,29 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  session only, which is a legitimate choice to make on purpose. */
     registerGridColumn(column: GridColumnInput): Disposer;
   };
-  /** S5.9, D-S5-22: the pure layout side of the four-seam kind contract — what shape a
-   *  consumer-defined kind draws. `interaction`/`view` above answer what you can do to it and how it
-   *  looks; `commands` (top of this interface) answers what actions it offers. */
-  layout: {
-    /** Claims the item-shaping producer for `kind`, replacing whichever one `kind` resolved to
-     *  before (the shipped `'span'`/`'group'`/`'milestone'` producers included). The common producer
-     *  is `(entry) => [wholeEntryItem(entry)]`. That is one Item over the entry's whole span, built
-     *  by the library's own exported helper. A plugin never restates the Item id convention
-     *  (review P3). `producer` is pure: it runs in `layout/`, the same DOM-free pass every other
-     *  item producer runs in. Legal only while `setup` runs (D-S5-4). Disposal removes it
-     *  automatically, and restores whichever registration is newest among the rest. Disposing one
-     *  plugin never disturbs another plugin's registration on the same look. The returned
-     *  `Disposer` removes it sooner (#155). */
-    registerItemProducer(look: EntryLook, producer: ItemProducer): Disposer;
-    /** Claims which entries wear `look` (Q10). A plugin registers this beside its producer: the
-     *  claim says *which* entries are this plugin's, the producer says *what* they draw. An Entry
-     *  no claim answers yes for falls back to the structure look — parent or leaf.
+  /** ADR 0018: one variant is one object, so one door installs it. `ctx.variants.add(variant)` is
+   *  the plugin half of the `GanttOptions.variants` a consumer writes — one type, two doors, one
+   *  shape. It replaced four registrations that each repeated the variant's name. */
+  variants: {
+    /** Installs one variant on this Gantt. `when` says which rows wear it, `items` what shape it
+     *  draws, `paint` how it looks, and `can` what you can do to it. Omit `when` and the variant
+     *  answers for every row nothing newer claims.
      *
-     *  The first registered claim to answer yes wins, and a second claim on the same Entry is
-     *  ignored. That second claim also raises a `'look-claimed-twice'` Error report naming both
-     *  plugins, in every build. It is not behind `isDevMode()`: that flag resolves when this repo
-     *  builds `dist/`, so gating it would delete the line from every consumer (D-S5-41). The library
-     *  never arbitrates between plugins: the consumer chose which ones to install, so core reports
-     *  and carries on.
+     *  **The newest rule wins** (`Q5`). This plugin's variant wins over core's own `parent`/`leaf`,
+     *  and over any variant installed before it. The consumer's own `GanttOptions.variants` wins
+     *  over every plugin's, whatever order the plugins installed in (D-S5-11). Setup order between
+     *  two plugins comes from `requires` (D-S5-31) — there is no ordering knob here.
      *
-     *  `claim` runs on the hover path, so keep it cheap — a `Set` read is the intended shape. It is
-     *  pure: it answers a question and draws nothing. Legal only while `setup` runs (D-S5-4), and
-     *  disposal removes it the same way every other `register*` seam's does. */
-    registerLookClaim(look: EntryLook, claim: LookClaim): Disposer;
+     *  Two plugins whose rules both answer yes for one row raise a `'variant-claimed-twice'` Error
+     *  report naming both, in every build. It is not behind `isDevMode()`: that flag resolves when
+     *  this repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41).
+     *  The library never arbitrates between plugins: the consumer chose which ones to install, so
+     *  core reports and carries on.
+     *
+     *  `when` runs on the hover path, so keep it cheap. It is pure: it answers a question and draws
+     *  nothing. Legal only while `setup` runs (D-S5-4), and disposal removes the variant the same
+     *  way every other `register*` seam's does. */
+    add(variant: EntryVariant): Disposer;
   };
 }
 
@@ -478,8 +462,6 @@ export function buildPluginPorts(
       canWrite: (entry, field) => shell.canWrite(entry, field),
       proposeEntryEdit: (payload) => shell.proposeEntryEdit(payload),
       announceEntryEdit: (payload) => shell.announceEntryEdit(payload),
-      registerLookDefaults: (look, defaults) =>
-        registerWhileOpen(() => shell.registrations.registerLookDefaults(look, defaults)),
     },
     view: {
       overlay: shell.overlay,
@@ -505,11 +487,8 @@ export function buildPluginPorts(
       registerGridColumn: (column) =>
         registerWhileOpen(() => shell.registrations.registerGridColumn(column, pluginId)),
     },
-    layout: {
-      registerItemProducer: (look, producer) =>
-        registerWhileOpen(() => shell.registrations.registerItemProducer(look, producer)),
-      registerLookClaim: (look, claim) =>
-        registerWhileOpen(() => shell.registrations.registerLookClaim(look, claim, pluginId)),
+    variants: {
+      add: (variant) => registerWhileOpen(() => shell.registrations.registerVariant(variant, pluginId)),
     },
   };
 

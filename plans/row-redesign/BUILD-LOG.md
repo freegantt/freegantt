@@ -741,3 +741,125 @@ name a caller writes — it is the platform calling `toInput()`. Keeping it off 
 published surface exactly as the ADR drew it.
 
 **To reverse:** delete both methods. The harness line stays correct either way.
+
+---
+
+## J32 — the interaction vocabulary moved to `model/`, so a variant can name it
+
+**Build 2, Unit A. Done in the code.**
+
+`EntryVariant.can` is an `Interactions`, and `EntryVariant` lives in `layout/` beside `ItemProducer`
+and `BarRenderer`. `Interactions` lived in `view/capability.ts`, and `layout/` may import `model/`
+and `time/` only (`.dependency-cruiser.cjs`, `layout-boundary`). So the vocabulary had to move down
+or the type could not be declared at all.
+
+**The call.** `CapabilityRule`, `WriteRule`, `GestureCapability` and `Interactions` are now declared
+in `src/model/interactions.ts`. `view/capability.ts` imports them and re-exports them, and it still
+owns the whole resolution (`resolveCapabilities`, `CapabilityInputs`, `Capabilities`). Nothing about
+the seam changed: one file still answers "may this gesture run".
+
+`model/write-verdict.ts` already set this pattern — `data/` computes a `WriteVerdict` and `model/`
+declares it, because "only `api/` and `model/` types are public". These four are public types for
+the same reason: a consumer writes `interactions: { resize: … }` and now also
+`variants: [{ can: { resize: … } }]`.
+
+**To reverse:** put the four back in `view/capability.ts` and declare `EntryVariant.can` structurally.
+
+---
+
+## J33 — a consumer's variant beats every plugin's, whatever order the plugins installed in
+
+**Build 2, Units A and B. Done in the code.**
+
+`Q5` ruled that the newest rule wins. Taken alone, that makes a consumer's `GanttOptions.variants`
+**lose** to every plugin: the consumer's list registers in the constructor, and a plugin installs
+after it. The build file's own test list asks for the opposite — *"a consumer `variants` entry
+overrides a plugin's variant on the same row"*.
+
+**The call.** Resolution walks three ranks, newest-first inside each: the consumer's own variants,
+then every plugin's, then core's two. That is the ladder D-S5-11 already states for a renderer —
+config beats a plugin beats the library — and `Q5`'s newest-wins rule is what orders each rank
+inside itself. The registry has two doors, `addConsumerVariant` and `addPluginVariant`, so the rank
+is a fact about who registered, never a knob anybody sets.
+
+**This adds no ordering knob** (D-S5-31). Two plugins are still ordered by `requires` alone, and two
+siblings with no edge still collide into the diagnostic.
+
+**To reverse:** collapse the three ranks to one sequence, and a plugin installed late wins.
+
+---
+
+## J34 — a paint that names no content decorates the library's bar
+
+**Build 2, Unit D. Done in the code. This closes an API gap.**
+
+The build file says `BAR_SHAPE_CLASS` goes and `fg-bar-summary` comes from the `parent` variant's
+own `paint`. Opened at `render/dom/index.ts`, that was not possible as written: a `BarRenderer`
+result **owns** the bar's content, so `applyElementDescription` wipes the label child and the
+library stamps no `data-label`. Moving the class into `paint` unchanged would have deleted the label
+from every parent bar, and the outside-label placement rule with it.
+
+The same gap already bit the harness. `harness/plugins/buffer-kind.ts` returned
+`{ class: { 'demo-buffer-bar': true } }` to tint a bar, and silently lost that bar's label.
+
+**The call.** A paint result that names `text`, `html` or `children` owns the bar's content, exactly
+as before. One that names only `class`, `style` or `attrs` says nothing about content, so the
+library keeps painting its own label and stamping `data-label`. `render/dom/index.ts`'s
+`paintsItsOwnContent` is the one place that rule is written.
+
+Core's `parent` variant is the first caller: `paint: () => ({ class: { 'fg-bar-summary': true } })`,
+one frozen object, no allocation on the hover path. `BAR_SHAPE_CLASS` is deleted, and core holds no
+table keyed by a variant name.
+
+**To reverse:** make every paint result own the content, and give the `parent` variant a `paint`
+that rebuilds the label child itself.
+
+---
+
+## J35 — `resolveLook` and `claimedLookFor` collapse into one door, and `layout/items/` splits in three
+
+**Build 2, Units A, B and D. Done in the code.**
+
+The build file renames `resolveLook` to `resolveVariant` and renames `claimedLookFor` beside it.
+Both survive only because the structural fallback sat between them: `resolveLook` was
+`claimedLookFor(entry) ?? (entry.hasChildren ? 'parent' : 'leaf')`. Delete the fallback, as Unit B
+requires, and the two are one function with two names.
+
+**The call.** One door: `registry.variantFor(entry)`. Core's `leaf` carries no `when`, so it answers
+for every row and the floor is total.
+
+**The file split.** `EntryVariant.paint` is a `BarRenderer`, and `layout/renderer.ts` imports
+`layout/frame.ts`, which imports item production. Declaring the variant vocabulary inside
+`produce-items.ts` therefore closed an import ring that `no-circular` refuses. So `layout/items/`
+is three files, each with one subject:
+
+- `item.ts` — `Item`, `ItemProducer`, `wholeEntryItem`, and `VariantItems`, the two questions the
+  frame pass asks (`variantFor`, `itemsFor`). It imports `model/` alone.
+- `variants.ts` — the variant vocabulary, the registry, and core's own two variants.
+- `produce-items.ts` — `resolveItems` and `produceItemsForRow`, which name `VariantItems`.
+
+`LayoutInput.itemProducerRegistry` becomes `LayoutInput.variants`, typed `VariantItems`: the frame
+pass never asks how a variant looks or what you can do to it, so it never names the wider type.
+
+**To reverse:** merge the three files and keep two names for one resolution.
+
+---
+
+## J36 — a double claim is two rules from one source, never an override
+
+**Build 2, Unit B. Done in the code.**
+
+Under the old seams, core's `parent`/`leaf` were producers and not claims, so a plugin claiming a
+parent row silently overrode core and raised nothing. Under ADR 0018 core's two are ordinary
+variants with ordinary rules, so a literal "two rules answered yes" diagnostic would fire on every
+plugin variant that lands on a row with children — and on every consumer variant that overrides a
+plugin's. Both are the design working, not an authoring error.
+
+**The call.** `'variant-claimed-twice'` fires when **two rules from the same rank** both answer yes,
+and never for core's rank. That is exactly `Q5`'s stated case: two sibling plugins with no `requires`
+edge between them, whose order nothing decides. A consumer's rule over a plugin's, or anything over
+core's floor, is a deliberate override and stays silent.
+
+A variant with no `when` claims nothing at all, so the last-resort variant never collides either.
+
+**To reverse:** report every second yes, and accept a warning on every intended override.

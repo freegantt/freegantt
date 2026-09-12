@@ -12,16 +12,16 @@
 
 ## Unit A — one variant is one object
 
-- [ ] Declare `EntryVariant<TProps = Record<string, unknown>>`. Copy the member list from the ADR's *Decision*: `name`, `when?`, `items?`, `paint?`, `can?`.
-- [ ] **Declare `VariantRule` beside it, because `EntryVariant.when` publishes the name.** Copy both declarations from the ADR's *What `when` matches*:
+- [x] Declare `EntryVariant<TProps = Record<string, unknown>>`. Copy the member list from the ADR's *Decision*: `name`, `when?`, `items?`, `paint?`, `can?`.
+- [x] **Declare `VariantRule` beside it, because `EntryVariant.when` publishes the name.** Copy both declarations from the ADR's *What `when` matches*:
       `type VariantRule<TProps> = FieldMatch<TProps> | ((entry: Entry<TProps>) => boolean)`.
-- [ ] **A field match is equality, per Field, AND across keys.** Each key reads through `entry.read(key)` and compares with that Field's own `equals` (`model/field.ts`), falling back to `Object.is`. **It never means "has a value"** — `{ 'demo:phaseId': true }` claims the rows whose value **is** `true`. That question is a predicate: `(entry) => entry.read('demo:phaseId') !== undefined`.
-- [ ] **`TProps` reaches the rule.** `GanttOptions<TProps>` already carries the Dataset's type, so `variants: readonly EntryVariant<TProps>[]` makes the ADR's own sample — `entry.read('slack') > 0` — compile. The registry inside `view/` holds the erased shape and casts once at the façade, the way `api/dataset.ts` re-types the store today. **Do not make `layout/` generic** — that is what ADR 0005 refused, and `Q2` defers the renderer half to [#284](https://github.com/Pawel-IT/FreeGantt/issues/284).
-- [ ] Default `items` to one whole-entry Item. Both shipped examples hand-write that line today.
+- [x] **A field match is equality, per Field, AND across keys.** Each key reads through `entry.read(key)` and compares with that Field's own `equals` (`model/field.ts`), falling back to `Object.is`. **It never means "has a value"** — `{ 'demo:phaseId': true }` claims the rows whose value **is** `true`. That question is a predicate: `(entry) => entry.read('demo:phaseId') !== undefined`.
+- [x] **`TProps` reaches the rule.** `GanttOptions<TProps>` already carries the Dataset's type, so `variants: readonly EntryVariant<TProps>[]` makes the ADR's own sample — `entry.read('slack') > 0` — compile. The registry inside `view/` holds the erased shape and casts once at the façade, the way `api/dataset.ts` re-types the store today. **Do not make `layout/` generic** — that is what ADR 0005 refused, and `Q2` defers the renderer half to [#284](https://github.com/Pawel-IT/FreeGantt/issues/284).
+- [x] Default `items` to one whole-entry Item. Both shipped examples hand-write that line today.
 - [ ] Add `variants` to `GanttOptions`. An app author installs a variant with no plugin at all.
-- [ ] Add `ctx.variants.add(variant)` as the plugin door. One type, two doors, one shape. **Namespaced**, like `ctx.fields.register` and `ctx.edits.setExtender` — a bare `ctx.addVariant` would be the one verb hanging off the root.
-- [ ] Resolve per Gantt: **walk newest-first and stop at the first rule that answers yes** (`Q5`, ruled 2026-09-11). There is no second source and no stored value.
-- [ ] Register core's own two variants **first**, as ordinary `EntryVariant` objects with nothing special about them:
+- [x] Add `ctx.variants.add(variant)` as the plugin door. One type, two doors, one shape. **Namespaced**, like `ctx.fields.register` and `ctx.edits.setExtender` — a bare `ctx.addVariant` would be the one verb hanging off the root.
+- [x] Resolve per Gantt: **walk newest-first and stop at the first rule that answers yes** (`Q5`, ruled 2026-09-11). There is no second source and no stored value.
+- [x] Register core's own two variants **first**, as ordinary `EntryVariant` objects with nothing special about them:
       `{ name: 'parent', when: (entry) => entry.hasChildren, paint: summaryBar }` and `{ name: 'leaf' }` with no `when`. **First, because the newest wins** — register them last and core beats every plugin, which is the opposite of what they are for.
 
 **Do not** store a variant. This is refuted item 9 in [`row-redesign/README.md`](../README.md), and the author refused it on 2026-09-11. A stored variant is ADR 0013's stored `kind` under a new word.
@@ -32,29 +32,29 @@
 
 ## Unit B — retire the four registration seams
 
-- [ ] `registerLookClaim` retires (18 refs, 6 files).
-- [ ] `registerItemProducer` retires (27 refs, 7 files).
-- [ ] `registerLookDefaults` retires (27 refs, 8 files).
+- [x] `registerLookClaim` retires (18 refs, 6 files).
+- [x] `registerItemProducer` retires (27 refs, 7 files).
+- [x] `registerLookDefaults` retires (27 refs, 8 files).
 - [ ] `RendererByLook` retires (22 refs, 7 files). `barRenderer: RendererByLook` leaves `GanttOptions` (`src/api/gantt.ts:154`) — it was a fifth site for the same name.
-- [ ] `KindDefaults` retires (15 refs, 7 files). `Interactions` serves both levels.
+- [x] `KindDefaults` retires (15 refs, 7 files). `Interactions` serves both levels.
 - [ ] `LookClaim` becomes **`VariantPredicate`** (11 refs, 5 files). **Not `VariantRule`** — `LookClaim` is `(entry) => boolean`, which is one arm of the union Unit A declares. Give the union the published name and the arm its own, or one type ships with two meanings.
-- [ ] `resolveLook` becomes `resolveVariant` (10 refs, 5 files) and **loses its structural fallback** (`src/layout/items/produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
-- [ ] `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`src/view/capability.ts:113-115`). **Build 1 removed two of the other three — `hasChildren` and `descendantsOf`. `fieldFor` stays**, on purpose: it is `dataset.field(key)`, a Field-registry lookup, and a row holds no registry. Delete it and every write verdict answers `NOT_WRITABLE` (`capability.ts:202`).
-- [ ] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Setup order resolves it and the diagnostic reports it.
-- [ ] **Do not invent an ordering knob. `requires` already is one** (D-S5-31, ruled 2026-09-01). The host topologically sorts the installed set before any `setup` runs, so `[a, b]` and `[b, a]` install identically. Two plugins with no edge between them are siblings, and a sibling must not depend on load order — that collision is what the diagnostic names.
-- [ ] **The newest rule wins** (`Q5`, ruled 2026-09-11). `claimedLookFor` (`layout/items/produce-items.ts:188-198`) says *"the first yes is the whole answer"* today. **Flip it**, so it agrees with `registerClaim` and `register`, which both already say newest.
-- [ ] **Walk newest-first and stop at the first yes.** Do not walk oldest-first and keep the last yes. This read runs on every hover change, where the budget is zero allocation and the early exit is the point (`:182,197`). Reversing the walk keeps the early exit at the same cost. **A reporter still walks the whole list** — a diagnostic has to see both claimants.
-- [ ] **Register core's `parent` and `leaf` FIRST, not last.** Every earlier draft said *"registered last"*, which was correct under first-wins. Under this ruling it would make **core beat every plugin variant**. Core is the floor, so it registers before anything else. `leaf` carries no `when`, so it answers for every row and the floor stays total.
+- [x] `resolveLook` becomes `resolveVariant` (10 refs, 5 files) and **loses its structural fallback** (`src/layout/items/produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
+- [x] `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`src/view/capability.ts:113-115`). **Build 1 removed two of the other three — `hasChildren` and `descendantsOf`. `fieldFor` stays**, on purpose: it is `dataset.field(key)`, a Field-registry lookup, and a row holds no registry. Delete it and every write verdict answers `NOT_WRITABLE` (`capability.ts:202`).
+- [x] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Setup order resolves it and the diagnostic reports it.
+- [x] **Do not invent an ordering knob. `requires` already is one** (D-S5-31, ruled 2026-09-01). The host topologically sorts the installed set before any `setup` runs, so `[a, b]` and `[b, a]` install identically. Two plugins with no edge between them are siblings, and a sibling must not depend on load order — that collision is what the diagnostic names.
+- [x] **The newest rule wins** (`Q5`, ruled 2026-09-11). `claimedLookFor` (`layout/items/produce-items.ts:188-198`) says *"the first yes is the whole answer"* today. **Flip it**, so it agrees with `registerClaim` and `register`, which both already say newest.
+- [x] **Walk newest-first and stop at the first yes.** Do not walk oldest-first and keep the last yes. This read runs on every hover change, where the budget is zero allocation and the early exit is the point (`:182,197`). Reversing the walk keeps the early exit at the same cost. **A reporter still walks the whole list** — a diagnostic has to see both claimants.
+- [x] **Register core's `parent` and `leaf` FIRST, not last.** Every earlier draft said *"registered last"*, which was correct under first-wins. Under this ruling it would make **core beat every plugin variant**. Core is the floor, so it registers before anything else. `leaf` carries no `when`, so it answers for every row and the floor stays total.
 - [ ] Test: a plugin variant overrides core's `parent` on a row with children. Test: a consumer `variants` entry overrides a plugin's variant on the same row.
 
 ---
 
 ## Unit C — `can` takes predicates
 
-- [ ] `KindDefaults` is boolean-only today for one stated reason: *"a registering plugin never sees an `entry`"* (`src/view/capability.ts:83-90`). Build 1 hands it one. Delete the mapped boolean type and let `Interactions` serve both levels.
-- [ ] **`CapabilityRule` gains `undefined` — no opinion.** `boolean | ((entry) => boolean | undefined)`, at both levels (`src/view/capability.ts:20`). Without it a variant's `can: { resize: (entry) => !entry.hasChildren }` says **yes** to every childless row, over the library rule below it. `WriteRule` already answers this way for the same bug (#256, `:37`), and `isOffered` (`:249-256`) already falls through on `undefined` — it is the predicate's return type that has to widen.
-- [ ] Keep the resolution order unchanged: consumer `interactions`, then the variant's `can`, then the library rule. `undefined` at any level falls to the next.
-- [ ] Keep `Field.editable` and `interactions` as **two questions**. Merging them deletes the read-only view. This ADR reuses the type, not the seam. This is refuted item 6 in [`field-redesign/shared/refuted.md`](../../field-redesign/shared/refuted.md) — *not* item 6 in `row-redesign/README.md`, which refuses one object for the `Dataset` and the `Gantt`.
+- [x] `KindDefaults` is boolean-only today for one stated reason: *"a registering plugin never sees an `entry`"* (`src/view/capability.ts:83-90`). Build 1 hands it one. Delete the mapped boolean type and let `Interactions` serve both levels.
+- [x] **`CapabilityRule` gains `undefined` — no opinion.** `boolean | ((entry) => boolean | undefined)`, at both levels (`src/view/capability.ts:20`). Without it a variant's `can: { resize: (entry) => !entry.hasChildren }` says **yes** to every childless row, over the library rule below it. `WriteRule` already answers this way for the same bug (#256, `:37`), and `isOffered` (`:249-256`) already falls through on `undefined` — it is the predicate's return type that has to widen.
+- [x] Keep the resolution order unchanged: consumer `interactions`, then the variant's `can`, then the library rule. `undefined` at any level falls to the next.
+- [x] Keep `Field.editable` and `interactions` as **two questions**. Merging them deletes the read-only view. This ADR reuses the type, not the seam. This is refuted item 6 in [`field-redesign/shared/refuted.md`](../../field-redesign/shared/refuted.md) — *not* item 6 in `row-redesign/README.md`, which refuses one object for the `Dataset` and the `Gantt`.
 
 ---
 
@@ -62,12 +62,12 @@
 
 - [ ] Delete `EntryLook` (`src/model/entry.ts:11`) — **47 references in 12 files**. Nothing replaces it. A variant name is a `string`. The alias already ended in `(string & {})`, so this widens no type.
 - [ ] `Item.look` and `BarGeom.look` become `.variant`, typed `string` (`src/layout/items/produce-items.ts:35,76`, `src/layout/frame.ts:93`).
-- [ ] Delete `BAR_SHAPE_CLASS` (`src/render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
-- [ ] **`fg-bar-summary` keeps its name.** It is a CSS class. It moves to the `parent` variant's `paint`. `src/view/styles.ts` names it too.
+- [x] Delete `BAR_SHAPE_CLASS` (`src/render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
+- [x] **`fg-bar-summary` keeps its name.** It is a CSS class. It moves to the `parent` variant's `paint`. `src/view/styles.ts` names it too.
 - [ ] `data-kind` becomes `data-variant`. **The write site does not contain the string `data-kind`** — `src/render/dom/index.ts:1186` writes `node.dataset['kind']`. A grep for `data-kind` misses it. Change both.
 - [ ] The literal `data-kind` sits in five `src/` files: `render/dom/index.ts`, `render/dom/index.test.ts`, `layout/items/produce-items.ts`, `model/entry.ts`, `api/gantt.test.ts`.
 - [ ] `'look-claimed-twice'` becomes `'variant-claimed-twice'` (`src/view/gantt-shell.ts:1475`), in 3 files.
-- [ ] `claimedLookFor` renames (`src/layout/items/produce-items.ts`, 4 refs).
+- [x] `claimedLookFor` renames (`src/layout/items/produce-items.ts`, 4 refs).
 
 **Plan the `fg-bar-summary` move and the `data-variant` rename together.** Seven e2e specs couple to this area — `data`, `parent-bar-drag`, `planner`, `plugins`, `row-hover`, `selection`, `theme` — plus `src/api/gantt.test.ts`. Most couple through `fg-bar-summary`, not the attribute. Move both in one step so those specs stay green.
 

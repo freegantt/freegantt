@@ -13,17 +13,20 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
-export { createItemProducerRegistry, wholeEntryItem, resolveLook } from './items/produce-items.js';
+export { wholeEntryItem } from './items/item.js';
+export type { Item, ItemProducer, VariantItems } from './items/item.js';
+export { createVariantRegistry } from './items/variants.js';
 export type {
-  DoubleLookClaim,
-  EntryLook,
-  Item,
-  ItemProducer,
-  ItemProducerRegistry,
-  LookClaim,
-  LookClaimant,
+  DoubleVariantClaim,
+  EntryVariant,
+  FieldMatch,
   ReportDoubleClaim,
-} from './items/produce-items.js';
+  VariantClaimant,
+  VariantPredicate,
+  VariantRegistry,
+  VariantRegistryPorts,
+  VariantRule,
+} from './items/variants.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';

@@ -13,47 +13,12 @@
 import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
-import type { EntryLook } from '../layout/index.js';
+import type { CapabilityRule, GestureCapability, Interactions, WriteRule } from '../model/index.js';
 
-/** A boolean pins every entry the same way; a predicate lets a consumer vary the answer per entry
- *  (U4: `interactions: { resize: e => e.props.locked !== true }`). */
-export type CapabilityRule = boolean | ((entry: Entry) => boolean);
-
-/** #256: the write rule takes the cell, because a write names one. Call:
- *  `interactions: { edit: (entry, field) => (entry.id === 'fixed' && field === 'end' ? false : undefined) }`.
- *
- *  `undefined` means "no opinion about this cell". The rules below then answer it, and a roll-up
- *  parent's derived cell stays refused. A predicate names one cell out of every (Entry × Field)
- *  pair on the page. So no opinion is the answer it gives most of the time.
- *
- *  A bare `boolean` over that whole space made a consumer restate every library rule to lock one
- *  cell. The harness's own first call site opened every derived cell by accident.
- *
- *  `undefined` reads the same way an `Aggregator`'s does (`model/field.ts`). A `before*` handler's
- *  reads that way too. A boolean pins every cell, with no fall-through.
- *
- *  `move`/`resize`/`select` keep a plain `CapabilityRule` on purpose. Each names one gesture over
- *  one Entry. A predicate that answers every Entry is a fair thing to ask for. */
-export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
-
-/** The gestures that arm and paint. A write is not one of them. It is the thing a gesture, a cell
- *  editor, or a keyboard nudge sets out to do, and `canWrite` decides it. */
-export type GestureCapability = 'move' | 'resize' | 'select';
-
-/** Live (S3/S5, D-S3-9). `linkCreate` stays off this type until S7 (I11: no unimplemented public
- *  key). */
-export interface Interactions {
-  move?: CapabilityRule;
-  resize?: CapabilityRule;
-  select?: CapabilityRule;
-  /** #256, S5.8, D-S5-19: the consumer's own answer to "may this cell's value change". It is the
-   *  one override above `Field.editable`, and the only per-entry axis that key has.
-   *
-   *  It gates the inline cell editor, the bar's resize handles and the bar move alike. All three
-   *  write a cell (I14). `Field.editable` states which Fields are writable at all. This states which
-   *  of them are writable *here*. Answer `undefined` for a cell this rule says nothing about. */
-  edit?: WriteRule;
-}
+// ADR 0018: the four vocabulary types moved down to `model/`, so `EntryVariant.can` (a `layout/`
+// type) can name the same `Interactions` a consumer writes. This file still owns the resolution,
+// and it republishes the names a plugin author reads off this seam.
+export type { CapabilityRule, GestureCapability, Interactions, WriteRule };
 
 /** Why a write is refused, when the refusal is worth words. A refusal that carries no reason is
  *  already visible: no handle paints, and no editor opens. The cell editor stays silent for it
@@ -80,15 +45,6 @@ export interface Capabilities {
   entriesMovedBy(entry: Entry): readonly Entry[];
 }
 
-/** S5.9, D-S5-22: `ctx.interaction.registerLookDefaults(look, defaults)` is a plugin's per-look
- *  answer. It sits one level below a consumer's own `interactions`, and one level above the library
- *  rules. It carries the same keys as `Interactions`, but a plain boolean only.
- *
- *  A registering plugin never sees an `entry`, and for `edit` it never sees a `field` either. So it
- *  has nothing to write a predicate against. This type is mapped from `Interactions` (#148), so a
- *  future gesture key (S7's `linkCreate`) cannot land on one interface and miss the other. */
-export type KindDefaults = { [K in keyof Interactions]?: boolean };
-
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
  *  Field lookup joined a list that already read badly at the call site. */
 export interface CapabilityInputs {
@@ -96,15 +52,14 @@ export interface CapabilityInputs {
   /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
    *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
-  /** ADR 0013: the look `layout/`'s item production would resolve for this Entry — structure first,
-   *  then whichever plugin-owned look claims it (`layout/items/produce-items.ts`'s `resolveLook`).
-   *  `registeredDefaultsFor` keys on this, not on structure alone, so a plugin's own
-   *  `registerLookDefaults(itsOwnLook, …)` reaches the Entries it claims. The look is named with a
-   *  placeholder, never a real plugin's id. [S5-A3] greps this tree for a consumer look's own name
-   *  and expects zero hits. Core prose that borrows one starts the coupling that gate catches. */
-  lookOf: (entry: Entry) => EntryLook;
-  /** S5.9, D-S5-22. */
-  registeredDefaultsFor?: ((look: EntryLook) => KindDefaults | undefined) | undefined;
+  /** ADR 0018: what this row's own variant allows — the variant's `can`, for the variant this Gantt
+   *  resolved for this Entry. It is one question, so it is one member: the shell resolves the
+   *  variant and reads its `can` in one step, and this file never learns a variant's name. That is
+   *  what keeps `plans/01` §2.5 — no `if (variant === …)` in core — true here by construction.
+   *
+   *  It sits one level below the consumer's own `interactions`, and one level above the library
+   *  rules. */
+  variantInteractionsFor?: ((entry: Entry) => Interactions | undefined) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -175,29 +130,40 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
   throw new Error(`no write rule for gesture ${String(capability)}`);
 }
 
-/** Precedence, stated once, here. The consumer's own `interactions` wins over a plugin's registered
- *  per-kind default. That wins over the library rules above. One ladder serves a gesture and a
+/** One rule's answer, or `undefined` for "no opinion". A boolean pins every entry; a predicate may
+ *  answer `undefined` and fall through to the next level (`J13`). One function, so the gesture
+ *  ladder and the write ladder below ask a rule the same way. */
+function askCapabilityRule(rule: CapabilityRule | undefined, entry: Entry): boolean | undefined {
+  return typeof rule === 'function' ? rule(entry) : rule;
+}
+
+/** The same question for a cell: one Entry and one Field (#256). */
+function askWriteRule(rule: WriteRule | undefined, entry: Entry, field: FieldKey): boolean | undefined {
+  return typeof rule === 'function' ? rule(entry, field) : rule;
+}
+
+/** Precedence, stated once, here. The consumer's own `interactions` wins over the variant's own
+ *  `can`. That wins over the library rules above. One ladder serves a gesture and a
  *  write alike.
  *
  *  A gesture is the conjunction of two questions, and neither substitutes for the other.
- *  `interactions` and a plugin default answer *whether the gesture is offered*. `canWrite` answers
+ *  `interactions` and a variant's `can` answer *whether the gesture is offered*. `canWrite` answers
  *  *whether the values it sets may change*.
  *
- *  So `interactions: { resize: true }` opens the handle on a kind the library would have closed. It
+ *  So `interactions: { resize: true }` opens the handle on a variant the library would have closed. It
  *  still cannot write a Field the consumer declared `editable: false`. To open that, open the Field,
  *  or answer `interactions.edit` for the cell. One home for "may this value change" is the whole
  *  point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
-  const { interactions, fieldFor, lookOf, registeredDefaultsFor } = inputs;
+  const { interactions, fieldFor, variantInteractionsFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
-    const rule = interactions?.edit;
-    const answer = typeof rule === 'function' ? rule(entry, field) : rule;
-    if (answer !== undefined) return answer ? WRITABLE : NOT_WRITABLE;
-    const registered = registeredDefaultsFor?.(lookOf(entry))?.edit;
-    if (registered !== undefined) return registered ? WRITABLE : NOT_WRITABLE;
+    const consumerAnswer = askWriteRule(interactions?.edit, entry, field);
+    if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
+    const variantAnswer = askWriteRule(variantInteractionsFor?.(entry)?.edit, entry, field);
+    if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
     return libraryWriteRule(entry.hasChildren, declared);
   };
 
@@ -239,10 +205,10 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
     entry.hasChildren ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
 
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
-    const rule = interactions?.[capability];
-    if (rule !== undefined) return typeof rule === 'function' ? rule(entry) : rule;
-    const registered = registeredDefaultsFor?.(lookOf(entry))?.[capability];
-    if (registered !== undefined) return registered;
+    const consumerAnswer = askCapabilityRule(interactions?.[capability], entry);
+    if (consumerAnswer !== undefined) return consumerAnswer;
+    const variantAnswer = askCapabilityRule(variantInteractionsFor?.(entry)?.[capability], entry);
+    if (variantAnswer !== undefined) return variantAnswer;
     return gestureIsOffered();
   };
 

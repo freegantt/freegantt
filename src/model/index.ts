@@ -39,6 +39,8 @@ export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
 export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
 export type { WriteVerdict, WriteRefusalReason } from './write-verdict.js';
+// ADR 0018: one vocabulary for the consumer's own `interactions` and a variant's `can`.
+export type { CapabilityRule, WriteRule, GestureCapability, Interactions } from './interactions.js';
 export type {
   StoreName,
   PluginStoreName,

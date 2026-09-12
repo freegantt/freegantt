@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, itemId } from '../../model/index.js';
 import type { Instant } from '../../model/index.js';
-import type { Item } from '../items/produce-items.js';
+import type { Item } from '../items/item.js';
 import { packRow } from './pack-lanes.js';
 
 function asInstant(ms: number): Instant {
