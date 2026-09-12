@@ -1,8 +1,7 @@
 ---
 name: pk-rename-symbol
-description: Rename a TypeScript symbol through the language service instead of grep — follows re-exports and aliases, skips prose and compound names.
+description: Rename a TypeScript symbol across files — a type, interface, class, function or variable. Use for any multi-file rename, and whenever you would otherwise reach for grep, sed or a word-boundary replace.
 argument-hint: '<file-that-declares-it> <OldName> <NewName>'
-disable-model-invocation: true
 ---
 
 # Rename a TypeScript symbol
