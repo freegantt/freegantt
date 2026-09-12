@@ -466,3 +466,35 @@ reaches one. `allStored` is the same for the committed array. `#hasChildren` sta
 build file requires; the live row reaches it through the `EntrySource` seam.
 
 **To reverse:** publish `childrenOf` again and drop the `Entry` factory.
+
+---
+
+## J18 — `formatValue` takes the live `Entry` beside `parseValue`
+
+**Build 1, Units C and D. Done in the code.**
+
+`J5` gave `parseValue` a third argument — the live `Entry` it parses into. `formatValue` already had
+one, and it was a `StoredEntry`. Its one caller is `view/grid-columns.ts:135`, which after Unit C
+holds an `Entry`, so the two halves of one Field would have read two different row types.
+
+**The call.** `formatValue?(value, ctx: FormatContext, entry: Entry)`. Both halves of a Field see the
+same row, and `core-fields.ts`'s `formatStart`/`formatEnd` read `entry.start` off it unchanged.
+Nothing in `data/` calls `formatValue` — `data/` never formats — so no hypothetical row reaches it.
+
+**To reverse:** type it `StoredEntry` and have `grid-columns.ts` reach for a stored row.
+
+---
+
+## J19 — a positional `hasChildren` argument is gone from `layout/`, and `entry.hasChildren` answers
+
+**Build 1, Unit C. Done in the code.**
+
+`resolveItems`, `resolveLook` and `produceItemsForRow` each carried a `hasChildren` answer beside the
+row it was about. `frame-memory.ts` kept a whole `#parentIds` `Set`, rebuilt on every `sync()`, for
+the single purpose of feeding the last of them.
+
+**The call.** `resolveLook(entry, registry)` reads `entry.hasChildren`. The `Set`, its rebuild and
+the callback all go. `CapabilityInputs` loses `hasChildren` and `descendantsOf` the same way, and
+`gantt-shell.ts` stops building three `childrenOf` closures.
+
+**To reverse:** put the boolean back as a positional argument.
