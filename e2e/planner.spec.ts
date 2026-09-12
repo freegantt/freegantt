@@ -60,7 +60,7 @@ test('the cells the design draws as pictures are real rendered nodes', async ({ 
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // A phase is a group bracket: the library's own shape, reached by structure alone (ADR 0013 —
-  // core's own `parent` variant claims a row with children and paints this class (ADR 0018).
+  // core's own `summary` variant claims a row with children and paints this class (ADR 0018).
   await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
   // A checkpoint is a diamond, and `diamond()` is core's own shipped glyph (ADR 0022): this page
   // states only which rows wear one, and `diamond()`'s own `css` paints the glyph on `::before`.

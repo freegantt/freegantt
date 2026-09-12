@@ -37,11 +37,11 @@ One authored, dated record: a name, and optional dates. Entries are persisted; t
 _Avoid_: **Task** (retired in ADR 0003 — it implies to-do work, and the whole point is that the record is domain-neutral), activity, event, bar (a bar is what an Item renders), record, row (a Row is a display track), **phase**, **grouped entry** (`{ source: 'group', groupBy }` is a row source, not a parent)
 
 **Spans**:
-An Entry **spans** if and only if both `start` and `end` are present (ADR 0012). `spansTime(entry)` in `model/entry.ts` is the one place that rule is written, and every layer asks it there. A spanning Entry holds a Segment and draws a bar. A row with one date, or with neither, does not span, shows in the grid, and draws no bar. Core does not paint a diamond.
-_Avoid_: calling one date a span; a diamond in core
+An Entry **spans** if and only if both `start` and `end` are present (ADR 0012). `spansTime(entry)` in `model/entry.ts` is the one place that rule is written, and every layer asks it there. A spanning Entry holds a Segment and draws a bar. A row with one date, or with neither, does not span, shows in the grid, and draws no bar. Core ships a `diamond()` look for a zero-duration span; no row wears it until a rule claims it (ADR 0022).
+_Avoid_: calling one date a span
 
 **Kind** (retired, ADR 0013 decision 26):
-Was the authored classification on Entry (`'span' | 'group' | 'milestone'`). An Entry has children or it does not. That structure decides derivation and the default bar look. Core does not store a classification, does not ship a diamond, and does not publish a calculated `kind` Field — that would restate `entry.hasChildren`. A plugin or a consumer that needs a shape that is not parent-or-bar declares a Variant, whose `when` rule claims the rows (ADR 0018) — nothing stores which ids it owns. `Row.kind` (`'entry' | 'header'`) and `TargetKind` are unrelated: they name what a row or a DOM target is, not a classification of an Entry.
+Was the authored classification on Entry (`'span' | 'group' | 'milestone'`). An Entry has children or it does not. That structure decides derivation and the default bar look. Core does not store a classification, and it does not publish a calculated `kind` Field — that would restate `entry.hasChildren`. Core ships a `diamond()` look (ADR 0022), but a `when` rule must still claim a row before it wears one. A plugin or a consumer that needs a shape that is not parent-or-bar declares a Variant, whose `when` rule claims the rows (ADR 0018) — nothing stores which ids it owns. `Row.kind` (`'entry' | 'header'`) and `TargetKind` are unrelated: they name what a row or a DOM target is, not a classification of an Entry.
 _Avoid_: putting `kind` back on Entry; `'milestone'` in core; `rollUpKinds`; `hierarchy.autoGroup`; a calculated `kind` Field; a stored Variant
 
 **Hierarchy**:
