@@ -1,7 +1,7 @@
 // model/ — zero-dependency primitive for commands and keybindings (S5.2, D-S5-6, D-S5-7). `Command`,
 // `CommandContext` and `KeyBinding` all name `Dataset`/`Gantt` (`api/` classes) or a context generic
 // bound to them, so — the same reasoning `model/plugin.ts`'s file header gives for
-// `GanttPlugin`/`PluginContext` (S5.1, issue #137 F1) — they live in `api/command.ts`, not here.
+// the plugin shapes and `PluginContext` (S5.1, issue #137 F1) — they live in `api/command.ts`, not here.
 // `KeyChord` and `TargetKind` have zero dependencies and each one is shared by two readers, so this
 // file declares those two primitives and nothing else.
 

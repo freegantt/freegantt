@@ -3,7 +3,7 @@
 // `./dataset.js` for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the
 // generic shape, and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a
 // runtime one. `api/dataset.ts` binds the type argument once — `export type DatasetPluginContext =
-// DatasetPluginContextOf<Dataset>`. `api/plugin.ts` and `api/command.ts` use the same pairing.
+// DatasetPluginContextOf<Dataset>`. `api/plugin-context.ts` and `api/command.ts` use that pairing.
 //
 // The two halves see different worlds on purpose. A `view` half sees panes, the overlay and gestures;
 // a `data` half sees only what the Dataset holds, so it stays DOM-free and runs wherever a Dataset

@@ -214,7 +214,7 @@ export interface GanttShellWiring {
    *  reason `commitEntryEdits` exists. The `Gantt` façade does not exist yet when this constructor
    *  runs. It returns `unknown` because `api/gantt.ts` binds the concrete
    *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
-   *  closing an import cycle (`api/plugin.ts`'s file header). */
+   *  closing an import cycle (`api/plugin-context.ts`'s file header). */
   buildPluginContext?: (parts: PluginContextParts) => unknown;
   /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
    *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and

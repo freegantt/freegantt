@@ -663,8 +663,9 @@ export class DuplicateRowIdError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-plugin-id'` — two entries of a `plugins` list (a `GanttPlugin[]`, or a
- *  `DatasetPlugin[]` in S5.10) share one `PluginId` (D-S5-3). */
+/** `code: 'duplicate-plugin-id'` — two entries of one `plugins` list share one `PluginId` (D-S5-3).
+ *  A `Gantt`'s own list and the Dataset's are checked together, because one `requires` graph covers
+ *  both (ADR 0019). */
 export class DuplicatePluginIdError extends FreeGanttError {
   readonly pluginId: PluginId;
 
@@ -696,7 +697,7 @@ export class PluginNotInstalledError extends FreeGanttError {
   }
 }
 
-/** `code: 'missing-plugin'` — a `DatasetPlugin` names a `requires` id that the same `plugins` list
+/** `code: 'missing-plugin'` — a plugin names a `requires` id that the same `plugins` list
  *  does not install (D-S5-31). Thrown at construction, naming both ids. `requires` is a check, never
  *  a supplier: a missing prerequisite is this error, not a quiet default. */
 export class MissingPluginError extends FreeGanttError {

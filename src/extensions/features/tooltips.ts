@@ -2,12 +2,12 @@
 // by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood gate this
 // step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
 // `api/index.ts` barrel. That barrel re-exports `tooltips` itself (D-S5-13). `extensions/popup.ts`
-// imports `api/plugin.ts` directly instead of that barrel, for the same reason (no-circular).
+// imports `api/plugin-context.ts` directly instead of that barrel, for the same reason (no-circular).
 
 import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
-import type { DomTarget } from '../../api/plugin.js';
+import type { DomTarget } from '../../api/plugin-context.js';
 import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
 import { spansTime } from '../../model/index.js';
 import { formatDate, formatEndInclusive } from '../../api/time-facade.js';

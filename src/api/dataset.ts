@@ -38,7 +38,7 @@ import type { ZonedTime } from '../time/index.js';
 const datasetState = new WeakMap<object, DatasetState>();
 
 // The Dataset-bound alias behind `api/dataset-plugin.ts`'s generic shape (the `*Of` pairing
-// `api/plugin.ts` and `api/command.ts` already use). A plugin author writing against the concrete
+// `api/plugin-context.ts` and `api/command.ts` already use). A plugin author writing against the concrete
 // `Dataset` names this one; code parameterizing over its own Dataset type names the `*Of` form.
 // `TProps` defaults here for the same reason `Dataset`'s own does: a plugin that does not care about
 // the consumer's `props` shape writes `DatasetPluginContext` and nothing more.
