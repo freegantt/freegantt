@@ -526,3 +526,69 @@ tree out of `parentId`. `storedValues` is a second, narrower door, named for the
 answers, and `layout/` never calls it.
 
 **To reverse:** delete the member and rebuild the map in `view/` from `toInput()`.
+
+---
+
+## J21 — `layout/` states a live row in its own test helper, and no test spreads one
+
+**Build 1, Unit B. Done in the code.**
+
+`layout/` may not import `data/`, and `model/` holds no runtime, so a layout test could not build an
+`Entry`. `src/layout/entry-double.ts` answers it: stored values plus a child list, closed over and
+handed back as an `Entry`. It imports `model/` and `time/` only, so it proves the seam by
+construction — `layout/` never needed `data/`.
+
+**The call.** `entryDouble({ id: 't1', start: 0, end: 10 })` for one row, `entryDoubles([…])` for a
+wired set where `parent()`, `children()`, `hasChildren`, `depth` and `descendants()` all answer.
+
+**It also retires a spread that would have shipped a silent bug.** Eleven test sites wrote
+`{ ...sampleEntries[0]!, end: … }`. A spread copies own enumerable properties only, so it drops every
+getter and every method and still typechecks — finding P2, now real in the suite. `entryValuesOf` and
+`entryDoubleLike` are what a test reaches for instead.
+
+**To reverse:** delete the file and hand `layout/` tests plain object literals again, which needs
+`Entry` to become a data-only type.
+
+---
+
+## J22 — `fixtures/sample-dataset.ts` publishes the stored rows beside the live ones
+
+**Build 1, Unit B. Done in the code.**
+
+`sampleEntries` is `entries.all`, which hands back live rows (`J10`). One layout test describes a
+*change* — `ChangeSet.added[].entity` — and that position carries a `StoredEntry` by contract
+(D-S5-45).
+
+**The call.** `sampleStoredEntries`, read once off `entries.storedValues` (`J20`). A test that asks a
+question about a row now takes `sampleEntries`; a test that describes a change takes
+`sampleStoredEntries`.
+
+**To reverse:** delete the export and rebuild the row in the one test that needs it.
+
+---
+
+## J23 — `DatasetOptions.measureDuration` is the public door onto the duration policy
+
+**Build 1, Unit B. Done in the code.**
+
+`Q6`/`J12` ruled the option and its name. `DatasetStateOptions` carried it already; the public
+`DatasetOptions` did not, so no consumer could set it. `api/dataset.ts` spreads its options into
+`DatasetState`, so the key is the whole change.
+
+**To reverse:** delete the key from `DatasetOptions`; the internal default stays `'span'`.
+
+---
+
+## J24 — a "before" reading in a test is a value held, never a row held
+
+**Build 1, tests. Done in the code.**
+
+Two `data/` tests failed after the live row landed, and both were right to. Each held
+`state.entries.get('p1')!` as a "before" snapshot, then asserted the row had changed. One `Entry` per
+id and every read live (ADR 0017 rule 2) makes that assertion compare a value with itself.
+
+**The call.** The tests capture `start`/`end` values before the edit, not the row. This is the live
+row working, so the tests state the new rule rather than reach for a stored copy.
+
+**To reverse:** nothing to reverse — a stored copy is what `entries.storedValues` is for, and neither
+test needs one.

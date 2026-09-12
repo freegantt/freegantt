@@ -73,45 +73,44 @@ The goal is one mechanical pass with no new type in the tree. After this unit, `
 
 ## Handoff — read this first
 
-**Where Build 1 stands at `b1c30be` on `row-redesign`.** Units A–E are **done in `src/` and in
-`harness/`, `fixtures/` and `e2e/`**. What remains is the **test suite**, then the tests this build
-owes, the gate greps, the locked-spec edits and the ADR flip.
+**Where Build 1 stands at `bf718ec` on `row-redesign`.** Units A–E are **done in `src/`, `harness/`,
+`fixtures/` and `e2e/`**. `layout/` and `data/` are **green in typecheck, lint and `test:node`**.
+What remains is the rest of the suite, the tests this build owes, the gate greps, the locked-spec
+edits and the ADR flip.
 
 ### The gate, right now
 
 | Check | State |
 |---|---|
-| `pnpm typecheck` | **RED — 204 errors, every one in a `*.test.ts` file.** No library file, harness file, fixture or e2e spec is red. |
-| `pnpm test:node` / `test:dom` | **not run.** They cannot pass while `typecheck` is red. |
+| `pnpm typecheck` | **RED — 85 errors, every one in a `*.test.ts` file** under `view/`, `api/`, `interaction/` and `model/`. |
+| `pnpm lint` | 8 errors, all in the same files, and all unused imports left by the same pass. |
+| `pnpm test:node` | `src/layout` and `src/data` pass (611 tests). The rest waits on typecheck. |
 | `pnpm verify:full` | **not run.** |
-| `pnpm boundaries` | not re-run since the `model/` file split. Run it early — `no-circular` is the rule that bit once already (see trap 1). |
 
-Every commit since `75914a0` used `--no-verify`, deliberately, so the work survives. **The branch has
-never been green since Unit A.**
+Every commit since `75914a0` used `--no-verify`, deliberately, so the work survives.
 
-### The box I stopped on
+### The file group I am inside
 
-Unit C, D and E are ticked. The open boxes are **Tests this build adds**, **Gate** and **Locked-spec
-edits**, plus the two `Q2` boxes under *What this build does not do* (those two are correct as they
-stand — `harness/planner.ts:104,114,116` were left alone on purpose).
+`view/`. The 85 errors, biggest first: `view/capability.test.ts` (29),
+`view/gantt-shell.test.ts` (17), `view/gesture-pipeline.test.ts` (11), `api/dataset.test.ts` (7),
+`view/tree-collapse.test.ts` (4), `api/gantt.test.ts` (4), then eleven files with one or two each.
+
+They fall into the shapes already answered under `layout/` and `data/`:
+
+- a test fabricates a plain object where an `Entry` is now wanted → `view/` may import `data/`, so
+  build the row through a real `DatasetState`, or reach for `layout/`'s `entryDouble` where the row
+  never meets the store.
+- a test spreads a live row (`{ ...sampleEntries[0]!, end }`) → `entryValuesOf` /
+  `entryDoubleLike` in `src/layout/entry-double.ts`. **A spread drops every getter and every
+  method and still typechecks** (finding P2, and it was real in `frame.test.ts`).
+- `CapabilityInputs` no longer takes `hasChildren` or `descendantsOf` → they collapse into the
+  `entry` argument.
+- `entry.props` → `entry.read(key)`, or `entry.toInput().props` where a test asserts the whole bag.
+- `state.fieldContext` → `state.fieldAccess`, and `ctx.read(entry, key)` → `entry.read(key)`.
 
 ### What is left, in order
 
-1. **Fix the 204 test-file type errors.** Biggest files first: `view/capability.test.ts` (29),
-   `view/gantt-shell.test.ts` (17), `layout/items/produce-items.test.ts` (15),
-   `view/gesture-pipeline.test.ts` (11), `layout/rows/filter.test.ts` (11),
-   `data/fields/field-access.test.ts` (11), `data/fields/aggregators.test.ts` (11),
-   `data/fields/field-types.test.ts` (10), `layout/rows/resolve-rows.test.ts` (9).
-   They fall into four shapes, and each has one answer:
-   - a test fabricates a plain object where an `Entry` is now wanted → give it the **test double**
-     the box under Unit B describes. `layout/` may not import `data/`, so the double belongs in
-     `layout/`'s own test helper: stored values plus a child list, closed over and returned as an
-     `Entry`. **This double is not written yet** — it is the single largest remaining piece.
-   - an Aggregator test calls `aggregator(children, parent, ctx)` → the signature is
-     `(parent, ctx)`, and the children come off `ctx.children()`.
-   - a `FieldContext` literal carries `read`/`durationOf` → it is `{ timeZone }` now; the pass
-     answers through `ComputeContext`.
-   - a `RowFilter` test passes a second `fields` argument → it takes the row alone.
+1. **Fix the 85 test-file type errors**, then the 8 lint errors beside them.
 2. **Write the tests under *Tests this build adds*.** None of them exists yet.
 3. **Run the Gate greps**, then `pnpm verify:full` with the redirect.
 4. **Make the locked-spec edits.** None is done.
@@ -119,31 +118,29 @@ stand — `harness/planner.ts:104,114,116` were left alone on purpose).
 
 ### Traps this file did not warn about
 
-1. **`model/entry.ts` was split into three files.** The live `Entry` names `FieldKey`, and `field.ts`
-   names `StoredEntry`, so declaring both in one file makes an import ring and
-   `.dependency-cruiser.cjs`'s `no-circular` reads type-only imports. The layout now is
-   `stored-entry.ts` → `field-key.ts` → `entry.ts` → `field.ts`. See `J15`.
+1. **`model/entry.ts` was split into three files.** The layout now is `stored-entry.ts` →
+   `field-key.ts` → `entry.ts` → `field.ts`. See `J15`.
 2. **`FieldContext` could not carry the registry or the tree.** `data/` reads Fields through its own
-   `FieldAccess` instead, and `createFieldContext` is gone. See `J16`. Every `data/` signature that
-   said `ctx: FieldContext` now says `access: FieldAccess`.
-3. **`entries.storedValues` is new, and it closes a real API gap.** The drag preview builds
-   `EditRequest.entries` and must not read live rows. See `J20`. It also deleted
-   `gantt-shell.ts`'s hand-rolled `#entriesById` memo.
-4. **`EntryInput`'s optional keys now admit an explicit `undefined`.** Without it, a live `Entry` is
-   not assignable to `EntryInput` under `exactOptionalPropertyTypes`, and the type's own doc has
-   always claimed it is. This is what makes `entries.add({ ...entry.toInput() })` compile.
-5. **`formatValue` takes the live `Entry` now**, beside `parseValue`. See `J18`. Its one caller
-   holds a live row after Unit C, and a Field whose two halves saw two row types would be a trap.
+   `FieldAccess`, and `createFieldContext` is gone — `createFieldAccess({ fields, timeZone })`
+   replaces it. See `J16`.
+3. **`entries.storedValues` is new, and it closes a real API gap.** See `J20`. `sampleStoredEntries`
+   in `fixtures/sample-dataset.ts` is the fixture-side door onto it (`J22`).
+4. **`EntryInput`'s optional keys now admit an explicit `undefined`**, which is what makes
+   `entries.add({ ...entry.toInput() })` compile.
+5. **`formatValue` takes the live `Entry` now**, beside `parseValue`. See `J18`.
 6. **A bulk regex over the test files is how 442 errors became 204**, and it mangled two prose
-   strings on the way (`field-registry.test.ts:50`, fixed). If you run another, read the diff.
+   strings on the way. It also left `row.parentId = x` as `row.parent()?.id = x` in four `layout/`
+   tests. If you run another, read the diff.
 7. **The store keeps `storedEntry`, `storedChildrenOf` and `allStored`.** They are `data/`-internal
-   and are not on `EntryStoreView`. See `J17`. Do not confuse them with the deleted public doors.
+   and are not on `EntryStoreView`. See `J17`.
+8. **A "before" reading in a test is a value, never a row.** One `Entry` per id and every read live
+   means `const before = entries.get(id)!` compares a row with itself. See `J24`.
 
 ### `J` and `Q` entries this build filed
 
-`J15` (the `model/` split), `J16` (`FieldAccess`), `J17` (the store's stored-side readers), `J18`
-(`formatValue` takes the row), `J19` (the positional `hasChildren` is gone), `J20`
-(`entries.storedValues`). No new `Q`. `Q2` stays deferred and its evidence is untouched.
+`J15`–`J20` from the library half. `J21` (the `layout/` test double and the spread it retires),
+`J22` (`sampleStoredEntries`), `J23` (`DatasetOptions.measureDuration`), `J24` (a "before" reading is
+a value). No new `Q`. `Q2` stays deferred and its evidence is untouched.
 
 
 ---
