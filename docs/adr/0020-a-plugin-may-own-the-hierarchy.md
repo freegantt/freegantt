@@ -1,7 +1,7 @@
 ---
 status: proposed — draft, not a decision. Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`.
 decided: one seam, not two — a plugin states the parent of an Entry, and the Rollup follows (2026-09-11, from the author's "from the data side it should be able to change how our rollup and parents/children work"). The source reads a `StoredEntry`, never the live `Entry`. Grouping stays a row source and does not come here.
-open: nothing. The seam is **`setHierarchySource`** (2026-09-11, author's ruling — `Q3`), and it sits beside `setExtender` on the `data` half. The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
+open: nothing. The seam is the **hierarchy source**, set through `ctx.hierarchy.setSource` (2026-09-11, author's ruling — `Q3` — with the namespace added on a review finding the same day), and it sits beside `ctx.edits.setExtender` on the `data` half. The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
 ---
 
 # A plugin may own the hierarchy
@@ -44,7 +44,7 @@ definePlugin({
   id: 'demo.phases',
   data(ctx) {
     // Which Entry is the parent of this one?
-    ctx.setHierarchySource((next) => (entry) => entry.props.phaseId ?? next(entry));
+    ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry));
   },
 });
 ```
@@ -89,10 +89,12 @@ The line is the author's: layout is not coupled to data, and this seam does not 
 
 ## Consequences
 
-**Four read sites stop reading `.parentId`.** They ask the live `Entry` instead — `entry.parent()`, `entry.children()`, `entry.hasChildren`. That work is 0017's, not this ADR's; this ADR is the reason it must land completely. A site left reading the field disagrees with the rest of the library the moment a plugin installs.
+**Three read sites stop reading `.parentId`, and a fourth is this ADR's own.** `layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77` and `view/tree-collapse.ts:111,153` ask the live `Entry` instead — `entry.parent()`, `entry.children()`, `entry.hasChildren` — and that work is 0017's. This ADR is the reason it must land completely: a site left reading the field disagrees with the rest of the library the moment a plugin installs.
+
+**The fourth site cannot move with them, and it belongs here.** `data/rollup.ts:46,52` finds the **former** parent of a row that moved, out of the `entries` map it was handed. A live `parent()` answers the new one, so the old parent never rolls up again and a move leaves a stale aggregate behind. It asks the **source**, applied to the pre-edit row — which is a question only this ADR can answer, because before it there is no source to ask.
 
 **`entry-tree.ts`'s four walks take the source.** `childIdsByParent`, `childCountByParent`, `depthOf` and `ancestorsOf` each read `parentId` directly today.
 
-**This is an expert door.** An app author never meets it. It sits on the Dataset half of `definePlugin` ([0019](0019-one-plugin-one-install-site.md)), beside `setExtender`, and the two read the same way.
+**This is an expert door.** An app author never meets it. It sits on the Dataset half of `definePlugin` ([0019](0019-one-plugin-one-install-site.md)), beside `ctx.edits.setExtender`, and the two read the same way: a namespace, then the verb.
 
 **A childless Entry can be made to paint as a summary two ways** — a variant of its own under ADR 0018, or this. The first changes the paint and claims nothing. The second changes the data's own answer, so the Rollup follows. That difference is exactly what 0018 protects when it refuses to store a variant.

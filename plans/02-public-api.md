@@ -315,6 +315,8 @@ not write.
 
 ## 4. Customization ladder
 
+> **This section describes HEAD.** [ADRs 0017–0020](../docs/adr/) rewrite it — the live `Entry`, the `EntryVariant` rule, `definePlugin`, and the hierarchy source. Until those four builds land, read this as what ships today, and **do not update it halfway through a build**. [`plans/row-redesign/build/`](row-redesign/build/) names the edits each build owes.
+
 Documented in this order; each level solves what the previous can't, and consumers stop at the shallowest level that works.
 
 | Level | Mechanism | Example |
@@ -708,6 +710,8 @@ choices, and `contextMenu()` took the worse one: leave two `document` listeners 
 ---
 
 ## 5. Shared axes and scroll (multi-Gantt, D9)
+
+> **This section describes HEAD**, for the same reason §4 does. [ADRs 0017–0020](../docs/adr/) have not landed.
 
 ```ts
 import { TimeScaleModel, ScrollModel } from 'freegantt';

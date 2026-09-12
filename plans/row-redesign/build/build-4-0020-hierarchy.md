@@ -16,7 +16,7 @@
 `layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77`, `view/tree-collapse.ts:111,153`.
 
 - [ ] Confirm none of those three reads `.parentId`. A site left reading the field disagrees with the library the moment a plugin installs.
-- [ ] **The fourth site is yours** — `data/rollup.ts:46,52`. Unit D of this build takes it, and the reason is in Unit D. Do not expect Build 1 to have touched it.
+- [ ] **The fourth site is yours** — `data/rollup.ts:46,52`. **Unit C** of this build takes it, and the reason is in Unit C. Do not expect Build 1 to have touched it. Unit D is the harness demo.
 - [ ] Confirm `data/entry-reader.ts:229,567` still **write** `parentId`. Those two stay.
 
 ---
@@ -28,7 +28,7 @@
 - [ ] Register core's own source as `(entry) => entry.parentId`, like any other, with no special claim on the seam (D-S5-23).
 - [ ] A plugin composes, the same way an `EditExtender` composes: it receives the current occupant and may call it.
 - [ ] Put the door on the `data` half of `definePlugin`, beside `setExtender`. **This is an expert door. An app author never meets it.**
-- [ ] **The seam is `setHierarchySource`** — ruled 2026-09-11 (`Q3`). Write it. The call site is `ctx.setHierarchySource((entry) => …)`, beside `ctx.setExtender`.
+- [ ] **The seam is the hierarchy source** — ruled 2026-09-11 (`Q3`). The call site is `ctx.hierarchy.setSource((next) => (entry) => …)`, beside `ctx.edits.setExtender`. **Namespaced**, like every other member of that context (`ctx.fields.register`, `ctx.store.reserve`); the ruling named the seam, and the namespace came with a review the same day.
 
 ---
 
@@ -94,7 +94,7 @@
 ## Locked-spec edits this build owes
 
 - [ ] `CONTEXT.md:47` — the **Hierarchy** entry defines the tree as `parentId`. It needs an edit either way: the tree is what the hierarchy source answers, and `parentId` is core's own source. Build 2 already changed "the parent look" in the same entry.
-- [ ] `CONTEXT.md` — add the seam's name once the author rules on it.
+- [ ] `CONTEXT.md` — add the **Hierarchy source** as a glossary term: the function that answers which Entry is the parent of another, with core's own being `(entry) => entry.parentId`.
 - [ ] `plans/01` — `data/`'s seam list gains the hierarchy source beside the extension hook.
 - [ ] `plans/02` — the plugin-author surface gains the door.
 - [ ] **Extend `scripts/check-doc-examples.mjs` to `harness/docs/plugin-authoring.html`.** This is the last build, so the page now describes `src/` and its samples can compile. Until this box is ticked, no sample on that page has ever been typechecked. Handed here from the planner brief on 2026-09-11.

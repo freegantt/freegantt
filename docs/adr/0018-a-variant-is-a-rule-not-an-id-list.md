@@ -29,19 +29,37 @@ ctx.interaction.registerLookDefaults(BUFFER_KIND, { resize: false });
 
 ## Decision
 
-**A variant is a rule. The first registered rule that answers yes wins.** There is no second source and no stored value.
+**A variant is a rule. Resolution walks newest-first and stops at the first rule that answers yes** (`Q5`, ruled 2026-09-11). There is no second source and no stored value.
 
 **One variant is one object.** Four registrations become one object, and the name appears once.
 
 ```ts
-interface EntryVariant {
+interface EntryVariant<TProps = Record<string, unknown>> {
   name: string; // this variant's identity — the `data-variant` a consumer styles, and the registry key
-  when?: VariantRule; // a predicate or a field match; omit it on the last-resort variant
+  when?: VariantRule<TProps>; // a field match or a predicate; omit it on the last-resort variant
   items?: ItemProducer; // default: one whole-entry Item — the line both examples hand-write
   paint?: BarRenderer;
   can?: Interactions; // per-variant capability, one level under the consumer's own
 }
 ```
+
+### What `when` matches
+
+**Published beside the key, because an author cannot guess it.** `{ milestone: true }` could mean "equals `true`" or "has a value", and the two answer differently for `{ status: 'blocked' }`.
+
+```ts
+type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | ((entry: Entry<TProps>) => boolean);
+
+/** Every named Field equals the value beside it. Several keys are AND. */
+type FieldMatch<TProps> = { [K in FieldKey]?: K extends keyof TProps ? TProps[K] : unknown };
+```
+
+- **A match is equality, per Field.** Each key reads through `entry.read(key)` and compares with that Field's own `equals` (`Field.equals`, `model/field.ts`), which is what makes `{ start: someInstant }` and `{ status: 'blocked' }` behave the same way a Grid comparison does. With no `equals` declared, the comparison is `Object.is`.
+- **Several keys are AND.** `{ milestone: true, locked: false }` claims a row that answers both.
+- **A match never means "has a value".** `when: { 'demo:phaseId': true }` claims the rows whose `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with the predicate: `(entry) => entry.read('demo:phaseId') !== undefined`.
+- **The shorthand is what core can index.** A field match names its keys, so a future pass can group rules by key. A predicate is opaque and runs per row. That is the trade, and the shorthand is the common case (refuted item 7 in [`plans/row-redesign/README.md`](../../plans/row-redesign/README.md)).
+
+**`EntryVariant` carries `TProps`, so the predicate compiles.** `entry.read('slack')` on an `Entry<unknown>` answers `unknown`, and the sample `entry.read('slack') > 0` does not compile. `GanttOptions<TProps>` already has the Dataset's type, so `variants: readonly EntryVariant<TProps>[]` hands it to every rule the app author writes. The registry inside `view/` holds the erased shape and casts once at the façade, the way `api/dataset.ts` already re-types the whole store for `TProps`.
 
 An app author installs a variant with no plugin at all:
 
@@ -52,7 +70,9 @@ new Gantt({
 });
 ```
 
-A plugin ships the same object through `ctx.addVariant(variant)`. One type, two doors, one shape.
+A plugin ships the same object through `ctx.variants.add(variant)`. One type, two doors, one shape.
+
+**The plugin door is namespaced, like every other one on that context.** A plugin context reads `ctx.fields.register`, `ctx.edits.setExtender`, `ctx.commands.register`, `ctx.interaction.registerKeybinding`. A bare `ctx.addVariant` would be the one verb hanging off the root. `ctx.variants.add(variant)` reads as the sentence it is, and it gives the variant seam a namespace to grow in.
 
 **Core registers its own two variants first**, and they are ordinary `EntryVariant` objects with nothing special about them:
 
@@ -70,6 +90,8 @@ A plugin ships the same object through `ctx.addVariant(variant)`. One type, two 
 **`name` is an identity, not a value.** It has three jobs, and storage is not one of them. `render/dom/index.ts:1186` stamps it onto the painted element, which `CONTEXT.md:517` publishes as a selector a consumer may style. The registry keys on it. A double-claim diagnostic names it.
 
 **`can` takes the same predicates `interactions` takes.** `KindDefaults` is boolean-only today for one stated reason: _"a registering plugin never sees an `entry`"_ (`view/capability.ts:83-90`). [ADR 0017](0017-the-entry-answers-questions-about-itself.md) hands it one. So the mapped boolean type dies and `Interactions` serves both levels. The resolution order is unchanged: consumer `interactions`, then the variant's `can`, then the library rule. The variant level stays view-level, so refuted item 6 in [`plans/field-redesign/shared/refuted.md`](../../plans/field-redesign/shared/refuted.md) still holds — this is not a second door onto `Field.editable`.
+
+**A gesture predicate gains the answer a write predicate already has: `undefined` — no opinion.** `CapabilityRule` is `boolean | ((entry) => boolean)` today (`view/capability.ts:20`), so a rule that speaks at all must answer every row. Put it one level down and that bites: a variant's `can: { resize: (entry) => !entry.hasChildren }` means "not on a parent", and it also says **yes** to every other row, over the library rule underneath it. `WriteRule` learned this on #256, where the harness's own first call site opened every derived cell by accident. So `CapabilityRule` becomes `boolean | ((entry) => boolean | undefined)`, at both levels, and `undefined` falls through to the next answer. A `boolean` still pins every row, which is what a consumer who wants that writes.
 
 ## How an app pins one row
 
@@ -132,6 +154,34 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 **No `if (variant === …)` chain in core.** Core reads a variant to pick a row out of a registration table — a producer, a paint, a `can`. It never branches on a variant's name. This is the rule that made ADR 0013 worth having, and it is the one this ADR must not spend. Deleting `BAR_SHAPE_CLASS` pays it down further: the one core table keyed by a variant name goes away.
 
 **An Entry carries no stored classification.** The earlier draft of this ADR spent that sentence. This one gives it back.
+
+## A command asks which variant a row resolved to
+
+**The owned-id `Set` answers a fifth question, and the four registrations above do not reach it.** `harness/plugins/buffer-kind.ts:52` is a command's `when`: `({ entry }) => entry !== undefined && owned.has(entry.id)`. The rule above deletes the `Set` that four other lines read. Leave the command as it is and the `Set` survives for one caller; restate the `when` rule inside the command and the harness re-derives what the library just resolved — which is the case `CLAUDE.md`'s stop rule exists to catch.
+
+**So a command context names the variant this Gantt resolved for the Entry it is about.**
+
+```ts
+interface CommandContextOf<TGantt, TDataset> {
+  entry?: Entry;
+  /** The variant this Gantt resolved for `entry`. `undefined` when the invocation names no Entry. */
+  variant?: string;
+  …
+}
+```
+
+```ts
+ctx.commands.register({
+  id: 'demo.bufferKind.markConsumed',
+  label: 'Mark buffer consumed',
+  when: ({ variant }) => variant === 'buffer', // the rows my variant claimed
+  run: …,
+});
+```
+
+**This is not `entry.variant` under another name, and the refusal at 0017 still holds.** A variant is per Gantt, so a row cannot answer it (I2). A command context **is** one Gantt's, holds that Gantt, and runs off the hot path — so it is the seam that can answer without giving the Dataset a view's opinion.
+
+**One shape was refused: `EntryVariant.commands`.** It would make the name appear once instead of twice, and it costs more. A command has an id, a label, a keybinding and a lifetime of its own, and `when` must also answer for an invocation that names no Entry at all. Two lifetimes under one member is the trap this ADR just spent a whole section removing.
 
 ## Consequences
 

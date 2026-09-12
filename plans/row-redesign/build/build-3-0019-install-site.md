@@ -33,11 +33,11 @@
 
 ## Unit C — the failure mode gets a name
 
-- [ ] A plugin with a `data` half, handed to a `Gantt`, **throws**. It has arrived too late to declare a Field.
+- [ ] **The type refuses it first.** `GanttOptions.plugins` takes `readonly ChromePlugin[]` — a plugin with a `data` half does not typecheck there. Copy the three declarations from the ADR's *The compiler refuses it first*: `data?: never` on the chrome arm is what makes the combination unrepresentable, the same way `scale` and `preset` already exclude each other.
+- [ ] `definePlugin` keeps the narrow type at the call site. Overload it, or infer the arm — a plugin author must see the error in the editor, not at mount.
+- [ ] A plugin with a `data` half, handed to a `Gantt`, **still throws at runtime**. The compiler never met the plain-JavaScript caller, or the list a helper widened.
 - [ ] **A silent partial install is refused.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove.
-- [ ] Use `PluginSetupError` unless the author rules otherwise. It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. No new type is needed.
-- [ ] The message must say **where to install it**, not only that it failed.
-- [ ] **`Q4` is ruled, 2026-09-11: raise `PluginSetupError`.** It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. **No new error type ships.** The message must say where to install it.
+- [ ] **`Q4` is ruled, 2026-09-11: raise `PluginSetupError`.** It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. **No new error type ships.** The message must say **where to install it**, not only that it failed.
 
 ---
 
@@ -67,6 +67,7 @@ This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard one l
 - [ ] Two Gantts on one Dataset each run `view(ctx)` once, with separate state (I2).
 - [ ] A chrome-only plugin still installs on the `Gantt`, and `gantt.plugins` still reconfigures live.
 - [ ] A plugin with a `data` half handed to a `Gantt` throws, and the message names the right install site.
+- [ ] The same combination does not typecheck. Pin it with a `@ts-expect-error` in the test, so the type-level refusal cannot regress silently.
 - [ ] `requires` is honoured across both halves.
 - [ ] A failed install unwinds the plugins set up before it.
 
