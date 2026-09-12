@@ -8,8 +8,8 @@
 //
 // Vocabulary note: `Entry` is the record. A phase is a row with children — ADR 0013 leaves it no
 // stored classification, so `harness/planner.ts` asks `childrenOf` the way any other consumer would.
-// A checkpoint is a row this fixture names in `plannerCheckpointEntryIds`, the same "a plugin that
-// needs another look stores which ids it owns" pattern `harness/plugins/milestone-kind.ts` uses.
+// A checkpoint is a row this fixture marks with its own `checkpoint` Field, and `harness/planner.ts`
+// installs one variant whose rule reads it back (ADR 0018). Nothing stores a variant.
 // "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) — this fixture
 // is a construction plan because a consumer said so, not because the library knows one.
 
@@ -27,6 +27,9 @@ export interface PlannerEntryProps {
   phase?: number;
   /** On the critical path — the design's inset ring. */
   critical?: boolean;
+  /** A checkpoint row. This is how a page pins one variant (ADR 0018): the page owns the word, the
+   *  Gantt's own `variants` rule reads it back, and nothing in core learns what a checkpoint is. */
+  checkpoint?: boolean;
 }
 
 const DAY = MS.DAY;
@@ -123,18 +126,13 @@ const PHASES: readonly Phase[] = [
   },
 ];
 
-/** Every checkpoint row's id, in authored order — `harness/planner.ts` hands this to
- *  `milestoneKind()` (`harness/plugins/milestone-kind.ts`) the same way `demo-dataset.ts` hands its
- *  own single milestone id to `main.ts`. Filled by `entryForRow` as it builds each row. */
-export const plannerCheckpointEntryIds: string[] = [];
-
 function entryForRow(row: PlannerRow, phase: Phase): EntryInput<PlannerEntryProps> {
   const [id, name, owner, startDay, durationDays, progress, flags] = row;
   const isCheckpoint = flags.includes('m');
   const meta: PlannerEntryProps = { progress, phase: phase.hue };
   if (owner !== '') meta.owner = owner;
   if (flags.includes('c')) meta.critical = true;
-  if (isCheckpoint) plannerCheckpointEntryIds.push(id);
+  if (isCheckpoint) meta.checkpoint = true;
 
   return {
     id,
@@ -156,7 +154,9 @@ export const plannerEntryInputs: readonly EntryInput<PlannerEntryProps>[] = PHAS
   ...phase.rows.map((row) => entryForRow(row, phase)),
 ]);
 
-const CHECKPOINT_ENTRY_IDS = new Set(plannerCheckpointEntryIds);
+function isCheckpointEntry(entry: EntryInput<PlannerEntryProps> | StoredEntry): boolean {
+  return (entry.props as PlannerEntryProps | undefined)?.checkpoint === true;
+}
 
 /** What the `#` column counts: work rows, numbered from 1 in authored order. A phase and a
  *  checkpoint are both skipped, so the numbers run unbroken down the work itself — the design's own
@@ -165,12 +165,15 @@ const CHECKPOINT_ENTRY_IDS = new Set(plannerCheckpointEntryIds);
  *  checkpoint does, so it is told apart by id, the same way `harness/planner.ts` tells its bar apart. */
 const WORK_ROW_NUMBERS = new Map<string, number>(
   plannerEntryInputs
-    .filter((entry) => entry.parentId !== undefined && !CHECKPOINT_ENTRY_IDS.has(String(entry.id)))
+    .filter((entry) => entry.parentId !== undefined && !isCheckpointEntry(entry))
     .map((entry, index) => [String(entry.id), index + 1]),
 );
 
 const PLANNER_FIELDS: readonly Field[] = [
   { key: 'owner', column: { header: 'Own', align: 'center' } },
+  // ADR 0018: the page's own word for a checkpoint row. The Gantt's `variants` rule reads it back,
+  // `update(id, { checkpoint: true })` would pin another row, and core never learns the word.
+  { key: 'checkpoint' },
   // Percent complete for a phase: its children's own progress, weighted by how long each one runs,
   // so a two-week row at 50% counts for more than a one-day row at 100% — `percent` is the shipped
   // Field type (`data/fields/field-types.ts`), and `weightedMeanByDuration` is the shipped
@@ -187,7 +190,7 @@ const PLANNER_FIELDS: readonly Field[] = [
   {
     key: 'ref',
     compute: (entry: StoredEntry) =>
-      CHECKPOINT_ENTRY_IDS.has(String(entry.id)) ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
+      isCheckpointEntry(entry) ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
     // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width
     // gives way, not the number.
