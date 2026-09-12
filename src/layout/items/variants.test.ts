@@ -15,7 +15,7 @@ function spanEntry(id: string, props: Record<string, unknown> = {}): Entry {
 
 describe('which rule wins', () => {
   it('answers the leaf variant for a row nothing claims, and the parent variant for a row with children', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
       { id: 'c', parentId: 'p', start: 0, end: 10 },
@@ -26,7 +26,7 @@ describe('which rule wins', () => {
   });
 
   it('lets a plugin variant override core’s own `parent` on a row with children (Q5)', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const [parent] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
       { id: 'c', parentId: 'p', start: 0, end: 10 },
@@ -38,7 +38,7 @@ describe('which rule wins', () => {
   });
 
   it('lets the newest of two plugin rules win, and disposing it restores the older one', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
 
     registry.addPluginVariant({ name: 'buffer', when: () => true });
@@ -50,7 +50,7 @@ describe('which rule wins', () => {
   });
 
   it('lets a consumer variant win over a plugin’s, even though the plugin registered later', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
 
     registry.addConsumerVariant({ name: 'mine', when: () => true });
@@ -60,7 +60,7 @@ describe('which rule wins', () => {
   });
 
   it('claims a row added after the rule was installed — the bug the id set caused', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry(declaring({ key: 'buffer' }));
     registry.addPluginVariant({ name: 'buffer', when: { buffer: true } });
 
     const later = spanEntry('added-later', { buffer: true });
@@ -69,7 +69,7 @@ describe('which rule wins', () => {
   });
 
   it('treats a variant with no `when` as the last resort, and every row still resolves', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
 
     registry.addPluginVariant({ name: 'everything' });
@@ -79,9 +79,17 @@ describe('which rule wins', () => {
   });
 });
 
+/** A Dataset that declares these keys and nothing else. A field match reads the registry, so a
+ *  suite that matches on a key must say the key is declared — `() => undefined` is the answer for a
+ *  Dataset with no Fields at all, and no match ever claims a row under it. */
+function declaring(...fields: readonly Field[]): { fieldFor: (key: FieldKey) => Field | undefined } {
+  const byKey = new Map<FieldKey, Field>(fields.map((field) => [field.key, field]));
+  return { fieldFor: (key) => byKey.get(key) };
+}
+
 describe('what a field match compares (J6)', () => {
   it('claims the row whose value equals the one beside the key', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry(declaring({ key: 'milestone' }));
     registry.addPluginVariant({ name: 'milestone', when: { milestone: true } });
 
     expect(registry.variantFor(spanEntry('a', { milestone: true }))).toBe('milestone');
@@ -89,7 +97,7 @@ describe('what a field match compares (J6)', () => {
   });
 
   it('never means "has a value": `{ flag: true }` passes over `flag: "yes"`', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry(declaring({ key: 'flag' }));
     registry.addPluginVariant({ name: 'flagged', when: { flag: true } });
 
     expect(registry.variantFor(spanEntry('a', { flag: 'yes' }))).toBe('leaf');
@@ -97,7 +105,7 @@ describe('what a field match compares (J6)', () => {
   });
 
   it('ANDs its keys', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry(declaring({ key: 'milestone' }, { key: 'locked' }));
     registry.addPluginVariant({ name: 'both', when: { milestone: true, locked: false } });
 
     expect(registry.variantFor(spanEntry('a', { milestone: true, locked: false }))).toBe('both');
@@ -109,19 +117,27 @@ describe('what a field match compares (J6)', () => {
       key: 'status',
       equals: (a, b) => String(a).toLowerCase() === String(b).toLowerCase(),
     };
-    const fields = new Map<FieldKey, Field>([['status', caseInsensitive]]);
-    const registry = createVariantRegistry({ fieldFor: (key) => fields.get(key) });
+    const registry = createVariantRegistry(declaring(caseInsensitive));
     registry.addPluginVariant({ name: 'blocked', when: { status: 'BLOCKED' } });
 
     expect(registry.variantFor(spanEntry('a', { status: 'blocked' }))).toBe('blocked');
 
-    const strict = createVariantRegistry();
+    const strict = createVariantRegistry(declaring({ key: 'status' }));
     strict.addPluginVariant({ name: 'blocked', when: { status: 'BLOCKED' } });
     expect(strict.variantFor(spanEntry('a', { status: 'blocked' }))).toBe('leaf');
   });
 
+  it('claims no row at all when no Field declares the key (F2)', () => {
+    // `entry.read` throws on a key no Field declares, and this runs on every row of every layout
+    // pass. A typo — and the one rule a chrome plugin cannot declare for itself — answers no.
+    const registry = createVariantRegistry(declaring({ key: 'milestone' }));
+    registry.addPluginVariant({ name: 'typo', when: { mileStone: true } });
+
+    expect(registry.variantFor(spanEntry('a', { mileStone: true }))).toBe('leaf');
+  });
+
   it('reads a predicate for "has a value", which is the question a match does not ask', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: 'phased',
       when: (entry) => entry.read('demo:phaseId') !== undefined,
@@ -135,7 +151,10 @@ describe('what a field match compares (J6)', () => {
 describe('what the double-claim diagnostic reports (J36)', () => {
   function collecting(): { registry: ReturnType<typeof createVariantRegistry>; seen: DoubleVariantClaim[] } {
     const seen: DoubleVariantClaim[] = [];
-    return { registry: createVariantRegistry({ reportDoubleClaim: (c) => seen.push(c) }), seen };
+    return {
+      registry: createVariantRegistry({ fieldFor: () => undefined, reportDoubleClaim: (c) => seen.push(c) }),
+      seen,
+    };
   }
 
   it('names both sides when two plugin rules cover one row, and the newest still paints', () => {
@@ -181,7 +200,7 @@ describe('what the double-claim diagnostic reports (J36)', () => {
 
 describe('what a variant answers about itself', () => {
   it('draws one whole-entry Item with no `items` of its own, and its own producer with one', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
 
     registry.addPluginVariant({ name: 'plain', when: { plain: true } });
@@ -205,7 +224,7 @@ describe('what a variant answers about itself', () => {
   });
 
   it('answers its own `paint` and `can` by name, and nothing for a name nobody registered', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const paint = (): undefined => undefined;
     const can = { resize: false };
 
@@ -218,7 +237,7 @@ describe('what a variant answers about itself', () => {
   });
 
   it('lets a plugin re-skin core’s own `leaf`, and disposal restores core’s producer', () => {
-    const registry = createVariantRegistry();
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
     const shipped = registry.itemsFor('leaf');
 

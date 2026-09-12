@@ -35,7 +35,7 @@ describe('null render backend', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      variants: createVariantRegistry(),
+      variants: createVariantRegistry({ fieldFor: () => undefined }),
     });
     backend.mount({ grid: undefined, timeline: undefined });
     backend.sync(frame);

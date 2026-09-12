@@ -64,7 +64,7 @@ function perFrame(): PerFrameLayoutInput {
     revision: 7,
     datasetRevision: 0,
     columns: [],
-    variants: createVariantRegistry(),
+    variants: createVariantRegistry({ fieldFor: () => undefined }),
   };
 }
 

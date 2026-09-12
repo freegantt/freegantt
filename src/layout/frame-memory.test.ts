@@ -22,7 +22,7 @@ function packPlan(entries = sampleEntries): readonly PlannedRow[] {
 }
 
 describe('FrameMemory (A2)', () => {
-  const registry = createVariantRegistry();
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
   const laneGap = 2;
 
   it('heightOfRow follows packed lane count without a FrameLayout', () => {
@@ -97,7 +97,7 @@ describe('FrameMemory (A2)', () => {
 });
 
 describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', () => {
-  const registry = createVariantRegistry();
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
   const laneGap = 2;
 
   function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {

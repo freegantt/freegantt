@@ -2146,6 +2146,44 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
+  it('a field match on a key no Field declares never matches, and the Gantt keeps drawing (F2)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [sampleEntries[0]!.toInput()],
+      timeZone: 'UTC',
+    });
+    // A chrome plugin installs after the Dataset closes its Field gate, so it cannot declare the key
+    // it matches on. The rule answers no for every row; it never takes the layout pass down.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [{ name: 'phased', when: { 'demo:phaseId': true }, paint: () => ({ text: 'P' }) }],
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.dataset['variant']).toBe('leaf');
+
+    gantt.destroy();
+  });
+
+  it('the same match claims the row once a Field declares the key (F2)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { 'demo:phaseId': true } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'demo:phaseId' }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [{ name: 'phased', when: { 'demo:phaseId': true }, paint: () => ({ text: 'P' }) }],
+    });
+
+    expect(container.querySelector<HTMLElement>('.fg-bar')!.dataset['variant']).toBe('phased');
+
+    gantt.destroy();
+  });
+
   it('a headerRenderer paints the grid header cell, and reassigning it repaints with no header remount (I11)', async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });

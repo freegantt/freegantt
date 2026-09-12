@@ -32,6 +32,10 @@ export type VariantPredicate<TProps = Record<string, unknown>> = (entry: Entry<T
  *  `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with a predicate:
  *  `(entry) => entry.read('demo:phaseId') !== undefined`.
  *
+ *  **A key no Field declares matches no row.** The match reads through the Field registry, so a
+ *  typo claims nothing rather than taking the layout pass down. A plugin that matches on its own
+ *  key declares that key from its `data` half (`ctx.fields.register`).
+ *
  *  Each key reads through `entry.read(key)` and compares with that Field's own `equals`
  *  (`model/field.ts`), so `{ start: someInstant }` and `{ status: 'blocked' }` compare the way a
  *  Grid comparison does. With no `equals` declared, the comparison is `Object.is`. */
@@ -136,8 +140,14 @@ export interface VariantRegistry extends VariantItems {
 /** What a `VariantRegistry` reads outside itself. Both are live: a Gantt may be rebound to another
  *  Dataset, and the reporter is the shell's own. */
 export interface VariantRegistryPorts {
-  /** `dataset.field` — where a field match reads the Field's own `equals`. */
-  fieldFor?: ((key: FieldKey) => Field | undefined) | undefined;
+  /** `dataset.field` — the Field registry a field match reads. It answers which keys are declared
+   *  and carries each one's own `equals`.
+   *
+   *  **Required, because "no port" and "no Field" are two different answers.** A registry with no
+   *  way to look a Field up cannot tell a declared key from a typo, and a registry that guesses
+   *  either reads an undeclared key (which throws) or refuses a declared one. A registry built
+   *  outside a Dataset says so with `() => undefined`: no key is declared. */
+  fieldFor: (key: FieldKey) => Field | undefined;
   reportDoubleClaim?: ReportDoubleClaim | undefined;
 }
 
@@ -204,10 +214,15 @@ function valueMatches(
   expected: unknown,
   fieldFor: VariantRegistryPorts['fieldFor'],
 ): boolean {
+  // The lookup comes first, and a key no Field declares answers no. `entry.read` throws on such a
+  // key, and this runs on every row of every layout pass, so reading first would take the frame
+  // down for a typo — or for the one rule a chrome plugin cannot help itself with, because it
+  // installs after the Dataset closes its Field gate.
+  const field = fieldFor(key);
+  if (field === undefined) return false;
   const actual = entry.read(key);
-  const field = fieldFor?.(key);
   // Called on the Field, never detached: a consumer's own `equals` may read `this`.
-  return field?.equals !== undefined ? field.equals(actual, expected) : Object.is(actual, expected);
+  return field.equals !== undefined ? field.equals(actual, expected) : Object.is(actual, expected);
 }
 
 function claimantOf(registration: VariantRegistration): VariantClaimant {
@@ -231,9 +246,9 @@ function canCollide(painted: VariantRegistration, next: VariantRegistration): bo
 }
 
 /** Call: `createVariantRegistry({ fieldFor, reportDoubleClaim })` once in the Gantt constructor; a
- *  test may call it bare and add its own variants. Core's two are seeded here, so the registry is
- *  never empty and every row resolves. */
-export function createVariantRegistry(ports: VariantRegistryPorts = {}): VariantRegistry {
+ *  registry outside a Dataset passes `fieldFor: () => undefined` and adds its own variants. Core's
+ *  two are seeded here, so the registry is never empty and every row resolves. */
+export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegistry {
   const { fieldFor } = ports;
   /** A `const` copy, so the walk below narrows it once instead of on every pass. */
   const report = ports.reportDoubleClaim;

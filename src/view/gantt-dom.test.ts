@@ -79,7 +79,7 @@ function paintOneGantt(
   });
   // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
   const layout = new FrameLayout();
-  const variantRegistry = createVariantRegistry();
+  const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
   const paint = (): void => {
     backend.sync(
       layout.computeFrame({
