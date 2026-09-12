@@ -1105,4 +1105,11 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
     const { x, width } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'end' } }, scale);
     expect(x + width).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
+
+  it('clamps a negative widthPx to 0, so a fixed box never paints a negative width (#212 follow-up, F6)', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { width, span } = barSpan({ ...spanOf(wideSpan), box: { widthPx: -4, anchor: 'center' } }, scale);
+    expect(width).toBe(0);
+    expect(span).toBe('fixed');
+  });
 });

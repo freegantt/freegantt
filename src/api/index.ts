@@ -338,6 +338,7 @@ export type {
   ResolvedColumn,
   FrameColumn,
   BarFlags,
+  BarSpanKind,
   PlannedRowKind,
 } from '../layout/index.js';
 // S5.6, D-S5-15: a decoration provider's own vocabulary — a plugin author writes `ctx.view
@@ -354,7 +355,7 @@ export type {
 // ADR 0018: `EntryVariant.items`'s own vocabulary — a plugin author naming `ItemProducer`
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
 // to structural inference.
-export type { Item, ItemProducer } from '../layout/index.js';
+export type { Item, ItemProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
 // it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
 // `VariantPredicate` names its predicate arm alone.

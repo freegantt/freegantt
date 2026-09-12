@@ -277,6 +277,25 @@
         pointer-events: none;
       }
 
+      /* A checkpoint's own stroke (DESIGN-FACTS §2.5, F8): `diamond()`'s own `::before` paints
+         `--fg-bar-fill-painted` and nothing else, so a hollow checkpoint's ring is this page's own
+         rule, read off a custom property `checkpointDiamond()` (planner.ts) sets only while not
+         done — `border: none` the rest of the time, when the property is unset. `box-sizing:
+         border-box` keeps the stroke inside the 13px box `diamond()` already sizes, rather than
+         growing it. */
+      .fg-bar-diamond::before {
+        box-sizing: border-box;
+        border: var(--demo-checkpoint-stroke, none);
+      }
+
+      /* A checkpoint's label reads on the pane in the row's own ink, 10px off the diamond's point
+         (DESIGN-FACTS §2.5) — the diamond has no fill to read a label against, so the muted outside
+         ink the design gives a span's label would sit next to nothing. */
+      .demo-checkpoint-label {
+        padding-inline-start: 10px;
+        color: var(--fg-row-label-color);
+      }
+
       /* S5.6-style weekend band (DESIGN-FACTS §1.2, §7): `weekendShading()`'s own class, painted
          below `.fg-bars` through `ctx.view.registerDecoration`. The colour is this page's, named
          once per theme above — the library ships no `--fg-x-weekend` (D-S1.13-8's own posture on

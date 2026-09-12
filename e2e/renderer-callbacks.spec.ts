@@ -11,10 +11,11 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  // ADR 0022: `diamond()` is core's own shipped glyph. The page's `milestone` variant claims the
-  // marked rows and reads `diamond()`'s own paint back to add its recolour, and `diamond()`'s own
-  // `css` draws the glyph on `.fg-bar-diamond::before`. The renderer still never shapes the node
-  // (I13: a renderer's bounded scope is attr/class/style/text/children).
+  // ADR 0022: `diamond()` is core's own shipped glyph. The page's variant (still named `diamond`,
+  // not `milestone` — F10) claims the marked rows with a plain `diamond({ when: { milestone: true }
+  // })`, and `diamond()`'s own `css` draws the glyph on `.fg-bar-diamond::before`. The purple fill
+  // is an ordinary, unlayered `.fg-bar-diamond { --fg-bar-fill: … }` rule in `plugins.html`'s own
+  // `<style>` block — no `paint` override, and nothing reads a paint back (F9).
   const milestoneBar = page.locator('#gantt .fg-bar.fg-bar-diamond');
   await expect(milestoneBar).toHaveCSS('--fg-bar-fill', '#7b2cbf');
 

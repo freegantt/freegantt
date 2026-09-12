@@ -22,7 +22,7 @@ import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
-import type { Item, VariantItems } from './items/item.js';
+import type { FixedBarBox, Item, VariantItems } from './items/item.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
@@ -51,6 +51,12 @@ export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
  *  independently. */
 export const DEFAULT_BAR_HEIGHT_PX = 18;
 
+/** What `barSpan` did to a bar's painted `[x, x + width)` extent (F12) — `'exact'` for the entry's
+ *  own span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for an Item
+ *  that carries its own `box` (ADR 0022). Named once so `barSpan`'s return type and `FrameBar.span`
+ *  read one type instead of repeating the union. */
+export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
+
 /** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
  * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
@@ -71,11 +77,15 @@ export function barSpan(
   entry: Pick<Item, 'start' | 'end' | 'box'>,
   scale: TimeScale,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
-): { x: number; width: number; span: 'exact' | 'minimum' | 'fixed' } {
+): { x: number; width: number; span: BarSpanKind } {
   const x = scale.xForInstant(entry.start);
   const end = scale.xForInstant(entry.end);
   if (entry.box !== undefined) {
-    return { x: fixedBoxX(x, end, entry.box), width: entry.box.widthPx, span: 'fixed' };
+    // A fixed box skips the floor on purpose (ADR 0022 — `diamond()`'s own width is the design, not
+    // a value to widen), but a negative or zero width is never a paint, so this still clamps at 0 —
+    // the same guard the plain path takes below (`Math.max(0, end - x)`), just without the floor.
+    const width = Math.max(0, entry.box.widthPx);
+    return { x: fixedBoxX(x, end, entry.box), width, span: 'fixed' };
   }
   const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
@@ -90,11 +100,7 @@ export function barSpan(
 /** Where a fixed-width box's left edge sits, given the pixel positions of the entry's own `start`
  *  and `end` (`x`, `end`). `'center'` reads the same midpoint the floor above centres a minimum-width
  *  bar on, so a diamond on a real span lands where the floor would have put one, not at its start. */
-function fixedBoxX(
-  x: number,
-  end: number,
-  box: { widthPx: number; anchor: 'start' | 'center' | 'end' },
-): number {
+function fixedBoxX(x: number, end: number, box: FixedBarBox): number {
   switch (box.anchor) {
     case 'start':
       return x;
@@ -150,7 +156,7 @@ export interface FrameBar {
    *  States a fact about the paint, not a judgement on the variant (plans/01 §2.5 bans a variant
    *  check here); a consumer tells a floored or fixed bar apart by pairing this with `variant`.
    *  `render/` stamps it as `data-span="minimum"` or `data-span="fixed"` (`02` §4). */
-  span: 'exact' | 'minimum' | 'fixed';
+  span: BarSpanKind;
   /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
    * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end

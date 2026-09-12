@@ -427,13 +427,18 @@ popupBtn.addEventListener('click', () => {
 // is an ordinary rule in `harness-chrome.css` (`.fg-bar-diamond { --fg-bar-fill: … }`), no JavaScript
 // in between (refuted item 8) — `.fg-bar` already reads that token into `--fg-bar-fill-painted`, and
 // `diamond()`'s own `::before` paints from it.
+// `name: 'milestone'` (F10) tells ADR 0018's story on this page too — an app names a row in its own
+// word, and `diamond()`'s look rides its class (`.fg-bar-diamond`) and `css`, neither of which reads
+// the name, so renaming costs nothing.
 // Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
 // existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
 const BUDGET_THRESHOLD = 5000;
 
-const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [diamond({ when: { milestone: true } })];
+const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [
+  diamond({ name: 'milestone', when: { milestone: true } }),
+];
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }

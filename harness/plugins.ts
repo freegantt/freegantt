@@ -115,8 +115,10 @@ popupBtn.addEventListener('click', () => {
 // demonstrates that a consumer's own variant wins over a plugin's of the same name whatever order
 // the plugins installed in (D-S5-11). Uncheck this toggle to see both plugin variants take over
 // instead — same pixels, two different sources, and neither plugin refuses the other (review P2).
+// `name: 'milestone'` (F10) tells ADR 0018's own story here too, the same as `buffer` and `risk`
+// below — an app names a row in its own word, and `diamond()`'s look reads none of them.
 const demoVariants: readonly EntryVariant[] = [
-  diamond({ when: { milestone: true } }),
+  diamond({ name: 'milestone', when: { milestone: true } }),
   { name: 'buffer', when: { buffer: true }, paint: () => ({ class: { 'demo-buffer-bar': true } }) },
   { name: 'risk', when: { risk: true }, paint: () => ({ class: { 'demo-risk-bar': true } }) },
 ];
