@@ -109,6 +109,8 @@ export interface GanttShellPorts {
   resolvedColumn(field: FieldKey): ResolvedColumn | undefined;
   /** I14's one capability resolution, asked for one cell (#256). */
   canWrite(entry: Entry, field: FieldKey): WriteVerdict;
+  /** ADR 0018: the variant this Gantt resolved for one row. */
+  variantOf(entry: Entry): string;
   /** Raises `beforeEntryEdit` on this Gantt's own bus and hands back what the handlers answered. */
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
@@ -302,6 +304,11 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  reads the same list, instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts`
      *  stays out of reach). Empty when no column is marked `tooltip: true`. */
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
+    /** ADR 0018: the variant this Gantt resolved for one row — the same answer the layout pass
+     *  painted with, and the same one `CommandContext.variant` carries. A plugin that builds a
+     *  command context of its own fills `variant` from here (`extensions/features/context-menu.ts`
+     *  is the first caller). A variant is per Gantt, so a row cannot answer it (I2). */
+    variantOf(entry: Entry): string;
     /** Every Grid column this Gantt paints right now, in paint order. The consumer's own columns and
      *  every plugin's are both here, each with its Field defaults already merged. `gantt.gridColumns` answers a
      *  different question: what the *consumer* authored (D-S5-33). A plugin that walks the grid wants
@@ -483,6 +490,7 @@ export function buildPluginPorts(
           .map((column) => ({ header: column.header, value: column.format(entry) })),
       registerDecoration: (layer, provider) =>
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
+      variantOf: (entry) => shell.variantOf(entry),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
       registerGridColumn: (column) =>
         registerWhileOpen(() => shell.registrations.registerGridColumn(column, pluginId)),

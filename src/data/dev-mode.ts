@@ -34,7 +34,7 @@
  * ## It has bitten three times
  *
  * Each time, a consumer-facing report was gated and no consumer ever received one:
- * `'scale-options-ignored'` and the corrected-rollup report (both D-S5-41), and `'look-claimed-twice'`
+ * `'scale-options-ignored'` and the corrected-rollup report (both D-S5-41), and `'variant-claimed-twice'`
  * (J33, 2026-09-11, caught in review before it shipped). Each was written as "warn in dev mode",
  * which is the phrase to distrust — it describes an intent this flag cannot carry.
  *

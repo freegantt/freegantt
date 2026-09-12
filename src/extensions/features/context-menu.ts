@@ -129,7 +129,7 @@ export function contextMenu(options: ContextMenuOptions = {}): GanttPlugin {
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
-          ...(entry !== undefined ? { entry } : {}),
+          ...(entry !== undefined ? { entry, variant: ctx.view.variantOf(entry) } : {}),
           ...(target !== undefined ? { target: commandTargetOf(target, actedOn) } : {}),
         };
         const available = ctx.commands.available(commandCtx);

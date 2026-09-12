@@ -18,7 +18,7 @@
 - [x] **A field match is equality, per Field, AND across keys.** Each key reads through `entry.read(key)` and compares with that Field's own `equals` (`model/field.ts`), falling back to `Object.is`. **It never means "has a value"** — `{ 'demo:phaseId': true }` claims the rows whose value **is** `true`. That question is a predicate: `(entry) => entry.read('demo:phaseId') !== undefined`.
 - [x] **`TProps` reaches the rule.** `GanttOptions<TProps>` already carries the Dataset's type, so `variants: readonly EntryVariant<TProps>[]` makes the ADR's own sample — `entry.read('slack') > 0` — compile. The registry inside `view/` holds the erased shape and casts once at the façade, the way `api/dataset.ts` re-types the store today. **Do not make `layout/` generic** — that is what ADR 0005 refused, and `Q2` defers the renderer half to [#284](https://github.com/Pawel-IT/FreeGantt/issues/284).
 - [x] Default `items` to one whole-entry Item. Both shipped examples hand-write that line today.
-- [ ] Add `variants` to `GanttOptions`. An app author installs a variant with no plugin at all.
+- [x] Add `variants` to `GanttOptions`. An app author installs a variant with no plugin at all.
 - [x] Add `ctx.variants.add(variant)` as the plugin door. One type, two doors, one shape. **Namespaced**, like `ctx.fields.register` and `ctx.edits.setExtender` — a bare `ctx.addVariant` would be the one verb hanging off the root.
 - [x] Resolve per Gantt: **walk newest-first and stop at the first rule that answers yes** (`Q5`, ruled 2026-09-11). There is no second source and no stored value.
 - [x] Register core's own two variants **first**, as ordinary `EntryVariant` objects with nothing special about them:
@@ -35,9 +35,9 @@
 - [x] `registerLookClaim` retires (18 refs, 6 files).
 - [x] `registerItemProducer` retires (27 refs, 7 files).
 - [x] `registerLookDefaults` retires (27 refs, 8 files).
-- [ ] `RendererByLook` retires (22 refs, 7 files). `barRenderer: RendererByLook` leaves `GanttOptions` (`src/api/gantt.ts:154`) — it was a fifth site for the same name.
+- [x] `RendererByLook` retires (22 refs, 7 files). `barRenderer: RendererByLook` leaves `GanttOptions` (`src/api/gantt.ts:154`) — it was a fifth site for the same name.
 - [x] `KindDefaults` retires (15 refs, 7 files). `Interactions` serves both levels.
-- [ ] `LookClaim` becomes **`VariantPredicate`** (11 refs, 5 files). **Not `VariantRule`** — `LookClaim` is `(entry) => boolean`, which is one arm of the union Unit A declares. Give the union the published name and the arm its own, or one type ships with two meanings.
+- [x] `LookClaim` becomes **`VariantPredicate`** (11 refs, 5 files). **Not `VariantRule`** — `LookClaim` is `(entry) => boolean`, which is one arm of the union Unit A declares. Give the union the published name and the arm its own, or one type ships with two meanings.
 - [x] `resolveLook` becomes `resolveVariant` (10 refs, 5 files) and **loses its structural fallback** (`src/layout/items/produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers when nothing earlier does.
 - [x] `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`src/view/capability.ts:113-115`). **Build 1 removed two of the other three — `hasChildren` and `descendantsOf`. `fieldFor` stays**, on purpose: it is `dataset.field(key)`, a Field-registry lookup, and a row holds no registry. Delete it and every write verdict answers `NOT_WRITABLE` (`capability.ts:202`).
 - [x] **Keep `DoubleLookClaim`, `LookClaimant` and `ReportDoubleClaim`**, renamed. Two rules may still both answer yes. Setup order resolves it and the diagnostic reports it.
@@ -60,13 +60,13 @@
 
 ## Unit D — delete `EntryLook`, and take the word out of the DOM
 
-- [ ] Delete `EntryLook` (`src/model/entry.ts:11`) — **47 references in 12 files**. Nothing replaces it. A variant name is a `string`. The alias already ended in `(string & {})`, so this widens no type.
-- [ ] `Item.look` and `BarGeom.look` become `.variant`, typed `string` (`src/layout/items/produce-items.ts:35,76`, `src/layout/frame.ts:93`).
+- [x] Delete `EntryLook` (`src/model/entry.ts:11`) — **47 references in 12 files**. Nothing replaces it. A variant name is a `string`. The alias already ended in `(string & {})`, so this widens no type.
+- [x] `Item.look` and `BarGeom.look` become `.variant`, typed `string` (`src/layout/items/produce-items.ts:35,76`, `src/layout/frame.ts:93`).
 - [x] Delete `BAR_SHAPE_CLASS` (`src/render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
 - [x] **`fg-bar-summary` keeps its name.** It is a CSS class. It moves to the `parent` variant's `paint`. `src/view/styles.ts` names it too.
-- [ ] `data-kind` becomes `data-variant`. **The write site does not contain the string `data-kind`** — `src/render/dom/index.ts:1186` writes `node.dataset['kind']`. A grep for `data-kind` misses it. Change both.
-- [ ] The literal `data-kind` sits in five `src/` files: `render/dom/index.ts`, `render/dom/index.test.ts`, `layout/items/produce-items.ts`, `model/entry.ts`, `api/gantt.test.ts`.
-- [ ] `'look-claimed-twice'` becomes `'variant-claimed-twice'` (`src/view/gantt-shell.ts:1475`), in 3 files.
+- [x] `data-kind` becomes `data-variant`. **The write site does not contain the string `data-kind`** — `src/render/dom/index.ts:1186` writes `node.dataset['kind']`. A grep for `data-kind` misses it. Change both.
+- [x] The literal `data-kind` sits in five `src/` files: `render/dom/index.ts`, `render/dom/index.test.ts`, `layout/items/produce-items.ts`, `model/entry.ts`, `api/gantt.test.ts`.
+- [x] `'look-claimed-twice'` becomes `'variant-claimed-twice'` (`src/view/gantt-shell.ts:1475`), in 3 files.
 - [x] `claimedLookFor` renames (`src/layout/items/produce-items.ts`, 4 refs).
 
 **Plan the `fg-bar-summary` move and the `data-variant` rename together.** Seven e2e specs couple to this area — `data`, `parent-bar-drag`, `planner`, `plugins`, `row-hover`, `selection`, `theme` — plus `src/api/gantt.test.ts`. Most couple through `fg-bar-summary`, not the attribute. Move both in one step so those specs stay green.
@@ -78,7 +78,7 @@
 - [ ] `harness/plugins/buffer-kind.ts` — 7 calls become one `ctx.variants.add` and one command.
 - [ ] `harness/plugins/risk-kind.ts` — 4 calls become one.
 - [ ] `harness/plugins/milestone-kind.ts` — **becomes four lines of page config and no plugin.** The ADR says so.
-- [ ] **A command context names the resolved variant: `CommandContextOf.variant?: string`** (`src/api/command.ts:117-133`). Fill it from the same resolution the layout pass uses, for the `entry` the invocation is about.
+- [x] **A command context names the resolved variant: `CommandContextOf.variant?: string`** (`src/api/command.ts:117-133`). Fill it from the same resolution the layout pass uses, for the `entry` the invocation is about.
 - [ ] Delete the owned-id `Set` pattern. Each plugin casts `new Set<EntryId>(ownedIds as Iterable<EntryId>)` today, because a claim could not ask a question about the row. Now it can.
 - [ ] **The `Set` has a fifth reader, and the box above is what frees it.** `buffer-kind.ts:52` is a command's `when`: `({ entry }) => entry !== undefined && owned.has(entry.id)`. It becomes `({ variant }) => variant === 'buffer'`. **Do not restate the variant's `when` rule inside the command** — that is the harness re-deriving what the library just resolved, and `CLAUDE.md`'s stop rule is about exactly that.
 

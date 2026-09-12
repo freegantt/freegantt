@@ -26,7 +26,7 @@ import type {
   CellRenderer,
   HeaderRenderer,
   TooltipRenderer,
-  RendererByLook,
+  EntryVariant,
 } from '../layout/index.js';
 import type {
   Entry,
@@ -148,10 +148,28 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  side, and still fall back to ellipsised-inside when the forced side has no room. `'none'` paints
    *  no label at all. */
   barLabels?: BarLabels;
-  /** Live (S5.4, D-S5-11/12). Customization ladder level 3 (`plans/02` §4). A function, or a
-   *  per-kind map — `{ milestone: (…) => …, '*': (…) => … }` — so the common case needs no
-   *  branching. `undefined` returned from either form keeps the library's own bar output. */
-  barRenderer?: BarRenderer | RendererByLook;
+  /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
+   *  bar this Gantt paints. `undefined` returned from it keeps the library's own bar output.
+   *
+   *  To paint one kind of row and leave the rest alone, write a variant instead: `variants: [{ name,
+   *  when, paint }]` (ADR 0018). That is what the retired per-kind map form was for, and a variant
+   *  says which rows it covers in the same object. */
+  barRenderer?: BarRenderer;
+  /** Live (ADR 0018). One variant is one object: `when` says which rows wear it, `items` what shape
+   *  it draws, `paint` how it looks, and `can` what you can do to it.
+   *
+   *  ```ts
+   *  variants: [{ name: 'milestone', when: { milestone: true }, paint: milestoneBar, can: { resize: false } }]
+   *  ```
+   *
+   *  Nothing stores a variant. It is a rule, resolved per Gantt, so two Gantts on one Dataset may
+   *  paint the same row differently (I2). To pin one named row, write the data — declare a Field,
+   *  `update(id, { milestone: true })`, and let `when` read it back.
+   *
+   *  The rules here win over every plugin's, whatever order the plugins installed in, and both win
+   *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
+   *  the later one wins. Default `[]`. */
+  variants?: readonly EntryVariant<TProps>[];
   /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
   cellRenderer?: CellRenderer;
@@ -261,6 +279,8 @@ export class Gantt<TProps = unknown> {
       // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
       // `buildPluginContext` already carries).
       ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
+      // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
+      ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
       ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
@@ -429,15 +449,30 @@ export class Gantt<TProps = unknown> {
     this.#shell.barLabels = value;
   }
 
-  /** Live (S5.4, D-S5-11/12). Assigning repaints every bar with no remount (I8). A `RendererByLook`
-   *  map is a value, not a mutable object (#187): mutate the map you already assigned, assign it
-   *  again, and nothing repaints. Assign a copy — `{ ...map, milestone: paint }`, `plans/02` §2. */
-  get barRenderer(): BarRenderer | RendererByLook | undefined {
+  /** Live (S5.4, D-S5-11). Assigning repaints every bar with no remount (I8). */
+  get barRenderer(): BarRenderer | undefined {
     return this.#shell.barRenderer;
   }
 
-  set barRenderer(renderer: BarRenderer | RendererByLook | undefined) {
+  set barRenderer(renderer: BarRenderer | undefined) {
     this.#shell.barRenderer = renderer;
+  }
+
+  /** Live (ADR 0018). Assigning replaces this Gantt's own variant list. Every row resolves its
+   *  variant again, and a row whose rule no longer answers falls back to whatever wins next. A
+   *  plugin's own variants stand, and they still lose to these.
+   *
+   *  A variant list is a value, not a mutable object (#187): push onto the array you already
+   *  assigned and nothing repaints. Assign a copy — `[...gantt.variants, myVariant]`. */
+  get variants(): readonly EntryVariant<TProps>[] {
+    return this.#shell.variants as readonly EntryVariant<TProps>[];
+  }
+
+  set variants(next: readonly EntryVariant<TProps>[]) {
+    // ADR 0018: one cast at the façade. `GanttOptions<TProps>` types every rule an app author
+    // writes; the registry inside `view/` holds the erased shape, the same way `api/dataset.ts`
+    // re-types the whole store for `TProps`.
+    this.#shell.variants = next as readonly EntryVariant[];
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
