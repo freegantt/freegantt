@@ -24,13 +24,13 @@ function entry(overrides: Partial<Entry> = {}): Entry {
 // derives `hasChildren` from `dataset.entries.childrenOf` and `lookOf` from `resolveLook`
 // (`layout/items/produce-items.ts`). This file has no Dataset to ask, so it marks the one fact each
 // test cares about on the Entry's own `props` and reads the mark straight back.
-const isMarkedParent = (entry: Entry): boolean => entry.props['isParent'] === true;
+const isMarkedParent = (entry: Entry): boolean => entry.read('isParent') === true;
 /** ADR 0013: what a parent bar's own drag would write. A test that cares hands over its own subtree;
  *  every other test here marks a parent with no children to find, which is what an empty list says. */
 const markedChildren = (entry: Entry): readonly Entry[] =>
-  (entry.props['children'] as readonly Entry[] | undefined) ?? [];
+  (entry.read('children') as readonly Entry[] | undefined) ?? [];
 const markedLook = (entry: Entry): EntryLook =>
-  (entry.props['look'] as EntryLook | undefined) ?? 'leaf';
+  (entry.read('look') as EntryLook | undefined) ?? 'leaf';
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
  *  registers — `start`/`end` roll up and are editable, `duration` computes, `kind` is neither. One

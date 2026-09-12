@@ -186,7 +186,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
     const committed = state.entries.get(target);
     expect(committed?.name).toBe('A');
     expect((committed?.props as { tag?: string } | undefined)?.tag).toBe('milestone');
-    expect(committed?.parentId).toBe(entryId('t1'));
+    expect(committed?.parent()?.id).toBe(entryId('t1'));
   });
 
   it('emits a changeset row for every plugin write, so undo restores all three', () => {

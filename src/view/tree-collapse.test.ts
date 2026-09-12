@@ -20,7 +20,7 @@ function entry(id: string, parentId?: string): Entry {
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: {},
   };
-  if (parentId !== undefined) record.parentId = entryId(parentId);
+  if (parentId !== undefined) record.parent()?.id = entryId(parentId);
   return record;
 }
 
@@ -72,8 +72,8 @@ function makeCollapse(
       ((id) => {
         const ids: RowId[] = [];
         let current = entries.find((candidate) => candidate.id === id);
-        while (current?.parentId !== undefined) {
-          const parentId = current.parentId;
+        while (current?.parent()?.id !== undefined) {
+          const parentId = current.parent()?.id;
           ids.push(rowId(parentId));
           current = entries.find((candidate) => candidate.id === parentId);
         }

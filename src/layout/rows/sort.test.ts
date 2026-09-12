@@ -23,7 +23,7 @@ function entry(
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: opts?.cost !== undefined ? { cost: opts.cost } : {},
   };
-  if (opts?.parentId !== undefined) row.parentId = entryId(opts.parentId);
+  if (opts?.parentId !== undefined) row.parent()?.id = entryId(opts.parentId);
   return row;
 }
 

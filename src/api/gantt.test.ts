@@ -163,11 +163,11 @@ describe('Gantt.dataset (#226)', () => {
     });
     const gantt = new Gantt({ container, dataset });
 
-    const cost: number | undefined = gantt.dataset.entries.fieldValue('a', 'cost');
+    const cost: number | undefined = gantt.dataset.entries.get('a')?.read('cost');
     expect(cost).toBe(42);
     // And the write half: `cost` is a declared key on this Dataset, so it is legal here.
     gantt.dataset.entries.update('a', { cost: 43 });
-    expect(gantt.dataset.entries.fieldValue('a', 'cost')).toBe(43);
+    expect(gantt.dataset.entries.get('a')?.read('cost')).toBe(43);
 
     gantt.destroy();
   });
@@ -4479,7 +4479,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     gantt.expandAll();
     expect(gantt.collapsed).toEqual([]);
 
-    gantt.rowSource = { source: 'group', groupBy: (item: StoredEntry) => item.props['category'] as string };
+    gantt.rowSource = { source: 'group', groupBy: (item: StoredEntry) => item.read('category') as string };
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gantt.collapseAll();
     expect(gantt.collapsed.map(String)).toEqual(['group:group', 'group:span', 'group:milestone']);

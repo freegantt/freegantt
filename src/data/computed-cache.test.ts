@@ -58,9 +58,9 @@ describe('ComputedFieldCache (D-S4-10)', () => {
         },
       ],
     });
-    expect(state.entries.fieldValue('t1', 'label')).toBe('t1:1');
-    expect(state.entries.fieldValue('t1', 'label')).toBe('t1:1');
+    expect(state.entries.get('t1')?.read('label')).toBe('t1:1');
+    expect(state.entries.get('t1')?.read('label')).toBe('t1:1');
     state.entries.update('t1', { name: 't2' });
-    expect(state.entries.fieldValue('t1', 'label')).toBe('t2:2');
+    expect(state.entries.get('t1')?.read('label')).toBe('t2:2');
   });
 });

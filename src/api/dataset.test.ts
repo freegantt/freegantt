@@ -41,7 +41,7 @@ describe('new Dataset()', () => {
       entries: [oneEntry({ id: 'root' }), oneEntry({ id: 't1', parentId: 'root' })],
     });
     expect(first(dataset).id).toBe(entryId('root'));
-    expect(dataset.entries.all[1]?.parentId).toBe(entryId('root'));
+    expect(dataset.entries.all[1]?.parent()?.id).toBe(entryId('root'));
   });
 
   it("takes date strings and reads them in the dataset's zone", () => {
@@ -222,7 +222,7 @@ describe('Dataset transaction/on/off delegation', () => {
       timeZone: 'UTC',
       entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1' })],
     });
-    expect(dataset.entries.childrenOf('p1').map((e) => e.id)).toEqual([entryId('t1')]);
+    expect((dataset.entries.get('p1')?.children() ?? []).map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
   it('off() stops a handler from seeing further events', () => {
@@ -247,17 +247,17 @@ describe('Dataset transaction/on/off delegation', () => {
         oneEntry({ id: 'leaf', parentId: 'root', props: { cost: 100 } }),
       ],
     });
-    expect(dataset.entries.fieldValue('root', 'cost')).toBe(100);
+    expect(dataset.entries.get('root')?.read('cost')).toBe(100);
     const restored = new Dataset({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
       entries: dataset.entries.all,
     });
-    expect(restored.entries.fieldValue('root', 'cost')).toBe(100);
+    expect(restored.entries.get('root')?.read('cost')).toBe(100);
     restored.entries.update('leaf', { cost: 250 });
-    expect(restored.entries.fieldValue('leaf', 'cost')).toBe(250);
-    expect(restored.entries.fieldValue('root', 'cost')).toBe(250);
+    expect(restored.entries.get('leaf')?.read('cost')).toBe(250);
+    expect(restored.entries.get('root')?.read('cost')).toBe(250);
   });
 });
 
@@ -481,13 +481,13 @@ describe('entries.fieldValue', () => {
       entries: [oneEntry()],
     });
     dataset.entries.update('t1', { cost: 500 });
-    expect(dataset.entries.fieldValue('t1', 'cost')).toBe(500);
+    expect(dataset.entries.get('t1')?.read('cost')).toBe(500);
   });
 
   it('reads an entry-sourced Field', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(dataset.entries.fieldValue('t1', 'start')).toBe(first(dataset).start);
-    expect(dataset.entries.fieldValue('t1', 'name')).toBe('Design');
+    expect(dataset.entries.get('t1')?.read('start')).toBe(first(dataset).start);
+    expect(dataset.entries.get('t1')?.read('name')).toBe('Design');
   });
 
   it('reads duration on a headless Dataset before any Gantt exists', () => {
@@ -497,18 +497,18 @@ describe('entries.fieldValue', () => {
       entries: [oneEntry({ start: 0, end: 1 })],
     });
     // `duration` computes its value and owns no `Entry` key, and still reads back as a `Duration`.
-    const duration: Duration | undefined = dataset.entries.fieldValue('t1', 'duration');
+    const duration: Duration | undefined = dataset.entries.get('t1')?.read('duration');
     expect(duration).toEqual({ value: 1, unit: 'millisecond' });
   });
 
   it('throws UnknownFieldError for an unregistered key', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(() => dataset.entries.fieldValue('t1', 'cost')).toThrow(UnknownFieldError);
+    expect(() => dataset.entries.get('t1')?.read('cost')).toThrow(UnknownFieldError);
   });
 
   it('throws EntryNotFoundError for a missing id', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(() => dataset.entries.fieldValue('missing', 'name')).toThrow(EntryNotFoundError);
+    expect(() => dataset.entries.get('missing')?.read('name')).toThrow(EntryNotFoundError);
   });
 
   it('reads a staged write inside an open transaction', () => {
@@ -519,7 +519,7 @@ describe('entries.fieldValue', () => {
     });
     dataset.transaction(() => {
       dataset.entries.update('t1', { cost: 40 });
-      expect(dataset.entries.fieldValue('t1', 'cost')).toBe(40);
+      expect(dataset.entries.get('t1')?.read('cost')).toBe(40);
     });
   });
 });
@@ -541,16 +541,16 @@ describe('Dataset generics (#123)', () => {
       ],
     });
 
-    const team: string | undefined = dataset.entries.get('t1')?.props?.team;
+    const team: string | undefined = dataset.entries.get('t1')?.read('team');
     expect(team).toBe('A');
 
     const updated = dataset.entries.update('t1', { cost: 500 });
-    expect(updated.props?.team).toBe('A');
+    expect(updated.read('team')).toBe('A');
 
     // The key types the read — no type argument at the call, and no `as` (#144, ADR 0005).
-    const cost: number | undefined = dataset.entries.fieldValue('t1', 'cost');
+    const cost: number | undefined = dataset.entries.get('t1')?.read('cost');
     expect(cost).toBe(500);
-    const name: string | undefined = dataset.entries.fieldValue('t1', 'name');
+    const name: string | undefined = dataset.entries.get('t1')?.read('name');
     expect(name).toBe('Design');
 
     // Compile-time only: a string is not a number for `cost`, and `bogus` is not a Field key.
@@ -641,7 +641,7 @@ describe('Dataset plugins (S5.10)', () => {
       plugins: [declaresCost],
     });
     expect(dataset.field('cost')?.type).toBe('money');
-    expect(dataset.entries.fieldValue('p1', 'cost')).toBe(500);
+    expect(dataset.entries.get('p1')?.read('cost')).toBe(500);
   });
 
   it('sets up in requires order, whichever order the array writes (D-S5-31)', () => {
@@ -747,10 +747,10 @@ describe('Dataset plugins (S5.10)', () => {
     dataset.entries.update('leaf', { name: 'Renamed' });
 
     // Both extender writes landed on the one child...
-    expect(dataset.entries.fieldValue('leaf', 'cost')).toBe(500);
+    expect(dataset.entries.get('leaf')?.read('cost')).toBe(500);
     expect(dataset.entries.get('leaf')?.start).toBe(instant(utc('2026-02-01')));
     // ...and the Rollup read the child both of them wrote, not the one the last wrapper left.
-    expect(dataset.entries.fieldValue('root', 'cost')).toBe(500);
+    expect(dataset.entries.get('root')?.read('cost')).toBe(500);
     expect(dataset.entries.get('root')?.start).toBe(instant(utc('2026-02-01')));
   });
 
@@ -811,6 +811,6 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     });
 
     expect(reloaded.field('risk')).toBeDefined();
-    expect(reloaded.entries.fieldValue('t1', 'risk')).toBe('high');
+    expect(reloaded.entries.get('t1')?.read('risk')).toBe('high');
   });
 });

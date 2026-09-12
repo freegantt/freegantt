@@ -201,9 +201,9 @@ describe('[S4-A9] promotion undo', () => {
     });
     const before = snapshotOf(state);
     state.entries.update('c1', { parentId: 'p1' });
-    expect(state.entries.childrenOf('p1')).toHaveLength(1);
+    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(1);
     undoAll(state);
-    expect(state.entries.childrenOf('p1')).toHaveLength(0);
+    expect((state.entries.get('p1')?.children() ?? [])).toHaveLength(0);
     expect(snapshotOf(state)).toBe(before);
   });
 });

@@ -19,7 +19,7 @@ function entry(id: string, parentId?: string, team?: string): Entry {
     segments: [{ id: segmentId(`${id}-1`), start, end }],
     props: {},
   };
-  if (parentId !== undefined) row.parentId = entryId(parentId);
+  if (parentId !== undefined) row.parent()?.id = entryId(parentId);
   if (team !== undefined) row.props = { team };
   return row;
 }
