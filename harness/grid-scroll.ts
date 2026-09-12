@@ -3,8 +3,8 @@
 // This fixture is what e2e/grid-scroll.spec.ts drives.
 
 import './harness-nav.ts';
-import { Gantt, Dataset } from '../src/api/index.js';
-import type { GridColumnInput } from '../src/api/index.js';
+import { Gantt, Dataset } from 'freegantt';
+import type { GridColumnInput } from 'freegantt';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 
 const dataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });

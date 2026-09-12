@@ -2,7 +2,7 @@
 // spans nor draws a bar until a child gives the Rollup pass something to derive from. ADR 0013: it
 // is not a "group" — there is no stored classification, and it looks like a plain Entry either way.
 
-import { Dataset } from '../src/api/dataset.js';
+import { Dataset } from 'freegantt';
 
 export function emptyGroupDataset(): Dataset {
   return new Dataset({

@@ -7,8 +7,8 @@
 // calendar so it starts `WEEKS_BACK` weeks before whatever "now" is when the module loads.
 
 import { sampleEntryInputs } from './sample-dataset.js';
-import { addMs, instant, MS } from '../src/api/index.js';
-import type { EntryInput, InstantInput } from '../src/api/index.js';
+import { addMs, instant, MS } from 'freegantt';
+import type { EntryInput, InstantInput } from 'freegantt';
 
 const ORIGINAL_START_MS = Date.UTC(2026, 8, 1); // sampleEntryInputs's entry-1 start
 const WEEKS_BACK = 3;

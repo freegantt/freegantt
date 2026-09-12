@@ -6,8 +6,8 @@
 // both depending on where the value came from. A `Date` already names a full instant, so its `end` is
 // the half-open boundary itself, not a date-only value `dateOnlyEnd` would read as "through that day".
 
-import { Dataset } from '../src/api/index.js';
-import type { Entry, EntryInput, StoredEntry } from '../src/api/index.js';
+import { Dataset } from 'freegantt';
+import type { Entry, EntryInput, StoredEntry } from 'freegantt';
 
 /** What a consumer actually writes — plain JSON, no id branding or date math. The harness uses this
  * directly, exactly as a consumer would. */

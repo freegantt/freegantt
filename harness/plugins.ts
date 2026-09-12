@@ -1,6 +1,6 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, contextMenu } from '../src/api/index.js';
-import type { CellRenderer, ChromePlugin, EntryVariant } from '../src/api/index.js';
+import { Gantt, Dataset, contextMenu } from 'freegantt';
+import type { CellRenderer, ChromePlugin, EntryVariant } from 'freegantt';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';

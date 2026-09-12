@@ -1,6 +1,6 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from '../src/api/index.js';
-import type { DatasetEventMap } from '../src/api/index.js';
+import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from 'freegantt';
+import type { DatasetEventMap } from 'freegantt';
 import { demoEntryInputs, separateSegments } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';

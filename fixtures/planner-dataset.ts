@@ -13,8 +13,8 @@
 // "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) — this fixture
 // is a construction plan because a consumer said so, not because the library knows one.
 
-import { addMs, instant, MS } from '../src/api/index.js';
-import type { StoredEntry, EntryInput, Field, Instant } from '../src/api/index.js';
+import { addMs, instant, MS } from 'freegantt';
+import type { StoredEntry, EntryInput, Field, Instant } from 'freegantt';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
 export interface PlannerEntryProps {

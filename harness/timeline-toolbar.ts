@@ -4,7 +4,7 @@
 // this answers is "make the surface visible on every demo page", so this file exists to avoid three
 // copies of the same dozen lines). Zoom buttons stay in sync through `gantt.on('navigationChange')`.
 
-import type { Gantt, PresetRef } from '../src/api/index.js';
+import type { Gantt, PresetRef } from 'freegantt';
 
 export interface TimelineToolbarOptions {
   gantt: Gantt;

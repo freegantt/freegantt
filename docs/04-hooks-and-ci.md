@@ -160,7 +160,24 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 
 That last one deserves emphasis: it closes the loop `plans/04` §4 opens ("an invariant without a job is a TODO, tracked in the table itself"). The table stops being prose and becomes a checked artifact.
 
-### 4.1 Violation fixtures
+### 4.1 `scripts/guard-red-test.mjs` — the red-test cases
+
+Each call writes one deliberate violation, asserts `depcruise` fails on it, then deletes the file. A
+case with no failing fixture is presumed broken (the rule this whole section states):
+
+| Case | Rule it proves |
+|---|---|
+| `scheduling/ -> render/` | `scheduling-boundary` — D4, `scheduling/` never reaches a DOM layer |
+| `interaction/ -> layout/` | `interaction-boundary` — P3's one-arrow widening (`model/` only) stays to one arrow |
+| `rollup-is-removable: second importer` | `rollup-is-removable` — the Rollup leaf keeps exactly one legal importer |
+| `dataset-change-subscription-is-removable: second importer` | `dataset-change-subscription-is-removable` — same shape, S2/S4 leaf |
+| `history-is-removable: second importer` | `history-is-removable` — same shape, undo/redo leaf |
+| `extensions/ -> view/` | `extensions-public-only` — D-S5-5's dogfood gate: a built-in feature may see only `api/` and `model/` |
+| `render/ -> data/transaction.js` | the `data/dev-mode.ts` leaf widening stays scoped to that one file, not `data/` generally |
+| `extensions/ -> data/transaction.js` | same, from the `extensions/` side |
+| `harness/ -> src/` (`import '../src/layout/items/variants.js'`) | `harness-public-api-only` (#287) — `harness/`, `e2e/` and `fixtures/` reach `src/` through the published `freegantt` specifier alone, never a relative path |
+
+### 4.2 Violation fixtures
 
 `test/fixtures/violations/` holds one small file per rule, each a deliberate violation with a header comment naming the rule it must trigger. They are excluded from `tsconfig`'s program and from `src/` globs. The directory doubles as documentation: "what does this rule actually catch?" is answered by reading one file.
 

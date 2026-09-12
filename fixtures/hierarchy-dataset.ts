@@ -6,7 +6,7 @@
 // never calls `instant()` on a zoneless plain time (harness code is not allowed through `time/`'s
 // plain-time helpers).
 
-import type { EntryInput } from '../src/api/index.js';
+import type { EntryInput } from 'freegantt';
 
 /** Leaf rows carry `props.cost` and `props.team`; every parent derives its look from having
  *  children (ADR 0013) — there is no stored classification any more. */

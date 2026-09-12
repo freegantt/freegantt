@@ -1,4 +1,4 @@
-import type { ChangeSet } from '../src/api/index.js';
+import type { ChangeSet } from 'freegantt';
 
 /** Call: `prependLogLine(log, '[load] imported document')`. */
 export function prependLogLine(log: HTMLElement, text: string): void {

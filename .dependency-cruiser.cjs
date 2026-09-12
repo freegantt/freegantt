@@ -102,6 +102,21 @@ module.exports = {
         pathNot: [DEV_MODE_LEAF, REGISTRATION_TABLE_LEAF],
       },
     },
+    // #287: harness/, e2e/ and fixtures/ are the library's first consumers, so they meet the same
+    // gate a real consumer meets — the sealed exports map, through the `freegantt` alias
+    // (vite.config.ts, tsconfig.json:24, landed at S5.6 as [S5-A2]). `scripts/guard-red-test.mjs`
+    // proves this rule actually blocks a violation.
+    {
+      name: 'harness-public-api-only',
+      comment:
+        "harness/, e2e/ and fixtures/ are the library's first consumers, so they meet the same gate a " +
+        'real consumer meets: the sealed exports map. They reach src/ through the published specifier ' +
+        'alone. A relative path into src/ walks past the map and can touch an internal no consumer ' +
+        'could reach, which is how a harness workaround hides an API gap instead of exposing it.',
+      severity: 'error',
+      from: { path: '^(harness|e2e|fixtures)/' },
+      to: { path: '^src/', pathNot: '^src/api/index\\.ts$' },
+    },
     // model and time are the type/primitive surface api/ re-exports (plans/01 §1: "api/ and model/
     // types are public", widened to time/'s public primitives and presets by #25, and to layout/'s
     // TimeScaleModel/ScrollModel by issue #91 §9-I — D9 names both as public, consumer-constructed
