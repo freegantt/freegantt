@@ -925,6 +925,9 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
+export function fixedWidthItem(px: number, anchor?: 'start' | 'center' | 'end'): ItemProducer;
+
+// @public
 export interface FormatContext extends FieldContext {
     // (undocumented)
     readonly locale: Intl.LocalesArgument;
@@ -956,11 +959,11 @@ export interface FrameBar {
     label: string;
     // (undocumented)
     lane: number;
-    minimumSpan: boolean;
     // (undocumented)
     rowId: RowId;
     segmentId?: SegmentId;
     segmentIds: readonly SegmentId[];
+    span: 'exact' | 'minimum' | 'fixed';
     variant: string;
     // (undocumented)
     width: number;
@@ -1406,6 +1409,10 @@ export function isTimeUnit(value: string): value is TimeUnit;
 
 // @public (undocumented)
 export interface Item {
+    box?: {
+        widthPx: number;
+        anchor: 'start' | 'center' | 'end';
+    };
     // (undocumented)
     end: Instant;
     // (undocumented)
@@ -1432,7 +1439,7 @@ export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
 export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
 
 // @public
-export type ItemProducer = (entry: Entry) => readonly Item[];
+export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
 
 // @public (undocumented)
 export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;

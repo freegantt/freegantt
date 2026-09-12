@@ -189,7 +189,7 @@ type RowBandGeom = {
 };
 type BarGeom = Pick<
   FrameBar,
-  'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'minimumSpan'
+  'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'span'
 > & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
@@ -1183,7 +1183,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           height: bar.height,
           flags: bar.flags,
           a11yLabel: bar.a11yLabel,
-          minimumSpan: bar.minimumSpan,
+          span: bar.span,
           // #212: the geom carries the Segment, so `shallowEqual` sees a Segment change and patches.
           // The key stays present and may hold `undefined`, which keeps the key count stable.
           segmentId: bar.segmentId,
@@ -1199,10 +1199,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (geom.segmentId === undefined) delete node.dataset[SEGMENT_ID_KEY];
         else node.dataset[SEGMENT_ID_KEY] = geom.segmentId;
         // States a fact about the paint, not a judgement on the variant (plans/01 §2.5) — every bar
-        // `barSpan` floors carries it the same way. Pair with `data-variant` to tell which variant
-        // was floored.
-        if (geom.minimumSpan) node.dataset['span'] = 'minimum';
-        else delete node.dataset['span'];
+        // `barSpan` floors or fixes carries it the same way. Pair with `data-variant` to tell which
+        // variant was floored or holds a fixed box.
+        if (geom.span === 'exact') delete node.dataset['span'];
+        else node.dataset['span'] = geom.span;
         node.dataset['flag'] = flagTokens(geom.flags);
         // J1: `undefined` covers both `barLabels: 'none'` and a `barRenderer` result — neither gets a
         // `data-label` stamp, so `.fg-bar-label`'s placement rules never fire for either case.

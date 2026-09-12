@@ -1030,11 +1030,11 @@ describe('computeFrame lanes (S4.8)', () => {
 });
 
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
-  it('floors a zero-width span at minBarWidthPx and stamps minimumSpan', () => {
+  it('floors a zero-width span at minBarWidthPx and stamps span: minimum', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width, minimumSpan } = barSpan(spanOf(zeroWidthSpan), scale);
+    const { x, width, span } = barSpan(spanOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
-    expect(minimumSpan).toBe(true);
+    expect(span).toBe('minimum');
     expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
@@ -1049,20 +1049,60 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
     const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
-    const { x, width, minimumSpan } = barSpan(spanOf(narrowSpan), scale);
+    const { x, width, span } = barSpan(spanOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
-    expect(minimumSpan).toBe(true);
+    expect(span).toBe('minimum');
     expect(x + width / 2).toBe(startX + 2.5);
   });
 
-  it('leaves an ordinary bar wide enough already unfloored, with no minimumSpan stamp', () => {
+  it('leaves an ordinary bar wide enough already unfloored, with span: exact', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, minimumSpan } = barSpan(spanOf(wideSpan), scale);
+    const { x, width, span } = barSpan(spanOf(wideSpan), scale);
     expect(width).toBe(
       scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),
     );
     expect(width).toBeGreaterThan(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
-    expect(minimumSpan).toBe(false);
+    expect(span).toBe('exact');
+  });
+});
+
+describe('barSpan — a fixed painted box the time scale does not size (ADR 0022)', () => {
+  it('keeps its own width regardless of the entry span, and stamps span: fixed', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { width, span } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
+    expect(width).toBe(13);
+    expect(span).toBe('fixed');
+  });
+
+  it('keeps its width when the scale changes zoom', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const zoomedOut = createTimeScale({
+      timeZone: 'UTC',
+      range: spanOf(sampleEntries[0]!),
+      pxPerMs: 1 / 5000,
+    });
+    const atDefaultZoom = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
+    const atOtherZoom = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, zoomedOut);
+    expect(atDefaultZoom.width).toBe(13);
+    expect(atOtherZoom.width).toBe(13);
+  });
+
+  it('centres on the span’s own midpoint for anchor: center — the same midpoint a floored bar centres on', () => {
+    const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
+    const { x, width } = barSpan({ ...spanOf(zeroWidthSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
+    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
+  });
+
+  it('aligns its left edge to the span’s start for anchor: start', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'start' } }, scale);
+    expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
+  });
+
+  it('aligns its right edge to the span’s end for anchor: end', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x, width } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'end' } }, scale);
+    expect(x + width).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
 });

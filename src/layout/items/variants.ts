@@ -74,7 +74,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
   name: string;
   /** Which rows wear it. Omit it to write a last resort, which answers for every row **no rule
    *  claims** — core's own `leaf` is the shipped one, and omitting `when` is how a plugin re-skins
-   *  it. A last resort never outranks a rule that states a claim, core's own `parent` included, so
+   *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
    *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
   when?: VariantRule<TProps>;
   /** What shape it draws. Default: one whole-entry Item (`wholeEntryItem`). */
@@ -192,24 +192,24 @@ const SUMMARY_BAR: ElementDescription = Object.freeze({
   class: Object.freeze({ 'fg-bar-summary': true }),
 });
 
-const PARENT_VARIANT_NAME = 'parent';
+const SUMMARY_VARIANT_NAME = 'summary';
 const LEAF_VARIANT_NAME = 'leaf';
 
 /** Core's two, as ordinary `EntryVariant` objects with nothing special about them. They register
  *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
  *  overrides. `leaf` carries no `when`, so it answers for every row and the floor is total.
  *
- *  **`leaf` registers before `parent`, and the order inside this list is load-bearing** (`J37`).
+ *  **`leaf` registers before `summary`, and the order inside this list is load-bearing** (`J37`).
  *  The walk is newest-first, and a variant with no `when` claims every row. Put `leaf` second and
- *  it answers before `parent` ever runs, so no row is ever a summary. The floor registers first,
- *  and every rule — core's own `parent` included — stands on it. */
+ *  it answers before `summary` ever runs, so no row is ever a summary. The floor registers first,
+ *  and every rule — core's own `summary` included — stands on it. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([
   {
     name: LEAF_VARIANT_NAME,
     items: produceLeafItems,
   },
   {
-    name: PARENT_VARIANT_NAME,
+    name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
     paint: () => SUMMARY_BAR,
   },
@@ -221,14 +221,14 @@ const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([
  *  Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
  *  start/end case). Same load-bearing cast as `wholeEntryItem` — `produceItemsForRow` never calls
  *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2). */
-function produceLeafItems(entry: Entry): readonly Item[] {
+function produceLeafItems(entry: Entry, variant: string): readonly Item[] {
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
     return segments.map((segment, index) =>
-      entryItem(entry, index, segment.start, segment.end, LEAF_VARIANT_NAME, segment.id),
+      entryItem(entry, index, segment.start, segment.end, variant, segment.id),
     );
   }
-  return [wholeEntryItem(entry, LEAF_VARIANT_NAME)];
+  return [wholeEntryItem(entry, variant)];
 }
 
 /** `when`, as one predicate. A field match reads each named key off the row and compares it with
@@ -320,7 +320,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       variant,
       resolved: {
         name: variant.name,
-        items: variant.items ?? ((entry) => [wholeEntryItem(entry, variant.name)]),
+        items: variant.items ?? ((entry, name) => [wholeEntryItem(entry, name)]),
         paint: variant.paint,
         can: variant.can,
       },
@@ -346,11 +346,11 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
     };
   };
 
-  /** Newest first: the consumer's rules, then every plugin's, then core's `parent` — and after all
+  /** Newest first: the consumer's rules, then every plugin's, then core's `summary` — and after all
    *  of those, the floors, in the same order.
    *
    *  **A rule with no `when` is a last resort, and a last resort never outranks a claim** (`P2-3`).
-   *  Rank alone put a plugin's floor over core's `parent`, so `ctx.variants.add({ name: 'leaf',
+   *  Rank alone put a plugin's floor over core's `summary`, so `ctx.variants.add({ name: 'leaf',
    *  paint })` — the re-skin this file documents — answered for every row and every summary rail in
    *  the Gantt stopped drawing. Sorting the floors last makes that registration re-skin the floor
    *  and leave every claim standing. */

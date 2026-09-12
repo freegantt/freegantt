@@ -21,7 +21,7 @@ describe('which rule wins', () => {
       { id: 'c', parentId: 'p', start: 0, end: 10 },
     ]);
 
-    expect(registry.resolveFor(parent!).name).toBe('parent');
+    expect(registry.resolveFor(parent!).name).toBe('summary');
     expect(registry.resolveFor(child!).name).toBe('leaf');
   });
 
@@ -89,7 +89,7 @@ describe('which rule wins', () => {
 
     registry.addPluginVariant({ name: 'leaf', paint });
 
-    expect(registry.resolveFor(parent!).name).toBe('parent');
+    expect(registry.resolveFor(parent!).name).toBe('summary');
     expect(registry.resolveFor(parent!).paint).not.toBe(paint);
     expect(registry.resolveFor(child!).name).toBe('leaf');
     expect(registry.resolveFor(child!).paint).toBe(paint);
@@ -262,8 +262,10 @@ describe('what a variant answers about itself', () => {
       ],
     });
 
-    expect(registry.resolveFor(spanEntry('a', { plain: true })).items(t1)).toHaveLength(1);
-    expect(registry.resolveFor(spanEntry('b', { twin: true })).items(t1)[0]?.id).toBe(itemId(t1.id, 7));
+    expect(registry.resolveFor(spanEntry('a', { plain: true })).items(t1, 'plain')).toHaveLength(1);
+    expect(registry.resolveFor(spanEntry('b', { twin: true })).items(t1, 'twin')[0]?.id).toBe(
+      itemId(t1.id, 7),
+    );
   });
 
   it('answers the `paint` and `can` of the rule that claimed the row, and nothing for core’s floor', () => {
@@ -291,7 +293,7 @@ describe('what a variant answers about itself', () => {
     const one = registry.resolveFor(spanEntry('one', { a: 1 }));
     expect(one.name).toBe('x');
     expect(one.paint).toBe(first);
-    expect(one.items(spanEntry('one', { a: 1 }))).toEqual([]);
+    expect(one.items(spanEntry('one', { a: 1 }), 'x')).toEqual([]);
     expect(registry.resolveFor(spanEntry('two', { a: 2 })).paint).toBe(second);
   });
 
@@ -301,7 +303,7 @@ describe('what a variant answers about itself', () => {
     const shipped = registry.resolveFor(t1).items;
 
     const dispose = registry.addPluginVariant({ name: 'leaf', items: () => [] });
-    expect(registry.resolveFor(t1).items(t1)).toEqual([]);
+    expect(registry.resolveFor(t1).items(t1, 'leaf')).toEqual([]);
 
     dispose();
     expect(registry.resolveFor(t1).items).toBe(shipped);

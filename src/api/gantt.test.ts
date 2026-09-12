@@ -3760,16 +3760,16 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     });
     const gantt = new Gantt({ container, dataset });
 
-    const groupBar = container.querySelector<HTMLElement>('[data-variant="parent"]')!;
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     const original = document.elementFromPoint.bind(document);
-    document.elementFromPoint = () => groupBar;
+    document.elementFromPoint = () => summaryBar;
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
     // ADR 0013: the parent's own dates roll up, and dragging its bar translates the dated
     // descendants below it. So the move is offered, and the resize is not — one edge of a derived
     // envelope names no descendant to resize.
-    expect(groupBar.hasAttribute('data-movable')).toBe(true);
+    expect(summaryBar.hasAttribute('data-movable')).toBe(true);
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(true);
 
@@ -3944,10 +3944,10 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     // the drag committed a write the Rollup pass immediately took back.
     const gantt = new Gantt({ container, dataset, interactions: { resize: true } });
 
-    const groupBar = container.querySelector<HTMLElement>('[data-variant="parent"]')!;
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     const original = document.elementFromPoint.bind(document);
-    document.elementFromPoint = () => groupBar;
+    document.elementFromPoint = () => summaryBar;
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
     expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(true);

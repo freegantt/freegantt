@@ -37,6 +37,32 @@ describe('wholeEntryItem (review P3)', () => {
   });
 });
 
+describe('a producer stamps the registration’s own name, not one it invents (ADR 0018, J3)', () => {
+  it('receives the resolved variant’s name, so one producer registered under two names stamps each correctly', () => {
+    const t1 = spanEntry('t1');
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const dispose = registry.addPluginVariant({
+      name: 'phase',
+      when: () => true,
+      items: (entry, variant) => [wholeEntryItem(entry, variant)],
+    });
+
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
+      wholeEntryItem(t1, 'phase'),
+    ]);
+
+    dispose();
+    registry.addPluginVariant({
+      name: 'stage',
+      when: () => true,
+      items: (entry, variant) => [wholeEntryItem(entry, variant)],
+    });
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
+      wholeEntryItem(t1, 'stage'),
+    ]);
+  });
+});
+
 function asInstant(ms: number): Instant {
   return ms as Instant;
 }
@@ -105,7 +131,7 @@ describe('produceItemsForRow', () => {
     ]);
     const items = produceItemsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
     expect(items).toHaveLength(1);
-    expect(items[0]?.variant).toBe('parent');
+    expect(items[0]?.variant).toBe('summary');
   });
 
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {

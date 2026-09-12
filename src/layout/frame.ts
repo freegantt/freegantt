@@ -56,23 +56,52 @@ export const DEFAULT_BAR_HEIGHT_PX = 18;
  *
  * A zero-length span (`start === end` — ADR 0012, ADR 0013: core ships no diamond for it any more)
  * still floors at `minBarWidthPx`, centred on its own instant, the same as any other painted span
- * too narrow to grab. */
+ * too narrow to grab.
+ *
+ * An Item that carries `box` (ADR 0022) skips the span-and-floor path entirely: its width is the
+ * box's own `widthPx`, positioned by its own `anchor`. `'center'` reads the box's edges off the
+ * same midpoint the floor above centres on, so the two rules never disagree — they answer the same
+ * question only when `start === end`. This is not "centred on the Item's start": a fixed-width box
+ * on a real span would land in two different places depending on which sentence a reader followed,
+ * so both rules read the span's midpoint. */
 export function barSpan(
   // `Pick<Item, ...>`, not `Entry` — every caller hands this an `Item` (`produceItemsForRow` never
   // produces one for a non-spanning Entry, ADR 0012), whose `start`/`end` stay required.
-  entry: Pick<Item, 'start' | 'end'>,
+  entry: Pick<Item, 'start' | 'end' | 'box'>,
   scale: TimeScale,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
-): { x: number; width: number; minimumSpan: boolean } {
+): { x: number; width: number; span: 'exact' | 'minimum' | 'fixed' } {
   const x = scale.xForInstant(entry.start);
-  const width = Math.max(0, scale.xForInstant(entry.end) - x);
+  const end = scale.xForInstant(entry.end);
+  if (entry.box !== undefined) {
+    return { x: fixedBoxX(x, end, entry.box), width: entry.box.widthPx, span: 'fixed' };
+  }
+  const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
   // span has its start for a midpoint; a 5px bar the floor widens to 12px keeps its own centre
   // instead of sliding left onto its start.
   if (width < minBarWidthPx) {
-    return { x: x - (minBarWidthPx - width) / 2, width: minBarWidthPx, minimumSpan: true };
+    return { x: x - (minBarWidthPx - width) / 2, width: minBarWidthPx, span: 'minimum' };
   }
-  return { x, width, minimumSpan: false };
+  return { x, width, span: 'exact' };
+}
+
+/** Where a fixed-width box's left edge sits, given the pixel positions of the entry's own `start`
+ *  and `end` (`x`, `end`). `'center'` reads the same midpoint the floor above centres a minimum-width
+ *  bar on, so a diamond on a real span lands where the floor would have put one, not at its start. */
+function fixedBoxX(
+  x: number,
+  end: number,
+  box: { widthPx: number; anchor: 'start' | 'center' | 'end' },
+): number {
+  switch (box.anchor) {
+    case 'start':
+      return x;
+    case 'end':
+      return end - box.widthPx;
+    case 'center':
+      return (x + end) / 2 - box.widthPx / 2;
+  }
 }
 
 export interface BarFlags {
@@ -112,11 +141,15 @@ export interface FrameBar {
   height: number;
   lane: number;
   flags: BarFlags;
-  /** `true` when `barSpan` widened this bar's true `[x, x + width)` extent to reach `minBarWidthPx`.
+  /** What `barSpan` did to this bar's painted `[x, x + width)` extent: `'exact'` for the entry's own
+   *  span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for an Item that
+   *  carries its own `box` (ADR 0022). One value, because a bar is never both floored and fixed —
+   *  `data-span` is one attribute slot, so the type mirrors the DOM it feeds.
+   *
    *  States a fact about the paint, not a judgement on the variant (plans/01 §2.5 bans a variant
-   *  check here); a consumer tells a floored bar apart by pairing this with `variant`. `render/` stamps it
-   *  as `data-span="minimum"` (`02` §4). */
-  minimumSpan: boolean;
+   *  check here); a consumer tells a floored or fixed bar apart by pairing this with `variant`.
+   *  `render/` stamps it as `data-span="minimum"` or `data-span="fixed"` (`02` §4). */
+  span: 'exact' | 'minimum' | 'fixed';
   /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
    * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
    * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
@@ -458,7 +491,7 @@ export function placeFrame(
     });
 
     for (const item of items) {
-      const { x, width, minimumSpan } = barSpan(item, scale, minBarWidthPx);
+      const { x, width, span } = barSpan(item, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       const lane = packing.laneByItem.get(item.id) ?? 0;
       const bar: FrameBar = {
@@ -475,7 +508,7 @@ export function placeFrame(
         height: barHeightPx,
         lane,
         flags: {},
-        minimumSpan,
+        span,
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
         // A reference copy of the set the memory already resolved beside this Item — no allocation
         // per frame (I5), and no second Entry source for a reader to disagree with (#230).

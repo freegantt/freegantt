@@ -18,11 +18,32 @@ export interface Item {
   /** The one Segment this Item draws (#212, ADR 0010) — set only when the Item stands for a real
    *  Segment of the Entry, never for an Item that draws the Entry's whole span (`wholeEntryItem`). */
   segmentId?: SegmentId;
+  /** A painted box the time scale does not size, or `undefined` for an ordinary span-and-floor box.
+   *  A marker that must hold its size at every zoom — `diamond()`'s glyph is the shipped case —
+   *  states it here. `widthPx` is the box's width in content pixels; `anchor` says which point of
+   *  the entry's own span the box holds fixed — `'center'` for a marker (a diamond points at an
+   *  instant), `'start'` for a flag (the pole sits on the date and the cloth hangs to the right).
+   *  Core picks for nobody: `fixedWidthItem` defaults to `'center'`, and every shipped or authored
+   *  variant states its own choice.
+   *
+   *  Not centred on the entry's own start — `barSpan` (`layout/frame.ts`) centres a *floored* span
+   *  on its own midpoint (ADR 0022 Q7), and `'center'` follows that same rule so the two never
+   *  disagree. The two answer the same question only when `start === end`.
+   *
+   *  `barSpan` honours this ahead of the span-and-floor path, and `render/` stamps
+   *  `data-span="fixed"`. `fixedWidthItem` is the producer that sets it. */
+  box?: { widthPx: number; anchor: 'start' | 'center' | 'end' };
 }
 
 /** What shape one variant draws. `EntryVariant.items` takes one; omit it and the variant draws one
- *  whole-entry Item, which is the line both shipped examples used to hand-write (ADR 0018). */
-export type ItemProducer = (entry: Entry) => readonly Item[];
+ *  whole-entry Item, which is the line both shipped examples used to hand-write (ADR 0018).
+ *
+ *  **Takes the variant's own name.** A variant states its name once (ADR 0018), so the registry
+ *  passes its own registration's name here instead of a producer inventing or hardcoding one — the
+ *  Item then carries that name straight to `data-variant`. A one-argument producer an author already
+ *  wrote keeps compiling: TypeScript accepts a function that takes fewer parameters than its
+ *  declared type. */
+export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
 
 /** One row's variant, as the item pass reads it: which one won, and what it draws. `variants.ts`
  *  widens it with how it looks and what you can do to it — those two name `BarRenderer`, and this
@@ -89,4 +110,18 @@ export function entryItem(
  *  (N10 in plans/field-redesign/BUILD-LOG.md). */
 export function wholeEntryItem(entry: Entry, variant: string): Item {
   return entryItem(entry, 0, entry.start as Instant, entry.end as Instant, variant);
+}
+
+/** Call: `diamond({ items: fixedWidthItem(13) })`. Answers an `ItemProducer` that draws one
+ *  whole-entry Item — the same span `wholeEntryItem` draws — with `box` set, so `barSpan` paints it
+ *  at `px` wide at every zoom instead of sizing it from the entry's span.
+ *
+ *  Omit `anchor` and it is `'center'` — the spelling already on the surface (`panToDate`'s `align`).
+ *  A variant that wants a flag's left-aligned pole passes `'start'`; core picks for nobody. */
+export function fixedWidthItem(px: number, anchor: 'start' | 'center' | 'end' = 'center'): ItemProducer {
+  return (entry, variant) => {
+    const item = wholeEntryItem(entry, variant);
+    item.box = { widthPx: px, anchor };
+    return [item];
+  };
 }
