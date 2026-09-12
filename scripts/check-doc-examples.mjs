@@ -68,10 +68,18 @@ function extractTsBlocks(markdown) {
  *  and the compiler sees two files.
  */
 function extractPageBlocks(markup) {
+  // Every `<pre>` opening is counted, and the count is checked against what this regex reached
+  // (`F27`). A `<pre>` with no `<code>` inside it, or with a newline between the two tags, never
+  // matches — so without this check it is neither compiled nor refused, which is the silent default
+  // the doc comment above set out to delete.
+  const openings = (markup.match(/<pre[\s>]/g) ?? []).length;
   const fence = /<pre([^>]*)><code>([\s\S]*?)<\/code><\/pre>/g;
   const blocks = [];
   const names = [];
-  let skipped = 0;
+  /** Which blocks were skipped, by name and mode — never a bare count (`F11`). A count is one digit
+   *  in a passing gate's output, so switching one attribute from `module` to `type-sketch` silences
+   *  a block and moves nothing a reader would notice. A name shows up in a diff of the output. */
+  const skipped = [];
   let match;
   while ((match = fence.exec(markup)) !== null) {
     const mode = /data-check="([a-z-]+)"/.exec(match[1])?.[1];
@@ -86,7 +94,7 @@ function extractPageBlocks(markup) {
       process.exit(1);
     }
     if (mode === 'type-sketch') {
-      skipped += 1;
+      skipped.push(fileName ?? code.trim().split('\n')[0].slice(0, 60));
       continue;
     }
     if (mode === 'plugin-data') {
@@ -102,6 +110,15 @@ function extractPageBlocks(markup) {
     }
     blocks.push(code);
     names.push(fileName);
+  }
+  if (openings !== blocks.length + skipped.length) {
+    console.error(
+      `check-doc-examples: harness/docs/plugin-authoring.html has ${openings} <pre> block(s), and ` +
+        `${blocks.length + skipped.length} were read. A <pre> with no <code> inside it, or with a ` +
+        'newline between the two tags, is read by nothing. Every block declares "module", ' +
+        '"plugin-data" or "type-sketch", and every block must be reachable.',
+    );
+    process.exit(1);
   }
   return { blocks, names, skipped };
 }
@@ -260,5 +277,6 @@ if (!pageResult.ok) {
 
 console.log(
   `check-doc-examples: all ${page.blocks.length} example(s) in ${path.relative(root, pagePath)} ` +
-    `typecheck against the built package types (${page.skipped} type sketch(es) skipped).`,
+    `typecheck against the built package types. Type sketches skipped: ` +
+    `${page.skipped.length === 0 ? 'none' : page.skipped.join(', ')}.`,
 );
