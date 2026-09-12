@@ -15,7 +15,7 @@ import {
   RegistrationClosedError,
   UnknownFieldError,
 } from './index.js';
-import type { ChangeSet, DatasetPlugin, Duration, StoredEntry, EntryInput } from './index.js';
+import type { ChangeSet, DatasetPlugin, Duration, Entry, StoredEntry, EntryInput } from './index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -28,7 +28,7 @@ const oneEntry = (overrides: Partial<EntryInput> = {}): EntryInput => ({
   ...overrides,
 });
 
-const first = (dataset: Dataset): StoredEntry => {
+const first = (dataset: Dataset): Entry => {
   const entry = dataset.entries.all[0];
   if (!entry) throw new Error('expected one entry');
   return entry;
@@ -252,7 +252,9 @@ describe('Dataset transaction/on/off delegation', () => {
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }],
-      entries: dataset.entries.all,
+      // `toInput()` is the copy door (ADR 0017): a live row answers questions, and the stored values
+      // a rebuild needs — `props` included — are what `entries.add()` takes.
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
     });
     expect(restored.entries.get('root')?.read('cost')).toBe(100);
     restored.entries.update('leaf', { cost: 250 });
@@ -396,7 +398,7 @@ describe('Dataset fields (S4.1)', () => {
     const updated = dataset.entries.update('t1', { start: '2026-09-05', cost: 500 });
 
     expect(changes).toHaveLength(1);
-    expect(updated.props).toEqual({ cost: 500 });
+    expect(updated.read('cost')).toBe(500);
     const fields = fieldRowsOf(changes[0]!)
       .map((row) => row.field)
       .sort();
@@ -467,8 +469,8 @@ describe('Dataset fields (S4.1)', () => {
     dataset.entries.update('a', { cost: 50 });
 
     expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
-    expect(dataset.entries.get('b')?.props).toEqual({ cost: 60, team: 'B' });
-    expect(dataset.entries.get('root')?.props).toEqual({ cost: 110 });
+    expect(dataset.entries.get('b')?.toInput().props).toEqual({ cost: 60, team: 'B' });
+    expect(dataset.entries.get('root')?.toInput().props).toEqual({ cost: 110 });
   });
 });
 
@@ -784,7 +786,7 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     });
 
   it('keeps the plugin’s values, which live in props and never needed the declaration', () => {
-    expect(withRisk().entries.get('t1')?.props).toEqual({ risk: 'high' });
+    expect(withRisk().entries.get('t1')?.toInput().props).toEqual({ risk: 'high' });
   });
 
   it('authors no orphan Field when the reading application leaves the plugin out', () => {
@@ -792,13 +794,13 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
     const reloaded = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'note' }],
-      entries: dataset.entries.all,
+      entries: dataset.entries.all.map((entry) => entry.toInput()),
     });
 
     expect(reloaded.field('risk')).toBeUndefined();
     expect(reloaded.field('note')).toBeDefined();
     // The plugin's data is still there, opaque, waiting for the plugin to come back.
-    expect(reloaded.entries.get('t1')?.props).toEqual({ risk: 'high' });
+    expect(reloaded.entries.get('t1')?.toInput().props).toEqual({ risk: 'high' });
   });
 
   it('re-declares cleanly when the reading application installs the same plugin again', () => {
