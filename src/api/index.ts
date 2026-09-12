@@ -362,6 +362,9 @@ export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '..
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';
+// ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
+// the shipped case. `barSpan` honours the Item's `box` ahead of the span-and-floor path.
+export { fixedWidthItem } from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

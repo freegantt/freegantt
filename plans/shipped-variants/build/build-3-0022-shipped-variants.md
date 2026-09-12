@@ -36,28 +36,28 @@ paint land.
 
 Mechanical. It lands first, because every unit after it names `summary()`.
 
-- [ ] Rename `PARENT_VARIANT_NAME`'s value and the constant with `pk-rename-symbol`. The variant's
+- [x] Rename `PARENT_VARIANT_NAME`'s value and the constant with `pk-rename-symbol`. The variant's
       `name` becomes `'summary'`.
-- [ ] `pnpm typecheck`.
-- [ ] The CSS class `.fg-bar-summary` is already right. Do not touch it.
-- [ ] Fix every string that names the old variant. Start here:
+- [x] `pnpm typecheck`.
+- [x] The CSS class `.fg-bar-summary` is already right. Do not touch it.
+- [x] Fix every string that names the old variant. Start here:
       `plans/02-public-api.md:378` (`.fg-bar[data-variant="parent"]`), `src/api/gantt.test.ts`,
       `src/layout/items/variants.test.ts`, `src/view/plugin-ports.test.ts`, `e2e/**`.
       A same-named string in prose is a separate decision, so read each one.
-- [ ] `grep -rn "data-variant=\"parent\"\|'parent'" src harness e2e plans docs` finds the rest.
+- [x] `grep -rn "data-variant=\"parent\"\|'parent'" src harness e2e plans docs` finds the rest.
 
 ## Unit B — an `ItemProducer` names the variant it draws for
 
 **Decided: Q1, J3.**
 
-- [ ] Widen `ItemProducer` to `(entry: Entry, variant: string) => readonly Item[]`
+- [x] Widen `ItemProducer` to `(entry: Entry, variant: string) => readonly Item[]`
       (`src/layout/items/item.ts:25`). Say in the doc comment why the name arrives as an argument: a
       variant states its name once, and the Item carries it to `data-variant`.
-- [ ] `createVariantRegistry` passes the registration's own name at every call site
+- [x] `createVariantRegistry` passes the registration's own name at every call site
       (`src/layout/items/variants.ts`, the `resolved.items` binding).
-- [ ] `resolveItems` (`src/layout/items/produce-items.ts:18`) passes the resolved name through.
-- [ ] `produceLeafItems` takes the name instead of hardcoding `LEAF_VARIANT_NAME`.
-- [ ] A test proves it: a variant that carries a producer stamps its own name, not the producer's.
+- [x] `resolveItems` (`src/layout/items/produce-items.ts:18`) passes the resolved name through.
+- [x] `produceLeafItems` takes the name instead of hardcoding `LEAF_VARIANT_NAME`.
+- [x] A test proves it: a variant that carries a producer stamps its own name, not the producer's.
       `bar({ name: 'phase' })` draws Items with `variant: 'phase'`.
 - [ ] Update `etc/freegantt.api.md` with `api-extractor run --local`, and say so in the PR.
 
@@ -65,20 +65,20 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 
 **Decided: Q3, Q5, Q7 — J6 and J7.**
 
-- [ ] The Item states a painted box the time scale does not size (`src/layout/items/item.ts`).
+- [x] The Item states a painted box the time scale does not size (`src/layout/items/item.ts`).
       **J7 states its shape and its anchor.** ADR 0022 holds that type. `diamond()` writes
       `anchor: 'center'`. A flag writes `'start'`.
-- [ ] `barSpan` honours it ahead of the span-and-floor path.
-- [ ] The third span state reaches `render/`, and `render/` stamps `data-span="fixed"` beside the
+- [x] `barSpan` honours it ahead of the span-and-floor path.
+- [x] The third span state reaches `render/`, and `render/` stamps `data-span="fixed"` beside the
       existing `data-span="minimum"`.
-- [ ] Export `fixedWidthItem(px, anchor?: 'start' | 'center' | 'end')` from `layout/`, and publish
+- [x] Export `fixedWidthItem(px, anchor?: 'start' | 'center' | 'end')` from `layout/`, and publish
       it from `src/api/index.ts` beside `wholeEntryItem`. Omitted, the anchor is `'center'`. It
       answers one whole-entry Item that carries `box`.
-- [ ] Unit tests in `src/layout/frame.test.ts`: a fixed box keeps its width when the scale changes,
+- [x] Unit tests in `src/layout/frame.test.ts`: a fixed box keeps its width when the scale changes,
       and each anchor puts it where J7 says. `:1047` already pins the floored-bar rule beside it —
       the two must not contradict each other.
-- [ ] A `render/` test asserts the attribute.
-- [ ] `docs/05-consumer-api.md` gains `data-span="fixed"`, beside `data-span="minimum"`.
+- [x] A `render/` test asserts the attribute.
+- [x] `docs/05-consumer-api.md` gains `data-span="fixed"`, beside `data-span="minimum"`.
 
 ## Unit D — the three factories
 

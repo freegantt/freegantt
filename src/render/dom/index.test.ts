@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
-import { computeFrame, createVariantRegistry } from '../../layout/index.js';
+import { computeFrame, createVariantRegistry, fixedWidthItem } from '../../layout/index.js';
 import type {
   BarRenderer,
   ResolvedRenderer,
@@ -724,6 +724,37 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
+  it('stamps data-span="fixed" on an Item whose variant states a `box` (ADR 0022), at the box’s own width', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
+    const t1 = sampleEntries[0]!;
+    const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
+    variantRegistry.addPluginVariant({
+      name: 'marker',
+      when: () => true,
+      items: fixedWidthItem(13),
+    });
+    const frame = computeFrame({
+      entries: [t1],
+      scale: realScale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+
+    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${t1.id}:0"]`)!;
+    expect(node.dataset['span']).toBe('fixed');
+    expect(node.style.width).toBe('13px');
+    backend.destroy();
+  });
+
   it('gives a Segment bar data-segment-id; a structural-parent bar carries none (#212, ADR 0013: no core group/milestone kind)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
@@ -754,8 +785,8 @@ describe('render/dom backend', () => {
       segmented.segments.map((segment) => segment.id),
     );
 
-    const parentBar = bars.find((node) => node.dataset['itemId'] === `${parentSeed.id}:0`)!;
-    expect(parentBar.dataset['segmentId']).toBeUndefined();
+    const summaryBar = bars.find((node) => node.dataset['itemId'] === `${parentSeed.id}:0`)!;
+    expect(summaryBar.dataset['segmentId']).toBeUndefined();
     backend.destroy();
   });
 
@@ -2015,12 +2046,12 @@ describe('render/dom backend', () => {
       }),
     );
 
-    const parentBar = timeline.querySelector<HTMLElement>('[data-variant="parent"]')!;
+    const summaryBar = timeline.querySelector<HTMLElement>('[data-variant="summary"]')!;
     const leafBar = timeline.querySelector<HTMLElement>('[data-variant="leaf"]')!;
-    expect(parentBar.className.split(' ')).toContain('fg-bar-summary');
+    expect(summaryBar.className.split(' ')).toContain('fg-bar-summary');
     expect(leafBar.className.split(' ')).not.toContain('fg-bar-summary');
     // J34: a paint that names only a class decorates, so the library still paints the label.
-    expect(parentBar.textContent).toBe(parent.name);
+    expect(summaryBar.textContent).toBe(parent.name);
 
     backend.destroy();
     grid.remove();

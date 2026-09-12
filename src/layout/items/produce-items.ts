@@ -14,9 +14,13 @@ import type { Item, VariantItems } from './item.js';
 /** What one Entry draws: its variant, then that variant's own producer.
  *
  *  A variant with no producer of its own draws one whole-entry Item, which the registry binds at
- *  registration. So this never answers "nothing" for a variant the registry knows. */
+ *  registration. So this never answers "nothing" for a variant the registry knows.
+ *
+ *  Passes the resolved variant's own name to its producer (ADR 0018: a variant states its name
+ *  once), so a producer never has to invent or hardcode the name its own Items carry. */
 export function resolveItems(entry: Entry, registry: VariantItems): readonly Item[] {
-  return registry.resolveFor(entry)?.items(entry) ?? [];
+  const variant = registry.resolveFor(entry);
+  return variant === undefined ? [] : variant.items(entry, variant.name);
 }
 
 /** Call: `produceItemsForRow(planned, entryById, registry)`. The registry is required — one per
