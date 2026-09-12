@@ -23,7 +23,7 @@ const KNOWN_CODES: Record<BuiltInErrorCode, true> = {
   'plugin-reconfigure-dropped': true,
   'scale-options-ignored': true,
   'rollup-corrected': true,
-  'look-claimed-twice': true,
+  'variant-claimed-twice': true,
   'derived-value': true,
   'derived-values-dropped': true,
   'no-parse-value': true,

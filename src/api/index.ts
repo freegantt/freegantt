@@ -141,7 +141,6 @@ export type {
 export type {
   CapabilityRule,
   Interactions,
-  KindDefaults,
   WriteRefusalReason,
   WriteRule,
   WriteVerdict,
@@ -261,7 +260,6 @@ export type {
   Entry,
   StoredEntry,
   EntryId,
-  EntryLook,
   Segment,
   SegmentId,
   RowId,
@@ -321,7 +319,6 @@ export type {
   BarLabels,
   BarLabelPlacement,
   ResolvedBarLabel,
-  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,
@@ -346,13 +343,14 @@ export type {
   RangeBand,
   RowStripe,
 } from '../layout/index.js';
-// S5.9, D-S5-22: `ctx.layout.registerItemProducer(kind, producer)`'s own vocabulary — a plugin
-// author naming `ItemProducer` explicitly, the same reason `BarRenderer`/`DecorationProvider` above
-// are exported rather than left to structural inference.
+// ADR 0018: `EntryVariant.items`'s own vocabulary — a plugin author naming `ItemProducer`
+// explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
+// to structural inference.
 export type { Item, ItemProducer } from '../layout/index.js';
-// Q10: `ctx.layout.registerLookClaim(look, claim)`'s own vocabulary, exported for the same reason —
-// a plugin author who names the predicate's type needs to be able to name it (J30).
-export type { LookClaim } from '../layout/index.js';
+// ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
+// it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
+// `VariantPredicate` names its predicate arm alone.
+export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';

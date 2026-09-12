@@ -18,7 +18,6 @@ export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
 export type { Entry } from './entry.js';
 export type {
   StoredEntry,
-  EntryLook,
   Segment,
   SegmentInput,
   EntryInput,

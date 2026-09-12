@@ -104,7 +104,6 @@ export type {
   RendererPoint,
   BarRenderer,
   BarRendererContext,
-  RendererByLook,
   CellRenderer,
   CellRendererContext,
   HeaderRenderer,

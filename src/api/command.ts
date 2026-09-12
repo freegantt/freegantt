@@ -129,6 +129,16 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
    *  landed on no Entry at all. */
   entry?: Entry | undefined;
+  /** The variant this Gantt resolved for `entry` (ADR 0018). `undefined` when the invocation names
+   *  no Entry at all.
+   *
+   *  A command scoped to one variant reads it: `when: ({ variant }) => variant === 'buffer'`. That
+   *  is the same answer the layout pass painted with, so a plugin never restates its own `when` rule
+   *  here, and never keeps a list of the ids it owns.
+   *
+   *  This is not `entry.variant` under another name. A variant is per Gantt, so a row cannot answer
+   *  it (I2). A command context **is** one Gantt's, and it runs off the hot path. */
+  variant?: string | undefined;
   target?: CommandTarget;
 }
 

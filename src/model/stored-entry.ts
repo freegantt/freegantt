@@ -3,13 +3,6 @@
 import type { EntryId, SegmentId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
 
-/** What one Item's look is: structure (a parent or a leaf), or a plugin-owned look — stamped as
- * `data-kind` on the painted element (`02` §4). Not a stored Entry classification (ADR 0013):
- * structure decides the default, and a plugin registers its own producer under its own look name.
- * This is the type that replaced the retired `EntryKind`, and it lives here for the same reason that
- * one did — it names a value on the public surface, so a consumer has to be able to name it too. */
-export type EntryLook = 'parent' | 'leaf' | (string & {});
-
 /** One dated stretch of an Entry, and the unit the Selection holds (#212, ADR 0010). Interrupted
  * work stores several; an Entry that never mentioned one stores a single Segment over its own span,
  * filled at ingest, so every Entry reads the same way and no caller carries a "no segments" branch.

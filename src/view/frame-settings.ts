@@ -24,7 +24,6 @@ import type {
   FieldCompare,
   HeaderRenderer,
   LayoutInput,
-  RendererByLook,
   RowSource,
   TooltipRenderer,
 } from '../layout/index.js';
@@ -117,7 +116,7 @@ interface FrameSettingsValues {
   todayLineMarginTicks: number;
   rowSource: RowSource;
   barLabels: BarLabels;
-  barRenderer: BarRenderer | RendererByLook | undefined;
+  barRenderer: BarRenderer | undefined;
   cellRenderer: CellRenderer | undefined;
   headerRenderer: HeaderRenderer | undefined;
   tooltipRenderer: TooltipRenderer | undefined;
@@ -240,7 +239,7 @@ export class FrameSettings {
     return this.#values.barLabels;
   }
 
-  get barRenderer(): BarRenderer | RendererByLook | undefined {
+  get barRenderer(): BarRenderer | undefined {
     return this.#values.barRenderer;
   }
 
