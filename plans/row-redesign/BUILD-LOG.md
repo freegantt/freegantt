@@ -1165,3 +1165,28 @@ reader of the report meets a name with a number on it all the same.
 
 The ADR names the type `Plugin`, so `Plugin` is what shipped. The question is whether a reader is
 better served by a word with no global behind it.
+
+---
+
+## J50 — `harness/main.ts`'s API-gap review, and the one split it still carries
+
+**Build 3. `CLAUDE.md`'s per-commit review of the harness.**
+
+**No gap in `src/` this round.** Every library call the page makes is one the library already
+answers. The page's own plugin now goes through `definePlugin`, like the eight in
+`harness/plugins/`, so no file on the page states a plugin shape by hand.
+
+**One split is left, and ADR 0019 made it optional rather than removing it.** `lockEntries()` is a
+`data` half with no `view` half, and the page writes a second plugin —
+`harness.entryContextActions` — to register the Lock and Unlock commands that read its store. Before
+this build that pair was forced: the two contracts could not be one object. It is now a choice, and
+the page keeps it for one reason that has nothing to do with the library: both commands write the
+page's own log panel through `prependLogLine(log, …)`, and `harness/plugins/lock-entries.ts` is
+written as if by a third party.
+
+**The honest close is a harness change, not a `src/` change** — `lockEntries(writeLog)` growing a
+`view` half, the way `logEverything(writeLog)` already takes its callback. It is left for the build
+that next touches that page, so this one does not carry an unreviewed rewrite of the lock demo.
+
+**To reverse:** put the `ChromePlugin` annotation back on `entryContextActions` and drop the
+`definePlugin` call.

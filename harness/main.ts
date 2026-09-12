@@ -10,13 +10,13 @@ import {
   contextMenu,
   inlineEditing,
   watchAllErrors,
+  definePlugin,
 } from '../src/api/index.js';
 import type {
   Entry,
   GridColumnInput,
   RowSource,
   DatasetEventMap,
-  ChromePlugin,
   EntryVariant,
   CellRenderer,
   HeaderRenderer,
@@ -496,8 +496,8 @@ weekendToggle.addEventListener('change', () => {
 // picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
-function entryContextActions(): ChromePlugin {
-  return {
+function entryContextActions() {
+  return definePlugin({
     id: 'harness.entryContextActions',
     view(ctx) {
       ctx.commands.register({
@@ -533,7 +533,7 @@ function entryContextActions(): ChromePlugin {
       });
       // No disposer: `ctx.disposables` already retracts both commands (review P4).
     },
-  };
+  });
 }
 
 // S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
