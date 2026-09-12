@@ -2146,6 +2146,66 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
+  it('paints a summary row with core’s own `parent` rule, not the consumer’s catch-all barRenderer (J61)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'P', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'solo', name: 'Solo', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    const painted: string[] = [];
+    // `J40`: a rule that names the rows it covers beats a catch-all that names none. Core's `parent`
+    // is such a rule, so the summary rail stands and `barRenderer` paints every other bar.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      barRenderer: ({ entry }) => {
+        painted.push(String(entry.id));
+        return { text: 'mine' };
+      },
+    });
+
+    expect(painted.sort()).toEqual(['c', 'solo']);
+    expect(container.querySelector('.fg-bar-summary')).not.toBeNull();
+
+    gantt.destroy();
+  });
+
+  it('lets a consumer’s own rule claim the summary row, which is how they paint it (J61)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'P', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    const painted: string[] = [];
+    // The door D-S5-11 asks for: the consumer's own rule outranks core's, so their paint answers.
+    const gantt = new Gantt({
+      container,
+      dataset,
+      variants: [
+        {
+          name: 'summary',
+          when: (entry) => entry.hasChildren,
+          paint: ({ entry }) => {
+            painted.push(String(entry.id));
+            return { class: { mine: true } };
+          },
+        },
+      ],
+    });
+
+    expect(painted).toEqual(['p']);
+    expect(container.querySelector('.fg-bar-summary')).toBeNull();
+
+    gantt.destroy();
+  });
+
   it('a field match on a key no Field declares never matches, and the Gantt keeps drawing (F2)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({

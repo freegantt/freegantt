@@ -151,7 +151,13 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  no label at all. */
   barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
-   *  bar this Gantt paints. `undefined` returned from it keeps the library's own bar output.
+   *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
+   *
+   *  A rule that names the rows it covers answers first, and the library's own summary rule is such
+   *  a rule (`J40`, `J61`). So this never paints a row with children, which the library paints as a
+   *  summary. To paint those too, claim them with a rule of your own:
+   *  `variants: [{ name: 'summary', when: (entry) => entry.hasChildren, paint }]` — a consumer's
+   *  rule outranks the library's.
    *
    *  To paint one kind of row and leave the rest alone, write a variant instead: `variants: [{ name,
    *  when, paint }]` (ADR 0018). That is what the retired per-kind map form was for, and a variant
