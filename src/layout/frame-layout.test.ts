@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
 import { createItemProducerRegistry } from './items/produce-items.js';
-import { sampleEntries } from '../../fixtures/sample-dataset.js';
+import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
-import type { Entry } from '../model/index.js';
+import type { Entry, EntryId } from '../model/index.js';
+import type { EntryDoubleValues } from './entry-double.js';
+import { entryDouble, entryDoubles } from './entry-double.js';
 import { changeSetId, entryId, itemId, rowId, segmentId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
@@ -57,19 +59,29 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
   };
 }
 
-function overlappingEntry(base: Entry, copies: number): Entry {
+function overlappingValues(base: Entry, copies: number, parentId?: EntryId): EntryDoubleValues {
   // Load-bearing non-null assertion (ADR 0012): every fixture entry this file feeds it is
   // authored with both dates.
   const start = base.start!;
   const end = base.end!;
   return {
-    ...base,
+    id: String(base.id),
+    name: base.name,
+    start,
+    end,
+    ...(parentId !== undefined ? { parentId: String(parentId) } : {}),
     segments: Array.from({ length: copies }, (_, index) => ({
       id: segmentId(`${base.id}-${index}`),
       start,
       end,
     })),
   };
+}
+
+/** A row this file states by hand — the live `Entry` a layout call takes, never a spread of one
+ *  (ADR 0017, finding P2: a spread drops every getter and every method). */
+function overlappingEntry(base: Entry, copies: number): Entry {
+  return entryDouble(overlappingValues(base, copies));
 }
 
 describe('FrameLayout', () => {
@@ -240,8 +252,10 @@ describe('FrameLayout', () => {
     // `segmentIdsForRow` reads the frame's Entry map, not its planned rows, for one reason: it must
     // agree with `entryIdsForRow`, which answers for a hidden row. Reading the planned rows instead
     // would silently narrow one of the pair and not the other.
-    const parent = overlappingEntry(sampleEntries[0]!, 2);
-    const child: Entry = { ...overlappingEntry(sampleEntries[1]!, 2), parentId: parent.id };
+    const [parent, child] = entryDoubles([
+      overlappingValues(sampleEntries[0]!, 2),
+      overlappingValues(sampleEntries[1]!, 2, sampleEntries[0]!.id),
+    ]) as readonly [Entry, Entry];
     const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [parent, child], rows: tree }));
@@ -363,7 +377,7 @@ describe('FrameLayout pack mode (S4.8, [S4-A5])', () => {
     layout.invalidateForChange({
       id: changeSetId(2),
       origin: 'user',
-      added: [{ store: 'entries', entity: sampleEntries[0]! }],
+      added: [{ store: 'entries', entity: sampleStoredEntries[0]! }],
       removed: [],
       updated: [],
     });

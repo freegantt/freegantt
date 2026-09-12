@@ -21,6 +21,7 @@ import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
+import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
@@ -435,8 +436,10 @@ describe('computeFrame', () => {
   });
 
   it('I8: item ids stay stable across a row-source switch', () => {
-    const parent = sampleEntries[0]!;
-    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
     const entries = [parent, child, ...sampleEntries.slice(2, 5)];
     const base = {
       entries,
@@ -464,13 +467,12 @@ describe('computeFrame', () => {
   });
 
   it("names a segmented bar as 'part N of M'", () => {
-    const entry = {
-      ...sampleEntries[0]!,
+    const entry = entryDoubleLike(sampleEntries[0]!, {
       segments: [
         { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
         { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
       ],
-    };
+    });
     const frame = computeFrame({
       entries: [entry],
       scale,
@@ -487,17 +489,21 @@ describe('computeFrame', () => {
   });
 
   it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
-    const entry = {
-      ...sampleEntries[0]!,
-      segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
-      ],
-    };
-    // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
-    // marker, to draw the parent's own summary bar instead of a Segment bar.
-    const grouped = { ...sampleEntries[1]! };
-    const groupedChild = { ...sampleEntries[2]!, id: entryId('grouped-child'), parentId: grouped.id };
+    const [entry, grouped, groupedChild] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!, {
+        segments: [
+          { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
+          { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
+        ],
+      }),
+      // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
+      // marker, to draw the parent's own summary bar instead of a Segment bar.
+      entryValuesOf(sampleEntries[1]!),
+      entryValuesOf(sampleEntries[2]!, {
+        id: 'grouped-child',
+        parentId: String(sampleEntries[1]!.id),
+      }),
+    ]) as readonly [Entry, Entry, Entry];
     const frame = computeFrame({
       entries: [entry, grouped, groupedChild],
       scale,
@@ -524,16 +530,7 @@ describe('computeFrame — horizontal culling', () => {
   });
 
   function entryAt(id: string, x: number, width: number): Entry {
-    const start = instant(x);
-    const end = instant(x + width);
-    return {
-      id: entryId(id),
-      name: id,
-      start,
-      end,
-      segments: [{ id: segmentId(`${id}-1`), start, end }],
-      props: {},
-    };
+    return entryDouble({ id, start: x, end: x + width });
   }
 
   const entries: Entry[] = [
@@ -641,12 +638,18 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     pxPerMs: 1 / (60 * 60 * 1000),
   });
   const gridEntries: readonly Entry[] = [
-    {
-      ...sampleEntries[0]!,
-      id: entryId('grid-1'),
+    entryDoubleLike(sampleEntries[0]!, {
+      id: 'grid-1',
       start: instant('2026-08-24T00:00:00Z'),
       end: instant('2026-08-25T00:00:00Z'),
-    },
+      segments: [
+        {
+          id: segmentId('grid-1-1'),
+          start: instant('2026-08-24T00:00:00Z'),
+          end: instant('2026-08-25T00:00:00Z'),
+        },
+      ],
+    }),
   ];
   const dayAndWeekHeaders = {
     ...preset,
@@ -907,19 +910,14 @@ describe(
   'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
-    const large: Entry[] = seededEntryInputs({ count: 5000 }).map((input) => {
-      const start = instant(input.start as Date);
-      const end = instant(input.end as Date);
-      return {
-        id: entryId(input.id),
+    const large: readonly Entry[] = entryDoubles(
+      seededEntryInputs({ count: 5000 }).map((input) => ({
+        id: input.id,
         name: input.name,
-        start,
-        end,
-        kind: 'span',
-        segments: [{ id: segmentId(`${input.id}-1`), start, end }],
-        props: {},
-      };
-    });
+        start: instant(input.start as Date),
+        end: instant(input.end as Date),
+      })),
+    );
     const largeScale = createTimeScale({ timeZone: 'UTC', range: spanOf(large[0]!), pxPerMs: 1 / 100_000 });
 
     it('emits only windowed rows while contentHeight stays the full extent', () => {
@@ -943,8 +941,10 @@ describe(
 
 describe('computeFrame row sources (S4.6)', () => {
   it('rowCount counts resolved rows, not entries, and collapse shrinks the plan', () => {
-    const parent = sampleEntries[0]!;
-    const child = { ...sampleEntries[1]!, parentId: parent.id };
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
     const rest = sampleEntries.slice(2);
     const entries = [parent, child, ...rest];
     const tree = computeFrame({
@@ -982,14 +982,13 @@ describe('computeFrame row sources (S4.6)', () => {
 });
 
 describe('computeFrame lanes (S4.8)', () => {
-  const overlapping: Entry = {
-    ...sampleEntries[0]!,
+  const overlapping: Entry = entryDoubleLike(sampleEntries[0]!, {
     segments: [
       { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
       { id: segmentId('lane-2'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
       { id: segmentId('lane-3'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
     ],
-  };
+  });
 
   it("a 'fixed' source never calls the packer", () => {
     const spy = vi.spyOn(packLanes, 'packRow');
@@ -1009,7 +1008,7 @@ describe('computeFrame lanes (S4.8)', () => {
   });
 
   it('culls through the height index when pack-mode rows have different heights', () => {
-    const short: Entry = { ...sampleEntries[1]!, id: sampleEntries[1]!.id };
+    const short: Entry = entryDoubleLike(sampleEntries[1]!);
     const frame = computeFrame({
       entries: [overlapping, short],
       scale,
@@ -1032,7 +1031,7 @@ describe('computeFrame lanes (S4.8)', () => {
 
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps minimumSpan', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
     const { x, width, minimumSpan } = barSpan(spanOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
@@ -1040,7 +1039,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
   });
 
   it('honours a custom minBarWidthPx', () => {
-    const zeroWidthSpan: Entry = { ...sampleEntries[0]!, end: sampleEntries[0]!.start! };
+    const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
     const { width } = barSpan(spanOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
@@ -1049,7 +1048,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
-    const narrowSpan: Entry = { ...sampleEntries[0]!, end: scale.instantForX(startX + 5) };
+    const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
     const { x, width, minimumSpan } = barSpan(spanOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(minimumSpan).toBe(true);
