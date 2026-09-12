@@ -190,8 +190,8 @@ Every config key is a live property. Setting one triggers exactly the invalidati
 **A config value is a value, not a mutable object (#187).** Assignment compares against what the property already holds, by identity. So a mutation of the object you already handed over, followed by an assignment of that same object, changes nothing and paints nothing. Assign a copy to ask for the repaint:
 
 ```ts
-gantt.barRenderer = { ...gantt.barRenderer, parent: paintSummary };   // repaints
-gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };                 // re-resolves rows
+gantt.interactions = { ...gantt.interactions, resize: false };   // re-resolves capabilities
+gantt.rowSource = { ...gantt.rowSource, groupBy: byTeam };       // re-resolves rows
 ```
 
 One rule covers every config key, object-valued ones included. A per-key exemption would put the rule back in each setter, which is what `frame-settings.ts`'s one invalidation table exists to prevent. It also keeps a repeated assignment of an unchanged value off the frame path.
@@ -376,12 +376,8 @@ Both questions — *how does this entry look?* and *what can you do to it?* — 
 **Variant.** Every bar element carries `data-variant`, so variant styling is level-2 CSS with zero JS (`.fg-bar[data-variant="parent"] { ... }`). That attribute is the Variant this Gantt resolved for the row — `parent`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification (ADR 0013, ADR 0018). A bar whose painted span was widened to `--fg-bar-min-width` or a diamond floor also carries `data-span="minimum"` (#212 follow-up) — pair it with `data-variant` to style a floored span differently from a floored diamond (`.fg-bar[data-variant="leaf"][data-span="minimum"] { ... }`). At level 3, `variants` paints one named set of rows and `barRenderer` is the catch-all for every bar no Variant paints:
 
 ```ts
-barRenderer: {
-  parent: ({ entry }) => summaryRail(entry),
-  leaf:   ({ entry }) => defaultBar(entry),
-  buffer: ({ entry }) => hatched(entry),   // plugin-owned look
-  '*':    ({ entry }) => defaultBar(entry),
-}
+variants: [{ name: 'buffer', when: { buffer: true }, paint: ({ entry }) => hatched(entry) }],
+barRenderer: ({ entry }) => defaultBar(entry),   // every bar no variant paints
 ```
 
 **Label placement (J1).** `gantt.barLabels` (`'fitBar' | 'inside' | 'outside' | 'none'`, default `'fitBar'`) picks where the bar label paints, live-reconfigurable (I8). `'fitBar'` paints inside when the label fits, outside to the right when it does not, and falls back to an ellipsised inside label as the last resort; `'inside'`/`'outside'` force one side and still fall back to ellipsised-inside when the forced side has no room; `'none'` paints no label at all. The resolved side is `data-label` on `.fg-bar` (`'inside'` / `'outside'`, absent for `'none'` or a `barRenderer` result) — a level-2 hook for a consumer stylesheet, styled by default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`).
