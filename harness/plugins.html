@@ -84,6 +84,15 @@
       .demo-risk-bar {
         background-image: repeating-linear-gradient(-45deg, #b3261e, #b3261e 4px, #f2b8b5 4px, #f2b8b5 8px);
       }
+      /* ADR 0022: `diamond()` ships the shape; this page states only the fill. `.fg-bar-diamond` is
+         the only diamond this page installs, so the class is an exact scope. Setting `--fg-bar-fill`
+         here reaches the ink with no JavaScript in between (refuted item 8) — `.fg-bar` reads the
+         token into `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints from that. This
+         rule is unlayered, so it beats the base sheet's `@layer freegantt` default at equal
+         specificity (ADR 0021). */
+      .fg-bar-diamond {
+        --fg-bar-fill: #7b2cbf;
+      }
     </style>
   </head>
   <body>

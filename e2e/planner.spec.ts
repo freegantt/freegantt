@@ -79,6 +79,31 @@ test('the cells the design draws as pictures are real rendered nodes', async ({ 
   expect(phaseDone).toBe('100%');
 });
 
+test('the checkpoint diamond paints transparent and holds its box width across a zoom step', async ({
+  page,
+}) => {
+  // `toBeVisible()` alone is what let the original defect ship (this file, formerly line 67): a
+  // checkpoint that grew with the timescale still reported "visible". This test asserts the two
+  // properties that would have gone red — a computed style, and a measured box across a real zoom
+  // step driven through the toolbar (`harness/planner-toolbar.ts`'s Zoom in button), not a
+  // hand-built `TimeScaleModel`.
+  await page.goto('/planner.html');
+  const checkpoint = page.locator('#gantt .fg-bar.fg-bar-diamond').first();
+  await expect(checkpoint).toBeVisible();
+
+  // The element's own background stays transparent — the diamond's ink is its `::before`, not the
+  // element's box (ADR 0022, `DIAMOND_CSS`: `.fg-bar-diamond { background: transparent; }`).
+  await expect(checkpoint).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
+  const widthAtDefaultZoom = await checkpoint.evaluate((el) => el.getBoundingClientRect().width);
+
+  await page.locator('button[aria-label="Zoom in"]').click();
+  await expect(checkpoint).toBeVisible();
+  const widthAfterZoomIn = await checkpoint.evaluate((el) => el.getBoundingClientRect().width);
+
+  expect(widthAfterZoomIn).toBe(widthAtDefaultZoom);
+});
+
 test('the new-task button says it is not wired rather than doing half a job', async ({ page }) => {
   await page.goto('/planner.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();

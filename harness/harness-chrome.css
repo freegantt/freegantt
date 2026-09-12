@@ -764,6 +764,16 @@ nav.harness-site-nav a[aria-current='page'] {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
+/* ADR 0022: `diamond()` ships the shape; this page states only the fill. `.fg-bar-diamond` is the
+   only diamond this page installs, so the class is an exact scope. Setting `--fg-bar-fill` here
+   reaches the ink with no JavaScript in between (refuted item 8) — `.fg-bar` reads the token into
+   `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints from that. This rule is
+   unlayered, so it beats the base sheet's `@layer freegantt` default at equal specificity (ADR
+   0021) — the same win an ordinary consumer rule always gets. */
+.fg-bar-diamond {
+  --fg-bar-fill: #7b2cbf;
+}
+
 /* ---------------------------------------------------------------- motion */
 
 @media (prefers-reduced-motion: reduce) {

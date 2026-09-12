@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 // T1-1: --fg-bar-fill-painted used to resolve once on .fg-container, so a bar's own --fg-bar-fill
-// override (barRenderer's style, e.g. harness/plugins.ts's milestone recolor) never reached the
-// bar's painted background — the custom property changed, but the mixed colour did not. The fix
-// moves the color-mix() onto .fg-bar itself.
+// override never reached the bar's painted background — the custom property changed, but the mixed
+// colour did not. The fix moves the color-mix() onto .fg-bar itself.
+//
+// The override this test reads is `harness/plugins.ts`'s milestone recolour, an ordinary
+// `.fg-bar-diamond { --fg-bar-fill: … }` rule in `plugins.html`'s own stylesheet (ADR 0022,
+// refuted item 8 — colour is a `--fg-*` token, never a JavaScript paint override). The assertion
+// below reads computed style, so it exercises this rule the same way it would any other source of
+// the custom property.
 //
 // color-mix() serializes differently across engines, so this never asserts a literal colour. It
 // asks the browser for the mix it would build with the bar's own --fg-bar-fill and --fg-bar-opacity
