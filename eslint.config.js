@@ -245,7 +245,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/**/*.mjs', '*.config.js', 'eslint/rules/**/*.cjs', '.dependency-cruiser.cjs'],
+    files: [
+      'scripts/**/*.mjs',
+      '.claude/skills/**/*.mjs',
+      '*.config.js',
+      'eslint/rules/**/*.cjs',
+      '.dependency-cruiser.cjs',
+    ],
     languageOptions: { globals: { ...globals.node } },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
