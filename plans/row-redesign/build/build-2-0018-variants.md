@@ -45,7 +45,7 @@
 - [x] **The newest rule wins** (`Q5`, ruled 2026-09-11). `claimedLookFor` (`layout/items/produce-items.ts:188-198`) says *"the first yes is the whole answer"* today. **Flip it**, so it agrees with `registerClaim` and `register`, which both already say newest.
 - [x] **Walk newest-first and stop at the first yes.** Do not walk oldest-first and keep the last yes. This read runs on every hover change, where the budget is zero allocation and the early exit is the point (`:182,197`). Reversing the walk keeps the early exit at the same cost. **A reporter still walks the whole list** — a diagnostic has to see both claimants.
 - [x] **Register core's `parent` and `leaf` FIRST, not last.** Every earlier draft said *"registered last"*, which was correct under first-wins. Under this ruling it would make **core beat every plugin variant**. Core is the floor, so it registers before anything else. `leaf` carries no `when`, so it answers for every row and the floor stays total.
-- [ ] Test: a plugin variant overrides core's `parent` on a row with children. Test: a consumer `variants` entry overrides a plugin's variant on the same row.
+- [x] Test: a plugin variant overrides core's `parent` on a row with children. Test: a consumer `variants` entry overrides a plugin's variant on the same row.
 
 ---
 
@@ -75,12 +75,12 @@
 
 ## Unit E — migrate the consumers
 
-- [ ] `harness/plugins/buffer-kind.ts` — 7 calls become one `ctx.variants.add` and one command.
-- [ ] `harness/plugins/risk-kind.ts` — 4 calls become one.
-- [ ] `harness/plugins/milestone-kind.ts` — **becomes four lines of page config and no plugin.** The ADR says so.
+- [x] `harness/plugins/buffer-kind.ts` — 7 calls become one `ctx.variants.add` and one command.
+- [x] `harness/plugins/risk-kind.ts` — 4 calls become one.
+- [x] `harness/plugins/milestone-kind.ts` — **becomes four lines of page config and no plugin.** The ADR says so.
 - [x] **A command context names the resolved variant: `CommandContextOf.variant?: string`** (`src/api/command.ts:117-133`). Fill it from the same resolution the layout pass uses, for the `entry` the invocation is about.
-- [ ] Delete the owned-id `Set` pattern. Each plugin casts `new Set<EntryId>(ownedIds as Iterable<EntryId>)` today, because a claim could not ask a question about the row. Now it can.
-- [ ] **The `Set` has a fifth reader, and the box above is what frees it.** `buffer-kind.ts:52` is a command's `when`: `({ entry }) => entry !== undefined && owned.has(entry.id)`. It becomes `({ variant }) => variant === 'buffer'`. **Do not restate the variant's `when` rule inside the command** — that is the harness re-deriving what the library just resolved, and `CLAUDE.md`'s stop rule is about exactly that.
+- [x] Delete the owned-id `Set` pattern. Each plugin casts `new Set<EntryId>(ownedIds as Iterable<EntryId>)` today, because a claim could not ask a question about the row. Now it can.
+- [x] **The `Set` has a fifth reader, and the box above is what frees it.** `buffer-kind.ts:52` is a command's `when`: `({ entry }) => entry !== undefined && owned.has(entry.id)`. It becomes `({ variant }) => variant === 'buffer'`. **Do not restate the variant's `when` rule inside the command** — that is the harness re-deriving what the library just resolved, and `CLAUDE.md`'s stop rule is about exactly that.
 
 ---
 
@@ -94,15 +94,15 @@
 
 ## Tests this build adds
 
-- [ ] **The newest registered rule that answers yes wins**, and an earlier rule does not. Core's own `parent` registers first, so a plugin overrides it on a row with children.
-- [ ] A row added after install gets the variant. This is the bug the id set caused.
-- [ ] `when` works in both forms — field match and predicate.
-- [ ] A field match compares through the Field's own `equals`, ANDs its keys, and does **not** claim a row that merely holds a value: `{ flag: true }` passes over `flag: 'yes'`.
-- [ ] A variant's `can` predicate answering `undefined` falls through to the library rule; answering `false` refuses.
-- [ ] A command's `when` reads `ctx.variant` and matches only the rows its own variant claimed.
-- [ ] A variant with no `when` is last-resort, and every row resolves.
-- [ ] Two rules that both answer yes raise `'variant-claimed-twice'` once, not per read.
-- [ ] Two Gantts on one Dataset install different variants and do not interfere (I2).
+- [x] **The newest registered rule that answers yes wins**, and an earlier rule does not. Core's own `parent` registers first, so a plugin overrides it on a row with children.
+- [x] A row added after install gets the variant. This is the bug the id set caused.
+- [x] `when` works in both forms — field match and predicate.
+- [x] A field match compares through the Field's own `equals`, ANDs its keys, and does **not** claim a row that merely holds a value: `{ flag: true }` passes over `flag: 'yes'`.
+- [x] A variant's `can` predicate answering `undefined` falls through to the library rule; answering `false` refuses.
+- [x] A command's `when` reads `ctx.variant` and matches only the rows its own variant claimed.
+- [x] A variant with no `when` is last-resort, and every row resolves.
+- [x] Two rules that both answer yes raise `'variant-claimed-twice'` once, not per read.
+- [x] Two Gantts on one Dataset install different variants and do not interfere (I2).
 - [ ] The pin path: `update(id, { milestone: true })` lands in a `ChangeSet`, undoes, and repaints.
 
 ---
@@ -110,8 +110,8 @@
 ## Gate
 
 - [ ] `grep -rn 'EntryLook\|registerLookClaim\|registerItemProducer\|registerLookDefaults\|RendererByLook\|KindDefaults' src/ harness/ | wc -l` → 0.
-- [ ] `grep -rn "data-kind\|dataset\['kind'\]" src/ e2e/ | wc -l` → 0.
-- [ ] `grep -rn "'look-claimed-twice'" src/ | wc -l` → 0.
+- [x] `grep -rn "data-kind\|dataset\['kind'\]" src/ e2e/ | wc -l` → 0.
+- [x] `grep -rn "'look-claimed-twice'" src/ | wc -l` → 0.
 - [ ] `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log` → report the verdict line.
 
 ---
