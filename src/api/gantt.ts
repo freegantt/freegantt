@@ -30,7 +30,6 @@ import type {
 } from '../layout/index.js';
 import type {
   Entry,
-  StoredEntry,
   EntryEdit,
   EntryId,
   FieldKey,

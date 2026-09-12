@@ -3,6 +3,7 @@ import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
 import { entryId, entryIdOfItem, segmentId } from '../model/index.js';
 import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import { EntryStore } from '../data/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -18,10 +19,23 @@ function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
+/** The rows a gesture reads, built through the real store. `interaction/` may reach `data/`, and the
+ *  store is the one place a live `Entry` is built (ADR 0017). */
+let minted = 0;
+const rows = new EntryStore(
+  ORDER.map((id) => ({
+    id,
+    name: id,
+    start: toInstant(0),
+    end: toInstant(1),
+    segments: [{ id: segmentOf(id), start: toInstant(0), end: toInstant(1) }],
+    props: {},
+  })),
+  { timeZone: 'UTC', dateOnlyEnd: 'inclusive', mintSegmentId: () => segmentId(`minted-${++minted}`) },
+);
+
 function entryFor(id: EntryId): Entry {
-  const start = toInstant(0);
-  const end = toInstant(1);
-  return { id, name: id, start, end, segments: [{ id: segmentOf(id), start, end }], props: {} };
+  return rows.get(id)!;
 }
 
 function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardEvent {

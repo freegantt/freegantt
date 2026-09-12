@@ -14,6 +14,7 @@ import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import type { Entry, EntryId } from '../model/index.js';
+import { entryDoubleLike } from '../layout/entry-double.js';
 import { segmentId } from '../model/index.js';
 
 // Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
@@ -333,7 +334,7 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
     // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
     // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
     // and the Entry is its Segments.
-    const child: Entry = { ...entries[1]!, parentId: twoSegments.id };
+    const child = entryDoubleLike(entries[1]!, { parentId: String(twoSegments.id) });
     const gantt = paintOneGantt([twoSegments, child]);
     const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
 

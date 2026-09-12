@@ -48,7 +48,6 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
-import { descendantsOf } from '../data/entry-tree.js';
 import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
