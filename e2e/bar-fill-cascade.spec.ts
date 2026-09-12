@@ -15,13 +15,13 @@ test('a bar with its own --fg-bar-fill override paints that colour, not the cont
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const milestoneBar = page.locator('#gantt .fg-bar.demo-milestone');
+  const milestoneBar = page.locator('#gantt .fg-bar.fg-bar-diamond');
   await expect(milestoneBar).toBeVisible();
 
   const { paintedColor, expectedColor } = await milestoneBar.evaluate((bar) => {
-    // The diamond shape paints on .demo-milestone::before — the page's own glyph since ADR 0013,
-    // and the bar element's own background stays transparent so the diamond can rotate past the
-    // bar's box. Read the pseudo-element's computed style, the one --fg-bar-fill-painted reaches.
+    // The diamond shape paints on .fg-bar-diamond::before (ADR 0022, diamond()'s own `css`), and
+    // the bar element's own background stays transparent so the diamond can rotate past the bar's
+    // box. Read the pseudo-element's computed style, the one --fg-bar-fill-painted reaches.
     const beforeStyle = getComputedStyle(bar, '::before');
     const fill = beforeStyle.getPropertyValue('--fg-bar-fill').trim();
     const opacity = beforeStyle.getPropertyValue('--fg-bar-opacity').trim();

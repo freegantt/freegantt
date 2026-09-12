@@ -193,28 +193,31 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 
 **Decided: Q4, J5.**
 
-- [ ] Publish `ResolvedVariant` from `src/api/index.ts`.
-- [ ] `Gantt` gains one door that answers it. The doc comment states why it is **not** `entry.variant`:
+- [x] Publish `ResolvedVariant` from `src/api/index.ts`.
+- [x] `Gantt` gains one door that answers it. The doc comment states why it is **not** `entry.variant`:
       an Entry belongs to a Dataset, a variant resolves per Gantt, and I2 makes two Gantts on one
       Dataset able to paint one row differently. Say it there, because the next reader proposes it again.
-- [ ] Settle the `variantOf` collision the way Q4 answers.
-- [ ] A test: two Gantts on one Dataset, with different `variants`, answer differently for one Entry.
-- [ ] `docs/05-consumer-api.md` gains `variantFor`.
+- [x] Settle the `variantOf` collision the way Q4 answers.
+- [x] A test: two Gantts on one Dataset, with different `variants`, answer differently for one Entry.
+- [x] `docs/05-consumer-api.md` gains `variantFor`.
 
 ## Unit G — the harness closes the loop
 
 This is the acceptance test. CLAUDE.md's stop rule governs it.
 
-- [ ] `fixtures/planner-dataset.ts:140`–`:143` stores `end === start`. Delete the fake one-day span
+- [x] `fixtures/planner-dataset.ts:140`–`:143` stores `end === start`. Delete the fake one-day span
       and the comment that explains it. `barSpan` centres a zero-width span correctly.
-- [ ] Check what ingest does with it. `end === start` must survive `new Dataset(...)` unchanged.
-- [ ] `harness/planner.ts` deletes `checkpointDiamond` (`:186`–`:205`) and says
+- [x] Check what ingest does with it. `end === start` must survive `new Dataset(...)` unchanged.
+      Confirmed unchanged for a real `Instant` (the fixture's `dayOffset` always was one) — the
+      +1-day rule only fires for a *date-only string* end under `dateOnlyEnd: 'inclusive'`
+      (`toEndInstant`, `src/time/input.ts:134`). No API gap.
+- [x] `harness/planner.ts` deletes `checkpointDiamond` (`:186`–`:205`) and says
       `diamond({ when: { checkpoint: true } })` in `PLANNER_VARIANTS` (`:213`).
-- [ ] `harness/planner.html` deletes the `.demo-checkpoint` block (`:266`–`:305`), the
+- [x] `harness/planner.html` deletes the `.demo-checkpoint` block (`:266`–`:305`), the
       `.demo-checkpoint-label` rule included.
-- [ ] **Anything that has to stay behind is an unclosed gap. Report it. Do not keep it.** A leftover
+- [x] **Anything that has to stay behind is an unclosed gap. Report it. Do not keep it.** A leftover
       `.demo-checkpoint` rule, a leftover renderer, a leftover `--demo-*` token — each one is an API
-      gap, and each one goes in the log as a **Q** entry.
+      gap, and each one goes in the log as a **Q** entry. Nothing stayed behind — see BUILD-LOG.
 ### The other two pages
 
 `harness/main.ts:423` and `harness/plugins.ts:110` each hand-build a milestone diamond, and each says
@@ -222,17 +225,19 @@ why in the same words: *core ships no diamond*. This build deletes that reason. 
 core now ships is re-deriving what the library computes, which `CLAUDE.md` names an API gap even when
 no lint fires. Logged as **J8**.
 
-- [ ] `harness/main.ts`'s `demoVariants` milestone becomes `diamond({ when: { milestone: true } })`.
+- [x] `harness/main.ts`'s `demoVariants` milestone becomes `diamond({ when: { milestone: true } })`.
       Its `--fg-bar-fill` recolour stays, as an override on the factory.
-- [ ] `harness/plugins.ts`'s milestone does the same. Its `buffer` and `risk` variants stay
+- [x] `harness/plugins.ts`'s milestone does the same. Its `buffer` and `risk` variants stay
       hand-written: core ships neither look, and the pair is what demonstrates a consumer's rule
       beating a plugin's of the same name (D-S5-11).
-- [ ] `harness-chrome.css`'s `.demo-milestone` rules go with them. Anything that cannot go is an
-      unclosed gap — report it.
-- [ ] `e2e/bar-fill-cascade.spec.ts` reads `--fg-bar-fill` through `.demo-milestone::before`. Its
+- [x] `harness-chrome.css`'s `.demo-milestone` rules go with them. `harness/plugins.html` carried an
+      identical block for the same variant and went too (J21) — nothing could not go.
+- [x] `e2e/bar-fill-cascade.spec.ts` reads `--fg-bar-fill` through `.demo-milestone::before`. Its
       subject is the fill cascade, not the glyph, so point it at the class `diamond()` paints and
       leave the assertion alone.
-- [ ] Review `harness/main.ts` in full, changed or not. CLAUDE.md asks for it on every commit.
+- [x] Review `harness/main.ts` in full, changed or not. CLAUDE.md asks for it on every commit. Clean:
+      no restated default, no hand-built model standing in for a config key, no leftover glyph code
+      outside the `demoVariants` edit this build made. See BUILD-LOG J22.
 
 ## Unit H — the prose sweep
 

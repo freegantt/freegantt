@@ -11,6 +11,7 @@ import {
   inlineEditing,
   watchAllErrors,
   definePlugin,
+  diamond,
 } from 'freegantt';
 import type {
   Entry,
@@ -420,21 +421,22 @@ popupBtn.addEventListener('click', () => {
 });
 
 // S5.4, D-S5-10/11: `cellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
-// ADR 0018: core ships no diamond and no `'milestone'` variant, so this page states one itself —
-// four lines of config and no plugin at all. The rule reads the `milestone` Field the fixture
-// writes on "Requirements review" (`fixtures/demo-dataset.ts`), so `update(id, { milestone: true })`
-// would pin a second row with no code change here.
+// ADR 0022: `diamond()` is core's own shipped glyph, so this page states only which rows wear one —
+// the `milestone` Field the fixture writes on "Requirements review" (`fixtures/demo-dataset.ts`), so
+// `update(id, { milestone: true })` would pin a second row with no code change here. The recolour is
+// an override on the factory: it reads the diamond's own paint and adds one token, rather than this
+// page re-deriving the glyph's class (J8).
 // Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
 // existing dataset rather than adding renderer-only fixture data.
 // The cell renderer branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and
 // paints `ctx.value`, the string the library formatted from it.
 const BUDGET_THRESHOLD = 5000;
 
+const milestoneDiamond = diamond({ when: { milestone: true } });
 const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [
   {
-    name: 'milestone',
-    when: { milestone: true },
-    paint: () => ({ class: { 'demo-milestone': true }, style: { '--fg-bar-fill': '#7b2cbf' } }),
+    ...milestoneDiamond,
+    paint: (ctx) => ({ ...milestoneDiamond.paint?.(ctx), style: { '--fg-bar-fill': '#7b2cbf' } }),
   },
 ];
 const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>

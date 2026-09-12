@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RegistrationClosedError } from '../model/index.js';
 import type { Disposer, Entry, EntryId, ErrorReportInput, PluginId } from '../model/index.js';
-import type { FrameBar, ResolvedColumn, TooltipRenderer } from '../layout/index.js';
+import type { FrameBar, ResolvedColumn, ResolvedVariant, TooltipRenderer } from '../layout/index.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import type { DomTarget } from './gantt-dom.js';
@@ -91,7 +91,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       registerGridColumn: () => registry.add('column'),
     },
     resolveTooltipRenderer: () => undefined,
-    variantOf: () => 'leaf',
+    variantFor: (): ResolvedVariant => ({ name: 'leaf', items: () => [], paint: undefined, can: undefined }),
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
     resolvedColumns: () => [],

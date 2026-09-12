@@ -11,11 +11,11 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  // ADR 0013: core ships no diamond, so the page owns the shape end to end. Its own `milestone`
-  // variant claims the marked rows and hands the bar the page's own class and fill, and
-  // `plugins.html` draws the glyph on that class's `::before`. The renderer still never shapes
-  // the node (I13: a renderer's bounded scope is attr/class/style/text/children).
-  const milestoneBar = page.locator('#gantt .fg-bar.demo-milestone');
+  // ADR 0022: `diamond()` is core's own shipped glyph. The page's `milestone` variant claims the
+  // marked rows and reads `diamond()`'s own paint back to add its recolour, and `diamond()`'s own
+  // `css` draws the glyph on `.fg-bar-diamond::before`. The renderer still never shapes the node
+  // (I13: a renderer's bounded scope is attr/class/style/text/children).
+  const milestoneBar = page.locator('#gantt .fg-bar.fg-bar-diamond');
   await expect(milestoneBar).toHaveCSS('--fg-bar-fill', '#7b2cbf');
 
   // The class carries a real glyph, not a name alone: the page's `::before` paints a sized box.
@@ -38,7 +38,7 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
 
   await page.locator('#renderers-toggle').uncheck();
 
-  await expect(page.locator('#gantt .fg-bar.demo-milestone')).toHaveCount(0);
+  await expect(page.locator('#gantt .fg-bar.fg-bar-diamond')).toHaveCount(0);
   await expect(page.locator('#gantt [data-field="cost"] .demo-over-budget')).toHaveCount(0);
 
   const sameBar = page.locator(`#gantt .fg-bar[data-item-id="${milestoneNodeId}"]`);
@@ -49,6 +49,6 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
   expect(stillProbed).toBe(true);
 
   await page.locator('#renderers-toggle').check();
-  await expect(page.locator('#gantt .fg-bar.demo-milestone')).toHaveCSS('--fg-bar-fill', '#7b2cbf');
+  await expect(page.locator('#gantt .fg-bar.fg-bar-diamond')).toHaveCSS('--fg-bar-fill', '#7b2cbf');
   await expect(page.locator('#gantt [data-field="cost"] .demo-over-budget')).toHaveText('$1500');
 });

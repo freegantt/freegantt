@@ -27,6 +27,7 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   EntryVariant,
+  ResolvedVariant,
 } from '../layout/index.js';
 import type {
   Entry,
@@ -508,6 +509,18 @@ export class Gantt<TProps = unknown> {
     // writes; the registry inside `view/` holds the erased shape, the same way `api/dataset.ts`
     // re-types the whole store for `TProps`.
     this.#shell.variants = next as readonly EntryVariant[];
+  }
+
+  /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3) — one door, and it
+   *  answers the object, never a name a caller looks up again (`itemsFor`/`paintFor` do not exist;
+   *  `variantOf` retired for the same reason, review finding F3). Call:
+   *  `gantt.variantFor(entry).name`, or read `.paint`/`.can`/`.css` off the same answer.
+   *
+   *  Not `entry.variant`. An Entry belongs to a `Dataset`; a variant resolves per Gantt. I2 lets two
+   *  Gantts on one Dataset paint the same row differently, so `entry.variant` would have to pick one
+   *  answer and be wrong on the other Gantt. */
+  variantFor(entry: Entry<TProps>): ResolvedVariant {
+    return this.#shell.variantFor(entry);
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */

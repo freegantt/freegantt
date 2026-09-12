@@ -359,6 +359,9 @@ export type { Item, ItemProducer } from '../layout/index.js';
 // it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
 // `VariantPredicate` names its predicate arm alone.
 export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '../layout/index.js';
+// ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
+// looks up again (F3, `plans/row-redesign/BUILD-LOG.md`).
+export type { ResolvedVariant } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
 // lines — and the Item id convention has one owner instead of one copy per plugin.
 export { wholeEntryItem } from '../layout/index.js';
