@@ -41,6 +41,9 @@ export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'be
 // @public
 export function attemptMutation(body: () => void): boolean;
 
+// @public
+export function bar(overrides?: Partial<EntryVariant>): EntryVariant;
+
 // @public (undocumented)
 export interface BarFlags {
     // (undocumented)
@@ -484,6 +487,9 @@ export class DerivedFieldNotWritableError extends FreeGanttError {
 }
 
 // @public
+export function diamond(overrides?: Partial<EntryVariant>): EntryVariant;
+
+// @public
 export function diffMs(a: Instant, b: Instant): number;
 
 // @public
@@ -768,6 +774,7 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 // @public
 export interface EntryVariant<TProps = Record<string, unknown>> {
     can?: Interactions;
+    css?: string;
     items?: ItemProducer;
     name: string;
     paint?: BarRenderer;
@@ -2048,6 +2055,9 @@ export interface StoreRowUpdated {
     // (undocumented)
     to: unknown;
 }
+
+// @public
+export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
 export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';

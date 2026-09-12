@@ -17,6 +17,7 @@ import {
   entryId,
   itemId,
   contextMenu,
+  diamond,
 } from './index.js';
 import type {
   ChangeSet,
@@ -2204,6 +2205,86 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     expect(container.querySelector('.fg-bar-summary')).toBeNull();
 
     gantt.destroy();
+  });
+
+  describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
+    function pointDataset(): Dataset {
+      return new Dataset({
+        timeZone: 'UTC',
+        entries: [{ id: 'm', name: 'M', start: '2026-01-01', end: '2026-01-01' }],
+      });
+    }
+
+    // The node a Gantt just built is always the last one in `head` — construction appends, and
+    // nothing removes one until `destroy()`. Capturing it by reference, right after construction,
+    // is what keeps each test honest about which Gantt's own node it reads.
+    function variantStyleNodeOf(container: HTMLElement): HTMLStyleElement {
+      const nodes = container.ownerDocument.head.querySelectorAll<HTMLStyleElement>(
+        'style[data-freegantt-variant-styles]',
+      );
+      return nodes[nodes.length - 1]!;
+    }
+
+    it('carries no diamond css when nothing installs diamond() — #286’s whole claim', () => {
+      const container = document.createElement('div');
+      const gantt = new Gantt({ container, dataset: pointDataset() });
+      const node = variantStyleNodeOf(container);
+
+      expect(node.textContent).not.toContain('.fg-bar-diamond');
+
+      gantt.destroy();
+    });
+
+    it('carries diamond()’s own rules once an author installs it', () => {
+      const container = document.createElement('div');
+      const gantt = new Gantt({ container, dataset: pointDataset(), variants: [diamond()] });
+      const node = variantStyleNodeOf(container);
+
+      expect(node.textContent).toContain('.fg-bar-diamond');
+      // After the base sheet, always (ADR 0022 §5) — so it can cancel `.fg-bar`'s own state paint.
+      const baseStyle = container.ownerDocument.head.querySelector('style[data-freegantt-styles]')!;
+      expect(baseStyle.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      gantt.destroy();
+    });
+
+    it('gantt.variants = […] installs a variant’s own css, and reassigning without it removes it', () => {
+      const container = document.createElement('div');
+      const gantt = new Gantt({ container, dataset: pointDataset() });
+      const node = variantStyleNodeOf(container);
+      expect(node.textContent).not.toContain('.fg-bar-diamond');
+
+      gantt.variants = [diamond()];
+      expect(node.textContent).toContain('.fg-bar-diamond');
+
+      gantt.variants = [];
+      expect(node.textContent).not.toContain('.fg-bar-diamond');
+
+      gantt.destroy();
+    });
+
+    it('two Gantts with different variants each carry their own node, never one shared node (I2)', () => {
+      const containerA = document.createElement('div');
+      const ganttA = new Gantt({ container: containerA, dataset: pointDataset(), variants: [diamond()] });
+      const nodeA = variantStyleNodeOf(containerA);
+
+      const containerB = document.createElement('div');
+      const ganttB = new Gantt({ container: containerB, dataset: pointDataset() });
+      const nodeB = variantStyleNodeOf(containerB);
+
+      expect(nodeA).not.toBe(nodeB);
+      expect(nodeA.textContent).toContain('.fg-bar-diamond');
+      expect(nodeB.textContent).not.toContain('.fg-bar-diamond');
+
+      ganttA.destroy();
+      expect(nodeA.isConnected).toBe(false);
+      // B's own node is untouched by A's disposal — proof the two were never one shared, refcounted
+      // node behind the two Gantts.
+      expect(nodeB.isConnected).toBe(true);
+      expect(nodeB.textContent).not.toContain('.fg-bar-diamond');
+
+      ganttB.destroy();
+    });
   });
 
   it('a field match on a key no Field declares never matches, and the Gantt keeps drawing (F2)', () => {

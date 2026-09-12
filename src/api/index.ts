@@ -365,6 +365,11 @@ export { wholeEntryItem } from '../layout/index.js';
 // ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
 // the shipped case. `barSpan` honours the Item's `box` ahead of the span-and-floor path.
 export { fixedWidthItem } from '../layout/index.js';
+// ADR 0022 §1: core's three shipped looks, as factories over `EntryVariant` rather than private
+// object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
+// hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it
+// until an author installs it.
+export { bar, summary, diamond } from '../layout/index.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

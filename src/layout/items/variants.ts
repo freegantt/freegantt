@@ -20,7 +20,7 @@ import type {
 } from '../../model/index.js';
 import type { BarRenderer } from '../renderer.js';
 import type { DrawnVariant, Item, ItemProducer, VariantItems } from './item.js';
-import { wholeEntryItem, entryItem } from './item.js';
+import { wholeEntryItem, entryItem, fixedWidthItem } from './item.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its four answers off this
  *  one object, so what a row draws, how it looks and what you can do to it always come from the
@@ -85,6 +85,17 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
   /** What you can do to it. One level under the consumer's own `interactions`, one level over the
    *  library rule. Answer `undefined` from a predicate for "no opinion" (`J13`). */
   can?: Interactions;
+  /** The rules this look needs, as CSS text — verbatim, no scoping done for you. A variant owns
+   *  `items`, `paint` and `can` already; this is the fifth answer, the rules behind the class
+   *  `paint` names (ADR 0022 §5, Q6). `view/` wraps every installed variant's `css` once in
+   *  `@layer freegantt` and writes it after the base sheet, so a variant's own rule cancels
+   *  `.fg-bar`'s background and state ring at equal specificity, and an unlayered consumer rule
+   *  still beats it (ADR 0021).
+   *
+   *  Not `rules` — `when` is already the rule (ADR 0018's title). Not `styles` — that is
+   *  `ElementDescription.style`'s own word, and `view/styles.ts`'s. Not `stylesheet` — a variant
+   *  carries one fragment, and the library holds one sheet. */
+  css?: string;
 }
 
 /** Two rules from one source both claimed one Entry. The newest paints; the older one is reported
@@ -167,6 +178,12 @@ export interface VariantRegistry extends VariantItems {
    *  plugins installed in, which is the posture every other consumer/plugin pair already takes
    *  (D-S5-11). */
   addConsumerVariant(variant: EntryVariant): Disposer;
+  /** Every installed variant's own `css`, in registration-ladder order — core, then every plugin,
+   *  then the consumer's (ADR 0022 §5). `view/` reads this to build the one `<style>` node a Gantt
+   *  writes for its variants, wraps it once in `@layer freegantt`, and writes it after the base
+   *  sheet. A variant with no `css` contributes nothing. Not the walk order `resolveFor` uses —
+   *  that one is newest-first, for paint priority; this one is rank-first, for cascade order. */
+  installedCss(): readonly string[];
 }
 
 /** What a `VariantRegistry` reads outside itself. Both are live: a Gantt may be rebound to another
@@ -195,25 +212,125 @@ const SUMMARY_BAR: ElementDescription = Object.freeze({
 const SUMMARY_VARIANT_NAME = 'summary';
 const LEAF_VARIANT_NAME = 'leaf';
 
-/** Core's two, as ordinary `EntryVariant` objects with nothing special about them. They register
- *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
- *  overrides. `leaf` carries no `when`, so it answers for every row and the floor is total.
+/** `.fg-bar-summary`'s own rules (ADR 0022 §5, Q6). Moved out of the always-shipped base sheet: a
+ *  page that never installs `summary()` no longer pays for them (they still do here, because
+ *  `CORE_VARIANTS` seeds `summary()` unconditionally — but a consumer who re-skins the floor with
+ *  a different `summary` no longer inherits a class the base sheet still defined behind it).
  *
- *  **`leaf` registers before `summary`, and the order inside this list is load-bearing** (`J37`).
- *  The walk is newest-first, and a variant with no `when` claims every row. Put `leaf` second and
- *  it answers before `summary` ever runs, so no row is ever a summary. The floor registers first,
- *  and every rule — core's own `summary` included — stands on it. */
-const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([
-  {
+ *  DESIGN-FACTS §2.4: a group bar is a solid rail 10px high in the row's own label ink, with a 4px
+ *  downward cap at each end — not an outline box at full bar height, which shouted over every span
+ *  bar under it. The box keeps the full bar height because that is the hit target; only the glyph
+ *  inside it is ink, so both pieces read --fg-group-bar-ink and a state can swap that one value.
+ *  --fg-group-bar-height is an undeclared knob with a default, the shape --fg-bar-radius takes.
+ *
+ *  A group bar's box is its hit target, not its ink: the shared outline and the shared inset ring
+ *  would both frame a full-height rectangle of empty pane around a 10px rail. So the state paints
+ *  on the rail. Selected swaps the rail's own ink for the selection colour — a group bar wears no
+ *  outer border at all — and hovered rings the rail alone. Both need the box's own state paint
+ *  cancelled first, and document order inside this one fragment resolves that (the layer does not
+ *  change it — the normal cascade still applies inside one layer). */
+const SUMMARY_CSS = `
+.fg-bar-summary { --fg-group-bar-ink: var(--fg-row-label-color); background: transparent; border: none; color: var(--fg-group-bar-ink); }
+.fg-bar-summary::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--fg-group-bar-height, 10px); transform: translateY(-50%); background: var(--fg-group-bar-ink); border-radius: 1px; }
+.fg-bar-summary::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% + var(--fg-group-bar-height, 10px) / 2); height: 4px; background: conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) left top / 8px 4px no-repeat, conic-gradient(from 315deg at 50% 100%, var(--fg-group-bar-ink) 0deg 90deg, transparent 90deg) right top / 8px 4px no-repeat; }
+.fg-bar-summary[data-state~="hovered"], .fg-bar-summary[data-state~="selected"] { outline: none; box-shadow: none; }
+.fg-bar-summary[data-state~="selected"] { --fg-group-bar-ink: var(--fg-selection-color); }
+.fg-bar-summary[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); }
+`;
+
+const DIAMOND_VARIANT_NAME = 'diamond';
+
+/** The diamond's own fixed box, in content pixels. `harness/planner.html` measured and shipped
+ *  13px, so that is what core's own default carries (ADR 0022 Q3).
+ *
+ *  Declared here, beside `diamond()`'s only reader — never in `src/layout/frame.ts`, which holds
+ *  the two Gantt-wide numbers `barSpan` and `frame-settings.ts` share (`DEFAULT_MIN_BAR_WIDTH_PX`).
+ *  This one belongs to one variant, not to the Gantt. */
+const DIAMOND_WIDTH_PX = 13;
+
+/** The diamond's class, and nothing else — the same shape `SUMMARY_BAR` takes. One frozen object:
+ *  the hover path allocates nothing. */
+const DIAMOND_BAR: ElementDescription = Object.freeze({
+  class: Object.freeze({ 'fg-bar-diamond': true }),
+});
+
+/** `.fg-bar-diamond`'s own rules (ADR 0022 §5, Q6). The box `fixedWidthItem` sizes is the hit
+ *  target; the `::before` is the ink, turned 45° into the familiar diamond.
+ *
+ *  **Restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it follows
+ *  whatever box the Item states. A literal `13px` here would leave a 20px hit box around a 13px
+ *  glyph the moment an author writes `diamond({ items: fixedWidthItem(20) })` (Q3).
+ *
+ *  The box's own background and state ring are cancelled first, so the glyph — not a square bar
+ *  sitting behind it — wears the hover ring and the selection outline. */
+const DIAMOND_CSS = `
+.fg-bar-diamond { background: transparent; }
+.fg-bar-diamond::before { content: ''; position: absolute; inset: 0; margin: auto; width: 100%; aspect-ratio: 1; background: var(--fg-bar-fill-painted); transform: rotate(45deg); }
+.fg-bar-diamond[data-state~="hovered"] { box-shadow: none; }
+.fg-bar-diamond[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); outline-offset: 1px; }
+.fg-bar-diamond[data-state~="selected"] { outline: none; }
+.fg-bar-diamond[data-state~="selected"]::before { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
+`;
+
+/** `bar()` — core's plain look, and the shipped floor every unclaimed row wears. Carries
+ *  `produceLeafItems`, which is the reason it is worth exporting: an author who hand-writes
+ *  `{ name, when }` gets the whole-entry default instead, and their Segments silently vanish
+ *  (ADR 0022 §1).
+ *
+ *  Carries no `css`. Its look **is** `.fg-bar`, the element class every look wears — diamonds
+ *  included — so that stays structure, in the always-shipped base sheet, not one look's own rule.
+ *
+ *  Every key on `overrides` wins, `name` included: `bar({ name: 'phase', when: myRule })` keeps
+ *  `produceLeafItems` and answers for the rows `myRule` claims instead of every row nothing else
+ *  claimed. */
+export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
+  return {
     name: LEAF_VARIANT_NAME,
     items: produceLeafItems,
-  },
-  {
+    ...overrides,
+  };
+}
+
+/** `summary()` — core's rail for a row with children. Claims on structure
+ *  (`entry.hasChildren`), never on a stored word (ADR 0013's own rule, narrowed by ADR 0022, not
+ *  spent): a consumer who wants the rail on a different rule passes their own `when`. */
+export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
+  return {
     name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
     paint: () => SUMMARY_BAR,
-  },
-]);
+    css: SUMMARY_CSS,
+    ...overrides,
+  };
+}
+
+/** `diamond()` — core's marker, for a row with no duration. Its default `when` is
+ *  `(entry) => entry.duration()?.value === 0`, the worked example this file already publishes for
+ *  `VariantPredicate` — structure, never a stored word (ADR 0013's "core does not ship a diamond"
+ *  is narrowed by this factory, not spent: nothing wears it until a rule claims it).
+ *
+ *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
+ *  factory's own default rule, or a consumer's own `{ items: fixedWidthItem(...) }`. */
+export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
+  return {
+    name: DIAMOND_VARIANT_NAME,
+    when: (entry: Entry) => entry.duration()?.value === 0,
+    items: fixedWidthItem(DIAMOND_WIDTH_PX),
+    paint: () => DIAMOND_BAR,
+    css: DIAMOND_CSS,
+    ...overrides,
+  };
+}
+
+/** Core's two, seeded from the factories every consumer reads (ADR 0022 §1). They register
+ *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
+ *  overrides. `bar()` carries no `when`, so it answers for every row and the floor is total.
+ *
+ *  **`bar()` registers before `summary()`, and the order inside this list is load-bearing** (`J37`).
+ *  The walk is newest-first, and a variant with no `when` claims every row. Put `bar()` second and
+ *  it answers before `summary()` ever runs, so no row is ever a summary. The floor registers first,
+ *  and every rule — core's own `summary()` included — stands on it. */
+const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([bar(), summary()]);
 
 /** A leaf draws one Item per Segment, or one over its whole span when it has none. The only shipped
  *  producer that is not the whole-entry default.
@@ -388,5 +505,15 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
     },
     addPluginVariant: (variant, pluginId) => register(variant, PLUGIN_RANK, pluginId),
     addConsumerVariant: (variant) => register(variant, CONSUMER_RANK, undefined),
+    installedCss() {
+      // Rank ascending, not `walkOrder`'s newest-first: this answers cascade order, not paint
+      // priority. `live`'s own order already puts core first (the constructor loop below seeds it
+      // before any plugin or consumer registers), so the sort only has to settle two registrations
+      // that share a rank.
+      return [...live]
+        .sort((a, b) => a.rank - b.rank || a.seq - b.seq)
+        .map((registration) => registration.variant.css)
+        .filter((css): css is string => css !== undefined);
+    },
   };
 }

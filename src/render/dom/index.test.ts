@@ -2301,6 +2301,43 @@ describe('render/dom backend', () => {
       restoreRuler();
     });
 
+    it('a fixed-width Item’s label finds no room in its own box, so `fitBar` moves it outside (ADR 0022, E5)', () => {
+      // The box holds no label — 13px minus the gap on both sides is negative — so `diamond()`'s own
+      // glyph relies on the same `fitBar` arithmetic every narrow bar already uses. Nothing about
+      // `box`/`span: 'fixed'` reaches `resolveBarLabelPlacement`: it reads `bar.x`/`bar.width` alone,
+      // and `barSpan` already set those from the box (Unit C). So this is the library's own path, not
+      // a special case a fixed-width variant would have to ask for.
+      withStubRuler();
+      const t1 = sampleEntries[0]!;
+      const markerRegistry = createVariantRegistry({ fieldFor: () => undefined });
+      markerRegistry.addPluginVariant({ name: 'marker', when: () => true, items: fixedWidthItem(13) });
+      const backend = paintingBackend([t1]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      const frame = computeFrame({
+        entries: [t1],
+        scale: scaleFor(0, 200, 2000),
+        preset,
+        visible: { x: 0, y: 0, width: 2000, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        variants: markerRegistry,
+      });
+      backend.sync(frame);
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['span']).toBe('fixed');
+      expect(bar.style.width).toBe('13px');
+      expect(bar.dataset['label']).toBe('outside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
     it('keeps the label inside, ellipsised by CSS, when neither side has room (J1)', () => {
       withStubRuler();
       const backend = paintingBackend([sampleEntries[0]!]);

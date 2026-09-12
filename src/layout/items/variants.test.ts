@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { itemId } from '../../model/index.js';
 import type { Entry, Field, FieldKey } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
-import { createVariantRegistry } from './variants.js';
+import { bar, createVariantRegistry, diamond, summary } from './variants.js';
 import type { DoubleVariantClaim, UnknownFieldMatch } from './variants.js';
 
 function spanEntry(id: string, props: Record<string, unknown> = {}): Entry {
@@ -307,5 +307,88 @@ describe('what a variant answers about itself', () => {
 
     dispose();
     expect(registry.resolveFor(t1).items).toBe(shipped);
+  });
+});
+
+describe('core’s three shipped factories (ADR 0022 §1)', () => {
+  it('bar() answers the floor: no `when`, and `produceLeafItems` as its `items`', () => {
+    const variant = bar();
+    expect(variant.name).toBe('leaf');
+    expect(variant.when).toBeUndefined();
+    expect(variant.css).toBeUndefined();
+    // produceLeafItems, not the whole-entry default: a Segment on the row draws its own Item.
+    const [item] = variant.items!(spanEntry('t1'), 'leaf');
+    expect(item!.variant).toBe('leaf');
+    expect(item!.segmentId).toBeDefined();
+  });
+
+  it('summary() claims a row by structure, and carries the rail’s own class and css', () => {
+    const variant = summary();
+    const [parent, child] = entryDoubles([
+      { id: 'p', start: 0, end: 10 },
+      { id: 'c', start: 0, end: 10, parentId: 'p' },
+    ]);
+    expect((variant.when as (entry: Entry) => boolean)(parent!)).toBe(true);
+    expect((variant.when as (entry: Entry) => boolean)(child!)).toBe(false);
+    expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-summary': true } });
+    expect(variant.css).toContain('.fg-bar-summary');
+  });
+
+  it('diamond() claims a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
+    const variant = diamond();
+    const point = entryDouble({ id: 'm', start: 5, end: 5 });
+    expect((variant.when as (entry: Entry) => boolean)(point)).toBe(true);
+    expect((variant.when as (entry: Entry) => boolean)(spanEntry('span'))).toBe(false);
+    const [item] = variant.items!(point, 'diamond');
+    expect(item!.box).toEqual({ widthPx: 13, anchor: 'center' });
+    expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-diamond': true } });
+    expect(variant.css).toContain('.fg-bar-diamond');
+  });
+
+  it('diamond() is not seeded into a fresh registry — no row wears it until installed', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const point = entryDouble({ id: 'm', start: 5, end: 5 });
+    expect(registry.resolveFor(point).name).not.toBe('diamond');
+  });
+
+  it('every key on `overrides` wins, `paint` included', () => {
+    const paint = (): undefined => undefined;
+    const variant = diamond({ name: 'checkpoint', when: { checkpoint: true }, paint });
+    expect(variant.name).toBe('checkpoint');
+    expect(variant.when).toEqual({ checkpoint: true });
+    expect(variant.paint).toBe(paint);
+    // Everything `overrides` left untouched still answers core's default.
+    expect(variant.items).toBeDefined();
+    expect(variant.css).toContain('.fg-bar-diamond');
+  });
+
+  it('a fresh registry still resolves `summary()` for a row with children (CORE_VARIANTS order)', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const [parent, child] = entryDoubles([
+      { id: 'p', start: 0, end: 10 },
+      { id: 'c', start: 0, end: 10, parentId: 'p' },
+    ]);
+    expect(registry.resolveFor(parent!).name).toBe('summary');
+    expect(registry.resolveFor(child!).name).toBe('leaf');
+  });
+
+  it('installedCss() answers every installed variant’s css, core first, and skips one with none', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    expect(registry.installedCss()).toEqual([summary().css]);
+
+    registry.addConsumerVariant(diamond());
+    const css = registry.installedCss();
+    expect(css).toHaveLength(2);
+    expect(css[0]).toContain('.fg-bar-summary');
+    expect(css[1]).toContain('.fg-bar-diamond');
+  });
+
+  it('installedCss() answers nothing once the css-bearing variant is disposed', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    const dispose = registry.addConsumerVariant(diamond());
+    expect(registry.installedCss()).toHaveLength(2);
+
+    dispose();
+    expect(registry.installedCss()).toEqual([summary().css]);
   });
 });
