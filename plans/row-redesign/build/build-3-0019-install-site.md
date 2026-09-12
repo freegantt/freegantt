@@ -12,12 +12,12 @@
 
 ## Unit A — one plugin type, two halves
 
-- [ ] Add `definePlugin({ id, requires, data, view })`. Copy the shape from the ADR's *Decision*.
-- [ ] `data(ctx)` declares Fields, the edit hook and the store. It is DOM-free and runs as the `Dataset` constructs.
-- [ ] `view(ctx)` registers variants, renderers, commands and keys. It runs as a `Gantt` mounts.
-- [ ] **The install site is where the state lives.** A plugin with a `data` half installs on the `Dataset`, because a Field must exist before the first Rollup (D-S5-4).
-- [ ] Every `Gantt` bound to that Dataset runs the `view` half **once, each with its own context**. One `view(ctx)` call is one Gantt's worth of state. I2 holds by construction.
-- [ ] `requires` moves onto the one type and covers both halves.
+- [x] Add `definePlugin({ id, requires, data, view })`. Copy the shape from the ADR's *Decision*.
+- [x] `data(ctx)` declares Fields, the edit hook and the store. It is DOM-free and runs as the `Dataset` constructs.
+- [x] `view(ctx)` registers variants, renderers, commands and keys. It runs as a `Gantt` mounts.
+- [x] **The install site is where the state lives.** A plugin with a `data` half installs on the `Dataset`, because a Field must exist before the first Rollup (D-S5-4).
+- [x] Every `Gantt` bound to that Dataset runs the `view` half **once, each with its own context**. One `view(ctx)` call is one Gantt's worth of state. I2 holds by construction.
+- [x] `requires` moves onto the one type and covers both halves.
 
 **Do not** add a type parameter to the `Dataset` constructor. TypeScript stops inferring later type parameters once an earlier one is written, so a plugin generic there breaks `new Dataset<TaskProps>({ plugins: [...] })`. Module augmentation stays the route for a plugin's Field keys. This is refuted item 3 in [`field-redesign/shared/refuted.md`](../../field-redesign/shared/refuted.md) — *not* item 3 in `row-redesign/README.md`, which refuses rebuilding the live `Entry` per revision. The ADR restates it.
 
@@ -25,27 +25,27 @@
 
 ## Unit B — what keeps its current site
 
-- [ ] A **chrome-only plugin** — no `data` half, such as `weekendShading()` — keeps installing on the `Gantt`.
-- [ ] `gantt.plugins` stays live-reconfigurable.
-- [ ] `dataset.plugins` stays read-only, for the reason it already is.
+- [x] A **chrome-only plugin** — no `data` half, such as `weekendShading()` — keeps installing on the `Gantt`.
+- [x] `gantt.plugins` stays live-reconfigurable.
+- [x] `dataset.plugins` stays read-only, for the reason it already is.
 
 ---
 
 ## Unit C — the failure mode gets a name
 
-- [ ] **The type refuses it first.** `GanttOptions.plugins` takes `readonly ChromePlugin[]` — a plugin with a `data` half does not typecheck there. Copy the three declarations from the ADR's *The compiler refuses it first*: `data?: never` on the chrome arm is what makes the combination unrepresentable, the same way `scale` and `preset` already exclude each other.
-- [ ] `definePlugin` keeps the narrow type at the call site. Overload it, or infer the arm — a plugin author must see the error in the editor, not at mount.
-- [ ] A plugin with a `data` half, handed to a `Gantt`, **still throws at runtime**. The compiler never met the plain-JavaScript caller, or the list a helper widened.
-- [ ] **A silent partial install is refused.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove.
-- [ ] **`Q4` is ruled, 2026-09-11: raise `PluginSetupError`.** It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. **No new error type ships.** The message must say **where to install it**, not only that it failed.
+- [x] **The type refuses it first.** `GanttOptions.plugins` takes `readonly ChromePlugin[]` — a plugin with a `data` half does not typecheck there. Copy the three declarations from the ADR's *The compiler refuses it first*: `data?: never` on the chrome arm is what makes the combination unrepresentable, the same way `scale` and `preset` already exclude each other.
+- [x] `definePlugin` keeps the narrow type at the call site. Overload it, or infer the arm — a plugin author must see the error in the editor, not at mount.
+- [x] A plugin with a `data` half, handed to a `Gantt`, **still throws at runtime**. The compiler never met the plain-JavaScript caller, or the list a helper widened.
+- [x] **A silent partial install is refused.** Installing the `view` half alone gives an author a Gantt that paints variants for a Field that was never declared, and every `entry.read(key)` answers `undefined`. That is the failure this ADR exists to remove.
+- [x] **`Q4` is ruled, 2026-09-11: raise `PluginSetupError`.** It already names a plugin id, and `extensions/install-dataset-plugins.ts:124` already unwinds the plugins installed before it. **No new error type ships.** The message must say **where to install it**, not only that it failed.
 
 ---
 
 ## Unit D — retire the pair
 
-- [ ] `GanttPlugin` (39 refs, 12 files) and `DatasetPlugin` (27 refs, 9 files) retire into one `Plugin`.
-- [ ] `PluginContextOf` and `DatasetPluginContextOf` become the two halves' context types. Each keeps the members it has.
-- [ ] Migrate all nine plugins in `harness/plugins/`: `buffer-kind`, `lock-entries`, `log-everything`, `milestone-kind`, `popup-demo`, `risk-kind`, `selection-shortcuts`, `weekend-shading`, `write-log`. Build 2 already turned `milestone-kind` into page config, so expect eight.
+- [x] `GanttPlugin` (39 refs, 12 files) and `DatasetPlugin` (27 refs, 9 files) retire into one `Plugin`.
+- [x] `PluginContextOf` and `DatasetPluginContextOf` become the two halves' context types. Each keeps the members it has.
+- [x] Migrate all nine plugins in `harness/plugins/`: `buffer-kind`, `lock-entries`, `log-everything`, `milestone-kind`, `popup-demo`, `risk-kind`, `selection-shortcuts`, `weekend-shading`, `write-log`. Build 2 already turned `milestone-kind` into page config, so expect eight.
 
 ---
 
@@ -55,9 +55,9 @@
 
 This was [#192](https://github.com/Pawel-IT/FreeGantt/issues/192)'s hazard one level down. The issue is **closed** — its `fromJSON` half died with ADR 0016. The live-install half did not die, and it had no owner between 2026-09-11 and this ADR.
 
-- [ ] Do **not** plan a repair. The ADR names the owner and stops there.
-- [ ] Two facts already bound it. The library never writes an undeclared key (ADR 0011). A duplicate *declaration* is already refused by the registry; a *value* the consumer wrote first is not.
-- [ ] Do **not** enforce a plugin key prefix. A prefix is a convention a plugin follows (`scheduling:progress`, ADR 0008). Core enforces none. That enforcement was the withdrawn ADR's, and it is not coming back.
+- [x] Do **not** plan a repair. The ADR names the owner and stops there.
+- [x] Two facts already bound it. The library never writes an undeclared key (ADR 0011). A duplicate *declaration* is already refused by the registry; a *value* the consumer wrote first is not.
+- [x] Do **not** enforce a plugin key prefix. A prefix is a convention a plugin follows (`scheduling:progress`, ADR 0008). Core enforces none. That enforcement was the withdrawn ADR's, and it is not coming back.
 
 ---
 
