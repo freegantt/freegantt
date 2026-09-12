@@ -143,10 +143,13 @@ export type PropsEdit<TProps> = { [K in keyof TProps]?: TProps[K] | undefined };
  * `Entry`, so `{ name: undefined }` does not compile, while `{ parentId: undefined }` and (after ADR
  * 0012) `{ start: undefined }` do. Every declared consumer key is removable without exception, because
  * `props` is `Partial<TProps>` everywhere already. */
+// `Exclude<…, undefined>` on the non-removable arm is load-bearing. `EntryInput`'s optional keys
+// admit an explicit `undefined` so that `entries.add({ ...entry.toInput() })` compiles (ADR 0017),
+// and without this the widening would leak here and quietly make `segments` removable.
 export type EntryEdit<TProps = Record<string, unknown>> = {
   [K in keyof EntryEnvelope<TProps>]?: K extends RemovableEntryKey
     ? EntryEnvelope<TProps>[K] | undefined
-    : EntryEnvelope<TProps>[K];
+    : Exclude<EntryEnvelope<TProps>[K], undefined>;
 } & { [K in keyof TProps]?: TProps[K] | undefined } & { readonly props?: never };
 
 /** The **read** shape: an edit core has already read, with every date an `Instant` rather than a loose

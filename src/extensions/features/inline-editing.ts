@@ -37,16 +37,13 @@ import type { EntryFieldEdit, GanttDom, MountLayer } from '../../api/plugin.js';
 import {
   EntryNotFoundError,
   MutationCancelledError,
-  spansTime,
   UnreadableCellValueError,
 } from '../../model/index.js';
 import type {
-  CoreFieldValue,
   Disposer,
   Entry,
   EntryId,
   Field,
-  FieldContext,
   FieldKey,
   Instant,
   PluginErrorReport,

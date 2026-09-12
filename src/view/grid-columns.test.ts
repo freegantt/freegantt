@@ -11,7 +11,7 @@ import {
 } from './grid-columns.js';
 import type { FieldLookup } from '../model/index.js';
 import type { Entry, Field, FieldKey, Instant } from '../model/index.js';
-import { entryId, segmentId } from '../model/index.js';
+import { entryDouble, entryDoubleLike } from '../layout/entry-double.js';
 
 const zone = 'UTC';
 const locale = 'en-US';
@@ -37,14 +37,13 @@ function lookupFrom(fields: readonly Field[]): FieldLookup {
 
 const entryStart = 0 as Instant;
 const entryEnd = 1 as Instant;
-const entry: Entry = {
-  id: entryId('t1'),
+const entry: Entry = entryDouble({
+  id: 't1',
   name: 'Alpha',
   start: entryStart,
   end: entryEnd,
-  segments: [{ id: segmentId('t1-1'), start: entryStart, end: entryEnd }],
   props: { cost: 500 },
-};
+});
 
 describe('resolveColumns (D-S4-12)', () => {
   it("a string takes the Field's column defaults", () => {
@@ -147,7 +146,7 @@ describe('resolveFieldCompares (D-S4-13)', () => {
 
   it('the duration cell on a dateless row is blank, not "NaN d" (ADR 0012 Gate)', () => {
     const columns = resolveColumns(['duration'], lookupFrom(CORE_FIELDS), { timeZone: zone, locale });
-    const dateless: Entry = { id: entryId('none'), name: 'none', segments: [], props: {} };
+    const dateless = entryDouble({ id: 'none' });
     expect(columns[0]?.format(dateless)).toBe('');
   });
 
@@ -157,8 +156,8 @@ describe('resolveFieldCompares (D-S4-13)', () => {
       locale,
     });
     const duration = compares.find((c) => c.key === 'duration')!;
-    const short: Entry = { ...entry, end: 10 as Instant };
-    const long: Entry = { ...entry, end: 40 as Instant };
+    const short = entryDoubleLike(entry, { end: 10 });
+    const long = entryDoubleLike(entry, { end: 40 });
     expect(duration.readStored(short)).toEqual({ value: 10, unit: 'millisecond' });
     expect(duration.compareStored(duration.readStored(short), duration.readStored(long))).toBeLessThan(0);
   });

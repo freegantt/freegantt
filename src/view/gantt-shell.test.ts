@@ -12,7 +12,6 @@ import {
   ContainerNotFoundError,
 } from '../model/index.js';
 import type {
-  Entry,
   EntryId,
   Field,
   Instant,
