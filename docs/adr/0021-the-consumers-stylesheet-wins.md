@@ -1,7 +1,7 @@
 ---
 status: proposed — opened 2026-09-12, out of a defect on `harness/planner.ts`'s checkpoint glyph and the grill that followed. Not built.
 decided: the base stylesheet ships inside one cascade layer, `@layer freegantt`, so an unlayered consumer rule wins at any specificity. Level 2 of the Customization ladder (`plans/02` §4) becomes true, which it was not.
-open: nothing this record answers. Per-look stylesheet splitting is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286) and is deliberately not here.
+open: nothing this record answers. Per-look stylesheet splitting is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286), and [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) answers it.
 ---
 
 # The consumer's stylesheet wins
@@ -75,7 +75,7 @@ An unlayered rule beats a layered one at any specificity. So a consumer writing 
 
 It does not give a glyph a fixed painted box. The checkpoint's second defect — a 12px box that grows to 28px on zoom, because the painted span is the entry's span floored at one Gantt-wide `--fg-bar-min-width` — is geometry, not cascade. [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) answers it.
 
-It does not split the sheet so an unused look's CSS drops out. That is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286), deliberately deferred until a third shipped look exists.
+It does not split the sheet so an unused look's CSS drops out. That is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286), and [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) answers it: a variant carries its own `css`, and an uninstalled look writes nothing.
 
 ## To reverse
 
