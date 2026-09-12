@@ -183,13 +183,6 @@ function phaseBar({ entry, label }: BarRendererContext): ElementDescription | un
   return description;
 }
 
-/** A phase's rail is the library's own paint, and the design draws exactly that: a solid rail in the
- *  row ink, with end caps and no label. `undefined` keeps it, so this kind opts out of the page's
- *  own bar paint rather than restating it. */
-function phaseRail(): ElementDescription | undefined {
-  return undefined;
-}
-
 /** A checkpoint (DESIGN-FACTS §2.5): a diamond glyph, filled when the checkpoint is done and hollow —
  *  the pane's background behind a 1.5px stroke — while it is not. Which one is a fact about this
  *  page's data, so the page answers it. ADR 0013 retired core's diamond, so this page owns the shape
@@ -211,12 +204,12 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
   return description;
 }
 
-// ADR 0018: three variants, three rules. Core already answers `'parent'` for any row with children,
-// so this page re-skins that one rather than re-deriving it, and a checkpoint states its own rule
-// against the Field the fixture writes. Nothing here stores a variant, and nothing keeps a list of
-// the rows it owns.
+// ADR 0018: one variant, one rule. A checkpoint states its own rule against the Field the fixture
+// writes. Nothing here stores a variant, and nothing keeps a list of the rows it owns.
+//
+// A phase needs no entry at all. Core's own `parent` variant already claims a row with children and
+// paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
 const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
-  { name: 'parent', when: (entry) => entry.hasChildren, paint: phaseRail },
   { name: 'checkpoint', when: { checkpoint: true }, paint: checkpointDiamond },
 ];
 

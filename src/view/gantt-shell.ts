@@ -601,11 +601,13 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
-        // D-S5-11, ADR 0018: the consumer's own `barRenderer` first. Then the variant's own
-        // `paint`, because a specific answer beats a whole-point claim. Then a plugin's claim.
+        // ADR 0018, `J40`: the resolved variant's own `paint` first, because it names the rows it
+        // covers. Then `barRenderer`, the catch-all for every bar no variant paints — which is what
+        // the retired map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's
+        // own `barRenderer` beats a plugin's whole-point `bar` renderer.
         resolveBarRenderer: (variant) =>
-          this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer) ??
-          this.#paintFor(variant),
+          this.#paintFor(variant) ??
+          this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`

@@ -11,9 +11,9 @@ test('barRenderer paints a milestone diamond and cellRenderer paints an over-bud
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  // ADR 0013: core ships no diamond, so the page owns the look end to end. `milestoneKind()` makes
-  // the `'milestone'` key real, the demo `barRenderer` hands the bar the page's own class and fill,
-  // and `plugins.html` draws the glyph on that class's `::before`. The renderer still never shapes
+  // ADR 0013: core ships no diamond, so the page owns the shape end to end. Its own `milestone`
+  // variant claims the marked rows and hands the bar the page's own class and fill, and
+  // `plugins.html` draws the glyph on that class's `::before`. The renderer still never shapes
   // the node (I13: a renderer's bounded scope is attr/class/style/text/children).
   const milestoneBar = page.locator('#gantt .fg-bar.demo-milestone');
   await expect(milestoneBar).toHaveCSS('--fg-bar-fill', '#7b2cbf');

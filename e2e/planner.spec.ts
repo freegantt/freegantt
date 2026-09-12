@@ -60,10 +60,10 @@ test('the cells the design draws as pictures are real rendered nodes', async ({ 
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // A phase is a group bracket: the library's own shape, reached by structure alone (ADR 0013 —
-  // a row with children draws the parent look), recoloured by the renderer and not redrawn by it.
+  // core's own `parent` variant claims a row with children and paints this class (ADR 0018).
   await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
-  // A checkpoint is a diamond, and core ships none, so this page draws it: `milestoneKind()` makes
-  // the `'milestone'` key real and `.demo-checkpoint`'s `::before` paints the glyph.
+  // A checkpoint is a diamond, and core ships none, so this page draws it: its own `checkpoint`
+  // variant claims the marked rows and `.demo-checkpoint`'s `::before` paints the glyph.
   await expect(page.locator('#gantt .fg-bar.demo-checkpoint').first()).toBeVisible();
 
   // The progress meter is described, not two anonymous divs.

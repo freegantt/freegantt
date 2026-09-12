@@ -946,3 +946,42 @@ The three-plugin split they used to stage — one plugin holding the claim, two 
 defaults for *its* look — is a shape ADR 0018 deleted, so it did not survive the rewrite.
 
 **To reverse:** restore the per-variant `bar` slot, and `RendererByLook` with it.
+
+---
+
+## J40 — a variant's `paint` beats `barRenderer`, because it names the rows it covers
+
+**Build 2, Units A and E. Done in the code. This closes an API gap `harness/planner.ts` exposed.**
+
+The shell resolved a bar's paint as `barRenderer` first, then the variant's own `paint`. Two e2e
+specs went red on it, and the harness had already paid for it in config.
+
+**What the harness had to write.** `harness/planner.ts` declared a variant of its own:
+
+```ts
+{ name: 'parent', when: (entry) => entry.hasChildren, paint: phaseRail }
+```
+
+`phaseRail` returned `undefined`. Both halves re-derive the library. The rule restates core's own
+`parent` rule word for word, and the paint exists only to stop the page's `barRenderer` painting
+over a row the library already paints. That is the harness compensating for the library, which
+`CLAUDE.md`'s stop rule names. It also deleted `fg-bar-summary` from every phase row, because a
+consumer `parent` variant with a paint of its own overrides core's.
+
+**The call. The resolved variant's `paint` answers first, then `barRenderer`.** A variant names the
+rows it covers, so it is the specific answer. `barRenderer` is the catch-all for every bar no
+variant paints — which is exactly what the retired map form's `'*'` entry meant, and the ADR says
+so in `GanttOptions.barRenderer`'s own doc. `GridColumn.cellRenderer` over the Gantt-wide
+`cellRenderer` is the same rule one seam along.
+
+**D-S5-11 is untouched.** It orders the catch-all: a consumer's `barRenderer` still beats a plugin's
+whole-point `bar` renderer. What changed is that a *specific* answer now beats a *general* one,
+which no decision had ruled on either way.
+
+**What a consumer loses, and what answers it.** A `barRenderer` no longer paints over a plugin's
+variant. To take a row a plugin claimed, declare a variant of the same name: the consumer's rank
+beats every plugin's (`J33`), and that says which rows in one place instead of painting over them.
+
+`harness/planner.ts` now states one variant, `checkpoint`. The phase rail is core's.
+
+**To reverse:** put `barRenderer` back in front, and give the planner page its `parent` entry again.
