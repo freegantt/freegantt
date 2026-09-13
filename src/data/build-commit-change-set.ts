@@ -2,6 +2,7 @@
 // edits → extension hook → rollup → fold. The only module that imports `rollup.ts` on the commit path
 // (`rollup-is-removable`).
 
+import { entryId } from '../model/index.js';
 import type {
   ChangeOrigin,
   ChangeSet,
@@ -272,7 +273,7 @@ export function buildCommitChangeSet(
   const extenderReading = data.extraEditsReadingFor({
     entries: byId,
     proposed,
-    entryAfterEdits: (id) => effectiveForExtender.get(id),
+    entryAfterEdits: (id) => effectiveForExtender.get(entryId(id)),
   });
   const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored, () =>
     data.mintSegmentId(),

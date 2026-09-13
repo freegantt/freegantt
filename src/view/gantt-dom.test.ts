@@ -263,7 +263,8 @@ describe('ContainerDom — finding an element from an id', () => {
     const bar = gantt.dom.barFor(entries[1]!.id);
 
     expect(bar).toBe(gantt.container.querySelectorAll('[data-item-id]')[1]);
-    expect(gantt.dom.barFor('no-such-entry' as EntryId)).toBeUndefined();
+    // F19: a plain string, not `as EntryId` — `barFor` is loose on this scalar id (#305).
+    expect(gantt.dom.barFor('no-such-entry')).toBeUndefined();
     gantt.destroy();
   });
 
@@ -294,6 +295,8 @@ describe('ContainerDom — finding an element from an id', () => {
     expect(cell?.dataset['field']).toBe('cost');
     expect(gantt.dom.targetUnder(cell!)?.entry?.id).toBe(entries[1]!.id);
     expect(gantt.dom.cellFor(entries[1]!.id, 'nothing')).toBeUndefined();
+    // F19: a plain string, not `as EntryId` — `cellFor` is loose on this scalar id (#305).
+    expect(gantt.dom.cellFor('no-such-entry', 'cost')).toBeUndefined();
     gantt.destroy();
   });
 

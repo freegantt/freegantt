@@ -939,7 +939,9 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
           // The pre-transaction snapshot still shows one Segment — this is the split the hook must not
           // be graded against (`entries.get` alone answers the wrong question here).
           expect(request.entries.get(entryId('t1'))?.segments).toHaveLength(1);
-          sawSegmentCount = request.entryAfterEdits(entryId('t1'))?.segments.length;
+          // F19: a plain string, not `entryId('t1')` — `entryAfterEdits` is loose on this scalar id
+          // (#305).
+          sawSegmentCount = request.entryAfterEdits('t1')?.segments.length;
           return new Map();
         },
       });
