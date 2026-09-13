@@ -410,3 +410,55 @@ describe('the Rollup context reads each row through its own children (F22)', () 
     expect(state.entries.get('p')!.read('kidSum')).toBe(3);
   });
 });
+
+// #300. The memo (`ComputedFieldCache`) is keyed by dataset revision, and the revision does not move
+// until the commit lands. The commit path runs *after* the transaction body closes, so
+// `DatasetState`'s "stand the memo down while a transaction is open" rule does not reach it: the
+// Rollup used to run with a live memo at the pre-commit revision, and an Aggregator reading a
+// child's `compute` Field was served the value cached before the edit.
+describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#300)', () => {
+  function datasetTallyingNameLengths(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'c', name: 'Child A', parentId: 'p' },
+      ],
+      fields: [
+        { key: 'nameLen', compute: (entry) => entry.name.length },
+        { key: 'tally', rollUp: 'sumNameLens' },
+      ],
+      aggregators: {
+        sumNameLens: (_parent, ctx) =>
+          ctx.values('nameLen').reduce((total: number, value) => total + Number(value), 0),
+      },
+    });
+  }
+
+  const LONGER_NAME = 'Child A Renamed Much Longer';
+
+  it('rolls up the edited value when nothing primed the memo first', () => {
+    const state = datasetTallyingNameLengths();
+
+    state.transaction(() => {
+      state.entries.update('c', { name: LONGER_NAME });
+    });
+
+    expect(state.entries.get('p')!.read('tally')).toBe(LONGER_NAME.length);
+  });
+
+  // The same edit, with one ordinary read in front of it — what any drawn frame does. Before the
+  // fix this answered 7, the length of the name the child carried before the transaction opened.
+  it('rolls up the edited value when a read primed the memo first', () => {
+    const state = datasetTallyingNameLengths();
+
+    expect(state.entries.get('c')!.read('nameLen')).toBe('Child A'.length);
+
+    state.transaction(() => {
+      state.entries.update('c', { name: LONGER_NAME });
+    });
+
+    expect(state.entries.get('c')!.read('nameLen')).toBe(LONGER_NAME.length);
+    expect(state.entries.get('p')!.read('tally')).toBe(LONGER_NAME.length);
+  });
+});
