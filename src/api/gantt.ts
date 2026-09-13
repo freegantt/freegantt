@@ -275,6 +275,14 @@ export class Gantt<TProps = unknown> {
     // The same Dataset, read at the erased width `view/` and `interaction/` work in — see
     // `commitEntryEdits` below, its one reader.
     const store: Dataset = options.dataset;
+    // `buildPluginContext` and `buildCommandContext` (in `wiring` below) both answer "this Gantt's
+    // `dataset` and `gantt`, plus whichever parts the caller supplies" — one fact, so it lives here
+    // once rather than in two byte-identical arrow functions (#260).
+    const withDatasetAndGantt = <TParts extends object>(parts: TParts) => ({
+      dataset: options.dataset,
+      gantt: this,
+      ...parts,
+    });
     this.#shell = new GanttShell({
       container: options.container,
       dataset: options.dataset,
@@ -355,16 +363,8 @@ export class Gantt<TProps = unknown> {
         // event handlers registered for later do). Every other member arrives already grouped from
         // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
         // edit there, and a member in the wrong group no longer compiles.
-        buildPluginContext: (parts): PluginContext<TProps> => ({
-          dataset: options.dataset,
-          gantt: this,
-          ...parts,
-        }),
-        buildCommandContext: (parts): CommandContext<TProps> => ({
-          dataset: options.dataset,
-          gantt: this,
-          ...parts,
-        }),
+        buildPluginContext: (parts): PluginContext<TProps> => withDatasetAndGantt(parts),
+        buildCommandContext: (parts): CommandContext<TProps> => withDatasetAndGantt(parts),
         now,
       },
     });
