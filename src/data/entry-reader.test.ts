@@ -3,6 +3,7 @@ import {
   fitSegmentsToEnvelope,
   moveEntryTo,
   reconcileExtenderEdits,
+  reconcileExtenderEditsForPreview,
   toEditReading,
   toEntries,
 } from './entry-reader.js';
@@ -554,6 +555,30 @@ describe('reconcileExtenderEdits refuses what reconcileEnvelope refuses (D-S5-44
     expect(() =>
       reconcileExtenderEdits(entries, new Map([[entry!.id, { start: invertingStart } as ProposedEdit]])),
     ).toThrow(InvertedSpanError);
+  });
+
+  // #258: `reconcileExtenderEditsForPreview` calls the same `reconcileExtenderEditsWith` loop as
+  // `reconcileExtenderEdits` above, on the pipeline's own rAF callback (`view/gesture-pipeline.ts`'s
+  // `#extraFor`), which has no `catch` of its own. `InvertedSpanError` reached that loop's `catch`
+  // one refusal type after this drop was written (`#143`, 27 minutes after `#240`), and nothing here
+  // widened it — a cascade proposing an inverted span rethrew straight out of the rAF callback,
+  // breaking the drag mid-gesture with the user's own edit lost alongside it. Both assertions read
+  // the same input through the one seam (`isEnvelopeRefusal`): the commit path still raises, and the
+  // preview path now drops instead of crashing.
+  it('#258: the preview path drops an inverted cascade the commit path still throws for', () => {
+    const context = createContext();
+    const [entry] = toEntries(
+      [{ id: 'seg', name: 'Seg', start: '2026-01-01', end: '2026-01-05' }],
+      context,
+      registry,
+    );
+    const entries = new Map([[entry!.id, entry!]]);
+    const invertingStart = instant(utc('2026-01-10T00:00:00Z'));
+    const inverted = new Map([[entry!.id, { start: invertingStart } as ProposedEdit]]);
+
+    expect(() => reconcileExtenderEdits(entries, inverted)).toThrow(InvertedSpanError);
+    expect(() => reconcileExtenderEditsForPreview(entries, inverted)).not.toThrow();
+    expect(reconcileExtenderEditsForPreview(entries, inverted).has(entry!.id)).toBe(false);
   });
 });
 
