@@ -55,6 +55,37 @@ describe('rollUpFields (S4.2)', () => {
     expect(costOf(state, 'root')).toBe(250);
   });
 
+  it('#270: a declining Aggregator clears a stale parent value and reports the clear', () => {
+    const state = treeDataset([{ id: 'p' }, { id: 'c', parentId: 'p', props: { cost: 10 } }]);
+
+    expect(costOf(state, 'p')).toBe(10);
+
+    let changeSet: ChangeSet | undefined;
+    state.on('change', ({ changeSet: cs }) => {
+      changeSet = cs;
+    });
+
+    // `sum` over no numeric values answers `undefined` — no opinion. On a roll-up parent that
+    // has no referent: nothing but the Rollup may write this cell (`view/capability.ts`), so
+    // there is no authored value the parent could be falling back to. The clear must land, and
+    // it must be reported.
+    state.entries.update('c', { cost: undefined });
+
+    expect(costOf(state, 'p')).toBeUndefined();
+
+    expect(changeSet).toBeDefined();
+    const parentCost = changeSet!.updated.find(
+      (row) => row.store === 'entries' && row.id === entryId('p') && row.field === 'cost',
+    );
+    expect(parentCost).toEqual({
+      store: 'entries',
+      id: entryId('p'),
+      field: 'cost',
+      from: 10,
+      to: undefined,
+    });
+  });
+
   // `rollUpKinds`/`hierarchy.autoGroup` (a per-kind opt-out of rolling up) were retired end to end
   // by ADR 0013: a Field rolls up for every Entry that has children, with no kind to opt out by.
   // Their two tests are gone with the feature, not weakened.
