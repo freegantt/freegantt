@@ -67,12 +67,17 @@ export class GridPaneWidth {
    *  `commitWidth`). #139 caps a px width at the columns' own edge — a width past the last column
    *  would only be dead space. `'fitColumns'` (#157) puts the pane exactly on that edge and keeps
    *  it there through every later rebind. Nothing floors either form — an explicit `width = 0`
-   *  still collapses the pane on purpose (#127). */
+   *  still collapses the pane on purpose (#127).
+   *
+   *  A target equal to the pane's own current width commits nothing (#260): with a flex column
+   *  present, `'fitColumns'` can resolve to the width the pane already has, and `beforeGridWidthChange`
+   *  is cancelable, so firing it (with `gridWidthChange` following) over a change that was never
+   *  going to happen invites a consumer to veto nothing. `resizeToColumns` guards the same way. */
   resize(width: GridWidth): void {
     this.#fitsColumns = width === 'fitColumns';
-    this.#commit(
-      width === 'fitColumns' ? (this.#columnsEdge() ?? this.#ports.readWidth()) : this.#ceiling(width),
-    );
+    const current = this.#ports.readWidth();
+    const target = width === 'fitColumns' ? (this.#columnsEdge() ?? current) : this.#ceiling(width);
+    if (target !== current) this.#commit(target);
   }
 
   /** `gantt.minGridWidth = px`'s own rule. Raising the floor above the current `width` lifts it

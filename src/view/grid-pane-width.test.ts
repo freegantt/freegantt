@@ -171,6 +171,18 @@ describe('GridPaneWidth (#252 S8-1)', () => {
 
       expect(gridPaneWidth.width).toBe(160);
     });
+
+    it("resize('fitColumns') commits nothing when the columns' own edge already matches the pane's width (#260)", () => {
+      const { pane, commits } = makePane({ width: 360, columnsWidth: 360 });
+      const gridPaneWidth = new GridPaneWidth(pane, false);
+
+      gridPaneWidth.resize('fitColumns');
+
+      // No commit means no `beforeGridWidthChange`/`gridWidthChange` pair fires — a consumer is
+      // never invited to veto a width that was never going to change.
+      expect(commits).toEqual([]);
+      expect(gridPaneWidth.width).toBe(360);
+    });
   });
 
   describe('the splitter veto path', () => {
