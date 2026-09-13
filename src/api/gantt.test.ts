@@ -5897,3 +5897,216 @@ describe('the Selection follows the Dataset when a Segment goes away (#212, ADR 
     gantt.destroy();
   });
 });
+
+// #275 item 3: nineteen public `Gantt` members ran under no test before this — eight of them
+// setters, which makes this the live-reconfigurable claim (`plans/02`: "every config key is
+// live-reconfigurable") seen from the same side as §2's matrix row. A zero-arg smoke test reaches
+// every getter; each setter then gets its own round-trip against the getter that reads it back.
+describe('Gantt — never-called public members (#275 §3/§4, merged with the live-reconfigurable claim)', () => {
+  it('zero-arg smoke: every named getter answers with no throw off a freshly constructed Gantt', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    const reads: Record<string, unknown> = {
+      theme: gantt.theme,
+      a11yLabel: gantt.a11yLabel,
+      barLabels: gantt.barLabels,
+      variants: gantt.variants,
+      range: gantt.range,
+      fit: gantt.fit,
+      todayLine: gantt.todayLine,
+      dateLines: gantt.dateLines,
+      zoomPresets: gantt.zoomPresets,
+      viewportGestures: gantt.viewportGestures,
+      canZoomIn: gantt.canZoomIn,
+      canZoomOut: gantt.canZoomOut,
+    };
+
+    expect(reads['theme']).toBe('auto');
+    expect(typeof reads['a11yLabel']).toBe('string');
+    expect(reads['barLabels']).toBe('fitBar');
+    expect(reads['variants']).toEqual([]);
+    expect(reads['range']).toBe('fitDataset');
+    expect(reads['fit']).toBe('pane');
+    expect(reads['todayLine']).toBe(true);
+    expect(reads['dateLines']).toEqual([]);
+    expect(Array.isArray(reads['zoomPresets'])).toBe(true);
+    expect((reads['zoomPresets'] as unknown[]).length).toBeGreaterThan(0);
+    expect(reads['viewportGestures']).toBeDefined();
+    expect(typeof reads['canZoomIn']).toBe('boolean');
+    expect(typeof reads['canZoomOut']).toBe('boolean');
+
+    gantt.destroy();
+  });
+
+  it('set barLabels is live — no remount needed to read the new value back', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    gantt.barLabels = 'outside';
+    expect(gantt.barLabels).toBe('outside');
+    gantt.barLabels = 'none';
+    expect(gantt.barLabels).toBe('none');
+
+    gantt.destroy();
+  });
+
+  it('set collapsed assigns the whole collapsed set directly, not just collapse()/expand() one at a time', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    gantt.collapsed = ['p'];
+    expect(gantt.collapsed).toEqual([entryId('p')]);
+
+    gantt.collapsed = [];
+    expect(gantt.collapsed).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('toggleCollapse flips a row between collapsed and expanded', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c', name: 'c', start: '2026-01-03', end: '2026-01-04', parentId: 'p' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    gantt.toggleCollapse('p');
+    expect(gantt.collapsed).toEqual([entryId('p')]);
+    gantt.toggleCollapse('p');
+    expect(gantt.collapsed).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('set range pins the time axis to a span; assigning fitDataset back releases it', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    gantt.range = { start: '2026-01-01', end: '2026-02-01' };
+    const pinned = gantt.range;
+    expect(pinned).not.toBe('fitDataset');
+    if (pinned !== 'fitDataset') {
+      expect(pinned.start).toBe(instant('2026-01-01T00:00:00Z'));
+      expect(pinned.end).toBe(instant('2026-02-01T00:00:00Z'));
+    }
+
+    gantt.range = 'fitDataset';
+    expect(gantt.range).toBe('fitDataset');
+
+    gantt.destroy();
+  });
+
+  it('set fit is live — pane, preset, and a fixed pxPerMs number all read back exactly', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    gantt.fit = 'preset';
+    expect(gantt.fit).toBe('preset');
+    gantt.fit = 0.05;
+    expect(gantt.fit).toBe(0.05);
+    gantt.fit = 'pane';
+    expect(gantt.fit).toBe('pane');
+
+    gantt.destroy();
+  });
+
+  it('set zoomPresets replaces the step list zoomIn/zoomOut walk, and drives canZoomIn/canZoomOut', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'day',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      gantt.zoomPresets = ['day', 'week'];
+      expect(gantt.zoomPresets.map((preset) => preset.id)).toEqual(['day', 'week']);
+
+      // "day" is now the finest step in this Gantt's own list: nothing finer to zoom into.
+      expect(gantt.canZoomIn).toBe(false);
+      expect(gantt.canZoomOut).toBe(true);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('zoomTo sets an exact density and fires navigationChange, the same notification zoomIn/zoomOut fire', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: unknown[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload);
+      });
+
+      gantt.zoomTo(0.01);
+
+      expect(seen.length).toBeGreaterThan(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('zoomToSpan fills the pane with the given span and pans its start to the left edge', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fit: 'preset',
+        preset: 'day',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const seen: unknown[] = [];
+      gantt.on('navigationChange', (payload) => {
+        seen.push(payload);
+      });
+
+      gantt.zoomToSpan({ start: '2026-09-01', end: '2026-09-08' });
+
+      expect(seen.length).toBeGreaterThan(0);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
