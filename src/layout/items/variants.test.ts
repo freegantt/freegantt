@@ -370,6 +370,17 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.css).toContain('.fg-bar-diamond');
   });
 
+  // #326: the box's own outline is cancelled so the glyph's ::before carries selection, but that
+  // cancel must not also eat a keyboard-focused diamond's own focus ring.
+  it('cancels the selected box outline only when the box is not the focus-visible target (#326)', () => {
+    const variant = diamond();
+    const selectedRule = variant
+      .css!.split('\n')
+      .find((line) => line.startsWith('.fg-bar-diamond[data-state~="selected"]:not'));
+    expect(selectedRule).toContain(':not(:focus-visible)');
+    expect(selectedRule).toContain('outline: none');
+  });
+
   it('diamond() ships not resizable, so a resize cannot turn its point into a bar; an override opts back in', () => {
     const shipped = diamond();
     expect(shipped.can).toEqual({ resize: false });

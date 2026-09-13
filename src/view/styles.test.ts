@@ -181,6 +181,23 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('outline: 2px dotted var(--fg-selection-color)');
   });
 
+  // #326: .fg-bar:focus-visible and .fg-bar[data-state~="selected"] share one specificity, so
+  // document order alone decides which outline paints a focused, selected bar. The focus rule must
+  // come last among them, or a keyboard-focused bar reads as selected instead of focused.
+  it("orders .fg-bar's own focus-visible rule after every outline-setting state/flag rule (#326)", () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const lines = css.split('\n');
+    const focusVisibleIndex = lines.findIndex((line) => line.trim() === '.fg-bar:focus-visible,');
+    const conflictIndex = lines.findIndex((line) => line.startsWith('.fg-bar[data-flag~="conflict"]'));
+    const selectedIndex = lines.findIndex((line) => line.startsWith('.fg-bar[data-state~="selected"]'));
+    const pendingIndex = lines.findIndex((line) => line.startsWith('.fg-bar[data-state~="pending"]'));
+    expect(focusVisibleIndex).toBeGreaterThan(conflictIndex);
+    expect(focusVisibleIndex).toBeGreaterThan(selectedIndex);
+    expect(focusVisibleIndex).toBeGreaterThan(pendingIndex);
+  });
+
   // J3: --fg-selection-color now shares --fg-bar-fill's own hue, so a flush outline would nearly
   // vanish into the fill. The offset is what keeps the ring visible against the pane instead.
   it('offsets the selected and pending bar outline off the fill, not flush against it (J3)', () => {
