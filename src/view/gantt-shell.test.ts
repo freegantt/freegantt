@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
-import { FrameLayout, ScrollModel, TimeScaleModel } from '../layout/index.js';
+import {
+  DEFAULT_MIN_BAR_WIDTH_PX,
+  FrameLayout,
+  ScrollModel,
+  TimeScaleModel,
+  fixedWidthItem,
+} from '../layout/index.js';
 import {
   entryId,
   rowId,
@@ -724,6 +730,153 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       expect(shell.collapsed.map(String)).toContain('group:red');
       shell.reveal(entryId('a'));
       expect(shell.collapsed.map(String)).not.toContain('group:red');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reveal(entryId) targets a diamond's own fixed box width, not the span-and-floor width (#295)", () => {
+    // The bug this closes: `#revealSpan` built a boxless literal, so a `diamond()` row's reveal
+    // used the 12px span floor instead of the 13px box `computeFrame` actually paints.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const pxPerMs = 0.01;
+      const at = instant('2026-09-01T00:10:00Z'); // 600,000ms after rangeStart, at pxPerMs above
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
+      const boxWidthPx = 13;
+      const marker: StoredEntry = {
+        id: entryId('marker'),
+        name: 'marker',
+        start: at,
+        end: at,
+        segments: [{ id: segmentId('marker-1'), start: at, end: at }],
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([marker]),
+        scroll,
+        scale,
+        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+      });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(entryId('marker'));
+
+      const centerX = scale.scale.xForInstant(at);
+      const expectedX = centerX + boxWidthPx / 2 - viewportWidth;
+      const floorFallbackX = centerX + DEFAULT_MIN_BAR_WIDTH_PX / 2 - viewportWidth;
+      expect(scroll.state.position.x).toBe(expectedX);
+      expect(scroll.state.position.x).not.toBe(floorFallbackX);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal(entryId) unions every Segment Item’s own painted extent, not the entry’s raw envelope (#295)', () => {
+    // Two zero-width Segments, each floored to `DEFAULT_MIN_BAR_WIDTH_PX` and centred on its own
+    // instant (`barSpan`) — the union of those two painted boxes reaches `minBarWidthPx / 2` past
+    // each Segment's own instant, which the entry's raw `start`/`end` alone would not reach.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const pxPerMs = 0.01;
+      // t1 sits far enough into the range that its own floored Item never goes negative — this test
+      // means to exercise the right-edge reveal branch alone, not the left-edge one.
+      const t1 = instant('2026-09-01T00:02:00Z');
+      const t2 = instant('2026-09-01T00:10:00Z');
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
+      const spread: StoredEntry = {
+        id: entryId('spread'),
+        name: 'spread',
+        start: t1,
+        end: t2,
+        segments: [
+          { id: segmentId('spread-1'), start: t1, end: t1 },
+          { id: segmentId('spread-2'), start: t2, end: t2 },
+        ],
+        props: {},
+      };
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset([spread]), scroll, scale });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(entryId('spread'));
+
+      const unionRight = scale.scale.xForInstant(t2) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
+      const rawEnvelopeRight = scale.scale.xForInstant(t2); // the entry's own `end`, unfloored
+      expect(scroll.state.position.x).toBe(unionRight - viewportWidth);
+      expect(scroll.state.position.x).not.toBe(rawEnvelopeRight - viewportWidth);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal(entryId) expands a collapsed ancestor before reading its Items, so it targets the real box (#295)', () => {
+    // `FrameLayout.itemsForEntry` answers from the post-collapse plan — a row collapse hid answers
+    // empty until the ancestor chain opens and the frame catches up. Computing the span before that
+    // expand-and-flush would silently fall back to the entry's raw span instead of its diamond box.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const pxPerMs = 0.01;
+      const at = instant('2026-09-01T00:10:00Z');
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
+      const boxWidthPx = 13;
+      const parent: StoredEntry = {
+        id: entryId('p'),
+        name: 'p',
+        start: rangeStart,
+        end: instant('2026-09-03T00:00:00Z'),
+        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
+        props: {},
+      };
+      const child: StoredEntry = {
+        id: entryId('c'),
+        name: 'c',
+        parentId: entryId('p'),
+        start: at,
+        end: at,
+        segments: [{ id: segmentId('c-1'), start: at, end: at }],
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([parent, child]),
+        scroll,
+        scale,
+        rowSource: { source: 'entries', tree: true },
+        collapsed: [rowId('p')],
+        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+      });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(entryId('c'));
+
+      expect(shell.collapsed.map(String)).not.toContain('p');
+      const centerX = scale.scale.xForInstant(at);
+      const expectedX = centerX + boxWidthPx / 2 - viewportWidth;
+      expect(scroll.state.position.x).toBe(expectedX);
 
       shell.destroy();
     } finally {

@@ -35,6 +35,8 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   FrameBar,
+  Item,
+  TimeScale,
 } from '../layout/index.js';
 
 import { createDomBackend } from '../render/dom/index.js';
@@ -382,6 +384,32 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
     throw new ContainerNotFoundError(container);
   }
   return el;
+}
+
+/** The union `[min x, max(x + width))` of every Item's own `barSpan` (#295). It is
+ *  `GanttShell.reveal`'s target when an entry draws several Items — one bar per Segment. Revealing
+ *  the entry then shows every one of them, not only the first its row packed. Takes at least one
+ *  Item: both callers check `items.length > 0` first. */
+function unionSpan(
+  items: readonly Item[],
+  scale: TimeScale,
+  minBarWidthPx: number,
+): { x: number; width: number } {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxEnd = Number.NEGATIVE_INFINITY;
+  for (const item of items) {
+    const { x, width } = barSpan(item, scale, minBarWidthPx);
+    minX = Math.min(minX, x);
+    maxEnd = Math.max(maxEnd, x + width);
+  }
+  return { x: minX, width: maxEnd - minX };
+}
+
+/** A stand-in Item for `barSpan`, for the one case where an entry draws no real Item (#295).
+ *  Reveal never becomes a no-op because a variant produced nothing. It carries no box, so it takes
+ *  the ordinary span-and-floor path, exactly as `reveal` always has. */
+function fallbackSpanItem(ownerId: EntryId, start: Instant, end: Instant): Item {
+  return { id: itemId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
 }
 
 export class GanttShell {
@@ -1858,17 +1886,19 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
-  /** An id that names an Entry reveals that Entry's whole envelope. An id that instead names one of
-   *  its Segments reveals that Segment alone. When an id could be read either way, the Entry reading
-   *  wins (ADR 0010, #212).
-   *  Both readings share one geometry path: it asks `FrameLayout` for the row's top, and `barSpan`
-   *  for the target's x/width off the bound `TimeScale`. That is the same formula `computeFrame`
-   *  builds bars from, so the two can never drift apart. It then hands the resulting `Rect` to
+  /** An id that names an Entry reveals the union of every Item that Entry draws. An id that instead
+   *  names one of its Segments reveals the one Item that draws that Segment. When an id could be
+   *  read either way, the Entry reading wins (ADR 0010, #212).
+   *  Both readings share one geometry path. It asks `FrameLayout` for the row's Items, and
+   *  `barSpan` for each Item's own x/width off the bound `TimeScale`. The box is included (#295),
+   *  so a `diamond()` row reveals its true glyph width. That is the same formula `computeFrame`
+   *  paints bars from, so the two can never drift apart. It then hands the resulting `Rect` to
    *  `Viewport.reveal` (S1.9, D-S1.9-6).
    *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
    *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
-   *  says which one the caller meant. A collapsed ancestor expands so the row exists. A
-   *  still-hidden row (filter) keeps the current y — it does not jump to 0.
+   *  says which one the caller meant. A collapsed ancestor expands before any Item is read.
+   *  `FrameLayout` answers Items from the post-collapse plan, so a row collapse hid answers empty.
+   *  A still-hidden row (filter) keeps the current y — it does not jump to 0.
    *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
    *  reading the brand. */
   reveal(id: EntryId | SegmentId | string): void {
@@ -1879,23 +1909,19 @@ export class GanttShell {
       // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
       // covered it).
       if (!spansTime(entry)) return this.#revealRow(entry.id);
-      return this.#revealSpan(entry.id, entry.start, entry.end);
+      return this.#revealEntrySpan(entry.id, entry.start, entry.end);
     }
     const ownerId = entries.entryIdOfSegment(id);
     const owner = ownerId === undefined ? undefined : entries.get(ownerId);
     const segment = owner?.segments.find((candidate) => candidate.id === id);
     if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
-    return this.#revealSpan(owner.id, segment.start, segment.end);
+    return this.#revealSegmentSpan(owner.id, segment.id, segment.start, segment.end);
   }
 
   /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
    *  stays exactly where it was (#232-adjacent gap, ADR 0012, Build 1). */
   #revealRow(ownerId: EntryId): void {
-    let rowIndex = this.#layout.rowIndexForEntry(ownerId);
-    if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
-      this.#frames.flush();
-      rowIndex = this.#layout.rowIndexForEntry(ownerId);
-    }
+    const rowIndex = this.#expandAndFindRow(ownerId);
     const position = this.#viewport.scroll.state.position;
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : position.y;
     // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
@@ -1903,13 +1929,54 @@ export class GanttShell {
     this.#viewport.reveal({ x: position.x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
-  #revealSpan(ownerId: EntryId, start: Instant, end: Instant): void {
-    const { x, width } = barSpan({ start, end }, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
+  /** Reveals the whole Entry: the union of the painted extents of every Item it draws (#295). An
+   *  ordinary bar draws one Item over the entry's own span, so this reduces to today's behaviour.
+   *  A `diamond()` row's fixed box is read the same way, box included. An entry that draws no Item
+   *  at all falls back to the entry's own span, so reveal never becomes a no-op. */
+  #revealEntrySpan(ownerId: EntryId, start: Instant, end: Instant): void {
+    const rowIndex = this.#expandAndFindRow(ownerId);
+    const items = this.#layout.itemsForEntry(ownerId);
+    const scale = this.#viewport.timeScale;
+    const minBarWidthPx = this.#frameSettings.minBarWidthPx;
+    const { x, width } =
+      items.length > 0
+        ? unionSpan(items, scale, minBarWidthPx)
+        : barSpan(fallbackSpanItem(ownerId, start, end), scale, minBarWidthPx);
+    this.#revealRect(rowIndex, x, width);
+  }
+
+  /** Reveals one Segment: the Item that draws it, box included (#295). It falls back to the union
+   *  of every Item the owning Entry draws, when no Item claims this Segment. It falls back again to
+   *  the Segment's own span when the Entry draws no Item — the same guard `#revealEntrySpan` takes. */
+  #revealSegmentSpan(ownerId: EntryId, targetSegmentId: SegmentId, start: Instant, end: Instant): void {
+    const rowIndex = this.#expandAndFindRow(ownerId);
+    const items = this.#layout.itemsForEntry(ownerId);
+    const target = items.find((item) => this.#layout.segmentIdsForItem(item.id).includes(targetSegmentId));
+    const scale = this.#viewport.timeScale;
+    const minBarWidthPx = this.#frameSettings.minBarWidthPx;
+    const { x, width } =
+      target !== undefined
+        ? barSpan(target, scale, minBarWidthPx)
+        : items.length > 0
+          ? unionSpan(items, scale, minBarWidthPx)
+          : barSpan(fallbackSpanItem(ownerId, start, end), scale, minBarWidthPx);
+    this.#revealRect(rowIndex, x, width);
+  }
+
+  /** Expands this entry's collapsed ancestors, and flushes the pending frame. Every caller does
+   *  this before it reads `FrameLayout` about the entry (#295). `itemsForEntry` answers from the
+   *  post-collapse plan, so a row collapse hid answers empty until the frame catches up. Returns
+   *  the row's index, or `-1` for a still-hidden row (a filter, not a collapse). */
+  #expandAndFindRow(ownerId: EntryId): number {
     let rowIndex = this.#layout.rowIndexForEntry(ownerId);
     if (rowIndex < 0 && this.#treeCollapse.expandAncestorsOf(ownerId)) {
       this.#frames.flush();
       rowIndex = this.#layout.rowIndexForEntry(ownerId);
     }
+    return rowIndex;
+  }
+
+  #revealRect(rowIndex: number, x: number, width: number): void {
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
     this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
   }

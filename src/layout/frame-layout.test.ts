@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
 import { createVariantRegistry } from './items/variants.js';
+import { fixedWidthItem } from './items/item.js';
 import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as packLanes from './lanes/pack-lanes.js';
@@ -189,6 +190,24 @@ describe('FrameLayout', () => {
     layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
 
     expect(layout.itemIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
+  });
+
+  it('itemsForEntry answers the full Item, box included, not just its id (#295)', () => {
+    const px = 13;
+    const variant = 'diamond';
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    registry.addPluginVariant({
+      name: variant,
+      when: () => true,
+      items: fixedWidthItem(px),
+    });
+    const entry: Entry = sampleEntries[0]!;
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [entry], variants: registry }));
+
+    const items = layout.itemsForEntry(entry.id);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.box).toEqual({ widthPx: px, anchor: 'center' });
   });
 
   it('segmentIdsForItem names the one Segment a Segment bar drew (#212)', () => {

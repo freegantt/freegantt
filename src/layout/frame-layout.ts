@@ -14,12 +14,14 @@ import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
 import { entryIdOfItem } from '../model/index.js';
 import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
+import type { Item } from './items/item.js';
 import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
  *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
  *  `EntryStoreView` makes over `EntryStore`. */
 export interface FrameLayoutView {
+  itemsForEntry(id: EntryId): readonly Item[];
   itemIdsForEntry(id: EntryId): readonly ItemId[];
   entryIdsForRow(id: RowId): readonly EntryId[];
   segmentIdsForItem(id: ItemId): readonly SegmentId[];
@@ -98,18 +100,28 @@ export class FrameLayout implements FrameLayoutView {
     return this.#entryIdsOfRow.get(id) ?? NO_ENTRY_IDS;
   }
 
-  /** Every Item this entry draws, in the packed order its row produced them (#185). It answers from
-   * the producer output, never from the `${entryId}:${segmentIndex}` id convention, so a plugin Kind
-   * that draws several Items from an entry with no Segments gets the same true answer. Empty when
-   * collapse hid the row, or when the entry draws nothing. */
-  itemIdsForEntry(id: EntryId): readonly ItemId[] {
+  /** Every Item this entry draws, in the packed order its row produced them (#185, #295) — the
+   * full Item, box included, not just its id. `reveal` needs a boxed Item's own painted width
+   * (`barSpan` takes the whole `Item`), and this is the one place that answer comes from: the
+   * packed row memory `computeFrame` already built. Empty when collapse hid the row, or when the
+   * entry draws nothing. Packing a row on demand costs a memoized pass (`packedRow`), acceptable
+   * here because reveal is a gesture, not the hot path. */
+  itemsForEntry(id: EntryId): readonly Item[] {
     const rowId = this.#rowOfEntry.get(id);
     if (rowId === undefined) return [];
-    const ids: ItemId[] = [];
+    const items: Item[] = [];
     for (const item of this.#memory.packedRow(rowId).items) {
-      if (item.entryId === id) ids.push(item.id);
+      if (item.entryId === id) items.push(item);
     }
-    return ids;
+    return items;
+  }
+
+  /** Every Item this entry draws, by id, in the packed order its row produced them (#185). It
+   * answers from the producer output, never from the `${entryId}:${segmentIndex}` id convention,
+   * so a plugin Kind that draws several Items from an entry with no Segments gets the same true
+   * answer. Empty when collapse hid the row, or when the entry draws nothing. */
+  itemIdsForEntry(id: EntryId): readonly ItemId[] {
+    return this.itemsForEntry(id).map((item) => item.id);
   }
 
   /** Every Segment this Item stands for (#212, ADR 0010) — the one answer, which the pointer path

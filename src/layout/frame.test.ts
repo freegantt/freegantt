@@ -22,11 +22,21 @@ import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
 import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
+import { wholeEntryItem } from './items/item.js';
+import type { FixedBarBox, Item } from './items/item.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
 function spanOf(entry: Entry): TimeSpan {
   return { start: entry.start as Instant, end: entry.end as Instant };
+}
+
+/** A full `Item` for `barSpan`, built the same way `computeFrame` builds one (`wholeEntryItem`) —
+ *  `barSpan` takes the whole `Item`, box included (#295), so a test hands it a real one instead of
+ *  a literal missing `box`. Pass `box` to build the fixed-box case `diamond()` ships. */
+function itemOf(entry: Entry, box?: FixedBarBox): Item {
+  const item = wholeEntryItem(entry, 'bar');
+  return box === undefined ? item : { ...item, box };
 }
 
 const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
@@ -1032,7 +1042,7 @@ describe('computeFrame lanes (S4.8)', () => {
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps span: minimum', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width, span } = barSpan(spanOf(zeroWidthSpan), scale);
+    const { x, width, span } = barSpan(itemOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
     expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
@@ -1040,7 +1050,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('honours a custom minBarWidthPx', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { width } = barSpan(spanOf(zeroWidthSpan), scale, 40);
+    const { width } = barSpan(itemOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
 
@@ -1049,7 +1059,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
     const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
-    const { x, width, span } = barSpan(spanOf(narrowSpan), scale);
+    const { x, width, span } = barSpan(itemOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
     expect(x + width / 2).toBe(startX + 2.5);
@@ -1057,7 +1067,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('leaves an ordinary bar wide enough already unfloored, with span: exact', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, span } = barSpan(spanOf(wideSpan), scale);
+    const { x, width, span } = barSpan(itemOf(wideSpan), scale);
     expect(width).toBe(
       scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),
     );
@@ -1070,7 +1080,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 describe('barSpan — a fixed painted box the time scale does not size (ADR 0022)', () => {
   it('keeps its own width regardless of the entry span, and stamps span: fixed', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { width, span } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
+    const { width, span } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
     expect(width).toBe(13);
     expect(span).toBe('fixed');
   });
@@ -1082,34 +1092,59 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
       range: spanOf(sampleEntries[0]!),
       pxPerMs: 1 / 5000,
     });
-    const atDefaultZoom = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
-    const atOtherZoom = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'center' } }, zoomedOut);
+    const atDefaultZoom = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
+    const atOtherZoom = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), zoomedOut);
     expect(atDefaultZoom.width).toBe(13);
     expect(atOtherZoom.width).toBe(13);
   });
 
   it('centres on the span’s own midpoint for anchor: center — the same midpoint a floored bar centres on', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width } = barSpan({ ...spanOf(zeroWidthSpan), box: { widthPx: 13, anchor: 'center' } }, scale);
+    const { x, width } = barSpan(itemOf(zeroWidthSpan, { widthPx: 13, anchor: 'center' }), scale);
     expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
   it('aligns its left edge to the span’s start for anchor: start', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'start' } }, scale);
+    const { x } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'start' }), scale);
     expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
   });
 
   it('aligns its right edge to the span’s end for anchor: end', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width } = barSpan({ ...spanOf(wideSpan), box: { widthPx: 13, anchor: 'end' } }, scale);
+    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'end' }), scale);
     expect(x + width).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
 
   it('clamps a negative widthPx to 0, so a fixed box never paints a negative width (#212 follow-up, F6)', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { width, span } = barSpan({ ...spanOf(wideSpan), box: { widthPx: -4, anchor: 'center' } }, scale);
+    const { x, width, span } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'center' }), scale);
     expect(width).toBe(0);
     expect(span).toBe('fixed');
+    // The clamped width, not the raw -4, positions the box — a collapsed box sits where a 0px box
+    // would, not displaced by half the negative width it never paints (#296).
+    const end = scale.xForInstant(wideSpan.end as Instant);
+    const startX = scale.xForInstant(wideSpan.start as Instant);
+    expect(x).toBe((startX + end) / 2);
   });
+
+  it('clamps a negative widthPx before positioning for anchor: end, not after (#296)', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'end' }), scale);
+    expect(width).toBe(0);
+    expect(x).toBe(scale.xForInstant(wideSpan.end as Instant));
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'clamps a non-finite widthPx (%s) to 0 rather than propagating it (#297)',
+    (widthPx) => {
+      const wideSpan: Entry = sampleEntries[0]!;
+      const { x, width, span } = barSpan(itemOf(wideSpan, { widthPx, anchor: 'center' }), scale);
+      expect(width).toBe(0);
+      expect(span).toBe('fixed');
+      const end = scale.xForInstant(wideSpan.end as Instant);
+      const startX = scale.xForInstant(wideSpan.start as Instant);
+      expect(x).toBe((startX + end) / 2);
+    },
+  );
 });
