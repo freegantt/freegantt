@@ -15,5 +15,14 @@ export default defineConfig({
   },
   test: {
     exclude: ['**/node_modules/**', 'eslint/rules/**', 'eslint/rules/fixtures/**'],
+    // v8's default coverage scope excludes `dist/` but not `dist-harness/`, so a report with no
+    // `include` here counts ~25 built harness bundles, `eslint/rules`, `harness/` (+ its docs),
+    // `fixtures/time` and root-level configs as uncovered source. `pure` and `dom` both extend
+    // this file, so scoping coverage here — rather than in `vitest.workspace.ts`, which only
+    // lists project `include` globs, not coverage settings — governs both projects with one
+    // entry. Library coverage is `src/**` only (#275).
+    coverage: {
+      include: ['src/**'],
+    },
   },
 });
