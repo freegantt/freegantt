@@ -73,6 +73,27 @@ describe('attachScroll', () => {
     expect(element.scrollTop).toBe(50);
   });
 
+  it('a late echo of an already-superseded write does not revert a newer panTo (#131)', () => {
+    // The browser's own 'scroll' event for a `writePosition()` write is not guaranteed to arrive
+    // before the next `panTo` — Firefox can deliver it late enough to land after a fresher target
+    // has already been set, landing here exactly as reproduced: write 0, panTo to 250 before the
+    // element's own 'scroll' event for that first write is dispatched.
+    const viewport = new Viewport();
+    const handle = viewport.bind(dataset, () => {});
+    handle.setContentSize({ width: 1000, height: 1000 });
+    handle.setPaneSize({ width: 100, height: 100 });
+    const element = el();
+    const attachment = attachScroll(element, viewport);
+
+    attachment.writePosition(); // writes 0 — the element already starts at 0, so this is a no-op write
+    viewport.scroll.panTo({ x: 250 }); // a newer target, not yet reflected in the element
+    // The element still reads 0 here — nothing has flushed the newer target to it yet. A caller
+    // (GanttShell.render(), on a later animation frame) is the only thing that would.
+    element.dispatchEvent(new Event('scroll')); // the late echo of the earlier write-to-0
+
+    expect(viewport.scroll.state.position.x).toBe(250);
+  });
+
   it('detach() removes the listener', () => {
     const viewport = new Viewport();
     const handle = viewport.bind(dataset, () => {});

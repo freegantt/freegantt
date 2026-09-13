@@ -22,6 +22,17 @@ const EPSILON = 1;
 /** `element` is the timeline pane: the single native scroller (D-D). The grid pane never scrolls —
  * it follows by transform, which is why there is no second scroller to fall a frame behind. */
 export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAttachment {
+  // What `writePosition` itself last pushed into the element — not the model's current target,
+  // which may already have moved on to something newer (#131). A model-driven write's own 'scroll'
+  // event does not always arrive before the next one: Firefox can deliver it late enough to land
+  // after a fresher `panTo` already changed the target, while Chromium/Edge deliver it before. Read
+  // that late echo against the live target and it looks like a user grabbing the scrollbar and
+  // dragging it back to the old spot — `onNativeScroll` then "honours" it, panning the model
+  // straight back to a position nothing asked for. Read it against what this attachment itself last
+  // wrote instead, and the echo carries no information: it is confirming a write already accounted
+  // for, not reporting a new one.
+  let lastWritten: { x: number; y: number } | undefined;
+
   function target(): { x: number; y: number } {
     // Already the locally clamped position (D-S1.7-2) — this file recomputes nothing.
     const { x, y } = viewport.visible;
@@ -32,11 +43,21 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     const to = target();
     if (Math.abs(element.scrollLeft - to.x) >= EPSILON) element.scrollLeft = to.x;
     if (Math.abs(element.scrollTop - to.y) >= EPSILON) element.scrollTop = to.y;
+    lastWritten = to;
   }
 
   // element -> model: only when the element differs from the clamped target by >= epsilon, or a
   // model-driven write (which lands exactly on target) would bounce back into another panTo (D-S1.5-6).
+  // Also skipped when the element merely still shows what this attachment itself last wrote — see
+  // `lastWritten` above.
   function onNativeScroll(): void {
+    if (
+      lastWritten !== undefined &&
+      Math.abs(element.scrollLeft - lastWritten.x) < EPSILON &&
+      Math.abs(element.scrollTop - lastWritten.y) < EPSILON
+    ) {
+      return;
+    }
     const to = target();
     if (Math.abs(element.scrollLeft - to.x) < EPSILON && Math.abs(element.scrollTop - to.y) < EPSILON) {
       return;
