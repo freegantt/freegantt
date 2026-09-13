@@ -152,9 +152,10 @@ interface VariantRegistration {
 }
 
 export interface VariantRegistry extends VariantItems {
-  /** The variant this row wears, as one object. Walks newest-first, over the consumer's rules, then
-   *  every plugin's, then core's two, and stops at the first rule that answers yes (`Q5`). Every row
-   *  resolves, because core's `leaf` carries no `when`.
+  /** The variant this row wears, as one object. Walks the claiming rules first — the consumer's,
+   *  then every plugin's, then core's `parent` — and stops at the first that answers yes (`Q5`).
+   *  Only then does it walk the last resorts, in the same order, with core's `leaf` last of all
+   *  (`J60`). Every row resolves, because core's `leaf` carries no `when`.
    *
    *  It answers with the registration that won, never with its name alone. Two registrations may
    *  share one name — a consumer's own rule over a plugin's of the same name is the shipped case —
@@ -197,12 +198,13 @@ const LEAF_VARIANT_NAME = 'leaf';
 
 /** Core's two, as ordinary `EntryVariant` objects with nothing special about them. They register
  *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
- *  overrides. `leaf` carries no `when`, so it answers for every row and the floor is total.
+ *  overrides. `leaf` carries no `when`, so it answers for every row no rule claims, and the floor
+ *  is total.
  *
- *  **`leaf` registers before `parent`, and the order inside this list is load-bearing** (`J37`).
- *  The walk is newest-first, and a variant with no `when` claims every row. Put `leaf` second and
- *  it answers before `parent` ever runs, so no row is ever a summary. The floor registers first,
- *  and every rule — core's own `parent` included — stands on it. */
+ *  **The order inside this list decides nothing** (`J60` supersedes `J37`). `statesAClaim` sorts
+ *  every claiming rule ahead of every last resort, so `parent` is asked before `leaf` whichever way
+ *  round they are written here. It reads floor-first anyway, because that is the order the walk
+ *  ends up in and a reader should not have to derive it from a comparator. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([
   {
     name: LEAF_VARIANT_NAME,

@@ -177,7 +177,7 @@ ADR 0013's body stays as it was written (`docs/adr/README.md:5`). Its `status:` 
 ## Consequences
 
 - `bar()` and `summary()` add no JavaScript bytes — core seeds both already. `diamond()` is the only new JS payload. `summary()`'s CSS leaves the always-shipped base sheet and rides the seeded factory; `diamond()`'s CSS never enters the base sheet. Measure `pnpm size-limit` after both moves, then set `.size-limit.json` from the number.
-- `CORE_VARIANTS` keeps seeding from the same factories, so `J37`'s load-bearing order holds: the floor registers first, or no row is ever a summary. `diamond()` is **not** in `CORE_VARIANTS`.
+- `CORE_VARIANTS` keeps seeding from the same factories. The order inside that list decides nothing — `J60` sorts every claiming rule ahead of every last resort, which superseded `J37` — so `summary()` answers a row with children whichever way round the two are seeded. `diamond()` is **not** in `CORE_VARIANTS`.
 - `harness/planner.ts` loses `checkpointDiamond` and roughly 30 lines of `planner.html` CSS, and gains `diamond({ when: { checkpoint: true } })`. `fixtures/planner-dataset.ts` stops faking a one-day span and stores `end === start`, which is the honest data and what `barSpan` already centres correctly. **Anything that has to stay behind is an unclosed gap, and gets reported rather than kept.**
 - An e2e that covers a variant's paint asserts a computed property or a measured box. `toBeVisible()` is what let this ship (`e2e/planner.spec.ts:67`).
 - `plans/02` §4.1 gains the shipped set; `docs/05-consumer-api.md` gains `variantFor`, `data-span="fixed"`, and `EntryVariant.css`.
