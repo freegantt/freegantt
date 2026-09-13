@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Dataset } from './dataset.js';
 import { definePlugin } from './define-plugin.js';
-import { RegistrationClosedError } from './index.js';
+import { entryId, fieldRowsOf, RegistrationClosedError } from './index.js';
 import type { ErrorReport } from './index.js';
 import type { EntryInput } from './index.js';
 
@@ -83,6 +83,66 @@ describe('a plugin source answers the tree, and every door follows it', () => {
     expect(dataset.entries.get('build')?.hasChildren).toBe(false);
     // `parentId` is still stored, and `toInput()` still hands back what was written (ADR 0020).
     expect(dataset.entries.get('sketch')?.toInput().parentId).toBe('build');
+  });
+
+  it("records every by-key door's current answer for parentId — under dispute, #299", () => {
+    // Seven public doors ask "what is this row's parentId", and only two of them agree with each
+    // other. `entry.read('parentId')` and `entry.parent()?.id` answer the plugin tree; every other
+    // door — `toInput()`, a `compute` Field's `ctx.read`, `ctx.values` in an Aggregator, the store's
+    // own `storedValues`, and the `ChangeSet` row a write produces — answers the stored field. #299
+    // asks which of the two the by-key door, `read`, should be. This test states today's answer for
+    // all seven and does not rule on it; it is meant to turn red the day that ruling lands.
+    const dataset = new Dataset<PhaseProps>({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'design', name: 'Design' },
+        { id: 'build', name: 'Build' },
+        { id: 'archive', name: 'Archive' },
+        { id: 'sketch', name: 'Sketch', parentId: 'build', props: { phaseId: 'design' } },
+      ],
+      fields: [
+        { key: 'cost', rollUp: 'sum' },
+        // A `compute` Field is the only way a test outside `data/` reaches `ctx.read`.
+        { key: 'probeParentId', compute: (_entry, ctx) => ctx.read('parentId') },
+        // An Aggregator is always a registered name, never an inline function (CLAUDE.md), so the
+        // only way a test reaches `ctx.values` is through one declared here.
+        { key: 'parentIdsSeenByRollup', rollUp: 'collectParentIds' },
+      ],
+      aggregators: {
+        collectParentIds: (_parent, ctx) => ctx.values('parentId'),
+      },
+      plugins: [phases()],
+    });
+
+    const sketch = dataset.entries.get('sketch')!;
+
+    // Door 1 — `entry.read('parentId')`: the tree door (live-entry.ts's special case, ADR 0017).
+    expect(sketch.read('parentId')).toBe('design');
+    // Door 2 — `entry.parent()?.id`: the named tree door. Agrees with door 1 by design.
+    expect(sketch.parent()?.id).toBe('design');
+    // Door 3 — `entry.toInput().parentId`: the copy door. Answers the stored field.
+    expect(sketch.toInput().parentId).toBe('build');
+    // Door 4 — `ctx.read('parentId')` inside a `compute` Field: the pass door. Answers the stored
+    // field — this is the door #299 disputes against door 1.
+    expect(sketch.read('probeParentId')).toBe('build');
+    // Door 5 — `entries.storedValues.get(id).parentId`: the store's own index. Stored field.
+    expect(dataset.entries.storedValues.get(entryId('sketch'))?.parentId).toBe('build');
+    // Door 6 — `ctx.values('parentId')` inside an Aggregator: folds each child through the same pass
+    // door as door 4, so it also answers the stored field. "design"'s plugin-tree child is "sketch".
+    expect(dataset.entries.get('design')?.read('parentIdsSeenByRollup')).toEqual(['build']);
+
+    // Door 7 — the `ChangeSet` row a `parentId` write produces. `diffEdit` reads `from`/`to` through
+    // the same pass door as doors 4 and 6, so a write that leaves the tree untouched (the plugin
+    // source still answers "design" off `phaseId`) still changes what this door answers.
+    let recordedTo: unknown;
+    dataset.on('change', ({ changeSet }) => {
+      recordedTo = fieldRowsOf(changeSet).find((row) => row.field === 'parentId')?.to;
+    });
+    dataset.entries.update('sketch', { parentId: 'archive' });
+    expect(recordedTo).toBe('archive');
+    // Doors 1 and 2 do not move: the plugin source never consulted the stored field it just changed.
+    expect(dataset.entries.get('sketch')?.parent()?.id).toBe('design');
+    expect(dataset.entries.get('sketch')?.read('parentId')).toBe('design');
   });
 
   it('two sources compose: the second receives the first and may call it', () => {
