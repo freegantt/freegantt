@@ -224,7 +224,7 @@ export interface EditRequest {
    *  reasoning from it can propose a write core then refuses against the shape it actually has
    *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
    *  rAF frame and must not copy the dataset to answer it (I5). */
-  entryAfterEdits(id: EntryId): StoredEntry | undefined;
+  entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so

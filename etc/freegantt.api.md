@@ -596,7 +596,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 // @public
 export interface EditRequest {
     entries: ReadonlyMap<EntryId, StoredEntry>;
-    entryAfterEdits(id: EntryId): StoredEntry | undefined;
+    entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
     proposed: ProposedEdits;
 }
 
@@ -1166,9 +1166,9 @@ export class Gantt<TProps = unknown> {
 
 // @public
 export interface GanttDom {
-    barFor(id: EntryId): HTMLElement | undefined;
+    barFor(id: EntryId | string): HTMLElement | undefined;
     readonly bounds: DOMRect;
-    cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
+    cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
     cellText(cell: HTMLElement): string;
     owns(node: Node): boolean;
     readonly paneBounds: Record<PaneName, DOMRect>;
@@ -1653,7 +1653,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
             field: FieldKey;
         } | undefined;
         registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
-        resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
+        resolveTooltipContent(entryId: EntryId | string): ElementDescription | undefined;
         resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
         variantFor(entry: Entry): ResolvedVariant;
         resolvedColumns(): readonly GridColumn[];
