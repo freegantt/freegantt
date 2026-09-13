@@ -45,8 +45,7 @@ function key(type: 'keydown', props: Partial<KeyboardEventInit> = {}): KeyboardE
 interface ContextOptions {
   /** Row ids `can('select', ...)` refuses — everything else defaults capable. */
   incapableRows?: readonly EntryId[];
-  /** `ctx.session()` returns `undefined` for these grabbed ids — simulates an incapable grab or a
-   *  pending (D-S3-17) arm-lock refusal. */
+  /** `ctx.session()` returns `undefined` for these grabbed ids — simulates an incapable grab. */
   refuseSession?: readonly EntryId[];
 }
 
@@ -72,6 +71,7 @@ function makeContext(
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
+    discardHeldGesture: () => false,
     setHovered: () => {},
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,

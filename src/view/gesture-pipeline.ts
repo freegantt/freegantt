@@ -97,8 +97,9 @@ export interface GesturePipelineDeps {
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
    *  ids. `undefined` preview parks bars on committed geometry; `undefined` pendingItemIds clears the
-   *  `pending` token. The arm lock itself is `session()` refusing while `#heldItemIds` is set.
-   *  `cursor` is the Cursor line (D-S3-15); `undefined` parks it. */
+   *  `pending` token. There is no arm lock (#272/#273 — `session()` supersedes a held gesture instead
+   *  of refusing to arm over it; `#held` is a fingerprint, not a gate). `cursor` is the Cursor line
+   *  (D-S3-15); `undefined` parks it. */
   applyGestureState(
     preview: readonly ItemPreview[] | undefined,
     pendingItemIds: readonly ItemId[] | undefined,
@@ -145,6 +146,25 @@ interface GestureRefusal {
   note: RefusalNote;
 }
 
+/** One gesture waiting on a `before*` Promise, stamped with the pipeline's own generation counter at
+ *  the moment the hold begins (#272, #273). `#settle`'s async branch reads `generation` back against
+ *  `#generation` before it acts — unequal means `session()` superseded it, `discardHeldGesture()`
+ *  discarded it, or the pipeline was destroyed, and the settle does nothing at all: no paint, no
+ *  write, no report (whichever of those already ran when the hold ended owns that job). */
+interface HeldGesture {
+  readonly generation: number;
+  readonly itemIds: readonly ItemId[];
+  readonly proposal: GestureProposal;
+  readonly refusal: GestureRefusal;
+  /** Part 3 (#273): the stored row each id in `proposal.paints` was measured from, snapshotted the
+   *  moment the hold begins. `#settle` compares this against the current `committedEntriesById()`
+   *  before it writes — object identity, not a value compare, because `entry-store.ts` replaces a
+   *  row's whole object on every committed field write to it (ADR 0017), so an unrelated field's
+   *  write already hands back a new object. `undefined` for an id the store held nothing for at hold
+   *  time — the same value a removal leaves behind. */
+  readonly measuredFrom: ReadonlyMap<EntryId, StoredEntry | undefined>;
+}
+
 /** Owns entry resolution, draft math, preview coalescing and the commit pipeline for move/resize
  *  gestures (D-GH-2, closes C1/C4). One commit-shaped fork on `gesture.kind`, isolated here instead
  *  of spread across shell state. `session()` (D-GH-1) is the only public entry point — draft/commit/
@@ -155,17 +175,14 @@ export class GesturePipeline {
    *  frame rather than synchronously on every pointermove — one paint per frame, not one per event. */
   #scheduledProposal: GestureProposal | undefined;
   #previewFrame: FrameScheduler;
-  /** D-S3-17: set for the duration of an unsettled `beforeEntryMove`/`beforeEntryResize` Promise;
-   *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
-   *  same value as `pendingItemIds` in the one `applyGestureState` write. */
-  #heldItemIds: readonly ItemId[] | undefined;
-  /** Part 3 (#273): the stored row each id in the held `proposal.paints` was measured from,
-   *  snapshotted the moment the hold begins. `#settle` compares this against the current
-   *  `committedEntriesById()` before it writes — object identity, not a value compare, because
-   *  `entry-store.ts` replaces a row's whole object on every committed field write to it (ADR 0017),
-   *  so an unrelated field's write already hands back a new object. `undefined` for an id the store
-   *  held nothing for at hold time — the same value a removal leaves behind. */
-  #heldMeasuredFrom: ReadonlyMap<EntryId, StoredEntry | undefined> | undefined;
+  /** #272/#273: one clock, ticked once per held gesture (`#awaitVeto`), never reset. `#held.generation`
+   *  is that gesture's stamp; `#settle`'s async branch only acts when the two still match, which is
+   *  what makes `session()` superseding the hold (instead of refusing to arm over it) safe — a stale
+   *  settle can never write, paint, or report over a gesture that replaced it. */
+  #generation = 0;
+  /** D-S3-17, amended #272/#273: the one held gesture, if any — no arm lock any more (see `session()`
+   *  and `discardHeldGesture()`), just a fingerprint a late settle checks itself against. */
+  #held: HeldGesture | undefined;
   /** S3.8, D-S3-15: content-x of the live pointer, coalesced with the preview on the same rAF. */
   #scheduledCursorX: number | undefined;
 
@@ -174,7 +191,7 @@ export class GesturePipeline {
     this.#previewFrame = new FrameScheduler(() => {
       this.#deps.applyGestureState(
         this.#computePreview(this.#scheduledProposal),
-        this.#heldItemIds,
+        this.#held?.itemIds,
         this.#computeCursor(),
       );
     });
@@ -185,7 +202,9 @@ export class GesturePipeline {
    *  nothing capable is grabbed, replacing the length check a caller used to make by hand against
    *  `entriesForGesture()`'s result. */
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
-    if (this.#heldItemIds !== undefined) return undefined;
+    // #272/#273: a new gesture supersedes a held one instead of refusing to arm over it — the old
+    // "arm lock" let one hung handler on one bar refuse every gesture in the Gantt, forever.
+    this.#discardHeldGesture('superseded');
     const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
     const bars = this.#entriesForGesture(grabbed, capability, edge);
@@ -418,38 +437,49 @@ export class GesturePipeline {
       this.#preview(undefined);
       return Promise.resolve(committed);
     }
-    return this.#awaitVeto(result, itemIds, proposal).then((allowed) => {
-      if (!allowed) {
-        this.#releaseHold();
-        this.#reportRefusal(refusal);
-        return false;
-      }
-      const measuredFrom = this.#heldMeasuredFrom;
-      if (measuredFrom && this.#rowsChangedSince(measuredFrom)) {
-        // Part 3 (#273): the settle is honest, but the rows the draft was measured from are not the
-        // rows in the store any more. Writing now would silently overwrite whatever changed them —
-        // last writer wins, with no conflict and no report. Refuse instead.
-        this.#reportGestureDropped(refusal, 'data-changed');
-        this.#releaseHold();
-        return false;
-      }
-      try {
-        return finish();
-      } catch (error) {
-        if (error instanceof EntryNotFoundError) {
-          // Another call removed the entry after the hold was taken, and before this settle — the
-          // same situation `inline-editing.ts`'s cell commit already folds (issue #137 F10). The
-          // user's own edit is moot now, so this reports and does not throw.
-          this.#reportGestureDropped(refusal, 'entry-gone');
+    const generation = this.#awaitVeto(itemIds, proposal, refusal);
+    return result
+      .then(
+        (allowed) => allowed,
+        () => false,
+      )
+      .then((allowed) => {
+        // #272/#273: the hold this settle belongs to may already be gone — superseded by a later
+        // `session()`, discarded by Escape or `destroy()`, or already settled itself. Whichever of
+        // those ran already did this settle's job (report, release, or nothing at all), so a stale
+        // settle does nothing here: no paint, no write, no second report.
+        const held = this.#held;
+        if (held === undefined || held.generation !== generation) return false;
+        if (!allowed) {
+          this.#releaseHold();
+          this.#reportRefusal(refusal);
           return false;
         }
-        throw error;
-      } finally {
-        // `finally`, not a line after `finish()`: a throw out of `finish()` must still clear the
-        // hold, or the pipeline stays bricked by a fault instead of by a slow handler (#273).
-        this.#releaseHold();
-      }
-    });
+        if (this.#rowsChangedSince(held.measuredFrom)) {
+          // Part 3 (#273): the settle is honest, but the rows the draft was measured from are not the
+          // rows in the store any more. Writing now would silently overwrite whatever changed them —
+          // last writer wins, with no conflict and no report. Refuse instead.
+          this.#reportGestureDropped(refusal, 'data-changed');
+          this.#releaseHold();
+          return false;
+        }
+        try {
+          return finish();
+        } catch (error) {
+          if (error instanceof EntryNotFoundError) {
+            // Another call removed the entry after the hold was taken, and before this settle — the
+            // same situation `inline-editing.ts`'s cell commit already folds (issue #137 F10). The
+            // user's own edit is moot now, so this reports and does not throw.
+            this.#reportGestureDropped(refusal, 'entry-gone');
+            return false;
+          }
+          throw error;
+        } finally {
+          // `finally`, not a line after `finish()`: a throw out of `finish()` must still clear the
+          // hold, or the pipeline stays bricked by a fault instead of by a slow handler (#273).
+          this.#releaseHold();
+        }
+      });
   }
 
   /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-40). A
@@ -483,22 +513,22 @@ export class GesturePipeline {
   }
 
   /** D-S3-17: only reached for a `before*` handler's unsettled Promise. Holds the commit draft (not
-   *  the last unsnapped pointer preview, not the stored origin) and arm-locks `session()` until
-   *  `result` settles. Paint is one immediate `applyGestureState`, not a rAF-cleared preview plus a
-   *  separate pending write. */
-  #awaitVeto(
-    result: Promise<boolean>,
-    itemIds: readonly ItemId[],
-    proposal: GestureProposal,
-  ): Promise<boolean> {
-    this.#heldItemIds = itemIds;
+   *  the last unsnapped pointer preview, not the stored origin) while `result` settles. Paint is one
+   *  immediate `applyGestureState`, not a rAF-cleared preview plus a separate pending write. Returns
+   *  this hold's generation, so `#settle` can tell a stale settle from a live one when `result`
+   *  finally resolves (#272, #273 — this no longer arm-locks `session()`; see `session()`). */
+  #awaitVeto(itemIds: readonly ItemId[], proposal: GestureProposal, refusal: GestureRefusal): number {
+    const generation = ++this.#generation;
+    this.#held = {
+      generation,
+      itemIds,
+      proposal,
+      refusal,
+      measuredFrom: this.#measuredFrom(proposal),
+    };
     this.#scheduledProposal = proposal;
-    this.#heldMeasuredFrom = this.#measuredFrom(proposal);
     this.#previewFrame.flush();
-    return result.then(
-      (allowed) => allowed,
-      () => false,
-    );
+    return generation;
   }
 
   /** Part 3 (#273): the stored row behind each id `proposal.paints` names, at the moment the hold
@@ -525,10 +555,28 @@ export class GesturePipeline {
   }
 
   #releaseHold(): void {
-    this.#heldItemIds = undefined;
+    this.#held = undefined;
     this.#scheduledProposal = undefined;
-    this.#heldMeasuredFrom = undefined;
     this.#previewFrame.flush();
+  }
+
+  /** Ends a currently-held gesture without writing anything: clears the hold, flushes the preview,
+   *  and raises one `'discarded'` report. `false` when nothing was held — Escape and `destroy()` both
+   *  read that to decide whether they did anything (Escape falls through to clearing the selection
+   *  instead; `destroy()` just no-ops). Public because `EntryGestureContext` (both the Escape handler
+   *  and `GanttShell.destroy()`) reach it from outside this file; `session()`'s own supersede call
+   *  uses the private `'superseded'` form below instead, so the two reasons cannot be confused at
+   *  their call sites (#272, #273). */
+  discardHeldGesture(): boolean {
+    return this.#discardHeldGesture('discarded');
+  }
+
+  #discardHeldGesture(because: GestureDroppedReason): boolean {
+    const held = this.#held;
+    if (held === undefined) return false;
+    this.#reportGestureDropped(held.refusal, because);
+    this.#releaseHold();
+    return true;
   }
 
   /** D-S3-18: coalesces on the pipeline's own rAF — a drag's every pointermove replaces the scheduled

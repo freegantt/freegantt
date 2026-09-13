@@ -670,23 +670,64 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(paints.at(-1)).toEqual({ preview: undefined, pending: undefined });
     });
 
-    it('session() refuses to arm a new gesture while a prior async veto is unsettled', async () => {
+    // Rewritten for #272/#273: this test used to assert the bug. A hung `beforeEntryMove` on entry
+    // "a" arm-locked `session()` for *every* bar in the Gantt — grabbing an unrelated entry "b" while
+    // "a"'s veto was still out returned `undefined`, refusing a gesture that had nothing to do with
+    // the hang. There is no arm lock any more: a new gesture — on the same bar or a different one —
+    // supersedes the held one instead of being refused. This is T1 (research §7): a hung veto now
+    // locks only its own bar.
+    it('a hung veto on one bar does not lock a gesture on another bar (#272, #273)', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
         resolveVeto = resolve;
       });
-      const { deps } = withRoster([entry('a', 100, 200)], {
+      const commitEntryEdits = vi.fn(() => true);
+      const { deps, reported } = withRoster([entry('a', 100, 200), entry('b', 300, 400)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits,
       });
       const pipeline = new GesturePipeline(deps);
-      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+      const aSession = pipeline.session(entryId('a'), { kind: 'move' })!;
+      void aSession.commit(50);
 
-      void session.commit(50);
-      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeUndefined();
+      // "b" is a different bar and arms normally — the hung "a" veto never reaches it.
+      const bSession = pipeline.session(entryId('b'), { kind: 'move' });
+      expect(bSession).toBeDefined();
+
+      // "a"'s own settle, once it finally resolves, does nothing: no commit, no second report beyond
+      // the one `session()` already raised when it superseded the hold.
+      resolveVeto(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(commitEntryEdits).not.toHaveBeenCalled();
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.by).toBe('core');
+      expect(reported[0]?.message).toContain('dropped');
+    });
+
+    it('session() re-arming the same bar supersedes its own held gesture instead of refusing (#272, #273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const commitEntryEdits = vi.fn(() => true);
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const firstSession = pipeline.session(entryId('a'), { kind: 'move' })!;
+      void firstSession.commit(50);
+
+      // Re-grabbing "a" while its own veto is still out is now a valid new gesture, not a refusal.
+      const secondSession = pipeline.session(entryId('a'), { kind: 'move' });
+      expect(secondSession).toBeDefined();
+      expect(reported).toHaveLength(1); // the superseded first gesture reported once, right away
+      expect(reported[0]?.message).toContain('dropped');
 
       resolveVeto(true);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+      // The stale settle from the superseded first gesture never commits.
+      expect(commitEntryEdits).not.toHaveBeenCalled();
     });
 
     it('an async veto resolving false commits nothing', async () => {
