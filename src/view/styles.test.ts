@@ -114,26 +114,29 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('.fg-live-region {');
   });
 
-  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the theme pins', () => {
+  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the theme pins, never on .fg-container (#271)', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
     const [rootBlock] = css.match(/:root\s*{[^}]*}/) ?? [''];
     const [containerBlock] = css.match(/\.fg-container\s*{[^}]*}/) ?? [''];
     // Attribute only, no `.fg-container`: a consumer's own chrome outside the Gantt — a toolbar above
-    // it — carries the pin and reads the same token set. Scoping these to the container left every
-    // element outside it on the light set for good, whatever theme the Gantt was on.
+    // it — carries the pin and reads the same token set. `.fg-container` itself declares no colour of
+    // its own, so an ancestor's pin reaches the container by inheritance instead of being blocked by
+    // a colour declaration on the container that always wins over anything inherited (#271).
     const [lightBlock] = css.match(/\n\[data-fg-theme='light'\]\s*{[^}]*}/) ?? [''];
     const [darkBlock] = css.match(/\n\[data-fg-theme='dark'\]\s*{[^}]*}/) ?? [''];
-    const [autoDarkBlock] = css.match(/\.fg-container:not\(\[data-fg-theme\]\)\s*{[^}]*}/) ?? [''];
+    // The auto-dark arm lives on :root, not on .fg-container, so `--fg-*` outside the container
+    // follows the OS too, and a dark OS never overrides an ancestor's own light pin (#271).
+    const [autoDarkBlock] = css.match(/:root:not\(\[data-fg-theme\]\)\s*{[^}]*}/) ?? [''];
     for (const token of COLOR_TOKENS) {
       expect(rootBlock, `:root missing ${token}`).toContain(token);
-      expect(containerBlock, `.fg-container missing ${token}`).toContain(token);
+      expect(containerBlock, `.fg-container must not declare ${token}`).not.toContain(token);
       expect(lightBlock, `[data-fg-theme='light'] missing ${token}`).toContain(token);
       expect(darkBlock, `[data-fg-theme='dark'] missing ${token}`).toContain(token);
       expect(autoDarkBlock, `auto-dark missing ${token}`).toContain(token);
     }
-    expect(css).not.toContain(':root:not([data-fg-theme])');
+    expect(css).toContain(':root:not([data-fg-theme])');
   });
 
   it('[S1-A8] --fg-band-height sizes bands; --fg-header-height is gone (D-S1.12-10)', () => {
