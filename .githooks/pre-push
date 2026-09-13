@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # docs/04-hooks-and-ci.md §3: the full gate before it becomes anyone else's problem.
 #
-# This hook IS the gate, not a latency optimisation ahead of one. `.github/workflows/ci.yml` is
-# `workflow_dispatch:` only — its push/pull_request triggers are commented out — so nothing runs
-# these checks on the server unless a human clicks the button.
+# This hook runs the gate, and it runs the whole of it. `.github/workflows/ci.yml` runs the same
+# command on a pull request that asks for review (#255), so this is the faster half rather than the
+# only one. It is still the only half that sees a push nobody opens a pull request for.
 #
-# `pnpm verify:full` runs `verify` — every job that workflow defines, in the same order — and then
-# `pnpm test:e2e`, the one check with NO CI job behind it. Playwright owns the acceptance checks
-# happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of
-# the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`).
+# `pnpm verify:full` runs `verify` — the browser-free chain — and then `pnpm test:e2e`. Playwright
+# owns the acceptance checks happy-dom cannot express: a real engine clamps `scrollTop`, fires
+# `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`).
 #
-# e2e stays out of `pnpm verify` itself, on purpose: `verify` is kept at CI parity (docs/04 §3), and
-# e2e is not a CI job. `verify:full` is the wrapper that adds the browser half, and it is the same
-# command an agent runs to prove its work (#255). Hook and agent must run one command, not two
-# spellings of it, or the hook stops predicting what the agent saw.
+# e2e stays out of `pnpm verify` itself, on purpose: `verify` is the chain that needs no browser,
+# and the wrapper adds the browser half. This hook, an agent proving its work, and CI all run that
+# one wrapper (#255). One command, not three spellings of it, or the hook stops predicting what
+# the others saw.
 #
-# `--no-verify` still works and is still not fought. But while CI is dispatch-only it is the only
-# thing standing between a broken invariant and `main`, so skipping it is a decision, not a shortcut.
+# `--no-verify` still works and is still not fought. CI now runs this same gate on every pull
+# request that asks for review, so a skip costs a red run rather than a silent landing. A push that
+# never becomes a pull request is still proved here and nowhere else.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -26,7 +26,7 @@ if [[ ! -d node_modules ]]; then
   exit 1
 fi
 
-echo "pre-push: pnpm verify:full (CI-parity gate, plus the browser checks CI has no job for)"
+echo "pre-push: pnpm verify:full (the gate — the same command CI runs)"
 pnpm verify:full
 
 echo "pre-push: OK — every I1-I14 guard passed, and e2e is green."
