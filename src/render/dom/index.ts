@@ -43,6 +43,7 @@ import {
   BAR_HANDLE_CLASS,
   BAR_TESTID,
   COLUMN_HEADER_CLASS,
+  DEFAULT_BAR_LABEL_GAP_PX,
   ENTRY_ID_KEY,
   FIELD_KEY,
   ITEM_ID_KEY,
@@ -209,11 +210,6 @@ type RowParity = 'odd' | 'even';
 function rowParity(index: number): RowParity {
   return index % 2 === 0 ? 'odd' : 'even';
 }
-
-/** `--fg-bar-label-gap`'s fallback (styles.ts's own literal `8px` states the same number for its CSS
- *  `padding-inline`) — one design value, read in two places for two different jobs: this file's fit
- *  test, and the label's own inline padding. */
-const DEFAULT_BAR_LABEL_GAP_PX = 8;
 
 /** J1's whole rule, pure arithmetic (no DOM read): `'fitBar'` reads inside when the label fits,
  *  outside to the right when it does not, and falls back to inside — ellipsised, by the CSS `.fg-

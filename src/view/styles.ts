@@ -37,7 +37,8 @@
 // `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
 // its own container.
 
-import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
+import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_LANE_GAP_PX } from '../layout/index.js';
+import { DEFAULT_BAR_LABEL_GAP_PX } from '../render/dom/dom-contract.js';
 
 const MARKER_ATTR = 'data-freegantt-styles';
 
@@ -82,10 +83,6 @@ const LIGHT_COLOR_TOKENS = `
   /* J1: a label pushed outside the bar paints on the pane, not on --fg-bar-fill, so it takes the
      pane's own ink family (--fg-header-subtext's) rather than --fg-bar-label-color. */
   --fg-bar-label-outside-color: #5E5A53;
-  /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
-     one design value, one token (render/dom/index.ts's own DEFAULT_BAR_LABEL_GAP_PX states the same
-     number as its JS-side fallback). */
-  --fg-bar-label-gap: 8px;
   --fg-warn: #B4690E;
   /* The design states #CF3B26. A Date line label sits in a header band, and this theme paints that
      band cream (--fg-header-band-bg) where the old one painted it white — #CF3B26 reads 4.36:1
@@ -143,7 +140,6 @@ const DARK_COLOR_TOKENS = `
   --fg-bar-fill: oklch(0.74 0.13 248);
   --fg-bar-label-color: #16181D;
   --fg-bar-label-outside-color: #A8A49B;
-  --fg-bar-label-gap: 8px;
   --fg-warn: #E0A340;
   --fg-date-line-color: #FF6F57;
   --fg-date-line-label-color: #1B1D22;
@@ -170,7 +166,13 @@ ${LIGHT_COLOR_TOKENS}
 .fg-container {
 ${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
-  --fg-lane-gap: 2px;
+  --fg-lane-gap: ${DEFAULT_LANE_GAP_PX}px;
+  /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
+     one design value, one token (render/dom/dom-contract.ts's own DEFAULT_BAR_LABEL_GAP_PX states the
+     same number as its JS-side fallback). A px metric, not a colour, so it lives here beside
+     --fg-lane-gap rather than in the light/dark token blocks above — a theme pin must never change a
+     layout metric (#294). */
+  --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
   --fg-bar-opacity: 1;
 }
 @media (prefers-color-scheme: dark) {
@@ -333,12 +335,12 @@ ${DARK_COLOR_TOKENS}
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
    min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
    it text-overflow never gets the chance to run. */
-.fg-bar-label { min-width: 0; padding-inline: var(--fg-bar-label-gap, 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-bar-label { min-width: 0; padding-inline: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* data-label='outside' (render/dom/index.ts's own resolveBarLabelPlacement) — the label leaves the
    bar's own box and paints on the pane beside it, in the pane's own ink rather than the bar fill's
    label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
    label already fits past the bar's right edge. */
-.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, 8px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
+.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
