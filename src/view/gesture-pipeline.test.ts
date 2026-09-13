@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
+import { EntryNotFoundError, SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -722,6 +722,53 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await commitPromise;
 
       expect(reported.map((report) => report.code)).toEqual(['entry-move-cancelled']);
+    });
+
+    // #273: a `finish()` that throws must not brick the pipeline for every bar that follows.
+    it('an EntryNotFoundError from finish() resolves false and does not brick the pipeline (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits: () => {
+          throw new EntryNotFoundError(entryId('a'), 'entries.update');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(false);
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
+    });
+
+    // The sibling of the test above: a plain fault still reaches the caller (it is not swallowed),
+    // and the `finally` still runs — the hold clears either way.
+    it('a plain Error from finish() rejects the commit, but still clears the hold (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits: () => {
+          throw new Error('boom');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(true);
+
+      await expect(commitPromise).rejects.toThrow('boom');
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
     });
 
     it('[S3-A4] session().preview() calls the injected extraEditsFor and previews its extra as a ghost', async () => {

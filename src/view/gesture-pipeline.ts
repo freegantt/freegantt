@@ -20,9 +20,10 @@ import type {
   SegmentId,
   ProposedEdits,
 } from '../model/index.js';
-import { entryId, itemId, spansTime } from '../model/index.js';
+import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
-import { buildRefusalReport } from '../data/error-reporting.js';
+import type { GestureDroppedReason } from '../data/error-reporting.js';
+import { buildGestureDroppedReport, buildRefusalReport } from '../data/error-reporting.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
@@ -408,14 +409,27 @@ export class GesturePipeline {
       return Promise.resolve(committed);
     }
     return this.#awaitVeto(result, itemIds, proposal).then((allowed) => {
-      if (allowed) {
-        const committed = finish();
+      if (!allowed) {
         this.#releaseHold();
-        return committed;
+        this.#reportRefusal(refusal);
+        return false;
       }
-      this.#releaseHold();
-      this.#reportRefusal(refusal);
-      return false;
+      try {
+        return finish();
+      } catch (error) {
+        if (error instanceof EntryNotFoundError) {
+          // Another call removed the entry after the hold was taken, and before this settle — the
+          // same situation `inline-editing.ts`'s cell commit already folds (issue #137 F10). The
+          // user's own edit is moot now, so this reports and does not throw.
+          this.#reportGestureDropped(refusal, 'entry-gone');
+          return false;
+        }
+        throw error;
+      } finally {
+        // `finally`, not a line after `finish()`: a throw out of `finish()` must still clear the
+        // hold, or the pipeline stays bricked by a fault instead of by a slow handler (#273).
+        this.#releaseHold();
+      }
     });
   }
 
@@ -431,6 +445,20 @@ export class GesturePipeline {
         event: refusal.event,
         note: refusal.note,
         entryId: refusal.entryId,
+      }),
+    );
+  }
+
+  /** One report per gesture *core* dropped on its own — never a `before*` handler's `false`, so this
+   *  never reads `refusal.note` (#272, #273). `buildGestureDroppedReport`'s `by: 'core'` is what
+   *  tells a consumer this was not their handler's veto. */
+  #reportGestureDropped(refusal: GestureRefusal, because: GestureDroppedReason): void {
+    this.#deps.raiseError(
+      buildGestureDroppedReport({
+        code: refusal.code,
+        event: refusal.event,
+        entryId: refusal.entryId,
+        because,
       }),
     );
   }
