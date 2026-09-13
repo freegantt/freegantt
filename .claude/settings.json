@@ -3,13 +3,33 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
-        "hooks": [{ "type": "command", "command": ".claude/hooks/check-file.sh", "timeout": 30 }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-file.sh",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
-        "hooks": [{ "type": "command", "command": ".claude/hooks/protect-spec.sh" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/protect-spec.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/require-draft-pr.sh"
+          }
+        ]
       }
     ]
   }

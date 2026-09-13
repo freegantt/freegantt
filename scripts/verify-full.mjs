@@ -17,10 +17,10 @@
 // tail -3 /tmp/v.log`.
 //
 // The check list is not written here. This script reads it from the `verify` script in
-// `package.json`. So `verify` stays the single source of truth for CI parity (docs/04 §3), and a
-// new CI job joins this gate as soon as it joins `verify`. `test:e2e` is appended: it is the one
-// check with no CI job behind it (docs/04 §3.1), and it catches the class of failure #255 records —
-// a drag that a real browser breaks, and happy-dom cannot see.
+// `package.json`. So `verify` stays the single source of truth, and a new check joins every caller
+// at once — this gate, `.githooks/pre-push`, and CI, which runs this same command in one job
+// (docs/04 §5). `test:e2e` is appended: it is the browser half `verify` leaves out, and it catches
+// the class of failure #255 records — a drag that a real browser breaks, and happy-dom cannot see.
 
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -29,7 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-/** The browser half. No CI job runs it, so this gate is the only thing that does. */
+/** The browser half: the one check `verify` leaves out, because it needs a browser. */
 const BROWSER_CHECK = 'test:e2e';
 
 /**
