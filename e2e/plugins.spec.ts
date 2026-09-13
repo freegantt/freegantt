@@ -133,3 +133,108 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
   await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
   await expect(page.locator('#log')).toContainText('entry-15 is locked');
 });
+
+// #280, #224's grill: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
+// with no `items` filter (harness/plugins.ts) — right-clicking entry-37, a buffer bar, opens the
+// ~22-item, ~740px-tall menu the issue reports. `.fg-container` clips at its own edge (styles.ts),
+// so a menu this tall used to run past the bottom with no way to reach the lowest items. popup.ts's
+// `--fg-popup-max-height` (set from the anchor's own pane on every reposition) and styles.ts's
+// `.fg-menu` rule cap the menu at the pane's height and let it scroll its own overflow instead.
+test('#280: a menu taller than the pane scrolls, so every item stays reachable', async ({ page }) => {
+  // The default viewport already stands taller than a 22-item menu — nothing to clip yet. A
+  // shorter pane, still wide enough for the harness page's own chrome, is what makes the pane the
+  // binding constraint instead, the same way any consumer's own page layout could.
+  await page.setViewportSize({ width: 1000, height: 500 });
+  await page.goto('/plugins.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  await bar.scrollIntoViewIfNeeded();
+  await expect(bar).toBeVisible();
+  await bar.click({ button: 'right' });
+
+  const menu = page.locator('#gantt .fg-menu');
+  await expect(menu).toBeVisible();
+  // Exactly one popup open at a time (#224 grill's third condition) — a stray second popup could
+  // let a later assertion below pass against the wrong one.
+  const popup = page.locator('#gantt .fg-popup');
+  await expect(popup).toHaveCount(1);
+
+  const items = page.locator('#gantt .fg-menu-item');
+  expect(await items.count()).toBeGreaterThan(10);
+
+  const containerBox = await page.locator('#gantt').boundingBox();
+  if (!containerBox) throw new Error('missing container bounding box');
+
+  // The clamp itself: `.fg-popup` is the box `--fg-popup-max-height` caps and the one that scrolls
+  // (styles.ts), so this stands no taller than the container it must stay inside, even though
+  // `.fg-menu` inside it keeps its full, uncapped content height.
+  const popupBoxBefore = await popup.boundingBox();
+  if (!popupBoxBefore) throw new Error('missing popup bounding box');
+  expect(popupBoxBefore.height).toBeLessThanOrEqual(containerBox.height + 1);
+
+  const lastItem = items.last();
+  await page.mouse.move(
+    popupBoxBefore.x + popupBoxBefore.width / 2,
+    popupBoxBefore.y + popupBoxBefore.height / 2,
+  );
+  await page.mouse.wheel(0, 1000);
+
+  // `boundingBox()` gives `{x, y, width, height}`, not `{top, bottom}` — the container's own bottom
+  // edge is `y + height`, not a `.bottom` field it never carries.
+  const containerBottom = containerBox.y + containerBox.height;
+  await expect
+    .poll(async () => {
+      const box = await lastItem.boundingBox();
+      if (!box) return false;
+      return box.y >= containerBox.y - 1 && box.y + box.height <= containerBottom + 1;
+    })
+    .toBe(true);
+  await expect(lastItem).toBeVisible();
+
+  // The scroll landed on the menu's own overflow, not a second popup this gesture happened to open.
+  await expect(popup).toHaveCount(1);
+});
+
+// #224's grill, second condition: today `paneOf` only knows the grid pane and the timeline pane
+// (pane-layout.ts) — the overlay a popup mounts into is their sibling, not inside either one. So a
+// scroll whose target sits in the menu's own overflow reads as "outside every pane" to popup.ts's
+// `scroll` dismiss trigger (D-S5-9), and never matches the anchor's own pane. That already holds by
+// accident; this test pins it so the newly-scrollable menu (#280) cannot regress it later.
+test('#280: scrolling inside the open menu does not dismiss it', async ({ page }) => {
+  // Same shorter pane as the scroll-reachability test above — the menu must actually overflow for
+  // this scroll to land inside it at all, rather than trivially not-dismissing a menu with nothing
+  // to scroll.
+  await page.setViewportSize({ width: 1000, height: 500 });
+  await page.goto('/plugins.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  await bar.scrollIntoViewIfNeeded();
+  await expect(bar).toBeVisible();
+  await bar.click({ button: 'right' });
+
+  const menu = page.locator('#gantt .fg-menu');
+  await expect(menu).toBeVisible();
+  // `.fg-popup` is the box `--fg-popup-max-height` caps and the one that scrolls (styles.ts) —
+  // `.fg-menu` inside it keeps its full, uncapped content height.
+  const popup = page.locator('#gantt .fg-popup');
+  await expect(popup).toHaveCount(1);
+
+  // Proves the scroll below lands on real overflow, not a popup that already showed every item.
+  const hasOverflow = await popup.evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(hasOverflow).toBe(true);
+
+  const popupBox = await popup.boundingBox();
+  if (!popupBox) throw new Error('missing popup bounding box');
+  await page.mouse.move(popupBox.x + popupBox.width / 2, popupBox.y + popupBox.height / 2);
+  await page.mouse.wheel(0, 1000);
+
+  await expect.poll(() => popup.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+  // Still the one popup that opened, not dismissed and not replaced by a second one.
+  await expect(popup).toHaveCount(1);
+  await expect(menu).toBeVisible();
+  const items = page.locator('#gantt .fg-menu-item');
+  await expect(items.first()).toBeAttached();
+});
