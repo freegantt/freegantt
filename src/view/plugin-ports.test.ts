@@ -150,7 +150,7 @@ describe('buildPluginPorts — the D-S5-4 gate', () => {
 
     expect(() => harness.parts.interaction.registerKeyHandler('Escape', () => {})).not.toThrow();
     expect(harness.parts.interaction.canWrite(makeEntry('a'), 'name')).toEqual({ ok: true });
-    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipContent('a')).toBeUndefined();
     expect(harness.parts.view.resolveTooltipColumns(makeEntry('a'))).toEqual([]);
   });
 
@@ -233,7 +233,9 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
   it('paints the resolved renderer’s own content', () => {
     const harness = makeHarness({ resolveTooltipRenderer: () => ({ renderer }) });
 
-    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toEqual({ text: 'body' });
+    // F19: a plain string, not `as EntryId` — `resolveTooltipContent` is loose on this scalar id
+    // (#305).
+    expect(harness.parts.view.resolveTooltipContent('a')).toEqual({ text: 'body' });
   });
 
   it('falls back to the default content when the entry has no bar in the current frame', () => {
@@ -242,7 +244,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
       lastPaintedBar: () => undefined,
     });
 
-    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipContent('a')).toBeUndefined();
   });
 
   it('falls back to the default content when the renderer throws (#137 F14)', () => {
@@ -255,7 +257,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
       }),
     });
 
-    expect(harness.parts.view.resolveTooltipContent('a' as EntryId)).toBeUndefined();
+    expect(harness.parts.view.resolveTooltipContent('a')).toBeUndefined();
     expect(errorSpy).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
   });
@@ -272,7 +274,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
       raiseError: (report) => reported.push(report),
     });
 
-    harness.parts.view.resolveTooltipContent('a' as EntryId);
+    harness.parts.view.resolveTooltipContent('a');
 
     expect(reported).toHaveLength(1);
     expect(reported[0]?.code).toBe('renderer-failed');

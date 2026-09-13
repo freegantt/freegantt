@@ -12,6 +12,7 @@
 // are declared once, here, with the rest. `api/plugin-context.ts` then binds both and adds `dataset`/`gantt`.
 // `view/` still names neither type: they arrive as type arguments and stay unbound in this file.
 
+import { entryId } from '../model/index.js';
 import type {
   Disposer,
   ElementDescription,
@@ -298,7 +299,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  `tooltips()` is this method's first caller. A feature that owns a renderer point reads the
      *  same resolution the render backend would, without reaching `view/renderer-registry.ts`
      *  directly (D-S5-5). */
-    resolveTooltipContent(entryId: EntryId): ElementDescription | undefined;
+    resolveTooltipContent(entryId: EntryId | string): ElementDescription | undefined;
     /** D-S5-13: every Grid column marked `tooltip: true`, resolved against this Gantt's current
      *  `gridColumns`/`fields` — header text and `entry`'s formatted value for each. `tooltips()`'s
      *  default body appends these after name/dates. A consumer that builds its own tooltip content
@@ -430,12 +431,13 @@ export function buildPluginPorts(
   // S5.5: the same resolve-then-call-with-fallback shape `render/dom/index.ts`'s `callRenderer` gives
   // `bar`/`cell` (#137 F14). A throwing tooltip renderer degrades to the library's default content,
   // never to a broken popup. No bar in the current frame resolves the same as "no renderer".
-  const resolveTooltipContent = (id: EntryId): ElementDescription | undefined => {
+  const resolveTooltipContent = (id: EntryId | string): ElementDescription | undefined => {
     const resolved = shell.resolveTooltipRenderer();
     if (resolved === undefined) return undefined;
-    const bar = shell.lastPaintedBar(id);
+    const resolvedId = entryId(id);
+    const bar = shell.lastPaintedBar(resolvedId);
     if (bar === undefined) return undefined;
-    const entry = shell.entry(id);
+    const entry = shell.entry(resolvedId);
     if (entry === undefined) return undefined;
     try {
       return resolved.renderer({ entry, item: bar });
