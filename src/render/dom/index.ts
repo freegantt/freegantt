@@ -345,6 +345,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
   let timelineHost: HTMLElement | undefined;
   let headerLayer: HTMLElement | undefined;
+  // #225: `.fg-header` itself stays `overflow: visible` so the Date line label (D-S1.13-6, an
+  // absolutely-positioned child of `.fg-header` itself) can sit at `top: 100%` of `.fg-header`'s own
+  // height, right below the bands, with no clip cutting it off. `headerBandsHost` is the exact-band-
+  // height box that carries the width-to-contentWidth clip `.fg-header` used to carry itself
+  // (#<S1.12 content-width fix>).
+  let headerBandsHost: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let rowBandLayer: HTMLElement | undefined;
   let contentSizer: HTMLElement | undefined;
@@ -829,8 +835,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // Bands keyed by index, coarsest first (D-S1.7-6); ticks keyed within a band. Today every shipped
   // preset has exactly one header, so this renders byte-identical output to the pre-S1.7 single list.
   function syncHeader(bands: readonly FrameHeaderBand[]): void {
-    if (!headerLayer) return;
-    bandLayer.sync(headerLayer, bands, {
+    if (!headerBandsHost) return;
+    bandLayer.sync(headerBandsHost, bands, {
       key: (_band, i) => i,
       create: () => {
         const node = document.createElement('div');
@@ -1266,6 +1272,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
       headerLayer = document.createElement('div');
       headerLayer.className = 'fg-header';
+      headerBandsHost = document.createElement('div');
+      headerBandsHost.className = 'fg-header-bands';
+      headerLayer.append(headerBandsHost);
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
       // J1: one ruler per mount, off the bar layer's own computed font — the font a label actually
@@ -1323,12 +1332,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       headerLayer.append(cursorLineLabel);
     },
     sync(frame: GeometryFrame) {
-      if (headerLayer) {
+      if (headerBandsHost) {
         // A boundary tick's cell is one full calendar unit wide and can overshoot `contentWidth` on a
-        // coarse preset over a short dataset. `.fg-header` clips (`overflow: hidden`) at its own box
-        // edge, so the box must be exactly `contentWidth` wide — or the clip lands at the pane's width
-        // instead and either hides in-range ticks or lets an oversized tick inflate native scrollWidth.
-        headerLayer.style.width = `${frame.contentWidth}px`;
+        // coarse preset over a short dataset. `.fg-header-bands` clips (`overflow: hidden`) at its own
+        // box edge, so the box must be exactly `contentWidth` wide — or the clip lands at the pane's
+        // width instead and either hides in-range ticks or lets an oversized tick inflate native
+        // scrollWidth (#<S1.12 content-width fix>). Carrying this on `headerBandsHost`, not
+        // `.fg-header` itself, is what leaves `.fg-header` free to stay `overflow: visible` for the
+        // Date line label (#225).
+        headerBandsHost.style.width = `${frame.contentWidth}px`;
       }
       syncHeader(frame.header.bands);
       syncGridHeader(frame.columns);
@@ -1547,6 +1559,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       gridHeaderLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;
+      headerBandsHost = undefined;
       barLayer = undefined;
       rowBandLayer = undefined;
       contentSizer = undefined;

@@ -257,7 +257,9 @@ ${DARK_COLOR_TOKENS}
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
-.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; height: auto; overflow: hidden; }
+.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: 1; height: auto; overflow: visible; }
+/* #225: the S1.12 width clip moves here so .fg-header stays overflow: visible. */
+.fg-header-bands { display: flex; flex-direction: column; overflow: hidden; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, 24px); min-height: 0; }
 /* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
    consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
@@ -394,6 +396,8 @@ ${DARK_COLOR_TOKENS}
    .fg-date-line[data-flag='today'] and .fg-date-line-label[data-flag='today']. The sheet itself
    states no such rule, which is the decision holding. */
 .fg-date-line-label, .fg-cursor-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--fg-date-line-color); color: var(--fg-date-line-label-color); }
+/* #225: top: 100% of .fg-header paints the label below the bands, not the ticks — no pixel math. */
+.fg-date-line-label { top: 100%; }
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: 2; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
 .fg-cursor-line-label { z-index: 2; pointer-events: none; }
