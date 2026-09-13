@@ -375,10 +375,15 @@ ${DARK_COLOR_TOKENS}
    the pane's own top-left instead, the sizer declared a scroll extent one header short of where the
    content it sizes actually ends, and the last row could never scroll fully into view. */
 .fg-content-sizer { position: relative; width: 1px; height: 1px; visibility: hidden; }
-/* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-timeline-pane is both
-   this element's positioned ancestor and its own overflow: auto scroll container, so bottom: 0
-   would resolve against the pane's visible clientHeight and cut the line off at the first
-   screenful instead of running the full scrollable row content. */
+/* The strokes' own wrapper (render/dom/date-line.ts) — same job .fg-tick-lines does for tick lines:
+   position: relative makes it the positioned ancestor a stroke's top: 0 resolves against, so a
+   stroke starts right where this in-flow box does, below the sticky header, not at the scroll
+   pane's own top edge (#118). */
+.fg-date-lines { position: relative; }
+/* height is set inline per frame (render/dom/date-line.ts), not bottom: 0: .fg-date-lines is both
+   this element's positioned ancestor and, being purely in-flow, taller than nothing on its own —
+   bottom: 0 would resolve against the pane's visible clientHeight and cut the line off at the
+   first screenful instead of running the full scrollable row content. */
 .fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
 /* A label is a filled chip, not bare coloured text. Bare text put a thin time-coloured word on the
    header band and asked it to clear 4.5:1 there; a chip carries its own ground, so the label reads

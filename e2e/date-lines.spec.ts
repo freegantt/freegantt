@@ -67,3 +67,40 @@ test('a Date line label stays glued to its line while the timeline pane scrolls 
     })
     .toBeLessThan(2);
 });
+
+test('a Date line stroke keeps no gap below it after a preset switch grows the header — #118', async ({
+  page,
+}) => {
+  await page.goto('/zoom.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.todayLine = true;
+  });
+
+  const line = page.locator('.fg-date-line').first();
+  await expect(line).toBeVisible();
+
+  // dayWeekMonth's three header bands stand taller than the starting preset's one — the header
+  // grows, which is what left a gap below the stroke before the fix (the stroke never reached past
+  // the header's own height in the first place, gap or no preset switch, but a taller header made
+  // it obvious).
+  await page.evaluate(() => {
+    window.__gantt.preset = 'dayWeekMonth';
+  });
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => {
+        const pane = document.querySelector('.fg-timeline-pane')!;
+        const stroke = document.querySelector('.fg-date-line') as HTMLElement;
+        const strokeRect = stroke.getBoundingClientRect();
+        const paneRect = pane.getBoundingClientRect();
+        // The stroke's own bottom edge, in pane-local coordinates, plus whatever the pane has
+        // already scrolled past — this is where the stroke ends inside the pane's full scrollable
+        // content, which must reach the pane's own scrollHeight for there to be no gap below it.
+        return strokeRect.bottom - paneRect.top + pane.scrollTop - pane.scrollHeight;
+      });
+    })
+    .toBe(0);
+});

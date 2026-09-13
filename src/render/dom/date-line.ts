@@ -38,10 +38,25 @@ function createHiddenDiv(): HTMLElement {
 /** Attaches Date line paint to the timeline pane: a 1px stroke per line, keyed by array position
  * (S1.13, D-S1.13-3 — no `id`, same precedent as Header bands), and a sibling Date line label layer
  * mounted in `headerLayer` for lines that carry a `label` (D-S1.13-6). Both layers key by the source
- * Date line index. Call `sync` each frame. */
-export function attachDateLines(timelineHost: HTMLElement, headerLayer: HTMLElement): DateLineAttachment {
+ * Date line index. Call `sync` each frame. `before` is the node the strokes' own wrapper mounts
+ * ahead of — pass `contentSizer` (#118), not the end of `timelineHost`'s children: a plain `append`
+ * landed after `.fg-content-sizer`, and that 1px `position: relative` sizer box (needed in flow for
+ * its own scroll-extent job) pushed this layer one pixel further down than `.fg-bars`/
+ * `.fg-tick-lines`, which both mount ahead of it. */
+export function attachDateLines(
+  timelineHost: HTMLElement,
+  headerLayer: HTMLElement,
+  before: HTMLElement,
+): DateLineAttachment {
   const layer = createHiddenDiv();
-  timelineHost.append(layer);
+  // Same positioning role `.fg-tick-lines` plays for tick-lines.ts: with no `position` of its own,
+  // this div is `static`, so a stroke's `position: absolute; top: 0` (CSS) skips past it to the
+  // nearest positioned ancestor — `.fg-timeline-pane` itself — landing at the pane's very top edge
+  // instead of just below the sticky header, where this layer's own in-flow box actually starts.
+  // The class below gives it `position: relative`, so each stroke's `top: 0` lands here instead,
+  // already offset by the header's height the same way `.fg-bars`/`.fg-tick-lines` are (#118).
+  layer.className = 'fg-date-lines';
+  timelineHost.insertBefore(layer, before);
 
   const labelLayer = createHiddenDiv();
   headerLayer.append(labelLayer);
