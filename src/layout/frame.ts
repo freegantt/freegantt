@@ -22,7 +22,7 @@ import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
-import type { FixedBarBox, Item, VariantItems } from './items/item.js';
+import type { BarAnchor, Item, VariantItems } from './items/item.js';
 import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
@@ -57,9 +57,11 @@ export const DEFAULT_BAR_HEIGHT_PX = 18;
  *  read one type instead of repeating the union. */
 export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 
-/** An entry's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
- * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart
- * (they briefly did: `reveal` had its own copy missing the zero-duration/inverted-entry clamp).
+/** An Item's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
+ * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart.
+ * Both callers hand it a real `Item`, `box` included (#295): a boxed Item — `diamond()`'s glyph is
+ * the shipped case — has no span-and-floor width at all, so a caller that built its own literal
+ * with `box` left off would silently paint that Item's real width and reveal a different one.
  *
  * A zero-length span (`start === end` — ADR 0012) still floors at `minBarWidthPx`, centred on its
  * own instant, the same as any other painted span too narrow to grab — unless a `diamond()` Variant
@@ -72,20 +74,21 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
  * on a real span would land in two different places depending on which sentence a reader followed,
  * so both rules read the span's midpoint. */
 export function barSpan(
-  // `Pick<Item, ...>`, not `Entry` — every caller hands this an `Item` (`produceItemsForRow` never
-  // produces one for a non-spanning Entry, ADR 0012), whose `start`/`end` stay required.
-  entry: Pick<Item, 'start' | 'end' | 'box'>,
+  // The whole `Item`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
+  // `Pick` and silently drop a fixed box's width, which is exactly the bug this signature closes.
+  item: Item,
   scale: TimeScale,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
 ): { x: number; width: number; span: BarSpanKind } {
-  const x = scale.xForInstant(entry.start);
-  const end = scale.xForInstant(entry.end);
-  if (entry.box !== undefined) {
+  const x = scale.xForInstant(item.start);
+  const end = scale.xForInstant(item.end);
+  if (item.box !== undefined) {
     // A fixed box skips the floor on purpose (ADR 0022 — `diamond()`'s own width is the design, not
-    // a value to widen), but a negative or zero width is never a paint, so this still clamps at 0 —
-    // the same guard the plain path takes below (`Math.max(0, end - x)`), just without the floor.
-    const width = Math.max(0, entry.box.widthPx);
-    return { x: fixedBoxX(x, end, entry.box), width, span: 'fixed' };
+    // a value to widen). Clamped once, here, so the returned `width` and `fixedBoxX`'s position both
+    // read the same finite, non-negative value — a negative (#296) or non-finite (#297) `widthPx`
+    // never reaches either.
+    const width = clampBoxWidth(item.box.widthPx);
+    return { x: fixedBoxX(x, end, item.box.anchor, width), width, span: 'fixed' };
   }
   const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
@@ -97,17 +100,28 @@ export function barSpan(
   return { x, width, span: 'exact' };
 }
 
+/** A fixed box's width, floored at 0 and never non-finite. The one place `widthPx` is read off a
+ *  box (`barSpan`, `fixedBoxX` both take the result, never the raw field) — so a negative width
+ *  (#296) and a non-finite one (#297, reachable through ordinary consumer arithmetic: a
+ *  divide-by-zero, a missing `parseFloat`) clamp to the same value everywhere a fixed box is sized
+ *  or positioned, instead of one guard catching the leak and the other missing it. */
+function clampBoxWidth(px: number): number {
+  return Number.isFinite(px) ? Math.max(0, px) : 0;
+}
+
 /** Where a fixed-width box's left edge sits, given the pixel positions of the entry's own `start`
- *  and `end` (`x`, `end`). `'center'` reads the same midpoint the floor above centres a minimum-width
- *  bar on, so a diamond on a real span lands where the floor would have put one, not at its start. */
-function fixedBoxX(x: number, end: number, box: FixedBarBox): number {
-  switch (box.anchor) {
+ *  and `end` (`x`, `end`) and the box's already-clamped `width` (`clampBoxWidth`) — never the raw
+ *  `widthPx`, so a clamped box never displaces (#296). `'center'` reads the same midpoint the floor
+ *  above centres a minimum-width bar on, so a diamond on a real span lands where the floor would
+ *  have put one, not at its start. */
+function fixedBoxX(x: number, end: number, anchor: BarAnchor, width: number): number {
+  switch (anchor) {
     case 'start':
       return x;
     case 'end':
-      return end - box.widthPx;
+      return end - width;
     case 'center':
-      return (x + end) / 2 - box.widthPx / 2;
+      return (x + end) / 2 - width / 2;
   }
 }
 
