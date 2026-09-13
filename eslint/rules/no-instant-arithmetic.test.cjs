@@ -13,6 +13,8 @@ const ruleTester = new RuleTester({
     parserOptions: {
       project: path.join(fixturesDir, 'tsconfig.json'),
       tsconfigRootDir: fixturesDir,
+      // Does CI's single-run inference type-check the on-disk fixture instead of the case?
+      disallowAutomaticSingleRunInference: true,
     },
   },
 });

@@ -1,155 +1,72 @@
 name: CI
 
+# One gate, three callers: an agent, `.githooks/pre-push`, and this workflow. All three run
+# `pnpm verify:full`, so no caller can prove a different thing from the others (#255).
+#
+# Triggers are pull-request-only, and a draft never runs. `ready_for_review` is not a default
+# event type, so it is listed here: converting a draft with `gh pr ready` is what starts the
+# first run. Work in progress costs no minutes. `pnpm open-pr` opens every pull request as a
+# draft for exactly that reason (docs/04 §5.2).
+#
+# There is no `push:` trigger, by decision. A push to a branch with a ready pull request already
+# runs through `synchronize`, and a push to `main` lands a merge this workflow just proved. The
+# one case a green run can go stale — `main` moved underneath the branch — is branch protection's
+# "require branches to be up to date before merging", which re-runs the gate only when it happens.
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-  # Disabled for now — push/pull_request triggers commented out.
-  # push:
-  #   branches: [main]
-  # pull_request:
+
+# A new push supersedes the run before it. Cancelling keeps the minutes on the commit that is
+# actually up for review.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  install:
+  # One job, not one job per check. GitHub bills a job by the minute, rounded up, and every job
+  # pays for its own checkout and install before it does ten seconds of work. Eleven such jobs
+  # cost about twenty billed minutes for a gate that runs in about one. Steps inside a job are
+  # free, and `pnpm verify:full` names the check that stopped the run in its verdict line, so the
+  # fan-out bought a slightly prettier failure page and nothing else.
+  gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
 
-  format:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # `node_modules` is cached whole, keyed on the lockfile and the pinned Node version. A run
+      # that changes no dependency installs nothing at all. Caching the directory rather than the
+      # pnpm store is what buys that: the store still leaves the link step to run.
+      - id: node-modules
+        uses: actions/cache@v4
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
 
-  typecheck:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # Chromium is cached against the Playwright version that drives it, read from the install
+      # rather than from a second copy of the version here. A Playwright bump busts this key and
+      # nothing else does. `--with-deps` runs only on a miss; the runner image already carries the
+      # system libraries Chromium needs, so a hit needs no apt step. If a future image drops one,
+      # the fix is `pnpm exec playwright install-deps chromium` on the hit path, not a wider key.
+      - id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{ print $NF }')" >> "$GITHUB_OUTPUT"
+      - id: browsers
+        uses: actions/cache@v4
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
 
-  lint:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-
-  boundaries:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm boundaries
-
-  # The documented-standards checks: no vendor product name, no sentence over the ASD-STE100
-  # ceiling, no undeclared lint disable. None of them needs a build, so they share one job.
-  standards:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm vendor-names
-      - run: pnpm sentence-length
-      - run: pnpm disables
-
-  guards:
-    needs: [lint, boundaries]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm guards
-
-  test-node:
-    needs: typecheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:node
-
-  test-dom:
-    needs: test-node
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:dom
-
-  build:
-    needs: [test-dom, guards, standards]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-
-  api-report:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm api-report
+      # The gate itself. Every check the local gate runs, in the same order, from one script that
+      # reads its check list out of `package.json` at run time. A check cannot join `verify` and
+      # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
+      - run: pnpm verify:full
