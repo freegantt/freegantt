@@ -78,12 +78,14 @@ A plugin ships the same object through `ctx.variants.add(variant)`. One type, tw
 
 ```ts
 { name: 'parent', when: (entry) => entry.hasChildren, paint: summaryBar }
-{ name: 'leaf' } // no `when` — it answers for every row, so every row resolves
+{ name: 'leaf' } // no `when` — the last resort, for every row no rule claims
 ```
 
-**First, not last — the newest rule wins** (`Q5`, ruled 2026-09-11). Core registers before anything else, so every plugin variant and every consumer variant is newer and overrides it. Core is the floor. A `leaf` variant with no `when` answers for every row, so the floor is total and no row falls through. **Registering core last would make core beat every plugin**, which is the opposite of what its two variants are for.
+**First, not last — the newest rule wins** (`Q5`, ruled 2026-09-11). Core registers before anything else, so every plugin variant and every consumer variant is newer and overrides it. Core is the floor. A `leaf` variant with no `when` is a **last resort**: it answers for every row no rule claims, so the floor is total and no row falls through (`J60`). **Registering core last would make core beat every plugin**, which is the opposite of what its two variants are for.
 
-**`leaf` registers before `parent`, and the order inside core's own pair is load-bearing too** (added on acceptance; `J37`). The same newest-first walk applies inside core's rank, and `leaf` carries no `when`, so it claims every row. Register it second and it answers before `parent`'s rule ever runs, and no row is ever a summary. The general rule: **a variant with no `when` registers before every rule it is the floor for.**
+**A last resort never outranks a rule that states a claim** (`J60`, `P2-3`, ruled 2026-09-12; it supersedes `J37`, which held that the order inside core's own pair was load-bearing). The walk asks every claiming rule first — newest rank first, then newest registration — and only then the last resorts, in the same order, with core's `leaf` last of all. Rank alone put a plugin's floor over core's `parent`, so `ctx.variants.add({ name: 'leaf', paint })` — the documented re-skin — answered for every row and every summary rail in the Gantt stopped drawing. Sorting the floors last makes that registration re-skin the floor and leave every claim standing. Registration order between a floor and a claim now decides nothing, core's own pair included.
+
+**Omitting `when` and writing `when: () => true` are different answers.** Omit it for a last resort, which takes every row no rule claims. Write `when: () => true` for a rule that claims every row outright, core's `parent` included — that one outranks core, because it states a claim.
 
 **A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
 
@@ -147,7 +149,7 @@ An earlier draft of this ADR gave the Entry a stored `variant`, and resolved a v
 
 - **The two structural names stop being special.** They are two names in the same registry as every other variant. There is no reserved list, because nothing can store a name.
 - **`BAR_SHAPE_CLASS` goes** (`render/dom/index.ts:205-207`). The summary class comes from the `parent` variant's own `paint`, like every other variant's class.
-- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers for every row and nothing newer is obliged to.
+- **`resolveLook`'s fallback goes** (`produce-items.ts:249`). The `leaf` variant carries no `when`, so it answers for every row no rule claims, and nothing newer is obliged to.
 
 ## What ADR 0013 keeps
 
