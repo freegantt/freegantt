@@ -96,8 +96,9 @@ Mechanical. It lands first, because every unit after it names `summary()`.
 - [x] Every key overrides, `paint` included. The argument is an object and never a positional rule:
       a `FieldMatch` is `{ [key: string]: unknown }`, so `diamond({ when })` could not be told from a
       match on a field named `when`.
-- [x] `CORE_VARIANTS` seeds from `bar()` and `summary()`. **`J37`'s order is load-bearing.** The floor
-      registers first, or no row is ever a summary. Keep the comment that says so.
+- [x] `CORE_VARIANTS` seeds from `bar()` and `summary()`. **The order inside that list decides
+      nothing** — `J60` sorts every claiming rule ahead of every last resort, and it superseded
+      `J37`. Keep the comment that says so, and do not reinstate the load-bearing wording.
 - [x] `diamond()` is **not** in `CORE_VARIANTS`. No row wears it until a rule claims it.
 - [x] Export all three from `src/api/index.ts`.
 - [x] Tests: each factory answers a complete variant; each key overrides; `CORE_VARIANTS` still
