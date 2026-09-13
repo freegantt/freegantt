@@ -1135,6 +1135,13 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
     expect(x).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
 
+  it('clamps a negative widthPx before positioning for anchor: start, not after (#296)', () => {
+    const wideSpan: Entry = sampleEntries[0]!;
+    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'start' }), scale);
+    expect(width).toBe(0);
+    expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
+  });
+
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'clamps a non-finite widthPx (%s) to 0 rather than propagating it (#297)',
     (widthPx) => {
