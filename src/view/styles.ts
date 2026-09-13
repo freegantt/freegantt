@@ -401,9 +401,12 @@ ${DARK_COLOR_TOKENS}
    stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
    panes underneath; a mounted .fg-popup opts back in. */
 .fg-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-/* overflow: hidden so a menu item's own hover paint clips to this radius instead of squaring off
-   the first and last corners. */
-.fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 6px; overflow: hidden; }
+/* overflow-x stays hidden so a menu item's own hover paint clips to this radius instead of
+   squaring off the first and last corners; overflow-y is auto for the same reason
+   --fg-popup-max-height exists below (#280): popup.ts sets it to the anchor pane's own height minus
+   this rule's own 1px top and bottom border, the two pixels its own box-sizing (content-box, the
+   default) adds on top of max-height. */
+.fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 6px; overflow: hidden auto; max-height: var(--fg-popup-max-height, none); }
 /* S5.5, D-S5-13: tooltips()'s own content, mounted inside .fg-popup. */
 .fg-tooltip { padding: 7px 10px; font: inherit; line-height: 1.45; max-width: 280px; }
 .fg-tooltip-title { font-weight: 600; }

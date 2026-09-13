@@ -146,13 +146,20 @@ function fitsOnPlacementAxis(
   return box.left >= pane.left && box.left + size.width <= pane.right;
 }
 
-function clamp(side: PopupPlacement, box: Box, size: { width: number; height: number }, pane: DOMRect): Box {
-  if (side === 'top' || side === 'bottom') {
-    const maxLeft = Math.max(pane.left, pane.right - size.width);
-    return { ...box, left: Math.min(Math.max(box.left, pane.left), maxLeft) };
-  }
+// Clamps both axes, not only the placement's own cross axis (#280). A flip already settles the
+// placement axis when the box fits *somewhere* — `fitsOnPlacementAxis` above found a side that does
+// — so clamping it too is a no-op there. When the box is taller (or wider) than the pane on every
+// side, no flip fits either one, and the box that reaches here still stands at its unflipped
+// placement, running past the pane on its own placement axis with nothing to pin it back. Pinning
+// that axis here as well is the fallback the pane-relative `--fg-popup-max-height` cap (`reposition`,
+// styles.ts's `.fg-popup`) needs: the box lands flush with the pane, and its own overflow scrolls.
+function clamp(box: Box, size: { width: number; height: number }, pane: DOMRect): Box {
+  const maxLeft = Math.max(pane.left, pane.right - size.width);
   const maxTop = Math.max(pane.top, pane.bottom - size.height);
-  return { ...box, top: Math.min(Math.max(box.top, pane.top), maxTop) };
+  return {
+    top: Math.min(Math.max(box.top, pane.top), maxTop),
+    left: Math.min(Math.max(box.left, pane.left), maxLeft),
+  };
 }
 
 /** What one dismiss listener works from: the popup that just opened, the seams it listens through,
@@ -289,20 +296,25 @@ export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyH
   const reposition = (): void => {
     if (!wrapper || !currentOptions) return;
     const anchor = anchorRect(currentOptions.anchor);
-    const size = { width: wrapper.offsetWidth, height: wrapper.offsetHeight };
     const pane = paneRectFor(anchor, dom.paneBounds, dom.bounds);
+    // Caps content taller than the pane before `offsetHeight` below reads it (#280). Without this, a
+    // menu taller than the pane never enters `clamp`'s size-aware branch at all — only its top moves,
+    // so the box still stands taller than the pane and its lowest items sit off screen with no way to
+    // reach them. The CSS side of the cap is styles.ts's `.fg-popup` rule, so any popup content —
+    // a menu today, whatever else `Popup` grows tomorrow — scrolls the same way past this height.
+    // `- 2` is that rule's own 1px top and bottom border, styles.ts's own comment on the same line.
+    wrapper.style.setProperty('--fg-popup-max-height', `${Math.max(0, pane.bottom - pane.top - 2)}px`);
+    const size = { width: wrapper.offsetWidth, height: wrapper.offsetHeight };
     const requested = currentOptions.placement ?? 'bottom';
     let box = placeAt(requested, anchor, size);
-    let side = requested;
     if (!fitsOnPlacementAxis(requested, box, size, pane)) {
       const flipped = OPPOSITE[requested];
       const flippedBox = placeAt(flipped, anchor, size);
       if (fitsOnPlacementAxis(flipped, flippedBox, size, pane)) {
-        side = flipped;
         box = flippedBox;
       }
     }
-    box = clamp(side, box, size, pane);
+    box = clamp(box, size, pane);
     // Two different boxes on purpose (#168). `pane` above is the region the popup must stay inside.
     // `overlay.bounds` is the frame it is mounted in, so it is the origin its own transform counts
     // from — the layer you mounted into is the layer you position against.
