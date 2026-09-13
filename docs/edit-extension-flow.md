@@ -18,8 +18,8 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 |---|---|---|
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
-| `StoredEdit` / `StoredEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `StoredEdits`, and a per-id lookup for post-body state (D-S5-45) |
+| `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, and a per-id lookup for post-body state (D-S5-45) |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the
@@ -28,12 +28,16 @@ whoever produces it, and whether it's one entry or a batch (#209). `data/` diffs
 edits and the extender's edits against the store into `FieldUpdated` rows itself (`diffEdit`), so
 nobody who writes an edit has to compute a diff by hand.
 
-**Read one way, write the other.** The two shapes are not interchangeable, and the asymmetry is the
-point: every `StoredEdit` is a legal `EntryEdit` (an `Instant` is an `InstantInput`), and no
-`EntryEdit` is a legal `StoredEdit`. So a forgotten normalization is a compile error, and no `as` sits
-on the hook boundary. Normalization has **one** door: `DatasetState.extraEditsFor` calls the occupant
-and then `toStoredEdits`, and both the commit path and the drag preview come through it. A plugin author
-therefore never resolves a date, never states `proposedKeys`, and never computes an envelope.
+**Read one way, write the other.** The two shapes are not interchangeable, and neither is assignable to
+the other. That asymmetry reversed once. Before ADR 0011 decision 22, every `StoredEdit` (now
+`ProposedEdit`) was a legal `EntryEdit`. A complete `props` record and a `props` patch are the same
+shape, so a plugin author could spread `request.proposed`'s `props` into a returned edit and propose
+every stored key by accident. Decision 22 closed the hole from both sides: `ProposedEdit` carries a
+`__brand` that refuses the object itself, and `EntryEdit`'s own `props?: never` refuses the literal. So
+a forgotten normalization is a compile error, and no `as` sits on the hook boundary. Normalization has
+**one** door: `DatasetState.extraEditsFor` calls the occupant and then `toEditsReading`, and both the
+commit path and the drag preview come through it. A plugin author therefore never resolves a date,
+never states `proposedKeys`, and never computes an envelope.
 
 **What a plugin author writes for the two cases that are easy to get wrong:**
 
@@ -46,9 +50,10 @@ therefore never resolves a date, never states `proposedKeys`, and never computes
   envelope (D-S5-50, #239). Stating the envelope here used to overwrite an earlier plugin's `end` and
   commit that write away with no error.
 
-**One known hole.** A cascade onto an Entry the *same transaction adds* is dropped in silence:
-`diffEdit` finds no base Entry for that id in the committed store, so it produces no rows and the
-author sees no error. Ruled deferred to **S7** and tracked as **#235**.
+**A cascade onto an Entry the same transaction adds.** This case has no base Entry in the committed
+store, so `diffEdit` cannot produce an update row for it. The cascade still lands: it folds into the
+`added` entity itself, through `addedEntitiesForFold` (`src/data/build-commit-change-set.ts:304-310`).
+The `ChangeSet` publishes the cascaded value on the added entity, and no separate update row.
 
 ## Flow
 
