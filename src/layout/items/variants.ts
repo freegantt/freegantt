@@ -280,7 +280,7 @@ const DIAMOND_CSS = `
 .fg-bar-diamond::before { content: ''; position: absolute; inset: 0; margin: auto; width: 100%; aspect-ratio: 1; background: var(--fg-bar-fill-painted); transform: rotate(45deg); }
 .fg-bar-diamond[data-state~="hovered"] { box-shadow: none; }
 .fg-bar-diamond[data-state~="hovered"]::before { outline: 1px solid var(--fg-hover-ring); outline-offset: 1px; }
-.fg-bar-diamond[data-state~="selected"] { outline: none; }
+.fg-bar-diamond[data-state~="selected"]:not(:focus-visible) { outline: none; }
 .fg-bar-diamond[data-state~="selected"]::before { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
 `;
 
