@@ -253,21 +253,6 @@ ${DARK_COLOR_TOKENS}
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
-/* S5.11, D-S5-25/D-S5-26: one focus ring style for every roving-focus target — the two panes
-   themselves (axe scrollable-region-focusable: a scrollable pane needs its own tab stop), a grid
-   row/cell, a column header cell, a bar, and the splitter. An inset ring keeps the outline inside
-   the element's own box instead of colliding with a neighbour row/cell/bar. */
-.fg-grid-pane:focus-visible,
-.fg-timeline-pane:focus-visible,
-.fg-row:focus-visible,
-.fg-row-label:focus-visible,
-.fg-row-cell:focus-visible,
-.fg-col-header:focus-visible,
-.fg-bar:focus-visible,
-.fg-splitter:focus-visible {
-  outline: 2px solid var(--fg-focus-ring);
-  outline-offset: -2px;
-}
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
@@ -358,6 +343,21 @@ ${DARK_COLOR_TOKENS}
 /* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, 0.6); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }
+/* S5.11, D-S5-25/D-S5-26: one focus ring style for every roving-focus target — the two panes
+   themselves (axe scrollable-region-focusable: a scrollable pane needs its own tab stop), a grid
+   row/cell, a column header cell, a bar, and the splitter. An inset ring keeps the outline inside
+   the element's own box instead of colliding with a neighbour row/cell/bar. */
+.fg-grid-pane:focus-visible,
+.fg-timeline-pane:focus-visible,
+.fg-row:focus-visible,
+.fg-row-label:focus-visible,
+.fg-row-cell:focus-visible,
+.fg-col-header:focus-visible,
+.fg-bar:focus-visible,
+.fg-splitter:focus-visible {
+  outline: 2px solid var(--fg-focus-ring);
+  outline-offset: -2px;
+}
 /* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
    bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, 0.4); pointer-events: none; }
