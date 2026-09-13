@@ -70,7 +70,6 @@ const COLOR_TOKENS = [
   '--fg-bar-fill',
   '--fg-bar-label-color',
   '--fg-bar-label-outside-color',
-  '--fg-bar-label-gap',
   '--fg-warn',
   '--fg-date-line-color',
 ];
@@ -145,6 +144,9 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('--fg-tick-box-floor');
     expect(css).toContain('--fg-indent-width');
     expect(css).toContain('--fg-lane-gap');
+    // #294: a px metric, not a colour — it moved out of the light/dark token blocks into this
+    // metrics block, beside --fg-lane-gap, so a theme pin can no longer change it.
+    expect(css).toContain('--fg-bar-label-gap');
     expect(css).toContain('--fg-bar-opacity');
     expect(css).toContain('--fg-bar-fill-painted');
     expect(css).not.toContain(':root, .fg-container');
@@ -246,7 +248,7 @@ describe('ensureBaseStyles', () => {
   // (e2e/theme.spec.ts reads the same bar's computed colour in Chromium). This unit test instead
   // pins the two declarations the cascade would join: the dark pin sets the dark ink token, and
   // .fg-bar paints its label from that token.
-  it('dark theme paints bar labels in dark ink so they read on the light blue fill', () => {
+  it("declares the dark theme's dark ink token, and .fg-bar reads its label colour from that token", () => {
     clearStyles();
     const container = makeContainer();
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });

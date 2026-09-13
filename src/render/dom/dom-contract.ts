@@ -63,3 +63,12 @@ export const ROW_ID_ATTRIBUTE = 'data-row-id';
 export const ITEM_ID_ATTRIBUTE = 'data-item-id';
 /** The Segment id a bar stands for, as a selector name — `[data-segment-id="sg1"]`. */
 export const SEGMENT_ID_ATTRIBUTE = 'data-segment-id';
+
+/** `--fg-bar-label-gap`'s fallback, in px. `view/styles.ts` interpolates this number twice: into
+ *  the declared token, and into each `var(...)` fallback. `render/dom/index.ts` reads the same
+ *  constant for its label fit test and for the label's inline padding. One constant, three readers,
+ *  so the token and its fallback cannot drift apart (#294).
+ *
+ *  It lives here, not in `render/dom/index.ts`. `view/styles.ts` imports a DOM-free constant from
+ *  this file, and never the DOM backend itself. */
+export const DEFAULT_BAR_LABEL_GAP_PX = 8;
