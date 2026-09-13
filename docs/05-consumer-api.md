@@ -171,9 +171,9 @@ and inherits down unchanged, so one setting still covers every bar.
 
 ### Internal tokens — not a consumer's to set
 
-Four `--fg-*` properties are the library's own plumbing, not a consumer's to set. Three are geometry
+Five `--fg-*` properties are the library's own plumbing, not a consumer's to set. Four are geometry
 the library writes inline, per element, because a stylesheet rule alone cannot express it — setting
-one by hand fights the next frame, which overwrites it. The fourth, `--fg-bar-fill-painted`, is
+one by hand fights the next frame, which overwrites it. The fifth, `--fg-bar-fill-painted`, is
 different: the base stylesheet computes it on `.fg-bar` itself, from `--fg-bar-fill` and
 `--fg-bar-opacity` (see the note above) — a consumer sets the two colour tokens that feed it, never
 this one.
@@ -183,6 +183,7 @@ this one.
 | `--fg-col-flex` | `render/dom/index.ts`, per column header/cell — the column's own flex-grow, or removed for a fixed column | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` `flex` |
 | `--fg-grid-content-width` | `pane-layout.ts`, on the grid pane — how far a fixed-width column set overflows the pane (#126) | `.fg-grid-spacer`, `.fg-rows-clip` `width` (falls back to `100%`) |
 | `--fg-row-depth` | `render/dom/index.ts`, per row — the row's hierarchy depth | `.fg-row-label` indent calc (with `--fg-indent-width`, above) |
+| `--fg-popup-max-height` | `popup.ts`, on the popup wrapper — the anchor pane's height minus the popup's 1px top and bottom border (#280) | `.fg-popup` `max-height` (falls back to `none`) |
 | `--fg-bar-fill-painted` | `.fg-bar`'s own CSS rule (`styles.ts`), computed from `--fg-bar-fill` and `--fg-bar-opacity` | `.fg-bar` background |
 
 ### Retired and renamed tokens
