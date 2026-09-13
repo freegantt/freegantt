@@ -3,6 +3,8 @@ import { registerCoreCommands } from './core-commands.js';
 import type { CoreCommandPorts } from './core-commands.js';
 import { CommandRegistry } from '../extensions/commands.js';
 import type { CommandContext } from '../extensions/commands.js';
+import { Keymap } from '../extensions/keymap.js';
+import type { KeyEventLike } from '../extensions/keymap.js';
 import { entryId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 
@@ -273,3 +275,92 @@ describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, 
     expect(available).not.toContain('freegantt.moveColumnLeft');
   });
 });
+
+// #275 item 1's sharp edge: `Alt+ArrowRight` is deliberately overloaded (D-S5-26) — `GanttShell`
+// binds `panRight` to it first, then `moveColumnRight` second, and `Keymap.resolve()`'s
+// newest-first order (D-S5-7) means `moveColumnRight`'s own `when` gets first refusal. Every test
+// above this one calls `registry.run(id)` directly, which never exercises that chord resolution —
+// so nothing before this proved the overload itself works, only that each command works once
+// already selected. This resolves a real `Alt+ArrowRight` `KeyEventLike` through a real `Keymap`,
+// bound in the exact order `GanttShell#registerCoreCommands` binds it, and checks both arms.
+describe('Alt+ArrowRight overload — column move vs. Gantt-wide pan fallback (D-S5-26)', () => {
+  function altArrowRight(): KeyEventLike {
+    return {
+      key: 'ArrowRight',
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      metaKey: false,
+      isComposing: false,
+      target: null,
+      stopPropagation: vi.fn(),
+    };
+  }
+
+  function bindAltArrowRightLikeGanttShell(
+    ports: ReturnType<typeof fakePorts>,
+    ctx: CommandContext<unknown>,
+  ): Keymap<unknown> {
+    const registry = new CommandRegistry<unknown>(() => ctx);
+    registerCoreCommands(registry, ports);
+    const keymap = new Keymap<unknown>(registry, () => ctx);
+    // Registration order matters here (D-S5-7: newest-first) — this mirrors gantt-shell.ts's own
+    // `bind('Alt+ArrowRight', 'freegantt.panRight')` followed by
+    // `bind('Alt+ArrowRight', 'freegantt.moveColumnRight')`.
+    keymap.register({ chord: 'Alt+ArrowRight', command: 'freegantt.panRight' });
+    keymap.register({ chord: 'Alt+ArrowRight', command: 'freegantt.moveColumnRight' });
+    return keymap;
+  }
+
+  it('fires the column arm when a header cell has focus', () => {
+    const ports = fakePorts();
+    const { ctx } = makeHeaderCommandContext('cost');
+    const keymap = bindAltArrowRightLikeGanttShell(ports, ctx);
+
+    const handled = keymap.resolve(altArrowRight());
+
+    expect(handled).toBe(true);
+    expect(ports.moveColumnStep).toHaveBeenCalledWith('cost', 1);
+    expect(ports.panRight).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the Gantt-wide pan fallback when no header cell has focus', () => {
+    const ports = fakePorts();
+    const ctx = {
+      dataset: {} as CommandContext<unknown>['dataset'],
+      gantt: {},
+    } as CommandContext<unknown>;
+    const keymap = bindAltArrowRightLikeGanttShell(ports, ctx);
+
+    const handled = keymap.resolve(altArrowRight());
+
+    expect(handled).toBe(true);
+    expect(ports.panRight).toHaveBeenCalledOnce();
+    expect(ports.moveColumnStep).not.toHaveBeenCalled();
+  });
+
+  it('a focused header cell whose column is not movable still falls through to pan', () => {
+    const ports = fakePorts();
+    ports.isColumnMovable.mockReturnValue(false);
+    const { ctx } = makeHeaderCommandContext('cost');
+    const keymap = bindAltArrowRightLikeGanttShell(ports, ctx);
+
+    const handled = keymap.resolve(altArrowRight());
+
+    expect(handled).toBe(true);
+    expect(ports.panRight).toHaveBeenCalledOnce();
+    expect(ports.moveColumnStep).not.toHaveBeenCalled();
+  });
+});
+
+function makeHeaderCommandContext(field: string): {
+  registry: CommandRegistry<unknown>;
+  ctx: CommandContext<unknown>;
+} {
+  const ctx = {
+    dataset: {} as CommandContext<unknown>['dataset'],
+    gantt: {},
+    target: { kind: 'header' as const, field, entryIds: [], segmentIds: [] },
+  } as CommandContext<unknown>;
+  return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
+}
