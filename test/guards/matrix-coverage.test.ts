@@ -1,13 +1,14 @@
 // docs/04-hooks-and-ci.md §4 promises this file: "closes the loop plans/04 §4 opens (an invariant
 // without a job is a TODO, tracked in the table itself). The table stops being prose and becomes a
 // checked artifact." Parses docs/01-invariant-guard-matrix.md's I1-I14 table and asserts every row
-// names a CI job that exists (either running today in ci.yml, or explicitly planned in docs/04 §5's
-// pipeline diagram for a later slice) and that no row's status cell is blank (#43).
+// names a gate check that runs today (CI is one job running the whole gate — docs/04 §5), or one
+// docs/04 §5's pipeline diagram plans for a later slice, and that no row's status is blank (#43).
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readCheckList } from '../../scripts/verify-full.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -15,14 +16,14 @@ const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf
 interface Row {
   id: string;
   mechanismCell: string;
-  ciJobCell: string;
+  gateCheckCell: string;
   statusCell: string;
 }
 
 /** Table rows for §1 (`| I1 | ... |`) and §2 (`| Rule prose | ... |`, no numbered id column — the
  * `#` cell is folded into the rule-name cell there). Both are 5-column-with-a-stray-pipe-hazard
  * tables (I12's Mechanism cell has an unescaped `|` in a regex literal), so both parse the same way:
- * CI job and Status are always the trailing two cells, whatever the earlier cells' prose contains. */
+ * Gate check and Status are always the trailing two cells, whatever the earlier cells' prose contains. */
 function parseRows(lines: string[]): Row[] {
   return lines.map((line) => {
     const cells = line
@@ -31,9 +32,9 @@ function parseRows(lines: string[]): Row[] {
       .filter((_, i, arr) => i > 0 && i < arr.length - 1); // drop the empty leading/trailing split
     const id = cells[0]!;
     const mechanismCell = cells[cells.length - 3] ?? '';
-    const ciJobCell = cells[cells.length - 2] ?? '';
+    const gateCheckCell = cells[cells.length - 2] ?? '';
     const statusCell = cells[cells.length - 1] ?? '';
-    return { id, mechanismCell, ciJobCell, statusCell };
+    return { id, mechanismCell, gateCheckCell, statusCell };
   });
 }
 
@@ -68,26 +69,27 @@ function freegantRuleMentionsInCell(cell: string): { rule: string; plannedNearby
   }));
 }
 
-/** Job names `pnpm <script>` lines in ci.yml actually run today. */
-function jobsRunByCi(workflow: string): Set<string> {
-  const names = [...workflow.matchAll(/^\s*-\s*run:\s*pnpm\s+(?:run\s+)?([\w:-]+)/gm)].map((m) => m[1]!);
-  return new Set(names);
+/** Every check the gate runs today. CI is one job running one command (docs/04 §5), so the list
+ * lives in `package.json` — the same list `pre-push` and an agent run. Reading it from there, and
+ * not from the workflow, is what keeps this table checked against what actually runs. */
+function checksRunByGate(): Set<string> {
+  const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
+  return new Set(readCheckList(pkg));
 }
 
-/** Jobs docs/04-hooks-and-ci.md §5's pipeline diagram names for a later slice — not in ci.yml yet
- * because their subject doesn't exist yet (matrix status `PLANNED (Sn)`), not because they were
+/** Checks docs/04-hooks-and-ci.md §5's pipeline diagram names for a later slice — not in the gate
+ * yet because their subject doesn't exist yet (matrix status `PLANNED (Sn)`), not because they were
  * forgotten. Sourced from the mermaid diagram's own node labels, not invented here. */
-const FUTURE_PLANNED_JOBS = new Set(['api-report', 'size-limit', 'e2e', 'axe', 'perf']);
+const FUTURE_PLANNED_CHECKS = new Set(['axe', 'perf']);
 
-function jobNamesInCell(cell: string): string[] {
+function checkNamesInCell(cell: string): string[] {
   return [...cell.matchAll(/`([\w:-]+)`/g)].map((m) => m[1]!);
 }
 
-describe('the invariant guard matrix maps every row to a real job (#43)', () => {
+describe('the invariant guard matrix maps every row to a real check (#43)', () => {
   const matrix = read('docs/01-invariant-guard-matrix.md');
-  const workflow = read('.github/workflows/ci.yml');
   const rows = parseInvariantRows(matrix);
-  const knownJobs = new Set([...jobsRunByCi(workflow), ...FUTURE_PLANNED_JOBS]);
+  const knownChecks = new Set([...checksRunByGate(), ...FUTURE_PLANNED_CHECKS]);
 
   it('finds exactly 14 rows (I1-I14) — guards the parser itself against a doc rewrite', () => {
     expect(rows.map((r) => r.id)).toEqual(Array.from({ length: 14 }, (_, i) => `I${i + 1}`));
@@ -97,20 +99,21 @@ describe('the invariant guard matrix maps every row to a real job (#43)', () => 
     expect(row.statusCell.length).toBeGreaterThan(0);
   });
 
-  it.each(rows.map((r) => [r.id, r] as const))('%s names at least one CI job', (_id, row) => {
-    expect(jobNamesInCell(row.ciJobCell).length).toBeGreaterThan(0);
+  it.each(rows.map((r) => [r.id, r] as const))('%s names at least one gate check', (_id, row) => {
+    expect(checkNamesInCell(row.gateCheckCell).length).toBeGreaterThan(0);
   });
 
-  it.each(rows.flatMap((r) => jobNamesInCell(r.ciJobCell).map((job) => [`${r.id}: ${job}`, job] as const)))(
-    '%s exists in ci.yml or is a documented future job',
-    (_label, job) => {
-      expect(knownJobs.has(job)).toBe(true);
-    },
-  );
+  it.each(
+    rows.flatMap((r) =>
+      checkNamesInCell(r.gateCheckCell).map((check) => [`${r.id}: ${check}`, check] as const),
+    ),
+  )('%s is a check the gate runs, or a documented future one', (_label, check) => {
+    expect(knownChecks.has(check)).toBe(true);
+  });
 });
 
 // D-S1.11-11 (plans/s1.11-close-the-gate/README.md, #43's other half): the coverage above only ever
-// read the CI-job column. Thirteen `freegantt/*` rules named in the Mechanism column had no file in
+// read the gate-check column. Thirteen `freegantt/*` rules named in the Mechanism column had no file in
 // eslint/rules/ at S1.11's baseline, seven of them on rows claiming `AUTO` — enforced today. This
 // closes that: every `freegantt/*` rule on an `AUTO`/`AUTO-PARTIAL` row must be a registered rule;
 // `PLANNED (Sn)` rows are exempt (that status *is* "not enforced yet, and here is when").
