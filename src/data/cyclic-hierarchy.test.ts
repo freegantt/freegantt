@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import type { EntryStore } from './entry-store.js';
 import { ParentCycleError } from '../model/index.js';
+import type { Field } from '../model/index.js';
 
 const STEP_BUDGET = 500;
 
@@ -112,5 +113,42 @@ describe('an authored parentId that loops never hangs the parent check (P2-2)', 
     boundTreeReads(state.entries);
 
     expect(() => state.entries.update('a', { parentId: 'a' })).toThrow(ParentCycleError);
+  });
+});
+
+describe('read("parentId") and a compute Field disagree with no plugin installed (#299)', () => {
+  /** `ctx.read` inside a `compute` Field is the by-key door a pure test can reach: it answers the
+   *  raw stored field, never the checked hierarchy index `entry.read('parentId')` goes through. */
+  const probeField: Field = { key: 'probeParentId', compute: (_entry, ctx) => ctx.read('parentId') };
+
+  it('a dangling parentId: entry.read refuses it, the compute Field still sees what was authored', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A', parentId: 'ghost' }],
+      fields: [probeField],
+    });
+
+    // Core's checked hierarchy index finds no Entry named "ghost" and refuses the answer.
+    expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
+    // `ctx.read('parentId')` never checks the index. It reads the raw stored field, and the
+    // authored value is still there.
+    expect(state.entries.get('a')?.read('probeParentId')).toBe('ghost');
+  });
+
+  it('a two-row cycle: the row that closes the loop loses its answer, the compute Field keeps it', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A', parentId: 'b' },
+        { id: 'b', name: 'B', parentId: 'a' },
+      ],
+      fields: [probeField],
+    });
+
+    // The chain walks from "a": "b" is where core detects the loop and drops the link, so "b" reads
+    // as a root through the checked door.
+    expect(state.entries.get('b')?.read('parentId')).toBeUndefined();
+    // The stored field never moved. `ctx.read('parentId')` still answers what "b" was authored with.
+    expect(state.entries.get('b')?.read('probeParentId')).toBe('a');
   });
 });

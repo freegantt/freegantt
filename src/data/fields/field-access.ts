@@ -210,6 +210,12 @@ export function measureEntryDuration(
 export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
   return {
     timeZone: access.timeZone,
+    // What value does `entry` hold under `key`, for `parentId` — the stored field, read straight off
+    // the row through `readFieldByKey`, never the hierarchy source.
+    //
+    // `entry.read('parentId')` (`data/live-entry.ts`) answers a different question for the same key:
+    // it follows the tree, not the stored field. The two doors disagree today, on purpose or not —
+    // #299 is open on which one `read` should be.
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined {
       return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
     },
