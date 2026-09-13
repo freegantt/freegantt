@@ -43,8 +43,6 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
 /** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
  *  allocates nothing (I5). */
 const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
-/** No supplier wired — the shape `#extraFor` reads when a shell hands over no Entry map at all. */
-const NO_ENTRIES: ReadonlyMap<EntryId, StoredEntry> = Object.freeze(new Map<EntryId, StoredEntry>());
 /** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
 const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
 
@@ -88,8 +86,13 @@ export interface GesturePipelineDeps {
    *
    *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
    *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
-   *  `datasetRevision`, which rises once per committed change. */
-  committedEntriesById?(): ReadonlyMap<EntryId, StoredEntry>;
+   *  `datasetRevision`, which rises once per committed change.
+   *
+   *  Required, not optional (#273): `#measuredFrom` reads it to fingerprint the rows a held draft was
+   *  built from, whether or not an `extraEditsFor` hook is installed. Left optional, a deps bag that
+   *  forgot to wire it would make that guard silently no-op — a test double that skips it is a test
+   *  that stops proving the guard exists. */
+  committedEntriesById(): ReadonlyMap<EntryId, StoredEntry>;
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
@@ -156,6 +159,13 @@ export class GesturePipeline {
    *  `session()` refuses to arm a new gesture while this is defined (the arm lock). Paint uses the
    *  same value as `pendingItemIds` in the one `applyGestureState` write. */
   #heldItemIds: readonly ItemId[] | undefined;
+  /** Part 3 (#273): the stored row each id in the held `proposal.paints` was measured from,
+   *  snapshotted the moment the hold begins. `#settle` compares this against the current
+   *  `committedEntriesById()` before it writes — object identity, not a value compare, because
+   *  `entry-store.ts` replaces a row's whole object on every committed field write to it (ADR 0017),
+   *  so an unrelated field's write already hands back a new object. `undefined` for an id the store
+   *  held nothing for at hold time — the same value a removal leaves behind. */
+  #heldMeasuredFrom: ReadonlyMap<EntryId, StoredEntry | undefined> | undefined;
   /** S3.8, D-S3-15: content-x of the live pointer, coalesced with the preview on the same rAF. */
   #scheduledCursorX: number | undefined;
 
@@ -414,6 +424,15 @@ export class GesturePipeline {
         this.#reportRefusal(refusal);
         return false;
       }
+      const measuredFrom = this.#heldMeasuredFrom;
+      if (measuredFrom && this.#rowsChangedSince(measuredFrom)) {
+        // Part 3 (#273): the settle is honest, but the rows the draft was measured from are not the
+        // rows in the store any more. Writing now would silently overwrite whatever changed them —
+        // last writer wins, with no conflict and no report. Refuse instead.
+        this.#reportGestureDropped(refusal, 'data-changed');
+        this.#releaseHold();
+        return false;
+      }
       try {
         return finish();
       } catch (error) {
@@ -474,6 +493,7 @@ export class GesturePipeline {
   ): Promise<boolean> {
     this.#heldItemIds = itemIds;
     this.#scheduledProposal = proposal;
+    this.#heldMeasuredFrom = this.#measuredFrom(proposal);
     this.#previewFrame.flush();
     return result.then(
       (allowed) => allowed,
@@ -481,9 +501,33 @@ export class GesturePipeline {
     );
   }
 
+  /** Part 3 (#273): the stored row behind each id `proposal.paints` names, at the moment the hold
+   *  begins — `paints`, not `writes`, because a parent bar's drag measures its delta off the
+   *  parent's own envelope, which lives only in `paints` (ADR 0013); a child that moved under it
+   *  during the hold makes that delta wrong too. */
+  #measuredFrom(proposal: GestureProposal): ReadonlyMap<EntryId, StoredEntry | undefined> {
+    const committed = this.#deps.committedEntriesById();
+    const measuredFrom = new Map<EntryId, StoredEntry | undefined>();
+    for (const id of proposal.paints.keys()) measuredFrom.set(id, committed.get(id));
+    return measuredFrom;
+  }
+
+  /** True once any row `measuredFrom` names is no longer the same object the store holds — a
+   *  replacement (ADR 0017: every committed field write replaces the row) or a removal
+   *  (`committed.get(id)` now `undefined`). Object identity, not a value compare: cheap, and exact —
+   *  a row that did not change is never replaced, so no false positive can reach this. */
+  #rowsChangedSince(measuredFrom: ReadonlyMap<EntryId, StoredEntry | undefined>): boolean {
+    const committed = this.#deps.committedEntriesById();
+    for (const [id, row] of measuredFrom) {
+      if (committed.get(id) !== row) return true;
+    }
+    return false;
+  }
+
   #releaseHold(): void {
     this.#heldItemIds = undefined;
     this.#scheduledProposal = undefined;
+    this.#heldMeasuredFrom = undefined;
     this.#previewFrame.flush();
   }
 
@@ -557,7 +601,7 @@ export class GesturePipeline {
   #extraFor(draft: ProposedEdits): ProposedEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
-    const entries = this.#deps.committedEntriesById?.() ?? NO_ENTRIES;
+    const entries = this.#deps.committedEntriesById();
     const raw = extraEditsFor({
       entries,
       proposed: draft,

@@ -91,6 +91,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     // wants a parent bar's drag overrides this with the descendants below it.
     entriesMovedBy: (entry) => [entry],
     commitEntryEdits: () => true,
+    // Part 3 (#273): required, not optional — a test that cares about the staleness guard overrides
+    // this with a real, mutable roster (see `storedMap`/`storedRow` above); everyone else gets an
+    // empty one, which measures every drafted id against `undefined` and never trips the guard.
+    committedEntriesById: () => storedMap(),
     emit: (name, payload) => {
       emitted.push([name, payload]);
       return true;
@@ -769,6 +773,80 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       await expect(commitPromise).rejects.toThrow('boom');
       expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+    });
+
+    // #273: the draft is a snapshot, but the row it was measured from is not — a commit landing
+    // during the hold must not let pointerup-era instants overwrite it silently.
+    it('a row replaced during the hold refuses the settle instead of overwriting it (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const roster = new Map([[entryId('a'), storedRow('a', 100, 200)]]);
+      const commitEntryEdits = vi.fn(() => true);
+      const afterEmitted: string[] = [];
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => {
+          if (name === 'beforeEntryMove') return veto;
+          afterEmitted.push(name);
+          return true;
+        }) as GesturePipelineDeps['emit'],
+        committedEntriesById: () => roster,
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      // The store replaces the whole row object on every committed write (ADR 0017) — a new object
+      // is what a real commit hands back, so the fixture mints one instead of mutating the old row.
+      roster.set(entryId('a'), storedRow('a', 500, 600));
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(false);
+      expect(commitEntryEdits).not.toHaveBeenCalled();
+      expect(afterEmitted).toEqual([]);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-cancelled',
+        severity: 'warning',
+        entryId: entryId('a'),
+      });
+    });
+
+    // The negative case: this is what proves the guard names its own rows, not the whole Dataset —
+    // a `datasetRevision` compare would refuse this commit too, and that is the design this test
+    // rules out.
+    it('an unrelated row replaced during the hold does not refuse the settle (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const roster = new Map([
+        [entryId('a'), storedRow('a', 100, 200)],
+        [entryId('z'), storedRow('z', 300, 400)],
+      ]);
+      const commitEntryEdits = vi.fn(() => true);
+      const afterEmitted: string[] = [];
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => {
+          if (name === 'beforeEntryMove') return veto;
+          afterEmitted.push(name);
+          return true;
+        }) as GesturePipelineDeps['emit'],
+        committedEntriesById: () => roster,
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      roster.set(entryId('z'), storedRow('z', 700, 800));
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(true);
+      expect(commitEntryEdits).toHaveBeenCalledTimes(1);
+      expect(afterEmitted).toEqual(['entryMove']);
     });
 
     it('[S3-A4] session().preview() calls the injected extraEditsFor and previews its extra as a ghost', async () => {
