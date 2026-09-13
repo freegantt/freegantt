@@ -84,8 +84,10 @@ export type BuiltInErrorCode =
  *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
  *  the `(string & {})` tail is the same shape a `FieldKey` already uses.
  *
- *  A code that names a thrown `FreeGanttError` matches that class's own `code`, so a consumer that
- *  already switches on `error.code` reads the report the same way. */
+ *  Two of these codes also name a thrown `FreeGanttError` — `'mutation-cancelled'` and
+ *  `'unreadable-value'` — and each one matches that class's own `code`. This match is a convention
+ *  the two files keep by hand. Nothing checks it (#259), because `model/errors.ts` writes its codes
+ *  as literals in `super(…)` calls. Read the class before you assume a third code matches. */
 export type ErrorCode = BuiltInErrorCode | (string & {});
 
 /** The one call a `before*` handler makes to say **why** it refuses (#210).

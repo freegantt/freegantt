@@ -19,6 +19,14 @@ import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
 import type { TimeSpan, TimeUnit } from './time.js';
 
+// `code` is a plain `string`, and it stays one. `api/index.ts` exports this class, so a consumer can
+// construct or subclass one with a code of their own. Every code the library throws is a literal in a
+// `super(…)` call below, and each class's doc names it. Nothing checks that literal, so a typo
+// compiles (#259). Keep the doc line and the `super(…)` literal in step by hand.
+//
+// One thrown code lives outside this file: `layout/viewport/viewport.ts` throws this base class
+// directly with `'viewport-already-bound'`. No class here names it, and this file's list is one
+// code short because of it (#259).
 export class FreeGanttError extends Error {
   readonly code: string;
 
