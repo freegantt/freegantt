@@ -81,3 +81,31 @@ test('a flex column shares the leftover room instead of forcing overflow (#139)'
   // together fill the pane exactly rather than overflowing it.
   expect(widths).toEqual([100, 120]);
 });
+
+// #325: `barLabels` defaults to `'fitBar'` (frame-settings.ts), so a bar narrower than its own
+// label flips `data-label` to `'outside'` and the label paints past the bar's right edge
+// (`.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100% }`, styles.ts).
+// That label is still a descendant of the bar, so a harness rule clipping the bar
+// (`overflow: hidden`, restated at nine sites) clipped this label away too — the element stayed in
+// the DOM the whole time, with correct text and correct `getBoundingClientRect()` geometry, so
+// `toBeVisible()` never caught it. `elementFromPoint` is the query that consults the paint tree
+// instead of the layout tree, matching e2e/harness.spec.ts's own regression test for the same class
+// of bug: it asks what is actually painted at the label's own box, not just where the box sits.
+test('a bar label too wide for its bar paints outside the bar, not clipped away (#325)', async ({ page }) => {
+  await page.goto('/grid-scroll.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const outsideLabels = page.locator('#gantt .fg-bar[data-label="outside"] .fg-bar-label');
+  expect(await outsideLabels.count()).toBeGreaterThan(0);
+
+  const isPaintedAtItsOwnBox = () =>
+    outsideLabels.first().evaluate((label) => {
+      const rect = label.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const atPoint = document.elementFromPoint(cx, cy);
+      return atPoint !== null && label.contains(atPoint);
+    });
+
+  await expect.poll(isPaintedAtItsOwnBox).toBe(true);
+});
