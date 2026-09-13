@@ -14,6 +14,7 @@
 import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  FreeGanttError,
   UnknownFieldError,
   ReservedFieldKeyError,
   DuplicateFieldKeyError,
@@ -97,6 +98,26 @@ export function editableOf(field: Field): FieldEditable {
 function toStoredEditable(field: Field): Field {
   if (typeof field.editable !== 'boolean') return field;
   return { ...field, editable: field.editable ? 'anywhere' : 'never' };
+}
+
+/** Where `target` sits in `resolved`, or a thrown `FreeGanttError` when it is nowhere in the array
+ *  (#260). A silent `-1` write turns `resolved[resolved.indexOf(target)] = …` into `resolved["-1"] =
+ *  …` — a new property, not an element — and desyncs `#resolved` from `#byKey` with no throw and no
+ *  type error. Pulled out of `#mergeCoreFieldOverride` so the guard runs against a plain array in a
+ *  test, not only through the class's own private state. */
+export function requireResolvedIndex(
+  resolved: readonly ResolvedField[],
+  target: ResolvedField,
+  key: string,
+): number {
+  const index = resolved.indexOf(target);
+  if (index === -1) {
+    throw new FreeGanttError(
+      'field-registry-resolved-key-missing',
+      `FieldRegistry: core Field "${key}" is declared but missing from the resolved list. This is an internal error; report it.`,
+    );
+  }
+  return index;
 }
 
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable'] as const;
@@ -209,8 +230,9 @@ export class FieldRegistry {
       ...core,
       ...(field.editable !== undefined ? { editable: field.editable } : {}),
     });
+    const coreIndex = requireResolvedIndex(this.#resolved, core, key);
     this.#byKey.set(key, merged);
-    this.#resolved[this.#resolved.indexOf(core)] = merged;
+    this.#resolved[coreIndex] = merged;
     this.#consumerOverriddenCoreKeys.add(key);
   }
 
