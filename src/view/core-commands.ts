@@ -44,12 +44,13 @@ export interface CoreCommandPorts {
   moveColumnStep(key: FieldKey, direction: 1 | -1): void;
 }
 
-/** D-S5-6: the twenty-one commands every consumer already has as a public method or default
- *  keybinding, named under the `freegantt.*` namespace. Registered before any plugin, so a plugin
- *  can override any of them (D-S5-7). Mechanical extraction from `GanttShell`'s old
- *  `#registerCoreCommands`/`#registerNavigationCommands` — ids, labels, and `when` clauses are
- *  unchanged; default keybindings still bind in `GanttShell` itself (a separate concern from the
- *  catalog). */
+/** D-S5-6: every command a consumer already has as a public method or default keybinding, named
+ *  under the `freegantt.*` namespace. No bare count here — one went stale by six (#259) — the set
+ *  this function registers is `BuiltInCommandId` in full, and `api/command.test.ts` asserts that
+ *  equality both ways. Registered before any plugin, so a plugin can override any of them (D-S5-7).
+ *  Mechanical extraction from `GanttShell`'s old `#registerCoreCommands`/`#registerNavigationCommands`
+ *  — ids, labels, and `when` clauses are unchanged; default keybindings still bind in `GanttShell`
+ *  itself (a separate concern from the catalog). */
 export function registerCoreCommands(
   registry: { register(command: Command<unknown>): void },
   ports: CoreCommandPorts,
