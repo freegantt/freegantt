@@ -136,9 +136,12 @@
         --demo-phase-215: oklch(0.42 0.1 215);
         --demo-weekend-bg: #e3ded0;
       }
-      /* Both selectors, one token set: the page (so the toolbar's own `--fg-*` reads Paper too) and
-         the Gantt itself, which re-declares the light set on `.fg-container` and would otherwise
-         override what it inherits from the page. */
+      /* Both selectors, one token set, still: choosing Paper leaves `gantt.theme` on `'light'`
+         (`planner-toolbar.ts`), so the container still carries `data-fg-theme='light'`, and that
+         attribute rule declares colour directly on `#gantt` — not by inheritance, so #271's fix (the
+         container no longer re-declaring colour on `.fg-container`) does not reach this case. Only a
+         same-target rule wins over another same-target rule, and only by specificity, so `#gantt`
+         needs its own copy here at a higher specificity than the attribute rule's. */
       body.theme-paper,
       body.theme-paper #gantt {
         --fg-pane-bg: #faf7ee;

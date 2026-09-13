@@ -30,9 +30,14 @@
 // measured about 4.1:1 against its own fill, under the 4.5:1 floor; the softening moved into the fill
 // itself, which is a colour the theme controls, instead of an opacity that erodes the label with it.
 //
-// `theme: 'light'|'dark'` writes `data-fg-theme` on the Gantt's own container, not on `:root`: a
-// `:root:not([data-fg-theme])` media query never sees that pin, so Light would leave the Gantt on the
-// system dark tokens. The two attribute rules select on the attribute alone, so a consumer can write
+// Why do the default colour tokens live on `:root` and not on `.fg-container`? A declaration on
+// an element always beats an inherited one, whatever the ancestor's specificity — so if the
+// container carried its own copy of the light set, that copy would win over any `data-fg-theme`
+// pin an ancestor wrote, and the pin could never reach in. The container stays silent on colour so
+// inheritance can carry a pin down to it. Resolution is the same order inside the container and
+// outside it: the nearest `data-fg-theme` pin (on the element or an ancestor), else
+// `prefers-color-scheme` (`:root:not([data-fg-theme])`), else the light default on `:root`. The two
+// attribute rules below select on the attribute alone, so a consumer can write
 // `data-fg-theme="dark"` on a wrapper around its own chrome — a toolbar above the Gantt — and
 // `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
 // its own container.
@@ -164,7 +169,6 @@ const BASE_STYLESHEET = `
 ${LIGHT_COLOR_TOKENS}
 }
 .fg-container {
-${LIGHT_COLOR_TOKENS}
   --fg-indent-width: 12px;
   --fg-lane-gap: ${DEFAULT_LANE_GAP_PX}px;
   /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
@@ -176,7 +180,7 @@ ${LIGHT_COLOR_TOKENS}
   --fg-bar-opacity: 1;
 }
 @media (prefers-color-scheme: dark) {
-  .fg-container:not([data-fg-theme]) {
+  :root:not([data-fg-theme]) {
 ${DARK_COLOR_TOKENS}
   }
 }
