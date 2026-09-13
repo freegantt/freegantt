@@ -155,6 +155,23 @@ export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
   };
 }
 
+/**
+ * The same access, with the memo stood down — for a pass that reads rows no revision holds.
+ *
+ * `ComputedFieldCache` is keyed by entry, Field key and **dataset revision** (D-S4-10), and a
+ * revision describes the committed rows only. A post-edit row and the Rollup's effective child are
+ * both hypothetical (`model/field.ts`), so neither belongs in that cache: reading it answers with
+ * the committed value for a staged row, and writing it hands the committed revision a value no
+ * commit produced. `DatasetState`'s own memo callback stands down while a transaction is open for
+ * the same reason; this covers the commit path, which runs after the body closes and before the
+ * revision moves (#300).
+ */
+export function readingHypotheticalRows(access: FieldAccess): FieldAccess {
+  // `undefined` from the callback is already how `DatasetState` stands the memo down, and
+  // `readField` already reads it as "compute it" — so this needs no second shape.
+  return { ...access, memo: () => undefined };
+}
+
 /** The same access, reading the tree a pass holds instead of the one the store holds. */
 export function readingChildrenFrom(
   access: FieldAccess,

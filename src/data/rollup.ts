@@ -25,6 +25,7 @@ import {
   entryAfterEdit,
   readField,
   readingChildrenFrom,
+  readingHypotheticalRows,
   writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
@@ -267,12 +268,20 @@ export function rollUpFields(
   committed: ReadonlyMap<EntryId, StoredEntry>,
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
-  access: FieldAccess,
+  storeAccess: FieldAccess,
   mintSegmentId: () => SegmentId,
   tree: RollUpTree,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
+
+  // Every row this pass reads is hypothetical — an effective parent, or a child carrying the value
+  // this bottom-up walk just gave it — so the memo stands down for the whole pass (#300). It is not
+  // enough that `DatasetState` stands it down while a transaction is open: the commit path runs
+  // after the body closes and before the revision moves, so the memo would be live at the *old*
+  // revision, and an Aggregator reading a child's `compute` Field would fold a stale value into a
+  // parent's stored cell.
+  const access = readingHypotheticalRows(storeAccess);
 
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
