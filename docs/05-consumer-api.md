@@ -108,31 +108,37 @@ no JS reads it.
 
 | Token | Default (light) | Default (dark) | Read by |
 |---|---|---|---|
-| `--fg-pane-bg` | `#FFFFFF` | `#171B22` | `.fg-grid-pane`, `.fg-timeline-pane` background |
-| `--fg-splitter-color` | `#DDE2E9` | `#262C36` | `.fg-splitter` background |
-| `--fg-header-bg` | `#EEF1F5` | `#12161C` | `.fg-header` background |
-| `--fg-header-band-bg` | `#FFFFFF` | `#171B22` | `.fg-band` background |
-| `--fg-header-text` | `#16191F` | `#E8ECF3` | `.fg-band`/`.fg-tick` text |
-| `--fg-header-subtext` | `#646D7B` | `#818C9E` | `.fg-tick` text, `.fg-tooltip-dates` |
-| `--fg-header-divider-color` | `#DDE2E9` | `#262C36` | rule between header bands, `.fg-menu-separator` |
+| `--fg-pane-bg` | `#FFFFFF` | `#1B1D22` | `.fg-grid-pane`, `.fg-timeline-pane` background |
+| `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
+| `--fg-header-bg` | `#FFFFFF` | `#1B1D22` | `.fg-header` background |
+| `--fg-header-band-bg` | `#F4F2EC` | `#22252B` | `.fg-band` background |
+| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text |
+| `--fg-header-subtext` | `#5E5A53` | `#A8A49B` | `.fg-tick` text, `.fg-tooltip-dates` |
+| `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands, `.fg-menu-separator` |
+| `--fg-tick-line-color` | `rgb(26 24 21 / 0.09)` | `rgb(236 234 227 / 0.1)` | `.fg-tick-line` — the timeline pane's own vertical grid line, one per finest-band tick boundary |
+| `--fg-tick-line-strong-color` | `rgb(26 24 21 / 0.16)` | `rgb(236 234 227 / 0.17)` | `.fg-tick-line[data-major]` — the coarser header band's own boundary line |
 | `--fg-row-even-bg` | `transparent` | `transparent` | `.fg-row[data-parity='even']`, `.fg-row-band[data-parity='even']` |
-| `--fg-row-odd-bg` | `rgba(22, 25, 31, 0.03)` | `rgba(232, 236, 243, 0.04)` | `.fg-row[data-parity='odd']`, `.fg-row-band[data-parity='odd']` |
-| `--fg-row-label-color` | `#16191F` | `#E8ECF3` | `.fg-row-label`/`.fg-row-cell` text; `.fg-cell-editor-control` text |
-| `--fg-row-unmatched-label-color` | `#79828F` | `#6D7889` | `.fg-row-label`/`.fg-row-cell` text on a row `data-matched='false'` marks — a grouping row whose value no `groupBy` bucket claimed |
-| `--fg-bar-fill` | `oklch(0.52 0.14 248)` | `oklch(0.74 0.13 248)` | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-opacity` | `0.9` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
-| `--fg-bar-label-color` | `#FFFFFF` | `#10131A` | `.fg-bar` text |
+| `--fg-row-odd-bg` | `#FAF8F2` | `#20232A` | `.fg-row[data-parity='odd']`, `.fg-row-band[data-parity='odd']` |
+| `--fg-row-hover-bg` | `#F6F3EB` | `#262A32` | `.fg-row[data-state~='hovered']`, `.fg-row-band[data-state~='hovered']` |
+| `--fg-row-selected-bg` | `#EEF3FB` | `#1F2A3F` | `.fg-row[data-state~="selected"]`/`.fg-row-band[data-state~="selected"]` background — a flat token, not a mix of `--fg-selection-color` |
+| `--fg-row-label-color` | `#1A1815` | `#ECEAE3` | `.fg-row-label`/`.fg-row-cell` text; `.fg-cell-editor-control` text |
+| `--fg-row-unmatched-label-color` | `#726D65` | `#9B978E` | `.fg-row-label`/`.fg-row-cell` text on a row `data-matched='false'` marks — a grouping row whose value no `groupBy` bucket claimed |
+| `--fg-bar-fill` | `oklch(0.49 0.13 248)` | `oklch(0.74 0.13 248)` | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
+| `--fg-bar-opacity` | `1` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
+| `--fg-bar-label-color` | `#FFFFFF` | `#16181D` | `.fg-bar` text |
 | `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` (J1) |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
-| `--fg-date-line-color` | `#CF3B26` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
+| `--fg-date-line-color` | `#C93820` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
+| `--fg-date-line-label-color` | `#FFFFFF` | `#1B1D22` | `.fg-date-line-label`, `.fg-cursor-line-label` text — the chip's own ink, paired with `--fg-date-line-color` as its fill |
+| `--fg-hover-ring` | `rgb(26 24 21 / 0.22)` | `rgb(236 234 227 / 0.26)` | `.fg-bar[data-state~="hovered"]` — the hovered bar's inset hairline |
+| `--fg-drag-shadow` | `0 2px 0 rgb(26 24 21 / 0.18)` | `0 2px 0 rgb(0 0 0 / 0.45)` | `.fg-bar[data-state~="dragging"]` — the dragged bar's lift |
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
-| `--fg-row-selected-bg` | `#EEF3FB` | `#1F2A3F` | `.fg-row[data-state~="selected"]`/`.fg-row-band[data-state~="selected"]` background — a flat token, not a mix of `--fg-selection-color` |
 | `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
 | `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
 | `--fg-focus-ring` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
-| `--fg-popup-bg` | `#FFFFFF` | `#1B2029` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
-| `--fg-popup-border` | `#DDE2E9` | `#313846` | `.fg-popup` border |
-| `--fg-popup-shadow` | `0 1px 2px rgba(22, 25, 31, 0.1), 0 8px 24px -6px rgba(22, 25, 31, 0.22)` | `0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.6)` | `.fg-popup` box-shadow; also the grabbed header cell's lifted shadow during a column reorder drag |
+| `--fg-popup-bg` | `#FFFFFF` | `#22252B` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
+| `--fg-popup-border` | `#E6E2D9` | `#3A3F48` | `.fg-popup` border |
+| `--fg-popup-shadow` | `0 8px 24px rgb(26 24 21 / 0.12)` | `0 10px 28px rgb(0 0 0 / 0.5)` | `.fg-popup` box-shadow; also the grabbed header cell's lifted shadow during a column reorder drag |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere — only
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
@@ -165,15 +171,19 @@ and inherits down unchanged, so one setting still covers every bar.
 
 ### Internal tokens — not a consumer's to set
 
-Three `--fg-*` properties are the library's own plumbing: it writes them inline, per element, to
-carry geometry a stylesheet rule alone cannot express. Setting one by hand fights the next frame,
-which overwrites it.
+Four `--fg-*` properties are the library's own plumbing, not a consumer's to set. Three are geometry
+the library writes inline, per element, because a stylesheet rule alone cannot express it — setting
+one by hand fights the next frame, which overwrites it. The fourth, `--fg-bar-fill-painted`, is
+different: the base stylesheet computes it on `.fg-bar` itself, from `--fg-bar-fill` and
+`--fg-bar-opacity` (see the note above) — a consumer sets the two colour tokens that feed it, never
+this one.
 
 | Token | Written by | Read by |
 |---|---|---|
 | `--fg-col-flex` | `render/dom/index.ts`, per column header/cell — the column's own flex-grow, or removed for a fixed column | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` `flex` |
 | `--fg-grid-content-width` | `pane-layout.ts`, on the grid pane — how far a fixed-width column set overflows the pane (#126) | `.fg-grid-spacer`, `.fg-rows-clip` `width` (falls back to `100%`) |
 | `--fg-row-depth` | `render/dom/index.ts`, per row — the row's hierarchy depth | `.fg-row-label` indent calc (with `--fg-indent-width`, above) |
+| `--fg-bar-fill-painted` | `.fg-bar`'s own CSS rule (`styles.ts`), computed from `--fg-bar-fill` and `--fg-bar-opacity` | `.fg-bar` background |
 
 ### Retired and renamed tokens
 
