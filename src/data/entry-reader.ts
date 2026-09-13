@@ -477,12 +477,29 @@ export function moveEntryTo(entry: StoredEntry, start: Instant): EntryEdit {
  * cascade that turns a dateless Entry spanning always mints a real id, because this path always
  * reaches the store. The preview path below never carries one; see `reconcileEnvelope`.
  */
+/** `reconcileEnvelope`'s own refusals (D-S5-44, #143) — every error it throws when a cascade's
+ *  envelope does not check out. Nothing else this loop's `try` can see belongs here: a bare `Error`
+ *  or an `UnknownFieldError` from an extender's own bug is not one of these, and must keep crashing
+ *  loud rather than paint a silent ghost (#258 — Option 1, widening this to catch any refusal, was
+ *  considered and rejected for exactly that reason). */
+function isEnvelopeRefusal(error: unknown): boolean {
+  return error instanceof SegmentsOutOfSyncError || error instanceof InvertedSpanError;
+}
+
 /** The one loop both `reconcileExtenderEdits` and `reconcileExtenderEditsForPreview` run — they
- *  differ in exactly two ways, never one: whether a `SegmentsOutOfSyncError` reaches the caller
- *  (`refuse`), and whether a real `mintSegmentId` is ever in hand (the preview path never carries
- *  one — see `reconcileExtenderEditsForPreview`'s own docblock). `refuse: 'throw'` never reaches the
- *  `catch` branch's drop, because `reconcileEnvelope` still throws synchronously and this rethrows it
- *  unchanged. */
+ *  differ in exactly two ways, never one: whether an envelope refusal (`isEnvelopeRefusal`) reaches
+ *  the caller (`refuse`), and whether a real `mintSegmentId` is ever in hand (the preview path never
+ *  carries one — see `reconcileExtenderEditsForPreview`'s own docblock). `refuse: 'throw'` never
+ *  reaches the `catch` branch's drop, because `reconcileEnvelope` still throws synchronously and this
+ *  rethrows it unchanged.
+ *
+ *  #258: this loop used to drop only `SegmentsOutOfSyncError`, which was every refusal
+ *  `reconcileEnvelope` raised the day this loop was written. `#143` later gave it a second one,
+ *  `InvertedSpanError`, and nothing here was told — a cascade proposing an inverted span rethrew
+ *  straight out of the pipeline's rAF callback, which has no `catch` of its own, breaking the drag
+ *  mid-gesture with the user's own edit lost alongside it. `isEnvelopeRefusal` names every refusal
+ *  this function's own `reconcileEnvelope` call can raise, in one place, so the next one it gains
+ *  cannot go stale here the same way. */
 function reconcileExtenderEditsWith(
   entries: ReadonlyMap<EntryId, StoredEntry>,
   edits: ProposedEdits,
@@ -498,7 +515,7 @@ function reconcileExtenderEditsWith(
       if (next !== edit) changed = true;
       reconciled.set(id, next);
     } catch (error) {
-      if (refuse === 'throw' || !(error instanceof SegmentsOutOfSyncError)) throw error;
+      if (refuse === 'throw' || !isEnvelopeRefusal(error)) throw error;
       changed = true;
     }
   }
