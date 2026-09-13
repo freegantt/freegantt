@@ -64,8 +64,10 @@ interface EditOrigin {
 export const EXTENDER_OPERATION = 'edit extender';
 
 /** `start`/`end`/`segments` are the only keys `reconcileEnvelope` ever adds on its own (D-S5-44) — an
- *  edit that never touches one of these three carries no envelope ambiguity at all. */
-const ENVELOPE_KEYS = ['start', 'end', 'segments'] as const;
+ *  edit that never touches one of these three carries no envelope ambiguity at all. Exported so
+ *  `build-commit-change-set.ts` can build its own Set from this same array, instead of writing the
+ *  triad down a second time (#260). */
+export const ENVELOPE_KEYS = ['start', 'end', 'segments'] as const;
 
 /** Which of `start`/`end`/`segments` a caller's own loose edit named, before `reconcileEnvelope` pairs
  *  or back-derives the rest (#232). This is the fact the I4 guard and the commit's own envelope
