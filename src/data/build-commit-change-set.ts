@@ -24,7 +24,7 @@ import {
   buildDerivedValuesDroppedReport,
   raiseErrorOn,
 } from './error-reporting.js';
-import { reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
+import { ENVELOPE_KEYS, reconcileEnvelope, reconcileExtenderEdits } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import { buildEffectiveEntries } from './entry-tree.js';
 import {
@@ -93,9 +93,10 @@ export function diffEdits(
   return updated;
 }
 
-/** `start`/`end`/`segments` are the only keys `reconcileEnvelope` ever derives (D-S5-44) — the same
- *  triad `entry-reader.ts`'s own `authoredEnvelopeKeysOf` names. */
-const ENVELOPE_FIELDS: ReadonlySet<string> = Object.freeze(new Set(['start', 'end', 'segments']));
+/** `start`/`end`/`segments` are the only keys `reconcileEnvelope` ever derives (D-S5-44) — as a Set,
+ *  built from the one array `entry-reader.ts` exports (`ENVELOPE_KEYS`), so the triad has one home
+ *  even though this pass wants Set operations and `authoredEnvelopeKeysOf` wants a `for...of` (#260). */
+const ENVELOPE_FIELDS: ReadonlySet<string> = Object.freeze(new Set<string>(ENVELOPE_KEYS));
 const NO_ENVELOPE_KEYS: ReadonlySet<string> = Object.freeze(new Set<string>());
 
 /** The label a `SegmentsOutOfSyncError` names when a body author's and an extender author's own
