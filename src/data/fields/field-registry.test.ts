@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { editableOf, FieldRegistry } from './field-registry.js';
+import { editableOf, FieldRegistry, requireResolvedIndex } from './field-registry.js';
 import { createFieldAccess, readFieldByKey, writeField } from './field-access.js';
 import type { Field, FieldType } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
   DuplicateFieldKeyError,
+  FreeGanttError,
   IllegalCoreFieldOverrideError,
   ReservedFieldKeyError,
   segmentId,
@@ -296,5 +297,19 @@ describe('percent — the shipped Field type', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'progress', type: 'percent' }] });
     expect(registry.get('progress')?.rollUp).toBeUndefined();
     expect(registry.rollingUpFields().some((field) => field.key === 'progress')).toBe(false);
+  });
+});
+
+describe('requireResolvedIndex — a -1 index refuses to write, instead of landing on "-1" (#260)', () => {
+  const start: Field = { key: 'start' };
+  const end: Field = { key: 'end' };
+
+  it('answers the position of a Field that is in the array', () => {
+    expect(requireResolvedIndex([start, end], end, 'end')).toBe(1);
+  });
+
+  it('throws FreeGanttError, naming the key, when the Field is not in the array', () => {
+    expect(() => requireResolvedIndex([start], end, 'end')).toThrow(FreeGanttError);
+    expect(() => requireResolvedIndex([start], end, 'end')).toThrow(/"end"/);
   });
 });
