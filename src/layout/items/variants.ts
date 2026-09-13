@@ -20,8 +20,8 @@ import type {
   PluginId,
 } from '../../model/index.js';
 import type { BarRenderer } from '../renderer.js';
-import type { DrawnVariant, Item, ItemProducer, VariantItems } from './item.js';
-import { wholeEntryItem, entryItem, fixedWidthItem } from './item.js';
+import type { DrawnVariant, ItemProducer, VariantItems } from './item.js';
+import { fixedWidthItem, ignoreSegments, followSegments } from './item.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
@@ -88,7 +88,8 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
    *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
   when?: VariantRule<TProps>;
-  /** What shape it draws. Default: one whole-entry Item (`wholeEntryItem`). */
+  /** What shape it draws. Default: one Item per Segment, or one over the whole span when the Entry
+   *  has none (`followSegments`, ADR 0023). */
   items?: ItemProducer;
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
    *  decorates the library's own bar and keeps its label (`J34`). */
@@ -284,15 +285,14 @@ const DIAMOND_CSS = `
 `;
 
 /** `bar()` — core's plain look, and the shipped floor every unclaimed row wears. Carries
- *  `produceLeafItems`, which is the reason it is worth exporting: an author who hand-writes
- *  `{ name, when }` gets the whole-entry default instead, and their Segments silently vanish
- *  (ADR 0022 §1).
+ *  `followSegments` — the same producer a variant with no `items` key gets from the registry.
+ *  `bar()`'s own shape and the default shape always agree (ADR 0023).
  *
  *  Carries no `css`. Its look **is** `.fg-bar`, the element class every look wears — diamonds
  *  included — so that stays structure, in the always-shipped base sheet, not one look's own rule.
  *
  *  Every key on `overrides` wins, `name` included: `bar({ name: 'phase', when: myRule })` keeps
- *  `produceLeafItems` and answers for the rows `myRule` claims instead of every row nothing else
+ *  `followSegments` and answers for the rows `myRule` claims instead of every row nothing else
  *  claimed.
  *
  *  **`bar` and `summary` keep their plain names (F13).** `import { bar } from 'freegantt'` reads as
@@ -303,18 +303,24 @@ const DIAMOND_CSS = `
 export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: LEAF_VARIANT_NAME,
-    items: produceLeafItems,
+    items: followSegments,
     ...overrides,
   };
 }
 
 /** `summary()` — core's rail for a row with children. Claims on structure
  *  (`entry.hasChildren`), never on a stored word (ADR 0013's own rule, narrowed by ADR 0022, not
- *  spent): a consumer who wants the rail on a different rule passes their own `when`. */
+ *  spent): a consumer who wants the rail on a different rule passes their own `when`.
+ *
+ *  **States its own `items` explicitly.** A parent may author several Segments of its own
+ *  (`src/data/rollup.ts` refused to reject one at ingest). The data-following default is not
+ *  automatically safe here. `ignoreSegments` is the shape a summary needs whatever its Segments
+ *  do — one rail. It says so, rather than trusting the registry's default to agree (ADR 0023). */
 export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
+    items: ignoreSegments,
     paint: () => SUMMARY_BAR,
     css: SUMMARY_CSS,
     ...overrides,
@@ -332,13 +338,19 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  `when: (entry) => entry.duration()?.value === 0`.
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
- *  factory's own default rule, or a consumer's own `{ items: fixedWidthItem(...) }`. */
+ *  factory's own default rule, or a consumer's own `{ items: fixedWidthItem(...) }`.
+ *
+ *  **What you can do to it: no resize.** A resize commits a real duration, and this factory's own
+ *  `when` stops matching the moment `start !== end` — the row would turn into a bar under the
+ *  pointer that dragged it. `diamond({ can: { resize: true } })` opts back in for an author who
+ *  wants that. */
 export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: DIAMOND_VARIANT_NAME,
     when: (entry: Entry) => entry.start !== undefined && entry.start === entry.end,
     items: fixedWidthItem(DIAMOND_WIDTH_PX),
     paint: () => DIAMOND_BAR,
+    can: { resize: false },
     css: DIAMOND_CSS,
     ...overrides,
   };
@@ -346,29 +358,14 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
 
 /** Core's two, seeded from the factories every consumer reads (ADR 0022 §1). They register
  *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
- *  overrides. `bar()` carries no `when`, so it answers for every row and the floor is total.
+ *  overrides. `bar()` carries no `when`, so it answers for every row no rule claims, and the floor
+ *  is total.
  *
- *  **`bar()` registers before `summary()`, and the order inside this list is load-bearing** (`J37`).
- *  The walk is newest-first, and a variant with no `when` claims every row. Put `bar()` second and
- *  it answers before `summary()` ever runs, so no row is ever a summary. The floor registers first,
- *  and every rule — core's own `summary()` included — stands on it. */
+ *  **The order inside this list decides nothing** (`J60` supersedes `J37`). `statesAClaim` sorts
+ *  every claiming rule ahead of every last resort, so `summary()` is asked before `bar()` whichever
+ *  way round they are written here. It reads floor-first anyway, because that is the order the walk
+ *  ends up in and a reader should not have to derive it from a comparator. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([bar(), summary()]);
-
-/** A leaf draws one Item per Segment, or one over its whole span when it has none. The only shipped
- *  producer that is not the whole-entry default.
- *
- *  Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
- *  start/end case). Same load-bearing cast as `wholeEntryItem` — `produceItemsForRow` never calls
- *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2). */
-function produceLeafItems(entry: Entry, variant: string): readonly Item[] {
-  const segments = entry.segments;
-  if (segments !== undefined && segments.length > 0) {
-    return segments.map((segment, index) =>
-      entryItem(entry, index, segment.start, segment.end, variant, segment.id),
-    );
-  }
-  return [wholeEntryItem(entry, variant)];
-}
 
 /** `when`, as one predicate. A field match reads each named key off the row and compares it with
  *  that Field's own `equals`. The Field is looked up per read rather than at registration: a Gantt
@@ -462,7 +459,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       variant,
       resolved: {
         name: variant.name,
-        items: variant.items ?? ((entry, name) => [wholeEntryItem(entry, name)]),
+        items: variant.items ?? followSegments,
         paint: variant.paint,
         can: variant.can,
         css: variant.css,

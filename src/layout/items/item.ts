@@ -50,8 +50,9 @@ export interface Item {
   readonly box?: FixedBarBox;
 }
 
-/** What shape one variant draws. `EntryVariant.items` takes one; omit it and the variant draws one
- *  whole-entry Item, which is the line both shipped examples used to hand-write (ADR 0018).
+/** What shape one variant draws. `EntryVariant.items` takes one. Omit it and the variant draws
+ *  `followSegments`, the registry's own default (ADR 0023). One Item per Segment, or one Item
+ *  over the whole span when the Entry has none.
  *
  *  **Takes the variant's own name.** A variant states its name once (ADR 0018), so the registry
  *  passes its own registration's name here instead of a producer inventing or hardcoding one — the
@@ -66,7 +67,7 @@ export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
 export interface DrawnVariant {
   /** The `data-variant` a consumer styles, and the word a command's `when` reads. */
   readonly name: string;
-  /** What it draws — its own `items`, or the whole-entry default bound at registration. */
+  /** What it draws — its own `items`, or `followSegments` bound at registration (ADR 0023). */
   readonly items: ItemProducer;
 }
 
@@ -138,8 +139,49 @@ export function wholeEntryItem(entry: Entry, variant: string): Item {
  *  (F16). One frozen `FixedBarBox` is safe to share across every Item this producer ever returns,
  *  because `box` is `readonly` on `Item` and nothing downstream writes through it (`Item.box`'s own
  *  doc). Freezing it turns an accidental write into a loud failure in strict mode, rather than a
- *  silent one that would otherwise reach every other Item sharing the same box. */
+ *  silent one that would otherwise reach every other Item sharing the same box.
+ *
+ *  **A narrow `px` starves the move zone, when resize is on.** Each resize handle is 8px wide and
+ *  sits 4px outside its own edge, so the two handles eat `px` from both sides. A `px` under about
+ *  9 leaves no gap between them for a pointer to grab the bar itself and move it — the handles meet
+ *  or overlap first. This only matters when the variant's `can.resize` allows a resize at all;
+ *  `diamond()`'s own default turns resize off, so its 13px box is unaffected. */
 export function fixedWidthItem(px: number, anchor: BarAnchor = 'center'): ItemProducer {
   const box: FixedBarBox = Object.freeze({ widthPx: px, anchor });
   return (entry, variant) => [{ ...wholeEntryItem(entry, variant), box }];
+}
+
+/** Always one Item, over the entry's whole span — the shape `summary()` states explicitly. A
+ *  summary is one rail whatever the Segments do (ADR 0023). The one-line wrapper that turns
+ *  `wholeEntryItem`'s single Item into an `ItemProducer`'s array, so `items: ignoreSegments` reads
+ *  as a plain assignment, the same shape `followSegments` takes.
+ *
+ *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, items: ignoreSegments }]` —
+ *  "the summary variant's items: always one item." */
+export function ignoreSegments(entry: Entry, variant: string): readonly Item[] {
+  return [wholeEntryItem(entry, variant)];
+}
+
+/** One Item per Segment, or one Item over the whole span when the Entry has none. The shape a
+ *  variant with no `items` key gets (ADR 0023).
+ *
+ *  Follows the data: a row authored in pieces draws its pieces, gaps included. A plain start/end
+ *  row draws the one Item it has always drawn.
+ *
+ *  Call: `variants: [{ name: 'phase', when: myRule, items: followSegments }]` — "the phase
+ *  variant's items: one item per segment." Naming it explicitly only matters when a variant also
+ *  overrides something else on `bar()`'s own object, and still wants to keep this shape. The
+ *  registry already gives this shape to a variant that names no `items` at all.
+ *
+ *  Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
+ *  start/end case). Same load-bearing cast as `wholeEntryItem` — `produceItemsForRow` never calls
+ *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2). */
+export function followSegments(entry: Entry, variant: string): readonly Item[] {
+  const segments = entry.segments;
+  if (segments !== undefined && segments.length > 0) {
+    return segments.map((segment, index) =>
+      entryItem(entry, index, segment.start, segment.end, variant, segment.id),
+    );
+  }
+  return ignoreSegments(entry, variant);
 }

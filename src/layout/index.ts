@@ -13,7 +13,7 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
-export { wholeEntryItem, fixedWidthItem } from './items/item.js';
+export { wholeEntryItem, fixedWidthItem, ignoreSegments, followSegments } from './items/item.js';
 export type { BarAnchor, FixedBarBox, Item, ItemProducer, VariantItems } from './items/item.js';
 export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 export type {

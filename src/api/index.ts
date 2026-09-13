@@ -369,6 +369,10 @@ export { wholeEntryItem } from '../layout/index.js';
 // ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
 // the shipped case. `barSpan` honours the Item's `box` ahead of the span-and-floor path.
 export { fixedWidthItem } from '../layout/index.js';
+// ADR 0023: the symmetric pair behind `EntryVariant.items` — a variant with no `items` key gets
+// `followSegments`, and `summary()` states `ignoreSegments` explicitly. An author who wants either
+// shape on a variant of their own names it the same way: `items: ignoreSegments`.
+export { ignoreSegments, followSegments } from '../layout/index.js';
 // ADR 0022 §1: core's three shipped looks, as factories over `EntryVariant` rather than private
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it

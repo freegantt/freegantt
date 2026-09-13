@@ -1,5 +1,5 @@
 ---
-status: accepted — opened 2026-09-12, out of the same defect and grill as [ADR 0021](0021-the-consumers-stylesheet-wins.md). Amended 2026-09-12: a variant owns its CSS (Q6, [#286](https://github.com/Pawel-IT/FreeGantt/issues/286)), and an Item states its own painted box and anchor (Q7). Accepted 2026-09-12.
+status: accepted — opened 2026-09-12, out of the same defect and grill as [ADR 0021](0021-the-consumers-stylesheet-wins.md). Amended 2026-09-12: a variant owns its CSS (Q6, [#286](https://github.com/Pawel-IT/FreeGantt/issues/286)), and an Item states its own painted box and anchor (Q7). Accepted 2026-09-12. Narrowed by [ADR 0023](0023-a-variant-with-no-items-follows-the-data.md), 2026-09-12: §1's registry default and `bar()`'s role in it were wrong — see §1's own note.
 decided: core exports its looks as `EntryVariant` factories — `bar()`, `summary()`, `diamond()` — each taking `Partial<EntryVariant>`; an Item may state a painted box the time scale does not size (`box: { widthPx, anchor }`); `FrameBar.span` is `'exact' | 'minimum' | 'fixed'`; `ItemProducer` receives the registration's name; `gantt.variantFor(entry)` is the one door and answers `ResolvedVariant`; `variantOf` retires; core's `parent` variant is renamed `summary`; a variant owns the CSS behind its class (`EntryVariant.css`), which closes [#286](https://github.com/Pawel-IT/FreeGantt/issues/286). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md)'s "core does not ship a diamond" is narrowed — see *What ADR 0013 keeps*.
 open: nothing this record answers. A fourth shipped look (a chevron, a flag, a hatched buffer, a hollow bar) is deliberately not here.
 ---
@@ -52,7 +52,9 @@ Each takes `Partial<EntryVariant>` and returns a complete one. Every key overrid
 
 `bar()`, `summary()`, `diamond()`. Those three, because core already holds two of them and the third has a broken consumer behind it. A chevron, a flag, a hatched buffer and a hollow bar are all plausible and none has evidence. **One shape ships because one shape had evidence**, and the next addition brings its own.
 
-`bar()` is not empty, which is the reason it is worth exporting. It carries `produceLeafItems` — one Item per Segment, or one over the whole span when there are none. An author who hand-writes `{ name: 'x', when: myRule }` silently gets `wholeEntryItem` instead, one bar over the whole span, and their Segments disappear. `bar()` is what prevents that.
+`bar()` is not empty, which is the reason it is worth exporting. It carries `produceLeafItems` — one Item per Segment, or one over the whole span when there are none.
+
+**Narrowed by [ADR 0023](0023-a-variant-with-no-items-follows-the-data.md).** The sentence this replaces said an author who hand-writes `{ name: 'x', when: myRule }` silently got the whole-entry default instead, Segments included, and that `bar()` was what prevented it. That was true of the registry built here, and it was the wrong registry to build: [#292](https://github.com/Pawel-IT/FreeGantt/issues/292) found the same silent loss on *every* variant that names no `items`, `bar()` included by name alone, not by mechanism. ADR 0023 makes `produceLeafItems` (renamed `followSegments`) the registry's own default, so every variant that omits `items` gets it — not only `bar()`.
 
 `diamond()` paints `.fg-bar-diamond`. `data-variant` and the class tell one story — the same agreement that makes `parent` become `summary` below. ADR 0013 retired a class of this name; it returns because nothing wears it until a rule claims it, and core's own sheet no longer holds it.
 
@@ -177,7 +179,7 @@ ADR 0013's body stays as it was written (`docs/adr/README.md:5`). Its `status:` 
 ## Consequences
 
 - `bar()` and `summary()` add no JavaScript bytes — core seeds both already. `diamond()` is the only new JS payload. `summary()`'s CSS leaves the always-shipped base sheet and rides the seeded factory; `diamond()`'s CSS never enters the base sheet. Measure `pnpm size-limit` after both moves, then set `.size-limit.json` from the number.
-- `CORE_VARIANTS` keeps seeding from the same factories, so `J37`'s load-bearing order holds: the floor registers first, or no row is ever a summary. `diamond()` is **not** in `CORE_VARIANTS`.
+- `CORE_VARIANTS` keeps seeding from the same factories. The order inside that list decides nothing — `J60` sorts every claiming rule ahead of every last resort, which superseded `J37` — so `summary()` answers a row with children whichever way round the two are seeded. `diamond()` is **not** in `CORE_VARIANTS`.
 - `harness/planner.ts` loses `checkpointDiamond` and roughly 30 lines of `planner.html` CSS, and gains `diamond({ when: { checkpoint: true } })`. `fixtures/planner-dataset.ts` stops faking a one-day span and stores `end === start`, which is the honest data and what `barSpan` already centres correctly. **Anything that has to stay behind is an unclosed gap, and gets reported rather than kept.**
 - An e2e that covers a variant's paint asserts a computed property or a measured box. `toBeVisible()` is what let this ship (`e2e/planner.spec.ts:67`).
 - `plans/02` §4.1 gains the shipped set; `docs/05-consumer-api.md` gains `variantFor`, `data-span="fixed"`, and `EntryVariant.css`.

@@ -32,7 +32,8 @@ export function bufferKind() {
         // What can you do to it? Move and select stay at the library default; resize refuses — a
         // buffer's length comes from the schedule around it, not a drag.
         can: { resize: false },
-        // What shape does it draw? One whole-entry Item — the default, so nothing is written here.
+        // What shape does it draw? Buffer rows carry no Segments, so the default already draws one
+        // whole-entry Item (`followSegments`, ADR 0023) — nothing is written here.
       });
 
       // What actions does it offer? One menu item, scoped to the rows this variant claimed — every

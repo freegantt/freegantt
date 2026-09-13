@@ -3,8 +3,8 @@
 // different question: what the row pass draws once a variant has been resolved.
 
 import { describe, expect, it } from 'vitest';
-import { itemId } from '../../model/index.js';
-import type { Entry, Field, FieldKey } from '../../model/index.js';
+import { itemId, segmentId } from '../../model/index.js';
+import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import { bar, createVariantRegistry, diamond, summary } from './variants.js';
 import type { DoubleVariantClaim, UnknownFieldMatch } from './variants.js';
@@ -322,18 +322,18 @@ describe('what a variant answers about itself', () => {
 });
 
 describe('core’s three shipped factories (ADR 0022 §1)', () => {
-  it('bar() answers the floor: no `when`, and `produceLeafItems` as its `items`', () => {
+  it('bar() answers the floor: no `when`, and `followSegments` as its `items`', () => {
     const variant = bar();
     expect(variant.name).toBe('leaf');
     expect(variant.when).toBeUndefined();
     expect(variant.css).toBeUndefined();
-    // produceLeafItems, not the whole-entry default: a Segment on the row draws its own Item.
+    // followSegments, not the whole-entry default: a Segment on the row draws its own Item.
     const [item] = variant.items!(spanEntry('t1'), 'leaf');
     expect(item!.variant).toBe('leaf');
     expect(item!.segmentId).toBeDefined();
   });
 
-  it('summary() claims a row by structure, and carries the rail’s own class and css', () => {
+  it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Item explicitly (ADR 0023)', () => {
     const variant = summary();
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -343,6 +343,20 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect((variant.when as (entry: Entry) => boolean)(child!)).toBe(false);
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-summary': true } });
     expect(variant.css).toContain('.fg-bar-summary');
+
+    // A parent may author several Segments of its own (`src/data/rollup.ts`). `summary()` still
+    // draws one rail, because it states `ignoreSegments` explicitly rather than trusting the
+    // registry's data-following default to agree.
+    const busyParent = entryDouble({
+      id: 'p2',
+      start: 0,
+      end: 10,
+      segments: [
+        { id: segmentId('p2-0'), start: 0 as Instant, end: 4 as Instant },
+        { id: segmentId('p2-1'), start: 6 as Instant, end: 10 as Instant },
+      ],
+    });
+    expect(variant.items!(busyParent, 'summary')).toHaveLength(1);
   });
 
   it('diamond() claims a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
@@ -354,6 +368,14 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(item!.box).toEqual({ widthPx: 13, anchor: 'center' });
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-diamond': true } });
     expect(variant.css).toContain('.fg-bar-diamond');
+  });
+
+  it('diamond() ships not resizable, so a resize cannot turn its point into a bar; an override opts back in', () => {
+    const shipped = diamond();
+    expect(shipped.can).toEqual({ resize: false });
+
+    const opted = diamond({ can: { resize: true } });
+    expect(opted.can).toEqual({ resize: true });
   });
 
   it('diamond() is not seeded into a fresh registry — no row wears it until installed', () => {
@@ -373,7 +395,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.css).toContain('.fg-bar-diamond');
   });
 
-  it('a fresh registry still resolves `summary()` for a row with children (CORE_VARIANTS order)', () => {
+  it('a fresh registry still resolves `summary()` for a row with children', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -381,6 +403,18 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     ]);
     expect(registry.resolveFor(parent!).name).toBe('summary');
     expect(registry.resolveFor(child!).name).toBe('leaf');
+  });
+
+  it('a when-less consumer variant still loses to `summary()` on a row it claims, even at a higher rank (J60)', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    registry.addConsumerVariant({ name: 'floor', paint: () => ({}) });
+    const [parent, child] = entryDoubles([
+      { id: 'p', start: 0, end: 10 },
+      { id: 'c', start: 0, end: 10, parentId: 'p' },
+    ]);
+    expect(registry.resolveFor(parent!).name).toBe('summary');
+    // The child has no claiming rule, so the newest when-less registration wins there instead.
+    expect(registry.resolveFor(child!).name).toBe('floor');
   });
 
   it('installedCss() answers every installed variant’s css, core first, and skips one with none', () => {

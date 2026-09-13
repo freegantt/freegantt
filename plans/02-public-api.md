@@ -666,12 +666,13 @@ consumer's rules outrank every plugin's.
 subscription of its own has nothing left to return. `return () => {};` was ceremony, and to a
 newcomer it read as if something were missing.
 
-**`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, which is
-what almost every `EntryVariant.items` producer wants, and what a Variant that omits `items`
-already draws.
- It is pure and DOM-free, and it is the one owner of the
-`${entryId}:${segmentIndex}` Item id convention — the one thing a plugin could otherwise get wrong
-from documentation alone.
+**`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, and it
+is pure and DOM-free, and it is the one owner of the `${entryId}:${segmentIndex}` Item id
+convention — the one thing a plugin could otherwise get wrong from documentation alone.
+`ignoreSegments(entry, variant)` wraps it into an `ItemProducer`, and `followSegments(entry,
+variant)` is its pair: one Item per Segment, or one over the whole span when the Entry has none.
+A Variant that omits `items` draws `followSegments` (ADR 0023) — `summary()` states
+`ignoreSegments` explicitly, because a summary is one rail whatever its Segments do.
 
 One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that
 writes its own stack-and-restore bookkeeping is a bug, not a variation.
