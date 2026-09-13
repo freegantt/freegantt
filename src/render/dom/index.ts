@@ -1318,7 +1318,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // selected-row band, and weekend shading, and under every bar — the design's own paint
       // order (`bands` -> `shades` -> `gridLines` -> bars, #<J2 fix>).
       tickLines = attachTickLines(timelineHost, barLayer);
-      dateLines = attachDateLines(timelineHost, headerLayer);
+      dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
     },
