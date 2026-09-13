@@ -6,7 +6,7 @@ import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { produceItemsForRow } from './produce-items.js';
-import { wholeEntryItem } from './item.js';
+import { followSegments, wholeEntryItem } from './item.js';
 import { createVariantRegistry } from './variants.js';
 
 describe('wholeEntryItem (review P3)', () => {
@@ -27,13 +27,22 @@ describe('wholeEntryItem (review P3)', () => {
     expect(wholeEntryItem(t1, 'leaf').segmentId).toBeUndefined();
   });
 
-  it('is what a variant with no `items` of its own draws (ADR 0018)', () => {
-    const t1 = spanEntry('t1');
+  it('is what a variant with no `items` of its own draws when the Entry has no Segments (ADR 0023)', () => {
+    const t1 = spanEntry('t1', { segments: [] });
     const own = createVariantRegistry({ fieldFor: () => undefined });
     own.addPluginVariant({ name: 'buffer', when: () => true });
     expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
       wholeEntryItem(t1, 'buffer'),
     ]);
+  });
+
+  it('draws one Item per Segment for a variant with no `items` of its own (ADR 0023)', () => {
+    const t1 = spanEntry('t1');
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addPluginVariant({ name: 'buffer', when: () => true });
+    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual(
+      followSegments(t1, 'buffer'),
+    );
   });
 });
 

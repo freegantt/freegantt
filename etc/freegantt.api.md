@@ -949,6 +949,9 @@ export interface FixedBarBox {
 export function fixedWidthItem(px: number, anchor?: BarAnchor): ItemProducer;
 
 // @public
+export function followSegments(entry: Entry, variant: string): readonly Item[];
+
+// @public
 export interface FormatContext extends FieldContext {
     // (undocumented)
     readonly locale: Intl.LocalesArgument;
@@ -1334,6 +1337,9 @@ export type HierarchySource<TProps = Record<string, unknown>> = (entry: StoredEn
 
 // @public
 export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: HierarchySource<TProps>) => HierarchySource<TProps>;
+
+// @public
+export function ignoreSegments(entry: Entry, variant: string): readonly Item[];
 
 // @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
