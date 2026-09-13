@@ -777,7 +777,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         const entries = committedEntriesById();
         reconcileExtenderEdits(
           entries,
-          extraEditsFor({ entries, proposed: draft, entryAfterEdits: (id) => entries.get(id) }),
+          extraEditsFor({
+            entries,
+            proposed: draft,
+            entryAfterEdits: (id) => entries.get(entryId(id)),
+          }),
         );
         return true;
       });

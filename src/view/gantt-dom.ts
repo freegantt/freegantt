@@ -39,7 +39,7 @@ import {
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
+import { entryId, entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
 import type { Entry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
@@ -97,11 +97,11 @@ export interface GanttDom {
    *  It asks the layout which Items the entry draws (#185). So an entry whose first Segment is
    *  scrolled off still anchors on a Segment that is on screen. `undefined` when the entry has no
    *  bar in the current frame at all. */
-  barFor(id: EntryId): HTMLElement | undefined;
+  barFor(id: EntryId | string): HTMLElement | undefined;
   /** The rendered grid cell for one entry and one Field. `undefined` when that row is not in the
    *  current frame, or the Gantt shows no column for `field`. It is also the one answer to "is my
    *  editor still anchored?" — a recycled row stops answering for the entry it used to hold. */
-  cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined;
+  cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
   /** The text one grid cell shows right now — the string `field.formatValue` already produced for
    *  this paint. The inline editor seeds itself with it rather than formatting the value a second
    *  time from a `FormatContext` a plugin cannot reach (D-S5-5). */
@@ -198,8 +198,8 @@ export class ContainerDom implements GanttDom {
     return target;
   }
 
-  barFor(id: EntryId): HTMLElement | undefined {
-    for (const item of this.#ports.layout.itemIdsForEntry(id)) {
+  barFor(id: EntryId | string): HTMLElement | undefined {
+    for (const item of this.#ports.layout.itemIdsForEntry(entryId(id))) {
       const bar = this.#ports.container.querySelector<HTMLElement>(
         `.${BAR_CLASS}${attributeIs(ITEM_ID_ATTRIBUTE, item)}`,
       );
@@ -208,7 +208,7 @@ export class ContainerDom implements GanttDom {
     return undefined;
   }
 
-  cellFor(id: EntryId, field: FieldKey): HTMLElement | undefined {
+  cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined {
     const row = `.${ROW_CLASS}${attributeIs(ENTRY_ID_ATTRIBUTE, id)}`;
     const cell = attributeIs(FIELD_ATTRIBUTE, field);
     return this.#ports.container.querySelector<HTMLElement>(`${row} ${cell}`) ?? undefined;

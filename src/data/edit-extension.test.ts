@@ -28,7 +28,11 @@ describe('identityExtender', () => {
     const t1 = entry('t1');
     const proposed = new Map<EntryId, ProposedEdit>([[t1.id, proposedEdit({ name: 'Framing' })]]);
     const entries = new Map([[t1.id, t1]]);
-    const result = identityExtender({ entries, proposed, entryAfterEdits: (id) => entries.get(id) });
+    const result = identityExtender({
+      entries,
+      proposed,
+      entryAfterEdits: (id) => entries.get(entryId(id)),
+    });
     expect(result.size).toBe(0);
   });
 });

@@ -20,7 +20,7 @@ import type {
   SegmentId,
   ProposedEdits,
 } from '../model/index.js';
-import { itemId, spansTime } from '../model/index.js';
+import { entryId, itemId, spansTime } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { buildRefusalReport } from '../data/error-reporting.js';
 import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
@@ -533,7 +533,7 @@ export class GesturePipeline {
     const raw = extraEditsFor({
       entries,
       proposed: draft,
-      entryAfterEdits: (id) => entryAfterEdits(entries, draft, id),
+      entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
     });
     // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
     // allocates nothing (I5). A hook that did write costs one entry per id it named:
