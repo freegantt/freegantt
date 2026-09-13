@@ -91,9 +91,14 @@ class LiveEntry implements Entry {
   }
 
   read<K extends FieldKey>(field: K): FieldValue<Record<string, unknown>, K> | undefined {
-    // One row answers one tree through every door it has (ADR 0017): a Grid column on `parentId`
+    // What is this row's parent, for `parentId` — the tree (ADR 0017): a Grid column on `parentId`
     // must not print a stale id beside live indentation. `update(id, { parentId })` still writes the
     // stored field, and `StoredEntry.parentId` is still what it wrote.
+    //
+    // `ctx.read('parentId')` inside a `compute` Field or an Aggregator (`data/fields/field-access.ts`,
+    // `createComputeContext`) answers a different question for the same key: it reads the stored
+    // field, not the tree. The two doors disagree today, on purpose or not — #299 is open on which
+    // one `read` should be.
     if (field === 'parentId') {
       return this.parent()?.id as FieldValue<Record<string, unknown>, K> | undefined;
     }
