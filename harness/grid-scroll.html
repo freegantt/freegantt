@@ -12,6 +12,7 @@
       .fg-gantt {
         --fg-row-height: 32px;
         --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
         height: 320px;
         border: 1px solid #ccc;
         margin-block-end: 1rem;
@@ -19,14 +20,16 @@
       .fg-tick {
         font-size: 10px;
       }
-      .fg-row,
-      .fg-bar {
+      .fg-row {
         font-size: 11px;
         line-height: var(--fg-row-height);
         padding: 0 6px;
         box-sizing: border-box;
         white-space: nowrap;
         overflow: hidden;
+      }
+      .fg-bar {
+        font-size: 11px;
       }
     </style>
   </head>

@@ -704,6 +704,7 @@ nav.harness-site-nav a[aria-current='page'] {
    `src/view/styles.ts`. */
 #gantt {
   --fg-row-height: 30px;
+  --fg-bar-label-gap: 7px;
 }
 
 /* Typography inside the Gantt stays harness-owned (D-S1.11-8): the library ships structure and
@@ -727,10 +728,6 @@ nav.harness-site-nav a[aria-current='page'] {
 
 .fg-bar {
   font-size: 11.5px;
-  line-height: var(--fg-row-height);
-  padding: 0 7px;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 .fg-date-line-label {
