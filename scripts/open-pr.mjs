@@ -64,8 +64,10 @@ if (existing.status === 0) {
   console.log(`open-pr: this branch already has pull request #${pr.number} — ${pr.url}`);
   console.log(
     pr.isDraft
-      ? `open-pr: it is still a draft, so CI is idle. Run \`gh pr ready ${pr.number}\` when it is meant to merge.`
-      : 'open-pr: it is ready for review, so CI runs on every push to this branch.',
+      ? `open-pr: it is still a draft, so CI is idle. Run \`gh pr ready ${pr.number}\` when it is meant to merge,` +
+          ` then \`pnpm pr-wait ${pr.number}\` to wait for the gate.`
+      : `open-pr: it is ready for review, so CI runs on every push to this branch.` +
+          ` \`pnpm pr-wait ${pr.number}\` waits for the gate and states the result.`,
   );
   process.exit(0);
 }
@@ -93,3 +95,6 @@ console.log(`open-pr: opened as a draft — ${url}`);
 console.log(
   `open-pr: CI stays idle until it is ready. Run \`gh pr ready ${number}\` when it is meant to merge.`,
 );
+// The next question after "ready" is always "did the gate pass". Name the one command that answers
+// it here, where the next reader already is — a wait written on the spot reports green (#354).
+console.log(`open-pr: then \`pnpm pr-wait ${number}\` waits for the gate and states the result in one line.`);

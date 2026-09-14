@@ -258,6 +258,7 @@ Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start
 ```bash
 pnpm open-pr --title "<title>" --body-file <path>   # pushes the branch, then opens a DRAFT
 gh pr ready <n>                                     # the decision to merge — this starts CI
+pnpm pr-wait <n>                                    # waits for the gate, states the result in one line
 ```
 
 The draft is not a formality. It is what the trigger set reads:
