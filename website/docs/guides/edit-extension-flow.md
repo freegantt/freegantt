@@ -23,7 +23,7 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
 | `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, and a per-id lookup for post-body state |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, and the two sets below |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the
@@ -58,6 +58,28 @@ never states `proposedKeys`, and never computes an envelope.
 store, so `diffEdit` cannot produce an update row for it. The cascade still lands: it folds into the
 `added` entity itself, through `addedEntitiesForFold` (`src/data/build-commit-change-set.ts:304-310`).
 The `ChangeSet` publishes the cascaded value on the added entity, and no separate update row.
+
+**Discovering an addition or a removal, not just reading one you already know.** `entries.get(id)` and
+`entryAfterEdits(id)` both answer only when the caller already holds `id`. Neither tells an extender
+*which* ids this transaction added or removed — a same-transaction addition has no entry in the
+committed store to be found by scanning it, and a removal leaves no trace once it lands. `addedEntryIds`
+and `removedEntryIds` on `EditRequest` close that gap (#235):
+
+```ts
+for (const id of request.removedEntryIds) unlinkEverythingTouching(id);
+for (const id of request.addedEntryIds) scheduleFrom(request.entryAfterEdits(id)!);
+```
+
+Read a removed id off `request.entries` — it still holds the pre-transaction row, since removal never
+rewrites that snapshot. Read an added id through `request.entryAfterEdits(id)`, never off
+`request.entries`, since an addition has no pre-transaction row to be in.
+
+Both sets are the transaction's **net effect, not a call log** — computed once, at commit, from the
+final pending-add and pending-remove state, not from a running list of every `add`/`remove` call the
+body made. An Entry the body both adds and removes ends up in neither set, the same way the `ChangeSet`
+publishes no row for it. An Entry the body removes and then re-adds ends up in `addedEntryIds` only,
+with one clean add row — not an update-after-delete. A drag preview frame gets two references to one
+shared empty set, so reading either costs nothing per frame (I5).
 
 ## Flow
 
