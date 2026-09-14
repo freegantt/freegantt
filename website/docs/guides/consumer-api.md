@@ -271,11 +271,11 @@ unsupported — the next layout pass owns the node.
 |---|---|---|
 | `.fg-grid-spacer` | `pane-layout.ts` | Sizes the grid content to overflowing columns. A rule here fights the next frame. |
 | `.fg-rows-clip` | `pane-layout.ts` | Clips windowed grid rows. The reconciler owns overflow here. |
-| `.fg-rows` | `pane-layout.ts` | Host for windowed grid rows. |
+| `.fg-rows` | `pane-layout.ts` | Parent of the windowed grid rows. |
 | `.fg-header-bands` | `render/dom/index.ts` | Clips the band stack so `.fg-header` can stay `overflow: visible` (#225). |
 | `.fg-tick-lines` | `render/dom/tick-lines.ts` | Positioned ancestor for tick-line strokes. |
-| `.fg-row-bands` | `render/dom/index.ts` | Host for `.fg-row-band` copies. |
-| `.fg-bars` | `render/dom/index.ts` | Host for `.fg-bar` nodes. |
+| `.fg-row-bands` | `render/dom/index.ts` | Parent of the `.fg-row-band` copies. |
+| `.fg-bars` | `render/dom/index.ts` | Parent of the `.fg-bar` nodes. |
 | `.fg-content-sizer` | `render/dom/index.ts` | Hidden 1×1 marker for the timeline scroll extent. |
 | `.fg-date-lines` | `render/dom/date-line.ts` | Positioned ancestor for date-line strokes. |
 | `.fg-live-region` | `view/live-region.ts` | Visually hidden polite live region. Not a painted surface. |
