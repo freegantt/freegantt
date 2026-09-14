@@ -64,6 +64,7 @@ The single table a reviewer (human or agent) checks against. Every rule from `pl
 | One `sync(frame)` per animation frame | `freegantt/raf-single-owner` — `requestAnimationFrame` allowed in exactly one file; test asserts N mutations in one tick produce one `sync` | `lint`, `test:dom` | `PLANNED (S2)` |
 | Slice gates (`plans/00` §4) pass before next slice | `scripts/slice-gate.mjs` reads the current slice from `.slice`, runs its acceptance-linked jobs (each id-addressed check escaped and existence-checked first) and prints a checklist. `pnpm gate` is run deliberately, at a slice boundary, so it sits outside `verify` and outside CI | `gate` (local) | `AUTO-PARTIAL` (the "harness shows X" items stay human) |
 | Hot path / structure inline-style split (`01` §3, S1.10) | `freegantt/no-inline-style-outside-geometry` (`02` §3.11) — bans `node.style.<prop> = …` for `prop` outside `{ transform, width, height }`, scoped to `src/render/**` + `src/view/**`; structure moves to `view/styles.ts`'s base stylesheet instead | `lint` | `AUTO` |
+| Published `--fg-*` tokens and `.fg-*` Parts match the sheet (`plans/02` §4, #261, #334) | `test/guards/theming-contract.test.ts` — every sheet token and class is in `docs/05-consumer-api.md`, internal names never leak into a consumer table, and documented token defaults match their real source | `guards` | `AUTO` |
 
 ---
 
