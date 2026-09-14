@@ -15,6 +15,7 @@ import { entryDouble } from '../layout/entry-double.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import type { EntryMove } from './event-bus.js';
 import { reconcileExtenderEdits } from '../data/entry-reader.js';
+import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
  *  paired with `snap: () => 'none'` (the default dep below) this is exactly what
@@ -947,6 +948,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
             entries,
             proposed: draft,
             entryAfterEdits: (id) => entries.get(entryId(id)),
+            addedEntryIds: EMPTY_ENTRY_IDS,
+            removedEntryIds: EMPTY_ENTRY_IDS,
           }),
         );
         return true;

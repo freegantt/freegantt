@@ -18,6 +18,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
+import { EMPTY_ENTRY_IDS } from './edit-extension.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { ErrorBus } from './error-reporting.js';
 import {
@@ -257,6 +258,11 @@ export function buildCommitChangeSet(
   const removedEntities = data.entries.pendingRemoved();
   const added = addedEntities.map((row) => row.entity);
   const removed = removedEntities.map((row) => row.entity);
+  // #235: net effect, not a call log — an Entry this transaction both adds and removes is in
+  // neither set, because `added`/`removed` above already reflect net pending state.
+  const addedEntryIds = added.length === 0 ? EMPTY_ENTRY_IDS : new Set(added.map((entity) => entity.id));
+  const removedEntryIds =
+    removed.length === 0 ? EMPTY_ENTRY_IDS : new Set(removed.map((entity) => entity.id));
 
   // The extender's cascade is reconciled against the state its own edit lands on — committed entries
   // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
@@ -274,6 +280,8 @@ export function buildCommitChangeSet(
     entries: byId,
     proposed,
     entryAfterEdits: (id) => effectiveForExtender.get(entryId(id)),
+    addedEntryIds,
+    removedEntryIds,
   });
   const extenderEdits = reconcileExtenderEdits(effectiveForExtender, extenderReading.stored, () =>
     data.mintSegmentId(),

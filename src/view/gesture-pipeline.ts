@@ -21,6 +21,7 @@ import type {
   ProposedEdits,
 } from '../model/index.js';
 import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.js';
+import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import type { GestureDroppedReason } from '../data/error-reporting.js';
 import { buildGestureDroppedReport, buildRefusalReport } from '../data/error-reporting.js';
@@ -661,6 +662,8 @@ export class GesturePipeline {
         entries,
         proposed: draft,
         entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
+        addedEntryIds: EMPTY_ENTRY_IDS,
+        removedEntryIds: EMPTY_ENTRY_IDS,
       });
       // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
       // allocates nothing (I5). A hook that did write costs one entry per id it named:
