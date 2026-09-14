@@ -966,6 +966,39 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(commitEntryEdits).toHaveBeenCalledTimes(1);
     });
 
+    // #332: an extender bug (not a typed refusal `isEnvelopeRefusal` names) still runs inside the
+    // pipeline's own rAF callback with nothing to catch it. `#extraFor` must recover the same way
+    // `render/dom`'s `callRenderer` recovers a bad renderer — this frame paints with no cascade
+    // ghost, and the failure is reported instead of lost.
+    it('[#332] an extender that throws reports the fault and previews with no ghost, not a crashed frame', async () => {
+      const a = entry('a', 100, 200);
+      const x = entry('x', 300, 400);
+      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => {
+        throw new Error('boom');
+      };
+      const { deps, applied, reported } = withRoster([a, x], {
+        extraEditsFor,
+        committedEntriesById: () => storedMap(storedRow('a', 100, 200), storedRow('x', 300, 400)),
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(a.id, { kind: 'move' })!;
+
+      session.preview(50);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
+      expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the fault
+      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the drag itself still paints
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'extender-preview-failed',
+        severity: 'warning',
+        by: 'plugin',
+      });
+      expect(reported[0]?.cause).toBeInstanceOf(Error);
+    });
+
     it('[S3-A4] no extraEditsFor (identity, P1 default) previews only the caller’s own draft, no ghost', async () => {
       const a = entry('a', 100, 200);
       const { deps, applied } = withRoster([a]);

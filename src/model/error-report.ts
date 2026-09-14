@@ -45,6 +45,10 @@ export type BuiltInErrorCode =
   // A fault core recovered from.
   | 'renderer-failed'
   | 'disposer-failed'
+  // #332: an EditExtender threw while `view/gesture-pipeline.ts`'s `#extraFor` computed a drag
+  // preview. Recovered the same way a bad renderer is (`renderer-failed`): that frame paints with
+  // no cascade ghost, same as no extender installed, and the drag itself carries on.
+  | 'extender-preview-failed'
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
