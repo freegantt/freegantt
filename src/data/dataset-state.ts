@@ -19,6 +19,7 @@ import type {
   Disposer,
   EditExtender,
   EditRequest,
+  EntryEdits,
   ProposedEdits,
   ExtenderWrapper,
   HierarchySource,
@@ -106,6 +107,10 @@ export class DatasetState implements Dataset {
   /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
    *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
+  /** Set while the extension hook's current occupant is running (#323). Read by `runTransaction`;
+   *  written only by `extraEditsFor`/`extraEditsReadingFor` below, around their one call to the
+   *  occupant. */
+  runningExtensionHook = false;
   readonly #entryContext: EntryReadContext;
   readonly fields: FieldRegistry;
   /** `data/`'s own ambient read scope (ADR 0017, J16) — the zone, the registry, the duration
@@ -188,6 +193,20 @@ export class DatasetState implements Dataset {
     return this.#editExtender;
   }
 
+  /** Calls the extension hook's current occupant, with `runningExtensionHook` set for the call's
+   *  own duration (#323) — `runTransaction` refuses a mutation that starts while this is `true`, so
+   *  a plugin that writes through the store instead of returning its edit gets
+   *  `MutationDuringExtensionHookError` rather than a second, unjoined transaction. `extraEditsFor`
+   *  and `extraEditsReadingFor` below are its only two callers. */
+  #callExtender(request: EditRequest): EntryEdits {
+    this.runningExtensionHook = true;
+    try {
+      return this.#editExtender(request);
+    } finally {
+      this.runningExtensionHook = false;
+    }
+  }
+
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and hands back
    *  what it returns. `api/dataset.ts`'s `extraEditsFor(dataset, request)` (the friend function this
    *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
@@ -201,7 +220,7 @@ export class DatasetState implements Dataset {
    *  dataset's own zone and end rule. */
   extraEditsFor(request: EditRequest): ProposedEdits {
     return toEditsReading(
-      this.#editExtender(request),
+      this.#callExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,
@@ -217,7 +236,7 @@ export class DatasetState implements Dataset {
    *  `extraEditsFor` already gives them. */
   extraEditsReadingFor(request: EditRequest): EditsReading {
     return toEditsReading(
-      this.#editExtender(request),
+      this.#callExtender(request),
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,

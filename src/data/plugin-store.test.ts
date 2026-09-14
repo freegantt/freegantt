@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { PluginStores, pluginStoreName } from './plugin-store.js';
 import { fieldRowsOf } from './change-set.js';
-import { entryId } from '../model/index.js';
+import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
 import type {
   ChangeSet,
   DatasetEventMap,
@@ -279,5 +279,28 @@ describe('a plugin-store write during a change handler', () => {
 
     state.entries.update('t1', { name: 'Design review' });
     expect(thrown).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a plugin-store write during the extension hook', () => {
+  it('throws MutationDuringExtensionHookError rather than opening a nested transaction (#323)', () => {
+    const state = new DatasetState({
+      entries: twoEntries,
+      timeZone: 'UTC',
+      editExtender: () => {
+        state.pluginStores.reserve<LockRow>(LOCK).set(entryId('t2'), { locked: true });
+        return new Map();
+      },
+    });
+    const thrown = vi.fn();
+
+    try {
+      state.entries.update('t1', { name: 'Design review' });
+    } catch (error) {
+      thrown(error);
+    }
+
+    expect(thrown).toHaveBeenCalledOnce();
+    expect(thrown.mock.calls[0]?.[0]).toBeInstanceOf(MutationDuringExtensionHookError);
   });
 });
