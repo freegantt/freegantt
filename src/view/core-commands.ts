@@ -5,7 +5,7 @@
 
 import type { EntryId, FieldKey } from '../model/index.js';
 import { MutationCancelledError } from '../model/index.js';
-import type { Command, CommandContext } from '../extensions/commands.js';
+import type { BuiltInCommandId, Command, CommandContext } from '../extensions/commands.js';
 
 /** The shell verbs the core catalog calls — pan, zoom, select, collapse/expand. Undo/redo read
  *  `CommandContext.dataset` directly (D-S5-6 already gives every command that), so they need no
@@ -46,8 +46,9 @@ export interface CoreCommandPorts {
 
 /** D-S5-6: every command a consumer already has as a public method or default keybinding, named
  *  under the `freegantt.*` namespace. No bare count here — one went stale by six (#259) — the set
- *  this function registers is `BuiltInCommandId` in full, and `api/command.test.ts` asserts that
- *  equality both ways. Registered before any plugin, so a plugin can override any of them (D-S5-7).
+ *  this function registers is `BuiltInCommandId` in full. Every `register` below is typed against
+ *  that union, so an id it does not name fails to compile, and `api/command.test.ts` catches the
+ *  other direction (#333). Registered before any plugin, so a plugin can override any of them (D-S5-7).
  *  Mechanical extraction from `GanttShell`'s old `#registerCoreCommands`/`#registerNavigationCommands`
  *  — ids, labels, and `when` clauses are unchanged; default keybindings still bind in `GanttShell`
  *  itself (a separate concern from the catalog). */
@@ -56,7 +57,10 @@ export function registerCoreCommands(
   ports: CoreCommandPorts,
 ): void {
   const asCtx = (ctx: unknown): CommandContext<unknown> => ctx as CommandContext<unknown>;
-  const register = (command: Command<unknown>): void => registry.register(command);
+  /** #333: the registry takes the open `CommandId`, because a plugin registers its own ids through
+   *  the same door. This catalog registers the built-in ones only, so it narrows the id here and a
+   *  typo fails to compile. */
+  const register = (command: Command<unknown> & { id: BuiltInCommandId }): void => registry.register(command);
 
   register({ id: 'freegantt.collapseAll', label: 'Collapse all', run: () => ports.collapseAll() });
   register({ id: 'freegantt.expandAll', label: 'Expand all', run: () => ports.expandAll() });
@@ -248,7 +252,7 @@ export function registerCoreCommands(
   /** One shape for all four column chords: differ only in id/label, which capability gates them
    *  (`resizable` vs `movable`), and which step they run. */
   const registerColumnStepCommand = (
-    id: string,
+    id: BuiltInCommandId,
     label: string,
     capable: (key: FieldKey) => boolean,
     step: (key: FieldKey) => void,

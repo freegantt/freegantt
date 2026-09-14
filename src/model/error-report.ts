@@ -33,11 +33,11 @@ export type ErrorSeverity = 'error' | 'warning' | 'info';
  *  built-in cell editor owns the last eight — its own `REFUSAL_TEXT`/`COMMIT_REFUSAL_TEXT` tables
  *  (`extensions/features/inline-editing.ts`) hold the words the user reads for each one.
  *  `error-code-drift.test.ts`, on the `extensions/` side of the boundary `model/` may not cross,
- *  checks every one of those table keys against this union through a `Record<BuiltInErrorCode,
+ *  checks every one of those table keys against this union through a `Record<BuiltInReportCode,
  *  true>` literal — a code missing there fails to compile, and a code missing here fails that
  *  literal too, so the two tables cannot drift apart in either direction (I11). A `type`, not a
  *  runtime tuple: `model/` carries zero runtime beyond its id/brand helpers (`plans/01` §1). */
-export type BuiltInErrorCode =
+export type BuiltInReportCode =
   // A refusal core observed.
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
@@ -88,11 +88,12 @@ export type BuiltInErrorCode =
  *  mint its own (which `ErrorReport.by`'s `PluginId` case requires). The shipped codes autocomplete;
  *  the `(string & {})` tail is the same shape a `FieldKey` already uses.
  *
- *  Two of these codes also name a thrown `FreeGanttError` — `'mutation-cancelled'` and
- *  `'unreadable-value'` — and each one matches that class's own `code`. This match is a convention
- *  the two files keep by hand. Nothing checks it (#259), because `model/errors.ts` writes its codes
- *  as literals in `super(…)` calls. Read the class before you assume a third code matches. */
-export type ErrorCode = BuiltInErrorCode | (string & {});
+ *  A report code and a thrown code are two vocabularies, not one. This names what a fault *reports*;
+ *  `errors.ts`'s `ThrownCode` names what an exception *carries*. Two codes sit in both —
+ *  `'mutation-cancelled'` and `'unreadable-value'` — because those faults do both. `errors.test.ts`
+ *  holds that overlap to exactly two, so a third one added on either side fails to compile until it
+ *  is named there on purpose (#333; unchecked convention before). */
+export type ReportCode = BuiltInReportCode | (string & {});
 
 /** The one call a `before*` handler makes to say **why** it refuses (#210).
  *
@@ -124,7 +125,7 @@ export interface Refusable {
  *
  *  Named `by` because `origin` is taken (`ChangeOrigin`) and a bare `source` is barred (Field source,
  *  Row source). `PluginId` is a plain `string`, so it is intersected with `{}` here to keep the two
- *  literals in a reader's autocomplete — the same trick `ErrorCode` uses. */
+ *  literals in a reader's autocomplete — the same trick `ReportCode` uses. */
 export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
 
 /** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
@@ -137,7 +138,7 @@ export interface ErrorReport {
   /** When core observed it — `time/`'s `now()`, stamped by the raiser so no other layer reads a
    *  clock (I10). */
   readonly at: Instant;
-  readonly code: ErrorCode;
+  readonly code: ReportCode;
   /** One sentence, for a person. The console fallback prints exactly this. */
   readonly message: string;
   readonly severity: ErrorSeverity;
