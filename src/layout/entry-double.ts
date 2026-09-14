@@ -95,9 +95,12 @@ class EntryDouble implements Entry {
   }
 
   #answer(field: FieldKey): unknown {
-    // One row answers one tree through every door it has (ADR 0017): `read('parentId')` is
-    // `parent()?.id`, never the stored field.
-    if (field === 'parentId') return this.parent()?.id;
+    // `read(key)` answers the stored value (ADR 0024); the tree has its own key, `hierarchyParentId`,
+    // and its own method, `parent()`.
+    if (field === 'parentId') {
+      return this.#values.parentId === undefined ? undefined : entryId(this.#values.parentId);
+    }
+    if (field === 'hierarchyParentId') return this.parent()?.id;
     if (field === 'duration') return this.duration();
     if (field === 'id') return this.id;
     if (field === 'name') return this.name;

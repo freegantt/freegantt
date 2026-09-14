@@ -214,6 +214,7 @@ export interface CommandTarget extends ActedOn {
 export interface ComputeContext extends FieldContext {
     children(): readonly StoredEntry[];
     duration(): Duration | undefined;
+    hierarchyParentId(): EntryId | undefined;
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
 }
 
@@ -251,6 +252,7 @@ export type CoreFieldValue<K extends FieldKey> = K extends keyof CoreFieldValues
 // @public
 export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
     duration: Duration;
+    hierarchyParentId: EntryId | undefined;
 }
 
 // @public

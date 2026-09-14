@@ -131,16 +131,21 @@ export interface FieldAccess {
   readonly timeZone: string;
   readonly measureDuration: DurationMeasure;
   storedChildrenOf(id: EntryId): readonly StoredEntry[];
+  /** Which Entry the checked hierarchy names as `entry`'s parent (ADR 0020) — the same answer
+   *  `entry.parent()?.id` gives on a live row, never `entry.parentId`'s stored value (ADR 0024). */
+  parentIdOf(entry: StoredEntry): EntryId | undefined;
   memo?(): FieldReadMemo | undefined;
 }
 
 const NO_CHILDREN: readonly StoredEntry[] = Object.freeze([]);
+const NO_PARENT = (): undefined => undefined;
 
 export interface FieldAccessOptions {
   fields: FieldLookup;
   timeZone: string;
   measureDuration?: DurationMeasure;
   storedChildrenOf?: (id: EntryId) => readonly StoredEntry[];
+  parentIdOf?: (entry: StoredEntry) => EntryId | undefined;
   memo?: () => FieldReadMemo | undefined;
 }
 
@@ -151,6 +156,7 @@ export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
     timeZone: options.timeZone,
     measureDuration: options.measureDuration ?? 'span',
     storedChildrenOf: options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN),
+    parentIdOf: options.parentIdOf ?? NO_PARENT,
     ...(options.memo !== undefined ? { memo: options.memo } : {}),
   };
 }
@@ -178,6 +184,15 @@ export function readingChildrenFrom(
   storedChildrenOf: (id: EntryId) => readonly StoredEntry[],
 ): FieldAccess {
   return { ...access, storedChildrenOf };
+}
+
+/** The same access, answering `hierarchyParentId` from the tree a pass holds instead of the store's
+ *  own committed index — the Rollup's effective parent (`data/rollup.ts`), never the live store. */
+export function readingParentFrom(
+  access: FieldAccess,
+  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+): FieldAccess {
+  return { ...access, parentIdOf };
 }
 
 /** What a consumer receives: the zone, and nothing that belongs to one row (ADR 0017, J5). */
@@ -210,12 +225,10 @@ export function measureEntryDuration(
 export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
   return {
     timeZone: access.timeZone,
-    // What value does `entry` hold under `key`, for `parentId` — the stored field, read straight off
-    // the row through `readFieldByKey`, never the hierarchy source.
-    //
-    // `entry.read('parentId')` (`data/live-entry.ts`) answers a different question for the same key:
-    // it follows the tree, not the stored field. The two doors disagree today, on purpose or not —
-    // #299 is open on which one `read` should be.
+    // `key` on this row, through the Field registry (ADR 0024): `read('parentId')` answers the
+    // stored field, the same as every other declared key. `hierarchyParentId()` below is the
+    // tree's own door, and it is a different question from `read('hierarchyParentId')` on the same
+    // access only in that this one skips the registry round-trip.
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined {
       return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
     },
@@ -224,6 +237,9 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
     },
     children(): readonly StoredEntry[] {
       return access.storedChildrenOf(entry.id);
+    },
+    hierarchyParentId(): EntryId | undefined {
+      return access.parentIdOf(entry);
     },
   };
 }

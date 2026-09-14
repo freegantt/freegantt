@@ -35,8 +35,10 @@ export interface Entry<TProps = Record<string, unknown>> {
   readonly segments: readonly Segment[];
 
   /** The one by-key value door: a core key, a `props` key, or a `compute` Field. Every answer is
-   *  live, `'parentId'` included — it answers `parent()?.id`, so one row answers one tree through
-   *  every door it has (ADR 0017, *A live row answers one tree*). */
+   *  live, and every answer is what its Field declares: a stored key answers the stored value,
+   *  `'parentId'` included, and a `compute` key answers what it computes (ADR 0024). The tree has
+   *  its own doors — `parent()` and `read('hierarchyParentId')` — because a plugin-owned hierarchy
+   *  (ADR 0020) can make the tree disagree with the stored `parentId`, on purpose. */
   read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
 
   /** Core's sixth Field, computed from `start` and `end` through `time/` under the Dataset's own
