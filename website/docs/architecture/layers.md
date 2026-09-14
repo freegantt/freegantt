@@ -1,6 +1,8 @@
 ---
 id: layers
 title: "Layers & import rules"
+last_update:
+  date: 2026-09-14
 ---
 
 Which directories may import which, and the lint rules that hold the line. The rule itself lives
@@ -73,7 +75,7 @@ context menu, inline editing
 <div class="box pure">
 <div class="name">layout/</div>
 <div class="sub">
-<code>computeFrame</code> · <code>FrameLayout</code> · rows/items/lanes ·
+<code>computeFrame</code> · <code>FrameLayout</code> · rows/items ·
 <code>TimeScaleModel</code> · <code>ScrollModel</code>
 </div>
 </div>

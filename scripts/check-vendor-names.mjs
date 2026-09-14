@@ -3,7 +3,7 @@
 // Two exceptions, and both are the same reason: a decision record has to be checkable, and "a
 // comparable Gantt does X" is not — a reader cannot verify it or weigh how far it generalizes.
 //
-//   1. `docs/adr/**` — an ADR may name them (ruled 2026-09-09).
+//   1. An ADR may name them (ruled 2026-09-09) — `docs/adr/**` and `website/docs/adr/**` alike.
 //   2. `plans/field-redesign/**` — an ADR's working material (ruled 2026-09-09). ADR 0011 split
 //      into five on 2026-09-09, and the product survey those five cite lives in one shared file
 //      rather than being copied into each. The survey is ADR evidence that happens to sit beside
@@ -31,12 +31,18 @@ const BANNED = [
   'ganttpro',
 ];
 
-const SCAN_DIRS = ['src', 'harness', 'plans', 'docs', 'test', 'scripts'];
+const SCAN_DIRS = ['src', 'harness', 'plans', 'docs', 'test', 'scripts', 'website/docs'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 
 // Paths that may name a vendor product: the ADRs, and the working material behind the field
 // redesign's five ADRs. Read the header for why each one is out of scope.
-const EVIDENCE_DIRS = [path.join('docs', 'adr'), path.join('plans', 'field-redesign')];
+const EVIDENCE_DIRS = [
+  path.join('docs', 'adr'),
+  path.join('website', 'docs', 'adr'),
+  path.join('plans', 'field-redesign'),
+  // TypeDoc generates this from `src/`, which this script already scans.
+  path.join('website', 'docs', 'api'),
+];
 
 function statesEvidence(rel) {
   return EVIDENCE_DIRS.some((dir) => rel === dir || rel.startsWith(`${dir}${path.sep}`));

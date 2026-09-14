@@ -1,6 +1,8 @@
 ---
 id: diagram
 title: "FreeGantt module map"
+last_update:
+  date: 2026-09-14
 ---
 <style>
   .fg-architecture-doc {
@@ -348,7 +350,7 @@ stroke-width="1.5"
 layout/
 </text>
 <text x="320" y="354" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-frame.ts, items/, lanes/, rows/, viewport/
+frame.ts, items/, rows/, viewport/
 </text>
 <text x="320" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
 3,568 lines · 29 files · computeFrame(), row/item pipeline
@@ -377,7 +379,7 @@ DatasetState, EntryStore, transaction
 4,207 lines · 28 files · extension hook → changeset
 </text>
 <text x="205" y="556" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-History, fields, serialization · imports time + model
+History, fields, rollup · imports time + model
 </text>
 <!-- scheduling/ stub — outside the core zone: plugin engine, not a core layer -->
 <rect
@@ -438,7 +440,7 @@ GanttShell, PluginRuntime ports, GesturePipeline
 6,583 lines · 31 files · capability, commands, plugin seams
 </text>
 <text x="930" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-CollapseState, grid-columns, keyboard/wheel nav, splitter
+TreeCollapse, grid-columns, keyboard/wheel nav, splitter
 </text>
 <!-- interaction/ — BUILT, solid box -->
 <rect
@@ -694,7 +696,7 @@ and <code>extensions/</code> for the plugin runtime and shipped built-ins.
 `model/` is the one module every other layer is allowed to reach into — 1,771 lines, zero
 dependencies, no runtime beyond id/brand helpers. At S5 it also exports `PluginId`,
 `ErrorReport`, `ElementDescription` and command primitives alongside
-`Field`/`ChangeSet`/`DatasetDocument`. Every arrow below is a real `import` in `src/` today;
+`Field`/`ChangeSet`. Every arrow below is a real `import` in `src/` today;
 the label on each box is exactly what that layer pulls across the boundary, type-only imports
 called out separately from the runtime calls (`entryId()`, `rowId()`, `itemId()`) that
 actually execute outside `model/`. `render/` never imports `model/` at all — it's included to
@@ -706,7 +708,7 @@ re-export.
 <svg
 viewBox="0 0 1240 600"
 role="img"
-aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, EntryKind, EntryId/RowId/ItemId brands with helpers, Field, FieldSource, ChangeSet, geometry types, errors and DatasetDocument. time/ imports Instant/TimeSpan/Duration type-only. layout/ imports Entry, EntryKind and the id types, and calls itemId()/rowId() at runtime. api/ re-exports the model types plus entryId/itemId. view/ imports only the Entry type through GanttShell's structural DatasetLike interface. data/ imports model types plus entryId()/rowId()/itemId() runtime helpers. render/ imports nothing from model/ directly."
+aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, the EntryId/SegmentId/RowId/ItemId/ChangeSetId brands with helpers, Field, ChangeSet, geometry types and errors. time/ imports Instant/TimeSpan/Duration type-only. layout/ imports Entry and the id types, and calls itemId()/rowId() at runtime. api/ re-exports the model types plus entryId/itemId. view/ imports only the Entry type through GanttShell's structural DatasetLike interface. data/ imports model types plus entryId()/rowId()/itemId() runtime helpers. render/ imports nothing from model/ directly."
 >
 <defs>
 <marker
@@ -736,13 +738,13 @@ stroke-width="1.75"
 model/
 </text>
 <text x="620" y="64" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryKind, EntryInput
+Entry, EntryInput, StoredEntry
 </text>
 <text x="620" y="79" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
 EntryId / RowId / ItemId brands + entryId(), rowId(), itemId()
 </text>
 <text x="620" y="94" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Field, FieldSource, ChangeSet, DatasetDocument
+Field, FieldKey, ChangeSet
 </text>
 <text x="620" y="109" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
 geometry (Point, Size, PixelSpan, Rect)
@@ -800,7 +802,7 @@ layout/
 receives:
 </text>
 <text x="425" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryKind, EntryId/ItemId/RowId
+Entry, EntryId/ItemId/RowId
 </text>
 <text x="425" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
 + itemId(), rowId() — runtime calls
@@ -829,10 +831,10 @@ api/
 re-exports:
 </text>
 <text x="725" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryKind, EntryId, RowId, ItemId
+Entry, EntryId, RowId, ItemId
 </text>
 <text x="725" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Field, FieldSource, ChangeSet
+Field, FieldKey, ChangeSet
 </text>
 <text x="725" y="312" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
 + entryId(), itemId() functions
@@ -914,13 +916,13 @@ data/
 receives:
 </text>
 <text x="160" y="480" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryKind, EntryId/ItemId/RowId
+Entry, EntryId/ItemId/RowId
 </text>
 <text x="160" y="496" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
 + entryId(), rowId(), itemId() — runtime
 </text>
 <text x="160" y="514" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-Field, ChangeSet, DatasetDocument
+Field, FieldKey, ChangeSet
 </text>
 <text x="160" y="540" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 2,607 lines · 23 files
@@ -949,9 +951,9 @@ color="var(--muted)"
 <code>layout/</code> is the only layer that both imports <code>model/</code> and calls its runtime
 helpers — everywhere else the crossing is types only. <code>data/</code> also calls
 <code>entryId()</code>/<code>rowId()</code>/<code>itemId()</code> at runtime for brand helpers. The
-<code>api/index.ts</code> re-export list now includes <code>Field</code>, <code>FieldSource</code> and
-<code>ChangeSet</code> alongside the original types, giving consumers the full vocabulary to declare
-fields and react to changesets.
+<code>api/index.ts</code> re-export list now includes <code>Field</code>, <code>FieldKey</code>,
+<code>FieldType</code> and <code>ChangeSet</code> alongside the original types, giving consumers the
+full vocabulary to declare fields and react to changesets.
 <code>view/</code> never imports <code>api/</code> — <code>GanttShell</code> takes a
 structurally-compatible <code>DatasetLike</code> instead, so <code>view -&gt; api</code> stays a
 non-edge (#40).
@@ -1346,7 +1348,7 @@ entry.read / .children / .hasChildren
 transaction · on/off · undo/redo
 </text>
 <text x="460" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-field · fields · toJSON / fromJSON
+field · fields · fieldTypes
 </text>
 <text x="460" y="158" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 replay
@@ -1372,10 +1374,10 @@ model/ re-exports
 entryId(), itemId()
 </text>
 <text x="735" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-Entry, EntryKind, EntryId, RowId, ItemId
+Entry, EntryId, RowId, ItemId
 </text>
 <text x="735" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-Field, FieldSource, ChangeSet
+Field, FieldKey, ChangeSet
 </text>
 <text x="735" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 Instant, TimeSpan, Duration
@@ -1534,7 +1536,7 @@ a consumer needs to call the classes above it and nothing else — <code>TimeSca
 internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S5 the
 <code>Gantt</code> class exposes plugins, commands, and the live-reconfigurable properties (preset,
 range, gridColumns, rowSource, collapsed, selection, …) and <code>Dataset</code> exposes entries CRUD,
-transactions, events, fields, Dataset plugins, serialization, and undo/redo. The call chain underneath never appears in the public
+transactions, events, fields, Dataset plugins, and undo/redo. The call chain underneath never appears in the public
 surface; a consumer only ever sees it as bars moving on screen. The first render happens after
 construction completes via <code>FrameScheduler.flush()</code>, not via bind-notify.
 </figcaption>
@@ -1560,7 +1562,7 @@ dashed arrows are callbacks or value/type flow.
 <svg
 viewBox="0 0 1240 720"
 role="img"
-aria-label="Call graph of the implemented FreeGantt modules at S5. api/ builds Dataset (data/) and Gantt (view/). GanttShell constructs the Viewport, FrameLayout, RenderBackend, EventBus, GesturePipeline, PluginRuntime, CollapseState, and every attachment. GanttShell binds to the TimeScaleModel via scale.bind, reads scale and preset, and the model calls onChange which is this.render(). interaction/ drives the EntryGestureContext seam. Per render, computeFrame in layout/frame.ts receives LayoutInput and produces GeometryFrame. The GeometryFrame goes to backend.sync which runs syncKeyed once per layer. model/ is a zero-dependency strip of types plus brand-id helpers."
+aria-label="Call graph of the implemented FreeGantt modules at S5. api/ builds Dataset (data/) and Gantt (view/). GanttShell constructs the Viewport, FrameLayout, RenderBackend, EventBus, GesturePipeline, PluginRuntime, TreeCollapse, and every attachment. GanttShell binds to the TimeScaleModel via scale.bind, reads scale and preset, and the model calls onChange which is this.render(). interaction/ drives the EntryGestureContext seam. Per render, computeFrame in layout/frame.ts receives LayoutInput and produces GeometryFrame. The GeometryFrame goes to backend.sync which runs syncKeyed once per layer. model/ is a zero-dependency strip of types plus brand-id helpers."
 >
 <defs>
 <marker
@@ -1660,7 +1662,7 @@ FrameScheduler coalesces rAF
 build Gestures + Capabilities
 </text>
 <text x="410" y="288" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-CollapseState · keyboard/wheel nav
+TreeCollapse · keyboard/wheel nav
 </text>
 <text x="410" y="308" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
 2,440 lines · 20 files
@@ -1689,7 +1691,7 @@ extension hook → changeset → events
 EntryStore, FieldRegistry, History
 </text>
 <text x="720" y="150" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-serialization (toJSON / fromJSON)
+fields (field · fields.all)
 </text>
 <text x="720" y="174" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
 imports time/ + model/ only
@@ -1822,10 +1824,10 @@ stroke-width="1.5"
 computeFrame()
 </text>
 <text x="1060" y="602" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-layout/frame.ts + items/ + lanes/ + rows/
+layout/frame.ts + items/ + rows/
 </text>
 <text x="1060" y="622" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-resolveRows → produceItems → packLanes → cull
+resolveRows → produceItems → cull
 </text>
 <text x="1060" y="638" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
 header ticks, date-lines, columns
@@ -1848,7 +1850,7 @@ stroke-width="1.5"
 model/
 </text>
 <text x="445" y="668" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-Entry · EntryKind · EntryId / RowId / ItemId · Field · ChangeSet · geometry · errors
+Entry · EntryId / RowId / ItemId · Field · ChangeSet · geometry · errors
 </text>
 <text x="445" y="686" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
 entryId() · rowId() · itemId() — zero deps: types + brand-id helpers only
