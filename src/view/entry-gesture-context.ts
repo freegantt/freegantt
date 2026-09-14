@@ -40,8 +40,9 @@ export interface EntryGestureSession {
   preview(dxPx: number, options?: DraftOptions): void;
   /** Snapped write: `beforeEntry{Move,Resize}` → commit → `entry{Move,Resize}` (D-S3-16). Resolves
    *  `false` on a sync veto or a `MutationCancelledError` — both restore silently. A returned Promise
-   *  from a `before*` handler resolves this one asynchronously instead (D-S3-17): the pipeline marks
-   *  itself `pending` (paint + arm lock) until it settles. */
+   *  from a `before*` handler resolves this one asynchronously instead (D-S3-17): the pipeline paints
+   *  `pending` and holds this gesture until it settles, a new gesture supersedes it, or something
+   *  discards it (`discardHeldGesture`, #272/#273). */
   commit(dxPx: number, options?: DraftOptions): Promise<boolean>;
   /** S3.5, D-S3-13: one discrete step in `direction`, sized to one resolved snap unit and written
    *  straight through `commit`'s own veto/pending path — `interaction/keyboard-editing.ts`'s only way
@@ -113,4 +114,9 @@ export interface EntryGestureContext {
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined;
+  /** Ends a currently-held gesture without writing anything: clears the hold, flushes the preview,
+   *  and reports it dropped. `false` when nothing was held. Escape reaches for this when there is no
+   *  live drag left to cancel (#272, #273) — a held gesture's Promise is still out with a `before*`
+   *  handler, so there is nothing `cancel()` on an `EntryGestureSession` could act on any more. */
+  discardHeldGesture(): boolean;
 }

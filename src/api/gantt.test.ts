@@ -4543,6 +4543,59 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     document.elementFromPoint = original;
     gantt.destroy();
   });
+
+  // #273: a collaborator's write lands while the veto is still pending. The settle must not
+  // overwrite it with the drag's own pointerup-era instants — it refuses instead, cleanly, and the
+  // collaborator's write stands.
+  it('a collaborator write during the hold wins over a settle that resolves true (#273)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    let resolveVeto!: (allowed: boolean) => void;
+    gantt.on(
+      'beforeEntryMove',
+      () =>
+        new Promise<void | false>((resolve) => {
+          resolveVeto = (allowed) => resolve(allowed ? undefined : false);
+        }),
+    );
+    const errors: ErrorReport[] = [];
+    gantt.on('error', (report) => {
+      errors.push(report);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    expect(bar.dataset['state']).toContain('pending');
+
+    // The collaborator writes the same row from outside, while the drag's own veto is still
+    // pending — a websocket push, another tab, anything that is not this drag.
+    const collaboratorStart = instant('2031-01-15T00:00:00Z');
+    const collaboratorEnd = instant('2031-01-20T00:00:00Z');
+    dataset.entries.update(id, { start: collaboratorStart, end: collaboratorEnd });
+
+    resolveVeto(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const settled = dataset.entries.get(id)!;
+    expect(settled.start).toBe(collaboratorStart);
+    expect(settled.end).toBe(collaboratorEnd);
+    expect(errors).toHaveLength(1);
+    expect(bar.dataset['state']).not.toContain('pending');
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
 });
 
 describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
