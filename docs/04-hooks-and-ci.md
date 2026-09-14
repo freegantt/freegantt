@@ -49,7 +49,10 @@ Agent-time enforcement. The value here is specific: a violation surfaced **insid
       "hooks": [{ "type": "command", "command": ".claude/hooks/protect-spec.sh" }]
     }, {
       "matcher": "Bash",
-      "hooks": [{ "type": "command", "command": ".claude/hooks/require-draft-pr.sh" }]
+      "hooks": [
+        { "type": "command", "command": ".claude/hooks/require-draft-pr.sh" },
+        { "type": "command", "command": ".claude/hooks/require-pr-wait.sh" }
+      ]
     }]
   }
 }
@@ -87,7 +90,27 @@ Why a hook, and not a line in this document: an agent runs the command it was gi
 
 It reads the command text, so a heredoc that only *writes* those words is blocked too. The message says to use the Write or Edit tool for that. A false block costs one turn; a missed create spends minutes on unfinished work and asks for a review nobody wanted.
 
-### 2.4 Optional: `Stop` hook
+### 2.4 `require-pr-wait.sh` — PreToolUse on `Bash` (#354)
+
+Blocks a hand-written CI wait, and names `pnpm pr-wait <n>` instead (§5.2). Exit `2` returns the
+reason: a poll written on the spot reads `state` against the `bucket` word the human output prints,
+so it never matches and the loop exits on its first evaluation. A wait that never waited looks
+exactly like one that ran.
+
+Scope is narrow on purpose, because a hook people route around enforces nothing. Only the *fake*
+waits are refused: a loop around a status read, a `sleep` beside one, and `--watch` on the pull
+request's own checks. Single reads pass — a run list, a log read, one JSON read of the checks. So
+does `gh run watch <id>`, which really does block and is the only tool for a `workflow_dispatch`
+run, because a dispatch run has no pull request and so no `pr-wait`.
+
+Why a hook, and not a line in this document: the session that wrote `pr-wait` hand-rolled a status
+loop afterwards anyway. A rule an agent must remember breaks on a busy turn, and this rule decides
+whether a red gate gets reported as green.
+
+Like the draft-PR hook, it reads the command text, so a heredoc that only *writes* those words is
+blocked too, and the message says to use the Write or Edit tool for that.
+
+### 2.5 Optional: `Stop` hook
 
 A `Stop` hook running `pnpm verify` when `git status --porcelain src/` is non-empty gives a clean end-of-turn signal. **Recommended off by default** and enabled per-preference: on a fast machine it is 45 seconds of latency at the end of every turn, and the PostToolUse hook plus CI already cover the same ground. Documented here so the choice is deliberate rather than absent.
 
@@ -170,6 +193,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
 | The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a gate check that runs, and that no row's status is blank; **and** (S1.11, D-S1.11-11) that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
 | One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify:full` and no single check beside it, that `pre-push` runs that same command, that the check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
+| The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
 | The S1 → S2 gate itself | `test/guards/slice-gate.test.ts` (S1.11, plans/s1.11-close-the-gate/README.md §3.4) — drives `tagged()` against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted — U2's own scenario |
 
