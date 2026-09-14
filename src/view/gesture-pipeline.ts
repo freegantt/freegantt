@@ -24,8 +24,12 @@ import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.j
 import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import type { GestureDroppedReason } from '../data/error-reporting.js';
-import { buildGestureDroppedReport, buildRefusalReport } from '../data/error-reporting.js';
-import { reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
+import {
+  buildCommitFaultReport,
+  buildGestureDroppedReport,
+  buildRefusalReport,
+} from '../data/error-reporting.js';
+import { isEnvelopeRefusal, reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
 import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
@@ -434,7 +438,7 @@ export class GesturePipeline {
       return Promise.resolve(false);
     }
     if (result === true) {
-      const committed = finish();
+      const committed = this.#finishCommit(finish, refusal);
       this.#preview(undefined);
       return Promise.resolve(committed);
     }
@@ -465,22 +469,45 @@ export class GesturePipeline {
           return false;
         }
         try {
-          return finish();
-        } catch (error) {
-          if (error instanceof EntryNotFoundError) {
-            // Another call removed the entry after the hold was taken, and before this settle — the
-            // same situation `inline-editing.ts`'s cell commit already folds (issue #137 F10). The
-            // user's own edit is moot now, so this reports and does not throw.
-            this.#reportGestureDropped(refusal, 'entry-gone');
-            return false;
-          }
-          throw error;
+          return this.#finishCommit(finish, refusal);
         } finally {
-          // `finally`, not a line after `finish()`: a throw out of `finish()` must still clear the
-          // hold, or the pipeline stays bricked by a fault instead of by a slow handler (#273).
+          // `finally`, not a line after the commit: `#finishCommit` folds every throw it knows, and
+          // the hold must still clear for the one it does not, or the pipeline stays bricked by a
+          // fault instead of by a slow handler (#273).
           this.#releaseHold();
         }
       });
+  }
+
+  /** Runs the commit and answers whether it wrote, for both of `#settle`'s branches. **Nothing
+   *  thrown here reaches the caller** (#341): a native `pointerup` listener calls `session.commit()`
+   *  and a keydown listener calls `session.nudge()`, and both discard the Promise. So a throw out of
+   *  this becomes an uncaught error or an unhandled rejection that no consumer code can catch. The
+   *  gesture answers `false` instead — the write did not land — and the report says which of the
+   *  three things happened, because the boolean cannot:
+   *
+   *  - The entry is gone. Another call removed it before the write (`inline-editing.ts`'s cell
+   *    commit folds the same case, #137 F10). The user's own edit is moot now.
+   *  - The store refused the write. An envelope-only cascade against a several-Segment Entry is the
+   *    one core raises (D-S5-44), and the preview path already drops that Entry's ghost for the same
+   *    reason — so the two paths now tell one story about one edit.
+   *  - Anything else is a fault, and `#reportCommitFault` says so. Calling a plugin's bug a refusal
+   *    is the misreport #258 and #332 both ruled out, so the fault keeps its own code and severity. */
+  #finishCommit(finish: () => boolean, refusal: GestureRefusal): boolean {
+    try {
+      return finish();
+    } catch (error) {
+      if (error instanceof EntryNotFoundError) {
+        this.#reportGestureDropped(refusal, 'entry-gone');
+        return false;
+      }
+      if (isEnvelopeRefusal(error)) {
+        this.#reportGestureDropped(refusal, 'write-refused');
+        return false;
+      }
+      this.#reportCommitFault(refusal, error);
+      return false;
+    }
   }
 
   /** One report per refused gesture, sync veto and settled-`false` Promise alike (D-S5-40). A
@@ -511,6 +538,20 @@ export class GesturePipeline {
         because,
       }),
     );
+  }
+
+  /** #341: the commit half of the fault `#reportExtenderFault` reports for the preview. The shape
+   *  is `buildCommitFaultReport`'s (`data/error-reporting.ts`), beside the two refusal builders and
+   *  the one noun table they all read. This adds the `console.error` a consumer who subscribes to
+   *  nothing still needs, and it reads the sentence back off the report rather than spelling it a
+   *  second time (D-S5-41). */
+  #reportCommitFault(refusal: GestureRefusal, error: unknown): void {
+    const report = buildCommitFaultReport({
+      event: refusal.event,
+      entryId: refusal.entryId,
+      cause: error,
+    });
+    this.#deps.raiseError(report, () => console.error(`FreeGantt: ${report.message}`, error));
   }
 
   /** D-S3-17: only reached for a `before*` handler's unsettled Promise. Holds the commit draft (not
