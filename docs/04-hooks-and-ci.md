@@ -268,6 +268,8 @@ The draft is not a formality. It is what the trigger set reads:
 
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
 
+**`gh pr ready <n>` does not always start CI (#298, #235).** The `ready_for_review` webhook event is what the workflow trigger in §5 waits for, and the GitHub CLI's `ready` call does not reliably fire it — on two pull requests in the same session, `gh pr checks <n>` kept reporting the stale `SKIPPED` run from when the pull request was still a draft, with no new run queued. Confirm with `gh run list --branch <branch> --limit 5`: if the newest run still has `event: pull_request` and `conclusion: skipped` from before `gh pr ready` ran, nothing started. The fallback is `gh workflow run ci.yml --ref <branch>`, which uses the workflow's `workflow_dispatch` trigger (§5, `if: github.event_name == 'workflow_dispatch' || ...`) to force the same `gate` job regardless of draft state.
+
 ---
 
 ## 6. What this costs
