@@ -76,7 +76,11 @@ describe('the hook is wired in, and can run', () => {
       hooks: { PreToolUse: { matcher: string; hooks: { command: string }[] }[] };
     };
     const onBash = settings.hooks.PreToolUse.filter((entry) => entry.matcher.includes('Bash'));
-    expect(onBash.flatMap((entry) => entry.hooks.map((h) => h.command))).toContain(HOOK);
+    // `$CLAUDE_PROJECT_DIR/` prefix: a relative command resolves against the agent's cwd, so the
+    // hook goes missing whenever an agent runs from a worktree instead of the project root.
+    expect(onBash.flatMap((entry) => entry.hooks.map((h) => h.command))).toContain(
+      `$CLAUDE_PROJECT_DIR/${HOOK}`,
+    );
   });
 
   it('is executable', () => {
