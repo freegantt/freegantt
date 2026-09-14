@@ -14,6 +14,7 @@ import {
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
   isTimeUnit,
+  isCoarserThan,
 } from './zone.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import type { TimeUnit } from '../model/index.js';
@@ -123,6 +124,38 @@ describe('zone-aware date arithmetic', () => {
     expect(isTimeUnit('q')).toBe(false);
     expect(isTimeUnit('')).toBe(false);
     expect(isTimeUnit('Day')).toBe(false);
+  });
+
+  it('SUPPORTED_TIME_UNITS declares every unit coarsest-last, pinned rather than trusted (#268)', () => {
+    // isCoarserThan reads UNITS' own declaration order — this pins that order against a change that
+    // reorders it (calendar-nesting order, not duration order: a month is not a whole number of
+    // weeks, so "coarsest last" here means nesting, not "biggest ms span").
+    expect([...SUPPORTED_TIME_UNITS]).toEqual([
+      'millisecond',
+      'minute',
+      'hour',
+      'day',
+      'week',
+      'month',
+      'year',
+    ]);
+  });
+
+  it('isCoarserThan (#268) answers by calendar-nesting rank, not by unit equality or duration', () => {
+    expect(isCoarserThan('week', 'day')).toBe(true);
+    expect(isCoarserThan('month', 'week')).toBe(true);
+    expect(isCoarserThan('day', 'day')).toBe(false);
+    expect(isCoarserThan('day', 'week')).toBe(false);
+    expect(isCoarserThan('hour', 'day')).toBe(false);
+    // Every unit ranks coarser than every unit before it in SUPPORTED_TIME_UNITS's own order.
+    const units = [...SUPPORTED_TIME_UNITS];
+    for (let i = 0; i < units.length; i++) {
+      for (let j = 0; j < units.length; j++) {
+        const a = units[i]!;
+        const b = units[j]!;
+        expect(isCoarserThan(a, b)).toBe(i > j);
+      }
+    }
   });
 
   it('dayOfWeek is ISO (1 = Monday … 7 = Sunday) and stays correct across a southern-hemisphere DST fold', () => {

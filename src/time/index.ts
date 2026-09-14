@@ -16,6 +16,7 @@ export {
   resolveDefaultTimeZone,
   SUPPORTED_TIME_UNITS,
   isTimeUnit,
+  isCoarserThan,
 } from './zone.js';
 export type { PlainParts } from './zone.js';
 export { createZonedTime } from './zoned-time.js';
