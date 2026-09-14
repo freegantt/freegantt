@@ -201,6 +201,87 @@ this one.
 - **`--fg-row-label-width`** was renamed to `--fg-grid-pane-width` at S1.8 — the gutter became a pane
   width, not a backend reservation. No file under `src/` still reads the old name.
 
+## Theming — the level-2 Parts list
+
+`plans/02-public-api.md` §4 states the customization ladder: level 2 is the Parts list. This section
+is the reference that statement points at — every `.fg-*` class the base stylesheet
+(`src/view/styles.ts`) defines, plus the two glyph classes `summary()` and `diamond()` ship in their
+own CSS (`src/layout/items/variants.ts`, ADR 0022). It landed here with the token tables (issue #334).
+
+A **public** Part is level-2 surface a consumer stylesheet targets. An **internal** Part is plumbing:
+the reconciler owns the node, and there is no stability promise on the name. Publishing the internal
+names is the point — omitting them is how this list went stale for three slices. Styling one is
+allowed (ADR 0021) and unsupported.
+
+The vocabulary is closed and un-renamed (D-S1.10-1). Additions before 1.0 are for a real structural
+gap, not a rename.
+
+### Public Parts
+
+| Part | Role |
+|---|---|
+| `.fg-container` | Root of one Gantt. Theme pin and token inheritance start here. |
+| `.fg-grid-pane` | Left pane. Grid columns, row labels, cells. |
+| `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
+| `.fg-splitter` | Drag handle between the two panes. |
+| `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
+| `.fg-grid-header` | Column header row in the grid pane. |
+| `.fg-col-header` | One column header cell. |
+| `.fg-col-header-label` | The header cell's own text. Ellipsizes. |
+| `.fg-column-resizer` | Column resize grip on a header cell. |
+| `.fg-row` | One grid row. Zebra, hover, and selection paint live here. |
+| `.fg-row-label` | First-column label cell. Carries hierarchy indent. |
+| `.fg-row-label-text` | The label cell's text child. |
+| `.fg-row-cell` | A data cell in the grid. |
+| `.fg-row-twisty` | Collapse control on a parent row. |
+| `.fg-header` | Sticky time header in the timeline pane. |
+| `.fg-band` | One header band. Height is `--fg-band-height`. |
+| `.fg-tick` | One tick label inside a band. |
+| `.fg-tick-line` | Vertical grid line in the timeline body. One per finest-band tick. |
+| `.fg-row-band` | Timeline copy of a grid row's zebra, hover, and selection paint. |
+| `.fg-bar` | One Item. Every look wears this class, diamonds included. |
+| `.fg-bar-label` | The bar's own text child. |
+| `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
+| `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
+| `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |
+| `.fg-date-line` | A Date line stroke, Today included. |
+| `.fg-date-line-label` | Date line chip. |
+| `.fg-cursor-line` | Hot-path cursor stroke under the pointer. |
+| `.fg-cursor-line-label` | Cursor line chip, always below the header bands. |
+| `.fg-decorations-under` | Decoration layer below the bars. |
+| `.fg-decorations-over` | Decoration layer above the bars. |
+| `.fg-range-band` | A range decoration (weekend shading, and the like). |
+| `.fg-row-stripe` | A row-height decoration stripe. |
+| `.fg-popup` | Shared popup surface for tooltips, the context menu, and the reorder wash. |
+| `.fg-tooltip` | `tooltips()` content, inside `.fg-popup`. |
+| `.fg-tooltip-title` | Tooltip title line. |
+| `.fg-tooltip-dates` | Tooltip date line. |
+| `.fg-menu` | `contextMenu()` content, inside `.fg-popup`. |
+| `.fg-menu-item` | One menu command. |
+| `.fg-menu-separator` | A rule between menu items. |
+| `.fg-cell-editor` | `inlineEditing()` wrapper on an open cell. |
+| `.fg-cell-editor-control` | The editor's own input. |
+| `.fg-cell-editor-discard` | Discard button on an invalid editor. |
+| `.fg-cell-notice` | Refusal notice over a cell that cannot open an editor. |
+
+### Internal Parts
+
+These names have no stability promise. A consumer rule against one is allowed (ADR 0021) and
+unsupported — the next layout pass owns the node.
+
+| Part | Mounted by | Why internal |
+|---|---|---|
+| `.fg-grid-spacer` | `pane-layout.ts` | Sizes the grid content to overflowing columns. A rule here fights the next frame. |
+| `.fg-rows-clip` | `pane-layout.ts` | Clips windowed grid rows. The reconciler owns overflow here. |
+| `.fg-rows` | `pane-layout.ts` | Host for windowed grid rows. |
+| `.fg-header-bands` | `render/dom/index.ts` | Clips the band stack so `.fg-header` can stay `overflow: visible` (#225). |
+| `.fg-tick-lines` | `render/dom/tick-lines.ts` | Positioned ancestor for tick-line strokes. |
+| `.fg-row-bands` | `render/dom/index.ts` | Host for `.fg-row-band` copies. |
+| `.fg-bars` | `render/dom/index.ts` | Host for `.fg-bar` nodes. |
+| `.fg-content-sizer` | `render/dom/index.ts` | Hidden 1×1 marker for the timeline scroll extent. |
+| `.fg-date-lines` | `render/dom/date-line.ts` | Positioned ancestor for date-line strokes. |
+| `.fg-live-region` | `view/live-region.ts` | Visually hidden polite live region. Not a painted surface. |
+
 ## Harness demos
 
 Run `pnpm dev` and open `http://localhost:5173`.
