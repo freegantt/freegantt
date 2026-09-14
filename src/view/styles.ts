@@ -209,7 +209,7 @@ ${DARK_COLOR_TOKENS}
    width: --fg-grid-content-width (D-S1.8-13, #126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
-.fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-row-label-color); }
+.fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: 1; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
    grid text never sits flush against a column's own edge or its neighbour's. */
