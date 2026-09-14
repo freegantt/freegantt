@@ -141,14 +141,14 @@
             <h4 class="card-title">FrameLayout <span class="tag pure">class</span></h4>
             <div class="path">layout/frame-layout.ts</div>
             <p>
-              The stateful wrapper that keeps the row-height index and per-row pack memo alive across renders.
+              The stateful wrapper that keeps the row-height index and per-row item memo alive across renders.
               The shell states what to draw; the memory never crosses into <code>view/</code>.
             </p>
             <dl>
               <dt>#memory: FrameMemory</dt>
               <dd>
-                Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus the packed-row
-                memo <code>Map</code>.
+                Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus the per-row
+                item memo <code>Map</code>.
               </dd>
             </dl>
           </div>
@@ -158,13 +158,13 @@
             <div class="path">layout/frame-memory.ts</div>
             <p>
               The cross-render memory of one layout pass. Kept behind <code>FrameLayout</code> so a later frame
-              reuses row-height sums and packed lanes where the inputs did not change.
+              reuses row-height sums and produced items where the inputs did not change.
             </p>
             <dl>
               <dt>RowHeightIndex</dt>
               <dd>Lazy prefix sums with binary search for <code>indexAtY</code>.</dd>
-              <dt>Map of packed-row memo</dt>
-              <dd>Per-row pack results, reused when the row's content is unchanged.</dd>
+              <dt>Map of per-row item memo</dt>
+              <dd>Per-row produced items, reused when the row's content is unchanged.</dd>
             </dl>
           </div>
 
@@ -191,7 +191,7 @@
             <h4 class="card-title">computeFrame() <span class="tag pure">function</span></h4>
             <div class="path">layout/frame.ts</div>
             <p>
-              The full layout pass. Pure, stateless. Resolves rows → produces items → packs lanes → culls to
+              The full layout pass. Pure, stateless. Resolves rows → produces items → culls to
               the window → emits header ticks and date-line decorations.
             </p>
             <dl>
@@ -220,23 +220,6 @@
               <dd>
                 Builds the per-kind producer map. A consumer-supplied kind with no producer lands on the span
                 producer — behavior per kind goes through this seam, not an <code>if (kind === …)</code> chain.
-              </dd>
-            </dl>
-          </div>
-
-          <div class="card">
-            <h4 class="card-title">packRow() / packLanes <span class="tag pure">function</span></h4>
-            <div class="path">layout/lanes/pack-lanes.ts</div>
-            <p>
-              Greedy first-fit lane packing. Each item takes the first lane whose last occupant ends at or
-              before the item starts; <code>packedRowHeight</code> and <code>yForLane</code> turn the lanes
-              into geometry.
-            </p>
-            <dl>
-              <dt>heightMode: 'pack'</dt>
-              <dd>
-                When the row source sets it, overlapping items stack into lanes instead of clipping. Fixed mode
-                keeps the 32px default.
               </dd>
             </dl>
           </div>

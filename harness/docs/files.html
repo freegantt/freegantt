@@ -522,7 +522,7 @@
                 "
               >
                 layout/ &nbsp;<span class="tag pure">pure</span> &nbsp;headless geometry — rows, items,
-                lanes, frame
+                frame
               </td>
             </tr>
             <tr>
@@ -531,7 +531,7 @@
                 computeFrame(), GeometryFrame, LayoutInput, FrameRow/Item/Header*, Overscan, DEFAULT_OVERSCAN
               </td>
               <td>
-                The full pure layout pass: resolves rows, produces items per row, packs lanes, culls to the
+                The full pure layout pass: resolves rows, produces items per row, culls to the
                 visible window, and computes header ticks and date-line decorations. One call in → one
                 <code>GeometryFrame</code> out.
               </td>
@@ -540,7 +540,7 @@
               <td class="mono">layout/frame-layout.ts</td>
               <td class="mono">FrameLayout</td>
               <td>
-                The stateful wrapper that keeps a <code>RowHeightIndex</code> and per-row pack memo alive
+                The stateful wrapper that keeps a <code>RowHeightIndex</code> and per-row item memo alive
                 across renders. One instance per Gantt.
               </td>
             </tr>
@@ -549,7 +549,7 @@
               <td class="mono">FrameMemory</td>
               <td>
                 Holds one layout pass's cross-render memory — the <code>RowHeightIndex</code> plus a
-                <code>Map</code> of packed-row memos — so a later frame reuses geometry where the inputs did
+                <code>Map</code> of per-row item memos — so a later frame reuses geometry where the inputs did
                 not change.
               </td>
             </tr>
@@ -626,14 +626,6 @@
               </td>
             </tr>
             <tr>
-              <td class="mono">layout/lanes/pack-lanes.ts</td>
-              <td class="mono">packRow(), packedRowHeight(), yForLane()</td>
-              <td>
-                Greedy first-fit lane packing: each item takes the first lane whose last occupant ends at or
-                before the item starts.
-              </td>
-            </tr>
-            <tr>
               <td class="mono">layout/rows/resolve-rows.ts</td>
               <td class="mono">resolveRows()</td>
               <td>
@@ -646,7 +638,7 @@
               <td class="mono">RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.</td>
               <td>
                 Pure data types defining the three row-source configs and their shared options
-                (<code>heightMode</code>, <code>filter</code>, <code>sort</code>, <code>filterPolicy</code>).
+                (<code>filter</code>, <code>sort</code>, <code>filterPolicy</code>).
               </td>
             </tr>
             <tr>

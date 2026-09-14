@@ -42,7 +42,7 @@
 // `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
 // its own container.
 
-import { DEFAULT_TICK_BOX_FLOOR_PX, DEFAULT_LANE_GAP_PX } from '../layout/index.js';
+import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
 import { DEFAULT_BAR_LABEL_GAP_PX } from '../render/dom/dom-contract.js';
 
 const MARKER_ATTR = 'data-freegantt-styles';
@@ -170,12 +170,10 @@ ${LIGHT_COLOR_TOKENS}
 }
 .fg-container {
   --fg-indent-width: 12px;
-  --fg-lane-gap: ${DEFAULT_LANE_GAP_PX}px;
   /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
      one design value, one token (render/dom/dom-contract.ts's own DEFAULT_BAR_LABEL_GAP_PX states the
-     same number as its JS-side fallback). A px metric, not a colour, so it lives here beside
-     --fg-lane-gap rather than in the light/dark token blocks above — a theme pin must never change a
-     layout metric (#294). */
+     same number as its JS-side fallback). A px metric, not a colour, so it lives here rather than in
+     the light/dark token blocks above — a theme pin must never change a layout metric (#294). */
   --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
   --fg-bar-opacity: 1;
 }

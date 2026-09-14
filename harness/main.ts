@@ -99,7 +99,6 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
-const packRowsBtn = document.querySelector<HTMLButtonElement>('#pack-rows-btn')!;
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
 
@@ -198,10 +197,8 @@ const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edg
 };
 let sortByName = false;
 
-function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
-  const heightMode: 'fixed' | 'pack' = next.pack ? 'pack' : 'fixed';
+function applyRowSource(next: { grouped: boolean }): void {
   const shared = {
-    heightMode,
     ...(filterTeam !== null && !next.grouped
       ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
       : {}),
@@ -219,10 +216,9 @@ function applyRowSource(next: { grouped: boolean; pack: boolean }): void {
 }
 
 function refreshRowSourceUi(): void {
-  const { source, heightMode } = gantt.rowSource;
+  const { source } = gantt.rowSource;
   const grouped = source === 'group';
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
-  packRowsBtn.textContent = heightMode === 'pack' ? 'Stack bars (fixed rows)' : 'Pack overlapping bars';
   filterTeamBtn.disabled = grouped;
   sortNameBtn.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
@@ -230,27 +226,22 @@ function refreshRowSourceUi(): void {
 }
 
 rowsSourceBtn.addEventListener('click', () => {
-  const { source, heightMode } = gantt.rowSource;
-  applyRowSource({ grouped: source !== 'group', pack: heightMode === 'pack' });
-});
-
-packRowsBtn.addEventListener('click', () => {
-  const { source, heightMode } = gantt.rowSource;
-  applyRowSource({ grouped: source === 'group', pack: heightMode !== 'pack' });
+  const { source } = gantt.rowSource;
+  applyRowSource({ grouped: source !== 'group' });
 });
 
 filterTeamBtn.addEventListener('click', () => {
-  const { source, heightMode } = gantt.rowSource;
+  const { source } = gantt.rowSource;
   if (source === 'group') return;
   filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
-  applyRowSource({ grouped: false, pack: heightMode === 'pack' });
+  applyRowSource({ grouped: false });
 });
 
 sortNameBtn.addEventListener('click', () => {
-  const { source, heightMode } = gantt.rowSource;
+  const { source } = gantt.rowSource;
   if (source === 'group') return;
   sortByName = !sortByName;
-  applyRowSource({ grouped: false, pack: heightMode === 'pack' });
+  applyRowSource({ grouped: false });
 });
 
 refreshRowSourceUi();

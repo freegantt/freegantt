@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_MIN_BAR_WIDTH_PX } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
-import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
-import * as packLanes from './lanes/pack-lanes.js';
 import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
@@ -284,7 +282,6 @@ describe('computeFrame', () => {
     memory.sync({
       plan,
       rowHeight: 10,
-      laneGap: DEFAULT_LANE_GAP_PX,
       entries,
       registry: variantRegistry,
       datasetRevision: 0,
@@ -988,54 +985,6 @@ describe('computeFrame row sources (S4.6)', () => {
     });
     expect(collapsed.rowCount).toBe(entries.length - 1);
     expect(collapsed.rows.some((r) => String(r.id) === String(child.id))).toBe(false);
-  });
-});
-
-describe('computeFrame lanes (S4.8)', () => {
-  const overlapping: Entry = entryDoubleLike(sampleEntries[0]!, {
-    segments: [
-      { id: segmentId('lane-1'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
-      { id: segmentId('lane-2'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
-      { id: segmentId('lane-3'), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
-    ],
-  });
-
-  it("a 'fixed' source never calls the packer", () => {
-    const spy = vi.spyOn(packLanes, 'packRow');
-    computeFrame({
-      entries: [overlapping],
-      scale,
-      preset,
-      visible,
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-      rows: { source: 'entries', heightMode: 'fixed' },
-    });
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
-  });
-
-  it('culls through the height index when pack-mode rows have different heights', () => {
-    const short: Entry = entryDoubleLike(sampleEntries[1]!);
-    const frame = computeFrame({
-      entries: [overlapping, short],
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 32 },
-      overscan: TIGHT,
-      rowHeight: 32,
-      laneGapPx: 2,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-      rows: { source: 'entries', heightMode: 'pack' },
-    });
-    expect(frame.rows).toHaveLength(1);
-    expect(frame.rows[0]?.laneCount).toBe(3);
-    expect(frame.rows[0]?.height).toBe(32 * 3 + 2 * 2);
-    expect(frame.contentHeight).toBe(32 * 3 + 2 * 2 + 32);
   });
 });
 

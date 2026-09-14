@@ -59,9 +59,9 @@
         --fg-indent-width: 0px;
         /* NOT a page choice — 4px is the library's own default, restated here under protest.
            `.demo-bar-progress` below reads `var(--fg-bar-radius)` so its leading corners match the
-           bar it sits in. A metric token is only declared on `.fg-container` for `--fg-indent-width`
-           and `--fg-lane-gap`; the rest live as `var(--fg-x, default)` fallbacks inside library
-           rules, so consumer CSS cannot read one back. Delete this line and the progress shading
+           bar it sits in. A metric token is only declared on `.fg-container` for `--fg-indent-width`;
+           the rest live as `var(--fg-x, default)` fallbacks inside library rules, so consumer CSS
+           cannot read one back. Delete this line and the progress shading
            goes square in Light and Dark (Paper still works, because Paper declares its own 2px).
            The library should close this, not this page. */
         --fg-bar-radius: 4px;

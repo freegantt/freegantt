@@ -20,7 +20,7 @@ flowchart TB
 
   subgraph pureside["Pure — no DOM, runs anywhere"]
     direction TB
-    LAY["<b>layout/</b><br/>row resolution · lane packing<br/>bar geometry · link routing · height index"]
+    LAY["<b>layout/</b><br/>row resolution · item production<br/>bar geometry · link routing · height index"]
     SCH["<b>scheduling/</b><br/>first-party default plugin:<br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
     DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · reactivity façade"]
     TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
@@ -86,7 +86,7 @@ src/
                  (S2.1: reactivity.ts, event-bus.ts, entry-reader.ts, entry-store.ts,
                  dataset-state.ts — the only file layer that may additionally import time/, D-S2-1)
   scheduling/    propagation engine + policies        (pure)
-  layout/        geometry: rows, lanes, bars, routing (pure)
+  layout/        geometry: rows, items, bars, routing (pure)
   render/
     dom/         default backend + reconciler
     null/        headless backend (tests, SSR, export seam)
@@ -119,7 +119,7 @@ flowchart LR
 
   subgraph derived["DERIVED — recomputed, never persisted"]
     direction TB
-    ROW["Row (a display lane)"]
+    ROW["Row (a display track)"]
     ITEM["Item (one drawn bar)"]
     GEO["Geometry (pixels)"]
   end
@@ -127,7 +127,7 @@ flowchart LR
   authored -->|"row source config +<br/>layout pipeline"| derived
 ```
 
-`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display lane. `Item` is one drawn bar on a row. **A row may carry many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
+`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display track. `Item` is one drawn bar on a row. **A row may carry many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
 
 ### 2.2 Entities
 
@@ -163,12 +163,11 @@ returned array is cached and rebuilt once per commit, not once per read (D-S2-3)
 comparing two reads of `all` by reference is a correct "did anything change" check.
 
 ```ts
-/** DERIVED. One display lane. */
+/** DERIVED. One display track. */
 interface Row {
   id: RowId;
   kind: 'entry' | 'group' | 'custom';
   cells: readonly string[];       // one per configured grid column, in display order — §2.6
-  heightMode: 'fixed' | 'pack';   // 'pack' grows to fit lanes
 }
 
 /** DERIVED. One drawn bar. Always traces back to an entry. */
@@ -179,7 +178,6 @@ interface Item {
   variant: string;             // the Variant this Gantt resolved — stamped as data-variant (ADR 0018)
   segmentIndex?: number;
   start: Instant; end: Instant;
-  lane: number;                // sub-lane within the row
 }
 ```
 
@@ -202,10 +200,6 @@ erDiagram
   }
   ROW {
     string kind "entry | group | custom"
-    string heightMode "fixed | pack"
-  }
-  ITEM {
-    number lane
   }
 ```
 
@@ -213,7 +207,7 @@ erDiagram
 
 ### 2.3 Row sources — the flexibility mechanism
 
-The layout pipeline is `row resolution → item emission → lane packing → geometry`. The **row source** is configuration:
+The layout pipeline is `row resolution → item emission → geometry`. The **row source** is configuration:
 
 ```ts
 rowSource: { source: 'entries', tree: true }                        // classic Gantt (default)
@@ -221,7 +215,7 @@ rowSource: { source: 'group', groupBy: t => t.props.team }         // one row pe
 rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
-Item emission then places entries (or entry segments) onto rows; overlapping items on one row auto-pack into sub-lanes. Future workload/resource views are simply another row source — no new rendering or interaction code.
+Item emission then places entries (or entry segments) onto rows, one shared band per row. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
 Item emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `items` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
 
@@ -387,7 +381,7 @@ interface GeometryFrame {
    *  `formatValue` (§2.6). It is derived text on the `a11yLabel` precedent, not consumer render
    *  output — a `cellRenderer` is applied by `render/`, never here. */
   rows: Array<{
-    id: RowId; kind: PlannedRowKind; index: number; top: number; height: number; laneCount: number;
+    id: RowId; kind: PlannedRowKind; index: number; top: number; height: number;
     depth: number; expandable: boolean; expanded: boolean;
     matched?: boolean;   // false when kept only because a descendant matched the filter
     cells: readonly string[];
@@ -416,7 +410,7 @@ interface GeometryFrame {
     segmentIds: readonly SegmentId[];
     /** The entry's name — what a backend renders as the bar's label (#26). */
     label: string;
-    x: number; y: number; width: number; height: number; lane: number;
+    x: number; y: number; width: number; height: number;
     /** Static classification only (`conflict`, `cycle` — renamed from `hasConflict`/`inCycle` at
      *  S1.10 so the field names double as the `data-flag` CSS vocabulary directly, D-S1.10-3) —
      *  never hover/selection. */
@@ -472,7 +466,7 @@ Rules that keep it honest:
 
 - **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Item.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
 - **No materialized hit-region array.** The bars array *is* the hit index; DOM backends get hit-testing from event delegation.
-- **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y" even with pack-mode variable heights. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S6 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S4's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
+- **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y", ready for row heights that vary in a future slice. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S6 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S4's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
 - **Grid and timeline consume the same `frame.rows`.** Both position rows absolutely from `top`/`height`; neither uses flow layout or computes a height. One vertical window, one scroll owner. This is the #1 defect source in split-pane Gantts and it is closed by construction (D8).
 
 ---

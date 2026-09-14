@@ -11,7 +11,6 @@ export interface FrameRow {
   index: number;
   top: number;
   height: number;
-  laneCount: number;
   depth: number;
   expandable: boolean;
   expanded: boolean;
