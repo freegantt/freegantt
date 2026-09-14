@@ -9,7 +9,6 @@ decided: core exports its looks as `EntryVariant` factories — `bar()`, `summar
 open: nothing this record answers. A fourth shipped look (a chevron, a flag, a hatched buffer, a hollow bar) is deliberately not here.
 ---
 
-
 [ADR 0021](0021-the-consumers-stylesheet-wins.md) is its pair: that one lets a consumer's CSS win, this one gives them something worth writing CSS against. Neither is sufficient alone — the checkpoint defect needed both.
 
 ## Context

@@ -9,7 +9,6 @@ decided: one seam, not two — a plugin states the parent of an Entry, and the R
 open: nothing. The seam is the **hierarchy source**, set through `ctx.hierarchy.setSource` (2026-09-11, author's ruling — `Q3` — with the namespace added on a review finding the same day), and it sits beside `ctx.edits.setExtender` on the `data` half. The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
 ---
 
-
 **Lands after [0017](0017-the-entry-answers-questions-about-itself.md), [0018](0018-a-variant-is-a-rule-not-an-id-list.md) and [0019](0019-one-plugin-one-install-site.md).** 0017 gives every reader one door onto the tree. This ADR is what makes that door worth having.
 
 ## Context
@@ -41,7 +40,7 @@ type HierarchySource<TProps = Record<string, unknown>> = (
 ) => EntryId | string | undefined;
 ```
 
-One entry in, one parent id out. Core's own source is `(entry) => entry.parentId`, registered like any other, with no special claim on the seam. A plain `string` is a legal answer, the way it is on every other way into the library, and core brands it once (`BUILD-LOG` `J51`).
+One entry in, one parent id out. Core's own source is `(entry) => entry.parentId`, registered like any other, with no special claim on the seam (D-S5-23). A plain `string` is a legal answer, the way it is on every other way into the library, and core brands it once (`BUILD-LOG` `J51`).
 
 A plugin composes, the same way an `EditExtender` composes — it receives the current occupant and may call it:
 

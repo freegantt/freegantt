@@ -3,7 +3,6 @@ id: consumer-api
 title: "FreeGantt — Consumer API (index)"
 ---
 
-
 This file points app authors at the consumer surface. It does not replace the spec.
 
 ## Start here
@@ -13,9 +12,9 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/README.md) | Quick start, dates/ids, and the API as it ships on the current branch |
 | [`plans/02-public-api.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
 | [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
-| [`etc/freegantt.api.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); browse it as generated reference pages at [API reference](../api/) |
-| [Plugin authoring guide](./plugin-authoring.md) | `definePlugin`, the two halves, every registration seam |
-| [Row source updates](./row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
+| [`etc/freegantt.api.md`](../api/) | Generated TypeScript export list (api-extractor); the same public surface is also browsable as generated API docs on the Docusaurus site (`pnpm docs`) |
+| [`docs/06-plugin-authoring.md`](plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
+| [`docs/07-row-source-updates.md`](row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
 
 ## S4 surface (hierarchy and rows)
 
@@ -34,7 +33,9 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
-- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back resolved, and one setting changes by spreading that value — see [Row source updates](./row-source-updates.md).
+- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back
+  resolved, and one setting changes by spreading that value — see
+  [Row source updates](row-source-updates.md).
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
@@ -61,8 +62,8 @@ of resolved rows.
 FreeGantt takes one plugin type with two halves (ADR 0019). `definePlugin`
 writes it: a `data` half installs on a `Dataset`, a `view`-only half installs on
 a `Gantt`. Install at construction (`plugins: [...]`), or reconfigure a `Gantt`'s
-plugins live (`gantt.plugins = [...]`). The [plugin authoring guide](./plugin-authoring.md) covers
-both halves, every registration seam, the registration gate, disposal, `requires`, and
+plugins live (`gantt.plugins = [...]`). The [plugin authoring guide](plugin-authoring.md) covers both
+halves, every registration seam, the registration gate, disposal, `requires`, and
 the errors an author meets. `tooltips()`, `contextMenu()`, and
 `inlineEditing()` are the three built-in plugins that ship with the package,
 none of them loaded unless a consumer installs them.
@@ -162,6 +163,13 @@ No named
 multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
 I2-safe place a `registerThemePreset`-shaped seam can live.
 
+**`gantt.resolvedTheme` answers `'light'` or `'dark'` — never `'auto'`** (#330): the getter reads
+back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
+getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
+moves — a `theme` assignment that changes the pin, or the OS flipping under `'auto'` with no
+ancestor pin in the way. It has no `before*` pair, the same reason `navigationChange` has none: the
+OS half is not a vetoable gesture, and the `theme` half already has its own live setter.
+
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
 `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. A
@@ -191,7 +199,7 @@ this one.
 
 ### Retired and renamed tokens
 
-- **`--fg-header-height`** shipped at S1.8 (fallback `20`) and retired at S1.12 — a
+- **`--fg-header-height`** shipped at S1.8 (fallback `20`) and retired at S1.12 (D-S1.12-10) — a
   fixed header height could not size N header bands correctly. Migration: `--fg-header-height: 40px`
   on a two-band preset becomes `--fg-band-height: 20px`. The grid pane's spacer now mirrors one empty
   `.fg-band` per header band, so both panes size from `--fg-band-height` alone. `src/view/styles.test.ts`
@@ -271,11 +279,11 @@ unsupported — the next layout pass owns the node.
 |---|---|---|
 | `.fg-grid-spacer` | `pane-layout.ts` | Sizes the grid content to overflowing columns. A rule here fights the next frame. |
 | `.fg-rows-clip` | `pane-layout.ts` | Clips windowed grid rows. The reconciler owns overflow here. |
-| `.fg-rows` | `pane-layout.ts` | Host for windowed grid rows. |
+| `.fg-rows` | `pane-layout.ts` | Holds the windowed grid rows. |
 | `.fg-header-bands` | `render/dom/index.ts` | Clips the band stack so `.fg-header` can stay `overflow: visible` (#225). |
 | `.fg-tick-lines` | `render/dom/tick-lines.ts` | Positioned ancestor for tick-line strokes. |
-| `.fg-row-bands` | `render/dom/index.ts` | Host for `.fg-row-band` copies. |
-| `.fg-bars` | `render/dom/index.ts` | Host for `.fg-bar` nodes. |
+| `.fg-row-bands` | `render/dom/index.ts` | Holds the `.fg-row-band` copies. |
+| `.fg-bars` | `render/dom/index.ts` | Holds the `.fg-bar` nodes. |
 | `.fg-content-sizer` | `render/dom/index.ts` | Hidden 1×1 marker for the timeline scroll extent. |
 | `.fg-date-lines` | `render/dom/date-line.ts` | Positioned ancestor for date-line strokes. |
 | `.fg-live-region` | `view/live-region.ts` | Visually hidden polite live region. Not a painted surface. |
@@ -289,6 +297,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-The [Architecture](../architecture/index.md) section holds the internal module maps for
-maintainers, and may lag the current slice. The [API reference](../api/) is generated from
-`src/api/index.ts` by TypeDoc at build time, so it never drifts from the shipped types.
+Architecture and API documentation live on the Docusaurus site under `website/` — run `pnpm docs` to
+view it locally. The site's API reference is generated from TSDoc comments via TypeDoc, so it never
+drifts from the source.

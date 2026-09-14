@@ -11,6 +11,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
 | [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); the same public surface is also browsable as generated API docs on the Docusaurus site (`pnpm docs`) |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
+| [`docs/07-row-source-updates.md`](07-row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
 
 ## S4 surface (hierarchy and rows)
 
@@ -29,7 +30,9 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
-- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
+- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back
+  resolved, and one setting changes by spreading that value — see
+  [Row source updates](07-row-source-updates.md).
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
@@ -56,7 +59,7 @@ of resolved rows.
 FreeGantt takes one plugin type with two halves (ADR 0019). `definePlugin`
 writes it: a `data` half installs on a `Dataset`, a `view`-only half installs on
 a `Gantt`. Install at construction (`plugins: [...]`), or reconfigure a `Gantt`'s
-plugins live (`gantt.plugins = [...]`). `docs/06-plugin-authoring.md` covers both
+plugins live (`gantt.plugins = [...]`). The [plugin authoring guide](06-plugin-authoring.md) covers both
 halves, every registration seam, the registration gate, disposal, `requires`, and
 the errors an author meets. `tooltips()`, `contextMenu()`, and
 `inlineEditing()` are the three built-in plugins that ship with the package,
@@ -273,11 +276,11 @@ unsupported — the next layout pass owns the node.
 |---|---|---|
 | `.fg-grid-spacer` | `pane-layout.ts` | Sizes the grid content to overflowing columns. A rule here fights the next frame. |
 | `.fg-rows-clip` | `pane-layout.ts` | Clips windowed grid rows. The reconciler owns overflow here. |
-| `.fg-rows` | `pane-layout.ts` | Host for windowed grid rows. |
+| `.fg-rows` | `pane-layout.ts` | Holds the windowed grid rows. |
 | `.fg-header-bands` | `render/dom/index.ts` | Clips the band stack so `.fg-header` can stay `overflow: visible` (#225). |
 | `.fg-tick-lines` | `render/dom/tick-lines.ts` | Positioned ancestor for tick-line strokes. |
-| `.fg-row-bands` | `render/dom/index.ts` | Host for `.fg-row-band` copies. |
-| `.fg-bars` | `render/dom/index.ts` | Host for `.fg-bar` nodes. |
+| `.fg-row-bands` | `render/dom/index.ts` | Holds the `.fg-row-band` copies. |
+| `.fg-bars` | `render/dom/index.ts` | Holds the `.fg-bar` nodes. |
 | `.fg-content-sizer` | `render/dom/index.ts` | Hidden 1×1 marker for the timeline scroll extent. |
 | `.fg-date-lines` | `render/dom/date-line.ts` | Positioned ancestor for date-line strokes. |
 | `.fg-live-region` | `view/live-region.ts` | Visually hidden polite live region. Not a painted surface. |

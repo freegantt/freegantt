@@ -3,7 +3,6 @@ id: guardrails-overview
 title: "FreeGantt — Guardrails Overview"
 ---
 
-
 **Status:** Design. No code yet — this folder specifies the enforcement system that `plans/04` §3–§4 calls for, in enough detail that implementing it is mechanical.
 
 **What this folder is:** the answer to "how do we make the rules in `plans/00`–`04` and `CLAUDE.md` *deterministic* — machine-checked, failing loudly, on every change — instead of things a reviewer has to remember."
@@ -49,7 +48,7 @@ L4 is a *convenience* layer: it runs a fast subset of L2/L3 early, for the agent
 
 | Source | Rules it contributes | Primary mechanism |
 |---|---|---|
-| `plans/01` §1 layer map | I1, the scheduling-isolation boundary (ADR 0002), pure-layer DOM freedom | dependency-cruiser + `no-restricted-globals` + Node-env test project |
+| `plans/01` §1 layer map | I1, D4 isolation, pure-layer DOM freedom | dependency-cruiser + `no-restricted-globals` + Node-env test project |
 | `plans/01` §5 time policy | I10, half-open storage | 3 lint rules (2 builtin-restriction, 1 type-aware custom) |
 | `plans/01` §6 data | transactions-only mutation, no singletons (I2) | 2 custom lint rules + isolation test |
 | `plans/01` §7 scheduling | I3, I4 | recursion lint rule + 5k fixture + fast-check purity property |
@@ -67,7 +66,7 @@ Recording these so nobody later mistakes the gap for an oversight:
 - **"Is this the right design?"** Guards enforce the *decided* architecture; they cannot tell us a decision was wrong. Locked decisions D1–D12 change by editing `plans/`, not by adding an exception to a lint rule. When a guard is fighting the code, the correct first question is "is the code wrong?" and the correct second is "should the spec change?" — never "let me add an eslint-disable."
 - **Coverage as a quality target.** One coverage gate exists (>90% on `scheduling/`, per S7 acceptance) because that module is pure logic with golden fixtures. No global coverage threshold: it drives test-shaped-noise, not correctness.
 - **Formatting debates.** Prettier decides, nobody reviews it, `--check` in CI.
-- **Performance budgets before S6.** Budgets that predate a measured spike are guesses. The *jobs* are scaffolded early and non-blocking; they gate at S6.
+- **Performance budgets before S6.** Budgets that predate a measured spike are guesses (D2). The *jobs* are scaffolded early and non-blocking; they gate at S6.
 
 ## 5. Escape hatches, and their price
 
@@ -91,7 +90,7 @@ A diagnostic behind this flag is not a warning that appears in development. It i
 - Our tests run with `DEV === true`, so the gated branch is the only branch they exercise. The suite is green and proves nothing about what a consumer gets.
 - Nobody reports the absence. A consumer cannot miss a line they have never seen.
 
-This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one. `'variant-claimed-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
+This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'variant-claimed-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
 
 **What it is legitimately for:** making *our own* development stricter, at a cost we do not want to charge a consumer. `transaction.ts` deep-freezes a ChangeSet so our tests catch a mutation. `build-commit-change-set.ts` asserts an extension hook did not overwrite the body. Both would still be correct if they never ran anywhere else. The test is: *would a consumer want this?* If yes, it must not be gated.
 

@@ -9,7 +9,6 @@ decided: the namespace is `props`; a Field key is the whole address, so `FieldSo
 open: none. Closed decisions are in `plans/field-redesign/0011-consumer-values-in-props/`.
 ---
 
-
 > **One sentence here is retired.** *Decision 13* named a rename of `fieldValue` to `read` and the deletion of `durationOf`. That was ADR 0014's, and the author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](index.md#the-gap-at-0014)). `entries.fieldValue` is what `src/` ships. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) now owns the read door, as `entry.read(key)`. **The decisions this ADR took itself all stand**, and the body stays written.
 
 **This is the ADR that simplifies the API.** It grew to 25 decisions and split into five on 2026-09-09, by question rather than by file. The other four are [0012 — optional dates](0012-dates-are-optional-on-every-kind.md), [0013 — what decides derivation](0013-what-decides-that-a-row-derives-its-values.md), [0014 — the plugin-author surface](index.md#the-gap-at-0014) and [0015 — what the write door refuses](0015-what-the-write-door-refuses.md). The map is [`plans/field-redesign/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/field-redesign/README.md).
@@ -190,9 +189,9 @@ sequenceDiagram
 
 - ADR 0005's `meta` rulings, if this is accepted.
 - `plans/01:273-281` (the `FieldSource` type and its default), `plans/01:330` and `plans/02:454` (*"Source decides stored or computed"*), and `plans/02` §7's two `FieldSource` errors.
-- The decision behind *"Omitted `source` is `meta` under the Field key"* is retired. The key is the whole address, so there is no `source` to omit.
-- The earlier `meta` carve-out goes with the `meta` Field, and so does the *"Whole-`meta` write after a declared Field exists"* rule row.
-- The decision titled _"one adapter reads and writes a `FieldSource`"_ is retired. The `& Partial<TFields>` arm on `EntryEdit` is a paragraph inside it, not the decision's name.
+- **D-S4-35 is retired** — *"Omitted `source` is `meta` under the Field key"*. The key is the whole address, so there is no `source` to omit.
+- **D-S2-7's `meta` carve-out** goes with the `meta` Field, and so does the *"Whole-`meta` write after a declared Field exists"* rule row.
+- **D-S4-2 is retired, and its title is _"one adapter reads and writes a `FieldSource`"_.** The `& Partial<TFields>` arm on `EntryEdit` is a paragraph inside it, not the decision's name.
 
 The prose sweep that rewrites all of this runs **once, after every open decision in all five ADRs has closed** — [`shared/prose-sweep.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/field-redesign/shared/prose-sweep.md).
 
