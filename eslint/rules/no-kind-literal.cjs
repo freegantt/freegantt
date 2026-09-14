@@ -1,8 +1,11 @@
-// CLAUDE.md entry-kinds rule: "Entry.kind is authored, never derived from having children.
-// Behavior per kind goes through the seams ... no `if (kind === ...)` chains outside them." S2's
-// span rollup (D-S2-22) is the first kind-dependent behaviour in data/, and this is its guard: a
-// kind string literal compared against a `.kind` property in src/data/** or src/layout/**, where it
-// must instead go through a lookup (a `Set`/registry), never an inline comparison.
+// S2's span rollup (D-S2-22) was the first kind-dependent behaviour in data/, and this rule was its
+// guard: a kind string literal compared against a `.kind` property in src/data/** or src/layout/**,
+// where it must instead go through a lookup (a `Set`/registry), never an inline comparison.
+//
+// ADR 0013 later retired the field this rule was written for: an Entry carries no stored
+// classification, so `entry.kind` no longer exists, and derivation and look follow structure and
+// registered Variants instead (ADR 0018, ADR 0022). The rule stays registered as a general backstop
+// against inline `.kind` dispatch on any object in these two layers, but its original target is gone.
 
 'use strict';
 
@@ -29,7 +32,7 @@ module.exports = {
     type: 'problem',
     docs: {
       description:
-        'ban comparing a kind string literal against Entry.kind in data/ and layout/ (CLAUDE.md, plans/01 §2.5)',
+        'ban comparing a kind string literal against a .kind property in data/ and layout/ (plans/01 §2.5, ADR 0013)',
     },
     messages: {
       kindLiteral:

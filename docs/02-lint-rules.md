@@ -58,7 +58,7 @@ These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-tes
 | Rule | Module | Allowed importers | Invariant |
 |---|---|---|---|
 | `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-7 — delete the file and parents keep caller-assigned values |
-| `autogroup-is-removable` | `src/data/hierarchy.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-17 — delete the file and promotion never runs |
+| ~~`autogroup-is-removable`~~ **RETIRED 2026-09-11** | ~~`src/data/hierarchy.ts`~~ | — | [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `data/hierarchy.ts` itself, so the rule's guarded file no longer exists. `autoGroup` is gone, not merely unreachable. |
 | `layout-boundary` | `src/layout/**` | may import `time/`, `model/` only | I1 — `layout/` never imports `data/` |
 
 *(B11 duplicates dependency-cruiser deliberately: `depcruise` is the authority and understands the whole graph; the ESLint mirror gives the red squiggle in-editor and inside the Claude Code PostToolUse hook, where a full graph crawl would be too slow.)*
@@ -116,6 +116,8 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
+**Never shipped, and its premise is now superseded.** The four seams below landed by S6 with no stored `kind` to dispatch on: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+
 ---
 
 ### 3.3a `freegantt/no-kind-literal` — syntactic · `01` §2.5 · shipped S2.7
@@ -136,9 +138,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Message:** `kind is dispatched through a lookup, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
 
-**When §3.3's seams land (S3+):** either fold this rule into §3.3's broader one with its allowlist, or
-keep both — the seam files themselves need to compare `kind` to dispatch, which is exactly what §3.3's
-allowlist exists for; `data/` and `layout/` have no such seam and never will, on the current design.
+**Resolved, not by folding into §3.3.** [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` itself, so §3.3's seam-allowlist rule was never built — there is no stored `kind` left to compare at any seam. This rule stays registered as a general backstop against inline `.kind` dispatch in `data/` and `layout/`, but its original target (`entry.kind ?? 'span'`) no longer exists in the model.
 
 ---
 
