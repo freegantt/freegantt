@@ -10,7 +10,7 @@
 // raises them where it wants them raised: the store does it once per revision, from the commit path,
 // and the Rollup's own pass — a tree no commit has landed — drops them on the floor.
 
-import type { EntryId, ErrorCode, ErrorReportInput, HierarchySource, StoredEntry } from '../model/index.js';
+import type { EntryId, ReportCode, ErrorReportInput, HierarchySource, StoredEntry } from '../model/index.js';
 import { entryId } from '../model/index.js';
 
 /** Core's own source, registered like any other with no special claim on the seam (D-S5-23). A
@@ -86,7 +86,7 @@ export function checkHierarchyAnswers(
  *  calls an expert door.
  *
  *  `says` completes the sentence after whoever answered. */
-function refuse(entry: StoredEntry, answer: EntryId, code: ErrorCode, says: string): ErrorReportInput {
+function refuse(entry: StoredEntry, answer: EntryId, code: ReportCode, says: string): ErrorReportInput {
   const authored = entry.parentId === answer;
   return {
     code,
