@@ -11,7 +11,7 @@ import type {
   Entry,
   StoredEntry,
   EntryId,
-  ErrorCode,
+  ReportCode,
   Instant,
   ItemId,
   ProposedEdit,
@@ -140,7 +140,7 @@ function proposedDatesOf(entry: EntryId, edit: ProposedEdit): ProposedDates {
  *  hands this straight to `buildRefusalReport` (`data/error-reporting.ts`), which derives the
  *  sentence's noun from `event` alone — that is what lets this carry no separate `kind`. */
 interface GestureRefusal {
-  code: ErrorCode;
+  code: ReportCode;
   /** The `before*` name whose handler refused. */
   event: 'beforeEntryMove' | 'beforeEntryResize';
   entryId: EntryId;

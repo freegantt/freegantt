@@ -80,6 +80,7 @@ export type {
   ColumnCellRendererContext,
   TooltipColumn,
 } from './field.js';
+export type { BuiltInThrownCode, ThrownCode } from './errors.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
@@ -130,8 +131,8 @@ export {
 export type {
   ErrorReport,
   ErrorReportInput,
-  BuiltInErrorCode,
-  ErrorCode,
+  BuiltInReportCode,
+  ReportCode,
   ErrorSeverity,
   ErrorReporter,
   Refusable,
