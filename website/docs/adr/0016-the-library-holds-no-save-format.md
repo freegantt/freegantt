@@ -9,7 +9,6 @@ decided: the library holds no save format; `toJSON`, `fromJSON`, the Document ty
 open: none. One question opened and closed on 2026-09-10 — `props` stands, on the two reasons that never mentioned serialization.
 ---
 
-
 **This ADR deletes a public surface, and it makes the five ADRs after it smaller.** ADRs 0012, 0011, 0013, 0014 and 0015 each spend a schema number today. None of them spends one after this lands.
 
 ## Context

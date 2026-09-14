@@ -62,37 +62,27 @@ the convention: state the date by hand, and only when you checked the page again
 
 ## 2. What REMAINS
 
-### 2.1 Thirty-two documents live in two places, and the published half is already behind
+### 2.1 Thirty-two documents live in two places — CLOSED 2026-09-14 (#221)
 
-**This is the biggest one, and it is the reason §1.3 happened.**
+`docs/` is the source. `website/docs/guides/` and `website/docs/adr/` are generated from it by
+`scripts/build-website-docs.mjs`, and `pnpm docs:published-is-current` fails the gate when the
+committed output is behind — the same posture `pnpm api-report` already takes for
+`etc/freegantt.api.md`. A published page with no source under `docs/` fails too, so a second home
+cannot come back quietly.
 
-| Pair | Count | State |
-| --- | --- | --- |
-| `docs/0*.md`, `docs/edit-extension-flow.md` ↔ `website/docs/guides/*.md` | 8 | All 8 differ. |
-| `docs/adr/*.md` ↔ `website/docs/adr/*.md` | 24 | All 24 differ. |
+`docs/` won every disagreement, because `docs/adr/README.md` rules that an accepted record is
+superseded and never rewritten. The migration had rewritten 24 ADR bodies while copying them, and
+that rule forbids it. The site now serves each record as its author wrote it.
 
-Prove it, and see which half is stale:
+`website/docs/guides/row-source-updates.md` had no source at all; it is now
+`docs/07-row-source-updates.md`. `scripts/check-doc-examples.mjs` typechecks the source rather than
+the copy.
 
-```bash
-git log --oneline 8c357d8..HEAD --name-only -- docs/ website/docs/ | sort -u
-```
-
-Since the migration (`8c357d8`, #355), `docs/02-lint-rules.md`, `docs/04-hooks-and-ci.md` and
-`docs/05-consumer-api.md` each took an edit that **never reached the published copy**. Only
-`edit-extension-flow.md` was updated in both halves, by hand, in one commit (`8f0d3a3`).
-
-Ownership is split today, which is why neither half wins by default:
-
-- `CLAUDE.md` cites `docs/04` §5 and `docs/05-consumer-api.md` — the root copies.
-- `test/guards/retired-words.test.ts` `SCAN_FILES` lists `docs/00`–`04` — the root copies.
-- `scripts/check-doc-examples.mjs` typechecks `website/docs/guides/plugin-authoring.md` — the
-  published copy.
-
-**Decide one home.** Either the root `docs/` becomes the source and the site copies are generated
-or symlinked, or the site becomes the source and the root copies are deleted with every citation
-re-pointed. Whichever way it goes, add a guard that fails when a pair diverges, or the next
-migration repeats this. Until then, assume any `website/docs/guides/` or `website/docs/adr/` page
-may be behind its twin.
+Two things this cost, both recorded rather than hidden. The published pages lose the migration's
+prose rewrites, which is the point — they were edits to the wrong copy. And
+`docs/05-consumer-api.md`'s closing paragraph names the Architecture and API sections in prose
+instead of linking them, because `website/docs/architecture/` has no source under `docs/` for a
+link to aim at.
 
 ### 2.2 `files.md` is an inventory that misses 24 live files
 
@@ -136,7 +126,7 @@ Its "behavior per kind" table lists `src/scheduling/policy/default-policy.ts`,
 `src/render/dom/renderer-registry.ts` and `src/interaction/capabilities.ts`. None exists, and
 `eslint.config.js` does not name them either. `scheduling/` is S7 and unbuilt, so at least one row
 describes work that has not happened — which `maintaining.md` rule 4 forbids ("a section describing
-a class that does not exist yet is worse than no section"). Fix it in whichever copy §2.1 settles
+a class that does not exist yet is worse than no section"). Fix it in `docs/02-lint-rules.md`, the source §2.1 settled on
 on as the source.
 
 ### 2.5 `Viewport.bind()` still notifies twice — a one-line library change

@@ -3,7 +3,6 @@ id: 0004-the-authored-body-of-data-is-a-dataset-not-a-project
 title: "The authored body of data is a Dataset, not a Project"
 ---
 
-
 ADR 0003 retired `Task` because the word carried a methodology into a core that claims not to assume one. `Project` had the same problem one level up: it's the class that wraps a host's entries plus the settings that give them meaning (above all the IANA zone), and "project" reads as project-management vocabulary the instant a host isn't running one — a shift roster, a room-booking calendar, or a machine-uptime chart has no project, the same way it has no tasks. We renamed the class (and everything derived from its name) to `Dataset`.
 
 ## Why now, and why this word

@@ -3,8 +3,7 @@ id: edit-extension-flow
 title: "The extension hook — flow and sample usage"
 ---
 
-
-**Scope:** `data/edit-extension.ts` (`plans/s2-data-core`). This doc illustrates the mechanism
+**Scope:** `data/edit-extension.ts` (D-S2-6, `plans/s2-data-core`). This doc illustrates the mechanism
 closed in **OQ1** (`plans/s2-data-core/OPEN-QUESTIONS.md`), revised 2026-08-27 at the user's explicit
 direction — a plain, usable API now over pre-matching an S7 scheduling contract that doesn't exist yet.
 It is a walkthrough, not a spec — the authoritative shape is
@@ -23,7 +22,7 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
 | `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, and the two sets below |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state (D-S5-45), and the two sets below |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the
@@ -48,10 +47,10 @@ never states `proposedKeys`, and never computes an envelope.
 - Two plugins on one Entry — `mergeEntryEdits(next(request), mine(request))`, never a `Map` spread or
   an object spread. A spread drops the earlier plugin's write outright (#197, #238).
 - A whole-Entry move — `moveEntryTo(entry, start)`. An envelope-only write against
-  an Entry that draws several Segments is refused (`SegmentsOutOfSyncError`), because
+  an Entry that draws several Segments is refused (`SegmentsOutOfSyncError`, D-S5-44), because
   `start`/`end` alone name no Segment to move. `moveEntryTo` returns every Segment translated rigidly,
   each keeping its own `SegmentId`, and it names `segments` and nothing else — core derives the
-  envelope (#239). Stating the envelope here used to overwrite an earlier plugin's `end` and
+  envelope (D-S5-50, #239). Stating the envelope here used to overwrite an earlier plugin's `end` and
   commit that write away with no error.
 
 **A cascade onto an Entry the same transaction adds.** This case has no base Entry in the committed
@@ -71,7 +70,7 @@ for (const id of request.addedEntryIds) scheduleFrom(request.entryAfterEdits(id)
 ```
 
 Read a removed id off `request.entries` — it still holds the pre-transaction row, since removal never
-rewrites that snapshot. Read an added id through `request.entryAfterEdits(id)`, never off
+rewrites that snapshot (D-S5-45). Read an added id through `request.entryAfterEdits(id)`, never off
 `request.entries`, since an addition has no pre-transaction row to be in.
 
 Both sets are the transaction's **net effect, not a call log** — computed once, at commit, from the
@@ -120,7 +119,7 @@ dataset.transaction(() => {
 ```
 
 A single edit needs none of that — it's still worth showing, because it's the more common call and it
-needs no ceremony at all. A lone mutation auto-wraps in its own transaction, the same
+needs no ceremony at all. D-S2-8 auto-wraps a lone mutation in its own transaction, the same
 convenience `plans/02` §2 promises: "Single mutations outside an explicit transaction are auto-wrapped
 in one — no second code path."
 
@@ -156,7 +155,7 @@ can return up to two extra edits (`frame-walls` cascading from `pour-foundation`
 cascading from `site-survey`), all folded into the one `ChangeSet` the transaction commits.
 
 S5.10 shipped the public way to install one: `new Dataset({ entries, plugins: [myPlugin()] })`, with
-the plugin claiming the hook through `ctx.edits.setExtender` (ADR 0002). Installing **composes** — the
+the plugin claiming the hook through `ctx.edits.setExtender` (D-S5-23). Installing **composes** — the
 wrapper receives the current occupant, so a second plugin adds to the first's writes instead of
 evicting it. `harness/plugins/lock-entries.ts` is the worked example.
 
@@ -165,8 +164,8 @@ evicting it. `harness/plugins/lock-entries.ts` is the worked example.
 1. **The caller** writes plain `dataset.entries.update(...)` calls — one alone, or several grouped in
    `dataset.transaction(() => { ... })`. It has no idea an extender is installed, and no branch for "if
    a plugin is present" or "if there's more than one edit."
-2. **The transaction collects the whole batch** — one proposed edit if the call was auto-wrapped,
-   or however many the body made — and, at commit, builds **one** `EditRequest`: the current
+2. **The transaction collects the whole batch** — one proposed edit if the call was auto-wrapped
+   (D-S2-8), or however many the body made — and, at commit, builds **one** `EditRequest`: the current
    entries plus every proposed edit together.
 3. **`cascadeStartDate` runs once**, given the entire batch. It loops `proposed`, and for each entry
    with a proposed `start` and a dependent, adds one extra edit. Nothing outside the loop's matches is
