@@ -56,8 +56,17 @@ jobs:
       # nothing else does. `--with-deps` runs only on a miss; the runner image already carries the
       # system libraries Chromium needs, so a hit needs no apt step. If a future image drops one,
       # the fix is `pnpm exec playwright install-deps chromium` on the hit path, not a wider key.
+      # Read the version from the installed package, never from `pnpm exec` output. `pnpm exec`
+      # writes its own banner to stdout — "Already up to date" and "Done in 351ms using pnpm
+      # v11.22.0" — whenever it decides the project needs an install check. `awk '{ print $NF }'`
+      # then returns one last-field per line, so `$GITHUB_OUTPUT` receives three lines where it
+      # needs one `key=value`. The run dies on the second: `Invalid format 'v11.22.0'`. That is a
+      # pnpm version string standing in for Playwright's, which is the tell. The banner is not
+      # deterministic — it depends on whether the lockfile looks settled — so the step passed on
+      # most branches and failed on the one that changed dependencies (#355). `require(...)` reads
+      # the same install with no wrapper in front of it, so there is no banner to strip.
       - id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{ print $NF }')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - id: browsers
         uses: actions/cache@v4
         with:
