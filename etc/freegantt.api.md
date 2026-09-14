@@ -656,8 +656,7 @@ export interface EntityRemoved {
 export interface EntriesRowSource extends RowSourceCommon {
     // (undocumented)
     source: 'entries';
-    // (undocumented)
-    tree?: boolean;
+    tree?: boolean | undefined;
 }
 
 // @public
@@ -1968,11 +1967,11 @@ export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 // @public
 export interface RowSourceCommon {
     // (undocumented)
-    filter?: RowFilter;
+    filter?: RowFilter | undefined;
     // (undocumented)
-    filterPolicy?: FilterPolicy;
+    filterPolicy?: FilterPolicy | undefined;
     // (undocumented)
-    sort?: RowSort;
+    sort?: RowSort | undefined;
 }
 
 // @public

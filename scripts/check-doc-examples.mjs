@@ -32,7 +32,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const guidePath = path.join(root, 'website/docs/guides/plugin-authoring.md');
+/** Every guide whose prose makes a checkable claim about the API. A guide joins this list the day it
+ *  gains its first fenced `ts` block — an unchecked example rots exactly as fast as a checked one
+ *  stays honest, and nothing but this list decides which it is. */
+const guidePaths = [
+  path.join(root, 'website/docs/guides/plugin-authoring.md'),
+  path.join(root, 'website/docs/guides/row-source-updates.md'),
+];
 const distTypesPath = path.join(root, 'dist/api/index.d.ts');
 const tsc = path.join(root, 'node_modules/.bin/tsc');
 
@@ -135,26 +141,34 @@ function runRedTest() {
 
 runRedTest();
 
-if (!existsSync(guidePath)) {
-  console.error(`check-doc-examples: ${path.relative(root, guidePath)} does not exist.`);
-  process.exit(1);
-}
+let checkedCount = 0;
 
-const guideMarkdown = readFileSync(guidePath, 'utf8');
-const blocks = extractTsBlocks(guideMarkdown);
-if (blocks.length === 0) {
-  console.error(`check-doc-examples: ${path.relative(root, guidePath)} carries no fenced ts blocks.`);
-  process.exit(1);
-}
+for (const guidePath of guidePaths) {
+  const guideName = path.relative(root, guidePath);
 
-const guideResult = typecheckBlocks(blocks);
-if (!guideResult.ok) {
-  console.error(`check-doc-examples: ${blocks.length} example(s) in the guide, one or more failed:\n`);
-  console.error(guideResult.output);
-  process.exit(1);
+  if (!existsSync(guidePath)) {
+    console.error(`check-doc-examples: ${guideName} does not exist.`);
+    process.exit(1);
+  }
+
+  const blocks = extractTsBlocks(readFileSync(guidePath, 'utf8'));
+  if (blocks.length === 0) {
+    console.error(`check-doc-examples: ${guideName} carries no fenced ts blocks.`);
+    process.exit(1);
+  }
+
+  const guideResult = typecheckBlocks(blocks);
+  if (!guideResult.ok) {
+    console.error(`check-doc-examples: ${blocks.length} example(s) in ${guideName}, one or more failed:\n`);
+    console.error(guideResult.output);
+    process.exit(1);
+  }
+
+  checkedCount += blocks.length;
+  console.log(`check-doc-examples: all ${blocks.length} example(s) in ${guideName} typecheck.`);
 }
 
 console.log(
-  `check-doc-examples: all ${blocks.length} example(s) in ${path.relative(root, guidePath)} ` +
+  `check-doc-examples: ${checkedCount} example(s) across ${guidePaths.length} guide(s) ` +
     'typecheck against the built package types.',
 );
