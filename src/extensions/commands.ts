@@ -11,11 +11,16 @@ import type { Disposer } from '../model/index.js';
 // is what makes a plugin's override of a core command undo itself on uninstall (D-S5-7).
 import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
+  BuiltInCommandId,
   CommandOf,
   CommandContextOf,
   CommandRegistryOf,
   CommandTarget as CommandTargetType,
 } from '../api/command.js';
+
+/** #333: `view/core-commands.ts` types every registration against this, so a typo in a registered id
+ *  fails to compile. It reaches the type here for the same reason it reaches `Command` here. */
+export type { BuiltInCommandId };
 
 export type Command<TGantt = unknown> = CommandOf<TGantt>;
 export type CommandContext<TGantt = unknown> = CommandContextOf<TGantt>;

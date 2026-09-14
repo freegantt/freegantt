@@ -5,7 +5,7 @@
 
 import type {
   EntryId,
-  ErrorCode,
+  ReportCode,
   ErrorReport,
   ErrorReportInput,
   FieldUpdated,
@@ -54,7 +54,7 @@ const REFUSAL_NOUN: Record<RefusalEvent, string> = Object.freeze({
 });
 
 export interface RefusalReportInit {
-  readonly code: ErrorCode;
+  readonly code: ReportCode;
   readonly event: RefusalEvent;
   /** What the first refusing handler said, if anything (#210) — `buildRefusalReport` reads
    *  `note.reason` once, at report time, the same way `#reportRefusal` used to. */
@@ -108,7 +108,7 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
 export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
 
 export interface GestureDroppedReportInit {
-  readonly code: ErrorCode;
+  readonly code: ReportCode;
   readonly event: RefusalEvent;
   readonly entryId: EntryId;
   readonly because: GestureDroppedReason;

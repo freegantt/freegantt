@@ -118,7 +118,7 @@ const NOTICE_CLASS = 'fg-cell-notice';
  *  offers no editor at all refuses silently. A cell that offers one but cannot open it here names
  *  the reason. */
 // Exported for `error-code-drift.test.ts` (#247 S3-4) alone — never through `api/index.ts`. That
-// test is what keeps `model/error-report.ts`'s `BuiltInErrorCode` honest against these two tables,
+// test is what keeps `model/error-report.ts`'s `BuiltInReportCode` honest against these two tables,
 // because `model/` may not import `extensions/` to check the other way (I11).
 export const REFUSAL_TEXT = {
   'derived-value': 'this value comes from the rows below it; edit a child row instead',

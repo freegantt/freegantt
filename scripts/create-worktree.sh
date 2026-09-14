@@ -17,7 +17,9 @@ base="${3:-origin/main}"
 branch="fix/${issue}-${slug}"
 dir=".worktrees/${issue}-${slug}"
 
-repo_root="$(git rev-parse --show-toplevel)"
+# Resolve the main checkout, not the caller's. `--show-toplevel` answers a linked worktree with
+# its own root, which would nest .worktrees/ inside that worktree.
+repo_root="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
 cd "$repo_root"
 
 if [ -e "$dir" ]; then
