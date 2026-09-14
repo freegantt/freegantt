@@ -555,8 +555,8 @@ export class Gantt<TProps = unknown> {
   /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
    *  (#187): assign a copy after a change, not the object already held.
    *
-   *  Reads back resolved (#248 S4-2): `heightMode`, `filterPolicy`, and `tree` (Entries sources)
-   *  come back filled, never omitted — a reader never has to know `layout/`'s own defaults. The
+   *  Reads back resolved (#248 S4-2): `filterPolicy` and `tree` (Entries sources) come back
+   *  filled, never omitted — a reader never has to know `layout/`'s own defaults. The
    *  resolve runs here, cached against the setter's own authored object, so two reads with no write
    *  between them stay `===` and the setter keeps assigning the plain `RowSource` the shell already
    *  compares by identity (#187) — resolving inside that comparison would break it instead. */

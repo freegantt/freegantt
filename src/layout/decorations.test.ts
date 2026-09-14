@@ -21,7 +21,6 @@ const row: FrameRow = {
   index: 0,
   top: 0,
   height: 32,
-  laneCount: 1,
   depth: 0,
   expandable: false,
   expanded: false,

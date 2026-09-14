@@ -1,5 +1,9 @@
 # S4 close-out — remaining review work
 
+**Lane packing retired by #298.** Mentions below of `heightMode`, packing, or lanes record what S4
+shipped, not current code; see
+[`s4.8-lane-packing-and-heights.md`](./s4.8-lane-packing-and-heights.md)'s retirement note.
+
 **Slice:** S4 · **Spec:** [`README.md`](./README.md) · **Findings:** [`plans/reviews/2026-09-01-s4-implement-final.html`](../reviews/2026-09-01-s4-implement-final.html)
 **Branch:** `s4-implement` · **Form:** one commit per step below. Tick the step boxes in this file in the same change as the code. Do not start the next step until the current step is on origin.
 **Ends with:** `pnpm verify && pnpm gate` green, this file's remaining boxes ticked, README § close-out status updated.

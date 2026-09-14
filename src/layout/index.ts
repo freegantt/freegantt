@@ -7,7 +7,6 @@ export {
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_BAR_HEIGHT_PX,
 } from './frame.js';
-export { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 export { pickDefined } from './pick-defined.js';
 // `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
@@ -41,7 +40,6 @@ export type {
   CustomRowSource,
   CustomRow,
   RowSourceCommon,
-  RowHeightMode,
   CustomRowInput,
   RowFilter,
   RowSort,
@@ -50,7 +48,6 @@ export type {
   ResolvedRowSource,
   ResolvedEntriesRowSource,
   ResolvedGroupRowSource,
-  ResolvedCustomRowSource,
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows, resolveRowSource } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';

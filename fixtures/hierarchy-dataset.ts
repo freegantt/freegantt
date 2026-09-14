@@ -1,10 +1,10 @@
 // Deterministic hierarchy fixture for harness/hierarchy.html (S4.11, D-S4-34): three levels deep, one
 // childless parent-with-no-children ("phase-empty" — ADR 0013: a row with no children is a normal
-// Entry, not a demoted group), one single-day span, one entry with three overlapping `segments`,
-// deliberate overlaps for pack mode, `cost` in `props` on every leaf, and `team` for the filter. Fixed
-// calendar dates only — no clock read. Segment bounds use `Z`-suffixed ISO strings so the fixture
-// never calls `instant()` on a zoneless plain time (harness code is not allowed through `time/`'s
-// plain-time helpers).
+// Entry, not a demoted group), one single-day span, one entry with three deliberately overlapping
+// `segments` (the #215/#217 covered-Segment repro), `cost` in `props` on every leaf, and `team` for
+// the filter. Fixed calendar dates only — no clock read. Segment bounds use `Z`-suffixed ISO strings
+// so the fixture never calls `instant()` on a zoneless plain time (harness code is not allowed
+// through `time/`'s plain-time helpers).
 
 import type { EntryInput } from 'freegantt';
 

@@ -2,8 +2,8 @@
 
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry, EntryId, RowId } from '../../model/index.js';
-import type { EntriesRowSource, RowHeightMode, UnindexedRow } from './row-source.js';
-import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
+import type { EntriesRowSource, UnindexedRow } from './row-source.js';
+import { PLANNED_ROW_KIND } from './row-source.js';
 
 export function entryTreeIndex(entries: readonly Entry[]): {
   roots: readonly Entry[];
@@ -30,7 +30,6 @@ function entryRow(
   fields: {
     depth: number;
     expandable: boolean;
-    heightMode: RowHeightMode;
     parentRowId?: RowId;
   },
 ): UnindexedRow {
@@ -41,15 +40,13 @@ function entryRow(
     entryIds: [entryId(entry.id)],
     expandable: fields.expandable,
     expanded: false,
-    heightMode: fields.heightMode,
     ...(fields.parentRowId !== undefined ? { parentRowId: fields.parentRowId } : {}),
   };
 }
 
 export function resolveEntriesSource(entries: readonly Entry[], source: EntriesRowSource): UnindexedRow[] {
-  const heightMode = heightModeOf(source);
   if (source.tree !== true) {
-    return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false, heightMode }));
+    return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false }));
   }
 
   const { roots, childRowsOf } = entryTreeIndex(entries);
@@ -70,7 +67,6 @@ export function resolveEntriesSource(entries: readonly Entry[], source: EntriesR
       entryRow(entry, {
         depth: frame.depth,
         expandable: children.length > 0,
-        heightMode,
         ...(frame.parentRowId !== undefined ? { parentRowId: frame.parentRowId } : {}),
       }),
     );

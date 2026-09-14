@@ -31,7 +31,6 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
-- `rowSource.heightMode: 'pack'` — stack overlaps into lanes (on the row source, not on `Gantt`)
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
 - `scroll` — pass the same `ScrollModel` into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
@@ -48,7 +47,7 @@ of resolved rows.
 
 `Field`, `FieldSource`, `FieldType`, `FieldKey`, `FieldContext`, `Aggregator`, `GridColumn`, `GridColumnInput`,
 `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`,
-`RowSourceCommon`, `RowHeightMode`, `CustomRowInput`,
+`RowSourceCommon`, `CustomRowInput`,
 `CollapseChange`, `DatasetHierarchy`, `SerializedField`, and the S4 error classes re-exported from
 `freegantt`.
 
@@ -93,7 +92,7 @@ no JS reads it.
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12 — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. An Item that carries its own `box` (ADR 0022) skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
-| `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row/lane band |
+| `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
 | `--fg-column-min-width` | `40px` | `column-chrome.ts` — floors how far a resize drag or a keyboard step can shrink a column |
@@ -101,7 +100,6 @@ no JS reads it.
 | `--fg-cell-padding-inline` | `10px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` — the one pair a header cell and a row cell both read, so grid text never sits flush against a column's edge |
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
-| `--fg-lane-gap` | `2px` | `.fg-container` declaration + `pixel-property.ts` into `LayoutInput.laneGapPx`, re-read on every pane measurement — gap between a row's packed lanes (`rowSource.heightMode: 'pack'`) |
 | `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label (J1) |
 
 ### Colour and shadow tokens

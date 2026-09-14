@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // S4.11 (plans/s4-hierarchy-and-rows/s4.11-harness-and-gate.md §2): hierarchy.html exercises tree
-// collapse, live row-source re-resolution, pack-mode heights, segmented drag + undo, and tree keyboard.
+// collapse, live row-source re-resolution, segmented drag + undo, and tree keyboard.
 
 async function gotoHierarchy(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/hierarchy.html');
@@ -126,90 +126,6 @@ test('[S4-A3] switching row source changes the row set and keeps the scroll offs
 
   await page.selectOption('#rows-mode', 'tree');
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBe(before);
-});
-
-test('pack mode grows a packed row and shifts the rows below', async ({ page }) => {
-  await gotoHierarchy(page);
-
-  const entryId = await entryWithSegments(page);
-  // Reveal the packed row by name instead of scrolling blindly to the bottom. This test used
-  // `gotoHierarchyShort`, which sets a 220px pane and scrolls to `scrollHeight` — and then looked
-  // the row up by an id read from the *dataset*, so whether virtualization had kept that row in
-  // the DOM was left to chance. That produced two intermittent failures: the row absent, so
-  // `boundingBox()` waited out the 30s timeout; or the row present but last, so no row sat below
-  // it and the search found nothing. `reveal` states the requirement the test actually has.
-  await page.evaluate((id) => {
-    window.__gantt.reveal(window.__dataset.entries.get(id)!.id);
-  }, entryId);
-  const packedRow = page.locator(`.fg-row[data-row-id="${entryId}"]`);
-  await expect(packedRow).toBeVisible();
-  const beforePacked = await packedRow.boundingBox();
-  expect(beforePacked).not.toBeNull();
-
-  // Name the row below, do not count it. Switching to pack mode re-renders, and virtualization
-  // decides which rows exist — so an `nth(i)` locator captured now re-resolves to a *different*
-  // row after the switch, and the assertion below then measures the wrong box. `data-row-id`
-  // survives the re-render. Same fix, same reason, as the `data-item-id` pinning in
-  // `plugins.spec.ts`, and as this test's own `packedRow` locator above.
-  const rows = page.locator('#gantt .fg-row');
-  const count = await rows.count();
-  let belowRowId: string | null = null;
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const box = await row.boundingBox();
-    if (box !== null && box.y > beforePacked!.y + beforePacked!.height - 1) {
-      belowRowId = await row.getAttribute('data-row-id');
-      break;
-    }
-  }
-  expect(belowRowId).not.toBeNull();
-  const below = page.locator(`.fg-row[data-row-id="${belowRowId}"]`);
-  const beforeBelow = await below.boundingBox();
-  expect(beforeBelow).not.toBeNull();
-
-  await page.selectOption('#height-mode', 'pack');
-
-  await expect
-    .poll(async () => {
-      const afterPacked = await packedRow.boundingBox();
-      return afterPacked !== null && afterPacked.height > beforePacked!.height;
-    })
-    .toBe(true);
-
-  await expect
-    .poll(async () => {
-      const afterBelow = await below.boundingBox();
-      return afterBelow !== null && afterBelow.y > beforeBelow!.y;
-    })
-    .toBe(true);
-});
-
-// #215, closed by #217's D2: pack mode gives every overlapping Segment its own lane, so nothing
-// covers anything and no Segment needs a hit-test workaround to reach it.
-test('a covered Segment can be selected once its row packs into lanes (#215)', async ({ page }) => {
-  await gotoHierarchy(page);
-  await page.selectOption('#height-mode', 'pack');
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  await expect(bars).toHaveCount(3);
-
-  // Three Segments, each overlapping the other two, force three distinct lanes — three distinct
-  // top offsets, not one shared row of stacked bars.
-  const boxes = await Promise.all([0, 1, 2].map((index) => bars.nth(index).boundingBox()));
-  for (const box of boxes) expect(box).not.toBeNull();
-  const tops = new Set(boxes.map((box) => box!.y));
-  expect(tops.size).toBe(3);
-
-  // Each Segment now sits on its own lane, so a plain click reaches it directly — no
-  // `elementFromPoint` scan, no mouse-event workaround, needed to land on a covered bar.
-  for (let index = 0; index < 3; index++) {
-    const bar = bars.nth(index);
-    const box = (await bar.boundingBox())!;
-    await bar.click({ position: { x: Math.min(box.width / 2, 12), y: box.height / 2 } });
-    await expect(bar).toHaveAttribute('data-state', /\bselected\b/);
-  }
 });
 
 test('a segment drag moves one bar and Undo restores it', async ({ page }) => {

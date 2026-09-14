@@ -3,8 +3,6 @@
 import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';
 
-export type RowHeightMode = 'fixed' | 'pack';
-
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 /** Does this row stay? The row answers its own questions — `entry.read('team')`, `entry.hasChildren`
@@ -20,7 +18,6 @@ export interface RowSort {
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
  *  does not take these (D-S4-21). */
 export interface RowSourceCommon {
-  heightMode?: RowHeightMode;
   filter?: RowFilter;
   sort?: RowSort;
   filterPolicy?: FilterPolicy;
@@ -52,7 +49,6 @@ export interface CustomRow {
 export interface CustomRowSource {
   source: 'custom';
   resolve(input: CustomRowInput): readonly CustomRow[];
-  heightMode?: RowHeightMode;
 }
 
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
@@ -64,40 +60,34 @@ export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'ent
 export const DEFAULT_FILTER_POLICY: FilterPolicy = 'keepAncestors';
 
 /** Each resolved source extends the source a consumer authored, and narrows the keys it fills from
- *  optional to required (#248 S4-2). A consumer who omits `heightMode`/`filterPolicy`/`tree` still
- *  reads a value back off `gantt.rowSource`. */
+ *  optional to required (#248 S4-2). A consumer who omits `filterPolicy`/`tree` still reads a value
+ *  back off `gantt.rowSource`. */
 export interface ResolvedEntriesRowSource extends EntriesRowSource {
-  heightMode: RowHeightMode;
   filterPolicy: FilterPolicy;
   tree: boolean;
 }
 
 export interface ResolvedGroupRowSource extends GroupRowSource {
-  heightMode: RowHeightMode;
   filterPolicy: FilterPolicy;
 }
 
-/** `'custom'` takes no `filter`/`sort`/`filterPolicy`/`tree` (D-S4-21) — only `heightMode` to fill. */
-export interface ResolvedCustomRowSource extends CustomRowSource {
-  heightMode: RowHeightMode;
-}
-
 /** What `Gantt.rowSource` reads back (#248 S4-2): every key a `RowSource` may omit, filled with the
- *  default `layout/` already applies at consumption (`heightModeOf`, `filterPolicyOf`, the entries
- *  source's own `tree` check) — so a consumer never has to know those defaults to read them. */
-export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
+ *  default `layout/` already applies at consumption (`filterPolicyOf`, the entries source's own
+ *  `tree` check) — so a consumer never has to know those defaults to read them. `'custom'` takes no
+ *  `filter`/`sort`/`filterPolicy`/`tree` (D-S4-21), so it has nothing left to fill and reads back as
+ *  the `CustomRowSource` a consumer authored. */
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | CustomRowSource;
 
 /** Fills every key `layout/` defaults at consumption, once, so a caller reads the same answer
  *  `layout/` would compute (#248 S4-2). `tree` mirrors `entries-source.ts`'s own check: anything but the
  *  literal `true` resolves to `false`. */
 export function resolveRowSource(source: RowSource): ResolvedRowSource {
-  const heightMode = heightModeOf(source);
-  if (source.source === 'custom') return { ...source, heightMode };
+  if (source.source === 'custom') return { ...source };
   const filterPolicy = source.filterPolicy ?? DEFAULT_FILTER_POLICY;
   if (source.source === 'entries') {
-    return { ...source, heightMode, filterPolicy, tree: source.tree === true };
+    return { ...source, filterPolicy, tree: source.tree === true };
   }
-  return { ...source, heightMode, filterPolicy };
+  return { ...source, filterPolicy };
 }
 
 /** True when this source can put one row under another. The tree entries source does, and so does
@@ -136,7 +126,6 @@ export interface PlannedRow {
   entryIds: readonly EntryId[];
   expandable: boolean;
   expanded: boolean;
-  heightMode: RowHeightMode;
   headerLabel?: string;
   /** `true` when this row's entry matched the active filter; `false` when kept only for descendants. */
   matched?: boolean;
@@ -156,8 +145,4 @@ export interface RowPassInput {
   collapsed: ReadonlySet<string>;
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
-}
-
-export function heightModeOf(source: RowSource): RowHeightMode {
-  return source.heightMode ?? 'fixed';
 }

@@ -277,8 +277,6 @@ export interface CustomRowInput {
 // @public (undocumented)
 export interface CustomRowSource {
     // (undocumented)
-    heightMode?: RowHeightMode;
-    // (undocumented)
     resolve(input: CustomRowInput): readonly CustomRow[];
     // (undocumented)
     source: 'custom';
@@ -984,8 +982,6 @@ export interface FrameBar {
     id: ItemId;
     label: string;
     // (undocumented)
-    lane: number;
-    // (undocumented)
     rowId: RowId;
     segmentId?: SegmentId;
     segmentIds: readonly SegmentId[];
@@ -1035,8 +1031,6 @@ export interface FrameRow {
     index: number;
     // (undocumented)
     kind: PlannedRowKind;
-    // (undocumented)
-    laneCount: number;
     matched?: boolean;
     segmentIds: readonly SegmentId[];
     // (undocumented)
@@ -1887,17 +1881,9 @@ export interface ResolvedColumn extends FrameColumn {
 }
 
 // @public
-export interface ResolvedCustomRowSource extends CustomRowSource {
-    // (undocumented)
-    heightMode: RowHeightMode;
-}
-
-// @public
 export interface ResolvedEntriesRowSource extends EntriesRowSource {
     // (undocumented)
     filterPolicy: FilterPolicy;
-    // (undocumented)
-    heightMode: RowHeightMode;
     // (undocumented)
     tree: boolean;
 }
@@ -1906,12 +1892,10 @@ export interface ResolvedEntriesRowSource extends EntriesRowSource {
 export interface ResolvedGroupRowSource extends GroupRowSource {
     // (undocumented)
     filterPolicy: FilterPolicy;
-    // (undocumented)
-    heightMode: RowHeightMode;
 }
 
 // @public
-export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | ResolvedCustomRowSource;
+export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | CustomRowSource;
 
 // Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported by the entry point index.d.ts
 //
@@ -1944,9 +1928,6 @@ export interface RollUpContext extends ComputeContext {
 export type RowFilter = (entry: Entry) => boolean;
 
 // @public (undocumented)
-export type RowHeightMode = 'fixed' | 'pack';
-
-// @public (undocumented)
 export type RowId = string & {
     readonly __brand: 'RowId';
 };
@@ -1970,8 +1951,6 @@ export interface RowSourceCommon {
     filter?: RowFilter;
     // (undocumented)
     filterPolicy?: FilterPolicy;
-    // (undocumented)
-    heightMode?: RowHeightMode;
     // (undocumented)
     sort?: RowSort;
 }

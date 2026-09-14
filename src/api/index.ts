@@ -297,19 +297,13 @@ export type {
   CustomRowSource,
   CustomRow,
   RowSourceCommon,
-  RowHeightMode,
   CustomRowInput,
   RowFilter,
   RowSort,
   FilterPolicy,
 } from '../layout/index.js';
 // What `Gantt.rowSource` reads back (#248 S4-2) — every key above a consumer may omit, filled.
-export type {
-  ResolvedRowSource,
-  ResolvedEntriesRowSource,
-  ResolvedGroupRowSource,
-  ResolvedCustomRowSource,
-} from '../layout/index.js';
+export type { ResolvedRowSource, ResolvedEntriesRowSource, ResolvedGroupRowSource } from '../layout/index.js';
 // Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
 // `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';

@@ -429,7 +429,7 @@
         </p>
         <p class="src">
           <b>derived from</b> view/gantt-shell.ts <code>render()</code>, layout/frame.ts,
-          layout/frame-layout.ts, layout/rows/*, layout/items/produce-items.ts, layout/lanes/pack-lanes.ts,
+          layout/frame-layout.ts, layout/rows/*, layout/items/produce-items.ts,
           render/dom/index.ts <code>sync()</code>, view/scroll-attachment.ts
         </p>
 
@@ -512,7 +512,7 @@
               />
               <rect class="bx pure" x="234" y="158" width="176" height="70" />
               <text class="t" x="246" y="176">FrameMemory</text>
-              <text class="s" x="246" y="190">RowHeightIndex + per-row pack memo</text>
+              <text class="s" x="246" y="190">RowHeightIndex + per-row item memo</text>
               <text class="s" x="246" y="206">reused across renders when inputs</text>
               <text class="xs" x="246" y="220">did not change</text>
 
@@ -529,10 +529,9 @@
               <text class="t" x="246" y="274">computeFrame(input, heights)</text>
               <text class="s" x="246" y="290">1) resolveRows — entries/group/custom</text>
               <text class="s" x="246" y="305">2) produceItems — per kind</text>
-              <text class="s" x="246" y="320">3) packLanes — first-fit, per row</text>
-              <text class="s" x="246" y="335">4) cull v + h to the window</text>
-              <text class="s" x="246" y="350">5) header ticks; date-lines</text>
-              <text class="xs" x="246" y="372">rows → items → lanes, in order</text>
+              <text class="s" x="246" y="320">3) cull v + h to the window</text>
+              <text class="s" x="246" y="335">4) header ticks; date-lines</text>
+              <text class="xs" x="246" y="372">rows → items, in order</text>
 
               <!-- col C -->
               <line
@@ -550,7 +549,7 @@
               <text class="s" x="464" y="177">visible: Rect</text>
               <text class="s" x="464" y="191">header.bands[]</text>
               <text class="s" x="464" y="205">rows[] ← windowed</text>
-              <text class="s" x="464" y="219">items[] ← produced + packed</text>
+              <text class="s" x="464" y="219">items[] ← produced</text>
               <text class="s" x="464" y="233">columns[] ← resolved</text>
               <text class="s" x="464" y="247">contentWidth ← FULL</text>
               <text class="s" x="464" y="261">contentHeight ← FULL</text>
@@ -653,7 +652,7 @@
         <h3>The pipeline inside <code>computeFrame</code></h3>
         <p>
           The layout pass is not a flat row-per-entry walk. Between input and culling it resolves rows from
-          a row source, produces items per <code>EntryKind</code>, and packs overlaps into lanes:
+          a row source and produces items per <code>EntryKind</code>:
         </p>
         <ol class="steps">
           <li>
@@ -664,10 +663,6 @@
             <strong>produceItems</strong> maps each row's entries to <code>Item</code>s by
             <code>EntryKind</code> — a span yields segments or one bar, a group yields a summary rail, a milestone
             yields a diamond (<code>items/produce-items.ts</code>).
-          </li>
-          <li>
-            <strong>packLanes</strong> greedy first-fit packs each row's items into lanes so overlapping bars
-            do not collide when <code>heightMode: 'pack'</code> (<code>lanes/pack-lanes.ts</code>).
           </li>
           <li>
             <strong>Cull</strong> then trims to the visible window, and <strong>header/date-line</strong>
@@ -690,8 +685,8 @@
           </li>
           <li>
             <strong>Overscan is in index space vertically, pixels horizontally.</strong> Vertical overscan
-            counts <em>rows</em> and goes through the height index, so it stays correct as row heights vary
-            with packing. Horizontal has no rows to count, so it is a pixel buffer.
+            counts <em>rows</em> and goes through the height index, so it stays correct as row heights vary.
+            Horizontal has no rows to count, so it is a pixel buffer.
           </li>
           <li>
             <strong>Rows are culled vertically only.</strong> A row whose item is off-screen horizontally is

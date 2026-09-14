@@ -1,6 +1,6 @@
-// layout/ — what one layout pass remembers between renders (D-S4-26). Produce, pack, and row height
-// live here so a pack row is produced once per dataset revision, whether `heightOfRow` forced it
-// above the viewport or `placeFrame` placed it in the window.
+// layout/ — what one layout pass remembers between renders (D-S4-26). Item production lives here so
+// a row's Items are produced once per dataset revision, whether `heightOfRow` forced it above the
+// viewport or `placeFrame` placed it in the window.
 
 import type { Entry, EntryId, ItemId, SegmentId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
@@ -9,16 +9,15 @@ import type { RowHeightIndex } from './row-height-index.js';
 import { produceItemsForRow } from './items/produce-items.js';
 import { NO_VARIANTS } from './items/item.js';
 import type { Item, VariantItems } from './items/item.js';
-import { packRow, packedRowHeight, singleLane } from './lanes/pack-lanes.js';
-import type { PackedRow } from './lanes/pack-lanes.js';
 
 /** Shared and frozen, so a row or an Item that stands for no Segment costs no allocation (I5). */
 export const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
 
-/** What this memory remembers about one row (#212, ADR 0010). One record, so the Items, their lanes
- *  and the Segments they stand for can never fall out of step: they are produced together, from one
- *  Entry source, and cached together under one key. */
-export interface RowMemory extends PackedRow {
+/** What this memory remembers about one row (#212, ADR 0010). One record, so the Items and the
+ *  Segments they stand for can never fall out of step: they are produced together, from one Entry
+ *  source, and cached together under one key. */
+export interface RowMemory {
+  readonly items: readonly Item[];
   /** Which Segments each produced Item stands for. */
   readonly segmentIdsByItem: ReadonlyMap<ItemId, readonly SegmentId[]>;
   /** Every Segment of every Entry this row owns, in row order. */
@@ -28,22 +27,20 @@ export interface RowMemory extends PackedRow {
 export interface FrameMemoryBind {
   readonly plan: readonly PlannedRow[];
   readonly rowHeight: number;
-  readonly laneGap: number;
   readonly entries: readonly Entry[];
   readonly registry: VariantItems;
   readonly datasetRevision: number;
-  /** Test seam: override packed/fixed height for index-space overscan checks. */
+  /** Test seam: override row height for index-space overscan checks. */
   readonly heightAt?: (index: number) => number;
 }
 
 export class FrameMemory {
   #heights: PrefixSumHeightIndex | undefined;
-  #packed = new Map<string, RowMemory>();
+  #produced = new Map<string, RowMemory>();
   /** The answer for a row no current frame planned. One per memory, not one per call, and not a
    *  module-level constant — two Gantts must not share it (I2). */
   readonly #noRow: RowMemory = {
     items: [],
-    packing: { laneByItem: new Map(), laneCount: 1 },
     segmentIdsByItem: new Map(),
     segmentIds: NO_SEGMENT_IDS,
   };
@@ -54,7 +51,6 @@ export class FrameMemory {
   #rowHeight = 0;
   #cachedRowCount = -1;
   #cachedRowHeight = -1;
-  #cachedLaneGap = -1;
   #datasetRevision: number | undefined;
   #heightAt: ((index: number) => number) | undefined;
   /** Bumped when this memory builds a fresh height index (D-S2-16). */
@@ -64,7 +60,7 @@ export class FrameMemory {
     return this.#heights ?? new PrefixSumHeightIndex(0, () => 0);
   }
 
-  /** Call: `memory.sync({ plan, rowHeight, laneGap, entries, registry, datasetRevision })`. */
+  /** Call: `memory.sync({ plan, rowHeight, entries, registry, datasetRevision })`. */
   sync(bind: FrameMemoryBind): void {
     this.#plan = bind.plan;
     this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
@@ -75,46 +71,42 @@ export class FrameMemory {
     else this.#heightAt = undefined;
 
     const countChanged = this.#cachedRowCount !== bind.plan.length;
-    const metricsChanged = this.#cachedRowHeight !== bind.rowHeight || this.#cachedLaneGap !== bind.laneGap;
+    const metricsChanged = this.#cachedRowHeight !== bind.rowHeight;
     const revisionChanged = bind.datasetRevision !== this.#datasetRevision;
 
     if (this.#heights === undefined || countChanged || metricsChanged) {
-      this.#packed.clear();
+      this.#produced.clear();
       this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.heightOfRow(index));
       this.#cachedRowCount = bind.plan.length;
       this.#cachedRowHeight = bind.rowHeight;
-      this.#cachedLaneGap = bind.laneGap;
       this.heightIndexRevision++;
     } else if (revisionChanged) {
-      this.#packed.clear();
+      this.#produced.clear();
       this.#heights.invalidateFrom(0);
     }
     this.#datasetRevision = bind.datasetRevision;
   }
 
-  /** Call: `memory.heightOfRow(index)` — fixed rows use `rowHeight`; pack rows use the packed lane count. */
+  /** Call: `memory.heightOfRow(index)` — every row uses `rowHeight` (singleLane, D-S4-19). */
   heightOfRow(index: number): number {
     if (this.#heightAt !== undefined) return this.#heightAt(index);
-    const row = this.#plan[index];
-    if (row === undefined || row.heightMode !== 'pack') return this.#rowHeight;
-    return packedRowHeight(this.packedRow(row.id).packing.laneCount, this.#rowHeight, this.#cachedLaneGap);
+    return this.#rowHeight;
   }
 
-  /** Call: `memory.packedRow(row.id)` — produce and pack once per dataset revision. */
-  packedRow(id: string): RowMemory {
-    const hit = this.#packed.get(id);
+  /** Call: `memory.rowMemory(row.id)` — produce a row's Items once per dataset revision. */
+  rowMemory(id: string): RowMemory {
+    const hit = this.#produced.get(id);
     if (hit !== undefined) return hit;
     const row = this.#rowById.get(id);
     if (row === undefined) return this.#noRow;
     const items = produceItemsForRow(row, this.#entryById, this.#registry);
-    const packed: RowMemory = {
+    const produced: RowMemory = {
       items,
-      packing: row.heightMode === 'pack' ? packRow(items) : singleLane(items),
       segmentIdsByItem: this.#segmentIdsEachItemStandsFor(items),
       segmentIds: this.segmentIdsOfEntries(row.entryIds),
     };
-    this.#packed.set(id, packed);
-    return packed;
+    this.#produced.set(id, produced);
+    return produced;
   }
 
   /** Call: `memory.segmentIdsOfEntries(layout.entryIdsForRow(id))` — every Segment of every named
@@ -165,14 +157,14 @@ export class FrameMemory {
     return entry.segments.map((segment) => segment.id);
   }
 
-  forgetPacked(rowId: string): void {
-    this.#packed.delete(rowId);
+  forgetProduced(rowId: string): void {
+    this.#produced.delete(rowId);
   }
 
   invalidateFrom(index: number): void {
     this.#heights?.invalidateFrom(index);
     for (let i = index; i < this.#plan.length; i++) {
-      this.forgetPacked(this.#plan[i]!.id);
+      this.forgetProduced(this.#plan[i]!.id);
     }
   }
 }

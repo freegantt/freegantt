@@ -8,6 +8,8 @@
 **Governed by:** `plans/00` D2/D7/D8, `plans/01` §2.3/§2.5/§2.6/§4/§6, `plans/02` §2/§4.1/§4.2/§6, ADR [0005](../../docs/adr/0005-fields-are-declared-and-grid-columns-reference-them.md) (superseded by [0011](../../docs/adr/0011-consumer-values-live-in-props.md)).
 
 > **Live Field and kind rules: ADRs 0011–0015.** This file records what S4 shipped. D-S4-2's adapter, D-S4-35's omitted `source`, and Q17 are superseded. The Field key is the address (`props`). There is no stored `kind`.
+>
+> **Lane packing retired by #298.** S4.8's `heightMode: 'pack'`, `LanePacking`, `packRow`, `FrameBar.lane`, `FrameRow.laneCount`, and `--fg-lane-gap` are gone: `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept collapsed to nothing. Every S4.8/D-S4-26/D-S4-27 reference below records history, not current code.
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
 
