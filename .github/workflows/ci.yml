@@ -51,9 +51,7 @@ jobs:
   # free, and `pnpm verify:full` names the check that stopped the run in its verdict line, so the
   # fan-out bought a slightly prettier failure page and nothing else.
   gate:
-    if: >-
-      github.event.action != 'closed' &&
-      (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    if: github.event.action != 'closed' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
