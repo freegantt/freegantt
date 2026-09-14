@@ -389,7 +389,8 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
 /** The union `[min x, max(x + width))` of every Item's own `barSpan` (#295). It is
  *  `GanttShell.reveal`'s target when an entry draws several Items — one bar per Segment. Revealing
  *  the entry then shows every one of them, not only the first its row packed. Takes at least one
- *  Item: both callers check `items.length > 0` first. */
+ *  Item: `#revealEntrySpan`, its one caller, checks `items.length > 0` first. A Segment names one
+ *  bar, so `#revealSegmentSpan` never unions — it would pan to a sibling. */
 function unionSpan(
   items: readonly Item[],
   scale: TimeScale,
@@ -405,9 +406,10 @@ function unionSpan(
   return { x: minX, width: maxEnd - minX };
 }
 
-/** A stand-in Item for `barSpan`, for the one case where an entry draws no real Item (#295).
- *  Reveal never becomes a no-op because a variant produced nothing. It carries no box, so it takes
- *  the ordinary span-and-floor path, exactly as `reveal` always has. */
+/** A stand-in Item for `barSpan`, for the case where nothing paints the target (#295). A variant
+ *  produced no Item, or no Item draws the named Segment. The dates it is handed become the target, so
+ *  reveal never becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers
+ *  the geometry, and it carries no box, so it takes the ordinary span-and-floor path. */
 function fallbackSpanItem(ownerId: EntryId, start: Instant, end: Instant): Item {
   return { id: itemId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
 }
@@ -1894,7 +1896,8 @@ export class GanttShell {
    *  `barSpan` for each Item's own x/width off the bound `TimeScale`. The box is included (#295),
    *  so a `diamond()` row reveals its true glyph width. That is the same formula `computeFrame`
    *  paints bars from, so the two can never drift apart. It then hands the resulting `Rect` to
-   *  `Viewport.reveal` (S1.9, D-S1.9-6).
+   *  `Viewport.reveal` (S1.9, D-S1.9-6). When nothing paints the named target, its own dates are
+   *  the target instead (`fallbackSpanItem`), so reveal never becomes a no-op.
    *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
    *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
    *  says which one the caller meant. A collapsed ancestor expands before any Item is read.
@@ -1946,21 +1949,18 @@ export class GanttShell {
     this.#revealRect(rowIndex, x, width);
   }
 
-  /** Reveals one Segment: the Item that draws it, box included (#295). It falls back to the union
-   *  of every Item the owning Entry draws, when no Item claims this Segment. It falls back again to
-   *  the Segment's own span when the Entry draws no Item — the same guard `#revealEntrySpan` takes. */
+  /** Reveals one Segment: the Item that draws it, box included (#295). A summary draws one bar over
+   *  the whole span, and that one bar stands for every Segment — so it is the target here too.
+   *  When no Item draws this Segment at all, the Segment's own dates are the target. A sibling bar
+   *  never is: the caller named this Segment, and panning to another one would show the wrong
+   *  Segment. That is the rule `RovingFocus` relies on — a split Entry's other Segments must not
+   *  widen the pan past the bar that has focus. */
   #revealSegmentSpan(ownerId: EntryId, targetSegmentId: SegmentId, start: Instant, end: Instant): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
     const items = this.#layout.itemsForEntry(ownerId);
     const target = items.find((item) => this.#layout.segmentIdsForItem(item.id).includes(targetSegmentId));
-    const scale = this.#viewport.timeScale;
-    const minBarWidthPx = this.#frameSettings.minBarWidthPx;
-    const { x, width } =
-      target !== undefined
-        ? barSpan(target, scale, minBarWidthPx)
-        : items.length > 0
-          ? unionSpan(items, scale, minBarWidthPx)
-          : barSpan(fallbackSpanItem(ownerId, start, end), scale, minBarWidthPx);
+    const drawn = target ?? fallbackSpanItem(ownerId, start, end);
+    const { x, width } = barSpan(drawn, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 

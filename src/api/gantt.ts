@@ -823,7 +823,9 @@ export class Gantt<TProps = unknown> {
     this.#shell.panToToday(now(), align);
   }
 
-  /** An `EntryId` reveals that Entry's whole envelope; a `SegmentId` reveals that one Segment alone.
+  /** Brings into view what this id draws (#295). An `EntryId` reveals every bar or marker that
+   *  Entry paints right now, as one rectangle; a `SegmentId` reveals the one bar that stands for
+   *  that Segment. A row that paints nothing at the named dates reveals those dates instead.
    *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). A plain
    *  `string` is legal. The Dataset resolves the reading; nothing reads the brand. */
   reveal(id: EntryId | SegmentId | string): void {

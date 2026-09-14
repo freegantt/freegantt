@@ -884,6 +884,169 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
+  it('reveal(entryId) aligns to the rectangle computeFrame painted, box width included (#295)', () => {
+    // `barSpan` is the one formula both sides read. This test reads the painted node's own x and
+    // width off the DOM, then asserts the scroll `reveal` chose aligns that exact rectangle's right
+    // edge. A second formula on either side shows up here as a bar reveal did not land on.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const at = instant('2026-09-01T00:10:00Z');
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
+      const boxWidthPx = 13;
+      const marker: StoredEntry = {
+        id: entryId('marker'),
+        name: 'marker',
+        start: at,
+        end: at,
+        segments: [{ id: segmentId('marker-1'), start: at, end: at }],
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([marker]),
+        scroll,
+        scale,
+        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+      });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(entryId('marker'));
+      shell.render(); // paints the frame the reveal's own scroll asked for
+
+      const bar = container.querySelector<HTMLElement>(`[data-item-id="${itemId(entryId('marker'))}"]`)!;
+      expect(pxWidth(bar)).toBe(boxWidthPx);
+      expect(scroll.state.position.x).toBe(translateX(bar) + pxWidth(bar) - viewportWidth);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal(segmentId) targets the one bar that stands for that Segment, at its painted box (#295)', () => {
+    // A `diamond()` row draws one boxed Item over the whole span, and that one bar stands for every
+    // Segment of the Entry (`segmentIdsForItem`). So naming a Segment reveals that bar at its box
+    // width — not the Segment's own zero-width span floored to `minBarWidthPx`.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const first = instant('2026-09-01T00:02:00Z');
+      const last = instant('2026-09-01T00:10:00Z');
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
+      const boxWidthPx = 13;
+      const marker: StoredEntry = {
+        id: entryId('marker'),
+        name: 'marker',
+        start: first,
+        end: last,
+        segments: [
+          { id: segmentId('marker-1'), start: first, end: first },
+          { id: segmentId('marker-2'), start: last, end: last },
+        ],
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([marker]),
+        scroll,
+        scale,
+        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+      });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(segmentId('marker-2'));
+
+      const boxRight = (scale.scale.xForInstant(first) + scale.scale.xForInstant(last)) / 2 + boxWidthPx / 2;
+      const segmentSpanRight = scale.scale.xForInstant(last) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
+      expect(scroll.state.position.x).toBe(boxRight - viewportWidth);
+      expect(scroll.state.position.x).not.toBe(segmentSpanRight - viewportWidth);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal(segmentId) uses that Segment’s own dates when no bar draws it, never a sibling bar (#295)', () => {
+    // A variant may draw fewer Items than the Entry has Segments. `RovingFocus` names a Segment to
+    // hold the pan on the bar that has focus, so widening to a sibling would show the wrong bar.
+    // Here only the first Segment draws, and the second one's own dates are the target.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollModel();
+      const drawnStart = instant('2026-09-01T00:02:00Z');
+      const drawnEnd = instant('2026-09-01T00:03:00Z');
+      const undrawnStart = instant('2026-09-01T00:10:00Z');
+      const undrawnEnd = instant('2026-09-01T00:11:00Z');
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
+      const split: StoredEntry = {
+        id: entryId('split'),
+        name: 'split',
+        start: drawnStart,
+        end: undrawnEnd,
+        segments: [
+          { id: segmentId('split-1'), start: drawnStart, end: drawnEnd },
+          { id: segmentId('split-2'), start: undrawnStart, end: undrawnEnd },
+        ],
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([split]),
+        scroll,
+        scale,
+        variants: [
+          {
+            name: 'first-piece-only',
+            when: () => true,
+            items: (entry, variant) => {
+              const drawn = entry.segments?.[0];
+              if (drawn === undefined) return [];
+              return [
+                {
+                  id: itemId(entry.id),
+                  entryId: entry.id,
+                  variant,
+                  label: entry.name,
+                  start: drawn.start,
+                  end: drawn.end,
+                  segmentId: drawn.id,
+                },
+              ];
+            },
+          },
+        ],
+      });
+      const viewportWidth = 50;
+      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
+
+      shell.reveal(segmentId('split-2'));
+
+      const ownDatesRight = scale.scale.xForInstant(undrawnEnd);
+      const siblingBarRight = scale.scale.xForInstant(drawnEnd);
+      expect(scroll.state.position.x).toBe(ownDatesRight - viewportWidth);
+      expect(scroll.state.position.x).not.toBe(siblingBarRight - viewportWidth);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('[R6-F13] selectedEntryIds keeps Dataset order for two Entries a collapsed ancestor hides, instead of NaN-sorting them', () => {
     // Finding 13: `#rowRankByEntryId` gives an unplanned Entry no rank, and the old comparator read
     // that as `Infinity`. Two unplanned Entries then subtracted `Infinity - Infinity`, which is `NaN`
