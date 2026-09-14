@@ -9,7 +9,7 @@
 
 > **Live Field and kind rules: ADRs 0011–0015.** This file records what S4 shipped. D-S4-2's adapter, D-S4-35's omitted `source`, and Q17 are superseded. The Field key is the address (`props`). There is no stored `kind`.
 >
-> **Lane packing retired by #298.** S4.8's `heightMode: 'pack'`, `LanePacking`, `packRow`, `FrameBar.lane`, `FrameRow.laneCount`, and `--fg-lane-gap` are gone: `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept collapsed to nothing. Every S4.8/D-S4-26/D-S4-27 reference below records history, not current code.
+> **Lane packing retired by #298.** S4.8's `heightMode: 'pack'`, `RowHeightMode`, `LanePacking`, `packRow`, `FrameBar.lane`, `FrameRow.laneCount`, and `--fg-lane-gap` are gone: `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept collapsed to nothing. Every mention of a lane, of packing, or of `heightMode` below records history, not current code — including U9, the public-surface tables (S4.6, S4.3/S4.7) and the test map, which name the retired types without citing S4.8.
 **Builds on:** S2 data core (transactions, changesets, undo, JSON), S3 gestures, S1's height index and `FrameLayout`.
 **Closes:** issue #80 (per-field rollup), #81 (row cells), ADR 0005's two open questions, `plans/03` §S4's three known gaps (#91 §9-B, §9-E, §9-G).
 
@@ -167,7 +167,7 @@ dataset.entries.update('t1', { start: '2026-10-05', cost: 12_000 });   // one ch
 const gantt = new Gantt({
   container, dataset,
   gridColumns: ['name', 'start', 'duration', { field: 'cost', header: 'Budget' }],
-  rowSource: { source: 'entries', tree: true, heightMode: 'pack', filter: byTeam, sort: { field: 'start' } },
+  rowSource: { source: 'entries', tree: true, filter: byTeam, sort: { field: 'start' } },
 });
 
 gantt.rowSource = { source: 'group', groupBy: (entry) => entry.props.team };
