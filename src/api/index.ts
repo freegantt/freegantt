@@ -238,6 +238,7 @@ export {
   FieldNotColumnableError,
   DuplicateRowIdError,
   MutationDuringNotificationError,
+  MutationDuringExtensionHookError,
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,
