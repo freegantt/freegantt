@@ -25,4 +25,7 @@ export interface CheckSummary {
   verdict: string;
 }
 
+/** True when a real run is on the board. A skipped check is the stale draft-time run, not a start. */
+export function hasRunStarted(checks: readonly PullRequestCheck[]): boolean;
+
 export function summarizeChecks(checks: readonly PullRequestCheck[], context: VerdictContext): CheckSummary;
