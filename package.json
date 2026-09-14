@@ -35,6 +35,7 @@
     "disables": "node scripts/audit-disables.mjs",
     "gate": "node scripts/slice-gate.mjs",
     "dev": "vite",
+    "docs": "pnpm --dir website start --host 0.0.0.0",
     "build": "node scripts/build.mjs",
     "api-report": "node scripts/api-report.mjs",
     "check-doc-examples": "node scripts/check-doc-examples.mjs",

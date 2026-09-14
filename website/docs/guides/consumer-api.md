@@ -1,4 +1,8 @@
-# FreeGantt — Consumer API (index)
+---
+id: consumer-api
+title: "FreeGantt — Consumer API (index)"
+---
+
 
 This file points app authors at the consumer surface. It does not replace the spec.
 
@@ -6,11 +10,11 @@ This file points app authors at the consumer surface. It does not replace the sp
 
 | Document | What it is |
 | --- | --- |
-| [`README.md`](../README.md) | Quick start, dates/ids, and the API as it ships on the current branch |
-| [`plans/02-public-api.md`](../plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
-| [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
-| [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); the same public surface is also browsable as generated API docs on the Docusaurus site (`pnpm docs`) |
-| [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
+| [`README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/README.md) | Quick start, dates/ids, and the API as it ships on the current branch |
+| [`plans/02-public-api.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
+| [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
+| [`etc/freegantt.api.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); browse it as generated reference pages at [API reference](../api/) |
+| [Plugin authoring guide](./plugin-authoring.md) | `definePlugin`, the two halves, every registration seam |
 
 ## S4 surface (hierarchy and rows)
 
@@ -56,8 +60,8 @@ of resolved rows.
 FreeGantt takes one plugin type with two halves (ADR 0019). `definePlugin`
 writes it: a `data` half installs on a `Dataset`, a `view`-only half installs on
 a `Gantt`. Install at construction (`plugins: [...]`), or reconfigure a `Gantt`'s
-plugins live (`gantt.plugins = [...]`). `docs/06-plugin-authoring.md` covers both
-halves, every registration seam, the registration gate, disposal, `requires`, and
+plugins live (`gantt.plugins = [...]`). The [plugin authoring guide](./plugin-authoring.md) covers
+both halves, every registration seam, the registration gate, disposal, `requires`, and
 the errors an author meets. `tooltips()`, `contextMenu()`, and
 `inlineEditing()` are the three built-in plugins that ship with the package,
 none of them loaded unless a consumer installs them.
@@ -186,7 +190,7 @@ this one.
 
 ### Retired and renamed tokens
 
-- **`--fg-header-height`** shipped at S1.8 (fallback `20`) and retired at S1.12 (D-S1.12-10) — a
+- **`--fg-header-height`** shipped at S1.8 (fallback `20`) and retired at S1.12 — a
   fixed header height could not size N header bands correctly. Migration: `--fg-header-height: 40px`
   on a two-band preset becomes `--fg-band-height: 20px`. The grid pane's spacer now mirrors one empty
   `.fg-band` per header band, so both panes size from `--fg-band-height` alone. `src/view/styles.test.ts`
@@ -203,6 +207,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-Architecture and API documentation live on the Docusaurus site under `website/` — run `pnpm docs` to
-view it locally. The site's API reference is generated from TSDoc comments via TypeDoc, so it never
-drifts from the source.
+The [Architecture](../architecture/index.md) section holds the internal module maps for
+maintainers, and may lag the current slice. The [API reference](../api/) is generated from
+`src/api/index.ts` by TypeDoc at build time, so it never drifts from the shipped types.

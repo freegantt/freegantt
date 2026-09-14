@@ -23,3 +23,8 @@ etc
 # directly, so a `.gitignore`-only exclusion does not stop it from being scanned.
 .worktrees
 
+# website/ is its own independent pnpm project (own pnpm-workspace.yaml, own tooling), not a
+# package of this one — its scaffolded and generated files are not ours to reformat as a side
+# effect of running `pnpm format` here.
+website
+
