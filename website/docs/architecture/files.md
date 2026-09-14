@@ -24,11 +24,16 @@ where they do something beyond re-export.
 | `model/geometry.ts` | `Point, Size, PixelSpan, Rect` | One vocabulary for pixels shared by `layout`, `render`, `view` — instead of four private `{x, y}` shapes. |
 | `model/errors.ts` | `FreeGanttError` and the catchable subclasses | The public error base, carrying a stable `code`. Subclasses name failures a consumer can hit: dates, fields, plugins, commands, and mutation. |
 | `model/change-set.ts` | `ChangeSet, FieldUpdated` | The *one write shape*: `{ added, removed, updated }`, where an update is `{ entryId, field: FieldKey, from, to }` per field. Emitted on `change`; the shape undo and redo replay. |
-| `model/field.ts` | `Field, FieldColumnAlign` | What a value *is* (ADR 0005). A Field key is the whole address (ADR 0011): a core key reads and writes the Entry directly, a `compute` Field runs on read and owns no home, and everything else lives in `entry.props` under its own key. There is no more `source` to declare. |
+| `model/field.ts` | `Field, ColumnAlign` | What a value *is* (ADR 0005). A Field key is the whole address (ADR 0011): a core key reads and writes the Entry directly, a `compute` Field runs on read and owns no home, and everything else lives in `entry.props` under its own key. There is no more `source` to declare. |
 | `model/command.ts` | `KeyChord, TargetKind` | Zero-dep command primitives. The bound `Command` types live in `api/command.ts`, which may name `Gantt`. |
-| `model/error-report.ts` | `ErrorReport, ErrorCode, RaiseError` | What the `error` event carries on Dataset and Gantt (ADR 0009). Types only; the catchable class is `FreeGanttError`. |
+| `model/error-report.ts` | `ErrorReport, ReportCode, RaiseError` | What the `error` event carries on Dataset and Gantt (ADR 0009). Types only; the catchable class is `FreeGanttError`. |
 | `model/plugin.ts` | `PluginId, Disposer, PluginStore, ExtenderWrapper` | Plugin primitives that name nothing outside `model/`. `ChromePlugin` lives in `api/plugin.ts`. |
 | `model/render.ts` | `ElementDescription` | The reconciler's vocabulary as plain data. A plugin returns this instead of a live node; `render/dom/element-description.ts` is the only place that turns it into DOM. |
+| `model/stored-entry.ts` | `StoredEntry, Segment, SegmentInput, EntryInput, EntryEdit, EditRequest, EditExtender, spansTime()` | What storage owns, and the loose shapes that reach it. One `Segment` is the unit Selection holds (ADR 0010, #212); an Entry that never mentions one still stores a single Segment over its own span, filled at ingest. |
+| `model/field-key.ts` | `CoreFieldKey, FieldKey, CoreFieldValues, CoreFieldValue, FieldValue` | A Field key names a Field and is the changeset's `field` (ADR 0011). Derives from `StoredEntry`, so it sits one file below `field.ts` — the live `Entry` names Field keys too, and the shared leaf keeps the two out of an import ring. |
+| `model/hierarchy-source.ts` | `HierarchySource, HierarchySourceWrapper` | Which Entry is the parent of this one (ADR 0020). A plugin states the answer; core owns everything downstream of it — child index, `depth`, the descendant walk, and the Rollup. |
+| `model/write-verdict.ts` | `WriteRefusalReason, WriteVerdict` | The verdict pair a plugin author reads off `ctx.interaction.canWrite`. Declared here, not in `data/`, because only `api/` and `model/` types are public — `data/write-rule.ts` computes it and `view/` republishes it. |
+| `model/interactions.ts` | `Interactions, CapabilityRule, WriteRule, GestureCapability` | What a consumer, or a Variant, may say about a gesture. Declared here so `layout/variants.ts` can name `can?: Interactions` without reaching above `model/` (ADR 0018); `view/capability.ts` is still the one file that resolves them. |
 | `model/index.ts` | barrel | Public types only; brands and error helpers re-exported. |
 
 ### `time/` — pure — the only legal home for date arithmetic
@@ -51,7 +56,7 @@ where they do something beyond re-export.
 | --- | --- | --- |
 | `data/dataset-state.ts` | `DatasetState, DatasetStateOptions` | The live state one `Dataset` instance owns — a façade holding the entry store, event bus, field registry, history and edit-extender. Exposes `transaction()` as the sole commit entry point. |
 | `data/entry-store.ts` | `EntryStore` | Committed entry map plus per-transaction write-set overlay. Exposes `add/update/remove` and a token-gated staging/apply surface so a transaction can stage edits it does not want to leak mid-flight. |
-| `data/entry-reader.ts` | `toEntries(), toEntry(), toStoredEdit()` | Maps `EntryInput`/`EntryEdit` through `time/`'s zone conversion into stored `Entry`/`StoredEdit` shapes — the single place field reading and date normalization meet. |
+| `data/entry-reader.ts` | `toEntries(), toEntry(), toEditReading()` | Maps `EntryInput`/`EntryEdit` through `time/`'s zone conversion into stored `Entry`/`StoredEdit` shapes — the single place field reading and date normalization meet. |
 | `data/change-set.ts` | `diffEdit(), foldChangeSet(), invertChangeSet()` | Field-aware changeset building: diffs a `StoredEdit` against committed state, folds a transaction's edits into one `ChangeSet`, and inverts it for undo. |
 | `data/transaction.ts` | `runTransaction(), commitChangeSet(), applyConstructionRollUp()` | The transaction runner. Mints a `TxToken`, runs the body, calls the edit-extender once, runs hierarchy promotion, runs rollup, folds the changeset, and emits `beforeChange`/`change`. |
 | `data/build-commit-change-set.ts` | `buildCommitChangeSet()` | The four-stage commit pipeline (ADR 0013 dropped the autoGroup promotion stage): body edits → extension hook → rollup → fold. The only module that imports `rollup.ts` on the commit path (`rollup-is-removable`). |
@@ -70,6 +75,11 @@ where they do something beyond re-export.
 | `data/fields/core-fields.ts` | `CORE_FIELDS` | Declares the eight core fields — name, start, end, kind, parentId, segments, meta, duration — as `Field` declarations of the same shape a consumer writes. |
 | `data/fields/field-access.ts` | `createFieldAccess(), mergeProposedEdits(), ambientFieldContext(), createComputeContext()` | The one reader behind every by-key value: a core key, a `props` key, or a `compute` Field. It also merges and overlays proposed edits, so a rule reads the row an edit would produce. |
 | `data/fields/field-registry.ts` | `FieldRegistry` | One registry per dataset. Resolves field types, merges core + consumer declarations, validates uniqueness, and provides lookup by key. |
+| `data/live-entry.ts` | `LiveEntries, EntrySource` | Builds the live `Entry` (ADR 0017): `model/` declares the interface, `data/` builds it, `layout/` names the type but never the file. Every read goes back to the store, so a row read inside an open transaction sees the write set overlaid on committed state. |
+| `data/hierarchy-source.ts` | `storedParentSource, parentIdFrom(), ParentIndex, CheckedHierarchy, checkHierarchyAnswers()` | Core's own hierarchy source, plus the check core runs over any source's answers (ADR 0020). An unknown parent id reads as a root, and a cycle's closing link breaks. Both are refused answers, and neither throws — the check reports nothing itself; the caller raises. |
+| `data/write-rule.ts` | `resolveWriteTarget(), libraryWriteRule, isUserEditable(), isApiEditable(), WriteTarget` | The one write resolver where three questions meet (ADR 0011): does the Field exist, is it editable, is it derived here. `view/capability.ts` asks the grid threshold before it opens a cell; `entry-store.ts`'s `update()` asks the API threshold before it stages a write (I14). |
+| `data/fields/column-sizing.ts` | `sizingOfColumn(), ColumnSizingCandidate` | The `width`/`flex` pair merges as one pair, never key by key (#249). The Field-column merge and the Gantt-column merge each fixed that bug independently once; this is the one function both now call. |
+| `data/fields/field-types.ts` | `percent, SHIPPED_FIELD_TYPES` | The shipped Field types (D-S4-3). `percent` formats through `Intl.NumberFormat`'s own `'percent'` style, so a stored `35` divides by 100 first and locale spacing is right — a hand-rolled `${value}%` gets French and Arabic wrong. |
 | `data/index.ts` | barrel | Re-exports `DatasetState`, `DatasetStateOptions`, `HistoryOptions`, `EntryStore`; everything else internal. |
 
 ### `layout/` — pure — headless geometry — rows, items, frame
@@ -101,24 +111,29 @@ where they do something beyond re-export.
 | `layout/viewport/batched-notifier.ts` | `BatchedNotifier` | Depth counter + pending flag + `finally` flush. Several writes, at most one notification, no observer ever sees an intermediate state. |
 | `layout/viewport/bound-value.ts` | `BoundValue, BoundValueContract, BoundValueHandle` | The binding side of a shareable model: one `Map<Binding, onChange>` serving both membership and notification, a memoized resolved value, and the notify-iff-changed rule. |
 | `layout/viewport/time-scale-model.ts` | `TimeScaleModel, TimeScaleIntent, ScaleBinding, ScaleBindingHandle` | Shareable x-axis. Takes *intent* (preset, range) and resolves zone/span/zoom from the Gantts bound to it. Two Gantts sharing one instance are x-synced by construction. |
-| `layout/viewport/scroll-model.ts` | `ScrollModel, ScrollIntent, ScrollBinding, ScrollState, ScrollBindingHandle` | Shareable scroll position. Owns one shared position; each bound Gantt clamps it locally. |
+| `layout/viewport/scroll-model.ts` | `ScrollModel, ScrollPosition, ScrollBinding, ScrollState, ScrollBindingHandle, bindScroll()` | Shareable scroll position. Owns one shared position; each bound Gantt clamps it locally. |
 | `layout/viewport/viewport.ts` | `Viewport, ViewportOptions, ViewportHandle` | The fan-in: one bind, one handle, one reaction over both models plus this Gantt's own pane size, content size and overscan. |
+| `layout/items/item.ts` | `Item, ItemProducer, BarAnchor, FixedBarBox, DrawnVariant, VariantItems, entryItem(), wholeEntryItem(), fixedWidthItem()` | What one row draws, as plain data — one Item is one bar. Holds the Item vocabulary alone, so `variants.ts` may name `ItemProducer` and `produce-items.ts` may name both, with no import ring between the three. |
+| `layout/items/variants.ts` | `VariantRegistry, createVariantRegistry(), VariantRule, ResolvedVariant, EntryVariant, bar, summary, diamond` | The Variant rule, and the file where a row meets one (ADR 0018). One object answers five questions about a row's shape: which rows wear it (`when`), what shape it draws (`items`), how it looks (`paint`), what you can do to it (`can`), and the rules its look needs (`css`, ADR 0022 §5). |
+| `layout/entry-double.ts` | `entryDouble(), entryDoubles(), entryDoublesById(), entryValuesOf(), EntryDoubleValues` | **Test-only.** The live `Entry` a `layout/` test builds by hand (ADR 0017). It also proves the seam by construction: `layout/` satisfies the whole interface out of `model/` and `time/` alone, so the `layout-boundary` rule stays untouched. |
 | `layout/index.ts` | barrel | Public layout entry points; the re-export that reaches `model/` types. |
 
 ### `render/` — DOM — `GeometryFrame` → pixels
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `render/backend.ts` | `RenderBackend<TSurface>, InteractionState, HitResult` | The backend seam. Names no DOM type itself — `TSurface` carries that. |
+| `render/backend.ts` | `RenderBackend<THost>, RenderSurfaces, InteractionState, HitResult` | The backend seam. Names no DOM type itself — `THost` carries that. |
 | `render/dom/index.ts` | `createDomBackend()` | The default backend: four absolutely-positioned layers plus a 1×1 content sizer, driven by `syncKeyed`. |
 | `render/dom/sync-keyed.ts` | `syncKeyed(), SyncKeyedSpec, KeyedLayer, NestedKeyedLayers` | The whole reconciler. Look-up-or-create per key → patch only if geometry changed → prune vanished keys. Scope is hard-bounded to attr/class/style/text + keyed children. |
 | `render/dom/pixel-property.ts` | `readPixelProperty(), PixelPropertyPolicy` | One reader for every `--fg-*` pixel custom property, with an explicit validity policy so "zero is nonsense" and "zero is a choice" are stated, not implied. |
-| `render/dom/date-line.ts` | `syncDateLine() / renderDateLine()` | Renders the today-line and authored date lines as positioned decoration elements. |
+| `render/dom/date-line.ts` | `attachDateLines(), DateLineAttachment` | Renders the today-line and authored date lines as positioned decoration elements. |
 | `render/dom/decorations.ts` | `DecorationsAttachment` | Turns `RangeBand`/`RowStripe` into keyed DOM nodes. |
 | `render/dom/dom-contract.ts` | `BAR_CLASS, ROW_CLASS, …` | Class names and data attributes this backend writes. Nothing outside `render/dom` may retype them; `view/gantt-dom.ts` resolves a node from these constants alone. |
 | `render/dom/element-description.ts` | `buildElement()` | Turns one `ElementDescription` into a live DOM subtree. Stays inside the reconciler's hard-bounded scope. |
 | `render/dom/css-escape.ts` | `cssEscapeAttr()` | One place for the `CSS.escape` feature-detect every `[data-field="…"]` selector needs. |
 | `render/dom/row-twisty.ts` | `rowIdFromTwistyClick()` | Row twisty hit target. Keeps `.fg-row-twisty`, `.fg-row` and `data-row-id` out of `view/` so a second backend owns its own control geometry. |
+| `render/dom/tick-lines.ts` | `attachTickLines(), TickLineAttachment` | The timeline grid lines, as one keyed layer. The geometry is `GeometryFrame.tickLines` from `layout/frame.ts`; this file only paints it. A consumer opts out through `--fg-tick-line-color` (J2). |
+| `render/dom/text-ruler.ts` | `createTextRuler(), TextRuler` | Measures a bar label's width in CSS px off a canvas 2D context that shares the bar layer's font (J1). `measureText` reads glyph metrics with no layout pass, which is what keeps a placement check affordable for every bar on every frame. |
 | `render/null/index.ts` | `createNullBackend(), NullBackend` | Headless backend recording the last frame. For tests, SSR-of-data, and the future export seam. |
 
 ### `view/` — DOM — the shell, gestures, capabilities, navigation
@@ -144,7 +159,7 @@ where they do something beyond re-export.
 | `view/styles.ts` | `ensureBaseStyles()` | Idempotently injects the library's base stylesheet once per `document`. |
 | `view/frame-scheduler.ts` | `FrameScheduler` | Coalesces render requests into at most one `requestAnimationFrame` per tick — the throttle between "a change happened" and "a frame drew". |
 | `view/dataset-change-subscription.ts` | `subscribeToDatasetChanges()` | Bridges the dataset's `change` event into the shell's render pipeline. |
-| `view/grid-columns.ts` | `resolveColumns(), resolveFieldCompares(), bindGanttFields()` | Bridges the consumer's `gridColumns` input and field declarations to layout's `ResolvedColumn[]` model. |
+| `view/grid-columns.ts` | `resolveColumns(), resolveFieldCompares(), resolveGanttFields()` | Bridges the consumer's `gridColumns` input and field declarations to layout's `ResolvedColumn[]` model. |
 | `view/capability.ts` | `resolveCapabilities()` | Merges the consumer's `Interactions` overrides with the per-kind default table; returns `Capabilities` with a `can(capability, entry)` method (invariant I14). |
 | `view/affordance-projection.ts` | `projectAffordances()` | Pure projection of hovered/movable/resizable paint tokens from hover, selection, and capability resolution. |
 | `view/entry-gesture-context.ts` | `EntryGestureContext, EntryGestureSession, EntryHit` | The type-seam between `view/` (which implements it) and `interaction/` (which drives it). |
@@ -155,6 +170,12 @@ where they do something beyond re-export.
 | `view/keyboard-navigation.ts` | `attachKeyboardNavigation()` | Keydown handler for viewport navigation when nothing is selected. |
 | `view/wheel-navigation.ts` | `attachWheelNavigation()` | ctrl/cmd+wheel zoom and shift+wheel pan. |
 | `view/event-bus.ts` | `GanttEventMap` | Declares the ten-plus event names and payload types, re-exporting the generic `EventBus` mechanism from `data/event-bus.ts`. |
+| `view/theme.ts` | `resolveTheme(), ResolvedTheme, MatchMedia` | Theme resolution (#330). The consumer states `Theme` (`'auto'`, `'light'`, `'dark'`); `ResolvedTheme` is what is actually painted once `'auto'` settles. Reads the nearest ancestor's `data-fg-theme`, so a wrapping app's pin reaches every Gantt inside it (#271). |
+| `view/variant-styles.ts` | `attachVariantStyles(), VariantStyles` | The second stylesheet a Gantt writes (ADR 0022 §5): the rules behind an installed Variant's own class. One node per Gantt, never one shared refcounted node per document (I2) — disposing one Gantt removes exactly its own rules. |
+| `view/grid-pane-width.ts` | `GridPaneWidth, GridWidth, GridPaneWidthPorts` | The grid pane's width rules: the #127 floor, the #139 ceiling over the resolved columns' right edge, and #157's `'fitColumns'` standing instruction that keeps the pane on that edge across every rebind. Split out of `GanttShell` so the rules are testable on their own. |
+| `view/segment-selection.ts` | `SegmentSelection, SegmentSelectionRow, SegmentSelectionPorts` | One sentence: given what is selected, what would a click select? ADR 0010's pane rule ran as two switches — one here, one in `interaction/entry-gestures.ts`. Now it runs once, in `view/`, and `interaction/` only ever asks for the answer (#230 R4). |
+| `view/roving-focus.ts` | `RovingFocus, RovingFocusRow, RovingFocusPorts` | Which bar a keyboard action lands on (D-S5-39). Restores by key, not by node: a virtualized row's node comes and goes as the window scrolls, but the row it stands for does not. The nudge and resize themselves stay `interaction/keyboard-editing.ts`'s job. |
+| `view/live-region.ts` | `LiveRegion, LiveRegionFeed` | One polite live region per Gantt (D-S5-25/D-S5-26). A screen reader announces a change to its text, so this is how a keyboard action reaches a screen-reader user. It subscribes to the Gantt's own `error` event, and grows no second call path for a plugin to reach it through. |
 | `view/index.ts` | public barrel | Re-exports the shell and the view-surface types `api/` needs. |
 
 ### `interaction/` — DOM — drives the gesture seam, no layout math
@@ -174,6 +195,8 @@ where they do something beyond re-export.
 | `api/dataset.ts` | `Dataset, DatasetOptions` | The public data store. Entries CRUD, transactions, events, fields, undo/redo — all delegated into `data/`. |
 | `api/gantt.ts` | `Gantt, GanttOptions` | The public `Gantt` class. Constructs one `GanttShell` and forwards; exposes the live properties (preset, range, gridColumns, rowSource, collapsed, selection, plugins, commands, …). |
 | `api/plugin.ts` | `ChromePluginOf, DataPluginOf, PluginOf` | The public Gantt-plugin contract, generic over `TGantt` so this file never imports `Gantt` (no cycle). |
+| `api/define-plugin.ts` | `definePlugin()` | The one door a plugin author writes a plugin through (ADR 0019). It returns the object it is given; what it adds is the type, so a mistake in the `data` half is a red squiggle in the editor, not a failure at mount. |
+| `api/plugin-context.ts` | `PluginContextOf` | What a plugin's `view` half receives (ADR 0019). Generic over the Gantt and Dataset types so `api/` has no import ring; `api/gantt.ts` binds the arguments once as `PluginContext`, which is the name a plugin author writes. |
 | `api/dataset-plugin.ts` | `DatasetPluginContextOf, mergeEntryEdits(), moveEntryTo()` | The public Dataset-plugin contract, plus the one legal merge of two extenders' writes. |
 | `api/command.ts` | `CommandOf, CommandContextOf, BuiltInCommandId` | The public command and keybinding contract, generic over `TGantt`. |
 | `api/attempt-mutation.ts` | `attemptMutation()` | Runs a mutating body and returns `false` when `beforeChange` refuses, instead of throwing. |
@@ -197,6 +220,7 @@ where they do something beyond re-export.
 | `extensions/features/menu-view.ts` | `MenuItem, MenuEntry` | Menu vocabulary and `ElementDescription` builder. Pure; no DOM mount. |
 | `extensions/features/inline-editing.ts` | `inlineEditing()` | Shipped cell editor. Owns a live control rather than a static `Popup` content tree. |
 | `extensions/features/date-input.ts` | `DateInput, DateInputFactory` | Default date seam: wraps `<input type="date">`. No extra runtime dep. |
+| `extensions/plugin-order.ts` | `resolveSetupOrder(), assertNoDuplicateIds(), OrderedPlugin` | The one place that answers "in what order do plugins set up?" (D-S5-31). ADR 0019 gives a plugin's two halves one `requires` list between them, so the sort belongs to neither install site alone. Generic over the plugin shape — it reads `id` and `requires` and nothing else. |
 | `extensions/index.ts` | barrel | Re-exports the runtime, commands, keymap, and the shipped built-ins. |
 
 ### not yet written

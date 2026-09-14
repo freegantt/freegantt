@@ -129,7 +129,7 @@ or `scroll` and they stay in sync.
 
 ```ts
 dataset.on('change', ({ changeSet }) => save(changeSet)); // data events on the Dataset
-gantt.on('selectionChange', () => render(gantt.selectionEntries)); // view events on the Gantt
+gantt.on('selectionChange', () => render(gantt.selectedEntries)); // view events on the Gantt
 gantt.on('beforeEntryMove', () => false); // every mutating interaction has a cancelable before* pair
 ```
 
