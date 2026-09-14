@@ -112,7 +112,7 @@ no JS reads it.
 | `--fg-splitter-color` | `#E6E2D9` | `#2B2F36` | `.fg-splitter` background |
 | `--fg-header-bg` | `#FFFFFF` | `#1B1D22` | `.fg-header` background |
 | `--fg-header-band-bg` | `#F4F2EC` | `#22252B` | `.fg-band` background |
-| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text |
+| `--fg-header-text` | `#1A1815` | `#ECEAE3` | `.fg-band`/`.fg-tick` text, `.fg-grid-header` text |
 | `--fg-header-subtext` | `#5E5A53` | `#A8A49B` | `.fg-tick` text, `.fg-tooltip-dates` |
 | `--fg-header-divider-color` | `#E6E2D9` | `#2B2F36` | rule between header bands, `.fg-menu-separator` |
 | `--fg-tick-line-color` | `rgb(26 24 21 / 0.09)` | `rgb(236 234 227 / 0.1)` | `.fg-tick-line` — the timeline pane's own vertical grid line, one per finest-band tick boundary |
