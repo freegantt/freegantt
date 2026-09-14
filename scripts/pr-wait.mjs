@@ -21,6 +21,14 @@
 //     stays the stale draft-time run, `conclusion: skipped`, and nothing queues. This script names
 //     the documented fallback — `gh workflow run ci.yml --ref <branch>` — instead of waiting out a
 //     run that will never start.
+//
+// A third case wears the second one's clothes for a few seconds, and it is the harder one.
+// `gh pr ready` returns before its run appears, and the stale draft-time run is already on the
+// board, SKIPPED. So an all-skipped board tells one of two opposite stories: the trigger never
+// fired, or the real run is seconds away. One read cannot tell them apart. On #360 that misread
+// cost a needless `gh workflow run` dispatch, and the dispatch then cancelled the real run through
+// the shared concurrency group. So a skipped check never counts as a started run, and the wait
+// below holds until a check arrives that is not skipped.
 
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -33,6 +41,14 @@ const POLL_SECONDS = 10;
 const UNSETTLED = new Set(['pending']);
 /** Buckets that mean the gate did not go green. */
 const FAILING = new Set(['fail', 'cancel']);
+
+/**
+ * True when a real run is on the board. A skipped check is the leftover draft-time run, so it
+ * never counts as a start — see the header for the two opposite stories an all-skipped board tells.
+ */
+export function hasRunStarted(checks) {
+  return checks.some((check) => check.bucket !== 'skipping');
+}
 
 function gh(argv, options = {}) {
   return spawnSync('gh', argv, { encoding: 'utf8', ...options });
@@ -89,14 +105,15 @@ export function summarizeChecks(checks, { number, seconds, branch }) {
   }
 
   // Every check skipped means the newest run predates "ready" — the stale draft-time run §5.2
-  // describes. A skipped gate proves nothing, so this is never a pass.
+  // describes. A skipped gate proves nothing, so this is never a pass. The caller waits this state
+  // out first (see `hasRunStarted`), because the real run often queues seconds after `gh pr ready`.
   if (checks.every((check) => check.bucket === 'skipping')) {
     return {
       settled: true,
       ok: false,
       verdict:
-        `pr-wait FAILED — every check on #${number} is SKIPPED, so this is the stale draft-time ` +
-        `run, not a gate that ran (docs/04 §5.2, #298/#235). ` +
+        `pr-wait FAILED — every check on #${number} is SKIPPED after ${seconds}s, so this is the ` +
+        `stale draft-time run, not a gate that ran (docs/04 §5.2, #298/#235). ` +
         `Force the same gate job: \`gh workflow run ci.yml --ref ${branch}\`.`,
     };
   }
@@ -152,16 +169,20 @@ if (isMain) {
     );
   }
 
-  // First: has a run started at all? Waiting inside `--watch` for a run that never queues is the
-  // trigger gap's failure mode, and it looks like a slow CI rather than a missing one.
+  // First: has a real run started? Waiting inside `--watch` for a run that never queues is the
+  // trigger gap's failure mode, and it looks like a slow CI rather than a missing one. An
+  // all-skipped board is not a start either, so this loop waits it out before it believes the gap.
   let checks = readChecks(pr.number);
-  while (checks.length === 0 && elapsed() < START_TIMEOUT_SECONDS) {
-    console.log(`pr-wait: #${pr.number} reports no checks yet — waiting for a run to queue (${elapsed()}s).`);
+  while (!hasRunStarted(checks) && elapsed() < START_TIMEOUT_SECONDS) {
+    console.log(
+      `pr-wait: #${pr.number} shows no run yet — waiting for one to queue ` +
+        `(${elapsed()}s of ${START_TIMEOUT_SECONDS}s).`,
+    );
     sleepSeconds(POLL_SECONDS);
     checks = readChecks(pr.number);
   }
 
-  if (checks.length > 0) {
+  if (hasRunStarted(checks)) {
     console.log(`pr-wait: watching ${checks.length} check(s) on #${pr.number} — ${pr.url}`);
     // `gh` owns the waiting. This script never polls a status field itself, which is the whole
     // point: there is no vocabulary here to read wrong.

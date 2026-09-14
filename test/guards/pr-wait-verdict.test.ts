@@ -14,7 +14,7 @@
 // A pass needs a check that actually went green.
 
 import { describe, expect, it } from 'vitest';
-import { summarizeChecks } from '../../scripts/pr-wait.mjs';
+import { hasRunStarted, summarizeChecks } from '../../scripts/pr-wait.mjs';
 
 const CONTEXT = { number: 354, seconds: 12, branch: 'fix/some-branch' };
 
@@ -71,5 +71,34 @@ describe('pr-wait verdicts', () => {
 
   it('a skipped check beside a green one still passes — only an all-skipped run is the gap', () => {
     expect(summarizeChecks([check('pass'), check('skipping', 'optional')], CONTEXT).ok).toBe(true);
+  });
+});
+
+// `gh pr ready` returns before its run appears, and the stale draft-time run is already on the
+// board, SKIPPED. So an all-skipped board tells one of two opposite stories: the trigger never
+// fired, or the real run is seconds away. `summarizeChecks` calls that board the trigger gap, which
+// is right only after the wait. `hasRunStarted` is what holds the wait open, so it must read an
+// all-skipped board as "nothing has started" — on #360 the single read cost a needless dispatch,
+// and the dispatch cancelled the real run through the shared concurrency group.
+describe('pr-wait waits for a real run', () => {
+  it('reads an empty board as not started', () => {
+    expect(hasRunStarted([])).toBe(false);
+  });
+
+  it('reads an all-skipped board as not started, because the real run may be seconds away', () => {
+    expect(hasRunStarted([check('skipping'), check('skipping', 'gate')])).toBe(false);
+  });
+
+  it('reads a queued check as started', () => {
+    expect(hasRunStarted([check('pending')])).toBe(true);
+  });
+
+  it('reads a settled check as started', () => {
+    expect(hasRunStarted([check('pass')])).toBe(true);
+    expect(hasRunStarted([check('fail')])).toBe(true);
+  });
+
+  it('reads one live check beside a stale skipped one as started', () => {
+    expect(hasRunStarted([check('skipping'), check('pending', 'real')])).toBe(true);
   });
 });
