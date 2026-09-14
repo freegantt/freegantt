@@ -1,6 +1,8 @@
 ---
 id: files
 title: "File inventory"
+last_update:
+  date: 2026-09-14
 ---
 
 An index of the tree: find the file here, then follow it into [Class map](./classes.md) for what
@@ -15,15 +17,14 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `model/ids.ts` | `EntryId, RowId, ItemId, entryId(), rowId(), itemId()` | Branded string ids. `itemId(entry, seg)` is the deterministic `` `${entryId}:${segmentIndex}` `` rule — the one place that format is written. |
+| `model/ids.ts` | `EntryId, SegmentId, RowId, ItemId, ChangeSetId` and their helpers | Branded string ids. `itemId(entry, seg)` is the deterministic `` `${entryId}:${segmentIndex}` `` rule — the one place that format is written. The `*FromDataset` helpers are the guarded way in from a DOM dataset attribute. |
 | `model/time.ts` | `Instant, TimeUnit, TimeSpan, Duration` | `Instant` is branded epoch-ms so a naked number cannot pass as a date. `TimeSpan` is half-open `[start, end)`. Also holds the *input twins* — `InstantInput`, `TimeSpanInput` and `DateOnlyEndRule`: what a consumer may write, as opposed to what the library stores. |
-| `model/entry.ts` | `Entry, EntryKind, EntryInput` | The authored record. `EntryKind` is an open union (`'span' \| 'group' \| 'milestone' \| (string & {})`) so a consumer can add kinds without a library edit. `EntryInput` is its loose twin: plain-string ids, any `InstantInput` for dates. An `Entry` is itself a valid `EntryInput`, so a consumer already holding branded values passes them straight through. |
+| `model/entry.ts` | `Entry` | The authored record, and it answers questions about itself (ADR 0017): `read(key)`, `duration()`, `hasChildren`, `children()`, `parent()`, `descendants()`, `depth`, `toInput()`. It carries no stored classification — an Entry derives when it has children. `toInput()` gives the loose twin `entries.add()` takes, which is how a row is copied. |
 | `model/dataset.ts` | `Dataset` | The *structural* contract (`entries` + `timeZone`) that `api/dataset.ts`'s class implements. Lives here so `layout/` can bind against it without importing `view/` or `api/`. |
 | `model/geometry.ts` | `Point, Size, PixelSpan, Rect` | One vocabulary for pixels shared by `layout`, `render`, `view` — instead of four private `{x, y}` shapes. |
-| `model/errors.ts` | `FreeGanttError` and the catchable subclasses | The public error base, carrying a stable `code`. Subclasses name failures a consumer can hit: dates, fields, plugins, commands, serialization, and mutation. |
+| `model/errors.ts` | `FreeGanttError` and the catchable subclasses | The public error base, carrying a stable `code`. Subclasses name failures a consumer can hit: dates, fields, plugins, commands, and mutation. |
 | `model/change-set.ts` | `ChangeSet, FieldUpdated` | The *one write shape*: `{ added, removed, updated }`, where an update is `{ entryId, field: FieldKey, from, to }` per field. Emitted on `change`; the shape undo and redo replay. |
 | `model/field.ts` | `Field, FieldColumnAlign` | What a value *is* (ADR 0005). A Field key is the whole address (ADR 0011): a core key reads and writes the Entry directly, a `compute` Field runs on read and owns no home, and everything else lives in `entry.props` under its own key. There is no more `source` to declare. |
-| `model/document.ts` | `DatasetDocument` | The schema-2 serialization shape — the field half plus entries, version-dispatched on read. |
 | `model/command.ts` | `KeyChord, TargetKind` | Zero-dep command primitives. The bound `Command` types live in `api/command.ts`, which may name `Gantt`. |
 | `model/error-report.ts` | `ErrorReport, ErrorCode, RaiseError` | What the `error` event carries on Dataset and Gantt (ADR 0009). Types only; the catchable class is `FreeGanttError`. |
 | `model/plugin.ts` | `PluginId, Disposer, PluginStore, ExtenderWrapper` | Plugin primitives that name nothing outside `model/`. `ChromePlugin` lives in `api/plugin.ts`. |
@@ -67,13 +68,8 @@ where they do something beyond re-export.
 | `data/replay.ts` | `replayChangeSet()` | Applies an undo/redo changeset through `commitChangeSet` with no extension hook and no rollup — the replay path is narrower than the live one by design. |
 | `data/fields/aggregators.ts` | `SHIPPED_AGGREGATORS` | Built-in aggregator functions — min, max, sum, count, none, weightedMeanByDuration — registered by name so a function reference can serialize into a document. |
 | `data/fields/core-fields.ts` | `CORE_FIELDS` | Declares the eight core fields — name, start, end, kind, parentId, segments, meta, duration — as `Field` declarations of the same shape a consumer writes. |
-| `data/fields/field-access.ts` | `readField(), writeField(), writeOntoEntry(), etc.` | The one switch over `FieldSource`: reads, writes, merges and overlays field values on entries/stored-edits. |
-| `data/fields/normalize-source.ts` | `storedSourceOf()` | One Field-source normalizer. Fills an omitted source as `{ from: 'meta', key }`. Registry resolve and the schema-2 codec both ask here. |
-| `data/fields/source-strategy.ts` | `withProposedKeys(), proposedKeysOf(), FieldReadMemo` | One FieldSource strategy table so `from` is not switched in four places. |
+| `data/fields/field-access.ts` | `createFieldAccess(), mergeProposedEdits(), ambientFieldContext(), createComputeContext()` | The one reader behind every by-key value: a core key, a `props` key, or a `compute` Field. It also merges and overlays proposed edits, so a rule reads the row an edit would produce. |
 | `data/fields/field-registry.ts` | `FieldRegistry` | One registry per dataset. Resolves field types, merges core + consumer declarations, validates uniqueness, and provides lookup by key. |
-| `data/serialization/field-document.ts` | `encodeFieldDocument(), decodeFieldDocument()` | Encodes and decodes the field half of a `DatasetDocument`. |
-| `data/serialization/index.ts` | `toJSON()` | Serializes a dataset to a schema-2 `DatasetDocument` with Z-suffixed ISO instants. |
-| `data/serialization/read.ts` | `fromDocument()` | Version-dispatches, converts stored ISO strings back to `Instant`, decodes fields. |
 | `data/index.ts` | barrel | Re-exports `DatasetState`, `DatasetStateOptions`, `HistoryOptions`, `EntryStore`; everything else internal. |
 
 ### `layout/` — pure — headless geometry — rows, items, frame
@@ -93,7 +89,7 @@ where they do something beyond re-export.
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
 | `layout/registration-table.ts` | `createRegistrationTable()` | Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf that `extensions/` may import. |
 | `layout/renderer.ts` | `BarRenderer, CellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
-| `layout/items/produce-items.ts` | `produceItemsForRow(), createItemProducerRegistry()` | Three shipped per-`EntryKind` item producers — span→segments or bar, group→summary rail, milestone→diamond — with unknown kinds falling back to span. |
+| `layout/items/produce-items.ts` | `produceItemsForRow(), resolveItems()` | Turns a row's entries into Items. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Items (ADR 0018). A header row produces none. |
 | `layout/rows/resolve-rows.ts` | `resolveRows()` | Dispatches to the correct row source based on `source.source`, stamping each row with a sequential index. |
 | `layout/rows/row-source.ts` | `RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.` | Pure data types defining the three row-source configs and their shared options (`filter`, `sort`, `filterPolicy`). |
 | `layout/rows/entries-source.ts` | `resolveEntriesSource()` | Flat mode maps each entry one-to-one; tree mode does a depth-first walk using `parentId`. |
@@ -129,7 +125,7 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `view/gantt-shell.ts` | `GanttShell, GanttShellOptions` | The composition root. Constructs the `Viewport`, `FrameLayout`, `PaneLayout`, `RenderBackend`, `EventBus`, `FrameScheduler`, `GesturePipeline`, `PluginRuntime`, `CollapseState` and every attachment; exposes live-reconfigurable properties. |
+| `view/gantt-shell.ts` | `GanttShell, GanttShellOptions` | The composition root. Constructs the `Viewport`, `FrameLayout`, `PaneLayout`, `RenderBackend`, `EventBus`, `FrameScheduler`, `GesturePipeline`, `PluginRuntime`, `TreeCollapse` and every attachment; exposes live-reconfigurable properties. |
 | `view/frame-settings.ts` | `FrameSettings, DEFAULT_ROW_HEIGHT` | Every live setting that says what the next frame draws, plus the table of what each change invalidates. |
 | `view/plugin-ports.ts` | `buildPluginPorts(), PluginContextParts` | Everything a `PluginContext` carries that `GanttShell` owns. Spread into the public context; `api/gantt.ts` adds only `dataset` and `gantt`. |
 | `view/plugin-registrations.ts` | `PluginRegistrations` | The five seams a plugin registers into — renderer, decoration, item producer, kind default, grid column — each with the refresh it owes. |
@@ -139,7 +135,7 @@ where they do something beyond re-export.
 | `view/column-chrome.ts` | `ColumnChrome` | Grid-column resolve, live resize/reorder preview, and the one commit sequence pointer drag and `gantt.gridColumns = …` share. |
 | `view/column-gesture-context.ts` | `ColumnGestureContext` | The seam `interaction/column-gestures.ts` drives and `GanttShell` implements. |
 | `view/core-commands.ts` | `registerCoreCommands()` | The core command catalog, split out of the shell so it is reviewable as a table. |
-| `view/tree-collapse.ts` | `TreeCollapse` | Collapse set plus tree-arrow and ancestor-expand policy. |
+| `view/tree-collapse.ts` | `TreeCollapse` | Collapsed `RowId`s as per-Gantt view state, plus the tree-arrow and ancestor-expand policy. Propose/commit two-step, so a `beforeCollapseChange` veto can cancel the commit. |
 | `view/today-landing.ts` | `panToTodayLine()` | Today-landing policy. The shell asks this; Viewport only pans. |
 | `view/pane-layout.ts` | `PaneLayout` | Builds the three-pane DOM skeleton — grid, splitter, timeline. |
 | `view/scroll-attachment.ts` | `attachScroll(), ScrollAttachment` | The only file allowed to touch `scrollTop`/`scrollLeft` (invariant I12). ε-filtered so a model-driven write cannot bounce back as a user scroll. |
@@ -154,7 +150,7 @@ where they do something beyond re-export.
 | `view/entry-gesture-context.ts` | `EntryGestureContext, EntryGestureSession, EntryHit` | The type-seam between `view/` (which implements it) and `interaction/` (which drives it). |
 | `view/gesture-pipeline.ts` | `GesturePipeline` | Owns the full gesture lifecycle for move/resize — entry resolution, draft math, preview rAF coalescing, snap resolution, and a commit pipeline with sync/async veto. |
 | `view/viewport-gestures.ts` | `resolveViewportGestures()` | Resolves per-gesture on/off flags for wheel zoom/pan and keyboard pan. |
-| `view/collapse-state.ts` | `CollapseState, CollapseChange` | Holds collapsed `RowId`s; propose/commit two-step for cancelable before/after events. |
+| `view/collapse-state.ts` | `CollapseChange` | The payload both collapse events carry. The state itself lives in `view/tree-collapse.ts`. |
 | `view/attach-row-twisty.ts` | `attachRowTwisty()` | Grid-pane click on a row twisty toggles collapse. Lives here, not in `interaction/`: collapse is viewport state, not a data gesture. |
 | `view/keyboard-navigation.ts` | `attachKeyboardNavigation()` | Keydown handler for viewport navigation when nothing is selected. |
 | `view/wheel-navigation.ts` | `attachWheelNavigation()` | ctrl/cmd+wheel zoom and shift+wheel pan. |
@@ -175,7 +171,7 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `api/dataset.ts` | `Dataset, DatasetOptions` | The public data store. Entries CRUD, transactions, events, fields, serialization, undo/redo — all delegated into `data/`. |
+| `api/dataset.ts` | `Dataset, DatasetOptions` | The public data store. Entries CRUD, transactions, events, fields, undo/redo — all delegated into `data/`. |
 | `api/gantt.ts` | `Gantt, GanttOptions` | The public `Gantt` class. Constructs one `GanttShell` and forwards; exposes the live properties (preset, range, gridColumns, rowSource, collapsed, selection, plugins, commands, …). |
 | `api/plugin.ts` | `ChromePluginOf, DataPluginOf, PluginOf` | The public Gantt-plugin contract, generic over `TGantt` so this file never imports `Gantt` (no cycle). |
 | `api/dataset-plugin.ts` | `DatasetPluginContextOf, mergeEntryEdits(), moveEntryTo()` | The public Dataset-plugin contract, plus the one legal merge of two extenders' writes. |

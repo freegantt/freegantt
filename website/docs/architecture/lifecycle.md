@@ -1,6 +1,8 @@
 ---
 id: lifecycle
 title: "Construction, render, notification"
+last_update:
+  date: 2026-09-14
 ---
 
 Three passes, in the order they run: what `new Gantt(…)` builds, what one `render()` does, and how
@@ -11,13 +13,16 @@ an edit reaches the screen. Counts on this page are measured, not estimated —
 
 `new Gantt({ container, dataset })` forwards into one long `GanttShell` constructor. Everything
 below happens synchronously, in this order, before that constructor returns. Beyond the diagram's
-steps, the shell also builds the capability resolver, the gesture pipeline, the plugin runtime,
-the command registry, the keymap, the collapse state, and the keyboard and wheel navigation
-attachments.
+steps, the shell also builds the grid pane width, the container resize watch, the overlay and row
+mount layers, the frame settings, the column chrome, the plugin registrations and their stylesheet,
+the capability resolver, the gesture pipeline, the plugin runtime, the command registry, the keymap,
+the collapse state, the segment selection, the roving focus, the live region, and the splitter,
+row-twisty, keyboard and wheel navigation attachments.
 
 *Derived from `harness/main.ts`, `api/gantt.ts`, `view/gantt-shell.ts`,
-`layout/viewport/viewport.ts`, `render/dom/index.ts`, `view/capability.ts`,
-`view/gesture-pipeline.ts`, `view/collapse-state.ts`.*
+`layout/viewport/viewport.ts`, `layout/viewport/bound-value.ts`, `render/dom/index.ts`,
+`view/capability.ts`, `view/gesture-pipeline.ts`, `view/tree-collapse.ts`,
+`view/frame-settings.ts`.*
 
 <div class="fg-architecture-doc">
 <figure>
@@ -32,7 +37,7 @@ preserveAspectRatio="xMidYMid meet"
 <title id="lc-seq-title">Gantt construction sequence</title>
 <desc id="lc-seq-desc">
 Sequence diagram of Gantt construction from harness through GanttShell to Viewport and
-scale/scroll models, showing 19 steps from container resolve to first frame flush.
+scale/scroll models, showing 20 steps from container resolve to first frame flush.
 </desc>
 <defs>
 <marker
@@ -234,7 +239,7 @@ style="color: var(--smell-line)"
 onChange() ×2 — one from each bind, not batched
 </text>
 <text class="s" x="620" y="456" text-anchor="middle">
-dropped: #phase, so #frames.request() is not called
+dropped by #phase: no frame request, no navigationChange
 </text>
 <!-- 13 self -->
 <g class="num">
@@ -250,7 +255,7 @@ dropped: #phase, so #frames.request() is not called
 </g>
 <path class="edge" d="M372,510 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
 <text x="424" y="514">#applyPaneMeasurement(measureTimelinePane())</text>
-<text class="s" x="424" y="528">reads --fg-row-height; size is the timeline pane box</text>
+<text class="s" x="424" y="528">re-reads the four --fg-* pixel properties, then sizes the rows' viewport</text>
 <!-- 15 -->
 <g class="num">
 <circle cx="8" cy="556" r="8" />
@@ -265,7 +270,7 @@ y2="556"
 marker-end="url(#a3)"
 style="color: var(--sub)"
 />
-<text x="533" y="550" text-anchor="middle">setPaneSize({ w, h }) — no gutter subtract</text>
+<text x="533" y="550" text-anchor="middle">setPaneSize(pane box − header height)</text>
 <!-- 16 self -->
 <g class="num">
 <circle cx="8" cy="588" r="8" />
@@ -286,24 +291,177 @@ style="color: var(--sub)"
 <text x="8" y="655" text-anchor="middle">18</text>
 </g>
 <path class="edge" d="M372,646 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
-<text x="424" y="650">new CollapseState; attachKeyboardNavigation; attachWheelNavigation</text>
+<text x="424" y="650">new TreeCollapse; attachKeyboardNavigation; attachWheelNavigation</text>
 <!-- 19 self -->
 <g class="num">
-<circle cx="8" cy="688" r="8" />
-<text x="8" y="691" text-anchor="middle">19</text>
+<circle cx="8" cy="684" r="8" />
+<text x="8" y="687" text-anchor="middle">19</text>
 </g>
-<rect class="bx" x="292" y="672" width="330" height="34" />
-<text class="t" x="304" y="686">#phase = 'live'; #frames.flush()</text>
-<text class="s" x="304" y="699">→ §2. One layout pass (measured).</text>
+<path class="edge" d="M372,678 h44 v14 h-38" marker-end="url(#a3)" style="color: var(--sub)" />
+<text x="424" y="682">datasetPlugins; plugins; zoomPresets; selection — all before frame 1</text>
+<!-- 20 self -->
+<g class="num">
+<circle cx="8" cy="722" r="8" />
+<text x="8" y="725" text-anchor="middle">20</text>
+</g>
+<rect class="bx" x="292" y="706" width="330" height="34" />
+<text class="t" x="304" y="720">#phase = 'live'; #frames.flush()</text>
+<text class="s" x="304" y="733">→ §2. One layout pass (measured).</text>
 </svg>
 </div>
 <figcaption>
 Diagram 1 — <code>new Gantt(...)</code>, synchronous, top to bottom. Amber = the two bind notifies
-that <code>#phase</code> drops. Steps 17–18 build the capability resolver, gesture
-pipeline, collapse state and navigation — new since S1.
+that <code>#phase</code> drops; the section under this diagram explains why there are two. Steps
+17–18 build the capability resolver, gesture pipeline, collapse state and navigation. Step 19
+installs every constructor-supplied plugin, keybinding, command and variant, so all of them reach
+frame 1.
 </figcaption>
 </figure>
 </div>
+
+### Step 12: why one `bind()` delivers two notifications
+
+The amber note says `onChange() ×2`. That surprises every new reader, so here is the whole story,
+from the start. No knowledge of the code is assumed.
+
+**A Gantt does not own its time axis or its scroll position.** Two small models own them.
+`TimeScaleModel` answers "which instant sits at which pixel". `ScrollModel` answers "how far is the
+content scrolled, and how far can it go". Both are *shareable*: two Gantts may bind to the same
+model, and that is how `harness/scroll-sync.ts` makes two Gantts pan together. `Viewport` is the
+fan-in over the pair, so `view/` holds one reaction instead of two.
+
+**Every binding follows one rule: bind always notifies the newcomer.** When something binds, the
+model calls it straight back. That first call is not an update. It *is* the newcomer's first
+render, so it never waits for an open batch:
+
+```ts
+// src/layout/viewport/bound-value.ts — the mechanism both models share
+bind(binding: Binding, onChange: () => void): BoundValueHandle {
+  this.#bindings.set(binding, onChange);
+  this.#resolved = undefined;
+  const changed = this.#recordResolved();
+  onChange(); // ← the newcomer hears about its own bind, always
+  …
+}
+```
+
+**One `Viewport.bind()` binds two models, and nothing wraps the pair.** Each call reaches
+`#notify`, and each `#notify` delivers straight through to the shell:
+
+```ts
+// src/layout/viewport/viewport.ts — inside bind()
+const scaleHandle = bindTimeScale(this.scale, scaleBinding, this.#notify); // → onChange() #1
+const scrollHandle = bindScroll(this.scroll, { content, pane }, this.#notify); // → onChange() #2
+```
+
+Compare that with every *later* write through the same handle. Each one wraps its two calls in a
+batch, so one caller-visible change costs exactly one notification:
+
+```ts
+// src/layout/viewport/viewport.ts — the handle bind() returns
+setPaneSize: (size) => {
+  this.#paneSize = size;
+  this.#notifications.batch(() => {   // ← one delivery at the end of the batch
+    scaleHandle.setPaneWidth(size.width);
+    scrollHandle.setPaneSize(size);
+  });
+},
+```
+
+So the count is not a mystery: `bind()` is the one path on the handle with no batch around it.
+
+<div class="fg-architecture-doc">
+<figure>
+<div class="scroller">
+<svg
+class="d"
+viewBox="0 0 960 280"
+role="img"
+aria-labelledby="lc-bind-title lc-bind-desc"
+preserveAspectRatio="xMidYMid meet"
+>
+<title id="lc-bind-title">Why bind notifies twice and setPaneSize notifies once</title>
+<desc id="lc-bind-desc">
+Two rows. The top row shows bind calling bindTimeScale and bindScroll, each firing its own
+notification, so the shell's onChange runs twice. The bottom row shows setPaneSize wrapping the
+same two calls in one batch, so onChange runs once.
+</desc>
+<defs>
+<marker
+id="a6"
+viewBox="0 0 10 10"
+refX="9"
+refY="5"
+markerWidth="7"
+markerHeight="7"
+orient="auto-start-reverse"
+>
+<path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+</marker>
+</defs>
+<!-- row A: bind -->
+<text class="t" x="16" y="22">Viewport.bind(dataset, onChange) — no batch around the pair</text>
+<rect class="bx pure" x="16" y="34" width="260" height="30" />
+<text class="s" x="28" y="53">bindTimeScale(scale, …, #notify)</text>
+<rect class="bx pure" x="16" y="76" width="260" height="30" />
+<text class="s" x="28" y="95">bindScroll(scroll, …, #notify)</text>
+<line class="edge" x1="276" y1="49" x2="330" y2="49" marker-end="url(#a6)" style="color: var(--sub)" />
+<line class="edge" x1="276" y1="91" x2="330" y2="91" marker-end="url(#a6)" style="color: var(--sub)" />
+<rect class="bx warn" x="336" y="34" width="150" height="30" />
+<text class="s" x="348" y="53">#notify() delivers</text>
+<rect class="bx warn" x="336" y="76" width="150" height="30" />
+<text class="s" x="348" y="95">#notify() delivers</text>
+<path class="edge" d="M486,49 H530 V62 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
+<path class="edge" d="M486,91 H530 V78 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
+<rect class="bx dom" x="566" y="42" width="200" height="56" />
+<text class="t" x="578" y="62">GanttShell onChange()</text>
+<text class="warnink" x="578" y="82">runs twice</text>
+<text class="xs" x="782" y="62">one caller-visible event,</text>
+<text class="xs" x="782" y="76">two deliveries</text>
+<!-- row B: setPaneSize -->
+<text class="t" x="16" y="158">handle.setPaneSize(size) — one batch around the same pair</text>
+<rect class="bx opt" x="16" y="170" width="260" height="80" />
+<text class="s" x="28" y="188">#notifications.batch(() =&gt; {</text>
+<rect class="bx pure" x="30" y="196" width="232" height="22" />
+<text class="s" x="40" y="211">scaleHandle.setPaneWidth(w)</text>
+<rect class="bx pure" x="30" y="222" width="232" height="22" />
+<text class="s" x="40" y="237">scrollHandle.setPaneSize(size)</text>
+<line class="edge" x1="276" y1="210" x2="330" y2="210" marker-end="url(#a6)" style="color: var(--sub)" />
+<rect class="bx pure" x="336" y="194" width="150" height="32" />
+<text class="s" x="348" y="214">#notify() delivers</text>
+<line class="edge" x1="486" y1="210" x2="560" y2="210" marker-end="url(#a6)" style="color: var(--sub)" />
+<rect class="bx dom" x="566" y="188" width="200" height="44" />
+<text class="t" x="578" y="208">GanttShell onChange()</text>
+<text class="s" x="578" y="224">runs once</text>
+<text class="xs" x="782" y="208">the batch flushes at its</text>
+<text class="xs" x="782" y="222">end, once, iff anything moved</text>
+</svg>
+</div>
+<figcaption>
+Diagram 2 — the same two sub-models, reached two ways. Amber = the unbatched pair at step 12.
+</figcaption>
+</figure>
+</div>
+
+**Nobody outside the shell ever sees those two calls.** `bind()` runs in the constructor and
+nowhere else, and the callback the shell passes in returns early for the whole of construction:
+
+```ts
+// src/view/gantt-shell.ts — step 10 of the diagram above
+this.#viewportHandle = this.#viewport.bind(
+  { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
+  () => {
+    if (this.#phase === 'constructing') return; // ← both bind-time calls stop here
+    this.#frames.request();
+    this.#emitNavigationChange();
+  },
+);
+```
+
+Measured on a three-entry dataset: constructing a `Gantt` delivers **two** bind-time notifications
+and runs **one** `computeFrame`. A third notification follows that first frame, from the
+`setContentSize` at the end of `render()`. That one arrives after `#phase` is `'live'`, so it does
+what a notification normally does — it asks for the next frame.
 
 ### Why the order is what it is
 
@@ -312,18 +470,20 @@ pipeline, collapse state and navigation — new since S1.
 | 4 | **Styles and panes before paint.** `ensureBaseStyles` must run before `PaneLayout` inserts classed elements, or the first frame is unstyled. `mount` needs the grid and timeline panes that `PaneLayout` builds. |
 | 7–8 | **Mount before bind.** Each model's `bind` notifies the newcomer at once. Those calls are dropped while wiring, but the render target must already exist for the deliberate first `flush()` at step 19. |
 | 9 | Before `bind`, so `#scrollAttachment` is never `undefined` during a render. The timeline pane is the single native scroller. |
-| 10–12 | `bind()` always notifies the newcomer, once per sub-model, with no `Viewport` batch around the pair. Those two `onChange`s land before `#viewportHandle` is assigned. `#phase` drops them so they do not `request()` a frame. The first real frame is step 19. |
-| 14–15 | One synchronous measurement, because a real `ResizeObserver`'s first callback is queued, not immediate. The size is the timeline pane's own box — the grid pane never overlapped it, so nothing is subtracted. `--fg-row-height` is re-read here, not per render. |
+| 10–12 | `bind()` always notifies the newcomer, once per sub-model, with no `Viewport` batch around the pair — [the section below](#step-12-why-one-bind-delivers-two-notifications) walks through why that is two. Those two `onChange`s land before `#viewportHandle` is assigned. `#phase` drops them, so neither asks for a frame and neither emits `navigationChange`. The first real frame is step 20. |
+| 14–15 | One synchronous measurement, because a real `ResizeObserver`'s first callback is queued, not immediate. The viewport gets the *rows'* box, not the pane box: the header sticks to the pane's top and covers that band of rows for the whole scroll, so the measured header height comes off the height. Reporting the full box left the scroll model one header short, and the last row could then never scroll fully into view. All four `--fg-*` pixel properties are re-read here, not per render. |
 | 17–18 | **Capabilities and gestures after the viewport.** The gesture pipeline needs the viewport's scale for draft math, and the capability resolver needs the consumer's `interactions` options which the shell has by then. Keyboard and wheel navigation sit at the end so the elements they attach to exist. |
+| 19–20 | **Plugins before the first frame** (ADR 0019). A constructor-supplied plugin's variant, keybinding, command or selection has to reach frame 1, so the shell applies all of them through its own live setters, then flushes. `theme` is the one setting applied *after* the flush. |
 
 ## One render pass
 
-`GanttShell.render()` gathers `LayoutInput`, runs one pure function, hands the frame to the
-backend, then pushes the resulting extents back into the viewport.
+`GanttShell.render()` builds one `LayoutInput` — what this frame contributes, merged with what
+`FrameSettings` holds — runs one pure function, hands the frame to the backend, then pushes the
+resulting extents back into the viewport.
 
-*Derived from `view/gantt-shell.ts` `render()`, `layout/frame.ts`, `layout/frame-layout.ts`,
-`layout/rows/*`, `layout/items/produce-items.ts`, `render/dom/index.ts` `sync()`,
-`view/scroll-attachment.ts`.*
+*Derived from `view/gantt-shell.ts` `render()`, `view/frame-settings.ts`, `layout/frame.ts`,
+`layout/frame-layout.ts`, `layout/rows/*`, `layout/items/produce-items.ts`,
+`layout/items/variants.ts`, `render/dom/index.ts` `sync()`, `view/scroll-attachment.ts`.*
 
 <div class="fg-architecture-doc">
 <figure>
@@ -356,17 +516,22 @@ orient="auto-start-reverse"
 <rect class="bx dom" x="16" y="20" width="182" height="40" />
 <text class="t" x="28" y="38">GanttShell.render()</text>
 <text class="s" x="28" y="51">view/ — the only DOM/pure meeting point</text>
-<rect class="bx pure" x="16" y="86" width="182" height="200" />
+<rect class="bx pure" x="16" y="86" width="182" height="232" />
 <text class="t" x="28" y="104">LayoutInput</text>
-<text class="s" x="28" y="121">entries ← dataset.entries.all</text>
-<text class="s" x="28" y="136">rowSource ← gantt.rowSource</text>
-<text class="s" x="28" y="151">columns ← resolveColumns</text>
-<text class="s" x="28" y="166">scale ← viewport.timeScale</text>
-<text class="s" x="28" y="181">visible ← viewport.visible</text>
-<text class="s" x="28" y="196">overscan ← viewport.overscan</text>
-<text class="s" x="28" y="211">rowHeight ← --fg-row-height</text>
-<text class="s" x="28" y="226">locale · todayLine · revision · collapsed</text>
-<text class="xs" x="28" y="252">read fresh, every pass</text>
+<text class="s" x="28" y="118">← #frameSettings</text>
+<text class="s" x="28" y="132">&#160;&#160;.toLayoutInput(perFrame)</text>
+<text class="xs" x="28" y="150">this frame contributes:</text>
+<text class="s" x="28" y="164">entries · scale · preset</text>
+<text class="s" x="28" y="178">visible · overscan · revision</text>
+<text class="s" x="28" y="192">columns · collapsed</text>
+<text class="s" x="28" y="206">variants · datasetRevision</text>
+<text class="s" x="28" y="220">decorationProviders</text>
+<text class="xs" x="28" y="238">FrameSettings holds:</text>
+<text class="s" x="28" y="252">rowHeight · tickBoxFloorPx</text>
+<text class="s" x="28" y="266">minBarWidthPx · barHeightPx</text>
+<text class="s" x="28" y="280">rows · todayLine · dateLines</text>
+<text class="s" x="28" y="294">locale? · fieldCompares</text>
+<text class="s" x="28" y="308">fieldContext?</text>
 <line
 class="edge"
 x1="107"
@@ -414,8 +579,8 @@ style="color: var(--sub)"
 />
 <rect class="bx pure" x="234" y="256" width="176" height="128" />
 <text class="t" x="246" y="274">computeFrame(input, heights)</text>
-<text class="s" x="246" y="290">1) resolveRows — entries/group/custom</text>
-<text class="s" x="246" y="305">2) produceItems — per kind</text>
+<text class="s" x="246" y="290">1) resolveRows — per rowSource</text>
+<text class="s" x="246" y="305">2) produceItems — per variant</text>
 <text class="s" x="246" y="320">3) cull v + h to the window</text>
 <text class="s" x="246" y="335">4) header ticks; date-lines</text>
 <text class="xs" x="246" y="372">rows → items, in order</text>
@@ -431,18 +596,20 @@ style="color: var(--sub)"
 />
 <rect class="bx pure" x="452" y="128" width="158" height="212" />
 <text class="t" x="464" y="146">GeometryFrame</text>
-<text class="s" x="464" y="163">revision</text>
-<text class="s" x="464" y="177">visible: Rect</text>
-<text class="s" x="464" y="191">header.bands[]</text>
+<text class="s" x="464" y="163">revision · visible: Rect</text>
+<text class="s" x="464" y="177">header.bands[]</text>
+<text class="s" x="464" y="191">tickLines[] ← windowed</text>
 <text class="s" x="464" y="205">rows[] ← windowed</text>
-<text class="s" x="464" y="219">items[] ← produced</text>
+<text class="s" x="464" y="219">rowCount · tree ← FULL</text>
 <text class="s" x="464" y="233">columns[] ← resolved</text>
-<text class="s" x="464" y="247">contentWidth ← FULL</text>
-<text class="s" x="464" y="261">contentHeight ← FULL</text>
-<text class="s" x="464" y="275">decorations[] ← dateLines</text>
-<text class="xs" x="464" y="296">plain numbers only —</text>
-<text class="xs" x="464" y="309">no DOM, no consumer output,</text>
-<text class="xs" x="464" y="322">no hit-region index</text>
+<text class="s" x="464" y="247">bars[] ← produced</text>
+<text class="s" x="464" y="261">links[] · decorations[]</text>
+<text class="s" x="464" y="275">underBars[] · overBars[]</text>
+<text class="s" x="464" y="289">contentWidth ← FULL</text>
+<text class="s" x="464" y="303">contentHeight ← FULL</text>
+<text class="xs" x="464" y="316">plain numbers only — no DOM,</text>
+<text class="xs" x="464" y="327">no consumer output,</text>
+<text class="xs" x="464" y="338">no hit-region index</text>
 <!-- col D -->
 <line
 class="edge"
@@ -465,28 +632,31 @@ y2="190"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx dom" x="652" y="196" width="176" height="108" />
+<rect class="bx dom" x="652" y="196" width="176" height="120" />
 <text class="t" x="664" y="214">sync() keyed layers</text>
-<text class="s" x="664" y="229">bands + ticks per band</text>
-<text class="s" x="664" y="242">rows + cells per row</text>
-<text class="s" x="664" y="255">items (by ItemId)</text>
-<text class="s" x="664" y="268">date-line; grid translateY</text>
+<text class="s" x="664" y="228">header bands + ticks</text>
+<text class="s" x="664" y="241">grid header columns</text>
+<text class="s" x="664" y="254">rows + cells; row bands</text>
+<text class="s" x="664" y="267">bars (by id); links</text>
+<text class="s" x="664" y="280">tick lines; date lines</text>
+<text class="s" x="664" y="293">decorations under + over</text>
+<text class="s" x="664" y="306">cursor line; grid translateY</text>
 <line
 class="edge"
 x1="740"
-y1="284"
+y1="318"
 x2="740"
-y2="304"
+y2="330"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx dom" x="652" y="310" width="176" height="46" />
-<text class="t" x="664" y="328">contentSizer.transform</text>
-<text class="s" x="664" y="342">gives the timeline pane a scroll range</text>
+<rect class="bx dom" x="652" y="334" width="176" height="46" />
+<text class="t" x="664" y="352">contentSizer.transform</text>
+<text class="s" x="664" y="366">gives the timeline pane a scroll range</text>
 <!-- feedback: setContentSize -->
 <path
 class="edge"
-d="M740,356 v46 h-620 v-40"
+d="M740,380 v22 h-620 v-40"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
@@ -508,7 +678,11 @@ style="color: var(--sub)"
 <rect class="bx dom" x="300" y="440" width="330" height="44" />
 <text class="t" x="312" y="458">scrollAttachment.writePosition()</text>
 <text class="s" x="312" y="472">element.scrollLeft/Top ← visible.x/y, ε-filtered</text>
-<text class="xs" x="312" y="500">the last statement of render() — after sync(), by design</text>
+<rect class="bx dom" x="300" y="492" width="330" height="62" />
+<text class="t" x="312" y="510">the shell's own tail, in order</text>
+<text class="s" x="312" y="524">gridPattern · setGridSize — both before sync()</text>
+<text class="s" x="312" y="537">band count moved → re-size the rows' viewport</text>
+<text class="s" x="312" y="550">then setContentSize · writePosition · rovingFocus</text>
 <!-- gesture preview -->
 <rect class="bx dom" x="16" y="508" width="182" height="56" />
 <text class="t" x="28" y="526">GesturePipeline.preview()</text>
@@ -520,7 +694,7 @@ style="color: var(--sub)"
 </svg>
 </div>
 <figcaption>
-Diagram 2 — one <code>render()</code>. Green = pure, blue = DOM. A content-size notify requests a
+Diagram 3 — one <code>render()</code>. Green = pure, blue = DOM. A content-size notify requests a
 later frame; it does not re-enter this pass. The hot gesture path (bottom-left) never touches the
 frame pipeline.
 </figcaption>
@@ -530,16 +704,20 @@ frame pipeline.
 ### The pipeline inside `computeFrame`
 
 The layout pass is not a flat row-per-entry walk. Between input and culling it resolves rows from
-a row source and produces items per `EntryKind`:
+a row source, then asks one registry what each Entry draws:
 
 1. **resolveRows** turns the configured `rowSource` (entries, group, custom) into an ordered list
    of rows, each stamped with a sequential index (`resolve-rows.ts`).
-2. **produceItems** maps each row's entries to `Item`s by `EntryKind` — a span yields segments or
-   one bar, a group yields a summary rail, a milestone yields a diamond
-   (`items/produce-items.ts`).
+2. **produceItemsForRow** turns each row's entries into `Item`s. An Entry carries no stored
+   classification, so nothing dispatches on a type tag. The variant registry resolves one variant
+   per Entry, and that variant's own producer builds the Items (`items/produce-items.ts`,
+   `items/variants.ts`). The walk runs newest-first — the consumer's rules, then a plugin's, then
+   core's two — and stops at the first `when` that answers yes. Core's `leaf` carries no `when`, so
+   every row resolves. A variant with no producer of its own draws one Item over the Entry's whole
+   span.
 3. **Cull** then trims to the visible window, and **header/date-line** emission closes the pass.
 
-#### The two coordinate rules `computeFrame` keeps
+#### The coordinate rules `computeFrame` keeps
 
 - **Windowed vs. full.** `rows` and `items` hold only what survived culling;
   `contentWidth`/`contentHeight` are *always* the full extent. That split is what lets the scroll
@@ -679,7 +857,7 @@ orient="auto-start-reverse"
 </svg>
 </div>
 <figcaption>
-Diagram 3 — two Gantts sharing one <code>TimeScaleModel</code> and one
+Diagram 4 — two Gantts sharing one <code>TimeScaleModel</code> and one
 <code>ScrollModel</code> (exactly what <code>harness/scroll-sync.ts</code> builds). Dashed =
 notification, solid = a call in.
 </figcaption>

@@ -1,6 +1,8 @@
 ---
 id: classes
 title: "Class map, layer by layer"
+last_update:
+  date: 2026-09-14
 ---
 
 What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
@@ -116,12 +118,17 @@ emits header ticks and date-line decorations.
 
 *`layout/items/produce-items.ts`*
 
-Per-row item production, dispatched by `EntryKind` through the shipped registry: span→segments
-or bar, group→bracket, milestone→diamond. Unknown kinds fall back to span.
+Per-row item production. An Entry carries no stored classification, so nothing dispatches on a type
+tag: the variant registry resolves one variant per Entry, and that variant's own producer builds the
+Items (ADR 0018). Header rows produce none.
 
-- **createItemProducerRegistry()** — Builds the per-kind producer map. A consumer-supplied kind
-  with no producer lands on the span producer — behavior per kind goes through this seam, not an
-  `if (kind === …)` chain.
+- **resolveItems(entry, registry)** — One resolution, one producer call, so no losing candidate's
+  Items are ever built and thrown away. A variant with no producer of its own draws one Item over
+  the Entry's whole span, so this never answers "nothing" for a variant the registry knows.
+- **VariantRegistry.resolveFor(entry)** — Walks newest-first: the consumer's rules, then a
+  plugin's, then core's two. It stops at the first `when` that answers yes. Core's `leaf` carries
+  no `when`, so every row resolves. Structure comes off the Entry itself (`entry.hasChildren`,
+  ADR 0017) — never an `if (kind === …)` chain.
 
 #### resolveRows() — function
 
@@ -254,12 +261,13 @@ Owns the full gesture lifecycle for move/resize — entry resolution, draft math
 `layout/gesture-draft.ts`, preview rAF coalescing, snap resolution, and a commit pipeline with
 sync/async veto. Implements `EntryGestureContext` for `interaction/` to drive.
 
-#### CollapseState — class
+#### TreeCollapse — class
 
-*`view/collapse-state.ts`*
+*`view/tree-collapse.ts`*
 
-Holds collapsed `RowId`s as per-Gantt view state. Propose/commit two-step so a
-`beforeCollapseChange` veto can cancel the commit.
+Holds collapsed `RowId`s as per-Gantt view state, plus the tree-arrow and ancestor-expand policy.
+Propose/commit two-step, so a `beforeCollapseChange` veto can cancel the commit. The payload type
+`CollapseChange` lives beside it in `view/collapse-state.ts`.
 
 #### attachRowTwisty() — function
 
@@ -422,7 +430,7 @@ committed value snaps, pure and driven by the live preset).
 
 ### `model/` — pure
 
-Ten files, all types, plus three id helpers and the `FreeGanttError` family. That is the entire
+Eighteen files, all types, plus the id helpers and the `FreeGanttError` family. That is the entire
 runtime — the layer exists so `layout/`, `data/`, `render/` and `view/` share one vocabulary
 without depending on each other.
 
@@ -430,13 +438,10 @@ without depending on each other.
 | --- | --- | --- |
 | `Instant` | `number & {__brand}` | Epoch ms. Branded so a naked number cannot be passed as a date by accident. |
 | `TimeSpan` | `{ start, end }` | Half-open `[start, end)` in storage. Display is inclusive, via one formatting helper — never an inline `end - 1`. |
-| `EntryId` / `RowId` / `ItemId` | `string & {__brand}` | Three distinct brands over `string`, so a row id cannot be used where an item id belongs. |
-| `Entry` | `id, parentId?, kind?, name, start, end, progress?, segments?, meta?` | `kind` is authored, never derived from having children. `meta` is consumer-owned and typed through the generic. |
-| `EntryKind` | `'span' \| 'group' \| 'milestone' \| (string & {})` | Open union: the `(string & {})` arm keeps editor autocomplete on the three shipped kinds while still accepting consumer-defined ones. |
-| `Field` | `{ key, source?, rollUp?, formatValue?, column?, … }` | What a value *is* (ADR 0005). A core field and a consumer field are the same declaration shape, so one code path serves both. A `column` present makes it columnable. |
-| `FieldSource` | `'entry' \| 'meta' \| 'compute'` | Decides which side a rolled-up parent value falls on: an `entry`- or `meta`-sourced field's aggregate is stored and undoable; a `compute`-sourced one is computed on read and never reaches the document. |
+| `EntryId` / `SegmentId` / `RowId` / `ItemId` / `ChangeSetId` | `string & {__brand}` | Five distinct brands over `string`, so a row id cannot be used where an item id belongs. |
+| `Entry` | `{ id, name, start?, end?, segments, read(), duration(), hasChildren, children(), parent(), descendants(), depth, toInput() }` | The authored record, and it answers questions about itself (ADR 0017). No stored classification: an Entry derives when it has children. `start`/`end` are absent together when it does not span (ADR 0012). `read(key)` is the one by-key value door — a core key, a `props` key, or a `compute` Field. |
+| `Field` | `{ key, type?, rollUp?, editable?, column?, … }` **or** `{ key, compute, … }` | What a value *is* (ADR 0005). A core field and a consumer field share one declaration shape, so one code path serves both. The union is exclusive (ADR 0011): a stored Field may roll up and may be edited; a `compute` Field may do neither and has no home, so its aggregate is computed on read. `'compute' in field` is the one test that separates them. A `column` present makes it columnable. |
 | `ChangeSet` | `{ added, removed, updated }` | The *one write shape* emitted on `change`, with `updated` carrying `{ entryId, field, from, to }` per field. What undo and redo replay. |
-| `DatasetDocument` | schema-2 serialization shape | The full document a `Dataset.toJSON()` produces and `fromJSON` reads. |
 | `Dataset` | `{ entries, timeZone }` | The structural contract. `api/dataset.ts`'s class `implements` it, which is what lets `layout/` bind against a dataset without an illegal import. |
 | `Rect` / `Size` / `Point` / `PixelSpan` | readonly numbers | One geometry vocabulary for four layers. |
 | `InstantInput` | `Instant \| Date \| number \| string` | The input twin of `Instant`: what a consumer may *write* where the library *stores* an `Instant`. A string is either absolute (explicit `Z` or numeric offset) or a Plain time that names no instant until the Dataset's zone resolves it. |
@@ -687,7 +692,6 @@ Everything is delegated into `data/` — the public class is a thin façade over
 - **transactions** — `transaction(fn)` batches several edits into one changeset, one render.
 - **events** — `on('beforeChange', vetoable)`, `on('change', { changeSet })`.
 - **fields** — `field(key)`, `fields.all`, `fieldTypes`, `aggregators`.
-- **serialization** — `toJSON()`, `Dataset.fromJSON(doc, { aggregators, plugins })`.
 - **undo / redo** — `undo()`, `redo()`, `canUndo`, `canRedo`, `replay(changeSet)`.
 - **implements DatasetContract** — States the relationship to `model/dataset.ts` instead of
   leaving it structural-by-coincidence.

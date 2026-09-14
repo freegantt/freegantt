@@ -35,6 +35,9 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/Pawel-IT/FreeGantt/tree/main/website/',
           routeBasePath: '/',
+          // A page states when it was last made true. `last_update.date` in the front matter is that
+          // statement; a page with none falls back to its last commit date.
+          showLastUpdateTime: true,
         },
         blog: false,
         theme: {
