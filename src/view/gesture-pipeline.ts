@@ -645,21 +645,46 @@ export class GesturePipeline {
    *  This runs inside a rAF callback with nothing to catch a throw, and the reconciliation a several-
    *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
    *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
-   *  ghost for that Entry this frame, and the commit path still throws the same edit for real. */
+   *  ghost for that Entry this frame, and the commit path still throws the same edit for real.
+   *
+   *  #332: a bug in the extender itself (a bare `Error`, `UnknownFieldError`, anything
+   *  `isEnvelopeRefusal` does not name) is not a refusal, and `reconcileExtenderEditsWith` rethrows it
+   *  unchanged from *either* call this makes. The `try` below catches it, the one place on this rAF
+   *  path that can — recovered the same way `render/dom`'s `callRenderer` recovers a bad renderer: this
+   *  frame paints with no cascade ghost, same as no extender installed, and the drag carries on. */
   #extraFor(draft: ProposedEdits): ProposedEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
-    const entries = this.#deps.committedEntriesById();
-    const raw = extraEditsFor({
-      entries,
-      proposed: draft,
-      entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
-    });
-    // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
-    // allocates nothing (I5). A hook that did write costs one entry per id it named:
-    // `reconcileExtenderEditsForPreview` reads only the ids its own edits name, and `entries` above
-    // is the supplier's cached map, not a copy this frame made.
-    if (raw.size === 0) return raw;
-    return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
+    try {
+      const entries = this.#deps.committedEntriesById();
+      const raw = extraEditsFor({
+        entries,
+        proposed: draft,
+        entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
+      });
+      // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
+      // allocates nothing (I5). A hook that did write costs one entry per id it named:
+      // `reconcileExtenderEditsForPreview` reads only the ids its own edits name, and `entries` above
+      // is the supplier's cached map, not a copy this frame made.
+      if (raw.size === 0) return raw;
+      return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
+    } catch (error) {
+      this.#reportExtenderFault(error);
+      return NO_EXTRA_EDITS;
+    }
+  }
+
+  /** #332: `by: 'plugin'`, not a specific `PluginId` — `setExtender` composes (D-S5-23), so the hook
+   *  `#extraFor` calls may be several plugins deep, and nothing here can tell which layer threw. ADR
+   *  0020 hit the identical problem (a composed hierarchy source) and settled on the same literal for
+   *  the same reason. `severity: 'warning'`, matching `callRenderer`'s own fault (`render/dom/index.ts`):
+   *  the drag itself fully recovers, it just paints one frame short a cascade ghost. */
+  #reportExtenderFault(error: unknown): void {
+    const message =
+      'An edit extender threw while computing the drag preview — this frame paints with no cascade.';
+    this.#deps.raiseError(
+      { code: 'extender-preview-failed', message, severity: 'warning', by: 'plugin', cause: error },
+      () => console.error(`FreeGantt: ${message}`, error),
+    );
   }
 }

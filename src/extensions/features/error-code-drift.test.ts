@@ -20,6 +20,7 @@ const KNOWN_CODES: Record<BuiltInErrorCode, true> = {
   'entry-resize-cancelled': true,
   'renderer-failed': true,
   'disposer-failed': true,
+  'extender-preview-failed': true,
   'plugin-reconfigure-dropped': true,
   'scale-options-ignored': true,
   'rollup-corrected': true,
