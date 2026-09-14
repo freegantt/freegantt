@@ -559,7 +559,31 @@ export class Gantt<TProps = unknown> {
    *  filled, never omitted — a reader never has to know `layout/`'s own defaults. The
    *  resolve runs here, cached against the setter's own authored object, so two reads with no write
    *  between them stay `===` and the setter keeps assigning the plain `RowSource` the shell already
-   *  compares by identity (#187) — resolving inside that comparison would break it instead. */
+   *  compares by identity (#187) — resolving inside that comparison would break it instead.
+   *
+   *  **To change one setting, spread the value you read back** (#254). The resolved source extends the
+   *  source you authored, so it assigns straight back with one key replaced. Pass `undefined` to turn
+   *  a setting off:
+   *
+   *  ```ts
+   *  const current = gantt.rowSource;
+   *  if (current.source === 'entries') {
+   *    gantt.rowSource = { ...current, sort: { field: 'name' } };  // sort on, filter kept
+   *    gantt.rowSource = { ...current, sort: undefined };          // sort off, filter kept
+   *  }
+   *  ```
+   *
+   *  The `source` check is not ceremony. This getter returns a union of all three row sources, and a
+   *  `'custom'` source carries no `filter`, `sort`, `filterPolicy` or `tree` (D-S4-21) — it resolves
+   *  its own rows, so it has nothing for those keys to act on. Narrowing tells the compiler which of
+   *  the three you hold. Read `nestsRows(gantt.rowSource)` when the question is whether rows nest.
+   *
+   *  Hold no local copy of a setting this getter answers. `gantt.rowSource.sort !== undefined` is the
+   *  one source of truth for "is a sort on", and a second copy beside it can disagree. The one thing
+   *  this getter cannot answer is a value captured *inside* a `filter` closure — the closure comes
+   *  back, the value it closed over does not.
+   *
+   *  Worked example and the toolbar use case: `website/docs/guides/row-source-updates.md`. */
   get rowSource(): ResolvedRowSource {
     const authored = this.#shell.rowSource;
     if (this.#rowSourceCache === undefined || this.#rowSourceCache.authored !== authored) {

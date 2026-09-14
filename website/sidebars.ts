@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
         'guides/boundaries-and-config',
         'guides/hooks-and-ci',
         'guides/consumer-api',
+        'guides/row-source-updates',
         'guides/plugin-authoring',
         'guides/edit-extension-flow',
       ],

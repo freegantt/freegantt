@@ -15,6 +15,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
 | [`etc/freegantt.api.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); browse it as generated reference pages at [API reference](../api/) |
 | [Plugin authoring guide](./plugin-authoring.md) | `definePlugin`, the two halves, every registration seam |
+| [Row source updates](./row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
 
 ## S4 surface (hierarchy and rows)
 
@@ -33,7 +34,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
-- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve)
+- `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back resolved, and one setting changes by spreading that value — see [Row source updates](./row-source-updates.md).
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
