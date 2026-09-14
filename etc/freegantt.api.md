@@ -451,6 +451,9 @@ export interface DateLineInput {
 }
 
 // @public
+export type DateLineLabelPlacement = 'overlayOnTimeLine' | 'overlayOnGanttBody' | number;
+
+// @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public (undocumented)
@@ -1072,6 +1075,9 @@ export class Gantt<TProps = unknown> {
     set collapsed(ids: readonly (RowId | string)[]);
     get commands(): CommandRegistry<TProps>;
     get dataset(): Dataset<TProps>;
+    // (undocumented)
+    get dateLineLabelPlacement(): DateLineLabelPlacement;
+    set dateLineLabelPlacement(placement: DateLineLabelPlacement);
     get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
     // (undocumented)
@@ -1119,6 +1125,7 @@ export class Gantt<TProps = unknown> {
         start: InstantInput;
         end: InstantInput;
     });
+    get resolvedTheme(): ResolvedTheme;
     reveal(id: EntryId | SegmentId | string): void;
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
@@ -1203,6 +1210,7 @@ export interface GanttEventMap {
     navigationChange: NavigationChange;
     // (undocumented)
     selectionChange: SelectionChange;
+    themeChange: ThemeChange;
 }
 
 // @public
@@ -1225,6 +1233,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
     dataset: Dataset<TProps>;
+    dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: GridWidth;
@@ -1905,6 +1914,9 @@ export interface ResolvedGroupRowSource extends GroupRowSource {
 // @public
 export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | CustomRowSource;
 
+// @public
+export type ResolvedTheme = 'light' | 'dark';
+
 // Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -2087,6 +2099,14 @@ export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
+
+// @public
+export interface ThemeChange {
+    // (undocumented)
+    readonly from: ResolvedTheme;
+    // (undocumented)
+    readonly to: ResolvedTheme;
+}
 
 // @public
 export type ThrownCode = BuiltInThrownCode | (string & {});

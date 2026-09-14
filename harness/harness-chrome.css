@@ -749,9 +749,15 @@ nav.harness-site-nav a[aria-current='page'] {
   letter-spacing: 0.05em;
 }
 
+/* #319: --warn is this page's own reserved amber — a boundary that is also a deadline (the
+   beforeEntryMove veto below reads it), so it takes the "warns" half of the "vermilion marks time,
+   amber warns" split at the top of this file, apart from the unlabelled Today line's own vermilion
+   --fg-date-line-color. Overriding the library's own Token, not a level-2 Part rule (plans/02 §4) —
+   the stroke and its label both read --fg-date-line-color, so one declaration restyles both. */
 .demo-mobilization-line {
   border-left-style: dashed;
   border-left-width: 2px;
+  --fg-date-line-color: var(--warn);
 }
 
 /* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — the library never invents one).

@@ -4,6 +4,7 @@ import { computeFrame, createVariantRegistry, fixedWidthItem } from '../../layou
 import type {
   BarRenderer,
   ResolvedRenderer,
+  DateLineLabelPlacement,
   Entry,
   ErrorReportInput,
   ItemId,
@@ -948,7 +949,11 @@ describe('render/dom backend', () => {
     const labels = timeline.querySelectorAll<HTMLElement>('.fg-date-line-label');
     expect(labels).toHaveLength(1);
     expect(labels[0]!.textContent).toBe('Ship');
-    expect(labels[0]!.style.transform).toBe('translateX(40px)');
+    // The label's transform carries a second, always-zero component under the default placement
+    // (#318, D-S1.10-6) — 0 for the default and 'overlayOnTimeLine' alike, a caller's own px
+    // otherwise.
+    expect(labels[0]!.style.transform).toBe('translate(40px, 0px)');
+    expect(labels[0]!.dataset['placement']).toBe('overlayOnGanttBody');
 
     backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 40, label: 'Ship' }] });
     expect(timeline.querySelectorAll('.fg-date-line')).toHaveLength(1);
@@ -1018,6 +1023,52 @@ describe('render/dom backend', () => {
     const nodes = timeline.querySelectorAll<HTMLElement>('.fg-date-line');
     expect(nodes[0]!.dataset['flag']).toBe('today');
     expect(nodes[1]!.dataset['flag']).toBeUndefined();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it("[#318] readDateLineLabelPlacement drives the Date line label's own anchor and yOffset", () => {
+    const placements: DateLineLabelPlacement[] = ['overlayOnGanttBody', 'overlayOnTimeLine', 12];
+    let placementIndex = 0;
+    const backend = createDomBackend({
+      entryById: () => undefined,
+      resolveBarRenderer: () => undefined,
+      resolveCellRenderer: () => undefined,
+      resolveHeaderRenderer: () => undefined,
+      readDateLineLabelPlacement: () => placements[placementIndex]!,
+    });
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const base = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+
+    backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 10, label: 'Ship' }] });
+    let label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
+    expect(label.dataset['placement']).toBe('overlayOnGanttBody');
+    expect(label.style.transform).toBe('translate(10px, 0px)');
+
+    placementIndex = 1;
+    backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 10, label: 'Ship' }] });
+    label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
+    expect(label.dataset['placement']).toBeUndefined();
+    expect(label.style.transform).toBe('translate(10px, 0px)');
+
+    placementIndex = 2;
+    backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 10, label: 'Ship' }] });
+    label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
+    expect(label.dataset['placement']).toBeUndefined();
+    expect(label.style.transform).toBe('translate(10px, 12px)');
 
     backend.destroy();
     grid.remove();

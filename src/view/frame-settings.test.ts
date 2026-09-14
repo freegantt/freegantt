@@ -79,6 +79,11 @@ describe('FrameSettings — the invalidation table', () => {
     },
     { setting: 'todayLine', patch: { todayLine: false }, expected: ['requestFrame'] },
     { setting: 'dateLines', patch: { dateLines: [] }, expected: ['requestFrame'] },
+    {
+      setting: 'dateLineLabelPlacement',
+      patch: { dateLineLabelPlacement: 'overlayOnTimeLine' },
+      expected: ['requestFrame'],
+    },
     { setting: 'barLabels', patch: { barLabels: 'outside' }, expected: ['requestFrame'] },
     { setting: 'barRenderer', patch: { barRenderer: () => undefined }, expected: ['requestFrame'] },
     { setting: 'cellRenderer', patch: { cellRenderer: () => undefined }, expected: ['requestFrame'] },
@@ -182,6 +187,7 @@ describe('FrameSettings — the pixel properties', () => {
     expect(settings.rowHeight).toBe(DEFAULT_ROW_HEIGHT);
     expect(settings.minBarWidthPx).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(settings.todayLineMarginTicks).toBe(DEFAULT_TODAY_LINE_MARGIN_TICKS);
+    expect(settings.dateLineLabelPlacement).toBe('overlayOnGanttBody');
   });
 
   it('each property keeps its own policy — the fallback answers an unusable value', () => {

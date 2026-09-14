@@ -155,6 +155,20 @@ describe('ensureBaseStyles', () => {
     expect(css).not.toContain('--fg-header-height');
   });
 
+  it('[#319] .fg-cursor-line-label paints below the header bands, same anchor #225 gave the Date line label', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toMatch(/\.fg-cursor-line-label\s*\{[^}]*top:\s*100%/);
+  });
+
+  it("[#318] the Date line label's default anchor is scoped to data-placement='overlayOnGanttBody', not every label", () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    expect(css).toMatch(/\.fg-date-line-label\[data-placement='overlayOnGanttBody'\]\s*\{[^}]*top:\s*100%/);
+  });
+
   it('setting --fg-bar-fill on the container before construction overrides the shipped default', () => {
     clearStyles();
     const container = makeContainer();

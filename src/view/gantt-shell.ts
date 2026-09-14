@@ -15,6 +15,7 @@ import {
 } from '../layout/index.js';
 import type {
   DateLine,
+  DateLineLabelPlacement,
   Overscan,
   PresetRef,
   RowSource,
@@ -43,6 +44,8 @@ import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
 import type { Panes } from './pane-layout.js';
+import { resolveTheme } from './theme.js';
+import type { ResolvedTheme } from './theme.js';
 import { ContainerResize, DomMountLayer } from './mount-layer.js';
 import { ContainerDom } from './gantt-dom.js';
 import type { DomTarget } from './gantt-dom.js';
@@ -294,6 +297,9 @@ export interface GanttShellOptions {
   todayLine?: boolean | Instant;
   /** Live (S1.13, D-S1.13-4). Default `[]`. */
   dateLines?: readonly DateLine[];
+  /** Live. See `GanttOptions.dateLineLabelPlacement`. Default `DEFAULT_DATE_LINE_LABEL_PLACEMENT`
+   *  (`'overlayOnGanttBody'`). */
+  dateLineLabelPlacement?: DateLineLabelPlacement;
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
@@ -533,6 +539,16 @@ export class GanttShell {
    * timeline pane's content is `contentWidth` wide, full stop. */
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
+  /** #330. The last value `resolvedTheme` answered — compared against on every OS flip and every
+   *  `theme` write, so `themeChange` fires exactly when that answer actually moves. Set for real
+   *  once the constructor knows `#container` and `#theme` (both required to resolve anything),
+   *  never read before then. */
+  #resolvedTheme!: ResolvedTheme;
+  /** #330. `window.matchMedia('(prefers-color-scheme: dark)')`, held so its `'change'` listener can
+   *  detach in `destroy()`. Queried once, at construction. A `MediaQueryList` stays live and keeps
+   *  firing `'change'` for its own query, so nothing here ever re-queries it. */
+  #darkSchemeQuery!: MediaQueryList;
+  #darkSchemeQueryListener!: () => void;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
@@ -655,6 +671,7 @@ export class GanttShell {
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
         readBarLabels: () => this.#frameSettings.barLabels,
+        readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
         // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
         // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
         // map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's own
@@ -969,6 +986,12 @@ export class GanttShell {
 
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
+    // #330: a plain read, not #syncResolvedTheme(). Nothing has subscribed to `themeChange` yet.
+    // Firing one here would tell a handler the theme "changed" from nothing, which never happened.
+    this.#resolvedTheme = resolveTheme(this.#container, (query) => window.matchMedia(query));
+    this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
+    this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
   }
 
@@ -1136,6 +1159,14 @@ export class GanttShell {
 
   set dateLines(lines: readonly DateLine[]) {
     this.#frameSettings.set({ dateLines: lines });
+  }
+
+  get dateLineLabelPlacement(): DateLineLabelPlacement {
+    return this.#frameSettings.dateLineLabelPlacement;
+  }
+
+  set dateLineLabelPlacement(placement: DateLineLabelPlacement) {
+    this.#frameSettings.set({ dateLineLabelPlacement: placement });
   }
 
   get todayLineMarginTicks(): number {
@@ -1513,6 +1544,9 @@ export class GanttShell {
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
       ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
+      ...(options.dateLineLabelPlacement !== undefined
+        ? { dateLineLabelPlacement: options.dateLineLabelPlacement }
+        : {}),
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
       ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
       ...(options.todayLineMarginTicks !== undefined
@@ -1754,17 +1788,37 @@ export class GanttShell {
     return this.#theme;
   }
 
-  /** Live (S1.10, D-S1.10-4): `'auto'` writes no attribute, letting `prefers-color-scheme` decide;
-   *  `'light'`/`'dark'` pin `data-fg-theme` on this container. Colour tokens are scoped to
-   *  `.fg-container`, so the pin wins over the media query even when `:root` has no attribute. */
+  /** Live (S1.10, D-S1.10-4). `'auto'` writes no attribute, letting `prefers-color-scheme` (or an
+   *  ancestor's own pin, #271) decide. `'light'`/`'dark'` pin `data-fg-theme` on this container
+   *  instead, which wins over both. `.fg-container` declares no colour tokens of its own to contest
+   *  it. (#271 fixed the opposite bug: it used to, and always won even under an ancestor's pin.) */
   set theme(value: Theme) {
     this.#theme = value;
     this.#applyTheme();
+    this.#syncResolvedTheme();
   }
 
   #applyTheme(): void {
     if (this.#theme === 'auto') this.#container.removeAttribute('data-fg-theme');
     else this.#container.setAttribute('data-fg-theme', this.#theme);
+  }
+
+  /** #330. `'auto'` answers the nearest explicit pin up the tree, else the OS. `'light'`/`'dark'`
+   *  answer themselves straight back — this container's own pin is that nearest pin. */
+  get resolvedTheme(): ResolvedTheme {
+    return this.#resolvedTheme;
+  }
+
+  /** #330. Re-resolves and fires `themeChange` exactly when the answer actually moved. Called after
+   *  every `theme` write, and every OS `'change'` (`#darkSchemeQuery`, set up once in the
+   *  constructor). A write that keeps the same resolved answer fires nothing. That covers an
+   *  already-`'light'` Gantt pinned to `'light'` again, or an OS flip an ancestor's pin shadows. */
+  #syncResolvedTheme(): void {
+    const next = resolveTheme(this.#container, (query) => window.matchMedia(query));
+    if (next === this.#resolvedTheme) return;
+    const from = this.#resolvedTheme;
+    this.#resolvedTheme = next;
+    this.#events.emit('themeChange', { from, to: next });
   }
 
   get a11yLabel(): string {
@@ -2187,6 +2241,7 @@ export class GanttShell {
     this.#containerResize.destroy();
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
+    this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener);
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();

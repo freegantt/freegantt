@@ -7,6 +7,7 @@ import type {
   BarLabels,
   BarRenderer,
   BarRendererContext,
+  DateLineLabelPlacement,
   ElementDescription,
   Entry,
   EntryId,
@@ -25,7 +26,11 @@ import type {
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
-import { itemIdFromDataset, rowIdFromDataset } from '../../layout/index.js';
+import {
+  DEFAULT_DATE_LINE_LABEL_PLACEMENT,
+  itemIdFromDataset,
+  rowIdFromDataset,
+} from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import { attachTickLines } from './tick-lines.js';
 import type { DateLineAttachment } from './date-line.js';
@@ -87,6 +92,9 @@ export interface DomBackendOptions {
    *  below already takes — a closure over `FrameSettings`, not a value snapshotted at construction.
    *  Omitted — a test backend built with no options — falls back to `'fitBar'`. */
   readBarLabels?: () => BarLabels;
+  /** #318 follow-up. Read fresh every `sync` call, same posture as `readBarLabels` above. Omitted —
+   *  a test backend built with no options — falls back to `DEFAULT_DATE_LINE_LABEL_PLACEMENT`. */
+  readDateLineLabelPlacement?: () => DateLineLabelPlacement;
   resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined;
   resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
@@ -323,6 +331,8 @@ function cellGeom(item: CellItem): CellGeom {
 export function createDomBackend(options: DomBackendOptions): RenderBackend<HTMLElement> {
   const { entryById, resolveBarRenderer, resolveCellRenderer, resolveHeaderRenderer } = options;
   const readBarLabels = options.readBarLabels ?? ((): BarLabels => 'fitBar');
+  const readDateLineLabelPlacement =
+    options.readDateLineLabelPlacement ?? ((): DateLineLabelPlacement => DEFAULT_DATE_LINE_LABEL_PLACEMENT);
   // No injected raiser means no bus, so nothing can be subscribed and the fallback always runs.
   const raiseError: RaiseError = options.raiseError ?? ((_report, fallback) => fallback?.());
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
@@ -1360,7 +1370,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable), paintedResizableEdges);
       }
       tickLines?.sync(frame.tickLines, frame.contentHeight, frame.visible.height);
-      dateLines?.sync(frame.decorations, frame.contentHeight, frame.visible.height);
+      dateLines?.sync(
+        frame.decorations,
+        frame.contentHeight,
+        frame.visible.height,
+        readDateLineLabelPlacement(),
+      );
       decorations?.sync(
         frame.underBars,
         frame.overBars,

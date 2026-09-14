@@ -11,6 +11,7 @@
 
 import {
   DEFAULT_BAR_HEIGHT_PX,
+  DEFAULT_DATE_LINE_LABEL_PLACEMENT,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_ROW_SOURCE,
   DEFAULT_TICK_BOX_FLOOR_PX,
@@ -20,6 +21,7 @@ import type {
   BarRenderer,
   CellRenderer,
   DateLine,
+  DateLineLabelPlacement,
   FieldCompare,
   HeaderRenderer,
   LayoutInput,
@@ -106,6 +108,7 @@ interface FrameSettingsValues {
   locale: Intl.LocalesArgument | undefined;
   todayLine: boolean | Instant;
   dateLines: readonly DateLine[];
+  dateLineLabelPlacement: DateLineLabelPlacement;
   todayLineMarginTicks: number;
   rowSource: RowSource;
   barLabels: BarLabels;
@@ -135,6 +138,7 @@ function defaultSettings(): FrameSettingsValues {
     locale: undefined,
     todayLine: true,
     dateLines: [],
+    dateLineLabelPlacement: DEFAULT_DATE_LINE_LABEL_PLACEMENT,
     todayLineMarginTicks: DEFAULT_TODAY_LINE_MARGIN_TICKS,
     rowSource: DEFAULT_ROW_SOURCE,
     barLabels: 'fitBar',
@@ -158,6 +162,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   locale: 'rebindFields',
   todayLine: 'repaint',
   dateLines: 'repaint',
+  dateLineLabelPlacement: 'repaint',
   todayLineMarginTicks: 'none',
   rowSource: 'invalidateItems',
   barLabels: 'repaint',
@@ -216,6 +221,10 @@ export class FrameSettings {
 
   get dateLines(): readonly DateLine[] {
     return this.#values.dateLines;
+  }
+
+  get dateLineLabelPlacement(): DateLineLabelPlacement {
+    return this.#values.dateLineLabelPlacement;
   }
 
   get todayLineMarginTicks(): number {
