@@ -125,14 +125,13 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
     ],
     specLinks: [
       { label: 'plans/02 §4.4 — Plugin registrations', href: `${PUBLIC_API}#44-plugin-registrations-one-collision-policy-one-lifetime-155` },
-      { label: 'Writing a plugin', href: './docs/plugin-authoring.html' },
       { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
     ],
   },
 };
 
-/** Mounts one page's brief into `container`. A page id with no entry (`grid-scroll`, `docs` — D-S5-29
- *  names eight gallery pages, not every harness page) leaves the container empty rather than throwing,
+/** Mounts one page's brief into `container`. A page id with no entry (`grid-scroll` —
+ *  eight gallery pages have a brief, not every harness page) leaves the container empty rather than throwing,
  *  so a page outside the gallery table can still call this without a special case. */
 export function mountPageBrief(container: HTMLElement, pageId: HarnessPageId): void {
   const brief = PAGE_BRIEFS[pageId];

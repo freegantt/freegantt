@@ -10,8 +10,7 @@ export type HarnessPageId =
   | 'mutation'
   | 'editing'
   | 'planner'
-  | 'plugins'
-  | 'docs';
+  | 'plugins';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -30,18 +29,9 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'editing', label: 'Direct manipulation', file: 'editing.html' },
   { id: 'planner', label: 'Planner (design)', file: 'planner.html' },
   { id: 'plugins', label: 'Plugin runtime', file: 'plugins.html' },
-  { id: 'docs', label: 'Docs', file: 'docs/index.html' },
 ];
 
-function isDocsPath(pathname: string): boolean {
-  return /\/docs(?:\/|$)/.test(pathname);
-}
-
 function detectCurrentPage(pathname: string): HarnessPageId {
-  if (isDocsPath(pathname)) {
-    return 'docs';
-  }
-
   const file = pathname.split('/').pop() ?? 'index.html';
   switch (file) {
     case '':
@@ -70,21 +60,16 @@ function detectCurrentPage(pathname: string): HarnessPageId {
   }
 }
 
-function pageHref(page: HarnessPage, inDocs: boolean): string {
-  if (inDocs) {
-    return page.id === 'docs' ? './index.html' : `../${page.file}`;
-  }
-
-  return page.id === 'docs' ? './docs/' : `./${page.file}`;
+function pageHref(page: HarnessPage): string {
+  return `./${page.file}`;
 }
 
 function mountHarnessNav(nav: HTMLElement): void {
-  const inDocs = isDocsPath(window.location.pathname);
   const current = detectCurrentPage(window.location.pathname);
 
   for (const page of HARNESS_PAGES) {
     const link = document.createElement('a');
-    link.href = pageHref(page, inDocs);
+    link.href = pageHref(page);
     link.textContent = page.label;
     if (page.id === current) {
       link.setAttribute('aria-current', 'page');
