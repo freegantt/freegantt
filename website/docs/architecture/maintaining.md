@@ -31,7 +31,7 @@ Each page states, near its top, which files it was derived from. **If you change
 every page that lists it.**
 
 ```bash
-grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
+grep -rln 'gantt-shell' website/docs/architecture/*.md   # which pages cover this file?
 ```
 
 | If you change… | Update |
