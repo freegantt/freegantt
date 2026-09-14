@@ -77,8 +77,9 @@ export interface PopupOptions {
 }
 
 export interface Popup {
-  /** Calling `open()` while a popup is already open replaces it — the previous popup is closed
-   *  first, then the new one opens at its own placement. */
+  /** Calling `open()` while this instance is already open replaces it — the previous popup is closed
+   *  first, then the new one opens at its own placement. A second `Popup` on the same Gantt is a
+   *  separate instance and stays up. */
   open(options: PopupOptions): void;
   close(): void;
   readonly isOpen: boolean;

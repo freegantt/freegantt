@@ -194,7 +194,7 @@ where they do something beyond re-export.
 | `extensions/disposables.ts` | `DisposableStore` | A plugin's cleanup list. Runs on uninstall or `Gantt.destroy()`. |
 | `extensions/commands.ts` | `CommandRegistry` | Command registry, generic over its Gantt type. Core commands and plugin commands share it. |
 | `extensions/keymap.ts` | `Keymap, normalizeChord()` | Newest-first key handler resolver. Innermost popup wins. |
-| `extensions/popup.ts` | `createPopup()` | Anchoring, flipping, clamping, and dismissal. Tooltips and the context menu build on this. |
+| `extensions/popup.ts` | `createPopup()` | Anchoring, flipping, clamping, and dismissal. Tooltips and the context menu each hold their own instance, so both may show. |
 | `extensions/focus-trap.ts` | `activateFocusTrap()` | Tab cycling and focus restore for `Popup`'s trap policy. |
 | `extensions/features/tooltips.ts` | `tooltips()` | Shipped tooltip plugin. Ordinary `ChromePlugin`; dogfoods the public contract. |
 | `extensions/features/context-menu.ts` | `contextMenu()` | Shipped context-menu plugin. Asks `ctx.view.dom` what a node is. |

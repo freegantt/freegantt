@@ -753,8 +753,9 @@ Newest-first chord resolver. The innermost popup wins Escape.
 
 *`extensions/popup.ts`*
 
-Anchoring, flipping, clamping, dismissal. Tooltips and the context menu build on this. Inline
-editing does not — it needs a live input node.
+Anchoring, flipping, clamping, dismissal. Tooltips and the context menu build on this. Each feature
+holds its own instance, so a tooltip and a menu may both show. Inline editing does not — it needs a
+live input node.
 
 #### tooltips() / contextMenu() / inlineEditing() — factories
 

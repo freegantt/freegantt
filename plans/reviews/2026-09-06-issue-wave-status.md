@@ -30,7 +30,7 @@ Mark an item done in the same commit that closes it. A line that is not marked d
 | #142 | a locked field cannot be dragged or resized (D-S5-48) | `[ ]` | one job with candidate 1; waits for #230 |
 | #222 | toolbar — decision settled; grill brief written | `[~]` | `36a2485` |
 | #208 | Q2: `EntityAdded` row vs `FieldUpdated` row | `[?]` | Q1 settled by #209 |
-| #224 | a popup layer with exclusive groups | `[?]` | — |
+| #224 | a popup layer with exclusive groups | `[x]` | closed wontfix — tooltip and menu may both show |
 | #225 | the library offsets the label | `[?]` | with #220 item 3 |
 | #220 | Q1–Q3 | `[?]` | — |
 | #217 | confirm whether `'auto'` is already `'pack'` | `[?]` | — |

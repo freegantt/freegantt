@@ -109,9 +109,9 @@ Say whether that is better or worse than the gap.
 
 ### Q5 — the slot, against #224
 
-The toolbar renders into a library-owned slot inside `.fg-container`. **#224 is separately proposing
-that a popup layer arbitrate** between the tooltip and the context menu (recommendation on the table,
-not yet ruled).
+The toolbar renders into a library-owned slot inside `.fg-container`. **#224 proposed that a popup
+layer arbitrate** between the tooltip and the context menu. That issue is closed wontfix: a hover
+tooltip and a context menu may both show, and the Gantt does not hold one Open popup.
 
 Ask: are these one concern or two? Both add a library-owned layer to `.fg-container`. Check
 `src/view/styles.ts` and the existing overlay/row-layer split (#158, #168 — "Overlay and RowLayer are

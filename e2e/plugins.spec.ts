@@ -134,7 +134,7 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
   await expect(page.locator('#log')).toContainText('entry-15 is locked');
 });
 
-// #280, #224's grill: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
+// #280: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
 // with no `items` filter (harness/plugins.ts) — right-clicking entry-37, a buffer bar, opens the
 // ~22-item, ~740px-tall menu the issue reports. `.fg-container` clips at its own edge (styles.ts),
 // so a menu this tall used to run past the bottom with no way to reach the lowest items. popup.ts's
@@ -155,8 +155,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
 
   const menu = page.locator('#gantt .fg-menu');
   await expect(menu).toBeVisible();
-  // Exactly one popup open at a time (#224 grill's third condition) — a stray second popup could
-  // let a later assertion below pass against the wrong one.
+  // This test opened one menu. Count it so a later assertion cannot pass against a different node.
   const popup = page.locator('#gantt .fg-popup');
   await expect(popup).toHaveCount(1);
 
@@ -196,7 +195,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
   await expect(popup).toHaveCount(1);
 });
 
-// #224's grill, second condition: today `paneOf` only knows the grid pane and the timeline pane
+// #280: today `paneOf` only knows the grid pane and the timeline pane
 // (pane-layout.ts) — the overlay a popup mounts into is their sibling, not inside either one. So a
 // scroll whose target sits in the menu's own overflow reads as "outside every pane" to popup.ts's
 // `scroll` dismiss trigger (D-S5-9), and never matches the anchor's own pane. That already holds by
