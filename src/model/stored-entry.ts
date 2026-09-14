@@ -225,6 +225,15 @@ export interface EditRequest {
    *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
    *  rAF frame and must not copy the dataset to answer it (I5). */
   entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
+  /** The Entries this transaction adds, by id — empty on a drag preview, and empty whenever the
+   *  transaction adds none. Read one with `entryAfterEdits(id)`: an added Entry is not in `entries`
+   *  above, which stays the pre-transaction snapshot (D-S5-45). Net effect, not a call log: an Entry
+   *  added and removed in the same transaction is in neither set (#235). */
+  readonly addedEntryIds: ReadonlySet<EntryId>;
+  /** The Entries this transaction removes, by id — descendants included, because `entries.remove`
+   *  removes the whole subtree and core fills the descendant walk. Read one off `entries` above,
+   *  which still holds it: `entryAfterEdits(id)` answers `undefined` for every id in here (#235). */
+  readonly removedEntryIds: ReadonlySet<EntryId>;
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so

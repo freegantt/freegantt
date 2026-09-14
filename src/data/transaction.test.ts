@@ -13,7 +13,7 @@ import {
 } from '../model/index.js';
 import type { ChangeSet, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
-import type { EntryEdit, EntryEdits, ProposedEdit } from './edit-extension.js';
+import type { EditExtender, EditRequest, EntryEdit, EntryEdits, ProposedEdit } from './edit-extension.js';
 
 /** A `ProposedEdit` for `stageUpdate`'s own test-fixture door (its doc comment names this file):
  *  fills the required brand/`props`/`proposedKeys` a raw patch no longer carries, inferring
@@ -1098,5 +1098,80 @@ describe('the extension hook writes the loose shape (#209)', () => {
   it('proposedKeys is not writable from outside', () => {
     const state = dataset([{ id: 't1' }]);
     expect(() => state.entries.update(entryId('t1'), { proposedKeys: new Set() })).toThrow(UnknownFieldError);
+  });
+});
+
+// #235: the hook could reach an added or removed Entry only by an id it already held. These two
+// members give it the ids without asking it to compare snapshots or infer them from `proposed`.
+describe('EditRequest.addedEntryIds / removedEntryIds (#235)', () => {
+  function captor(): { seen: EditRequest[]; extender: EditExtender } {
+    const seen: EditRequest[] = [];
+    return {
+      seen,
+      extender: (request) => {
+        seen.push(request);
+        return new Map();
+      },
+    };
+  }
+
+  it('carries the id of an Entry this transaction adds, empty when it adds none', () => {
+    const state = dataset([{ id: 't1' }]);
+    const { seen, extender } = captor();
+    state.setExtender(() => extender);
+
+    state.entries.add({ id: 't3', name: 'Added', start: 0, end: 1 });
+
+    expect(seen).toHaveLength(1);
+    expect([...seen[0]!.addedEntryIds]).toEqual([entryId('t3')]);
+    expect(seen[0]!.removedEntryIds.size).toBe(0);
+    expect(seen[0]!.entryAfterEdits(entryId('t3'))?.name).toBe('Added');
+
+    seen.length = 0;
+    state.entries.update(entryId('t1'), { name: 'Renamed' });
+    expect(seen[0]!.addedEntryIds.size).toBe(0);
+  });
+
+  it('carries every id a subtree remove takes, empty when it removes none', () => {
+    const state = dataset([
+      { id: 'p1' },
+      { id: 'c1', parentId: 'p1' },
+      { id: 'c2', parentId: 'p1' },
+      { id: 'other' },
+    ]);
+    const { seen, extender } = captor();
+    // `entries` is `#byId` itself (D-S5-45), so it keeps updating after the transaction commits —
+    // reading whether it "still holds" a removed id has to happen inside the hook's own call, not
+    // from the request this test kept a reference to afterward.
+    let c1NameAtHookTime: string | undefined;
+    state.setExtender(() => (request) => {
+      c1NameAtHookTime = request.entries.get(entryId('c1'))?.name;
+      return extender(request);
+    });
+
+    state.entries.remove(entryId('p1'));
+
+    expect(seen).toHaveLength(1);
+    expect(new Set(seen[0]!.removedEntryIds)).toEqual(new Set([entryId('p1'), entryId('c1'), entryId('c2')]));
+    expect(seen[0]!.addedEntryIds.size).toBe(0);
+    for (const id of seen[0]!.removedEntryIds) expect(seen[0]!.entryAfterEdits(id)).toBeUndefined();
+    // The pre-transaction snapshot still answers for a removed id, at hook time — only
+    // `entryAfterEdits` reflects the removal (D-S5-45).
+    expect(c1NameAtHookTime).toBe('c1');
+  });
+
+  it('an Entry added and removed in the same transaction is in neither set', () => {
+    const state = dataset([]);
+    const { seen, extender } = captor();
+    state.setExtender(() => extender);
+
+    state.transaction(() => {
+      state.entries.add({ id: 't9', name: 't9', start: 0, end: 1 });
+      state.entries.remove(entryId('t9'));
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.addedEntryIds.size).toBe(0);
+    expect(seen[0]!.removedEntryIds.size).toBe(0);
   });
 });

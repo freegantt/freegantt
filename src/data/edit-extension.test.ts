@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { identityExtender } from './edit-extension.js';
+import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId, segmentId } from '../model/index.js';
@@ -32,6 +32,8 @@ describe('identityExtender', () => {
       entries,
       proposed,
       entryAfterEdits: (id) => entries.get(entryId(id)),
+      addedEntryIds: EMPTY_ENTRY_IDS,
+      removedEntryIds: EMPTY_ENTRY_IDS,
     });
     expect(result.size).toBe(0);
   });
@@ -45,6 +47,8 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
     entries: requestEntries,
     proposed: new Map() as ProposedEdits,
     entryAfterEdits: (id: EntryId) => requestEntries.get(id),
+    addedEntryIds: EMPTY_ENTRY_IDS,
+    removedEntryIds: EMPTY_ENTRY_IDS,
   };
 
   /** One wrapper that runs the current occupant, then adds a name of its own to the result. */
@@ -118,6 +122,8 @@ describe('composing two extenders that write one Entry (#197)', () => {
       entries,
       proposed: new Map() as ProposedEdits,
       entryAfterEdits: (id: EntryId) => entries.get(id),
+      addedEntryIds: EMPTY_ENTRY_IDS,
+      removedEntryIds: EMPTY_ENTRY_IDS,
     };
     return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
   }
