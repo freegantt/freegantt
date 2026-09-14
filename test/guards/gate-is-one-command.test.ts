@@ -111,3 +111,36 @@ describe('the workflow runs for review, and never for a draft (#255)', () => {
     expect(workflow).toMatch(/cancel-in-progress: true/);
   });
 });
+
+// A step that writes `$GITHUB_OUTPUT` must write exactly one `key=value` line. The Playwright
+// version step piped `pnpm exec playwright --version` through `awk '{ print $NF }'`, and `pnpm
+// exec` writes its own banner to stdout whenever it runs an install check — "Already up to date",
+// then "Done in 351ms using pnpm v11.22.0". `awk` returns one last-field per line, so the file got
+// three lines and the run died on the second: `Invalid format 'v11.22.0'`. The banner depends on
+// whether the lockfile looks settled, so the step passed on most branches and failed on the one
+// that changed dependencies (#355). A command wrapped in a package manager cannot promise one line.
+describe('a workflow output step writes one key=value line', () => {
+  const workflow = read('.github/workflows/ci.yml');
+
+  /** Every `run:` line that writes to `$GITHUB_OUTPUT`. */
+  const outputWriters = [...workflow.matchAll(/^\s*(?:-\s*)?run:\s*(.*\$GITHUB_OUTPUT.*)$/gm)].map(
+    (match) => match[1]!,
+  );
+
+  it('has an output-writing step to guard', () => {
+    expect(outputWriters.length).toBeGreaterThan(0);
+  });
+
+  it('never pipes a package-manager-wrapped command into $GITHUB_OUTPUT', () => {
+    for (const step of outputWriters) {
+      expect(step, `this step can emit a package manager banner: ${step}`).not.toMatch(
+        /\$\((?:pnpm|npm|yarn)\s/,
+      );
+    }
+  });
+
+  it('reads the Playwright version from the installed package', () => {
+    // The cache key still comes from the install, never from a second copy of the version here.
+    expect(workflow).toMatch(/require\('@playwright\/test\/package\.json'\)\.version/);
+  });
+});
