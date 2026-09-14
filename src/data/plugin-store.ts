@@ -20,7 +20,7 @@ import type {
   PluginStoreView,
   StoreRowUpdated,
 } from '../model/index.js';
-import { entryId } from '../model/index.js';
+import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 
@@ -129,8 +129,17 @@ export class PluginStores {
 
   /** A write with a transaction already open joins it; a write with none wraps itself in one, the
    *  same rule `entries.add` follows outside a `transaction()` body (issue #137 F17). Those are the
-   *  only two cases — a `setup`-time write and an event-handler write both take the second. */
+   *  only two cases — a `setup`-time write and an event-handler write both take the second.
+   *
+   *  The extension hook's own transaction is still open while the hook runs (#323) — `runTransaction`
+   *  has not reached `endStores` yet — so the "join the open transaction" branch below would otherwise
+   *  stage a hook-time write straight into the write set it is already inside, silently, instead of
+   *  refusing it the way a store bound through `runTransaction` does. The `runningExtensionHook` check
+   *  must run before that branch, not inside `runTransaction`, for exactly that reason. */
   #write(name: PluginStoreName, id: EntryId, value: object | undefined): void {
+    if (this.#runner?.runningExtensionHook) {
+      throw new MutationDuringExtensionHookError('dataset.transaction');
+    }
     if (this.#writeSet) {
       this.#stage(name, id, value);
       return;

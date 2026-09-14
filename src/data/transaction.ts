@@ -14,7 +14,11 @@ import type {
   SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
-import { MutationCancelledError, MutationDuringNotificationError } from '../model/index.js';
+import {
+  MutationCancelledError,
+  MutationDuringExtensionHookError,
+  MutationDuringNotificationError,
+} from '../model/index.js';
 import { buildCommitChangeSet } from './build-commit-change-set.js';
 import { buildDerivedValuesDroppedReport, buildRefusalReport, raiseErrorOn } from './error-reporting.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
@@ -89,6 +93,17 @@ export interface TransactionData {
    *  `true` throws before running its body (D-S2-9, D-S2-25). Only `runTransaction` reads or writes
    *  this. */
   notifying: boolean;
+  /** Set while the extension hook's current occupant is running (#323). A nested write through the
+   *  store does not join the hook's own transaction — `openTransactions` is already back to 0 by the
+   *  time the hook runs, since `runTransaction` closes the body's count before calling
+   *  `buildCommitChangeSet` — so a transaction started while this is `true` throws before running its
+   *  body, the same way the `notifying` guard above does. `runTransaction` here and `PluginStores`'
+   *  own `#write` (`data/plugin-store.ts`, #323) both read this — `#write` has a "join the open
+   *  transaction" branch of its own that a plain `runTransaction` call would bypass, so it checks the
+   *  flag before that branch runs, not only inside `runTransaction`. Only
+   *  `DatasetState.extraEditsReadingFor`/`extraEditsFor` write it, around their one call to the
+   *  occupant. */
+  runningExtensionHook: boolean;
   /** Mints from a per-instance counter (D-S2-18) — identity two writers never need to agree on, not a
    *  sync token. */
   nextChangeSetId(): ChangeSetId;
@@ -249,6 +264,9 @@ export function runTransaction<T>(
 ): T {
   if (data.notifying) {
     throw new MutationDuringNotificationError('dataset.transaction');
+  }
+  if (data.runningExtensionHook) {
+    throw new MutationDuringExtensionHookError('dataset.transaction');
   }
 
   const token: TxToken = {} as TxToken;
