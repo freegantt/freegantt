@@ -11,7 +11,6 @@
 
 import {
   DEFAULT_BAR_HEIGHT_PX,
-  DEFAULT_LANE_GAP_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_ROW_SOURCE,
   DEFAULT_TICK_BOX_FLOOR_PX,
@@ -41,10 +40,6 @@ const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
 const TICK_BOX_FLOOR_POLICY = { fallback: DEFAULT_TICK_BOX_FLOOR_PX, accepts: 'positive' } as const;
 
-const LANE_GAP_PROPERTY = '--fg-lane-gap';
-/** Zero gap is authored: packed bars may sit flush. */
-const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
-
 const MIN_BAR_WIDTH_PROPERTY = '--fg-bar-min-width';
 /** Zero is authored. A consumer who wants a zero-width span to paint opted out of the floor on
  *  purpose. */
@@ -54,17 +49,16 @@ const BAR_HEIGHT_PROPERTY = '--fg-bar-height';
 /** A zero-height bar is not a bar: only a positive value is an authored bar height. */
 const BAR_HEIGHT_POLICY = { fallback: DEFAULT_BAR_HEIGHT_PX, accepts: 'positive' } as const;
 
-/** The five px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
- *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all five together. */
+/** The four px sizes a Gantt reads off its own Container's CSS, not off a constructor option. They
+ *  are not settings: nothing writes one, and `refreshPixelProperties` re-reads all four together. */
 interface PixelMetrics {
   rowHeight: number;
-  laneGapPx: number;
   tickBoxFloorPx: number;
   minBarWidthPx: number;
   barHeightPx: number;
 }
 
-/** The five `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
+/** The four `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
  *  decides whether an authored value is usable, and the metric it answers.
  *  `refreshPixelProperties` below is the whole reader: one loop, no per-property code. */
 interface PixelPropertyRead {
@@ -75,7 +69,6 @@ interface PixelPropertyRead {
 
 const PIXEL_PROPERTIES: readonly PixelPropertyRead[] = Object.freeze([
   { property: ROW_HEIGHT_PROPERTY, policy: ROW_HEIGHT_POLICY, metric: 'rowHeight' },
-  { property: LANE_GAP_PROPERTY, policy: LANE_GAP_POLICY, metric: 'laneGapPx' },
   { property: TICK_BOX_FLOOR_PROPERTY, policy: TICK_BOX_FLOOR_POLICY, metric: 'tickBoxFloorPx' },
   { property: MIN_BAR_WIDTH_PROPERTY, policy: MIN_BAR_WIDTH_POLICY, metric: 'minBarWidthPx' },
   { property: BAR_HEIGHT_PROPERTY, policy: BAR_HEIGHT_POLICY, metric: 'barHeightPx' },
@@ -180,7 +173,6 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
  *  Spelled in `LayoutInput`'s own words, which is why `rows` appears here and `rowSource` does not. */
 type SettingLayoutInputKey =
   | 'rowHeight'
-  | 'laneGapPx'
   | 'tickBoxFloorPx'
   | 'minBarWidthPx'
   | 'barHeightPx'
@@ -202,7 +194,6 @@ export class FrameSettings {
 
   #metrics: PixelMetrics = {
     rowHeight: DEFAULT_ROW_HEIGHT,
-    laneGapPx: DEFAULT_LANE_GAP_PX,
     tickBoxFloorPx: DEFAULT_TICK_BOX_FLOOR_PX,
     minBarWidthPx: DEFAULT_MIN_BAR_WIDTH_PX,
     barHeightPx: DEFAULT_BAR_HEIGHT_PX,
@@ -292,7 +283,6 @@ export class FrameSettings {
     return {
       ...perFrame,
       rowHeight: this.#metrics.rowHeight,
-      laneGapPx: this.#metrics.laneGapPx,
       tickBoxFloorPx: this.#metrics.tickBoxFloorPx,
       minBarWidthPx: this.#metrics.minBarWidthPx,
       barHeightPx: this.#metrics.barHeightPx,

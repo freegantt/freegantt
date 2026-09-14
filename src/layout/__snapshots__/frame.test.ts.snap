@@ -9,7 +9,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "height": 18,
     "id": "entry-1:0",
     "label": "Discovery",
-    "lane": 0,
     "rowId": "entry-1",
     "segmentId": "sg1",
     "segmentIds": [
@@ -28,7 +27,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "height": 18,
     "id": "entry-2:0",
     "label": "Stakeholder interviews",
-    "lane": 0,
     "rowId": "entry-2",
     "segmentId": "sg2",
     "segmentIds": [
@@ -47,7 +45,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "height": 18,
     "id": "entry-3:0",
     "label": "Requirements draft",
-    "lane": 0,
     "rowId": "entry-3",
     "segmentId": "sg3",
     "segmentIds": [

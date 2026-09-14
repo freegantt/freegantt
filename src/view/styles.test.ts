@@ -146,9 +146,8 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('--fg-band-height');
     expect(css).toContain('--fg-tick-box-floor');
     expect(css).toContain('--fg-indent-width');
-    expect(css).toContain('--fg-lane-gap');
     // #294: a px metric, not a colour — it moved out of the light/dark token blocks into this
-    // metrics block, beside --fg-lane-gap, so a theme pin can no longer change it.
+    // metrics block, so a theme pin can no longer change it.
     expect(css).toContain('--fg-bar-label-gap');
     expect(css).toContain('--fg-bar-opacity');
     expect(css).toContain('--fg-bar-fill-painted');

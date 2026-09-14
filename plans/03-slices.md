@@ -176,7 +176,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Position:** after S3, before S5. **Done, gate passing.** Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settled scope calls, closed ADR 0005's two open questions, and renamed `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widened from spans to every rolling-up field.
 
-**Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights.
+**Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights. **Lane packing retired by #298:** `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept — and `heightMode` — collapsed to nothing; every row now draws its items at one shared, fixed-height band.
 
 **Scope**
 
@@ -188,8 +188,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2). **Superseded by ADR 0013:** nothing promotes a stored classification, because there is none. `autoGroup` is deleted, and losing the last child leaves a normal, dateless Entry.
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
-- Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index.
-- Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard.
+- Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index. **Retired by #298:** `singleLane` is the only row-packing behavior, so packing, sub-lanes and `heightMode` are gone.
+- Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard. **Retired by #298:** no lanes remain to drag or resize within; a row's items share its one band.
 - Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rowSource` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 - **Known gaps due this slice (issue #91 §9):** §9-E is a bet on `RowHeightIndex.heightAt`/`invalidateFrom` and `RenderBackend.applyState` finally getting production callers — pack-mode row heights above and the hover/selection/drag hot path are exactly that; if either lands and still does not use the methods, remove them rather than leave decoration. §9-G: `render/backend.ts`'s `hitTest(x, y)` does not name its coordinate space (DOM backend takes client coords, `GeometryFrame` is content coords) — this slice's gesture controllers are its first callers, so give it a named `ClientPoint` type before wiring them up, not after. §9-B (`view/gantt-shell.ts`'s `#wiring` boolean) is worth revisiting too: tree UI and lane interaction both add more to wire during construction.
 
@@ -199,7 +199,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [x] `[S4-A2]` An edit naming an unregistered field key throws `UnknownFieldError` — it is never written silently.
 - [x] `[S4-A3]` Switching `gantt.rowSource` between the tree and a grouped source re-resolves rows without a remount, and scroll position survives it.
 - [x] `[S4-A4]` A segmented entry renders N bars on one row; drag of one segment behaves sanely and transactionally.
-- [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test).
+- [x] `[S4-A5]` Pack-mode rows change height correctly as overlaps come and go; scroll position stays stable (height index invalidation test). *— retired by #298: pack mode is gone; the coverage now pins scroll re-clamp when the row count shrinks instead.*
 - [x] `[S4-A6]` Collapse state survives data edits and is independent per Gantt.
 - [x] `[S4-A7]` Filter with keep-ancestors shows a matching deep child under its chain of parents.
 - [x] `[S4-A8]` An empty `kind: 'group'` entry renders as a group, accepts children, and its span appears once children exist — no special-casing. *— retired by ADR 0013: `kind` leaves the record, and an Entry derives when it has children.*

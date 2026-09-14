@@ -48,7 +48,6 @@ function flattenMatched(row: UnindexedRow, matched: ReadonlySet<RowId>): Unindex
     entryIds: row.entryIds,
     expandable: false,
     expanded: false,
-    heightMode: row.heightMode,
     matched: matched.has(row.id),
     ...(row.headerLabel !== undefined ? { headerLabel: row.headerLabel } : {}),
   };

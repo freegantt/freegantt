@@ -75,10 +75,10 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
   },
   hierarchy: {
     demonstrates:
-      'A tree of entries groups, sorts, filters and packs its rows. Grid columns resize and reorder ' +
-      'by drag, and a beforeEntryEdit veto swaps in a different editor for one column.',
+      'A tree of entries groups, sorts, and filters its rows. Grid columns resize and reorder by ' +
+      'drag, and a beforeEntryEdit veto swaps in a different editor for one column.',
     config: [
-      "gantt.rowSource = { source: 'entries', tree: true, heightMode: 'pack' }",
+      "gantt.rowSource = { source: 'entries', tree: true }",
       "gantt.gridColumns = ['name', 'start', 'end']",
       "gantt.on('beforeEntryEdit', (event) => …)",
     ],

@@ -271,11 +271,10 @@ gantt.rowSource = {
   resolve: ({ entries }) => [{ id: 'a', entryIds: ['t1'] }],
 };
 
-// Sort, filter, and pack mode live on the row source (entries and group only)
+// Sort and filter live on the row source (entries and group only)
 gantt.rowSource = {
   source: 'entries',
   tree: true,
-  heightMode: 'pack', // 'fixed' (default) stacks overlaps into lanes
   filter: (entry) => entry.meta.team === 'A',
   filterPolicy: 'keepAncestors', // or 'matchOnly'
   sort: { field: 'start', direction: 'asc' },
@@ -341,9 +340,8 @@ gantt.destroy();
 ```
 
 Mounts a Gantt into `container`: a grid pane (configurable columns), a splitter, and a timeline pane
-with header bands and bars. Row height comes from `--fg-row-height` (default 36px) unless
-`heightMode: 'pack'` is set on the row source. Two `Gantt` instances on one page are fully
-independent (I2); two given the same `scale`/`scroll` x-sync (D9).
+with header bands and bars. Row height comes from `--fg-row-height` (default 36px). Two `Gantt`
+instances on one page are fully independent (I2); two given the same `scale`/`scroll` x-sync (D9).
 
 Every config key is a live property — assign `gantt.preset`, `gantt.gridColumns`, `gantt.rowSource`,
 and so on without remounting.
@@ -536,7 +534,7 @@ properties it defines, in the consumer app's own `.css`:
 ```
 
 The full set of overridable tokens (`--fg-pane-bg`, `--fg-header-bg`, `--fg-bar-fill`,
-`--fg-warn`, `--fg-indent-width`, `--fg-lane-gap`, and so on) is listed in `plans/02-public-api.md`
+`--fg-warn`, `--fg-indent-width`, and so on) is listed in `plans/02-public-api.md`
 §4.1 and `src/view/styles.ts`. Any selector the library renders
 (`.fg-bar`, `.fg-row`, `.fg-header`, …) can also be targeted directly for changes a token doesn't
 cover.

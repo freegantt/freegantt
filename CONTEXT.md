@@ -190,8 +190,8 @@ The internal list `resolveRows` produces before placement — `PlannedRow` value
 _Avoid_: PlannedRow as a glossary term (internal only), Row model (Row is what the frame carries after placement)
 
 **Row**:
-A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). A parent Entry and a leaf Entry both produce a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty.
-_Avoid_: Line, track (a track is what a Lane is), record; reading `Row.kind: 'header'` as "a parent Entry"; using `'group'` as a Row kind (that literal is gone with `Entry.kind`)
+A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Items of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). A parent Entry and a leaf Entry both produce a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty. Every Item on a Row draws at the same vertical band, centred in the row (`singleLane`, D-S4-19) — Lane and Lane packing are retired (#298): the only row-packing behavior there ever was is the one every row already has.
+_Avoid_: Line, track, record; reading `Row.kind: 'header'` as "a parent Entry"; using `'group'` as a Row kind (that literal is gone with `Entry.kind`); Lane, Lane packing, `heightMode: 'pack'` (retired, #298 — see above)
 
 **Row source**:
 The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Live on `gantt.rowSource` (and `GanttOptions.rowSource` at construction). Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object. `filter`, `sort`, and `filterPolicy` live here — never on the Store (D-S4-28).
@@ -216,14 +216,6 @@ _Avoid_: Bar (an Item is what a bar renders; "bar" is a rendering detail, not th
 **Item producer**:
 The per-Entry seam that turns one Entry into its Item(s) for a row (`ItemProducer`). Core keys on structure: a parent (has children) or a leaf (its Segments, or one bar). A plugin that needs another look does not register against a stored `kind` — there is none (ADR 0013). `wholeEntryItem(entry)` is the public helper for the common case — one Item over the entry's whole span — so a producer reads `(entry) => [wholeEntryItem(entry)]` and no plugin restates the `${entryId}:${segmentIndex}` id convention (review P3).
 _Avoid_: Item emitter (retired name — `registerItemEmitter` was renamed to `registerItemProducer`, Q16)
-
-**Lane**:
-A sub-track within a Row, assigned by the layout pass so that Items whose spans overlap on the same Row are stacked instead of drawn on top of each other. A Lane is a packing result — always derived, never authored.
-_Avoid_: Sub-row, level, stack
-
-**Lane packing**:
-The pass that assigns each Item on a row to a lane index and computes `laneCount` and row height under `heightMode: 'pack'` (`packRow`). Memoized per row per dataset revision (D-S4-26).
-_Avoid_: Stack layout, sub-row layout
 
 **Grouping**:
 The row-level nesting of the timeline grid (parent/child rows via `parentId`). Distinct from a parent Entry (an Entry that has children). A grouping header is `Row.kind: 'header'` and stands for no Entry (`entryIds` empty, `headerLabel` in column 0, other cells blank — D-S4-23).
@@ -258,11 +250,11 @@ The DOM element (or a CSS selector naming one) a consumer hands to `new Gantt({ 
 _Avoid_: Host (retired, see Consumer), Mount target (a Render surface — a different, lower-level concept the Container is split into, see Render surface)
 
 **FrameLayout**:
-The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — the row-height index and `FrameMemory` (lane-pack caches). `computeFrame` stays pure; `FrameLayout` is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
+The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — the row-height index and `FrameMemory` (per-row item caches). `computeFrame` stays pure; `FrameLayout` is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
 _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, not what)
 
 **Frame memory**:
-What one `computeFrame` pass remembers when `FrameLayout` calls it again — today the `RowHeightIndex` and per-row lane-pack results. Passed as the optional second argument to `computeFrame`; not public (D-S4-19).
+What one `computeFrame` pass remembers when `FrameLayout` calls it again — today the `RowHeightIndex` and per-row produced-item results. Passed as the optional second argument to `computeFrame`; not public (D-S4-19).
 _Avoid_: Frame cache as a consumer term (internal lifetime object only)
 
 **Frame settings**:

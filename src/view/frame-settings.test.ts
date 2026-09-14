@@ -11,7 +11,6 @@ import type { FrameSettingsPatch, FrameSettingsPorts, PerFrameLayoutInput } from
 import type { PixelPropertyPolicy } from '../render/dom/pixel-property.js';
 import {
   DEFAULT_BAR_HEIGHT_PX,
-  DEFAULT_LANE_GAP_PX,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_TICK_BOX_FLOOR_PX,
   createVariantRegistry,
@@ -156,10 +155,9 @@ describe('FrameSettings — the invalidation table', () => {
 });
 
 describe('FrameSettings — the pixel properties', () => {
-  it('reads all five properties, and asks for no frame of its own', () => {
+  it('reads all four properties, and asks for no frame of its own', () => {
     const { ports, calls, reads } = recordingPorts({
       '--fg-row-height': 48,
-      '--fg-lane-gap': 6,
       '--fg-tick-box-floor': 3,
       '--fg-bar-min-width': 16,
       '--fg-bar-height': 20,
@@ -169,7 +167,6 @@ describe('FrameSettings — the pixel properties', () => {
 
     expect(reads).toEqual([
       '--fg-row-height',
-      '--fg-lane-gap',
       '--fg-tick-box-floor',
       '--fg-bar-min-width',
       '--fg-bar-height',
@@ -193,7 +190,6 @@ describe('FrameSettings — the pixel properties', () => {
     settings.refreshPixelProperties();
     const input = settings.toLayoutInput(perFrame());
     expect(input.rowHeight).toBe(DEFAULT_ROW_HEIGHT);
-    expect(input.laneGapPx).toBe(DEFAULT_LANE_GAP_PX);
     expect(input.tickBoxFloorPx).toBe(DEFAULT_TICK_BOX_FLOOR_PX);
     expect(input.minBarWidthPx).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(input.barHeightPx).toBe(DEFAULT_BAR_HEIGHT_PX);

@@ -136,11 +136,6 @@ const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
     pattern: /export const DEFAULT_TICK_BOX_FLOOR_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
-  '--fg-lane-gap': {
-    file: 'src/layout/lanes/pack-lanes.ts',
-    pattern: /export const DEFAULT_LANE_GAP_PX = (\d+(?:\.\d+)?);/,
-    unit: 'px',
-  },
   '--fg-bar-label-gap': {
     file: 'src/render/dom/dom-contract.ts',
     pattern: /export const DEFAULT_BAR_LABEL_GAP_PX = (\d+(?:\.\d+)?);/,

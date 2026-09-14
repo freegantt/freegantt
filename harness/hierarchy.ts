@@ -10,7 +10,6 @@ import type {
   EntryInput,
   GridColumnsChange,
   GridColumnInput,
-  RowHeightMode,
   RowSource,
 } from 'freegantt';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
@@ -46,7 +45,6 @@ const GRID_WITHOUT_COST: readonly GridColumnInput[] = ['name', 'start', 'end'];
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 const rowsModeSelect = document.querySelector<HTMLSelectElement>('#rows-mode')!;
-const heightModeSelect = document.querySelector<HTMLSelectElement>('#height-mode')!;
 const toggleCostBtn = document.querySelector<HTMLButtonElement>('#toggle-cost-col')!;
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')!;
@@ -101,11 +99,9 @@ function mountGantt(next: Dataset<HierarchyProps>): Gantt {
 }
 
 function buildRowSource(): RowSource {
-  const heightMode: RowHeightMode = heightModeSelect.value === 'pack' ? 'pack' : 'fixed';
   const rowsMode = rowsModeSelect.value;
   const sortField = sortFieldSelect.value;
   const shared = {
-    heightMode,
     ...(filterTeam !== null && rowsMode !== 'grouped'
       ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
       : {}),
@@ -209,7 +205,6 @@ refreshHistoryButtons();
 renderSelection();
 
 rowsModeSelect.addEventListener('change', () => applyRowSource());
-heightModeSelect.addEventListener('change', () => applyRowSource());
 
 toggleCostBtn.addEventListener('click', () => {
   costColumnVisible = !costColumnVisible;

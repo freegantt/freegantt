@@ -3,10 +3,9 @@
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import type { GroupRowSource, UnindexedRow } from './row-source.js';
-import { heightModeOf, PLANNED_ROW_KIND } from './row-source.js';
+import { PLANNED_ROW_KIND } from './row-source.js';
 
 export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSource): UnindexedRow[] {
-  const heightMode = heightModeOf(source);
   const order: string[] = [];
   const grouped = new Map<string, Entry[]>();
   for (const entry of entries) {
@@ -31,7 +30,6 @@ export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSo
       entryIds: [],
       expandable,
       expanded: false,
-      heightMode,
       headerLabel: key,
     });
     for (const entry of members) {
@@ -42,7 +40,6 @@ export function resolveGroupSource(entries: readonly Entry[], source: GroupRowSo
         entryIds: [entryId(entry.id)],
         expandable: false,
         expanded: false,
-        heightMode,
         parentRowId: headerId,
       });
     }

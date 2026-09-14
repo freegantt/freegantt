@@ -15,7 +15,6 @@ import { applyCollapse } from './rows/collapse.js';
 import { entryIdOfItem } from '../model/index.js';
 import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
 import type { Item } from './items/item.js';
-import { DEFAULT_LANE_GAP_PX } from './lanes/pack-lanes.js';
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
  *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
@@ -67,7 +66,6 @@ export class FrameLayout implements FrameLayoutView {
     this.#memory.sync({
       plan: this.#plan,
       rowHeight: input.rowHeight,
-      laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
       entries: input.entries,
       registry: input.variants,
       datasetRevision: input.datasetRevision,
@@ -100,26 +98,26 @@ export class FrameLayout implements FrameLayoutView {
     return this.#entryIdsOfRow.get(id) ?? NO_ENTRY_IDS;
   }
 
-  /** Every Item this entry draws, in the packed order its row produced them (#185, #295) — the
-   * full Item, box included, not just its id. `reveal` needs a boxed Item's own painted width
-   * (`barSpan` takes the whole `Item`), and this is the one place that answer comes from: the
-   * packed row memory `computeFrame` already built. Empty when collapse hid the row, or when the
-   * entry draws nothing. Packing a row on demand costs a memoized pass (`packedRow`), acceptable
-   * here because reveal is a gesture, not the hot path. */
+  /** Every Item this entry draws, in the order its row produced them (#185, #295) — the full Item,
+   * box included, not just its id. `reveal` needs a boxed Item's own painted width (`barSpan` takes
+   * the whole `Item`), and this is the one place that answer comes from: the row memory
+   * `computeFrame` already built. Empty when collapse hid the row, or when the entry draws nothing.
+   * Producing a row on demand costs a memoized pass (`rowMemory`), acceptable here because reveal
+   * is a gesture, not the hot path. */
   itemsForEntry(id: EntryId): readonly Item[] {
     const rowId = this.#rowOfEntry.get(id);
     if (rowId === undefined) return [];
     const items: Item[] = [];
-    for (const item of this.#memory.packedRow(rowId).items) {
+    for (const item of this.#memory.rowMemory(rowId).items) {
       if (item.entryId === id) items.push(item);
     }
     return items;
   }
 
-  /** Every Item this entry draws, by id, in the packed order its row produced them (#185). It
-   * answers from the producer output, never from the `${entryId}:${segmentIndex}` id convention,
-   * so a plugin Kind that draws several Items from an entry with no Segments gets the same true
-   * answer. Empty when collapse hid the row, or when the entry draws nothing. */
+  /** Every Item this entry draws, by id, in the order its row produced them (#185). It answers from
+   * the producer output, never from the `${entryId}:${segmentIndex}` id convention, so a plugin
+   * Kind that draws several Items from an entry with no Segments gets the same true answer. Empty
+   * when collapse hid the row, or when the entry draws nothing. */
   itemIdsForEntry(id: EntryId): readonly ItemId[] {
     return this.itemsForEntry(id).map((item) => item.id);
   }
@@ -133,7 +131,7 @@ export class FrameLayout implements FrameLayoutView {
   segmentIdsForItem(id: ItemId): readonly SegmentId[] {
     const rowId = this.#rowOfEntry.get(entryIdOfItem(id));
     if (rowId === undefined) return NO_SEGMENT_IDS;
-    return this.#memory.packedRow(rowId).segmentIdsByItem.get(id) ?? NO_SEGMENT_IDS;
+    return this.#memory.rowMemory(rowId).segmentIdsByItem.get(id) ?? NO_SEGMENT_IDS;
   }
 
   /** Every Segment of every Entry this row owns, in row order (#199, #212) — what a click on a row

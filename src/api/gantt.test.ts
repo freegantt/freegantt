@@ -4856,45 +4856,32 @@ describe('Gantt rows and collapse (S4.6)', () => {
   });
 });
 
-describe('Gantt pack-mode scroll (S4.8, [S4-A5])', () => {
-  it('keeps the pixel scroll offset and re-clamps it; never resets to 0', async () => {
+describe('Gantt scroll re-clamp when the row count shrinks', () => {
+  it('never resets to 0, and a caller re-clamp brings it back inside bounds (D-S1.5-2)', async () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const container = document.createElement('div');
     const scroll = new ScrollModel();
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: sampleEntries.map((entry, i) =>
-        i === 0
-          ? {
-              ...entry,
-              segments: [
-                { start: entry.start!, end: entry.end! },
-                { start: entry.start!, end: entry.end! },
-              ],
-            }
-          : entry,
-      ),
-    });
-    const gantt = new Gantt({
-      container,
-      dataset,
-      scroll,
-      rowSource: { source: 'entries', heightMode: 'pack' },
-    });
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset, scroll });
     FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
-    scroll.panTo({ x: 0, y: 80 });
+    scroll.panTo({ x: 0, y: scroll.state.max.y });
     const yBefore = scroll.state.position.y;
-    expect(yBefore).toBe(80);
+    expect(yBefore).toBeGreaterThan(0);
 
-    dataset.entries.update(sampleEntries[0]!.id, {
-      segments: [{ start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! }],
-    });
+    for (const entry of sampleEntries.slice(0, sampleEntries.length - 3)) {
+      dataset.entries.remove(entry.id);
+    }
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
+    // D-S1.5-2: a shrink never rewrites `position` by itself — it stays exactly where the
+    // caller last asked, even past the new, smaller `max`, until something re-clamps it.
+    expect(scroll.state.position.y).toBe(yBefore);
     expect(scroll.state.position.y).not.toBe(0);
+
+    scroll.panTo(scroll.state.position);
+    expect(scroll.state.position.y).toBeGreaterThan(0);
     expect(scroll.state.position.y).toBeLessThanOrEqual(scroll.state.max.y);
-    expect(scroll.state.position.y).toBeLessThanOrEqual(yBefore);
 
     gantt.destroy();
     vi.unstubAllGlobals();

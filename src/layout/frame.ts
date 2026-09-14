@@ -17,13 +17,11 @@ import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFor
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineDecoration } from './date-line.js';
 import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
-import type { RowMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { BarAnchor, Item, VariantItems } from './items/item.js';
-import { DEFAULT_LANE_GAP_PX, yForLane } from './lanes/pack-lanes.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
 import type { RangeBand, RowStripe } from './decoration.js';
@@ -160,7 +158,6 @@ export interface FrameBar {
   y: number;
   width: number;
   height: number;
-  lane: number;
   flags: BarFlags;
   /** What `barSpan` did to this bar's painted `[x, x + width)` extent: `'exact'` for the entry's own
    *  span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for an Item that
@@ -312,9 +309,7 @@ export interface LayoutInput {
   variants: VariantItems;
   /** Every declared Field's stored-value read and compare, bound at this Gantt's locale (D-S4-13). */
   fieldCompares?: readonly FieldCompare[];
-  /** Gap between packed lanes in px. Omitted → `DEFAULT_LANE_GAP_PX`. View reads `--fg-lane-gap`. */
-  laneGapPx?: number;
-  /** Dataset commit generation. FrameMemory keys packed-row invalidation on this (A2). */
+  /** Dataset commit generation. FrameMemory keys row-production invalidation on this (A2). */
   datasetRevision: number;
   /** Bound Field reader for row-source `filter` / `groupBy` / `sort.compare` (A5). */
   fieldContext?: FieldContext;
@@ -366,10 +361,6 @@ function barA11yLabel(
   return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
-function packedItemsForRow(row: PlannedRow, memory: FrameMemory): RowMemory {
-  return memory.packedRow(row.id);
-}
-
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
 export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
   return resolveRows({
@@ -386,7 +377,6 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
   mem.sync({
     plan,
     rowHeight: input.rowHeight,
-    laneGap: input.laneGapPx ?? DEFAULT_LANE_GAP_PX,
     entries: input.entries,
     registry: input.variants,
     datasetRevision: input.datasetRevision,
@@ -444,7 +434,6 @@ export function placeFrame(
 ): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
   const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
-  const laneGap = input.laneGapPx ?? DEFAULT_LANE_GAP_PX;
   const mem = memory ?? memoryFor(input, plan);
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
@@ -487,9 +476,8 @@ export function placeFrame(
       overflowCount++;
     }
 
-    const packed = packedItemsForRow(planned, mem);
-    const items = packed.items;
-    const packing = packed.packing;
+    const produced = mem.rowMemory(planned.id);
+    const items = produced.items;
     const height = index.heightAt(rowIndex);
     const parts = segmentCountByEntry(items);
     rows.push({
@@ -498,7 +486,6 @@ export function placeFrame(
       index: planned.index,
       top,
       height,
-      laneCount: packing.laneCount,
       depth: planned.depth,
       expandable: planned.expandable,
       expanded: planned.expanded,
@@ -508,13 +495,12 @@ export function placeFrame(
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
       // A reference copy of the set `RowMemory` already resolved for this row (#230 R5) — no
       // allocation per frame (I5), and the same header rule `entryIds` uses just above.
-      segmentIds: isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : packed.segmentIds,
+      segmentIds: isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : produced.segmentIds,
     });
 
     for (const item of items) {
       const { x, width, span } = barSpan(item, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
-      const lane = packing.laneByItem.get(item.id) ?? 0;
       const bar: FrameBar = {
         id: item.id,
         entryId: item.entryId,
@@ -522,18 +508,16 @@ export function placeFrame(
         variant: item.variant,
         label: item.label,
         x,
-        // Centred in its own lane band: yForLane answers the band's own top, at rowHeight tall, and
-        // half the leftover (rowHeight - barHeightPx) sits above the bar, half below.
-        y: yForLane(top, lane, rowHeight, laneGap) + (rowHeight - barHeightPx) / 2,
+        // Every row is one lane (singleLane, D-S4-19): the bar centres in the row's own band.
+        y: top + (rowHeight - barHeightPx) / 2,
         width,
         height: barHeightPx,
-        lane,
         flags: {},
         span,
         a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
         // A reference copy of the set the memory already resolved beside this Item — no allocation
         // per frame (I5), and no second Entry source for a reader to disagree with (#230).
-        segmentIds: packed.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,
+        segmentIds: produced.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,
       };
       if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
       bars.push(bar);

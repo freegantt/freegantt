@@ -89,7 +89,6 @@ function planned(entryIds: readonly EntryId[], kind: 'entry' | 'header' = 'entry
     entryIds,
     expandable: false,
     expanded: true,
-    heightMode: 'fixed',
   };
 }
 
@@ -183,7 +182,6 @@ describe('produceItemsForRow', () => {
       entryIds: [],
       expandable: false,
       expanded: true,
-      heightMode: 'fixed',
       headerLabel: 'Team',
     };
     const items = produceItemsForRow(header, entryByIdFor([t1]), registry);
