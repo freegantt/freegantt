@@ -19,8 +19,23 @@ on:
 
 # A new push supersedes the run before it. Cancelling keeps the minutes on the commit that is
 # actually up for review.
+#
+# The key is the branch name, and it has to be. Two event types reach this workflow for one branch.
+# `pull_request` carries a number. `workflow_dispatch` carries none, so the old key fell back to
+# `github.ref` for it. One branch then produced two groups — `ci-341` and
+# `ci-refs/heads/fix/341-...` — and nothing cancelled anything. Both runs ran the whole gate, in
+# parallel, and billed twice.
+#
+# That is not a rare path. `docs/04` §5.2 tells a reader to run `gh workflow run ci.yml --ref
+# <branch>` when `gh pr ready` does not fire the trigger. The advice is right, and it doubled the
+# cost every time the pull request run had in fact started. It hit four branches before anyone
+# read the bill.
+#
+# `head.ref` and `ref_name` are both the plain branch name, so the two doors land in one group.
+# `github.ref_name` is `341/merge` on a `pull_request` event, which is why that side reads
+# `head.ref` instead.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
