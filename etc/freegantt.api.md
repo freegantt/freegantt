@@ -80,7 +80,10 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInErrorCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+
+// @public
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-not-columnable' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'viewport-already-bound' | 'field-registry-resolved-key-missing';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
@@ -790,9 +793,6 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
 }
 
 // @public
-export type ErrorCode = BuiltInErrorCode | (string & {});
-
-// @public
 export interface ErrorFeed {
     // (undocumented)
     off(name: 'error', handler: (report: ErrorReport) => void): void;
@@ -807,7 +807,7 @@ export interface ErrorReport {
     readonly by: ErrorReporter;
     readonly cause?: unknown;
     // (undocumented)
-    readonly code: ErrorCode;
+    readonly code: ReportCode;
     readonly entryId?: EntryId;
     readonly field?: FieldKey;
     readonly message: string;
@@ -1039,11 +1039,11 @@ export interface FrameRow {
     top: number;
 }
 
-// @public (undocumented)
+// @public
 export class FreeGanttError extends Error {
-    constructor(code: string, message: string, options?: ErrorOptions);
+    constructor(code: ThrownCode, message: string, options?: ErrorOptions);
     // (undocumented)
-    readonly code: string;
+    readonly code: ThrownCode;
 }
 
 // @public (undocumented)
@@ -1858,6 +1858,9 @@ export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer
 export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
 
 // @public
+export type ReportCode = BuiltInReportCode | (string & {});
+
+// @public
 export class ReservedFieldKeyError extends FreeGanttError {
     constructor(key: string);
     // (undocumented)
@@ -2084,6 +2087,9 @@ export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
+
+// @public
+export type ThrownCode = BuiltInThrownCode | (string & {});
 
 // @public (undocumented)
 export interface Tick {
