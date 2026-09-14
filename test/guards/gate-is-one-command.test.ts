@@ -157,3 +157,51 @@ describe('a workflow output step writes one key=value line', () => {
     expect(workflow).toMatch(/require\('@playwright\/test\/package\.json'\)\.version/);
   });
 });
+
+// An action declares its own Node runtime in its own `action.yml`, and GitHub deprecated node20 on
+// 2025-09-19. At `@v4`, checkout, setup-node, cache and pnpm/action-setup all declared node20, so
+// GitHub forced them onto node24 and annotated every run with a warning that named them. `.nvmrc`
+// cannot answer that warning: it sets the Node this project runs on, never the Node an action runs
+// on. Only a major bump does. So this pins the floor, and it refuses an action with no floor on
+// record — an unguarded `uses:` is how the repo slides back to node20 without anybody reading a
+// warning.
+const FIRST_NODE24_MAJOR = new Map([
+  ['actions/checkout', 5],
+  ['actions/setup-node', 5],
+  ['actions/cache', 5],
+  ['pnpm/action-setup', 5],
+]);
+
+describe('every action runs on a supported Node runtime', () => {
+  const workflow = read('.github/workflows/ci.yml');
+  const pins = [...workflow.matchAll(/uses:\s*([\w.-]+\/[\w.-]+)@v(\d+)/g)].map((match) => ({
+    action: match[1]!,
+    major: Number(match[2]),
+  }));
+
+  it('has actions to guard', () => {
+    expect(pins.length).toBeGreaterThan(0);
+  });
+
+  it('records a Node floor for every action the workflow uses', () => {
+    for (const { action } of pins) {
+      expect(
+        FIRST_NODE24_MAJOR.has(action),
+        `${action} has no Node floor on record. Look up the first major whose action.yml says ` +
+          `node24, then add it to FIRST_NODE24_MAJOR.`,
+      ).toBe(true);
+    }
+  });
+
+  it('pins no action below its first node24 major', () => {
+    for (const { action, major } of pins) {
+      const floor = FIRST_NODE24_MAJOR.get(action);
+      if (floor === undefined) continue;
+      expect(
+        major,
+        `${action}@v${major} declares node20, which GitHub deprecated. v${floor} is the first ` +
+          `major that declares node24.`,
+      ).toBeGreaterThanOrEqual(floor);
+    }
+  });
+});

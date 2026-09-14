@@ -49,9 +49,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # These four actions run on the node24 runtime, and that is why the majors look new. An
+      # action declares its own runtime in its own `action.yml`. That runtime is not the Node this
+      # project runs on — `.nvmrc` sets that one, and it already says 24. At `@v4` all four
+      # declared `node20`, which GitHub deprecated on 2025-09-19. GitHub forced them onto node24
+      # anyway, and annotated every run with a warning. The warning named the actions, never this
+      # repo's code, so no `.nvmrc` edit could ever silence it. Only a major bump does. Keep each
+      # major at or above the first one that declares node24: checkout v5, setup-node v5, cache
+      # v5, pnpm/action-setup v5.
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      # setup-node caches nothing here. The `actions/cache` steps below do the caching, on keys
+      # this file owns. Keep it that way: setup-node v6 limits its own automatic cache to npm.
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
@@ -59,7 +69,7 @@ jobs:
       # that changes no dependency installs nothing at all. Caching the directory rather than the
       # pnpm store is what buys that: the store still leaves the link step to run.
       - id: node-modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
@@ -83,7 +93,7 @@ jobs:
       - id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - id: browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
