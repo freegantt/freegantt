@@ -493,13 +493,13 @@ describe('attachEntryGestures — grid row click', () => {
 
   // #185: a row that owns several Entries selects all of them. `hitTest` reports the row, and
   // `selectableSegmentsOf` answers which Segments it owns — no Item id is invented anywhere on this path.
-  const PACKED = rowId('packed');
+  const MULTI_ENTRY_ROW = rowId('multi-entry');
 
-  function packedRowContext(rowEntries: readonly EntryId[] = [A, B]) {
-    // x = 0 is the packed row; x = 1 is A's own bar, so a test can select off the timeline too.
+  function multiEntryRowContext(rowEntries: readonly EntryId[] = [A, B]) {
+    // x = 0 is the multi-entry row; x = 1 is A's own bar, so a test can select off the timeline too.
     return makeContext({
       hitTest: (at) => {
-        if (at.x === 0) return { kind: 'row', rowId: PACKED };
+        if (at.x === 0) return { kind: 'row', rowId: MULTI_ENTRY_ROW };
         return at.x === 1 ? { kind: 'bar', itemId: itemId(A) } : undefined;
       },
       selection: {
@@ -515,7 +515,7 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const { ctx, proposals } = packedRowContext();
+    const { ctx, proposals } = multiEntryRowContext();
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
@@ -527,7 +527,7 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const { ctx, proposals } = packedRowContext();
+    const { ctx, proposals } = multiEntryRowContext();
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
@@ -542,7 +542,7 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const { ctx, proposals } = packedRowContext();
+    const { ctx, proposals } = multiEntryRowContext();
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(1)); // select A off its own bar
@@ -555,7 +555,8 @@ describe('attachEntryGestures — grid row click', () => {
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const { ctx, proposals } = makeContext({
-      hitTest: (at) => (at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: PACKED }),
+      hitTest: (at) =>
+        at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: MULTI_ENTRY_ROW },
       selection: {
         selectableSegmentsOf: (hit: EntryHit) =>
           hit.kind === 'row'
@@ -575,7 +576,7 @@ describe('attachEntryGestures — grid row click', () => {
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     // `selectableSegmentsOf` resolves the capability (I14), so an incapable Entry never reaches this file.
-    const { ctx, proposals } = packedRowContext([B]);
+    const { ctx, proposals } = multiEntryRowContext([B]);
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
@@ -586,7 +587,7 @@ describe('attachEntryGestures — grid row click', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const { ctx, proposals } = packedRowContext([]);
+    const { ctx, proposals } = multiEntryRowContext([]);
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(1)); // select A off its own bar
