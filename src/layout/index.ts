@@ -53,8 +53,13 @@ export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows, resolveRowSource } f
 export { FrameLayout } from './frame-layout.js';
 export type { FrameLayoutView } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
-export { resolveDateLines } from './date-line.js';
-export type { DateLine, DateLineDecoration, ResolveDateLinesInput } from './date-line.js';
+export { resolveDateLines, DEFAULT_DATE_LINE_LABEL_PLACEMENT } from './date-line.js';
+export type {
+  DateLine,
+  DateLineDecoration,
+  DateLineLabelPlacement,
+  ResolveDateLinesInput,
+} from './date-line.js';
 export type {
   GeometryFrame,
   FrameRow,

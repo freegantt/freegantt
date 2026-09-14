@@ -65,8 +65,11 @@ const dataset = new Dataset<DemoEntryProps>({
 });
 
 // S3 direct manipulation demo (editing.html's own `mobilization` date line): a hard boundary a
-// `beforeEntryMove` veto below enforces — dropping a bar before it is refused.
-const mobilization = now();
+// `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A week out from
+// today, not today itself — so this labelled Date line and the unlabelled Today line wrapper
+// (`todayLine`'s own default) land at two different x's instead of one, and this page shows both
+// (#319 follow-up).
+const mobilization = addMs(now(), 7 * MS.DAY);
 
 const gantt = new Gantt({
   container: '#gantt',
@@ -77,6 +80,11 @@ const gantt = new Gantt({
   gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true },
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
+  // #318: the default (`'overlayOnGanttBody'`) anchors below the header, which a scrolled-up row's
+  // own bar can still reach — this page's own "Program" summary bar does, right where it lands.
+  // The header itself never scrolls, so anchoring the label there instead is the one placement no
+  // row can ever paint under.
+  dateLineLabelPlacement: 'overlayOnTimeLine',
 });
 gantt.panToToday();
 

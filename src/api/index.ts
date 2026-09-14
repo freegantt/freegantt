@@ -95,6 +95,7 @@ export type {
   GanttScaleOptions,
   DateLineInput,
   DateLine,
+  DateLineLabelPlacement,
   ChromePlugin,
   DataPlugin,
   Plugin,
@@ -125,7 +126,13 @@ export type {
 // One vocabulary for "what did this land on", shared by `CommandTarget.kind` and `DomTarget.kind`
 // (review A3).
 export type { TargetKind } from '../model/index.js';
-export type { Theme, GridWidth, ViewportGestures, ViewportGestureFlags } from '../view/index.js';
+export type {
+  Theme,
+  ResolvedTheme,
+  GridWidth,
+  ViewportGestures,
+  ViewportGestureFlags,
+} from '../view/index.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
@@ -136,6 +143,7 @@ export type {
   NavigationChange,
   SelectionChange,
   CollapseChange,
+  ThemeChange,
   ProposedDates,
   ProposedSpan,
   EntryGestureEvent,

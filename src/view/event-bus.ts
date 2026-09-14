@@ -18,6 +18,7 @@ import type {
   SegmentId,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
+import type { ResolvedTheme } from './theme.js';
 
 export type { CollapseChange };
 
@@ -72,6 +73,13 @@ export interface NavigationChange {
   readonly fit: TimeScaleFit;
   readonly canZoomIn: boolean;
   readonly canZoomOut: boolean;
+}
+
+/** #330. `Gantt.resolvedTheme` moved — a `theme` assignment that changes the pin, or the OS
+ *  flipping under `'auto'` with no ancestor pin in the way. */
+export interface ThemeChange {
+  readonly from: ResolvedTheme;
+  readonly to: ResolvedTheme;
 }
 
 /** ADR 0013, Q9: where one entry the gesture moves lands. Both dates are optional, because a
@@ -132,6 +140,9 @@ export interface GanttEventMap {
   beforeGridWidthChange: GridWidthChange;
   gridWidthChange: GridWidthChange;
   navigationChange: NavigationChange;
+  /** #330. No `before*` pair, the same reason `navigationChange` has none: the OS half of this is
+   *  not a vetoable gesture, and the `theme` half already has its own live setter. */
+  themeChange: ThemeChange;
   /** S3, D-S3-10. Sync veto: returning `false` leaves the selection untouched. */
   beforeSelectionChange: SelectionChange;
   selectionChange: SelectionChange;
