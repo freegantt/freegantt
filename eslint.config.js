@@ -76,6 +76,10 @@ export default tseslint.config(
     // walks the filesystem directly, so a git-only ignore rule does not stop it from being scanned.
     // Same gap `.prettierignore`'s own `.worktrees` entry closes.
     //
+    // website/** is its own independent pnpm project (own pnpm-workspace.yaml, own tooling), not
+    // a package of this one — same reasoning as `.prettierignore`'s `website` entry, closing the
+    // same gap for lint that entry closes for format.
+    //
     // NOTE: these are ignore paths for non-source artifacts. No lint rule, layer allow-list, or
     // severity is relaxed by this entry — the I1/I10/I12 rule set below is unchanged.
     ignores: [
@@ -86,6 +90,7 @@ export default tseslint.config(
       'eslint/rules/fixtures/**',
       '.agents/skills/**',
       '.worktrees/**',
+      'website/**',
     ],
   },
   js.configs.recommended,

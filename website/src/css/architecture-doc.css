@@ -1,0 +1,290 @@
+/* Styling for the hand-drawn architecture diagrams (SVG figures and the layer-map box diagram)
+   carried over from harness/docs/*.html. Everything else in those pages now renders with
+   Docusaurus's own theme — this file only paints the diagrams themselves, scoped under
+   .fg-architecture-doc so it cannot leak into surrounding prose. */
+:root {
+  --fg-doc-panel: #ffffff;
+  --fg-doc-panel-2: #fbfbfa;
+  --fg-doc-ink: #1c1e26;
+  --fg-doc-sub: #55596b;
+  --fg-doc-faint: #5c6079;
+  --fg-doc-line: #d8dae2;
+  --fg-doc-line-soft: #e7e9ef;
+  --fg-doc-accent: #3a5a99;
+  --fg-doc-pure-bg: #e8f4ea;
+  --fg-doc-pure-line: #4a7a58;
+  --fg-doc-pure-ink: #24462f;
+  --fg-doc-dom-bg: #eef1f8;
+  --fg-doc-dom-line: #5a6a9a;
+  --fg-doc-dom-ink: #263155;
+  --fg-doc-api-bg: #fdf1e7;
+  --fg-doc-api-line: #a8703c;
+  --fg-doc-api-ink: #6b3f13;
+  --fg-doc-stub-bg: #f1f1f3;
+  --fg-doc-stub-line: #b3b6c0;
+  --fg-doc-stub-ink: #63677a;
+  --fg-doc-smell-bg: #fff4e5;
+  --fg-doc-smell-line: #c98a2a;
+  --fg-doc-smell-ink: #6b4409;
+  --fg-doc-hot-bg: #fdecec;
+  --fg-doc-hot-line: #c25151;
+  --fg-doc-hot-ink: #7a2323;
+  --fg-doc-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+}
+html[data-theme='dark'] {
+  --fg-doc-panel: #1c1e27;
+  --fg-doc-panel-2: #191b23;
+  --fg-doc-ink: #e7e8ee;
+  --fg-doc-sub: #9498ab;
+  --fg-doc-faint: #6d7185;
+  --fg-doc-line: #33364a;
+  --fg-doc-line-soft: #282b3a;
+  --fg-doc-accent: #7f9fd8;
+  --fg-doc-pure-bg: #17261c;
+  --fg-doc-pure-line: #4f8460;
+  --fg-doc-pure-ink: #bfe6c8;
+  --fg-doc-dom-bg: #1a2036;
+  --fg-doc-dom-line: #6d7fc0;
+  --fg-doc-dom-ink: #cfd7ff;
+  --fg-doc-api-bg: #2e2113;
+  --fg-doc-api-line: #c98a4f;
+  --fg-doc-api-ink: #f5dcc0;
+  --fg-doc-stub-bg: #22242d;
+  --fg-doc-stub-line: #4a4e60;
+  --fg-doc-stub-ink: #8a8e9e;
+  --fg-doc-smell-bg: #2e2410;
+  --fg-doc-smell-line: #c98a2a;
+  --fg-doc-smell-ink: #f2d29b;
+  --fg-doc-hot-bg: #2e1616;
+  --fg-doc-hot-line: #c25151;
+  --fg-doc-hot-ink: #f5b8b8;
+}
+/* Some diagrams (classes.md, lifecycle.md, plugins.md, timeline.md) reference these shorter
+   names directly in their SVG markup. Alias them to the --fg-doc-* palette so the diagrams
+   resolve without editing every var() call inside the hand-authored SVGs. */
+.fg-architecture-doc {
+  --line: var(--fg-doc-line);
+  --line-soft: var(--fg-doc-line-soft);
+  --sub: var(--fg-doc-sub);
+  --dom-line: var(--fg-doc-dom-line);
+  --hot-bg: var(--fg-doc-hot-bg);
+  --hot-line: var(--fg-doc-hot-line);
+  --smell-line: var(--fg-doc-smell-line);
+}
+.fg-architecture-doc * {
+  box-sizing: border-box;
+}
+.fg-architecture-doc .scroller {
+  overflow-x: auto;
+  margin: 1rem 0 1.5rem;
+  border: 1px solid var(--fg-doc-line);
+  border-radius: 8px;
+  background: var(--fg-doc-panel);
+  padding: 0.5rem;
+}
+.fg-architecture-doc .scroller svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.fg-architecture-doc figcaption {
+  font-size: 0.8rem;
+  color: var(--fg-doc-faint);
+  margin: 0.5rem 0 0;
+  padding-left: 0.2rem;
+}
+.fg-architecture-doc figure {
+  margin: 0 0 1.5rem;
+}
+/* ---- diagram styling (SVG uses these classes) ---- */
+.fg-architecture-doc .d .bx {
+  fill: var(--fg-doc-panel-2);
+  stroke: var(--fg-doc-line);
+  stroke-width: 1;
+  rx: 5;
+}
+.fg-architecture-doc .d .bx.pure {
+  fill: var(--fg-doc-pure-bg);
+  stroke: var(--fg-doc-pure-line);
+}
+.fg-architecture-doc .d .bx.dom {
+  fill: var(--fg-doc-dom-bg);
+  stroke: var(--fg-doc-dom-line);
+}
+.fg-architecture-doc .d .bx.api {
+  fill: var(--fg-doc-api-bg);
+  stroke: var(--fg-doc-api-line);
+}
+.fg-architecture-doc .d .bx.warn {
+  fill: var(--fg-doc-smell-bg);
+  stroke: var(--fg-doc-smell-line);
+}
+.fg-architecture-doc .d .bx.hot {
+  fill: var(--fg-doc-hot-bg);
+  stroke: var(--fg-doc-hot-line);
+}
+.fg-architecture-doc .d .bx.oval {
+  rx: 18;
+}
+.fg-architecture-doc .d .bx.opt {
+  fill: var(--fg-doc-stub-bg);
+  stroke: var(--fg-doc-stub-line);
+  stroke-dasharray: 4 3;
+}
+.fg-architecture-doc .d .diamond {
+  fill: var(--fg-doc-panel-2);
+  stroke: var(--fg-doc-line);
+  stroke-width: 1;
+}
+.fg-architecture-doc .d text {
+  font-family: var(--fg-doc-mono);
+  font-size: 10.5px;
+  fill: var(--fg-doc-ink);
+}
+.fg-architecture-doc .d .t {
+  font-weight: 700;
+  font-size: 11px;
+}
+.fg-architecture-doc .d .s {
+  fill: var(--fg-doc-sub);
+  font-size: 9.5px;
+}
+.fg-architecture-doc .d .xs {
+  fill: var(--fg-doc-faint);
+  font-size: 9px;
+}
+.fg-architecture-doc .d .hotink {
+  fill: var(--fg-doc-hot-ink);
+  font-weight: 700;
+}
+.fg-architecture-doc .d .warnink {
+  fill: var(--fg-doc-smell-ink);
+  font-weight: 700;
+}
+.fg-architecture-doc .d .edge {
+  stroke: var(--fg-doc-sub);
+  fill: none;
+  stroke-width: 1.3;
+}
+.fg-architecture-doc .d .edge.ret {
+  stroke-dasharray: 4 3;
+}
+.fg-architecture-doc .d .edge.hot {
+  stroke: var(--fg-doc-hot-line);
+  stroke-width: 2;
+}
+.fg-architecture-doc .d .edge.soft {
+  stroke: var(--fg-doc-line);
+}
+.fg-architecture-doc .d .life {
+  stroke: var(--fg-doc-line);
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+}
+.fg-architecture-doc .d .num circle {
+  fill: var(--fg-doc-accent);
+}
+.fg-architecture-doc .d .num text {
+  fill: #fff;
+  font-size: 9px;
+  font-weight: 700;
+}
+html[data-theme='dark'] .fg-architecture-doc .d .num text {
+  fill: #0d0f14;
+}
+/* ---- layer map ---- */
+.fg-architecture-doc .layermap {
+  border: 1px solid var(--fg-doc-line);
+  border-radius: 8px;
+  background: var(--fg-doc-panel);
+  padding: 1.2rem;
+  margin: 1rem 0 1.5rem;
+}
+.fg-architecture-doc .tier {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.fg-architecture-doc .box {
+  border: 1px solid var(--fg-doc-line);
+  border-radius: 6px;
+  padding: 0.55rem 0.8rem;
+  background: var(--fg-doc-panel-2);
+  min-width: 190px;
+  flex: 1 1 190px;
+  max-width: 300px;
+}
+.fg-architecture-doc .box .name {
+  font-family: var(--fg-doc-mono);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.fg-architecture-doc .box .sub {
+  font-size: 0.74rem;
+  color: var(--fg-doc-sub);
+  margin-top: 0.15rem;
+  line-height: 1.4;
+}
+.fg-architecture-doc .box.pure {
+  background: var(--fg-doc-pure-bg);
+  border-color: var(--fg-doc-pure-line);
+}
+.fg-architecture-doc .box.pure .name {
+  color: var(--fg-doc-pure-ink);
+}
+.fg-architecture-doc .box.dom {
+  background: var(--fg-doc-dom-bg);
+  border-color: var(--fg-doc-dom-line);
+}
+.fg-architecture-doc .box.dom .name {
+  color: var(--fg-doc-dom-ink);
+}
+.fg-architecture-doc .box.api {
+  background: var(--fg-doc-api-bg);
+  border-color: var(--fg-doc-api-line);
+}
+.fg-architecture-doc .box.api .name {
+  color: var(--fg-doc-api-ink);
+}
+.fg-architecture-doc .box.stub {
+  background: var(--fg-doc-stub-bg);
+  border-color: var(--fg-doc-stub-line);
+  border-style: dashed;
+}
+.fg-architecture-doc .box.stub .name,
+.fg-architecture-doc .box.stub .sub {
+  color: var(--fg-doc-stub-ink);
+}
+.fg-architecture-doc .arrow-v {
+  text-align: center;
+  color: var(--fg-doc-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  margin: 0.45rem 0;
+}
+.fg-architecture-doc .tier-label {
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-doc-faint);
+  margin: 0.55rem 0 0.9rem;
+}
+/* ---- plain file tree ---- */
+.fg-architecture-doc .tree {
+  font-family: var(--fg-doc-mono);
+  font-size: 0.8rem;
+  line-height: 1.75;
+  background: var(--fg-doc-panel);
+  border: 1px solid var(--fg-doc-line);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 1rem 0 1.5rem;
+}
+.fg-architecture-doc .tree .c {
+  color: var(--fg-doc-faint);
+}

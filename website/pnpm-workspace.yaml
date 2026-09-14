@@ -1,0 +1,9 @@
+# Marks `website/` as its own pnpm project root, independent of the outer repo's workspace file.
+# Without this, `pnpm install` run here still finds the outer pnpm-workspace.yaml and shares its
+# virtual store, which breaks typedoc's runtime plugin resolution (it can't see website's own
+# node_modules from deep inside the shared store).
+packages: []
+allowBuilds:
+  esbuild: true
+  '@swc/core': true
+  core-js: true

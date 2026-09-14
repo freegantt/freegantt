@@ -576,7 +576,7 @@ To customize dark mode instead of just light mode, scope the override to the dar
 | `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                         |
 | `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                               |
 | `docs/06-plugin-authoring.md` | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
-| `harness/docs/`               | Internal module maps for maintainers (may lag the current slice)                 |
+| `website/` (`pnpm docs`)      | Docusaurus site — architecture, guides, ADRs, and generated API reference        |
 
 ## Development
 

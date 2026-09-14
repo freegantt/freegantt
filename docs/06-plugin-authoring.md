@@ -4,10 +4,11 @@ A plugin adds behavior to FreeGantt without a fork. This guide shows the one
 plugin type and its two halves, where each half installs, every registration
 seam a plugin can use, and the errors an author meets.
 
-A second rendering of the same surface lives in
-`harness/docs/plugin-authoring.html`, with runnable examples. All four ADRs are
-accepted, so the two pages describe one shipped surface and not a draft of one.
-This guide describes HEAD, and its fenced examples typecheck against HEAD.
+A second rendering of the same surface lives on the Docusaurus site at
+`website/docs/guides/plugin-authoring.md`, with runnable examples. All four
+ADRs are accepted, so the two pages describe one shipped surface and not a
+draft of one. This guide describes HEAD, and its fenced examples typecheck
+against HEAD.
 
 Every claim below names the test that proves it. If a claim in an earlier
 draft had no test, this guide drops the claim instead of stating it as fact.
