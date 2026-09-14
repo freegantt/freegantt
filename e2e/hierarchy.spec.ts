@@ -184,6 +184,34 @@ test('pack mode grows a packed row and shifts the rows below', async ({ page }) 
     .toBe(true);
 });
 
+// #215, closed by #217's D2: pack mode gives every overlapping Segment its own lane, so nothing
+// covers anything and no Segment needs a hit-test workaround to reach it.
+test('a covered Segment can be selected once its row packs into lanes (#215)', async ({ page }) => {
+  await gotoHierarchy(page);
+  await page.selectOption('#height-mode', 'pack');
+  await showSegmentedSpan(page);
+
+  const entryId = await entryWithSegments(page);
+  const bars = barsForEntry(page, entryId);
+  await expect(bars).toHaveCount(3);
+
+  // Three Segments, each overlapping the other two, force three distinct lanes — three distinct
+  // top offsets, not one shared row of stacked bars.
+  const boxes = await Promise.all([0, 1, 2].map((index) => bars.nth(index).boundingBox()));
+  for (const box of boxes) expect(box).not.toBeNull();
+  const tops = new Set(boxes.map((box) => box!.y));
+  expect(tops.size).toBe(3);
+
+  // Each Segment now sits on its own lane, so a plain click reaches it directly — no
+  // `elementFromPoint` scan, no mouse-event workaround, needed to land on a covered bar.
+  for (let index = 0; index < 3; index++) {
+    const bar = bars.nth(index);
+    const box = (await bar.boundingBox())!;
+    await bar.click({ position: { x: Math.min(box.width / 2, 12), y: box.height / 2 } });
+    await expect(bar).toHaveAttribute('data-state', /\bselected\b/);
+  }
+});
+
 test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
   await gotoHierarchy(page);
   await page.evaluate(() => {
