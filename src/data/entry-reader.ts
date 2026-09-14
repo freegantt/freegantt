@@ -481,8 +481,12 @@ export function moveEntryTo(entry: StoredEntry, start: Instant): EntryEdit {
  *  envelope does not check out. Nothing else this loop's `try` can see belongs here: a bare `Error`
  *  or an `UnknownFieldError` from an extender's own bug is not one of these, and must keep crashing
  *  loud rather than paint a silent ghost (#258 — Option 1, widening this to catch any refusal, was
- *  considered and rejected for exactly that reason). */
-function isEnvelopeRefusal(error: unknown): boolean {
+ *  considered and rejected for exactly that reason).
+ *
+ *  Exported for `view/gesture-pipeline.ts` (#341): a gesture's commit cannot let this throw reach a
+ *  native `pointerup` listener, and it reports a refusal and a fault differently. So it asks the
+ *  same question this loop asks, of the same list, rather than naming the two classes itself. */
+export function isEnvelopeRefusal(error: unknown): boolean {
   return error instanceof SegmentsOutOfSyncError || error instanceof InvertedSpanError;
 }
 

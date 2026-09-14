@@ -102,10 +102,16 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
  *
  *  `'data-changed'` — the rows the draft was measured from were replaced while the handler was still
  *  deciding (Part 3). `'entry-gone'` — the entry the settle would write was removed (Part 2's
- *  `EntryNotFoundError` fold). `'superseded'` — a new gesture armed before the handler decided
- *  (Part 1). `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the handler
- *  decided (Part 1). */
-export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
+ *  `EntryNotFoundError` fold). `'write-refused'` — the commit reached the store and the store said
+ *  no, the way an envelope-only cascade against a several-Segment Entry is refused (#341, D-S5-44).
+ *  `'superseded'` — a new gesture armed before the handler decided (Part 1). `'discarded'` — the
+ *  user pressed Escape, or the Gantt was destroyed, before the handler decided (Part 1).
+ *
+ *  The first three only happen to a gesture a handler still holds. `'entry-gone'` and
+ *  `'write-refused'` also happen on a plain mouseup that commits in its own tick, so their
+ *  sentences below say what happened and never when (#341). */
+export type GestureDroppedReason =
+  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
 
 export interface GestureDroppedReportInit {
   readonly code: ReportCode;
@@ -117,7 +123,8 @@ export interface GestureDroppedReportInit {
 /** One sentence per reason, quoting no handler — core is the one talking. */
 const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.freeze({
   'data-changed': 'the rows it was measured from changed while the handler was still deciding',
-  'entry-gone': 'the entry it would have written was removed while the handler was still deciding',
+  'entry-gone': 'the entry it would have written was removed before the write',
+  'write-refused': 'the store refused the write it asked for',
   superseded: 'a new gesture took its place before the handler decided',
   discarded: 'the wait ended before the handler decided',
 });
@@ -125,20 +132,55 @@ const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.fr
 /** The one builder for a gesture core dropped on its own, not a `before*` handler's `false`
  *  (#272, #273 fix). `by: 'core'` is the field that tells a consumer this was not their handler's
  *  veto — `buildRefusalReport`'s reports are always `by: 'consumer'`, and this is the reason the two
- *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the two reasons
- *  where real work was lost (`'data-changed'`, `'entry-gone'`); `'info'` for the two the user caused
- *  on purpose (`'superseded'`, `'discarded'`). */
+ *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the three
+ *  reasons where real work was lost (`'data-changed'`, `'entry-gone'`, `'write-refused'`); `'info'`
+ *  for the two the user caused on purpose (`'superseded'`, `'discarded'`). */
 export function buildGestureDroppedReport(init: GestureDroppedReportInit): ErrorReportInput {
   const { code, event, entryId, because } = init;
   const noun = REFUSAL_NOUN[event];
   const severity: ErrorReportInput['severity'] =
-    because === 'data-changed' || because === 'entry-gone' ? 'warning' : 'info';
+    because === 'superseded' || because === 'discarded' ? 'info' : 'warning';
   return {
     code,
     message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[because]}.`,
     severity,
     by: 'core',
     entryId,
+  };
+}
+
+export interface CommitFaultReportInit {
+  readonly event: RefusalEvent;
+  readonly entryId: EntryId;
+  /** The thrown value itself — a plugin's own bug, never a refusal core raised on purpose. */
+  readonly cause: unknown;
+}
+
+/** The one builder for a gesture whose commit **threw** (#341), and the sibling of
+ *  `buildGestureDroppedReport`: that one is core saying no on purpose, this one is somebody's bug.
+ *  `view/gesture-pipeline.ts` catches it, because `session.commit()` runs from a native `pointerup`
+ *  listener that discards the Promise — so the throw reaches no consumer code, and this report is
+ *  the only way the failure surfaces.
+ *
+ *  `by: 'plugin'`, the same answer `#reportExtenderFault` gives for the preview half of one fault:
+ *  the extension hook composes (D-S5-23), so the code that threw may be several plugins deep, and
+ *  ADR 0020 settled on this literal for an identical composed source. `severity: 'error'`, where
+ *  the preview's fault is a `'warning'`: that one loses a ghost for one frame, and this one loses
+ *  the edit the user just made. A disposer that throws already reports at `'error'` on exactly that
+ *  rule (`extensions/plugin-runtime.ts`).
+ *
+ *  The sentence claims nothing about the store. A `change` listener that throws *after* the rows
+ *  applied lands here too, and "Nothing was saved" would be a lie for that one — so this says the
+ *  one thing true of every fault on this path: the bars show the stored data, whatever it now is. */
+export function buildCommitFaultReport(init: CommitFaultReportInit): ErrorReportInput {
+  const { event, entryId, cause } = init;
+  return {
+    code: 'gesture-commit-failed',
+    message: `A ${REFUSAL_NOUN[event]} broke while it saved. The bars show the stored data again.`,
+    severity: 'error',
+    by: 'plugin',
+    entryId,
+    cause,
   };
 }
 

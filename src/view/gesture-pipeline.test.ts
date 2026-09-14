@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { EntryNotFoundError, SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
+import { EntryNotFoundError, entryId, itemId, segmentId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -794,17 +794,21 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
     });
 
-    // The sibling of the test above: a plain fault still reaches the caller (it is not swallowed),
-    // and the `finally` still runs — the hold clears either way.
-    it('a plain Error from finish() rejects the commit, but still clears the hold (#273)', async () => {
+    // The sibling of the test above, and #341 reversed what it pins. #273 let a plain fault reach
+    // the caller on purpose ("it is not swallowed") and only guarded the `finally`. But the caller
+    // is `interaction/entry-gestures.ts`'s `void session.commit(...)`, inside a native `pointerup`
+    // listener — nothing there can catch it, so "reaches the caller" meant an unhandled rejection
+    // and no report at all. The fault is now reported, and the hold still clears.
+    it('a plain Error from finish() resolves false, reports the fault, and still clears the hold (#341)', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
         resolveVeto = resolve;
       });
-      const { deps } = withRoster([entry('a', 100, 200)], {
+      const boom = new Error('boom');
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
         commitEntryEdits: () => {
-          throw new Error('boom');
+          throw boom;
         },
       });
       const pipeline = new GesturePipeline(deps);
@@ -813,8 +817,16 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const commitPromise = session.commit(50);
       resolveVeto(true);
 
-      await expect(commitPromise).rejects.toThrow('boom');
+      await expect(commitPromise).resolves.toBe(false);
       expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'gesture-commit-failed',
+        severity: 'error',
+        by: 'plugin',
+        entryId: entryId('a'),
+        cause: boom,
+      });
     });
 
     // #273: the draft is a snapshot, but the row it was measured from is not — a commit landing
@@ -926,8 +938,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     // `reconcileExtenderEditsForPreview`, which drops the refused edit instead of throwing — that
     // Entry paints no ghost for this frame, and the frame still paints the entry the caller drags.
     // The commit path calls `reconcileExtenderEdits` (no drop) against the same effective state, and
-    // it throws for real.
-    it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path still throws', async () => {
+    // it refuses for real — #341 turned that refusal from a synchronous throw out of `commit()`
+    // into one report and a `false`, because the throw reached a native `pointerup` listener and no
+    // caller could catch it. Both paths now tell one story about one edit: the preview drops that
+    // Entry's ghost, and the commit drops the gesture.
+    it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path refuses', async () => {
       const a = entry('a', 100, 200);
       const twoSegments: readonly Segment[] = [
         { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
@@ -954,7 +969,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         );
         return true;
       });
-      const { deps, applied } = withRoster([a, x], { extraEditsFor, committedEntriesById, commitEntryEdits });
+      const { deps, applied, reported } = withRoster([a, x], {
+        extraEditsFor,
+        committedEntriesById,
+        commitEntryEdits,
+      });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(a.id, { kind: 'move' })!;
 
@@ -965,8 +984,16 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the refused cascade
       expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the frame still paints the drag
 
-      expect(() => session.commit(50)).toThrow(SegmentsOutOfSyncError);
+      await expect(session.commit(50)).resolves.toBe(false);
       expect(commitEntryEdits).toHaveBeenCalledTimes(1);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-cancelled',
+        severity: 'warning',
+        by: 'core',
+        entryId: a.id,
+      });
+      expect(reported[0]?.message).toContain('the store refused the write it asked for');
     });
 
     // #332: an extender bug (not a typed refusal `isEnvelopeRefusal` names) still runs inside the
@@ -1047,6 +1074,76 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       expect(committed).toBe(true);
       expect(paints.filter((pending) => pending !== undefined)).toEqual([]);
+    });
+
+    // #341: the ordinary mouseup — a sync `true` from `beforeEntryMove`, no hold, no async veto.
+    // `finish()` threw straight out of `session.commit()` into the native `pointerup` listener,
+    // which discards the Promise, so nobody could catch it and nothing reported it. Worse, the
+    // `#preview(undefined)` that follows never ran, so the drag ghost stayed painted over stored
+    // data the unwound transaction never changed.
+    it('[#341] a fault on the sync commit resolves false, reports it, and un-paints the drag', async () => {
+      const boom = new Error('boom');
+      const { deps, applied, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw boom;
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      session.preview(50);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(applied.at(-1)).toBeDefined(); // the drag is on screen
+
+      await expect(session.commit(50)).resolves.toBe(false);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(applied.at(-1)).toBeUndefined(); // and it is off it again
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'gesture-commit-failed',
+        severity: 'error',
+        by: 'plugin',
+        entryId: entryId('a'),
+        cause: boom,
+      });
+      expect(reported[0]?.message).toContain('move');
+    });
+
+    // #341: the same fold the async branch has had since #273, now on the sync branch too — a
+    // `beforeEntryMove` handler that removes the entry and then returns `true` reaches it. A
+    // removed entry is not a bug, so it reports as a dropped gesture and never as a fault.
+    it('[#341] an EntryNotFoundError on the sync commit reports the entry as gone, not as a fault', async () => {
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw new EntryNotFoundError(entryId('a'), 'entries.update');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
+      expect(reported[0]?.message).toContain('was removed before the write');
+    });
+
+    // #341: a resize reads as a resize. The noun comes from the event, through the one table
+    // `data/error-reporting.ts` already keeps for every refusal sentence.
+    it('[#341] a fault on a resize commit names the resize', async () => {
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw new Error('boom');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported[0]?.code).toBe('gesture-commit-failed');
+      expect(reported[0]?.message).toContain('resize');
     });
 
     it('preview with cursorX paints a Cursor line and cancel parks it (D-S3-15)', async () => {

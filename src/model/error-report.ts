@@ -49,6 +49,12 @@ export type BuiltInReportCode =
   // preview. Recovered the same way a bad renderer is (`renderer-failed`): that frame paints with
   // no cascade ghost, same as no extender installed, and the drag itself carries on.
   | 'extender-preview-failed'
+  // #341: the commit half of `extender-preview-failed`. Something threw while a gesture's commit
+  // ran — an EditExtender's own bug, a `beforeChange` handler that threw instead of refusing, a
+  // `change` listener. `view/gesture-pipeline.ts`'s `#settle` catches it, because a throw from
+  // there escapes into a native `pointerup` listener and no caller can reach it. `severity:
+  // 'error'`, not `'warning'`: the gesture is caught, but the edit the user made is gone.
+  | 'gesture-commit-failed'
   | 'plugin-reconfigure-dropped'
   | 'scale-options-ignored'
   | 'rollup-corrected'
