@@ -394,6 +394,7 @@ export {
   formatWeekNumber,
   formatHour,
   isTimeUnit,
+  isCoarserThan,
 } from '../time/index.js';
 export type {
   ViewPreset,

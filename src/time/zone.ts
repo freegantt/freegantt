@@ -166,6 +166,31 @@ export function isTimeUnit(value: string): value is TimeUnit {
   return SUPPORTED_TIME_UNITS.has(value as TimeUnit);
 }
 
+/** `UNITS`' own declaration order, coarsest last — pinned by a test (`zone.test.ts`) rather than
+ *  trusted, since nothing about `Object.freeze` guarantees a reader keeps it sorted. `isCoarserThan`
+ *  reads this instead of re-deriving an order of its own, so the two can never disagree. */
+const UNIT_RANK: Record<TimeUnit, number> = Object.freeze(
+  Object.fromEntries((Object.keys(UNITS) as TimeUnit[]).map((unit, index) => [unit, index])) as Record<
+    TimeUnit,
+    number
+  >,
+);
+
+/** Call: `isCoarserThan(tickUnit, 'day')` — true when `unit` groups a wider calendar span than
+ *  `than` (`isCoarserThan('week', 'day')` is `true`; `isCoarserThan('day', 'day')` is `false`).
+ *  For a plugin author asking "is this tick too coarse to draw per-day decoration?" without
+ *  building its own rank table over `TimeUnit` (#268).
+ *
+ *  This is **calendar-nesting order, not duration order**: a month is coarser than a week because
+ *  every month's days group into it, not because a month spans more milliseconds than four weeks
+ *  always would (it doesn't). That distinction is harmless for a granularity-floor question like the
+ *  one above, and wrong the moment someone reaches for this to do arithmetic — `time/` exists to
+ *  keep that kind of arithmetic out of the caller's hands (`plans/01` §5, I10), so reach for
+ *  `stepBy`/`diffDays` there instead. */
+export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean {
+  return UNIT_RANK[unit] > UNIT_RANK[than];
+}
+
 function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
   return new UnsupportedUnitError(unit, 'time');
 }
