@@ -157,6 +157,13 @@ No named
 multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
 I2-safe place a `registerThemePreset`-shaped seam can live.
 
+**`gantt.resolvedTheme` answers `'light'` or `'dark'` — never `'auto'`** (#330): the getter reads
+back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
+getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
+moves — a `theme` assignment that changes the pin, or the OS flipping under `'auto'` with no
+ancestor pin in the way. It has no `before*` pair, the same reason `navigationChange` has none: the
+OS half is not a vetoable gesture, and the `theme` half already has its own live setter.
+
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
 `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. A

@@ -14,6 +14,7 @@ export type {
   NavigationChange,
   SelectionChange,
   CollapseChange,
+  ThemeChange,
   ProposedDates,
   ProposedSpan,
   EntryGestureEvent,
@@ -21,6 +22,7 @@ export type {
   EntryResize,
   EntryFieldEdit,
 } from './event-bus.js';
+export type { ResolvedTheme } from './theme.js';
 export type {
   CapabilityRule,
   GestureCapability,

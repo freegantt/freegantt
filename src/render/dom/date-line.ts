@@ -1,14 +1,27 @@
 // render/dom — Date line paint. Geometry lives in layout/date-line.ts (S1.13).
 
-import type { DateLineDecoration, FrameDecoration } from '../../layout/index.js';
+import type { DateLineDecoration, DateLineLabelPlacement, FrameDecoration } from '../../layout/index.js';
+import { DEFAULT_DATE_LINE_LABEL_PLACEMENT } from '../../layout/index.js';
 import { KeyedLayer } from './sync-keyed.js';
 
 type DateLineGeom = { x: number; height: number; className: string; today: boolean };
-type DateLineLabelGeom = { x: number; label: string; className: string; today: boolean };
+type DateLineLabelGeom = {
+  x: number;
+  yOffset: number;
+  overlayOnGanttBody: boolean;
+  label: string;
+  className: string;
+  today: boolean;
+};
 type LabelledDateLine = { line: DateLineDecoration; index: number };
 
 export interface DateLineAttachment {
-  sync(decorations: readonly FrameDecoration[], contentHeight: number, paneHeight: number): void;
+  sync(
+    decorations: readonly FrameDecoration[],
+    contentHeight: number,
+    paneHeight: number,
+    labelPlacement?: DateLineLabelPlacement,
+  ): void;
   destroy(): void;
 }
 
@@ -65,7 +78,9 @@ export function attachDateLines(
   const labels = new KeyedLayer<LabelledDateLine, number, DateLineLabelGeom>();
 
   return {
-    sync(decorations, contentHeight, paneHeight) {
+    sync(decorations, contentHeight, paneHeight, labelPlacement = DEFAULT_DATE_LINE_LABEL_PLACEMENT) {
+      const overlayOnGanttBody = labelPlacement === 'overlayOnGanttBody';
+      const yOffset = typeof labelPlacement === 'number' ? labelPlacement : 0;
       // `.fg-date-line` CSS gives `top: 0` but not a height. This node is a child of
       // `.fg-timeline-pane`, which is both the positioned ancestor and the `overflow: auto`
       // scroller. A CSS `bottom: 0` would size to the pane's clientHeight, not scrollHeight.
@@ -95,13 +110,20 @@ export function attachDateLines(
         create: () => createHiddenDiv(),
         toGeom: ({ line }) => ({
           x: line.x,
+          yOffset,
+          overlayOnGanttBody,
           label: line.label ?? '',
           className: line.className ?? '',
           today: line.today === true,
         }),
         patch: (node, geom) => {
           node.className = classListFor(geom.className, 'fg-date-line-label');
-          node.style.transform = `translateX(${geom.x}px)`;
+          // `overlayOnGanttBody` (default) anchors at `top: 100%` (CSS, #225); every other placement
+          // anchors at `top: 0` and nudges down by `yOffset` px instead — 0 for `'overlayOnTimeLine'`,
+          // a caller's own number otherwise. transform stays the one inline geometry write (D-S1.10-6).
+          node.style.transform = `translate(${geom.x}px, ${geom.yOffset}px)`;
+          if (geom.overlayOnGanttBody) node.dataset['placement'] = 'overlayOnGanttBody';
+          else delete node.dataset['placement'];
           node.textContent = geom.label;
           // The label carries the flag its own stroke carries, so the chip can take the Today colour.
           // It sits in the header layer, not beside the stroke, so no selector reaches it from there.

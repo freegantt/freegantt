@@ -25,6 +25,17 @@ export interface DateLine {
   className?: string;
 }
 
+/** Where a Date line's own label paints, relative to the sticky header (#318 follow-up to #225).
+ * `'overlayOnGanttBody'` (the default) anchors below the header, clear of its ticks — #225's own
+ * fix. It can still meet a bar: the header stays put while the timeline pane scrolls, so whichever
+ * row's bar is scrolled to the top sits right under it. `'overlayOnTimeLine'` anchors inside the
+ * header instead, where no row can ever scroll under it, at the cost of #225's own ticks collision
+ * when the label's x lands on one. A `number` is a px offset from the header's own top edge, for a
+ * caller who wants neither shorthand and states the anchor itself. */
+export type DateLineLabelPlacement = 'overlayOnTimeLine' | 'overlayOnGanttBody' | number;
+
+export const DEFAULT_DATE_LINE_LABEL_PLACEMENT: DateLineLabelPlacement = 'overlayOnGanttBody';
+
 export interface ResolveDateLinesInput {
   scale: Pick<TimeScale, 'range' | 'xForInstant'>;
   /** `true`/`undefined` reads `now()` (or the test-frozen `now` below); `false` omits it; an

@@ -243,9 +243,12 @@ function isPlannerTheme(value: string | null): value is PlannerThemeChoice {
 }
 
 /** What the page opens on when nobody has picked yet: whatever the reader's own system asks for.
- *  A stored choice always wins — picking Light on a dark desktop is a choice, not a mistake. */
+ *  A stored choice always wins — picking Light on a dark desktop is a choice, not a mistake.
+ *  Reads `gantt.resolvedTheme` (#330) rather than `matchMedia` directly — the library already
+ *  resolves `'auto'` against the OS (and an ancestor's own pin, #271), and this page's own Gantt is
+ *  still on that default here, before the toolbar below ever calls `gantt.theme = …`. */
 function preferredTheme(): PlannerThemeChoice {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return gantt.resolvedTheme;
 }
 
 function readStoredTheme(): PlannerThemeChoice {

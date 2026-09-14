@@ -394,11 +394,19 @@ ${DARK_COLOR_TOKENS}
    .fg-date-line[data-flag='today'] and .fg-date-line-label[data-flag='today']. The sheet itself
    states no such rule, which is the decision holding. */
 .fg-date-line-label, .fg-cursor-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--fg-date-line-color); color: var(--fg-date-line-label-color); }
-/* #225: top: 100% of .fg-header paints the label below the bands, not the ticks — no pixel math. */
-.fg-date-line-label { top: 100%; }
+/* #225, widened #318: top: 0 above is 'overlayOnTimeLine''s and a numeric offset's own anchor
+   (render/dom/date-line.ts adds the px nudge through transform, the one inline write geometry
+   allows — D-S1.10-6). 'overlayOnGanttBody', the default, instead paints below the bands, clear of
+   the ticks — no pixel math, render/dom stamps data-placement to pick this rule over the anchor
+   above. */
+.fg-date-line-label[data-placement='overlayOnGanttBody'] { top: 100%; }
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: 2; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-.fg-cursor-line-label { z-index: 2; pointer-events: none; }
+/* #319: the shared rule above gives every label top: 0, which collided with the header's own
+   ticks the same way the Date line label's did before #225. The Cursor line label has no placement
+   option of its own (it is a hot-path hover readout, never a Frame decoration) — one rule, always
+   below the bands. */
+.fg-cursor-line-label { z-index: 2; pointer-events: none; top: 100%; }
 /* S5.3, D-S5-8: the one overlay layer, above both panes (DOM order alone gives it the top of the
    stack — no z-index needed against them). pointer-events: none so an empty overlay never blocks the
    panes underneath; a mounted .fg-popup opts back in. */

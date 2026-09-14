@@ -7,6 +7,7 @@ import type {
   GanttEventMap,
   GridWidth,
   Interactions,
+  ResolvedTheme,
   Theme,
   ViewportGestures,
 } from '../view/index.js';
@@ -19,7 +20,7 @@ import type {
   RowSource,
   ResolvedRowSource,
 } from '../layout/index.js';
-import type { DateLine } from '../layout/index.js';
+import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
   BarRenderer,
@@ -117,6 +118,14 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
    *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
   dateLines?: readonly DateLineInput[];
+  /** Live (#318 follow-up to #225). Where a Date line's own label paints, relative to the sticky
+   *  header. `'overlayOnGanttBody'` (the default) anchors below the header, clear of its ticks — the
+   *  shape #225 shipped. It can still meet a bar: the header stays put while the timeline pane
+   *  scrolls, so whichever row's bar is scrolled to the top sits right under it.
+   *  `'overlayOnTimeLine'` anchors inside the header instead, where no row can ever scroll under it,
+   *  at the cost of #225's own ticks collision when the label's x lands on one. A `number` is a px
+   *  offset from the header's own top edge, for a caller who wants neither shorthand. */
+  dateLineLabelPlacement?: DateLineLabelPlacement;
   /** Live. How many of the current preset's own ticks `panToToday()` leaves between the pane's left
    *  edge and where it lands `align: 'start'` (the default) — the **Today line margin** (CONTEXT.md).
    *  Default `2`; `0` restores the old flush landing. No effect on `align: 'center'`. */
@@ -261,6 +270,8 @@ export type { ActedOn, CommandTarget };
 // `dateLines`'s resolved read type (S4-1) — passed through so a caller who names `DateLine`
 // explicitly imports it beside `DateLineInput`, its loose counterpart above.
 export type { DateLine };
+// `dateLineLabelPlacement`'s own type (#318 follow-up), passed through the same way.
+export type { DateLineLabelPlacement };
 
 export class Gantt<TProps = unknown> {
   #shell: GanttShell;
@@ -295,6 +306,7 @@ export class Gantt<TProps = unknown> {
         'theme',
         'a11yLabel',
         'locale',
+        'dateLineLabelPlacement',
         'todayLineMarginTicks',
         'interactions',
         'snap',
@@ -417,6 +429,12 @@ export class Gantt<TProps = unknown> {
 
   set theme(value: Theme) {
     this.#shell.theme = value;
+  }
+
+  /** #330. Never `'auto'` — the answer `theme` resolved to, once an ancestor's own pin (#271) or
+   *  the OS actually settles it one way or the other. Fires `themeChange` when this answer moves. */
+  get resolvedTheme(): ResolvedTheme {
+    return this.#shell.resolvedTheme;
   }
 
   get a11yLabel(): string {
@@ -679,6 +697,15 @@ export class Gantt<TProps = unknown> {
    *  zone via `toInstant`. */
   set dateLines(lines: readonly DateLineInput[]) {
     this.#shell.dateLines = this.#toDateLines(lines);
+  }
+
+  get dateLineLabelPlacement(): DateLineLabelPlacement {
+    return this.#shell.dateLineLabelPlacement;
+  }
+
+  /** Live. See `GanttOptions.dateLineLabelPlacement`. */
+  set dateLineLabelPlacement(placement: DateLineLabelPlacement) {
+    this.#shell.dateLineLabelPlacement = placement;
   }
 
   get todayLineMarginTicks(): number {
