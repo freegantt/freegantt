@@ -214,7 +214,7 @@ awareness, which is what keeps I12 whole.
 *`view/splitter.ts`*
 
 Pointer-drag handler on the splitter chrome that resizes the grid pane relative to the timeline
-pane. Dispatches through the shell's `setGridWidth` live property.
+pane. Dispatches through the shell's `gridWidth` live property.
 
 #### ensureBaseStyles() — function
 
@@ -373,7 +373,7 @@ orient="auto-start-reverse"
 <rect class="bx pure" x="788" y="24" width="156" height="130" />
 <text class="t" x="800" y="42">ViewPreset ×9</text>
 <text class="s" x="800" y="60">ZOOM_PRESETS ladder</text>
-<text class="s" x="800" y="74">finest hour → coarsest year</text>
+<text class="s" x="800" y="74">fine hour → coarse year</text>
 <text class="s" x="800" y="88">plus 5 single-band ids</text>
 <text class="xs" x="800" y="108">Deep-FROZEN: a shipped</text>
 <text class="xs" x="800" y="120">preset is a value, not a</text>
@@ -394,7 +394,7 @@ style="color: var(--line)"
 />
 <rect class="bx" x="16" y="256" width="288" height="120" />
 <text class="t" x="28" y="276">pxPerMsForPreset(zone, preset, at)</text>
-<text class="s" x="28" y="294">tickWidthPx / (one tick's real ms)</text>
+<text class="s" x="28" y="294">preferredTickWidthPx / tick's real ms</text>
 <text class="xs" x="28" y="314">The zoom a preset implies ON ITS OWN — what</text>
 <text class="xs" x="28" y="326">a scale resolves to when there is no measured</text>
 <text class="xs" x="28" y="338">viewport to fit into. An unmeasured container is</text>
@@ -518,7 +518,7 @@ orient="auto-start-reverse"
 <text class="xs" x="520" y="262">it is the only layer allowed the</text>
 <text class="xs" x="520" y="274">zone lookup and the day arithmetic.</text>
 <path class="edge" d="M627,182 V150" marker-end="url(#a8)" style="color: var(--sub)" />
-<rect class="bx pure" x="508" y="24" width="238" height="120" />
+<rect class="bx pure" x="508" y="24" width="252" height="120" />
 <text class="t" x="520" y="42">the four readings</text>
 <text class="xs" x="520" y="60">Z / ±hh:mm string → absolute, zone ignored</text>
 <text class="xs" x="520" y="74">Plain date-time → resolved through zone</text>
@@ -677,7 +677,7 @@ live-reconfigurable property to it.
   `plugins`, `viewportGestures`, `theme`, `locale`, `todayLine`, …
 - **live properties** — `preset`, `range`, `fit`, `zoomIn`/`zoomOut`, `zoomPresets`,
   `panToInstant`/`panToToday`, `gridColumns`, `rowSource`, `collapsed`, `collapse`/`expand`,
-  `selection`, `selectionEntries`, `interactions`, `plugins`, `commands`, `viewportGestures`,
+  `selection`, `selectedEntries`, `interactions`, `plugins`, `commands`, `viewportGestures`,
   `theme`, `locale`, `todayLine`, `gridWidth`, …
 - **destroy()** — Idempotent, delegates. No module-level singletons anywhere in `src/` (I2).
 

@@ -515,7 +515,7 @@ orient="auto-start-reverse"
 <!-- col A: inputs -->
 <rect class="bx dom" x="16" y="20" width="182" height="40" />
 <text class="t" x="28" y="38">GanttShell.render()</text>
-<text class="s" x="28" y="51">view/ — the only DOM/pure meeting point</text>
+<text class="s" x="28" y="51">view/ — where DOM meets pure</text>
 <rect class="bx pure" x="16" y="86" width="182" height="232" />
 <text class="t" x="28" y="104">LayoutInput</text>
 <text class="s" x="28" y="118">← #frameSettings</text>
@@ -551,7 +551,7 @@ y2="140"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx pure" x="234" y="86" width="176" height="46" />
+<rect class="bx pure" x="234" y="86" width="212" height="46" />
 <text class="t" x="246" y="104">FrameLayout</text>
 <text class="s" x="246" y="118">.computeFrame(input)</text>
 <line
@@ -563,7 +563,7 @@ y2="152"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx pure" x="234" y="158" width="176" height="70" />
+<rect class="bx pure" x="234" y="158" width="212" height="70" />
 <text class="t" x="246" y="176">FrameMemory</text>
 <text class="s" x="246" y="190">RowHeightIndex + per-row item memo</text>
 <text class="s" x="246" y="206">reused across renders when inputs</text>
@@ -577,7 +577,7 @@ y2="250"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx pure" x="234" y="256" width="176" height="128" />
+<rect class="bx pure" x="234" y="256" width="212" height="128" />
 <text class="t" x="246" y="274">computeFrame(input, heights)</text>
 <text class="s" x="246" y="290">1) resolveRows — per rowSource</text>
 <text class="s" x="246" y="305">2) produceItems — per variant</text>
@@ -587,72 +587,72 @@ style="color: var(--sub)"
 <!-- col C -->
 <line
 class="edge"
-x1="410"
+x1="446"
 y1="320"
-x2="446"
+x2="482"
 y2="320"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx pure" x="452" y="128" width="158" height="212" />
-<text class="t" x="464" y="146">GeometryFrame</text>
-<text class="s" x="464" y="163">revision · visible: Rect</text>
-<text class="s" x="464" y="177">header.bands[]</text>
-<text class="s" x="464" y="191">tickLines[] ← windowed</text>
-<text class="s" x="464" y="205">rows[] ← windowed</text>
-<text class="s" x="464" y="219">rowCount · tree ← FULL</text>
-<text class="s" x="464" y="233">columns[] ← resolved</text>
-<text class="s" x="464" y="247">bars[] ← produced</text>
-<text class="s" x="464" y="261">links[] · decorations[]</text>
-<text class="s" x="464" y="275">underBars[] · overBars[]</text>
-<text class="s" x="464" y="289">contentWidth ← FULL</text>
-<text class="s" x="464" y="303">contentHeight ← FULL</text>
-<text class="xs" x="464" y="316">plain numbers only — no DOM,</text>
-<text class="xs" x="464" y="327">no consumer output,</text>
-<text class="xs" x="464" y="338">no hit-region index</text>
+<rect class="bx pure" x="488" y="128" width="170" height="212" />
+<text class="t" x="500" y="146">GeometryFrame</text>
+<text class="s" x="500" y="163">revision · visible: Rect</text>
+<text class="s" x="500" y="177">header.bands[]</text>
+<text class="s" x="500" y="191">tickLines[] ← windowed</text>
+<text class="s" x="500" y="205">rows[] ← windowed</text>
+<text class="s" x="500" y="219">rowCount · tree ← FULL</text>
+<text class="s" x="500" y="233">columns[] ← resolved</text>
+<text class="s" x="500" y="247">bars[] ← produced</text>
+<text class="s" x="500" y="261">links[] · decorations[]</text>
+<text class="s" x="500" y="275">underBars[] · overBars[]</text>
+<text class="s" x="500" y="289">contentWidth ← FULL</text>
+<text class="s" x="500" y="303">contentHeight ← FULL</text>
+<text class="xs" x="500" y="316">plain numbers only — no DOM,</text>
+<text class="xs" x="500" y="327">no consumer output,</text>
+<text class="xs" x="500" y="338">no hit-region index</text>
 <!-- col D -->
 <line
 class="edge"
-x1="610"
+x1="658"
 y1="180"
-x2="646"
+x2="694"
 y2="180"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx dom" x="652" y="128" width="176" height="42" />
-<text class="t" x="664" y="146">domBackend.sync(frame)</text>
-<text class="s" x="664" y="160">no allocation beyond geoms</text>
+<rect class="bx dom" x="700" y="128" width="212" height="42" />
+<text class="t" x="712" y="146">domBackend.sync(frame)</text>
+<text class="s" x="712" y="160">no allocation beyond geoms</text>
 <line
 class="edge"
-x1="740"
+x1="788"
 y1="170"
-x2="740"
+x2="788"
 y2="190"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx dom" x="652" y="196" width="176" height="120" />
-<text class="t" x="664" y="214">sync() keyed layers</text>
-<text class="s" x="664" y="228">header bands + ticks</text>
-<text class="s" x="664" y="241">grid header columns</text>
-<text class="s" x="664" y="254">rows + cells; row bands</text>
-<text class="s" x="664" y="267">bars (by id); links</text>
-<text class="s" x="664" y="280">tick lines; date lines</text>
-<text class="s" x="664" y="293">decorations under + over</text>
-<text class="s" x="664" y="306">cursor line; grid translateY</text>
+<rect class="bx dom" x="700" y="196" width="212" height="120" />
+<text class="t" x="712" y="214">sync() keyed layers</text>
+<text class="s" x="712" y="228">header bands + ticks</text>
+<text class="s" x="712" y="241">grid header columns</text>
+<text class="s" x="712" y="254">rows + cells; row bands</text>
+<text class="s" x="712" y="267">bars (by id); links</text>
+<text class="s" x="712" y="280">tick lines; date lines</text>
+<text class="s" x="712" y="293">decorations under + over</text>
+<text class="s" x="712" y="306">cursor line; grid translateY</text>
 <line
 class="edge"
-x1="740"
+x1="788"
 y1="318"
-x2="740"
+x2="788"
 y2="330"
 marker-end="url(#a4)"
 style="color: var(--sub)"
 />
-<rect class="bx dom" x="652" y="334" width="176" height="46" />
-<text class="t" x="664" y="352">contentSizer.transform</text>
-<text class="s" x="664" y="366">gives the timeline pane a scroll range</text>
+<rect class="bx dom" x="700" y="334" width="212" height="46" />
+<text class="t" x="712" y="352">contentSizer.transform</text>
+<text class="s" x="712" y="366">gives the pane its scroll range</text>
 <!-- feedback: setContentSize -->
 <path
 class="edge"
@@ -686,11 +686,11 @@ style="color: var(--sub)"
 <!-- gesture preview -->
 <rect class="bx dom" x="16" y="508" width="182" height="56" />
 <text class="t" x="28" y="526">GesturePipeline.preview()</text>
-<text class="s" x="28" y="540">class toggles + transforms only</text>
+<text class="s" x="28" y="540">class toggles + transforms</text>
 <text class="s" x="28" y="552">never builds a frame (I13)</text>
-<text class="xs" x="652" y="470">This pass is synchronous.</text>
-<text class="xs" x="652" y="484">A content-size notify schedules the next</text>
-<text class="xs" x="652" y="498">frame through FrameScheduler (rAF).</text>
+<text class="xs" x="700" y="470">This pass is synchronous.</text>
+<text class="xs" x="700" y="484">A content-size notify schedules the next</text>
+<text class="xs" x="700" y="498">frame through FrameScheduler (rAF).</text>
 </svg>
 </div>
 <figcaption>
@@ -778,7 +778,7 @@ orient="auto-start-reverse"
 <!-- shells -->
 <rect class="bx dom" x="16" y="16" width="168" height="44" />
 <text class="t" x="28" y="34">GanttShell A</text>
-<text class="s" x="28" y="48">if (#phase is live) #frames.request()</text>
+<text class="s" x="28" y="48">live: #frames.request()</text>
 <rect class="bx dom" x="776" y="16" width="168" height="44" />
 <text class="t" x="788" y="34">GanttShell B</text>
 <text class="s" x="788" y="48">own container, own backend</text>
