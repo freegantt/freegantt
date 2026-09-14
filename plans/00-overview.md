@@ -40,7 +40,7 @@ These were decided explicitly and the rest of the spec depends on them. Changing
 
 ## 3. Design principles
 
-1. **Authored vs. derived, and never confuse them.** Entries, dependencies, calendars are authored and persisted. Rows, bars, lanes, geometry are derived every frame and never persisted. This one separation is what makes multiple bars per row, resource views, and grouping cheap later.
+1. **Authored vs. derived, and never confuse them.** Entries, dependencies, calendars are authored and persisted. Rows, bars, geometry are derived every frame and never persisted. This one separation is what makes multiple bars per row, resource views, and grouping cheap later.
 2. **Pure layers below the DOM line.** Model, time, data, and layout run in Node with no DOM — and so does scheduling, whenever a scheduling plugin is installed: the plugin boundary is pure and DOM-free by construction (D4), the same guarantee the mandatory layers carry. Every geometry or scheduling bug is a unit test against a plain object.
 3. **Policies, not opinions.** Wherever planning methodologies disagree (conflict precedence, criticality, calendar semantics), the core exposes a policy seam with a sensible neutral default. The default is documented as *a* choice, not *the* truth.
 4. **The delta is the interface.** Every mutation flows through a transaction that produces a changeset (`{ from, to }` per field). Undo, persistence, animation, sync, and multi-view consistency all consume the same changesets.
@@ -62,7 +62,7 @@ flowchart LR
   S1["<b>S1 Timeline & viewport</b><br/>time axis · presets · scrolling<br/>split pane · shared viewport objects"]
   S2["<b>S2 Data core</b><br/>stores · transactions<br/>undo/redo · changesets · JSON"]
   S3["<b>S3 Direct manipulation</b><br/>drag · resize · select<br/>before* events · extender preview"]
-  S4["<b>S4 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · lane packing"]
+  S4["<b>S4 Hierarchy & rows</b><br/>tree · collapse · grouping<br/>multi-item rows · filter & sort"]
   S5["<b>S5 Extensibility & polish</b><br/>plugin API · renderers<br/>theming · keyboard/a11y complete"]
   S6["<b>S6 Scale & sync</b><br/>perf validation · virtualization<br/>linked multi-Gantt demo"]
   S7["<b>S7 Scheduling plugin</b><br/>links · lag · propagation<br/>cycles · diagnostics · arrows"]
