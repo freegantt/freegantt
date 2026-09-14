@@ -1435,6 +1435,9 @@ export class InvertedSpanError extends FreeGanttError {
 }
 
 // @public
+export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean;
+
+// @public
 export function isTimeUnit(value: string): value is TimeUnit;
 
 // @public (undocumented)
