@@ -108,6 +108,14 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     formatValue: formatDuration,
     column: { header: 'Duration', align: 'end', width: 100 },
   },
+  {
+    // The tree's own by-key door (ADR 0024): the answer `entry.parent()?.id` gives, computed on
+    // read, never stored. `parentId` above stays the authored value — a plugin-owned hierarchy
+    // source (ADR 0020) can make the two disagree, on purpose.
+    key: 'hierarchyParentId',
+    compute: (_entry, ctx) => ctx.hierarchyParentId(),
+    column: { header: 'Parent (checked)', width: 120 },
+  },
 ]);
 
 /** Whether `key` names one of the Fields above — a core Field a consumer never overrides its way

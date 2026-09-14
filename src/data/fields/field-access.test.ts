@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entryId, segmentId } from '../../model/index.js';
-import type { StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
+import type { ChangeSet, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
   createFieldAccess,
   createRollUpContext,
@@ -16,6 +16,7 @@ import {
 } from './field-access.js';
 import { FieldRegistry } from './field-registry.js';
 import { DatasetState } from '../dataset-state.js';
+import { fieldRowsOf } from '../change-set.js';
 
 const span = (props?: Record<string, unknown>): StoredEntry => {
   return {
@@ -265,5 +266,63 @@ describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () =
     });
 
     expect(state.entries.get('p')?.read('childNames')).toBe('Renamed');
+  });
+});
+
+// #331 ruling on ADR 0024: every reading door a caller can hold — `entry.read`, `ctx.read`,
+// `toInput()`, the `ChangeSet` — answers the same value for a stored Field. A `compute` Field is not
+// one of these doors: it never stores, so it never appears in `toInput()` or a `ChangeSet` row.
+describe('a cross-door invariant: every door agrees on a stored Field (ADR 0024, #331)', () => {
+  const probeCost: Field = { key: 'probeCost', compute: (_entry, ctx) => ctx.read('cost') };
+
+  it('entry.read, ctx.read, toInput(), and the ChangeSet all answer the same stored value', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'a', name: 'A', parentId: 'p' },
+      ],
+      fields: [{ key: 'cost' }, probeCost],
+    });
+    state.entries.update('a', { cost: 500 });
+
+    const seen: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      seen.push(changeSet);
+    });
+    state.entries.update('a', { cost: 700 });
+
+    const entry = state.entries.get('a')!;
+    // The stored value, on the by-key doors.
+    expect(entry.read('cost')).toBe(700);
+    expect(entry.read('probeCost')).toBe(700);
+    expect((entry.toInput().props as Record<string, unknown>)['cost']).toBe(700);
+    expect(fieldRowsOf(seen[0]!).find((row) => row.field === 'cost')?.to).toBe(700);
+
+    // `parentId` is the same story (ADR 0024): every door answers the authored value, not the
+    // checked tree — that is `hierarchyParentId`'s job, below.
+    expect(entry.read('parentId')).toBe('p');
+    expect(entry.toInput().parentId).toBe('p');
+  });
+
+  it('hierarchyParentId is not one of these doors: it never stores, so toInput() and the ChangeSet never carry it', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'a', name: 'A', parentId: 'p' },
+      ],
+    });
+
+    const seen: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      seen.push(changeSet);
+    });
+    state.entries.update('a', { name: 'A renamed' });
+
+    const entry = state.entries.get('a')!;
+    expect(entry.read('hierarchyParentId')).toBe('p');
+    expect('hierarchyParentId' in entry.toInput()).toBe(false);
+    expect(fieldRowsOf(seen[0]!).some((row) => row.field === 'hierarchyParentId')).toBe(false);
   });
 });

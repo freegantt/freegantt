@@ -26,6 +26,7 @@ import {
   readField,
   readingChildrenFrom,
   readingHypotheticalRows,
+  readingParentFrom,
   writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
@@ -309,10 +310,15 @@ export function rollUpFields(
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective
   // children — the store does not hold the value this bottom-up walk just gave a child (ADR 0017).
-  const passAccess = readingChildrenFrom(access, (id) =>
-    (byParent.get(id) ?? [])
-      .map((childId) => effectiveEntry(childId, entries, merged, computed))
-      .filter((child): child is StoredEntry => child !== undefined),
+  // `ctx.hierarchyParentId()` gets the same treatment (ADR 0024): the pass's own effective parent,
+  // never the store's committed one, which may not have this edit's hierarchy change yet.
+  const passAccess = readingParentFrom(
+    readingChildrenFrom(access, (id) =>
+      (byParent.get(id) ?? [])
+        .map((childId) => effectiveEntry(childId, entries, merged, computed))
+        .filter((child): child is StoredEntry => child !== undefined),
+    ),
+    (entry) => parentIdFrom(parentOfEffective, entry),
   );
   const updated: FieldUpdated[] = [];
   const cascadeDropped: FieldUpdated[] = [];

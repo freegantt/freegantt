@@ -4,6 +4,7 @@
 // names a Field key too, and a shared leaf is what keeps the two out of an import ring.
 
 import type { Duration } from './time.js';
+import type { EntryId } from './ids.js';
 import type { StoredEntry } from './stored-entry.js';
 
 /** The shipped subset — keys of `Entry` except `id` and `props`. The comparator exhaustiveness check
@@ -25,6 +26,10 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
    *  is the one computation all three doors reach: `'span'` measures `end - start`, and
    *  `'segments'` sums the Segments and counts no gap (ADR 0017). */
   duration: Duration;
+  /** The tree's answer to "who is this row's parent", by key (ADR 0024) — the same answer
+   *  `parent()?.id` gives, computed on read, never stored. `parentId` stays the authored value; a
+   *  plugin-owned hierarchy source can make the two disagree, on purpose (ADR 0020). */
+  hierarchyParentId: EntryId | undefined;
 }
 
 /** A core Field's value, and `unknown` for every other key. This is all a `FieldContext` can

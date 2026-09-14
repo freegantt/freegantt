@@ -55,6 +55,7 @@ import {
   entryAfterEdit,
   readField,
   readingChildrenFrom,
+  readingParentFrom,
   writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
@@ -198,7 +199,10 @@ export class EntryStore implements EntryStoreContract {
     this.#registry = registry;
     // The store is the tree a Field read walks: a `compute` Field asking `ctx.children()` outside a
     // Rollup pass means the row the store holds now (#214).
-    this.#access = readingChildrenFrom(access, (id) => this.storedChildrenOf(id));
+    this.#access = readingParentFrom(
+      readingChildrenFrom(access, (id) => this.storedChildrenOf(id)),
+      (entry) => this.parentIdOf(entry),
+    );
     this.#live = new LiveEntries({
       storedEntry: (id) => this.storedEntry(id),
       storedChildrenOf: (id) => this.storedChildrenOf(id),

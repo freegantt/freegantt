@@ -932,3 +932,4 @@ Rules:
 | I12 | All pixels-from-time via `TimeScale`; all scroll via `ScrollModel` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
 | I14 | One key answers *may this value change*. Every write path reads `Field.editable`, and no other source. The grid writes at `'anywhere'` only. `entries.update()` writes at anything but `'never'`. Gesture arming and visual affordances come from one resolution. | shared resolver + interaction test + `e2e/write-refusal.spec.ts` (must call `entries.update()`, local gate only) |
+| I15 | For every declared Field, every reading door — `entry.read`, `ctx.read`, `toInput()`, the stored value, the `ChangeSet` — agrees on a committed row (ADR 0024) | `src/data/fields/field-access.test.ts` |
