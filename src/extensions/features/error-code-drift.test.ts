@@ -21,6 +21,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'renderer-failed': true,
   'disposer-failed': true,
   'extender-preview-failed': true,
+  'gesture-commit-failed': true,
   'plugin-reconfigure-dropped': true,
   'scale-options-ignored': true,
   'rollup-corrected': true,
