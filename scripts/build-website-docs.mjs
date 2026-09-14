@@ -36,9 +36,9 @@ function publishedPathFor(sourcePath) {
   if (dir === 'docs/adr') {
     return `website/docs/adr/${file === 'README.md' ? 'index.md' : file}`;
   }
-  // Everything else stays off the site. `docs/handoff/` is the only case today: a handoff names what
-  // one pass left undone, for the next contributor, and it goes stale the moment someone acts on it.
-  // A new guide publishes by being written — drop it in `docs/` and it appears.
+  // Nothing else publishes, and today nothing else is there: `docs/` holds exactly the pages the
+  // site serves. Working notes that go stale — a handoff, a review — live in `plans/`. So a guide
+  // publishes by being written: drop it in `docs/` and it appears on the site.
   return null;
 }
 
