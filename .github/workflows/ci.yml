@@ -12,9 +12,15 @@ name: CI
 # runs through `synchronize`, and a push to `main` lands a merge this workflow just proved. The
 # one case a green run can go stale — `main` moved underneath the branch — is branch protection's
 # "require branches to be up to date before merging", which re-runs the gate only when it happens.
+#
+# `closed` fires on a merge and on a close-without-merge alike, and either way the run in flight
+# for that branch has nothing left to prove — the PR it was gating is gone. `closed` earns no
+# `gate` run of its own (see the `if:` below); it exists only to make the concurrency group below
+# see a new run and cancel the stale one. That run reports `skipped`, the same zero-cost shape a
+# draft's first push already gets.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
 
 # A new push supersedes the run before it. Cancelling keeps the minutes on the commit that is
@@ -45,7 +51,9 @@ jobs:
   # free, and `pnpm verify:full` names the check that stopped the run in its verdict line, so the
   # fan-out bought a slightly prettier failure page and nothing else.
   gate:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
