@@ -96,6 +96,52 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
   return `Nothing was saved. A ${event} handler refused this ${noun}${said}`;
 }
 
+/** Why core dropped a held gesture itself, instead of a `before*` handler saying no (#272, #273).
+ *  Never a consumer's own veto, so `buildGestureDroppedReport` reads no `RefusalNote` — there are no
+ *  words to quote.
+ *
+ *  `'data-changed'` — the rows the draft was measured from were replaced while the handler was still
+ *  deciding (Part 3). `'entry-gone'` — the entry the settle would write was removed (Part 2's
+ *  `EntryNotFoundError` fold). `'superseded'` — a new gesture armed before the handler decided
+ *  (Part 1). `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the handler
+ *  decided (Part 1). */
+export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
+
+export interface GestureDroppedReportInit {
+  readonly code: ErrorCode;
+  readonly event: RefusalEvent;
+  readonly entryId: EntryId;
+  readonly because: GestureDroppedReason;
+}
+
+/** One sentence per reason, quoting no handler — core is the one talking. */
+const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.freeze({
+  'data-changed': 'the rows it was measured from changed while the handler was still deciding',
+  'entry-gone': 'the entry it would have written was removed while the handler was still deciding',
+  superseded: 'a new gesture took its place before the handler decided',
+  discarded: 'the wait ended before the handler decided',
+});
+
+/** The one builder for a gesture core dropped on its own, not a `before*` handler's `false`
+ *  (#272, #273 fix). `by: 'core'` is the field that tells a consumer this was not their handler's
+ *  veto — `buildRefusalReport`'s reports are always `by: 'consumer'`, and this is the reason the two
+ *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the two reasons
+ *  where real work was lost (`'data-changed'`, `'entry-gone'`); `'info'` for the two the user caused
+ *  on purpose (`'superseded'`, `'discarded'`). */
+export function buildGestureDroppedReport(init: GestureDroppedReportInit): ErrorReportInput {
+  const { code, event, entryId, because } = init;
+  const noun = REFUSAL_NOUN[event];
+  const severity: ErrorReportInput['severity'] =
+    because === 'data-changed' || because === 'entry-gone' ? 'warning' : 'info';
+  return {
+    code,
+    message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[because]}.`,
+    severity,
+    by: 'core',
+    entryId,
+  };
+}
+
 /** Up to three of `dropped`'s distinct Entry ids, quoted, plus a count of the rest — the one shared
  *  shape `buildDerivedValuesDroppedReport` and `buildCascadeDroppedReport` both name their Entries
  *  with, so a 500-row drop still reads as one line (ADR 0013, decision 5/6). */

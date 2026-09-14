@@ -138,3 +138,51 @@ test('[S3-A8] a held drop paints pending until Hold drop is unchecked', async ({
     // 8px: well past the 4px drag threshold and past typical subpixel layout jitter.
     .toBeGreaterThan(8);
 });
+
+test('[S3-A8, #272, #273] Escape ends a held drop instead of leaving it pending forever', async ({
+  page,
+}) => {
+  await gotoEditing(page);
+  await page.selectOption('#snap-unit', 'none');
+  await page.locator('#hold-drop').check();
+
+  const lineBox = await page.locator('#gantt .fg-date-line.demo-mobilization-line').boundingBox();
+  expect(lineBox).not.toBeNull();
+  const heldBar = await barRightOf(page, lineBox!.x);
+  const heldBefore = await heldBar.boundingBox();
+  expect(heldBefore).not.toBeNull();
+
+  await dragBy(page, heldBar, 80);
+  await page.mouse.up();
+
+  await expect(page.locator('#gantt .fg-bar[data-state~="pending"]').first()).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  // The held gesture ended with no timeout and no "Hold drop" uncheck — Escape discarded it.
+  await expect(page.locator('#gantt .fg-bar[data-state~="pending"]')).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const after = await heldBar.boundingBox();
+      return after ? after.x - heldBefore!.x : 0;
+    })
+    .toBeLessThan(2);
+
+  // A held gesture that only locked its own bar (#272/#273): a fresh drag, still with "Hold drop"
+  // checked, still commits on its own — the held-then-discarded bar left nothing behind that blocks
+  // the next one.
+  await page.locator('#hold-drop').uncheck();
+  const otherBar = await barRightOf(page, lineBox!.x + 200);
+  const otherBefore = await otherBar.boundingBox();
+  expect(otherBefore).not.toBeNull();
+
+  await dragBy(page, otherBar, 80);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => {
+      const after = await otherBar.boundingBox();
+      return after ? after.x - otherBefore!.x : 0;
+    })
+    .toBeGreaterThan(8);
+});

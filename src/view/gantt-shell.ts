@@ -862,6 +862,7 @@ export class GanttShell {
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
+      discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };
     // S5.2, D-S5-6/D-S5-7: core commands first, then the keymap listener. Both attach ahead of
     // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
@@ -2175,6 +2176,9 @@ export class GanttShell {
 
   destroy(): void {
     if (this.#destroyed) return;
+    // #272/#273: a held gesture's Promise can otherwise outlive this Gantt, settling into a shell
+    // with nothing left to paint or write through. First, before anything else.
+    this.#gesturePipeline.discardHeldGesture();
     // S5.1, D-S5-3: plugins first. A disposer may still need its overlay node or another pane-owned
     // resource, so it must run before any pane below is torn down.
     this.#pluginRuntime.disposeAll();
