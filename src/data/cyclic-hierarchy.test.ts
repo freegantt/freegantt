@@ -116,26 +116,29 @@ describe('an authored parentId that loops never hangs the parent check (P2-2)', 
   });
 });
 
-describe('read("parentId") and a compute Field disagree with no plugin installed (#299)', () => {
+describe('read("parentId") and read("hierarchyParentId") answer two different questions (ADR 0024, #331)', () => {
   /** `ctx.read` inside a `compute` Field is the by-key door a pure test can reach: it answers the
-   *  raw stored field, never the checked hierarchy index `entry.read('parentId')` goes through. */
+   *  raw stored field, the same as `entry.read('parentId')` now does. */
   const probeField: Field = { key: 'probeParentId', compute: (_entry, ctx) => ctx.read('parentId') };
 
-  it('a dangling parentId: entry.read refuses it, the compute Field still sees what was authored', () => {
+  it('a dangling parentId: every by-key door on "parentId" agrees; "hierarchyParentId" refuses it', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
       entries: [{ id: 'a', name: 'A', parentId: 'ghost' }],
       fields: [probeField],
     });
 
-    // Core's checked hierarchy index finds no Entry named "ghost" and refuses the answer.
-    expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
-    // `ctx.read('parentId')` never checks the index. It reads the raw stored field, and the
-    // authored value is still there.
+    // "parentId" answers what was authored, on every door — the stored value never disagrees with
+    // itself (ADR 0024).
+    expect(state.entries.get('a')?.read('parentId')).toBe('ghost');
     expect(state.entries.get('a')?.read('probeParentId')).toBe('ghost');
+    // The tree's own key finds no Entry named "ghost" and refuses the answer — a root, same as
+    // `parent()`.
+    expect(state.entries.get('a')?.read('hierarchyParentId')).toBeUndefined();
+    expect(state.entries.get('a')?.parent()).toBeUndefined();
   });
 
-  it('a two-row cycle: the row that closes the loop loses its answer, the compute Field keeps it', () => {
+  it('a two-row cycle: "parentId" keeps the authored link; "hierarchyParentId" drops the closing one', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -145,10 +148,12 @@ describe('read("parentId") and a compute Field disagree with no plugin installed
       fields: [probeField],
     });
 
-    // The chain walks from "a": "b" is where core detects the loop and drops the link, so "b" reads
-    // as a root through the checked door.
-    expect(state.entries.get('b')?.read('parentId')).toBeUndefined();
-    // The stored field never moved. `ctx.read('parentId')` still answers what "b" was authored with.
+    // The stored field never moved, on either door.
+    expect(state.entries.get('b')?.read('parentId')).toBe('a');
     expect(state.entries.get('b')?.read('probeParentId')).toBe('a');
+    // The chain walks from "a": "b" is where core detects the loop and drops the link, so "b" reads
+    // as a root through the tree's own key.
+    expect(state.entries.get('b')?.read('hierarchyParentId')).toBeUndefined();
+    expect(state.entries.get('b')?.parent()).toBeUndefined();
   });
 });

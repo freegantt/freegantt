@@ -339,6 +339,8 @@ The stale plan text the same review found is fixed in place and is not logged he
 
 **To reverse:** make `read('parentId')` answer the stored field, and keep the ban.
 
+**Reversed 2026-09-13, exactly as predicted above** ([#331](https://github.com/Pawel-IT/FreeGantt/issues/331), [ADR 0024](../../docs/adr/0024-parentid-answers-the-stored-value-on-every-door.md)). [#299](https://github.com/Pawel-IT/FreeGantt/issues/299) found the two-doors-two-answers bug this predicted — `entry.read('parentId')` and `ctx.read('parentId')` (a `compute` Field's own by-key door) disagreed, because only the first went through the checked tree. `read('parentId')` now answers the stored field, uniformly, on every door. The tree keeps a by-key door of its own instead: `hierarchyParentId`, a new core Field, computed from the same checked hierarchy `parent()` reads, never stored.
+
 ---
 
 ## J10 — `entries.all` hands back live rows, and its membership stays committed

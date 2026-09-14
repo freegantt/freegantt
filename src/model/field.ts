@@ -2,6 +2,7 @@
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
 import type { Duration } from './time.js';
+import type { EntryId } from './ids.js';
 import type { StoredEntry, EntryEdits } from './stored-entry.js';
 import type { Entry } from './entry.js';
 import type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValue } from './field-key.js';
@@ -253,6 +254,9 @@ export interface ComputeContext extends FieldContext {
   duration(): Duration | undefined;
   /** The children of the row this pass is computing. It walks, so it carries parentheses. */
   children(): readonly StoredEntry[];
+  /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
+   *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024). */
+  hierarchyParentId(): EntryId | undefined;
 }
 
 /** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13), and reused

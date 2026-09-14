@@ -90,18 +90,11 @@ class LiveEntry implements Entry {
     return this.#source.depthOf(this.id);
   }
 
+  // `read(key)` answers the value stored under `key`, for every declared Field (ADR 0024). The tree
+  // has its own door, `parent()`, which follows the hierarchy source instead (ADR 0020) — the two
+  // can disagree under a plugin-owned hierarchy, on purpose. `hierarchyParentId` reads the tree by
+  // key, through this same door, for a caller that holds a key and not a member name.
   read<K extends FieldKey>(field: K): FieldValue<Record<string, unknown>, K> | undefined {
-    // What is this row's parent, for `parentId` — the tree (ADR 0017): a Grid column on `parentId`
-    // must not print a stale id beside live indentation. `update(id, { parentId })` still writes the
-    // stored field, and `StoredEntry.parentId` is still what it wrote.
-    //
-    // `ctx.read('parentId')` inside a `compute` Field or an Aggregator (`data/fields/field-access.ts`,
-    // `createComputeContext`) answers a different question for the same key: it reads the stored
-    // field, not the tree. The two doors disagree today, on purpose or not — #299 is open on which
-    // one `read` should be.
-    if (field === 'parentId') {
-      return this.parent()?.id as FieldValue<Record<string, unknown>, K> | undefined;
-    }
     const stored = this.#stored();
     if (stored === undefined) return undefined;
     return this.#source.readField(stored, field) as FieldValue<Record<string, unknown>, K> | undefined;
