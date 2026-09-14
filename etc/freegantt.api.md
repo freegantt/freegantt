@@ -1555,6 +1555,13 @@ export class MutationCancelledError extends FreeGanttError {
 }
 
 // @public
+export class MutationDuringExtensionHookError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public
 export class MutationDuringNotificationError extends FreeGanttError {
     constructor(operation: string);
     // (undocumented)

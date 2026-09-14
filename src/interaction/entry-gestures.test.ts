@@ -132,6 +132,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     setHovered: () => {},
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
+    discardHeldGesture: () => false,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
       if (entries.length === 0) return undefined;

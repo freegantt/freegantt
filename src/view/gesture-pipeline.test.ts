@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
+import { EntryNotFoundError, SegmentsOutOfSyncError, entryId, itemId, segmentId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -91,6 +91,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     // wants a parent bar's drag overrides this with the descendants below it.
     entriesMovedBy: (entry) => [entry],
     commitEntryEdits: () => true,
+    // Part 3 (#273): required, not optional — a test that cares about the staleness guard overrides
+    // this with a real, mutable roster (see `storedMap`/`storedRow` above); everyone else gets an
+    // empty one, which measures every drafted id against `undefined` and never trips the guard.
+    committedEntriesById: () => storedMap(),
     emit: (name, payload) => {
       emitted.push([name, payload]);
       return true;
@@ -666,23 +670,64 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(paints.at(-1)).toEqual({ preview: undefined, pending: undefined });
     });
 
-    it('session() refuses to arm a new gesture while a prior async veto is unsettled', async () => {
+    // Rewritten for #272/#273: this test used to assert the bug. A hung `beforeEntryMove` on entry
+    // "a" arm-locked `session()` for *every* bar in the Gantt — grabbing an unrelated entry "b" while
+    // "a"'s veto was still out returned `undefined`, refusing a gesture that had nothing to do with
+    // the hang. There is no arm lock any more: a new gesture — on the same bar or a different one —
+    // supersedes the held one instead of being refused. This is T1 (research §7): a hung veto now
+    // locks only its own bar.
+    it('a hung veto on one bar does not lock a gesture on another bar (#272, #273)', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
         resolveVeto = resolve;
       });
-      const { deps } = withRoster([entry('a', 100, 200)], {
+      const commitEntryEdits = vi.fn(() => true);
+      const { deps, reported } = withRoster([entry('a', 100, 200), entry('b', 300, 400)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits,
       });
       const pipeline = new GesturePipeline(deps);
-      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+      const aSession = pipeline.session(entryId('a'), { kind: 'move' })!;
+      void aSession.commit(50);
 
-      void session.commit(50);
-      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeUndefined();
+      // "b" is a different bar and arms normally — the hung "a" veto never reaches it.
+      const bSession = pipeline.session(entryId('b'), { kind: 'move' });
+      expect(bSession).toBeDefined();
+
+      // "a"'s own settle, once it finally resolves, does nothing: no commit, no second report beyond
+      // the one `session()` already raised when it superseded the hold.
+      resolveVeto(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(commitEntryEdits).not.toHaveBeenCalled();
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.by).toBe('core');
+      expect(reported[0]?.message).toContain('dropped');
+    });
+
+    it('session() re-arming the same bar supersedes its own held gesture instead of refusing (#272, #273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const commitEntryEdits = vi.fn(() => true);
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const firstSession = pipeline.session(entryId('a'), { kind: 'move' })!;
+      void firstSession.commit(50);
+
+      // Re-grabbing "a" while its own veto is still out is now a valid new gesture, not a refusal.
+      const secondSession = pipeline.session(entryId('a'), { kind: 'move' });
+      expect(secondSession).toBeDefined();
+      expect(reported).toHaveLength(1); // the superseded first gesture reported once, right away
+      expect(reported[0]?.message).toContain('dropped');
 
       resolveVeto(true);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+      // The stale settle from the superseded first gesture never commits.
+      expect(commitEntryEdits).not.toHaveBeenCalled();
     });
 
     it('an async veto resolving false commits nothing', async () => {
@@ -722,6 +767,127 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await commitPromise;
 
       expect(reported.map((report) => report.code)).toEqual(['entry-move-cancelled']);
+    });
+
+    // #273: a `finish()` that throws must not brick the pipeline for every bar that follows.
+    it('an EntryNotFoundError from finish() resolves false and does not brick the pipeline (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits: () => {
+          throw new EntryNotFoundError(entryId('a'), 'entries.update');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(false);
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
+    });
+
+    // The sibling of the test above: a plain fault still reaches the caller (it is not swallowed),
+    // and the `finally` still runs — the hold clears either way.
+    it('a plain Error from finish() rejects the commit, but still clears the hold (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
+        commitEntryEdits: () => {
+          throw new Error('boom');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      resolveVeto(true);
+
+      await expect(commitPromise).rejects.toThrow('boom');
+      expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
+    });
+
+    // #273: the draft is a snapshot, but the row it was measured from is not — a commit landing
+    // during the hold must not let pointerup-era instants overwrite it silently.
+    it('a row replaced during the hold refuses the settle instead of overwriting it (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const roster = new Map([[entryId('a'), storedRow('a', 100, 200)]]);
+      const commitEntryEdits = vi.fn(() => true);
+      const afterEmitted: string[] = [];
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => {
+          if (name === 'beforeEntryMove') return veto;
+          afterEmitted.push(name);
+          return true;
+        }) as GesturePipelineDeps['emit'],
+        committedEntriesById: () => roster,
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      // The store replaces the whole row object on every committed write (ADR 0017) — a new object
+      // is what a real commit hands back, so the fixture mints one instead of mutating the old row.
+      roster.set(entryId('a'), storedRow('a', 500, 600));
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(false);
+      expect(commitEntryEdits).not.toHaveBeenCalled();
+      expect(afterEmitted).toEqual([]);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-cancelled',
+        severity: 'warning',
+        entryId: entryId('a'),
+      });
+    });
+
+    // The negative case: this is what proves the guard names its own rows, not the whole Dataset —
+    // a `datasetRevision` compare would refuse this commit too, and that is the design this test
+    // rules out.
+    it('an unrelated row replaced during the hold does not refuse the settle (#273)', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const roster = new Map([
+        [entryId('a'), storedRow('a', 100, 200)],
+        [entryId('z'), storedRow('z', 300, 400)],
+      ]);
+      const commitEntryEdits = vi.fn(() => true);
+      const afterEmitted: string[] = [];
+      const { deps } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => {
+          if (name === 'beforeEntryMove') return veto;
+          afterEmitted.push(name);
+          return true;
+        }) as GesturePipelineDeps['emit'],
+        committedEntriesById: () => roster,
+        commitEntryEdits,
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      const commitPromise = session.commit(50);
+      roster.set(entryId('z'), storedRow('z', 700, 800));
+      resolveVeto(true);
+
+      await expect(commitPromise).resolves.toBe(true);
+      expect(commitEntryEdits).toHaveBeenCalledTimes(1);
+      expect(afterEmitted).toEqual(['entryMove']);
     });
 
     it('[S3-A4] session().preview() calls the injected extraEditsFor and previews its extra as a ghost', async () => {

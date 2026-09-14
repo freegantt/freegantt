@@ -4,6 +4,7 @@ import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf } from './change-set.js';
 import {
   MutationCancelledError,
+  MutationDuringExtensionHookError,
   MutationDuringNotificationError,
   SegmentsOutOfSyncError,
   UnknownFieldError,
@@ -308,6 +309,27 @@ describe('runTransaction', () => {
       { store: 'entries', id: entryId('t1'), field: 'name', from: 't1', to: 'a' },
       { store: 'entries', id: entryId('t2'), field: 'name', from: 't2', to: 'cascaded' },
     ]);
+  });
+
+  it('an EditExtender that writes through the store instead of returning its edit throws MutationDuringExtensionHookError, and the user edit is not saved either (#323)', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits => {
+        state.entries.update(entryId('t1'), { name: 'reentrant' });
+        return new Map();
+      },
+    });
+    let changeCount = 0;
+    state.on('change', () => {
+      changeCount += 1;
+    });
+
+    expect(() => state.entries.update(entryId('t1'), { name: 'a' })).toThrow(
+      MutationDuringExtensionHookError,
+    );
+    expect(changeCount).toBe(0);
+    expect(state.entries.get(entryId('t1'))?.name).toBe('t1');
   });
 
   it('with identityExtender, the same shape transaction produces the user edit alone', () => {

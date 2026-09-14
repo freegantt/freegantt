@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$CLAUDE_PROJECT_DIR")"
-
 payload="$(cat)"
 file_path="$(node -e '
   let data = "";
@@ -32,6 +30,12 @@ esac
 if [[ ! -f "$file_path" ]]; then
   exit 0
 fi
+
+# The edited file's own directory decides the repo root — never the shell's cwd. A PostToolUse hook
+# runs with the session's primary directory as cwd even when the edited file lives in a different
+# git worktree, so `git rev-parse --show-toplevel` alone would resolve the wrong root and lint the
+# file as "outside of base path" (#323 worktree session).
+cd "$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null || echo "$CLAUDE_PROJECT_DIR")"
 
 if ! command -v pnpm >/dev/null 2>&1; then
   exit 0
