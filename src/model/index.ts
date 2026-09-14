@@ -112,6 +112,7 @@ export {
   DuplicateRowIdError,
   AggregatorFailedError,
   MutationDuringNotificationError,
+  MutationDuringExtensionHookError,
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,

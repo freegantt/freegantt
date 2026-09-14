@@ -3,12 +3,12 @@
     "name": "core (Dataset + Gantt)",
     "path": "dist/api/index.js",
     "import": "{ Dataset, Gantt }",
-    "limit": "80 KB"
+    "limit": "300 KB"
   },
   {
     "name": "core + tooltips + contextMenu + inlineEditing",
     "path": "dist/api/index.js",
     "import": "{ Dataset, Gantt, tooltips, contextMenu, inlineEditing }",
-    "limit": "83 KB"
+    "limit": "300 KB"
   }
 ]

@@ -262,6 +262,8 @@ export function attachEntryGestures(
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key !== 'Escape') return;
     if (drag.escape()) return; // was dragging — cancelled, does not also clear the selection
+    // #272/#273: a held async veto has no live drag left to cancel, so Escape ends the wait instead.
+    if (ctx.discardHeldGesture()) return;
     anchor = undefined;
     if (ctx.selection.segmentIds().length > 0) ctx.selection.propose([]);
   }

@@ -196,7 +196,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Consumer mutates entry inside `beforeEntryMove` | `TxToken` + `MutationDuringNotificationError` |
 | Dragging a `'group'` "works" then snaps back | `move` false for `derivedSpanKinds`; never arms |
 | DST silently shifts bar | Calendar delta through `time/` (D-S3-3) |
-| Async `beforeEntryMove` never resolves | Stays pending; no timeout that commits |
+| Async `beforeEntryMove` never resolves | Stays pending; no timeout that commits. A new gesture on the same or another bar, Escape, or `destroy()` discards the hold — reports it, writes nothing (#272, #273) |
 | Extender ghost for scrolled-out entry | No node to paint; commit unaffected |
 | Ctrl+wheel zooms browser | `passive: false` + `preventDefault()` |
 | Arrows pan when user meant nudge | Selection mode switch; Escape clears |

@@ -589,6 +589,25 @@ export class MutationDuringNotificationError extends FreeGanttError {
   }
 }
 
+/** `code: 'mutation-during-extension-hook'` — a mutator called while the extension hook
+ * (`EditExtender`) runs (#323). A nested write does not join the hook's own transaction. It opens a
+ * new outermost transaction, and that calls the hook again. The recursion overflows the stack, or —
+ * behind a hand-rolled depth cap — lands as separate changesets. Separate changesets split one undo
+ * step into many, which breaks I7. The write set is discarded; the hook call in progress is not
+ * affected. */
+export class MutationDuringExtensionHookError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'mutation-during-extension-hook',
+      `${operation}: you cannot change the Dataset while the extension hook runs. Nothing was saved. Return the edit from the hook. Do not write through the store.`,
+    );
+    this.name = 'MutationDuringExtensionHookError';
+    this.operation = operation;
+  }
+}
+
 /** `code: 'mutation-cancelled'` — a `beforeChange` handler returned `false`, refusing the whole
  * changeset (D-S2-25). Thrown by the programmatic call that triggered the transaction, carrying the
  * changeset that was refused — `entries.update()`'s contract is to return the stored entry, and if
