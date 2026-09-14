@@ -869,7 +869,12 @@ describe('Gantt dateLines (S1.13)', () => {
       expect(labels[0]!.textContent).toBe('Launch');
       const lines = container.querySelectorAll<HTMLElement>('.fg-date-line');
       expect(lines).toHaveLength(2);
-      expect(labels[0]!.style.transform).toBe(lines[0]!.style.transform);
+      // The stroke's transform is x-only (translateX); the label's carries a second, always-zero
+      // component under the default placement (#318, D-S1.10-6 — the px nudge a non-default
+      // placement would carry travels the same property).
+      const x = /^translateX\((.+)\)$/.exec(lines[0]!.style.transform)?.[1];
+      expect(labels[0]!.style.transform).toBe(`translate(${x}, 0px)`);
+      expect(labels[0]!.dataset['placement']).toBe('overlayOnGanttBody');
 
       gantt.destroy();
     } finally {
@@ -992,6 +997,44 @@ describe('Gantt dateLines (S1.13)', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('[#318] dateLineLabelPlacement moves the rendered Date line label between the header and the body, live', async () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({
+          entries: [{ id: 'span', name: 'span', start: '2020-01-01', end: '2030-01-01' }],
+          timeZone: 'UTC',
+        }),
+        fit: 'preset',
+        preset: 'year',
+        todayLine: false,
+        dateLines: [{ placeAt: '2026-06-01', label: 'Launch' }],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const label = container.querySelector<HTMLElement>('.fg-date-line-label')!;
+      expect(label.dataset['placement']).toBe('overlayOnGanttBody');
+
+      gantt.dateLineLabelPlacement = 'overlayOnTimeLine';
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(label.dataset['placement']).toBeUndefined();
+
+      gantt.dateLineLabelPlacement = 30;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(label.dataset['placement']).toBeUndefined();
+      expect(label.style.transform.endsWith(', 30px)')).toBe(true);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('Gantt navigationChange (S1.12)', () => {
@@ -1096,6 +1139,33 @@ describe('Gantt theme and a11yLabel (S1.10)', () => {
 
     gantt.theme = 'auto';
     expect(container.getAttribute('data-fg-theme')).toBeNull();
+
+    gantt.destroy();
+  });
+
+  it("[#330] resolvedTheme answers 'light'/'dark' for every theme value, and fires themeChange when it moves", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    // happy-dom's own matchMedia always answers `matches: false` — the OS half of 'auto' resolves
+    // 'light' here, same as it does for every other Gantt test in this file with no override.
+    expect(gantt.resolvedTheme).toBe('light');
+
+    const events: Array<{ from: string; to: string }> = [];
+    gantt.on('themeChange', (change) => {
+      events.push(change);
+    });
+
+    gantt.theme = 'dark';
+    expect(gantt.resolvedTheme).toBe('dark');
+    expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+    gantt.theme = 'auto';
+    expect(gantt.resolvedTheme).toBe('light');
+    expect(events).toEqual([
+      { from: 'light', to: 'dark' },
+      { from: 'dark', to: 'light' },
+    ]);
 
     gantt.destroy();
   });
@@ -5956,6 +6026,8 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
       fit: gantt.fit,
       todayLine: gantt.todayLine,
       dateLines: gantt.dateLines,
+      dateLineLabelPlacement: gantt.dateLineLabelPlacement,
+      resolvedTheme: gantt.resolvedTheme,
       zoomPresets: gantt.zoomPresets,
       viewportGestures: gantt.viewportGestures,
       canZoomIn: gantt.canZoomIn,
@@ -5970,6 +6042,8 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(reads['fit']).toBe('pane');
     expect(reads['todayLine']).toBe(true);
     expect(reads['dateLines']).toEqual([]);
+    expect(reads['dateLineLabelPlacement']).toBe('overlayOnGanttBody');
+    expect(reads['resolvedTheme']).toBe('light');
     expect(Array.isArray(reads['zoomPresets'])).toBe(true);
     expect((reads['zoomPresets'] as unknown[]).length).toBeGreaterThan(0);
     expect(reads['viewportGestures']).toBeDefined();
@@ -5987,6 +6061,18 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(gantt.barLabels).toBe('outside');
     gantt.barLabels = 'none';
     expect(gantt.barLabels).toBe('none');
+
+    gantt.destroy();
+  });
+
+  it('set dateLineLabelPlacement is live — no remount needed to read the new value back (#318)', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    gantt.dateLineLabelPlacement = 'overlayOnTimeLine';
+    expect(gantt.dateLineLabelPlacement).toBe('overlayOnTimeLine');
+    gantt.dateLineLabelPlacement = 24;
+    expect(gantt.dateLineLabelPlacement).toBe(24);
 
     gantt.destroy();
   });

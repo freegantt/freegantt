@@ -1155,6 +1155,139 @@ describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => 
   });
 });
 
+/** A fake `MediaQueryList` for `'(prefers-color-scheme: dark)'` — `fire()` is the OS flipping. */
+function fakeDarkSchemeQuery(matches: boolean) {
+  const listeners = new Set<() => void>();
+  const query = {
+    matches,
+    addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+  };
+  return {
+    query,
+    fire: (next: boolean) => {
+      query.matches = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+describe('resolvedTheme / themeChange (#330)', () => {
+  it("resolves 'auto' against the OS when constructed, with no event for that initial read", () => {
+    const { query } = fakeDarkSchemeQuery(true);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const events: string[] = [];
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      shell.on('themeChange', () => {
+        events.push('fired');
+      });
+
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(events).toEqual([]);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('assigning theme fires themeChange when the resolved answer moves, and not when it does not', () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      expect(shell.resolvedTheme).toBe('light');
+
+      shell.theme = 'light';
+      expect(events).toEqual([]);
+
+      shell.theme = 'dark';
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.theme = 'dark';
+      expect(events).toHaveLength(1);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("the OS flipping under 'auto' fires themeChange with no assignment at all", () => {
+    const { query, fire } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      fire(true);
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("an ancestor's own pin shadows the OS, so a flip under it fires nothing (#271)", () => {
+    const { query, fire } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const ancestor = document.createElement('div');
+      ancestor.setAttribute('data-fg-theme', 'light');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: unknown[] = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      expect(shell.resolvedTheme).toBe('light');
+      fire(true);
+      expect(shell.resolvedTheme).toBe('light');
+      expect(events).toEqual([]);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('destroy detaches the OS listener — a later flip touches nothing', () => {
+    const { query, fire } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: unknown[] = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      shell.destroy();
+      fire(true);
+      expect(events).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
   it('a 500-entry transaction updating every entry yields one change, one computeFrame, one sync, and an unchanged height index', () => {
     // Installed before construction so the shell's own first render (#22) is call #0 — the only way
