@@ -1,10 +1,11 @@
-// #261: `plans/02` §4 was once the only published home of the Customization ladder, and by the time
-// S5 audited it, it had been wrong for three slices with every gate green the whole time — twelve
-// live tokens missing, a stale colour palette, a wrong published default, a selector that matched
-// nothing. #221 question 1 moved the level-1 token reference to `docs/05-consumer-api.md` and
-// corrected it once (`46db903`). This guard is the part that stops the drift happening a second time:
-// it parses `src/view/styles.ts` for every `--fg-*` token the sheet actually carries, and fails when
-// that set (or a documented default) disagrees with `docs/05-consumer-api.md`'s tables.
+// #261 / #334: `plans/02` §4 was once the only published home of the Customization ladder, and by
+// the time S5 audited it, it had been wrong for three slices with every gate green the whole time —
+// twelve live tokens missing, a stale colour palette, a wrong published default, a selector that
+// matched nothing. #221 question 1 moved the level-1 token reference to `docs/05-consumer-api.md`
+// and corrected it once (`46db903`). Half 1 (`#261`) parses `src/view/styles.ts` for every `--fg-*`
+// token the sheet actually carries, and fails when that set (or a documented default) disagrees with
+// `docs/05-consumer-api.md`'s tables. Half 2 (`#334`) does the same for every `.fg-*` class: the
+// base sheet plus the two glyph classes `summary()` and `diamond()` ship in their own CSS.
 //
 // A handful of documented tokens carry no CSS at all — `--fg-row-height`, `--fg-grid-pane-width` and
 // five more are read once, in TypeScript, through `pixel-property.ts`, and the sheet never mentions
@@ -22,6 +23,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const styles = read('src/view/styles.ts');
+const variants = read('src/layout/items/variants.ts');
 const doc = read('docs/05-consumer-api.md');
 
 // ---------------------------------------------------------------------------------------------
@@ -320,5 +322,101 @@ describe('the sheet and the published token tables agree on every default', () =
       }
     }
     expect(mismatches, mismatches.join('\n')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Half 2 — every `.fg-*` class the sheet (or a shipped variant's CSS) defines is documented once
+// ---------------------------------------------------------------------------------------------
+
+/** Pulls one `const NAME = \`...\`;` template literal's own text — variant CSS is a bare literal,
+ *  not a `.trim()` call the way `BASE_STYLESHEET` is. */
+function extractCssLiteral(source: string, constName: string, fileLabel: string): string {
+  const re = new RegExp(`const ${constName} = \`([\\s\\S]*?)\`;`);
+  const match = re.exec(source);
+  if (!match) {
+    throw new Error(`theming-contract guard: could not find "${constName}" in ${fileLabel}`);
+  }
+  return match[1]!;
+}
+
+/** Every `.fg-*` class a block of CSS actually selects on. Comments are stripped first so a prose
+ *  mention (`.fg-overlay's inset: 0`) cannot invent a class the sheet never defined as a rule. */
+function classesIn(block: string): Set<string> {
+  const withoutComments = block.replace(/\/\*[\s\S]*?\*\//g, '');
+  return new Set([...withoutComments.matchAll(/\.fg-[a-z0-9-]+/g)].map((m) => m[0]!));
+}
+
+const sheetDefinedClasses = classesIn(baseBlock);
+const variantDefinedClasses = new Set([
+  ...classesIn(extractCssLiteral(variants, 'SUMMARY_CSS', 'src/layout/items/variants.ts')),
+  ...classesIn(extractCssLiteral(variants, 'DIAMOND_CSS', 'src/layout/items/variants.ts')),
+]);
+const definedClasses = new Set([...sheetDefinedClasses, ...variantDefinedClasses]);
+
+function partRows(sectionText: string): { part: string }[] {
+  return sectionText
+    .split('\n')
+    .filter((line) => /^\|\s*`\.fg-/.test(line))
+    .map((line) => {
+      const cells = line
+        .split('|')
+        .map((cell) => cell.trim())
+        .filter((_, i, arr) => i > 0 && i < arr.length - 1);
+      const part = cells[0]!.replace(/`/g, '');
+      return { part };
+    });
+}
+
+const publicPartsSection = section('### Public Parts', /^### /m);
+const internalPartsSection = section('### Internal Parts', /^## /m);
+const publicPartRows = partRows(publicPartsSection);
+const internalPartRows = partRows(internalPartsSection);
+const documentedPublicParts = new Set(publicPartRows.map((r) => r.part));
+const documentedInternalParts = new Set(internalPartRows.map((r) => r.part));
+
+describe('the sheet and the published Parts tables name the same classes', () => {
+  it('documents every class the sheet and the shipped variants define', () => {
+    const undocumented = [...definedClasses].filter(
+      (cls) => !documentedPublicParts.has(cls) && !documentedInternalParts.has(cls),
+    );
+    expect(
+      undocumented,
+      `styles.ts / shipped variant CSS define these .fg-* classes but docs/05-consumer-api.md's Parts tables never mention them:\n${undocumented.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('never documents a class the sheet and the shipped variants do not define', () => {
+    const phantom = [...documentedPublicParts, ...documentedInternalParts].filter(
+      (cls) => !definedClasses.has(cls),
+    );
+    expect(
+      phantom,
+      `docs/05-consumer-api.md documents these .fg-* classes but neither styles.ts nor the shipped variant CSS defines them:\n${phantom.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('keeps every Internal Parts entry out of the public table', () => {
+    const leaked = internalPartRows.filter((row) => documentedPublicParts.has(row.part));
+    expect(
+      leaked.map((r) => r.part),
+      'an internal Part also appears in the public table — pick one home',
+    ).toEqual([]);
+  });
+
+  it('only calls a defined class "internal" (no internal Part invents a name the sheet never uses)', () => {
+    const inventedInternal = internalPartRows.filter((row) => !definedClasses.has(row.part));
+    expect(
+      inventedInternal.map((r) => r.part),
+      'the Internal Parts table names a class styles.ts and the shipped variants do not define',
+    ).toEqual([]);
+  });
+
+  it('puts every variant glyph class in the public table, not the internal one', () => {
+    const buried = [...variantDefinedClasses].filter((cls) => documentedInternalParts.has(cls));
+    expect(
+      buried,
+      'a shipped variant glyph class is marked internal — summary() and diamond() are level-2 surface',
+    ).toEqual([]);
   });
 });
