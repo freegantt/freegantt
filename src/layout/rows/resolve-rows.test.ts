@@ -5,6 +5,7 @@ import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDoubles } from '../entry-double.js';
 import type { FieldCompare } from '../column.js';
 import type { RowSource } from './row-source.js';
+import { resolveRowSource } from './row-source.js';
 import { resolveRows } from './resolve-rows.js';
 
 function stored(
@@ -199,5 +200,47 @@ describe('resolveRows source × policy × sort × collapsed', () => {
       fieldCompares: costCompares(),
     });
     expect(planned.map((row) => String(row.id))).toEqual(ids);
+  });
+});
+
+// #254: a caller changes one setting by spreading the value `gantt.rowSource` reads back. Turning a
+// setting *off* is the half that used to be unwritable — `exactOptionalPropertyTypes` rejects the
+// spread unless the key takes an explicit `undefined`. These cases fail to compile if that widening
+// is reverted, so they pin the type as much as the rows.
+describe('one setting changes through a spread (#254)', () => {
+  const authored: RowSource = {
+    source: 'entries',
+    tree: true,
+    filter: teamA,
+    sort: { field: 'start' },
+  };
+
+  function idsOf(rows: RowSource): string[] {
+    const planned = resolveRows({ entries: treeEntries, rows, fieldCompares: costCompares() });
+    return planned.map((row) => String(row.id));
+  }
+
+  it('clears the sort and keeps the filter', () => {
+    const current = resolveRowSource(authored);
+    if (current.source !== 'entries') throw new Error('entries source expected');
+
+    expect(idsOf(authored)).toEqual(['p', 'c2', 'c1']);
+    expect(idsOf({ ...current, sort: undefined })).toEqual(['p', 'c1', 'c2']);
+  });
+
+  it('clears the filter and keeps the sort', () => {
+    const current = resolveRowSource(authored);
+    if (current.source !== 'entries') throw new Error('entries source expected');
+
+    expect(idsOf({ ...current, filter: undefined })).toEqual(['p', 'c2', 'c1', 'q']);
+  });
+
+  it('replaces one setting and carries the other back unchanged', () => {
+    const current = resolveRowSource(authored);
+    if (current.source !== 'entries') throw new Error('entries source expected');
+
+    const next = { ...current, sort: { field: 'name' as const } };
+    expect(next.filter).toBe(teamA);
+    expect(next.tree).toBe(true);
   });
 });

@@ -16,16 +16,23 @@ export interface RowSort {
 }
 
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
- *  does not take these (D-S4-21). */
+ *  does not take these (D-S4-21).
+ *
+ *  Every key takes an explicit `undefined`, so one setting turns off through the same spread that
+ *  turns it on (#254): `{ ...current, sort: undefined }`. A bare `sort?: RowSort` rejects that
+ *  spread under `exactOptionalPropertyTypes`, and the only route left is a rest-destructure with a
+ *  discarded binding. `applyFilter` and `applySort` already take `undefined` and return early on
+ *  it, so the value reaches a reader that handles it and costs no new branch. */
 export interface RowSourceCommon {
-  filter?: RowFilter;
-  sort?: RowSort;
-  filterPolicy?: FilterPolicy;
+  filter?: RowFilter | undefined;
+  sort?: RowSort | undefined;
+  filterPolicy?: FilterPolicy | undefined;
 }
 
 export interface EntriesRowSource extends RowSourceCommon {
   source: 'entries';
-  tree?: boolean;
+  /** Takes an explicit `undefined` for the reason `RowSourceCommon` states (#254). */
+  tree?: boolean | undefined;
 }
 
 export interface GroupRowSource extends RowSourceCommon {

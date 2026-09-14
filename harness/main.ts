@@ -187,15 +187,14 @@ reparentBtn.addEventListener('click', () => {
   });
 });
 
-// #248 S4-3: grouped and pack used to be local flags mirroring gantt.rowSource. Now that the
-// getter reads back resolved (S4-2), the page reads both off the Gantt instead of holding a
-// second copy.
+// #248 S4-3, #254: the page holds no copy of an answer gantt.rowSource already gives. Each setting
+// button spreads the source it just read and replaces its own key, so changing the sort leaves the
+// filter alone and neither button re-authors the other.
 //
-// filterTeam stays local for a narrower reason than "the Gantt cannot read it back". The Gantt reads
-// the filter closure back fine — ResolvedEntriesRowSource extends EntriesRowSource. What it cannot
-// read back is the team name captured *inside* that closure, and the button cycles through those
-// names. sortByName is a different case: gantt.rowSource.sort answers it, so it is a second copy of
-// what the library already holds. See #254.
+// filterTeam is the one local, and it stays for a narrower reason than "the Gantt cannot read it
+// back". The Gantt reads the filter closure back fine — ResolvedEntriesRowSource extends
+// EntriesRowSource. What it cannot read back is the team name captured *inside* that closure, and
+// the button cycles through those names.
 let filterTeam: 'core' | 'edge' | 'launch' | null = null;
 const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edge' | 'launch' | null> = {
   off: 'core',
@@ -203,53 +202,50 @@ const NEXT_FILTER_TEAM: Record<'core' | 'edge' | 'launch' | 'off', 'core' | 'edg
   edge: 'launch',
   launch: null,
 };
-let sortByName = false;
 
-function applyRowSource(next: { grouped: boolean }): void {
-  const shared = {
-    ...(filterTeam !== null && !next.grouped
-      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
-      : {}),
-    ...(sortByName && !next.grouped ? { sort: { field: 'name' as const } } : {}),
-  };
-  const source: RowSource = next.grouped
-    ? {
-        source: 'group',
-        groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
-        ...shared,
-      }
-    : { source: 'entries', tree: true, ...shared };
-  gantt.rowSource = source;
+/** The one button that rebuilds instead of spreading: it switches `source`, and a fresh source
+ *  carries no filter and no sort. Both settings reset together, so neither outlives the switch. */
+function applyGrouping(grouped: boolean): void {
+  filterTeam = null;
+  const next: RowSource = grouped
+    ? { source: 'group', groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned') }
+    : { source: 'entries', tree: true };
+  gantt.rowSource = next;
   refreshRowSourceUi();
 }
 
 function refreshRowSourceUi(): void {
-  const { source } = gantt.rowSource;
-  const grouped = source === 'group';
+  const current = gantt.rowSource;
+  const grouped = current.source === 'group';
+  const sorted = current.source !== 'custom' && current.sort !== undefined;
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
   filterTeamBtn.disabled = grouped;
   sortNameBtn.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
-  sortNameBtn.textContent = sortByName ? 'Sort by name: on' : 'Sort by name: off';
+  sortNameBtn.textContent = sorted ? 'Sort by name: on' : 'Sort by name: off';
 }
 
 rowsSourceBtn.addEventListener('click', () => {
-  const { source } = gantt.rowSource;
-  applyRowSource({ grouped: source !== 'group' });
+  applyGrouping(gantt.rowSource.source !== 'group');
 });
 
 filterTeamBtn.addEventListener('click', () => {
-  const { source } = gantt.rowSource;
-  if (source === 'group') return;
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
   filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
-  applyRowSource({ grouped: false });
+  const team = filterTeam;
+  gantt.rowSource = {
+    ...current,
+    filter: team === null ? undefined : (entry: Entry) => entry.read('team') === team,
+  };
+  refreshRowSourceUi();
 });
 
 sortNameBtn.addEventListener('click', () => {
-  const { source } = gantt.rowSource;
-  if (source === 'group') return;
-  sortByName = !sortByName;
-  applyRowSource({ grouped: false });
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  gantt.rowSource = { ...current, sort: current.sort === undefined ? { field: 'name' } : undefined };
+  refreshRowSourceUi();
 });
 
 refreshRowSourceUi();
