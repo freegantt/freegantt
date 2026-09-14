@@ -23,6 +23,11 @@ const EMPTY_EDITS: EntryEdits = Object.freeze(new Map());
 /** No cascade, ever — the baseline the tests contrast an installed extender against. */
 export const identityExtender: EditExtender = () => EMPTY_EDITS;
 
+/** Shared by every `EditRequest` builder whose transaction adds or removes nothing — the drag
+ *  preview never does (#235), so this is what `addedEntryIds`/`removedEntryIds` read there. One
+ *  frozen `Set`, not a fresh one per call, so a preview frame allocates nothing (I5). */
+export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
+
 /**
  * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
  * (D-S5-23).
