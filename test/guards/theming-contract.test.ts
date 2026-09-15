@@ -98,7 +98,7 @@ const sheetDefinedTokens = new Set<string>([
 interface ExternalDefault {
   file: string;
   pattern: RegExp;
-  unit: 'px';
+  unit: 'px' | '';
 }
 
 const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
@@ -147,6 +147,34 @@ const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
     pattern: /export const DEFAULT_BAR_LABEL_GAP_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
+  // #392: these two have no other TS reader (styles.ts is the constant's only owner — no `export`),
+  // so the pattern below matches the local `const`, not an `export const` like every entry above.
+  '--fg-band-height': {
+    file: 'src/view/styles.ts',
+    pattern: /const DEFAULT_BAND_HEIGHT_PX = (\d+(?:\.\d+)?);/,
+    unit: 'px',
+  },
+  '--fg-bar-radius': {
+    file: 'src/view/styles.ts',
+    pattern: /const DEFAULT_BAR_RADIUS_PX = (\d+(?:\.\d+)?);/,
+    unit: 'px',
+  },
+};
+
+// #392: the colour section's own two theme-independent, unitless tokens — same posture as
+// INTERPOLATED_PIXEL_TOKENS above (a local, un-exported `const` in styles.ts is the value's only
+// source, so this map, not `metricDeclared`'s unexpanded `${…}` template text, is what resolves it).
+const INTERPOLATED_COLOUR_TOKENS: Record<string, ExternalDefault> = {
+  '--fg-ghost-opacity': {
+    file: 'src/view/styles.ts',
+    pattern: /const DEFAULT_GHOST_OPACITY = ([\d.]+);/,
+    unit: '',
+  },
+  '--fg-pending-opacity': {
+    file: 'src/view/styles.ts',
+    pattern: /const DEFAULT_PENDING_OPACITY = ([\d.]+);/,
+    unit: '',
+  },
 };
 
 function resolveExternalDefault(token: string, def: ExternalDefault): string {
@@ -161,12 +189,16 @@ function resolveExternalDefault(token: string, def: ExternalDefault): string {
 }
 
 /** A structural/pixel token's real default, resolved from wherever it actually lives — a
- *  TypeScript constant the `:root` declaration interpolates, or the sheet's own literal `var(…,
- *  default)` fallback. */
+ *  TypeScript constant the `:root` declaration interpolates, `METRIC_TOKENS`'s own `:root`
+ *  declaration (the value that ships — #392), or, failing both, the sheet's own literal
+ *  `var(…, default)` fallback. `metricDeclared` goes first: once `:root` declares a token
+ *  unconditionally, any inline `var(--fg-x, literal)` fallback a library rule still carries for it
+ *  is unreachable — that property always already has a value by the time the rule reads it — so
+ *  the inline literal is dead and must never be preferred over the value `:root` actually ships. */
 function resolvePixelTokenDefault(token: string): string {
   if (token in INTERPOLATED_PIXEL_TOKENS)
     return resolveExternalDefault(token, INTERPOLATED_PIXEL_TOKENS[token]!);
-  const literal = baseVarFallback.get(token) ?? baseDeclared.get(token);
+  const literal = metricDeclared.get(token) ?? baseVarFallback.get(token) ?? baseDeclared.get(token);
   if (literal === undefined) {
     throw new Error(`theming-contract guard: no known default source for ${token}`);
   }
@@ -293,6 +325,25 @@ describe('the sheet and the published token tables agree on every default', () =
     expect(mismatches, mismatches.join('\n')).toEqual([]);
   });
 
+  it('never lets a token declared in METRIC_TOKENS drift from its own inline var() fallback', () => {
+    // A token :root always declares (METRIC_TOKENS) makes any inline `var(--fg-x, literal)`
+    // fallback for that same token unreachable — the property already has a value by the time the
+    // rule reads it. The dead fallback still LOOKS live, so nothing stops it silently drifting from
+    // the value that actually ships. This is the guard for that: every token both blocks declare
+    // must still agree, so an edit to one without the other fails here instead of shipping quietly.
+    const mismatches: string[] = [];
+    for (const [token, metricValue] of metricDeclared) {
+      const fallbackValue = baseVarFallback.get(token);
+      if (fallbackValue === undefined) continue;
+      if (fallbackValue !== metricValue) {
+        mismatches.push(
+          `${token}: METRIC_TOKENS declares "${metricValue}" on :root, but an inline var(--fg-x, …) fallback still says "${fallbackValue}" — the sheet ships the :root value, so the inline fallback is dead and must match it`,
+        );
+      }
+    }
+    expect(mismatches, mismatches.join('\n')).toEqual([]);
+  });
+
   it("matches every colour/shadow token's documented light and dark defaults to the sheet", () => {
     const mismatches: string[] = [];
     for (const row of colourRows) {
@@ -310,9 +361,18 @@ describe('the sheet and the published token tables agree on every default', () =
         continue;
       }
       // A single, theme-independent value (--fg-bar-opacity, --fg-ghost-opacity, --fg-pending-opacity)
-      // — declared once on .fg-container or read once with a var() fallback, never per-theme. The
-      // doc marks its own dark column "—" rather than restating the same number twice.
-      const sheetValue = baseDeclared.get(token!) ?? baseVarFallback.get(token!);
+      // — declared once on .fg-container, once on :root via METRIC_TOKENS, or read once with a
+      // var() fallback, never per-theme. INTERPOLATED_COLOUR_TOKENS goes first for a token whose
+      // METRIC_TOKENS line interpolates a TS constant (metricDeclared would otherwise capture the
+      // unexpanded `${…}` template text). Failing that, metricDeclared goes before baseDeclared/
+      // baseVarFallback for the same reason resolvePixelTokenDefault prefers it: the :root
+      // declaration is the value that ships, and an inline var() fallback for the same token is
+      // dead once :root always sets it. The doc marks its own dark column "—" rather than
+      // restating the same number twice.
+      const sheetValue =
+        token! in INTERPOLATED_COLOUR_TOKENS
+          ? resolveExternalDefault(token!, INTERPOLATED_COLOUR_TOKENS[token!]!)
+          : (metricDeclared.get(token!) ?? baseDeclared.get(token!) ?? baseVarFallback.get(token!));
       if (sheetValue !== docLight) {
         mismatches.push(`${token}: doc says "${docLight}", the sheet says "${sheetValue}"`);
       }
