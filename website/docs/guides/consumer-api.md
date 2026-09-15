@@ -16,6 +16,14 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`docs/06-plugin-authoring.md`](plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 | [`docs/07-row-source-updates.md`](row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
 
+## What a Gantt shows
+
+A Gantt is two panes on one set of rows. The **Grid pane** is on the left. The **Timeline pane** is on the right.
+
+A **Grid column** is one vertical slice of the Grid pane. It names a Field and carries presentation only — header, width, order. Declaring a Field does not put it on the Grid pane. A Grid column on the Gantt does that.
+
+The Timeline pane paints **Items** as bars on a time scale. A bar is paint, not identity (`CONTEXT.md`). The time axis is not a column. The whole view is a **Gantt**. Chart is a retired word (#7).
+
 ## S4 surface (hierarchy and rows)
 
 These landed in slice S4. Details and examples live in `plans/02-public-api.md` §4.2–§4.3.
@@ -29,7 +37,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 
 ### Gantt
 
-- `gridColumns` — which columnable Fields this view shows, in order
+- `gridColumns` — which Fields this view shows, in order
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.

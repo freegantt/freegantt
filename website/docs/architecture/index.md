@@ -99,11 +99,15 @@ dataset.undo(); // what it did arrives on 'change', tagged origin: 'undo'
 dataset.redo();
 ```
 
-### Fields, columns, rows
+### Panes, fields, columns
 
-A **field** is what a value *is*, and it is declared on the dataset. A **grid column** is where a
-Gantt *shows* a field, and it is declared on the Gantt. Declaring a field does not put it on
-screen.
+A Gantt is two panes on one set of rows. The **Grid pane** is on the left. The **Timeline pane**
+is on the right. The time axis is not a column. The whole view is a Gantt — not a chart (#7).
+
+A **field** is what a value *is*, and it is declared on the dataset. A **grid column** is one
+vertical slice of the Grid pane: it names a field and carries presentation, and it is declared on
+the Gantt. Declaring a field does not put it on screen. The Timeline pane paints **Items** as
+bars; a bar is paint, not identity.
 
 ```ts
 const dataset = new Dataset({

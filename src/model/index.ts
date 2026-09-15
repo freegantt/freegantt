@@ -109,7 +109,7 @@ export {
   DerivedFieldNotWritableError,
   UnknownAggregatorError,
   UnknownFieldTypeError,
-  FieldNotColumnableError,
+  FieldColumnNotDefinedError,
   DuplicateRowIdError,
   AggregatorFailedError,
   MutationDuringNotificationError,

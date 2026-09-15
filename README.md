@@ -238,8 +238,9 @@ Dependencies land in slice S7 — see `plans/03-slices.md`.
 ### Fields and grid columns
 
 **A field is what a value _is_; a grid column is where a Gantt _shows_ it.** Fields live on the
-`Dataset`; grid columns live on the `Gantt` (`gridColumns`). A Field with a `column` declaration is
-columnable; naming a non-columnable Field in `gridColumns` throws `FieldNotColumnableError`.
+`Dataset`; grid columns live on the `Gantt` (`gridColumns`). `Field.column` is optional defaults for
+the bare-key shorthand. A column object supplies presentation. A bare key with no defaults throws
+`FieldColumnNotDefinedError`.
 
 ```ts
 gantt.gridColumns = ['name', 'start', 'duration', 'cost'];

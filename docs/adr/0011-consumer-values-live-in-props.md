@@ -143,7 +143,7 @@ sequenceDiagram
 | **Read consumer values through an accessor and never store them** | **Rejected.** Reads alone carry four of the planner's five fields, and a Gantt that edits, undoes and aggregates a consumer value has to hold it |
 | **A nested accessor path** (`accessor: ['finance', 'approved']`) | **Deferred.** It costs a compiled reader, an immutable path writer, path equality, undo through a path and a Document rule. It is an additive optional key whenever a real consumer needs one |
 | **Publish an ownership ladder now** (managed, custom setter, controlled writes) | **Rejected for this ADR.** It is an escape hatch from a storage model being replaced. Revisit when a consumer asks |
-| **`internal: true` for `parentId` and `segments`** | **Rejected.** An absent `column` already means *not a column*, and `gridColumns` naming such a Field already throws `FieldNotColumnableError`. A second key for one job breaks *one config tree per job* |
+| **`internal: true` for `parentId` and `segments`** | **Rejected.** An absent `column` means no shorthand defaults. A bare key with no defaults throws `FieldColumnNotDefinedError`. A column object still shows the Field. A second key for one job breaks *one config tree per job* |
 
 ## Consequences
 
