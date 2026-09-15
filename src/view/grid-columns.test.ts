@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from '../data/fields/field-registry.js';
-import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
+import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import {
   DEFAULT_COLUMN_WIDTH_PX,
@@ -117,10 +117,47 @@ describe('resolveColumns (D-S4-12)', () => {
     );
   });
 
-  it("gridColumns: ['parentId'] throws FieldNotColumnableError — a core Field with no column", () => {
-    expect(() => resolveColumns(['parentId'], lookupFrom(CORE_FIELDS), { timeZone: zone })).toThrow(
-      FieldNotColumnableError,
+  it("gridColumns: ['parentId'] throws FieldColumnNotDefinedError", () => {
+    let thrown: unknown;
+    try {
+      resolveColumns(['parentId'], lookupFrom(CORE_FIELDS), { timeZone: zone });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(FieldColumnNotDefinedError);
+    expect(thrown).toMatchObject({ code: 'field-column-not-defined', key: 'parentId' });
+  });
+
+  it("gridColumns: [{ field: 'parentId', header: 'Authored parent' }] resolves", () => {
+    const columns = resolveColumns(
+      [{ field: 'parentId', header: 'Authored parent' }],
+      lookupFrom(CORE_FIELDS),
+      {
+        timeZone: zone,
+      },
     );
+    expect(columns).toHaveLength(1);
+    expect(columns[0]?.field).toBe('parentId');
+    expect(columns[0]?.header).toBe('Authored parent');
+    expect(columns[0]?.width).toBe(DEFAULT_COLUMN_WIDTH_PX);
+    expect(columns[0]?.align).toBe('start');
+  });
+
+  it("gridColumns: ['owner'] throws FieldColumnNotDefinedError", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'owner' }] });
+    expect(() => resolveColumns(['owner'], registry, { timeZone: zone })).toThrow(FieldColumnNotDefinedError);
+  });
+
+  it("gridColumns: [{ field: 'owner', header: 'Owner' }] resolves", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'owner' }] });
+    const columns = resolveColumns([{ field: 'owner', header: 'Owner', width: 140 }], registry, {
+      timeZone: zone,
+    });
+    expect(columns).toHaveLength(1);
+    expect(columns[0]?.field).toBe('owner');
+    expect(columns[0]?.header).toBe('Owner');
+    expect(columns[0]?.width).toBe(140);
+    expect(columns[0]?.format(entry)).toBe('');
   });
 });
 
