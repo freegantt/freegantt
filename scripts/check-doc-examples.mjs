@@ -36,8 +36,8 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
  *  gains its first fenced `ts` block — an unchecked example rots exactly as fast as a checked one
  *  stays honest, and nothing but this list decides which it is. */
 const guidePaths = [
-  path.join(root, 'website/docs/guides/plugin-authoring.md'),
-  path.join(root, 'website/docs/guides/row-source-updates.md'),
+  path.join(root, 'docs/06-plugin-authoring.md'),
+  path.join(root, 'docs/07-row-source-updates.md'),
 ];
 const distTypesPath = path.join(root, 'dist/api/index.d.ts');
 const tsc = path.join(root, 'node_modules/.bin/tsc');

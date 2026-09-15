@@ -3,8 +3,7 @@ id: 0003-the-authored-record-is-an-entry-not-a-task
 title: "The authored record is an Entry, not a Task"
 ---
 
-
-> **Vocabulary note.** The text below is preserved as written and says `Project` throughout (`new Project({ tasks })`, `Project.tasks` → `Project.entries`). That wrapper was renamed to `Dataset` by [ADR 0004](./0004-the-authored-body-of-data-is-a-dataset-not-a-project.md) — read every `Project` here as `Dataset`.
+> **Vocabulary note.** The text below is preserved as written and says `Project` throughout (`new Project({ tasks })`, `Project.tasks` → `Project.entries`). That wrapper was renamed to `Dataset` by [ADR 0004](0004-the-authored-body-of-data-is-a-dataset-not-a-project.md) — read every `Project` here as `Dataset`.
 
 ADR 0002 moved scheduling out of the mandatory core and behind a plugin seam, but the *vocabulary* of the core stayed where it was: the one authored, DOM-free record every layer is built on was called `Task`, and its default `kind` literal was the string `'task'`. That word carries a methodology whether or not a scheduling plugin is installed — a `Task` is to-do work, it belongs to somebody, it gets done. We renamed the record to `Entry` and the default kind to `'span'`, so that nothing in the mandatory core names an assumption about what the data means.
 
@@ -14,7 +13,7 @@ Not a style preference. Three concrete costs, in order of how much they hurt:
 
 - **It kept re-importing the assumption ADR 0002 removed.** Every contributor — human and agent — who read `Task` reasoned about scheduling and reintroduced it in places it does not belong: scheduling concepts in `layout/`, dependency assumptions in `render/`, "when does this get scheduled" questions about `data/`. The boundary was drawn in the layer diagram and then talked back out of existence by the noun sitting in the middle of it. This happened repeatedly, and correcting it case by case never held, because the vocabulary regenerated the mistake.
 - **It mistranslated the library for its own users.** A host charting units sold per day, machine uptime, room bookings, or headcount per week has no tasks at all. `new Project({ tasks })` forces them to mentally translate the entire public API on every read, and tells them — wrongly — that they are holding the wrong tool.
-- **It was about to get expensive.** Pre-S2, `data/` and `scheduling/` are still stubs and nothing is persisted, so the rename is a mechanical sweep. Once transactions, undo, and the serialization contract are built on the old name, it stops being one.
+- **It was about to get expensive.** Pre-S2, `data/` and `scheduling/` are still stubs and nothing is persisted, so the rename is a mechanical sweep. Once transactions, undo, and the serialization contract (D7) are built on the old name, it stops being one.
 
 ## What "Entry" buys, and what it gives up
 

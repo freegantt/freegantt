@@ -3,8 +3,7 @@ id: 0010-the-selection-holds-segments-not-entries
 title: "The Selection holds Segments, not Entries"
 ---
 
-
-An earlier decision fixed the Selection as a set of `EntryId`. Its premise was that "this Segment is selected but
+D-S3-10 fixed the Selection as a set of `EntryId`. Its premise was that "this Segment is selected but
 its siblings are not" means nothing. `CONTEXT.md` said the same thing from the other side: "A Segment
 is a unit of drawing only." **That premise is wrong, and this ADR reverses it. The Selection is a set
 of `SegmentId`.**
@@ -40,7 +39,7 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
 ## Considered options
 
 - **Keep the Selection on the Entry, and let the Picked Item say which bar the pointer grabbed
-  (the status quo).** Rejected. It is what shipped, and it is the defect. The pick told the
+  (the status quo, D-S4-30).** Rejected. It is what shipped, and it is the defect. The pick told the
   paint one thing and the Selection told every action another, so each new action had to choose a
   side. #200, #185, #198, #205 and #211 are that choice, made five times, twice in opposite
   directions. Two established Gantt products do work this way, so the option is not absurd. One of
@@ -92,7 +91,7 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
   envelope, and an ordinary date cell edits as it always did.
 - **The Picked Item is deleted.** It existed only because the Selection could not hold a Segment. The
   behaviour it bought is kept, and #211's tests are the net that proves it.
-- **The pick-paint rule survives its own mechanism.** *"What paints as selected is what moves"* is not reversed.
+- **D-S4-30 survives its own mechanism.** *"What paints as selected is what moves"* is not reversed.
   It becomes true by construction, because the paint and the gesture now read one set.
 - **A covered Segment still cannot be selected.** Overlapping Segments are valid data, and
   `elementFromPoint` returns the top bar only. This ADR does not close that, and no test here claims
@@ -118,5 +117,5 @@ The Document goes to `schema: 4`, and a reader of an older Document mints the id
   pair a Command's `ActedOn` already takes, so the gesture path and the Command path read one shape
   (#216 Q3).
 
-Supersedes the premise recorded in `plans/s3-direct-manipulation/s3.1-selection.md` and the pick
-clause in `plans/s4-hierarchy-and-rows/README.md`. Issue #212.
+Supersedes the premise of D-S3-10 (`plans/s3-direct-manipulation/s3.1-selection.md`) and the pick
+clause of D-S4-30 (`plans/s4-hierarchy-and-rows/README.md`). Issue #212.

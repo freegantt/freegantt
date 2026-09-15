@@ -11,7 +11,6 @@ open: nothing this redesign answers. **`Q2`** — whether the renderer contexts 
 
 > **Superseded in two statements by [ADR 0024](0024-parentid-answers-the-stored-value-on-every-door.md)**, ruled and built 2026-09-13 (#331). *A live row answers one tree*'s table row `parentId` → `parent()` (below) and its sentence "`entry.read('parentId')` answers `parent()?.id`" no longer hold, and neither does *one row, one tree, whichever door you ask through*: `read('parentId')` now answers the stored value, like every other key, on every door. The tree kept its own by-key door — `hierarchyParentId`, a new core Field — rather than `parentId` continuing to answer two different questions depending which door asked. **Do not rewrite the body.** Everything else in this ADR stands, `read()` as the one by-key value door included.
 
-
 **This is the first of four ADRs that give one row one object.** [0018](0018-a-variant-is-a-rule-not-an-id-list.md) makes the variant a rule. [0019](0019-one-plugin-one-install-site.md) gives a plugin one install site. [0020](0020-a-plugin-may-own-the-hierarchy.md) lets a plugin say what the tree is. This one comes first, because all three of the others read questions off the row.
 
 ## Context
@@ -91,8 +90,8 @@ entries.add({ ...entry.toInput(), id: 'copy-1' })   // duplicate this row
 | Receives an **`Entry`**                                           | Carries a **`StoredEntry`**                                           |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
 | the variant rule and the Item producer (`LookClaim`, `ItemProducer`) | `ProposedEdit` / `ProposedEdits`                                      |
-| capability resolution and every `Interactions` predicate          | `EditRequest.entries` — the pre-transaction snapshot        |
-| every renderer context that names an entry                        | `EditRequest.entryAfterEdits(id)` — the post-body state     |
+| capability resolution and every `Interactions` predicate          | `EditRequest.entries` — the pre-transaction snapshot (D-S5-45)        |
+| every renderer context that names an entry                        | `EditRequest.entryAfterEdits(id)` — the post-body state (D-S5-45)     |
 | a command's `when` and `run`                                      | `entryAfterEdit` and its five callers (`field-access.ts:242`)         |
 | `entries.get`, `entries.all`, the value `entries.add` returns — **`all` hands back live rows, and which rows it hands back is still committed-only** (rule 2) | a `ChangeSet`'s `{from, to}` values                                   |
 |                                                                   | `CoreFieldKey` and `CoreFieldValues`, which derive from `StoredEntry` |
@@ -125,11 +124,11 @@ Three names lost. `EntrySnapshot` fails check 4: `CONTEXT.md:23` gives "Snapshot
 ### Five rules
 
 1. **`model/` declares both types. `data/` builds the `Entry`.** The interfaces are types, so `model/` keeps zero runtime (`plans/01` §1.1). The factory sits beside the store and the indexes it reads.
-2. **One `Entry` per id, and every read is live.** The `Entry` allocates nothing per frame and keeps a stable identity inside a `Set`. **Live means what `childrenOf` answers today**: the committed index, overlaid with the open write set (`entry-store.ts:214-218`). It does not mean `all`, which is committed-only (`:167`).
+2. **One `Entry` per id, and every read is live.** The `Entry` allocates nothing per frame and keeps a stable identity inside a `Set`. **Live means what `childrenOf` answers today**: the committed index, overlaid with the open write set (`entry-store.ts:214-218`). It does not mean `all`, which is committed-only (D-S2-21, `:167`).
 
-   **Two questions hide in one word, and `all` answers them differently.** *Which* rows exist is the collection's question, and `all` answers it as of the last commit — the array is a `computed` bound to `#revision`, and `ScaleBinding`'s reference comparison rests on that (`entry-store.ts:150-153`). *What a row is worth* is the row's question, and every `Entry` answers it now. So inside an open transaction `all` does not grow, and each row in it already reads the write set. `has`, `get` and `size` are the live membership doors, and all three follow the write set today — `all.length` never did.
+   **Two questions hide in one word, and `all` answers them differently.** *Which* rows exist is the collection's question, and `all` answers it as of the last commit — the array is a `computed` bound to `#revision`, and `ScaleBinding`'s reference comparison rests on that (D-S1.5-4, `entry-store.ts:150-153`). *What a row is worth* is the row's question, and every `Entry` answers it now. So inside an open transaction `all` does not grow, and each row in it already reads the write set. `has`, `get` and `size` are the live membership doors, and all three follow the write set today — `all.length` never did.
 
-   **A review asked for `all: readonly StoredEntry[]` instead, and it is refused.** It reads as the cleaner snapshot, and it costs the thing this ADR is for: `layout/` receives that array (`gantt-shell.ts:725`), and `entries-source.ts:55` then rebuilds the whole tree out of `parentId` because stored values are all it holds. That is the re-derivation [0020](0020-a-plugin-may-own-the-hierarchy.md) cannot survive. The stored values stay reachable where they are needed and nowhere else: `entry.toInput()` copies a row, and the edit pipeline carries `StoredEntry` already. **`entries.storedValues` is the third door, added during the build** (`J20`): the committed rows as a `ReadonlyMap<EntryId, StoredEntry>`, the store's own index handed out read-only. It is not this refusal reopened — the refused shape was the row *list* `layout/` receives, which must stay live or `entries-source.ts` rebuilds the tree out of `parentId`. `storedValues` answers one question (`EditRequest.entries`, committed-only) and `layout/` never calls it.
+   **A review asked for `all: readonly StoredEntry[]` instead, and it is refused.** It reads as the cleaner snapshot, and it costs the thing this ADR is for: `layout/` receives that array (`gantt-shell.ts:725`), and `entries-source.ts:55` then rebuilds the whole tree out of `parentId` because stored values are all it holds. That is the re-derivation [0020](0020-a-plugin-may-own-the-hierarchy.md) cannot survive. The stored values stay reachable where they are needed and nowhere else: `entry.toInput()` copies a row, and the edit pipeline carries `StoredEntry` already. **`entries.storedValues` is the third door, added during the build** (`J20`): the committed rows as a `ReadonlyMap<EntryId, StoredEntry>`, the store's own index handed out read-only. It is not this refusal reopened — the refused shape was the row *list* `layout/` receives, which must stay live or `entries-source.ts` rebuilds the tree out of `parentId`. `storedValues` answers one question (`EditRequest.entries`, committed-only by D-S5-45) and `layout/` never calls it.
 3. **No derived type reads `keyof` the `Entry`.** `CoreFieldKey`, `CoreFieldValues` and `ProposedEdit` all derive from `StoredEntry`, and they stay that way.
 4. **A member that does no work is a property. A member that computes, walks or allocates carries parentheses.** `id`, `name`, `start`, `end`, `segments` and `depth` are properties — each one hands back what the row already holds. `hasChildren` is a property too: it reads the cached `#byParent` index and answers a boolean, so it allocates nothing. `children()`, `parent()`, `descendants()` and `duration()` carry parentheses, because each one computes, walks or allocates.
 
@@ -182,7 +181,7 @@ Four findings, each verified at HEAD on 2026-09-11. Any one of them alone decide
 
 **P2 — core spreads `StoredEntry` on its hot path.** `data/fields/field-access.ts:242` is `const next: Entry = { ...entry };`, and `:257` then assigns `next.props`. Five callers reach it (`entry-store.ts:180`, `entry-tree.ts:17,36,53`, `rollup.ts:198`, `change-set.ts:61`). A spread copies own enumerable properties only. An `Entry` would lose its methods there and still typecheck, and the assignment would refuse against a getter in strict mode. Under this ADR nothing changes at that line: it takes a `StoredEntry` and returns one.
 
-**P4 — two `Entry` positions are deliberately different.** `model/entry.ts:204` documents `EditRequest.entries` as the state _before_ this transaction's edits. `:216` documents `entryAfterEdits(id)` as the state _after_ its body. That distinction is why both exist. A live `Entry` answers one question, so it would collapse the pair and hand every cascade a delta of zero. Both stay stored values.
+**P4 — two `Entry` positions are deliberately different.** `model/entry.ts:204` documents `EditRequest.entries` as the state _before_ this transaction's edits. `:216` documents `entryAfterEdits(id)` as the state _after_ its body. D-S5-45 is why both exist. A live `Entry` answers one question, so it would collapse the pair and hand every cascade a delta of zero. Both stay stored values.
 
 ## The seam with `layout/`
 
@@ -256,13 +255,13 @@ interface RollUpContext extends ComputeContext {
   durations(): readonly (Duration | undefined)[];
 }
 
-/** Ambient plus this Gantt's locale. Still built once at column-resolve time. */
+/** Ambient plus this Gantt's locale. Still built once at column-resolve time (D-S4-13). */
 interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }
 ```
 
-**Three contexts, because there are three lifetimes, and a first draft of this section had two.** That draft put `children()` on `FieldContext` itself. `FormatContext` extends `FieldContext` and is built **once per column resolve** and reused for every cell (`model/field.ts`), so a per-row member on that type either answers the wrong row or forces a context rebuild on the paint path. Splitting says which members are per-Dataset and which are per-pass, and the type now states the lifetime it has.
+**Three contexts, because there are three lifetimes, and a first draft of this section had two.** That draft put `children()` on `FieldContext` itself. `FormatContext` extends `FieldContext` and is built **once per column resolve** and reused for every cell (`model/field.ts`, D-S4-13), so a per-row member on that type either answers the wrong row or forces a context rebuild on the paint path. Splitting says which members are per-Dataset and which are per-pass, and the type now states the lifetime it has.
 
 **A `compute` Field keeps its by-key read, and this is what the review caught.** Take `ctx.read` away outright and a `compute` Field can reach `entry.props` and the core dates and nothing else: not `duration`, not another `compute` Field, not a Field a plugin declared. `src/data/computed-cache.test.ts:30` is a live one that reads a sibling Field today, and the comment at `model/field.ts:224-226` publishes the promise. Worse, the author who wants a duration writes the millisecond arithmetic by hand, which `CLAUDE.md`'s time rule forbids outside `time/`. So both questions survive; only the entry argument goes.
 

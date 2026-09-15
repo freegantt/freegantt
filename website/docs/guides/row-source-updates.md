@@ -144,6 +144,6 @@ holds `team` to label its own button.
 
 ## Related
 
-- [Consumer API index](./consumer-api.md) — the rest of the app-author surface.
+- [Consumer API index](consumer-api.md) — the rest of the app-author surface.
 - [API reference](../api/) — generated `RowSource`, `EntriesRowSource`, `GroupRowSource`,
   `CustomRowSource` and `RowSourceCommon`.
