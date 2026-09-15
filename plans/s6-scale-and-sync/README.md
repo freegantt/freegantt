@@ -6,7 +6,7 @@
 **Governed by:** `plans/00` **D2** (scale posture — design for growth, validate by measured spike) and **D9** (multi-Gantt sync), `plans/01` §11 (invariants I1–I14), `plans/04` §5 (the gate).
 **Builds on:** S1.5's `ScrollModel`/`TimeScaleModel` and its two-Gantt fixture, S1.7's windowed frame, S4's row-height index seam, S5's plugin runtime and its disposal contract.
 
-> **What this slice is not.** No `Dependency`, no `schedule()`, no link geometry — S7, and the graph and SVG-link cost measurements wait for it, because links do not exist yet. No worker seam for `schedule()`: measure that after S7 if the plugin's own numbers demand it (D2). No new public feature, with **one stated exception**: R3 is an acceptance row of this slice and cannot be ticked without a per-axis `scroll` surface (**D-S6-1**, §5.3). That surface is in scope; #401, #402, #404 and #408 are the ones held out, and §4 Q3 decides where they land. S6 proves the core at scale and makes the package shippable.
+> **What this slice is not.** No `Dependency`, no `schedule()`, no link geometry — S7, and the graph and SVG-link cost measurements wait for it, because links do not exist yet. No worker seam for `schedule()`: measure that after S7 if the plugin's own numbers demand it (D2). No new public feature, with **one stated exception**: R3 is an acceptance row of this slice and cannot be ticked without a per-axis `scroll` surface (**D-S6-1**, §5.3). That surface is in scope; #401, #402, #404 and #408 are the ones held out. **Q3 is answered (2026-09-15): #401 lands before any further S6 work**, and only S6 work that serves #401 continues past it (§4 Q3). S6 proves the core at scale and makes the package shippable.
 
 ---
 
@@ -87,7 +87,7 @@ Written as hygiene. It is now the blocker: `version` is `0.0.0`, `dist/` is giti
 | #92 | — | Tree-shaking. `[S5-A6]` ticked it for features; the package-level check is #400's tarball. |
 | **#407** | — | The consumer brief's §1 maps nine of its concepts onto shipped API and closes "It works." One row was already wrong and cost #405. Nobody has checked the other eight. `quickie`. |
 
-Three issues raised by the same consumer brief are **not** S6: #401 (per-tick value rows), #402 (`Segment` props), #404 (`shading()`). They are new public surface. Where they land is an open call — see §4 Q3. **#401 is the consumer's blocking ask**, and its own brief calls it "the one real gap in the model".
+Three issues raised by the same consumer brief are **not** S6: #401 (per-tick value rows), #402 (`Segment` props), #404 (`shading()`). They are new public surface. **#401 now comes first, ahead of the rest of S6** — see §4 Q3. #402 and #404 are still unplaced. #401 is the consumer's blocking ask, and its own brief calls it "the one real gap in the model".
 
 **#408** (a gesture that creates a Segment) is new public surface too, raised here rather than by the brief. It joins the same open call.
 
@@ -99,9 +99,10 @@ Three issues raised by the same consumer brief are **not** S6: #401 (per-tick va
 |---|---|---|
 | **Q1** | What does "§12-style budgets" mean, now that no §12 exists? | R1 cannot be written down, let alone enforced. See §5.1. |
 | ~~**Q2**~~ | ~~Does R3 mean "both axes move" or "three sharing modes"?~~ | **Answered 2026-09-15 (author), in two steps.** First: only x needs to sync, so R3 is a build. Then: the shared unit becomes one **scroll axis**, so x, y, both and neither are all the caller's and the library ships no modes — **D-S6-1**, §5.3. |
-| **Q3** | Do #401, #402, #404 and #408 land inside S6, after it, or in a new slice? | They are public surface, and S6's whole posture is "no new public feature". A consumer is waiting on the first three, and **#401 is its blocking ask**. Until this is answered, three of the brief's five asks have no slice and no date, and the consumer learns that by waiting. This is **step 0** of §6. |
+| ~~**Q3**~~ | ~~Do #401, #402, #404 and #408 land inside S6, after it, or in a new slice?~~ | **Answered 2026-09-15 (author): #401 goes first.** It lands before any further S6 work, and only S6 work that serves #401 continues past it. It gets its own plan directory. The design is settled in [#401's own comment](https://github.com/Pawel-IT/FreeGantt/issues/401#issuecomment-5689299551), which also re-scopes #408: `timelineCellClick` gives an app the create path with no fight against D-S3-10, so #408 keeps only "does the library mint the Segment itself?". **#402 and #404 are still unplaced** — Q6 below. |
 | ~~**Q4**~~ | ~~Does the 10k number stay 10k?~~ | **Answered 2026-09-15 (author): yes, do 10k.** The row stands and the fixture rises — #406. See §5.2. |
 | **Q5** | Does #112 Seam B land here or defer to S7? | Only S6's own measurement work can say whether it needs a DOM-free harness. |
+| **Q6** | Where do #402 (`Segment` props) and #404 (`shading()`) land? | Q3 placed #401 and re-scoped #408. These two are still new public surface with no slice. Neither blocks the consumer — the brief ranks them third and fifth of five. |
 
 ---
 
@@ -267,9 +268,9 @@ The ruling stands and nothing needs to change in `plans/00`. It is recorded here
 
 ## 6. Order of work
 
-**Read this first: three of the consumer's five asks have no slice.** S6's posture is "no new public feature" (§3), so #401 (per-tick value rows), #402 (`Segment` props) and #404 (`shading()`) sit outside it. #401 is the consumer's **blocking** ask and its own brief calls it "the one real gap in the model". The list below does not schedule any of the three.
+**Read this first: #401 comes before the rest of this list.** Q3 is answered (2026-09-15): #401 goes first, and only S6 work that serves it continues past it. #402 (`Segment` props) and #404 (`shading()`) are still unplaced — Q6.
 
-0. **Answer Q3** (§4) — where #401, #402 and #404 land. Until that answer exists, the consumer's top blocker has no slice and no date, and nobody outside this file knows it.
+0. **#401** — a row that paints one value per tick. It is the consumer's blocking ask, its design is settled, and it gates everything below that does not serve it.
 
 1. **#400** — packaging. It blocks a consumer, it costs about a day, and it discharges R5.
 2. **Mint `[S6-A1]`–`[S6-A5]` and add the S6 → S7 entry to `scripts/slice-gate.mjs`** (§5.4). Nothing after this is provable without it.
