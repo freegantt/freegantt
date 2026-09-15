@@ -26,10 +26,34 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `verify` | the check chain in `package.json` — every check except the browser one | ~60s |
 | `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then `test:e2e`. **The gate** | ~75s |
 | `open-pr` | `node scripts/open-pr.mjs` — pushes the branch, opens a draft pull request (§5.2) | ~5s |
+| `measure:scale` | `node scripts/measure-scale.mjs` — the scale measurement. **Not a check** (§1.1) | ~40s |
 
 `pnpm verify` is the **browser-free chain**: every check except `test:e2e`. It is a stage of the gate, not the gate.
 
 `pnpm verify:full` is **the gate**. Three callers run it, and none of them runs anything else: an agent proving a change, `.githooks/pre-push`, and CI (§5). It reads its check list from the `verify` script at run time, so no caller can drift from another (§3.2).
+
+### 1.1 `measure:scale` reports a number and judges nothing
+
+Every other script on that table answers pass or fail. `pnpm measure:scale` answers "how much", and that is why no hook and no CI job calls it.
+
+The reason is issue #95's, and it is not squeamishness about slow tests. A frame-time assertion is a claim about the machine that ran it. A CI runner is shared, noisy and not the reference hardware S6's budgets will name, so such a test fails on a busy runner and passes on a quiet one, with the same code. That test teaches a team to re-run the build until it goes green, which costs more than the regression it was meant to catch. S1.11 already rejected CI timing assertions once, for `[S1-A1]`. Budgets arrive when S6 names them and names the hardware (`plans/s6-scale-and-sync/README.md` §5.1).
+
+```bash
+pnpm measure:scale              # headless
+pnpm measure:scale --headed     # watch it scroll
+```
+
+It starts its own dev server on port 5174 — set `FG_MEASURE_PORT` if that port is taken — opens `harness/large-dataset.html`, and scrolls the timeline pane for 240 frames on each axis. Then it scrolls once more at 4x CPU slowdown, which is what turns a median into a cost on a machine with headroom. It prints:
+
+- **Frame time**, as p50 / p95 / max, with a count of frames over 32 ms. Read the tail, not the median: an unthrottled run on a fast machine reports the display's cadence, about 16.7 ms, whatever the work costs.
+- **Script milliseconds per frame**, unthrottled and throttled. This is the honest cost number, because it is a CPU accumulator rather than a wall-clock sample.
+- **Nodes, listeners and heap** after a forced collection.
+
+It writes two files under `measurements/` (git-ignored): a summary JSON, and a Chromium trace to open in the browser's Performance panel.
+
+**It refuses a port that already answers.** An earlier version did not, silently reused a server left over from the previous run, and produced a page of numbers measured against the wrong code. That is the same false green `scripts/e2e-worktree-port-guard.mjs` exists to refuse (§5), and the fix is the same: fail loudly rather than measure the wrong thing.
+
+**What it cannot do.** A scripted `scrollTop` write is not a real wheel or trackpad scroll. A headless run is not reference hardware. Which call stacks are ours, and whether a layout was forced, is Performance-panel work — which is what the trace file is for, and why #95 asks a person to read it.
 
 ---
 

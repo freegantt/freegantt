@@ -16,10 +16,10 @@
 
 | # | Acceptance row | State | Carried by |
 |---|---|---|---|
-| **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | Not started. The spike has not run. See §5.1 — the section it cites does not exist. | #95 (profile the harness), #342 (bundle number) |
+| **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | Not started. The spike has not run, and no budget is defined. `pnpm measure:scale` now captures the browser half of it on demand (#403's branch) — a measurement, never a gate, per #95. See §5.1. | #95 (profile the harness), #342 (bundle number) |
 | **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | Harness seeds **5,000** and the row says 10,000. Ruled 2026-09-15: **the fixture goes to 10k.** See §5.2. | **#406** (fixture), #95 (measurement) |
 | **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Not a tick.** `[S1-A4]` proves both-axis sharing. The second shape is a build, and the shape is settled: one **scroll axis** becomes the shared unit, so a caller shares x, y, both or neither — **D-S6-1**, §5.3. Shared y alone is representable and unadvertised. | **#405** |
-| **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | Not started. The consumer's case is two Gantts on **shared** models, which is where a leak has somewhere to accumulate. | **#403** |
+| **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | **Done, 2026-09-15.** Counted in `test/dom/leak-cycles.test.ts` (100 cycles, three shapes, plus the shared-model binding check) and in `e2e/mount-destroy.spec.ts` (Chromium nodes, listeners and heap). `GanttShell.destroy()` is one `disposeAll()`. | **#403** |
 | **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | Not started, and now blocking. A `github:` install lands with no `dist/` at all. | **#400** |
 
 ### R1 — budgets from a measured spike
@@ -34,6 +34,10 @@ D2 says the posture is validated by measurement, not assumed. The spike measures
 
 Then act on it: swap the height index if the crossover says so, and fix what the reconciler numbers expose. The budgets that come out go into CI on reference hardware, and a regression fails the build.
 
+`pnpm measure:scale` (added with R4, 2026-09-15) covers the first of the five: it drives `large-dataset.html`, reports scroll frame time as p50/p95/max plus a dropped-frame count, reports script cost per frame, and writes a Chromium trace for the Performance panel. It runs the scroll twice more — once unthrottled, once at 4x CPU slowdown, which is #95 step 5. It asserts nothing and `verify` does not call it.
+
+**First reading, 2026-09-15, this developer machine, headless, at the fixture's present 5,000 entries.** Unthrottled the scroll drops no frames and costs 3.1 ms of script per frame. At 4x slowdown p95 is 49.5 ms and **53 of 240 frames run over 32 ms**. That is a number to act on, not a budget: the fixture is not yet 10,000 (#406), and this machine is not reference hardware. The other four measurements — pack-heavy layout cost, the height-index crossover, reconciler cost, zone arithmetic per tick — are not covered and still need their own runs.
+
 ### R2 — the 10k fixture
 
 `harness/large-dataset.ts` seeds `seededEntryInputs({ count: 5000 })`. `e2e/large-dataset.spec.ts` drives it. `[S1-A1]` already proves only windowed rows exist in the DOM at 5,000 — and that box was ticked with a deliberate note: *not* "smoothly", because throughput is D2's measured spike and belongs here.
@@ -46,9 +50,18 @@ So R2 is the timing half of a fixture that already exists. It needs the count ra
 
 What is left is per-axis sharing: the shared unit becomes one scroll axis, so x, y, both and neither are all the caller's. See §5.3, **D-S6-1**.
 
-### R4 — the leak check → **#403**
+### R4 — the leak check → **#403** (done, 2026-09-15)
 
 The work and its acceptance are in the issue. The short version: three counts (nodes, listeners, observables) must return to baseline over 100 cycles, and the same must hold for two Gantts sharing one `ScrollModel` and one `TimeScaleModel`, in three destroy orders.
+
+**What landed, and the two things it taught.**
+
+`GanttShell.destroy()` was a hand-written list of twenty-two teardown calls. A resource added in a later slice could miss that list with nothing to catch it. Each resource now registers its own release on the line that builds it, and `destroy()` is one `disposeAll()`.
+
+The counts live in two places, because one place cannot answer both halves. `test/dom/leak-cycles.test.ts` counts listeners, observers, animation frames and nodes over 100 cycles, and asserts a shared model holds no binding once its Gantts are gone — `ScrollModel.state.max` is the fan-in over live bindings, so a dead one keeps claiming room there. `e2e/mount-destroy.spec.ts` counts nodes, listeners and heap in Chromium, driving `harness/mount-destroy.html`.
+
+1. **A leak census has to be proved red.** A first draft patched `globalThis.EventTarget.prototype` and read clean through a deliberately leaked document listener, because happy-dom's nodes inherit from its own `EventTarget` class and not from that global. Every count here was then checked by injecting a real leak: a missed `removeEventListener`, a missed `disconnect()`, and a missed `unbind()` each turn it red.
+2. **Heap is a question only a real browser answers.** happy-dom retains about 0.2 MB per rendered entry per mount whatever `destroy()` does, and two forced collections do not return it. The same page in Chromium grows 1.4 KB per mount over 150 mounts, with node and listener counts exactly flat. So the fake-DOM tests assert counts and never memory, and they use small fixtures.
 
 The first consumer is a Livewire single-page app that mounts and destroys a linked pair on every visit. A leak there shows up as a slow tab after forty minutes of a dispatcher's work.
 
