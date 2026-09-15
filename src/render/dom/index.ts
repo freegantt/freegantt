@@ -1370,12 +1370,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         paintResizeHandles(resizeHandleBarsOfEntry(paintedResizable), paintedResizableEdges);
       }
       tickLines?.sync(frame.tickLines, frame.contentHeight, frame.visible.height);
-      dateLines?.sync(
-        frame.decorations,
-        frame.contentHeight,
-        frame.visible.height,
-        readDateLineLabelPlacement(),
-      );
+      dateLines?.sync({
+        decorations: frame.decorations,
+        contentHeight: frame.contentHeight,
+        paneHeight: frame.visible.height,
+        labelPlacement: readDateLineLabelPlacement(),
+      });
       decorations?.sync(
         frame.underBars,
         frame.overBars,
