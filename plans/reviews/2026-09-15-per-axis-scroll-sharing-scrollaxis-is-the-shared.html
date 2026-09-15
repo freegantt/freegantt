@@ -41,9 +41,10 @@
           uncommitted working tree just before this report.
         </p>
         <p class="text-sm text-slate-700 max-w-3xl">
-          Pass 2 (cold <code>reviewer-planner</code>) is pending. The dispatch is documented in the
-          next commit; verdict boxes below are filled as they land. Findings keep their ids and
-          cite exact files/lines a fresh agent — or a human — can open.
+          Pass 2 (cold <code>reviewer-planner</code>) landed: F1–F5 all
+          <span class="font-semibold">Confirmed</span>. F3's collision lives only in
+          <code>gantt.ts</code> (its citation tightened); F1's sweep list gained the rule file's
+          own prose strings. Verdict boxes are on each finding.
         </p>
         <div class="flex flex-wrap gap-3 text-xs uppercase tracking-wider text-slate-500 pt-2">
           <span class="border border-slate-400 px-2 py-1">solid box = module</span>
@@ -252,8 +253,22 @@
             <code>maintaining.md</code>. A reader of <code>layers.md:79</code> still sees
             <code>TimeScaleModel · ScrollModel</code> listed as the viewport exports.
           </p>
-          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
-            <p class="font-semibold text-emerald-800">Pass 2 — pending.</p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Every cited artifact holds: both I12 cells carry "a bound <code>ScrollAxis</code>"
+              beside <code>freegantt/no-scroll-outside-scroll-model</code>; B4 rows in both lint
+              tables; the rule ships as <code>eslint/rules/no-scroll-outside-scroll-model.cjs</code>
+              (registered <code>eslint/rules/index.cjs:7</code>, wired
+              <code>eslint.config.js:116</code>), with fixture
+              <code>test/fixtures/violations/no-scroll-outside-scroll-model.ts:1</code> pinned in
+              <code>test/guards/lint-fixtures.test.ts:17,33</code>; its only exemption is
+              <code>view/scroll-attachment.ts</code>. The four architecture pages are stale as
+              listed; <code>lifecycle.md:741</code> is doubly so ("Derived from
+              <code>scroll-model.ts</code>", a file this branch deleted). One fix-shaping note: the
+              rule file's own prose says "the ScrollModel binding" four times (rule cjs lines 1, 16,
+              20, 21) — a rename must sweep those strings too.
+            </p>
           </div>
         </article>
 
@@ -287,8 +302,15 @@
             Fix: add a y-only pair to <code>scroll-sync.html</code>, or strike "y-only" from the
             scope line with a note.
           </p>
-          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
-            <p class="font-semibold text-emerald-800">Pass 2 — pending.</p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              <code>plans/03-slices.md:258</code> promises "(x-only, y-only, and both variants)";
+              the checked acceptance at <code>:267</code> asks only both-axes + x-shared-while-y-
+              private and is met. <code>scroll-sync.html</code> (lines 57-70) and
+              <code>scroll-sync.ts</code> (lines 24, 34-51) mount exactly two pairs — both-axes and
+              x-only; <code>[S6-A3]</code> drives only the x-only pair.
+            </p>
           </div>
         </article>
 
@@ -318,9 +340,19 @@
             <span class="font-semibold">Why it is new.</span> The phrase "time axis" predates the
             branch, but the branch rewrote the sentence that carries it and loaded "axis" as a
             scroll-direction term in the very same paragraph. Fix: "its scale, both, or neither".
+            <span class="text-slate-500">(Cited <code>gantt-shell.ts:271-273</code> is the parallel
+            doc, which says only "sync that direction ... omit a direction to keep it private" —
+            the collision is <code>gantt.ts</code>'s alone.)</span>
           </p>
-          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
-            <p class="font-semibold text-emerald-800">Pass 2 — pending.</p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Line 95 says "the same <code>ScrollAxis</code> as <code>x</code> (or
+              <code>y</code>)" and line 97 says "its time axis, both, or neither" — the collision
+              is real and lives entirely in <code>gantt.ts:95-98</code>. The
+              <code>gantt-shell.ts:271-273</code> parallel doc does not contain "time axis", so the
+              finding's citation was clipped to <code>gantt.ts</code>.
+            </p>
           </div>
         </article>
 
@@ -347,8 +379,16 @@
             and keep <code>ScrollAxes</code> as the config entry, or make the two requirements part
             of one named type.
           </p>
-          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
-            <p class="font-semibold text-emerald-800">Pass 2 — pending.</p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              <code>viewport.ts:66</code> is exactly
+              <code>readonly scroll: ScrollAxes &amp; { readonly x: ScrollAxis; readonly y: ScrollAxis }</code>.
+              <code>ScrollAxes</code> (<code>scroll-axis.ts:46-49</code>) is the optional config
+              record <code>{ x?: ScrollAxis; y?: ScrollAxis }</code>; the runtime value is
+              always-both (<code>viewport.ts:89-92</code> freezes the pair). The internal field wears
+              the public options type for a live bound pair, as described.
+            </p>
           </div>
         </article>
 
@@ -373,8 +413,13 @@
             the apostrophe carries no information. Rephrase without the plural standing for "the
             axes".
           </p>
-          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
-            <p class="font-semibold text-emerald-800">Pass 2 — pending.</p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Lines 1302-1303 read exactly "the x/y <code>ScrollAxis</code>es'
+              <code>panTo</code> have nowhere real to write". The plural-possessive stumble and the
+              rephrase both hold.
+            </p>
           </div>
         </article>
       </section>
