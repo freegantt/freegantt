@@ -11,8 +11,9 @@ import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { InternalThrownCode } from '../../model/index.js';
 import type { Entry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
+// Not re-exported from `model/index.ts` — a code a consumer cannot reach stays off its barrel too (#380).
+import type { InternalThrownCode } from '../../model/errors.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 

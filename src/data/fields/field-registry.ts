@@ -15,7 +15,6 @@ import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../.
 import {
   ComputedFieldCannotBeWrittenError,
   FreeGanttError,
-  type InternalThrownCode,
   UnknownFieldError,
   ReservedFieldKeyError,
   DuplicateFieldKeyError,
@@ -23,6 +22,8 @@ import {
   UnknownAggregatorError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
+// Not re-exported from `model/index.ts` — a code a consumer cannot reach stays off its barrel too (#380).
+import type { InternalThrownCode } from '../../model/errors.js';
 import { SHIPPED_AGGREGATORS } from './aggregators.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import { SHIPPED_FIELD_TYPES } from './field-types.js';

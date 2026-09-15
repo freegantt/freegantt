@@ -80,7 +80,7 @@ export type {
   ColumnCellRendererContext,
   TooltipColumn,
 } from './field.js';
-export type { BuiltInThrownCode, InternalThrownCode, ThrownCode } from './errors.js';
+export type { BuiltInThrownCode, ThrownCode } from './errors.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
