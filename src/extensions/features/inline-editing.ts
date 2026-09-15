@@ -57,13 +57,12 @@ export interface InlineEditingOptions {
   dateInput?: DateInputFactory;
 }
 
-/** S5.8, D-S5-20: `field.type === 'date'` routes through the `dateInput` seam. The two shipped core
- *  date Fields (`start`/`end`) never declare `type` themselves. `type` must name a registered
- *  `fieldTypes` bundle, and shipping one just to spell "date" would be a bigger, riskier change
- *  than this slice needs. So this guard also matches those two keys by name. A consumer's own date-valued
- *  Field opts in with `type: 'date'` plus a matching `fieldTypes.date` bundle (even an empty one). */
+/** S5.8, D-S5-20: `field.type === 'date'` routes through the `dateInput` seam. Core `start` and
+ *  `end` name that type, and so does a consumer Instant Field `{ key: 'permitExpiry', type: 'date' }`.
+ *  The shipped type table seeds `date`, so no local `fieldTypes.date` bundle is required. A Field
+ *  with no `type` does not take this editor. */
 function isDateField(field: Field): boolean {
-  return field.type === 'date' || field.key === 'start' || field.key === 'end';
+  return field.type === 'date';
 }
 
 /** Would an edit of this cell write the `start`/`end` envelope of an Entry that stores `segments`?
@@ -77,8 +76,8 @@ function isDateField(field: Field): boolean {
  *  opens as it always did. Several Segments still have no answer to "which stretch did you mean?".
  *  The cell keeps refusing, because an editor over it can only fail on commit.
  *
- *  This names `start` and `end` by key, as `isDateField` above already does for the same two core
- *  Fields. That repeats a rule `data/` also holds.
+ *  This names `start` and `end` by key. That is the segment envelope door, not the date editor:
+ *  `isDateField` above routes on `type === 'date'` only. This repeats a rule `data/` also holds.
  *
  *  #256 added the library's own write question, `ctx.interaction.canWrite`. This rule stays out of
  *  it, on purpose. A drag on a segmented bar writes `segments` and a recomputed envelope, so it

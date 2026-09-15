@@ -428,6 +428,82 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('core end opens the date editor by type, not by key', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: structuredClone([...ENTRIES]),
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'start', 'end'],
+      plugins: [inlineEditing()],
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(input(container).type).toBe('date');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer Instant Field with type: date opens the date editor with no local fieldTypes.date', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [
+        {
+          id: 'e1',
+          name: 'Task',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          props: { permitExpiry: instant('2026-06-15T00:00:00Z') },
+        },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'permitExpiry', type: 'date', column: { header: 'Permit' } }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'permitExpiry'],
+      plugins: [inlineEditing()],
+    });
+    dblclick(cellFor(container, 'e1', 'permitExpiry'));
+    expect(input(container).type).toBe('date');
+    expect(input(container).value).toBe('2026-06-15');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a Field with no type does not open the date editor', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [
+        {
+          id: 'e1',
+          name: 'Task',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          props: { permitExpiry: instant('2026-06-15T00:00:00Z') },
+        },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'permitExpiry', column: { header: 'Permit' } }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'permitExpiry'],
+      plugins: [inlineEditing()],
+    });
+    dblclick(cellFor(container, 'e1', 'permitExpiry'));
+    expect(input(container).type).toBe('text');
+    gantt.destroy();
+    container.remove();
+  });
+
   it('committing a new date writes one transaction', () => {
     const { container, gantt, dataset } = makeGantt();
     dblclick(cellFor(container, 'e1', 'start'));

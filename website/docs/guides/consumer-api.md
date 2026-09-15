@@ -30,14 +30,14 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 
 ### Dataset
 
-- `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's
+- `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. Field key `start` cannot be redeclared (`IllegalCoreFieldOverrideError` except `editable`); type name `date` is replaceable at construction via `fieldTypes`, and `registerType('date')` still throws.
 - A parent rolls up because it has children (ADR 0013). An Entry carries no stored classification, so nothing opts a row in or out by kind.
 - `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door (ADR 0017)
 - `plugins` — a plugin with a `data` half installs here (ADR 0019)
 
 ### Gantt
 
-- `gridColumns` — which Fields this view shows, in order
+- `gridColumns` — which Fields this view shows, in order. `cellRenderer` stays on the column. `meterCell()` and `imageCell()` are the shipped cell renderers (#265); default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
@@ -278,6 +278,11 @@ gap, not a rename.
 | `.fg-row-label` | First-column label cell. Carries hierarchy indent. |
 | `.fg-row-label-text` | The label cell's text child. |
 | `.fg-row-cell` | A data cell in the grid. |
+| `.fg-meter` | `meterCell()` wrapper. Track plus optional formatted text. |
+| `.fg-meter-track` | The meter graphic. `aria-hidden` when text sits beside it. |
+| `.fg-meter-fill` | The filled portion of the track. Width is the clamped percent. |
+| `.fg-meter-text` | The Field's formatted value beside the track. |
+| `.fg-image-cell` | `imageCell()` img. |
 | `.fg-row-twisty` | Collapse control on a parent row. |
 | `.fg-header` | Sticky time header in the timeline pane. |
 | `.fg-band` | One header band. Height is `--fg-band-height`. |

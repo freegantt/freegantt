@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { editableOf, FieldRegistry, requireResolvedIndex } from './field-registry.js';
 import { createFieldAccess, readFieldByKey, writeField } from './field-access.js';
-import type { Field, FieldType } from '../../model/index.js';
+import type { Duration, Entry, Field, FieldType, Instant } from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
   DuplicateFieldKeyError,
@@ -13,6 +13,8 @@ import {
   UnknownFieldError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
+import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, instant, MS } from '../../time/index.js';
+import { currency } from './field-types.js';
 
 function ctx(registry: FieldRegistry) {
   return createFieldAccess({ fields: registry, timeZone: 'UTC' });
@@ -143,6 +145,17 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
     expect(() => new FieldRegistry({ fields: [{ key: 'start', rollUp: 'none' }] })).toThrow(
       IllegalCoreFieldOverrideError,
     );
+  });
+
+  it("{ key: start, type: text } throws IllegalCoreFieldOverrideError — a consumer cannot redeclare a core Field's type", () => {
+    try {
+      new FieldRegistry({ fields: [{ key: 'start', type: 'text' }] });
+      expect.unreachable('expected IllegalCoreFieldOverrideError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(IllegalCoreFieldOverrideError);
+      expect((error as IllegalCoreFieldOverrideError).illegalKey).toBe('type');
+      expect((error as IllegalCoreFieldOverrideError).key).toBe('start');
+    }
   });
 
   it('the illegal-override error names the offending key', () => {
@@ -297,6 +310,134 @@ describe('percent — the shipped Field type', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'progress', type: 'percent' }] });
     expect(registry.get('progress')?.rollUp).toBeUndefined();
     expect(registry.rollingUpFields().some((field) => field.key === 'progress')).toBe(false);
+  });
+});
+
+describe('shipped Field types resolve by name with no local fieldTypes', () => {
+  const entry = {} as Entry;
+
+  it('{ key: owner, type: text } resolves with no local fieldTypes entry', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'owner', type: 'text' }] });
+    const field = registry.get('owner')!;
+    expect(field.type).toBe('text');
+    expect(field.inputType).toBe('text');
+    expect(field.formatValue!('Ada', { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('Ada');
+    expect(field.rollUp).toBeUndefined();
+  });
+
+  it('type: number formats through Intl, parses 35, refuses abc, aligns end, and has no rollUp', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'qty', type: 'number' }] });
+    const field = registry.get('qty')!;
+    expect(field.type).toBe('number');
+    expect(field.formatValue!(35, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
+      new Intl.NumberFormat('en-US', { style: 'decimal' }).format(35),
+    );
+    expect(field.parseValue!('35', { timeZone: 'UTC' }, entry)).toBe(35);
+    expect(field.parseValue!('abc', { timeZone: 'UTC' }, entry)).toBeUndefined();
+    expect(field.column?.align).toBe('end');
+    expect(field.rollUp).toBeUndefined();
+  });
+
+  it('type: date formats an Instant through formatDate, and has no parseValue', () => {
+    const noon: Instant = instant('2026-06-15T12:00:00Z');
+    const registry = new FieldRegistry({ fields: [{ key: 'due', type: 'date' }] });
+    const field = registry.get('due')!;
+    expect(field.type).toBe('date');
+    expect(field.formatValue!(noon, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
+      formatDate('UTC', noon, 'en-US', DATE_TIME_FORMAT),
+    );
+    expect(field).not.toHaveProperty('parseValue');
+  });
+
+  it('type: duration formats like the core duration Field', () => {
+    const twelveDays: Duration = { value: 12 * MS.DAY, unit: 'millisecond' };
+    const registry = new FieldRegistry({ fields: [{ key: 'lead', type: 'duration' }] });
+    const field = registry.get('lead')!;
+    expect(field.type).toBe('duration');
+    expect(field.formatValue!(twelveDays, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('12 d');
+  });
+
+  it('{ type: currency({ code: EUR }) } resolves, formats, parses, and does not keep an object on type', () => {
+    const registry = new FieldRegistry({
+      fields: [{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }],
+    });
+    const field = registry.get('cost')!;
+    expect(field.type).toBeUndefined();
+    expect(typeof field.type).not.toBe('object');
+    expect(field.formatValue!(1234.5, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(1234.5),
+    );
+    expect(field.formatValue!(1234.5, { timeZone: 'UTC', locale: 'de-DE' }, entry)).toBe(
+      new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(1234.5),
+    );
+    expect(field.parseValue!('35', { timeZone: 'UTC' }, entry)).toBe(35);
+    expect(field.rollUp).toBe('sum');
+  });
+
+  it('a named registration of a currency bundle still resolves by that name', () => {
+    const registry = new FieldRegistry({
+      fieldTypes: { eur: currency({ code: 'EUR' }) },
+      fields: [{ key: 'cost', type: 'eur' }],
+    });
+    const field = registry.get('cost')!;
+    expect(field.type).toBe('eur');
+    expect(field.formatValue!(10, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(10),
+    );
+  });
+
+  it("{ type: 'not-a-type' } still throws UnknownFieldTypeError", () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'x', type: 'not-a-type' }] })).toThrow(
+      UnknownFieldTypeError,
+    );
+  });
+});
+
+describe('core Fields consume the shipped type table', () => {
+  it('resolved name/start/end/duration name text/date/date/duration', () => {
+    const registry = new FieldRegistry();
+    expect(registry.get('name')?.type).toBe('text');
+    expect(registry.get('start')?.type).toBe('date');
+    expect(registry.get('end')?.type).toBe('date');
+    expect(registry.get('duration')?.type).toBe('duration');
+    expect(registry.get('parentId')).not.toHaveProperty('type');
+    expect(registry.get('segments')).not.toHaveProperty('type');
+    expect(registry.get('hierarchyParentId')).not.toHaveProperty('type');
+  });
+
+  it('core end still formats inclusive; a start-less end formats as a plain Instant', () => {
+    const registry = new FieldRegistry();
+    const start = instant('2026-06-15T00:00:00Z');
+    const end = instant('2026-06-20T00:00:00Z');
+    const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
+    const withStart = { start, end } as Entry;
+    const formatted = registry.get('end')!.formatValue!(end, formatCtx, withStart);
+    expect(formatted).toBe(formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT));
+    expect(formatted).not.toBe(formatDate('UTC', end, 'en-US', DATE_TIME_FORMAT));
+    expect(registry.get('end')!.formatValue!(end, formatCtx, { end } as Entry)).toBe(
+      formatDate('UTC', end, 'en-US', DATE_TIME_FORMAT),
+    );
+  });
+
+  // Same constructor spread the percent test already pins. Core Fields name `date`, so the
+  // replacement reaches `start` and `end`. mergeField is `{ ...bundle, ...declared }`: `end`
+  // keeps formatEnd and takes only compare.
+  it('overriding date rewrites start formatValue and compare; end keeps formatEnd and takes only compare', () => {
+    const registry = new FieldRegistry({
+      fieldTypes: { date: { formatValue: () => 'OVERRIDE', compare: () => 42 } },
+    });
+    const start = instant('2026-06-15T00:00:00Z');
+    const end = instant('2026-06-20T00:00:00Z');
+    const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
+    const withStart = { start, end } as Entry;
+
+    expect(registry.get('start')!.formatValue!(start, formatCtx, withStart)).toBe('OVERRIDE');
+    expect(registry.get('start')!.compare!(start, end)).toBe(42);
+    expect(registry.get('end')!.compare!(start, end)).toBe(42);
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).toBe(
+      formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT),
+    );
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).not.toBe('OVERRIDE');
   });
 });
 

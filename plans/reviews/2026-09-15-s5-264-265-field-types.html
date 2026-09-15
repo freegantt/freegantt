@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — FreeGantt, #264 / #265 field types and cell renderers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    </script>
+    <style>
+      .seam {
+        stroke-dasharray: 4 4;
+      }
+      .leak {
+        stroke: #dc2626;
+      }
+      .deep {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+      }
+      .struck {
+        opacity: 0.55;
+      }
+      .struck h3 {
+        text-decoration: line-through;
+      }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-4">
+        <h1 class="font-serif text-4xl">FreeGantt — branch review (pass 1 + pass 2 verified)</h1>
+        <p class="text-sm text-slate-600 font-mono">
+          Working-tree diff vs <span class="bg-stone-200 px-1">origin/main (d07b628)</span> · Branch
+          <span class="bg-stone-200 px-1">Pawel-IT/264_265</span> · 2026-09-15 · no commits yet, 23
+          files · +555 / −121 plus untracked
+          <span class="bg-stone-200 px-1">src/layout/cells.ts</span> /
+          <span class="bg-stone-200 px-1">src/layout/cells.test.ts</span>
+        </p>
+        <p class="text-sm text-slate-600 font-mono">
+          Issues
+          <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/264">#264</a>
+          (shipped Field types; core Fields name them) and
+          <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/265">#265</a>
+          (shipped <code>meterCell()</code> / <code>imageCell({ alt })</code>)
+        </p>
+        <p class="text-sm font-mono bg-emerald-50 border border-emerald-200 px-3 py-2 inline-block">
+          verify:full PASS — all 17 checks green, test:e2e included (66s), on the pre-push of the
+          pass-1 report commit. Feature work is still uncommitted in the working tree and was in
+          that run.
+        </p>
+        <p class="text-sm text-slate-700 max-w-3xl">
+          Pass 2 (cold <code>reviewer-planner</code>) opened every cited file. F1 and F3–F7
+          Confirmed. F2 is Mis-described: the back door is real, but <code>end</code> keeps its own
+          inclusive <code>formatValue</code> and loses only <code>compare</code>. Account below
+          replaced.
+        </p>
+        <div class="flex flex-wrap gap-3 text-xs uppercase tracking-wider text-slate-500 pt-2">
+          <span class="border border-slate-400 px-2 py-1">solid box = module</span>
+          <span class="border border-dashed border-slate-400 px-2 py-1">dashed = seam</span>
+          <span class="border border-red-500 text-red-600 px-2 py-1">red = leakage</span>
+          <span class="deep text-stone-100 px-2 py-1">thick dark = deep module</span>
+        </div>
+      </header>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">What this branch does</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Landed clean</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>
+                #264 part 1 — <code>SHIPPED_FIELD_TYPES</code> now seeds
+                <code>text</code>, <code>number</code>, <code>percent</code>, <code>date</code>,
+                <code>duration</code>. A Field naming one of those strings needs no local
+                <code>fieldTypes</code> entry.
+              </li>
+              <li>
+                #264 part 2 — core <code>name</code> / <code>start</code> / <code>end</code> /
+                <code>duration</code> name those types. <code>end</code> keeps its inclusive
+                <code>formatValue</code>. <code>parentId</code>, <code>segments</code>,
+                <code>hierarchyParentId</code> stay untyped.
+              </li>
+              <li>
+                <code>currency({ code: 'EUR' })</code> is a factory, not a seeded name. A bad ISO
+                code throws at the call, not at first format. Inline bundles are stripped off the
+                resolved Field so a function object never sits on <code>type</code>.
+              </li>
+              <li>
+                No default <code>rollUp</code> on a shipped type (ADR 0008). Percent stays 0–100,
+                unclamped. <code>mergeColumn</code> already merged one level deep (#142).
+              </li>
+              <li>
+                #265 — <code>meterCell()</code> paints a track plus formatted text, graphic
+                <code>aria-hidden</code>, never <code>role="progressbar"</code>. Missing values paint
+                nothing. Out-of-range clamps paint only. Planner e2e asserts the new a11y.
+              </li>
+              <li>
+                Date-editor routing is <code>field.type === 'date'</code> only.
+                <code>isDateField</code> no longer special-cases the <code>start</code> /
+                <code>end</code> keys. A consumer Instant Field takes the date editor with no local
+                <code>fieldTypes.date</code> bundle.
+              </li>
+              <li>
+                Planner Done cell is <code>meterCell()</code>. The hand-written
+                <code>progressCell</code> with <code>role="img"</code> / <code>"35% complete"</code>
+                is gone — that was the exact consumer-compensates-for-library gap #264/#265 named.
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-sky-700">Axes this pass covered</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>
+                <span class="font-semibold">Naming</span> — call sites read aloud with real
+                arguments. <code>meterCell()</code> and
+                <code>currency({ code: 'EUR' })</code> pass.
+                <code>imageCell({ alt: 'Owner' })</code> fails when the column holds different
+                images (F1).
+              </li>
+              <li>
+                <span class="font-semibold">Simplicity</span> — one leftover re-export after the
+                formatter move (F4). The simplify skill file is not in this repo; YAGNI / one-home
+                / middle-man are the checks used.
+              </li>
+              <li>
+                <span class="font-semibold">Standards / spec</span> — #264's table and #265's a11y
+                rules against the diff. Docs the branch touched still describe only
+                <code>percent</code> (F3, F7).
+              </li>
+              <li>
+                <span class="font-semibold">Architecture</span> — Field types stay in
+                <code>data/</code>; cell renderers are DOM-free <code>ElementDescription</code>
+                trees in <code>layout/</code>, matching <code>diamond()</code>. Two seams leak
+                (F2, F6).
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">harness/main.ts (reviewed in full, per the stop rule)</h2>
+        <p class="text-sm">
+          Unchanged on this branch. No restated default, no hand-built
+          <code>TimeScaleModel</code>, no hand-tuned <code>--fg-grid-pane-width</code>.
+          <code>gridWidth: 'fitColumns'</code> (line 80) stays. Budget still names a local
+          <code>money</code> type from <code>fixtures/demo-dataset.ts</code> — that file is F5, not
+          this one.
+        </p>
+        <p class="text-sm">
+          <code>harness/planner.ts</code> (changed) closes the stop-rule gap the issues cited: the
+          Done column is <code>meterCell()</code>. Remaining custom cells (Task tag, Own initials,
+          compact Start/Finish, <code>12d</code> punctuation) are this page's design, not a missing
+          library type. Own stays initials on purpose — the design's mark is not a URL, so
+          <code>imageCell</code> is the wrong renderer.
+        </p>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">API surface — six questions</h2>
+        <div class="space-y-3 text-sm">
+          <p>
+            <span class="font-semibold">Does an app author read the call site as the job it does?</span>
+            Yes for the type names and for the meter:
+            <code>{ key: 'permitExpiry', type: 'date' }</code>,
+            <code>{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }</code>,
+            <code>{ field: 'progress', cellRenderer: meterCell() }</code>.
+            No for a column of different images — F1.
+          </p>
+          <p>
+            <span class="font-semibold"
+              >Does the branch add a knob, a hook, or a handle an app author must set to get the
+              default behaviour?</span
+            >
+            No. Seeded types apply by name. <code>meterCell()</code> defaults
+            <code>text: true</code>. <code>imageCell</code> is opt-in; requiring
+            <code>alt</code> is the a11y answer, not a hidden default knob. Core Fields pick up
+            types with no consumer declaration.
+          </p>
+          <p>
+            <span class="font-semibold">Can the code say what a comment says, and delete the comment?</span>
+            The long notes on no default <code>rollUp</code>, percent's divide-by-100, and currency
+            as a factory are design history a signature cannot carry. Keep them.
+            <code>fieldWithoutInlineType</code>'s comment is the one the code almost says already —
+            the function name is the job.
+          </p>
+          <p>
+            <span class="font-semibold"
+              >Does a new kind, field, or plugin extend through a seam, or does it need an
+              <code>if</code> chain?</span
+            >
+            Seam. New types join <code>SHIPPED_FIELD_TYPES</code>. Currency is a factory because a
+            code is per-Field data. Cell renderers are factories on the column (D-S5-17).
+            <code>isDateField</code> dropped its key special-case. <code>writesSegmentEnvelope</code>
+            still names <code>start</code>/<code>end</code> by key — that door is the segment
+            envelope, not the type table, and the comment says so.
+          </p>
+          <p>
+            <span class="font-semibold">Does the change move this code toward a ball of mud?</span>
+            Away. Core eats the type layer. The date editor routes on the type name. The planner
+            stops re-implementing a meter. Two leftover leaks: the type-table override still
+            rewrites core Fields (F2), and cell-renderer look lives in the always-on sheet (F6).
+          </p>
+          <p>
+            <span class="font-semibold">Is each new type and module SOLID, extensible, and easy to use?</span>
+            <code>field-types.ts</code> is one deep module behind a name table plus one factory.
+            <code>layout/cells.ts</code> is one module for the two shipped paints. The
+            <code>Field.type</code> union
+            <code>FieldTypeName | FieldType&lt;TValue&gt;</code> is the price of inline currency;
+            after merge a string stays and an object does not, which the glossary now states.
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">Architecture — before / after</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — core bypasses the type table</p>
+            <pre class="mermaid">
+flowchart TB
+  subgraph data ["data/"]
+    CF["CORE_FIELDS<br/>private formatStart / formatEnd / formatDuration"]
+    PT["SHIPPED_FIELD_TYPES<br/>percent only"]
+    REG["FieldRegistry"]
+    CF --> REG
+    PT --> REG
+  end
+  subgraph harness ["harness/planner.ts"]
+    PC["progressCell()<br/>role=img, 'complete'"]
+  end
+  REG -.unused by core.-> PT
+  PC -.compensates.-> data
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class CF,PC leak
+            </pre>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one table, two leftover leaks</p>
+            <pre class="mermaid">
+flowchart TB
+  subgraph data ["data/"]
+    TYPES["SHIPPED_FIELD_TYPES<br/>text number percent date duration"]
+    CUR["currency({ code })"]
+    CF2["CORE_FIELDS<br/>type: text / date / duration"]
+    REG2["FieldRegistry"]
+    TYPES --> REG2
+    CF2 --> REG2
+    CUR --> REG2
+  end
+  subgraph layout ["layout/"]
+    CELLS["meterCell() / imageCell()"]
+  end
+  subgraph view ["view/styles.ts"]
+    CSS[".fg-meter* always-on"]
+  end
+  CELLS -.class names.-> CSS
+  OPT["options.fieldTypes.date"] -.silent override.-> REG2
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  classDef deep fill:#1e293b,color:#f8fafc,stroke:#1e293b;
+  class TYPES,CELLS deep
+  class CSS,OPT leak
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="candidates" class="space-y-6">
+        <h2 class="font-serif text-2xl">Findings</h2>
+        <p class="text-sm text-slate-600">
+          7 findings. None of them undoes the type table or the meter. F1 is the one that disagrees
+          with the originating issue's a11y rule. Pass 2: F1, F3–F7 Confirmed; F2 Mis-described
+          (account replaced). No finding struck.
+        </p>
+
+        <article id="F1" class="rounded-lg border-2 border-red-300 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F1</span> ·
+              <code>imageCell({ alt })</code> stamps one alt on every row
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-red-100 text-red-800 px-2 py-1"
+              >Strong · Spec / naming</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            src/layout/cells.ts:79–95 · src/model/field.ts:36–43 · issue #265 a11y section
+          </p>
+          <p>
+            <span class="font-semibold">Call site.</span>
+            <code>imageCell({ alt: 'Owner' })({ fieldValue: url, value: 'Ada' })</code>
+            Read aloud: "the image cell's alt is Owner." That sentence is false for a column of
+            different people. Every row announces the same name. The renderer already receives
+            <code>value</code> (the Field's formatted text) and does not use it:
+          </p>
+          <p class="font-mono text-xs bg-stone-100 p-3 overflow-x-auto">
+            export function imageCell(options: { alt: string }): ColumnCellRenderer {<br />
+            &nbsp;&nbsp;const { alt } = options;<br />
+            &nbsp;&nbsp;return ({ fieldValue }) =&gt; {<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;if (typeof fieldValue !== 'string' || fieldValue === '') return undefined;<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;return { tag: 'img', class: { 'fg-image-cell': true }, attrs: { src: fieldValue, alt } };<br />
+            &nbsp;&nbsp;};<br />
+            }
+          </p>
+          <p>
+            <span class="font-semibold">Spec.</span> #265: "alt carries the formatted value when
+            [the cell] does not [also show text]." The "What to ship" line also wrote
+            <code>imageCell({ alt })</code>, so the factory signature and the a11y rule disagree.
+            The implementation kept the signature and dropped the rule. There is also no
+            text-beside option, so the <code>alt=""</code> half of that same sentence has nothing
+            to apply to.
+          </p>
+          <p>
+            <span class="font-semibold">Search test.</span> A search for <code>alt</code> on this
+            renderer finds the factory option, not the per-cell name a reader hears.
+          </p>
+          <p>
+            <span class="font-semibold">Fix shape (not verified).</span> Default alt to
+            <code>value</code>. Keep an optional static string for a column that really is one
+            picture. The issue's own call site then reads
+            <code>cellRenderer: imageCell()</code> — "the photo column's cell renderer is an image
+            cell" — and the formatted caption is the alt.
+          </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Function body matches the quoted code. Context carries <code>value: string</code>
+              unused. #265 states both the factory signature and the formatted-value alt rule; the
+              implementation kept the signature. Cited range corrected to 79–95.
+            </p>
+          </div>
+        </article>
+
+        <article id="F2" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F2</span> · Type-table override rewrites
+              core Fields the Field door refuses
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+              >Worth exploring · API / architecture</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            src/data/fields/field-registry.ts:146, 167–175 ·
+            src/data/fields/core-fields.ts:52–70 ·
+            src/data/fields/field-registry.test.ts:298–307
+          </p>
+          <p>
+            <span class="font-semibold">Problem.</span> After this branch, core
+            <code>start</code> and <code>end</code> name <code>type: 'date'</code>. A consumer
+            declaration <code>{ key: 'start', type: 'text' }</code> throws
+            <code>IllegalCoreFieldOverrideError</code> — <code>type</code> is not in
+            <code>CORE_FIELD_OVERRIDABLE_KEYS</code> (<code>['editable']</code> only). The same
+            consumer can still write
+            <code>new FieldRegistry({ fieldTypes: { date: myBundle } })</code>
+            and the constructor spread
+            <code>{ ...SHIPPED_FIELD_TYPES, ...options.fieldTypes }</code>
+            silently replaces the bundle those core Fields merge.
+            <code>start</code>'s format and compare both change.
+            <code>end</code> keeps its own inclusive <code>formatValue</code> (<code>formatEnd</code>
+            at core-fields.ts:69; <code>mergeField</code>'s <code>{ ...bundle, ...declared }</code>
+            keeps the Field's own key) and loses only its <code>compare</code>. The date editor
+            still routes, because <code>isDateField</code> reads the string <code>'date'</code> on
+            the Field, not the bundle body.
+          </p>
+          <p>
+            <span class="font-semibold">Why it is new.</span> The silent option-vs-
+            <code>registerType</code> asymmetry already existed (the test at
+            field-registry.test.ts:298 pins it for <code>percent</code>). It did not rewrite core
+            Fields until core started naming the seeded keys. #264 said a consumer must not
+            redeclare <code>start</code>/<code>end</code>/<code>duration</code>, and also said the
+            table is "seeded before the consumer's option so a consumer can still override by
+            name." Those two sentences now meet, and only one door is locked.
+          </p>
+          <p>
+            <span class="font-semibold">Deletion test.</span> Deleting the silent override would
+            concentrate the rule in one place: a shipped name is not replaceable at construction,
+            same as             <code>registerType</code>. Keeping it means core's "cannot redeclare" rule is
+            a Field-key check only.
+          </p>
+          <div class="rounded border border-amber-300 bg-amber-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-amber-800">Pass 2 — Mis-described (account replaced).</p>
+            <p>
+              Mechanics confirmed: overridable keys, constructor spread, illegal-override throw,
+              core <code>type: 'date'</code>, pinning test, <code>isDateField</code>. A throwaway
+              registry probe with
+              <code>fieldTypes: { date: { formatValue: () =&gt; 'OVERRIDE', compare: () =&gt; 42 } }</code>
+              showed <code>start</code> taking both overrides and <code>end</code> taking only
+              <code>compare</code>. Probe deleted. The finding stands with the corrected sentence
+              above.
+            </p>
+          </div>
+        </article>
+
+        <article id="F3" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F3</span> ·
+              <code>files.md</code> rows this branch sat next to stayed stale
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+              >Standards · docs</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            website/docs/architecture/files.md:75, 82, 94
+          </p>
+          <p>
+            This branch added the <code>layout/cells.ts</code> row (line 94). Two rows in the same
+            table were not updated:
+          </p>
+          <ul class="list-disc pl-5 text-sm space-y-1">
+            <li>
+              Line 75 — <code>CORE_FIELDS</code> still "Declares the eight core fields — name,
+              start, end, kind, parentId, segments, meta, duration". There is no
+              <code>kind</code> Field and no <code>meta</code> Field.
+              <code>hierarchyParentId</code> is missing. CONTEXT.md already says there is no
+              <code>kind</code> Field.
+            </li>
+            <li>
+              Line 82 — <code>field-types.ts</code> still exports "<code>percent,
+              SHIPPED_FIELD_TYPES</code>" and describes only percent. The file now ships five
+              seeded types plus <code>currency()</code>.
+            </li>
+          </ul>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Line 75 names <code>kind</code> and <code>meta</code>; <code>CORE_FIELDS</code> holds
+              seven keys and neither of those. Line 82 still describes percent alone.
+              <code>git diff</code> shows exactly one added line in this file, the
+              <code>layout/cells.ts</code> row.
+            </p>
+          </div>
+        </article>
+
+        <article id="F4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F4</span> ·
+              <code>stringifyPrimitive</code> re-export is a middle man
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-1"
+              >Simplify</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            src/data/fields/core-fields.ts:8 · src/view/grid-columns.ts:6, 132 ·
+            src/data/fields/field-types.ts:9–14
+          </p>
+          <p>
+            The function moved to <code>field-types.ts</code> with the <code>text</code> type.
+            <code>core-fields.ts</code> now does
+            <code>export { stringifyPrimitive } from './field-types.js'</code>
+            so that the one remaining caller,
+            <code>view/grid-columns.ts</code>'s format fallback, does not have to move its import.
+            Grep finds no other importer. Point the import at the new home and delete the
+            re-export. <code>view/</code> already imports <code>data/fields/</code>
+            (<code>column-sizing.ts</code> on the next line).
+          </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Four hits outside <code>plans/</code>: definition, use inside <code>text</code>, the
+              re-export, and the one importer. <code>core-fields.ts</code> never calls the symbol.
+            </p>
+          </div>
+        </article>
+
+        <article id="F5" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F5</span> · First consumer still
+              hand-writes <code>money</code> instead of <code>currency()</code>
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+              >Worth exploring · Spec / stop rule</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            fixtures/demo-dataset.ts:131–163 · fixtures/hierarchy-dataset.ts:78–107 ·
+            src/data/fields/field-types.ts:132–149
+          </p>
+          <p>
+            #264's evidence was consumer code compensating for a missing type. After
+            <code>currency({ code: 'USD' })</code> ships, both gallery fixtures still declare:
+          </p>
+          <p class="font-mono text-xs bg-stone-100 p-3 overflow-x-auto">
+            fieldTypes: { money: { rollUp: 'sum', formatValue: (value, ctx) =&gt;<br />
+            &nbsp;&nbsp;new Intl.NumberFormat(ctx.locale, { style: 'currency', currency: 'USD',
+            maximumFractionDigits: 0 }).format(value), … } }
+          </p>
+          <p>
+            <span class="font-semibold">What the factory does not give them.</span>
+            <code>maximumFractionDigits: 0</code>, and a <code>parseValue</code> that strips
+            currency signs. <code>rollUp</code>, <code>editable</code>, and
+            <code>column.header</code> can sit on the Field. If the number input shows the stored
+            number, the strip-signs parser is leftover from a text-shaped editor. If the 0-fraction
+            format is the real gap, the factory has no parameter for it.
+          </p>
+          <p>
+            This is not a new workaround in <code>harness/main.ts</code>. It is the library's first
+            consumer not eating the new factory. Same shape the stop rule exists to catch.
+          </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Both fixtures match the quoted bundle. The factory takes only <code>{ code }</code>,
+              ships bare <code>Number(text.trim())</code>, and has no fraction-digits parameter.
+            </p>
+          </div>
+        </article>
+
+        <article id="F6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F6</span> · Cell-renderer look leaks
+              into the always-on sheet
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-1"
+              >Worth exploring · Architecture</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            src/layout/cells.ts:1–7, 26–36 · src/view/styles.ts:376–384 ·
+            src/layout/items/variants.ts:100–110 · harness/planner.html:197–213
+          </p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div class="rounded border border-slate-200 p-3 text-sm space-y-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500">Before — variant (deep)</p>
+              <p>
+                <code>diamond()</code> carries <code>css</code>. <code>view/</code> wraps it in
+                <code>@layer freegantt</code>. Look travels with the factory. A Gantt that never
+                installs the variant never pays for its rules.
+              </p>
+            </div>
+            <div class="rounded border border-red-200 p-3 text-sm space-y-2">
+              <p class="text-xs uppercase tracking-wider text-red-700">After — cell renderer (shallow)</p>
+              <p>
+                <code>ColumnCellRenderer</code> has no <code>css</code> key. <code>meterCell</code>
+                hard-codes <code>.fg-meter*</code> class names in <code>layout/</code>. The rules
+                live in the always-on sheet. Every Gantt ships them. Planner then overrides those
+                core classes to shrink the track.
+              </p>
+            </div>
+          </div>
+          <p>
+            The comments already name the constraint. It is not a functional bug:
+            <code>meterCell()</code> needs no extra consumer CSS to look like a meter, which is
+            the right default. The cost is locality: look is split across
+            <code>layout/cells.ts</code> and <code>view/styles.ts</code>, and a consumer themes by
+            fighting core class names (planner.html:197–213) instead of passing a fragment the way
+            a variant does.
+          </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Header comment, hard-coded class names, always-on sheet, variant <code>css</code>
+              key, and planner overrides all sit where cited.
+              <code>ColumnCellRenderer</code> is a bare function type with no <code>css</code> seam.
+            </p>
+          </div>
+        </article>
+
+        <article id="F7" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex items-baseline justify-between gap-4">
+            <h3 class="font-serif text-xl">
+              <span class="font-mono text-sm text-slate-400">F7</span> · Consumer API guide never
+              names the shipped types
+            </h3>
+            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+              >Spec · docs</span
+            >
+          </div>
+          <p class="font-mono text-sm text-slate-600">
+            docs/05-consumer-api.md:30, 37, 278–282 ·
+            website/docs/guides/consumer-api.md:37, 278–282 · CONTEXT.md:87–88
+          </p>
+          <p>
+            The glossary now lists <code>text</code>, <code>number</code>, <code>percent</code>,
+            <code>date</code>, <code>duration</code>, and the <code>currency()</code> factory.
+            The consumer guide this branch edited only added
+            <code>meterCell()</code> / <code>imageCell({ alt })</code> on the
+            <code>gridColumns</code> bullet and the public Parts table. An app author who reads
+            <code>docs/05</code> still sees <code>fieldTypes</code> as "declare consumer Fields
+            beside core's" with no shipped names and no
+            <code>{ key: 'due', type: 'date' }</code> call site. #264 is the larger half of the
+            branch; its call sites live only in CONTEXT.md, the API Extractor dump, and tests.
+          </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              <code>docs/05</code> grep for type names returns only the existing
+              <code>fieldTypes</code> bullet and the meter-fill Parts row. Website guide carries
+              the same text. CONTEXT.md lists all five types plus the factory.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="space-y-4">
+        <h2 class="font-serif text-2xl">Top recommendation</h2>
+        <div class="rounded-lg border-2 border-slate-800 bg-white p-6 space-y-2">
+          <p class="font-serif text-xl">
+            <a href="#F1" class="underline">F1</a> — give <code>imageCell</code> a per-cell alt
+          </p>
+          <p class="text-sm">
+            It is the only finding that disagrees with the originating issue's a11y rule, and the
+            renderer already has the string it needs (<code>value</code>). F2–F7 are doors, docs,
+            and leftovers. They wait. This one ships a battery that announces the wrong name.
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-3 text-sm text-slate-600">
+        <h2 class="font-serif text-2xl text-slate-900">Standards / spec totals</h2>
+        <p>
+          <span class="font-semibold">Standards:</span> 3 findings (F3 docs shotgun, F4 middle man,
+          F6 always-on CSS). Worst: F3, because the file this branch edited still describes core
+          Fields that do not exist.
+        </p>
+        <p>
+          <span class="font-semibold">Spec:</span> 4 findings (F1 a11y miss, F2 override back door,
+          F5 unused factory, F7 consumer guide). Worst: F1, because #265 stated the alt rule and
+          the code does the other thing.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
