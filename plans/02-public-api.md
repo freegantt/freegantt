@@ -782,18 +782,18 @@ choices, and `contextMenu()` took the worse one: leave two `document` listeners 
 > **This section describes HEAD**, for the same reason §4 does. [ADRs 0017–0020](../docs/adr/) have not landed.
 
 ```ts
-import { TimeScaleModel, ScrollModel } from 'freegantt';
+import { TimeScaleModel, ScrollAxis } from 'freegantt';
 
-const scale  = new TimeScaleModel({ preset: 'weekAndMonth', fit: 'preset' });
-const scroll = new ScrollModel();
+const scale = new TimeScaleModel({ preset: 'weekAndMonth', fit: 'preset' });
+const x = new ScrollAxis();
 
-const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, scale, scroll });
-const workforce  = new Gantt({ container: '#bottom', dataset: staffing,         scale, scroll });
+const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, scale, scroll: { x } });
+const workforce  = new Gantt({ container: '#bottom', dataset: staffing,         scale, scroll: { x } });
 ```
 
 The two Gantts hold **different** datasets — D9's own example is a delivery-schedule Gantt above a workforce Gantt. What is shared is the axis and the scroll, never the data. Two Gantts *may* bind one `Dataset`: nothing forbids it, a second Gantt is simply a second subscriber to `dataset.on('change')` (D-S2-24), and it costs the library nothing. It is not a case the library designs around or tests, and a consumer who wants it owns the arrangement.
 
-Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. Sharing a `scroll` instance links both axes (S1.5, D-S1.5-3) — a shorter chart's own row count clamps the shared position locally, so it pins at its last row while a taller chart keeps going, with zero remembered state. `TimeScaleModel` is a class with no `Source` interface; `ScrollModel` gets no `xOnly()`/`yOnly()` either — partial sharing returns when a caller actually needs "share x, keep y private".
+Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `ScrollModel`, which fused both directions into one object, is retired (S6, D-S6-1); `ScrollAxis` is one direction, so `scroll: { x?, y? }` shares exactly the directions a caller supplies. The example above shares `x` and leaves `y` private on each Gantt — sharing `y` too, or instead, is `scroll: { x, y }` or `scroll: { y }`. Whichever direction is shared, a shorter chart's own row (or content) count clamps the shared position locally, so it pins at its own last row while a taller chart keeps going, with zero remembered state.
 
 ---
 

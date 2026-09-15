@@ -1299,9 +1299,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       rowBandLayer = document.createElement('div');
       rowBandLayer.className = 'fg-row-bands';
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
-      // so nothing else in this DOM makes `timelineHost` actually overflow — without this, ScrollModel's
-      // `panTo` has nowhere real to write. Zero visual footprint; `sync()` moves it to the frame's
-      // bottom-right corner every render.
+      // so nothing else in this DOM makes `timelineHost` actually overflow — without this, the x/y
+      // `ScrollAxis`es' `panTo` have nowhere real to write. Zero visual footprint; `sync()` moves it
+      // to the frame's bottom-right corner every render.
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';
@@ -1394,7 +1394,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       }
       if (contentSizer) {
         // The sizer itself is 1x1px, so its far edge — not its origin — must land at the content
-        // extent, or the browser's native scrollable range ends up 1px past what ScrollModel computed.
+        // extent, or the browser's native scrollable range ends up 1px past what the ScrollAxis computed.
         // No gutter to add: the timeline pane's content is `contentWidth` wide, full stop (D-S1.8-1).
         const x = Math.max(0, frame.contentWidth - 1);
         const y = Math.max(0, frame.contentHeight - 1);
