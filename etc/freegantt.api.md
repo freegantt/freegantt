@@ -262,6 +262,11 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
 export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
 
 // @public
+export function currency(options: {
+    code: string;
+}): FieldType<number>;
+
+// @public
 export interface CustomRow {
     // (undocumented)
     entryIds?: readonly string[];
@@ -834,7 +839,7 @@ export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 // @public
 export type Field<TValue = unknown> = {
     key: FieldKey;
-    type?: FieldTypeName;
+    type?: FieldTypeName | FieldType<TValue>;
     rollUp?: AggregatorName;
     editable?: FieldEditable | boolean;
     distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
@@ -846,7 +851,7 @@ export type Field<TValue = unknown> = {
     column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
 } | {
     key: FieldKey;
-    type?: FieldTypeName;
+    type?: FieldTypeName | FieldType<TValue>;
     rollUp?: never;
     editable?: never;
     compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
@@ -920,7 +925,7 @@ export interface FieldType<TValue = unknown> {
 }
 
 // @public (undocumented)
-export type FieldTypeName = string & {};
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | (string & {});
 
 // @public (undocumented)
 export interface FieldUpdated {
@@ -1364,6 +1369,11 @@ export class IllegalCoreFieldOverrideError extends FreeGanttError {
 }
 
 // @public
+export function imageCell(options: {
+    alt: string;
+}): ColumnCellRenderer;
+
+// @public
 export function inlineEditing(options?: InlineEditingOptions): ChromePlugin;
 
 // @public (undocumented)
@@ -1529,6 +1539,11 @@ export interface MenuItem {
 
 // @public
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits;
+
+// @public
+export function meterCell(options?: {
+    text?: boolean;
+}): ColumnCellRenderer;
 
 // @public
 export class MissingPluginError extends FreeGanttError {

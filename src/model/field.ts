@@ -11,7 +11,7 @@ export type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValu
 import type { ElementDescription } from './render.js';
 
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
-export type FieldTypeName = string & {};
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | (string & {});
 
 /** How far a Field's value may change (ADR 0015). One key, two thresholds: the grid writes it only
  *  at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
@@ -66,7 +66,8 @@ export interface GridColumnBase {
    *  of the whole list. */
   hidden?: boolean;
   /** D-S5-13 — `true` adds this column's header and formatted value to the default bar tooltip.
-   *  Default `false`. */
+   *  Default `false`. `tooltip: true` on an image column shows the stored URL unless the Field's
+   *  `formatValue` returns a caption. */
   tooltip?: boolean;
 }
 
@@ -108,7 +109,10 @@ export interface TooltipColumn {
 export type Field<TValue = unknown> =
   | {
       key: FieldKey;
-      type?: FieldTypeName;
+      /** A string looks up the type table. An object is the bundle — `{ key: 'cost',
+       *  type: currency({ code: 'EUR' }) }`. After merge, a string name stays; an inline bundle
+       *  does not leave a function object on `type`. */
+      type?: FieldTypeName | FieldType<TValue>;
       /** Name only — a function does not serialize (ADR 0005). */
       rollUp?: AggregatorName;
       /** Where this Field's value may change (ADR 0015). **One key, two thresholds** — the grid
@@ -182,7 +186,7 @@ export type Field<TValue = unknown> =
     }
   | {
       key: FieldKey;
-      type?: FieldTypeName;
+      type?: FieldTypeName | FieldType<TValue>;
       rollUp?: never;
       editable?: never;
       /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
@@ -205,7 +209,8 @@ export type Field<TValue = unknown> =
       distribute?: never;
     };
 
-/** A stored-Field bundle applied by name to many Fields (`registerType`) — `key`, `type` and the
+/** A stored-Field bundle applied by name (`registerType`, `type: 'percent'`) or inline
+ *  (`type: currency({ code: 'EUR' })`) to many Fields — `key`, `type` and the
  *  `compute`/`rollUp`/`editable` discriminants left out. Written directly rather than derived from
  *  `Field` with `Omit`: `Omit` does not distribute over a union, so it would collapse to the two
  *  arms' *common* keys and drop `equals`/`parseValue`/`inputType` — `percent` (`field-types.ts`)

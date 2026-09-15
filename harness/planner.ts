@@ -8,6 +8,7 @@ import {
   formatDate,
   formatEndInclusive,
   diamond,
+  meterCell,
 } from 'freegantt';
 import type {
   BarRendererContext,
@@ -44,7 +45,8 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'duration', header: 'Dur', align: 'end', width: 52, cellRenderer: durationCell },
   { field: 'start', align: 'end', width: 72, cellRenderer: startCell },
   { field: 'end', header: 'Finish', align: 'end', width: 72, cellRenderer: finishCell },
-  { field: 'progress', header: 'Done', width: 82, cellRenderer: progressCell },
+  // The Done cell is core's meter. This page does not re-implement it.
+  { field: 'progress', header: 'Done', width: 82, cellRenderer: meterCell() },
 ];
 
 // ---- Cells the design paints as something other than text ------------------------------------
@@ -71,8 +73,8 @@ function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescripti
   return { class: { 'demo-task-cell': true, 'demo-task-cell-group': isPhase }, children };
 }
 
-/** The Own cell: initials in a phase-coloured disc. #264 tracks the image column type this wants to
- *  be — a photo rather than initials — which has no declared Field type yet. Initials until it does. */
+/** The Own cell: initials in a phase-coloured disc. `imageCell` paints a photo; this column stays
+ *  initials — the design's own mark, not a URL. */
 function ownerCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
   if (value === '') return { text: '' };
   const fill = phaseFill(entry?.read('phase'));
@@ -115,24 +117,6 @@ function finishCell({ entry, fieldValue }: ColumnCellRendererContext): ElementDe
  *  so no time arithmetic runs on this page. */
 function durationCell({ value }: ColumnCellRendererContext): ElementDescription | undefined {
   return { text: value.replace(' d', 'd') };
-}
-
-/** The Done cell: a meter beside the percentage. `role="img"` with the formatted value as its label,
- *  so the bar is one described graphic instead of two unlabelled divs. */
-function progressCell({ value, fieldValue }: ColumnCellRendererContext): ElementDescription | undefined {
-  const percent = typeof fieldValue === 'number' ? Math.max(0, Math.min(100, fieldValue)) : 0;
-  return {
-    class: { 'demo-progress': true },
-    children: [
-      {
-        key: 'track',
-        class: { 'demo-progress-track': true },
-        attrs: { role: 'img', 'aria-label': `${value} complete` },
-        children: [{ key: 'fill', class: { 'demo-progress-fill': true }, style: { width: `${percent}%` } }],
-      },
-      { key: 'text', class: { 'demo-progress-text': true }, text: value },
-    ],
-  };
 }
 
 // ---- Bars ------------------------------------------------------------------------------------
