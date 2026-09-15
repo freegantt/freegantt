@@ -57,14 +57,6 @@
            at 14px a two-digit number ellipsised to `1.`. The library keeps its own 12px: a 0 default
            would silently flatten the tree for a consumer who never asked for that. */
         --fg-indent-width: 0px;
-        /* NOT a page choice — 4px is the library's own default, restated here under protest.
-           `.demo-bar-progress` below reads `var(--fg-bar-radius)` so its leading corners match the
-           bar it sits in. A metric token is only declared on `.fg-container` for `--fg-indent-width`;
-           the rest live as `var(--fg-x, default)` fallbacks inside library rules, so consumer CSS
-           cannot read one back. Delete this line and the progress shading
-           goes square in Light and Dark (Paper still works, because Paper declares its own 2px).
-           The library should close this, not this page. */
-        --fg-bar-radius: 4px;
         border: 1px solid var(--fg-splitter-color);
         border-radius: 0 0 10px 10px;
         overflow: hidden;
