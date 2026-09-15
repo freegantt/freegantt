@@ -950,10 +950,10 @@ describe('render/dom backend', () => {
     expect(labels).toHaveLength(1);
     expect(labels[0]!.textContent).toBe('Ship');
     // The label's transform carries a second, always-zero component under the default placement
-    // (#318, D-S1.10-6) — 0 for the default and 'overlayOnTimeLine' alike, a caller's own px
+    // (#318, D-S1.10-6) — 0 for the default and 'inHeader' alike, a caller's own px
     // otherwise.
     expect(labels[0]!.style.transform).toBe('translate(40px, 0px)');
-    expect(labels[0]!.dataset['placement']).toBe('overlayOnGanttBody');
+    expect(labels[0]!.dataset['placement']).toBe('belowHeader');
 
     backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 40, label: 'Ship' }] });
     expect(timeline.querySelectorAll('.fg-date-line')).toHaveLength(1);
@@ -1030,7 +1030,7 @@ describe('render/dom backend', () => {
   });
 
   it("[#318] readDateLineLabelPlacement drives the Date line label's own anchor and yOffset", () => {
-    const placements: DateLineLabelPlacement[] = ['overlayOnGanttBody', 'overlayOnTimeLine', 12];
+    const placements: DateLineLabelPlacement[] = ['belowHeader', 'inHeader', 12];
     let placementIndex = 0;
     const backend = createDomBackend({
       entryById: () => undefined,
@@ -1055,7 +1055,7 @@ describe('render/dom backend', () => {
 
     backend.sync({ ...base, decorations: [{ kind: 'dateLine', x: 10, label: 'Ship' }] });
     let label = timeline.querySelector<HTMLElement>('.fg-date-line-label')!;
-    expect(label.dataset['placement']).toBe('overlayOnGanttBody');
+    expect(label.dataset['placement']).toBe('belowHeader');
     expect(label.style.transform).toBe('translate(10px, 0px)');
 
     placementIndex = 1;

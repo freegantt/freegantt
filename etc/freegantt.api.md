@@ -451,7 +451,7 @@ export interface DateLineInput {
 }
 
 // @public
-export type DateLineLabelPlacement = 'overlayOnTimeLine' | 'overlayOnGanttBody' | number;
+export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
 
 // @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';

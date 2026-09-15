@@ -298,7 +298,7 @@ export interface GanttShellOptions {
   /** Live (S1.13, D-S1.13-4). Default `[]`. */
   dateLines?: readonly DateLine[];
   /** Live. See `GanttOptions.dateLineLabelPlacement`. Default `DEFAULT_DATE_LINE_LABEL_PLACEMENT`
-   *  (`'overlayOnGanttBody'`). */
+   *  (`'belowHeader'`). */
   dateLineLabelPlacement?: DateLineLabelPlacement;
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
