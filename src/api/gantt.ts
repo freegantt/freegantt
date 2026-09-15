@@ -440,6 +440,14 @@ export class Gantt<TProps = unknown> {
     return this.#shell.resolvedTheme;
   }
 
+  /** #394. The getter above is always correct. But re-parenting this Gantt's own container under a
+   *  differently-pinned wrapper fires no `themeChange` — no `data-fg-theme` attribute changed for
+   *  the library to notice. Call this right after such a move: it re-resolves now and fires
+   *  `themeChange` if the answer moved, and returns that answer either way. */
+  checkResolvedTheme(): ResolvedTheme {
+    return this.#shell.checkResolvedTheme();
+  }
+
   get a11yLabel(): string {
     return this.#shell.a11yLabel;
   }

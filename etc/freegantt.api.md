@@ -1065,6 +1065,7 @@ export class Gantt<TProps = unknown> {
     get canZoomOut(): boolean;
     get cellRenderer(): CellRenderer | undefined;
     set cellRenderer(renderer: CellRenderer | undefined);
+    checkResolvedTheme(): ResolvedTheme;
     clearCapabilityRule(capability: keyof Interactions): void;
     // (undocumented)
     collapse(id: RowId | string): void;
