@@ -7,12 +7,15 @@
 // `docs/05-consumer-api.md`'s tables. Half 2 (`#334`) does the same for every `.fg-*` class: the
 // base sheet plus the two glyph classes `summary()` and `diamond()` ship in their own CSS.
 //
-// A handful of documented tokens carry no CSS at all — `--fg-row-height`, `--fg-grid-pane-width` and
-// five more are read once, in TypeScript, through `pixel-property.ts`, and the sheet never mentions
-// them (CLAUDE.md's stop-rule names `--fg-grid-pane-width` as exactly this case, #157). This guard
-// checks those seven against the TypeScript file that actually owns their fallback, named per token
-// below, rather than skipping them — that file is the one place their real default can drift from
-// the doc without this stylesheet ever changing.
+// #383 closed the gap CLAUDE.md's stop rule named `--fg-grid-pane-width` as exactly (#157): every
+// documented token now carries a real `:root` declaration, so a consumer's own CSS can read its
+// default back with a bare `var(--fg-x)`. `--fg-row-height`, `--fg-grid-pane-width` and five more
+// still read, in TypeScript, through `pixel-property.ts` — their `:root` declaration exists only so a
+// consumer can see the default; `pixel-property.ts`'s own JS-side constant stays the guard against an
+// *invalid* authored value, a different job (docs/05-consumer-api.md, "Structural pixel tokens").
+// Each one's `:root` line interpolates that same TypeScript constant (`${DEFAULT_ROW_HEIGHT}px`) rather
+// than restating the number as a literal, so this guard checks it against the TypeScript file that
+// actually owns it, named per token below, instead of trying to parse the interpolation as a value.
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -63,6 +66,11 @@ function varFallbacksIn(block: string): Map<string, string> {
 
 const lightDeclared = declarationsIn(extractTemplate('LIGHT_COLOR_TOKENS'));
 const darkDeclared = declarationsIn(extractTemplate('DARK_COLOR_TOKENS'));
+// #383: every consumer-facing metric's own `:root` declaration — a separate template literal, the
+// same reason LIGHT_COLOR_TOKENS/DARK_COLOR_TOKENS above get their own `extractTemplate` call
+// instead of being read off `BASE_STYLESHEET` directly (its own source only carries
+// `${METRIC_TOKENS}`, not the interpolated text, until the module actually runs).
+const metricDeclared = declarationsIn(extractTemplate('METRIC_TOKENS'));
 const baseBlock = extractTemplate('BASE_STYLESHEET');
 const baseDeclared = declarationsIn(baseBlock);
 const baseVarFallback = varFallbacksIn(baseBlock);
@@ -74,15 +82,17 @@ const baseVarFallback = varFallbacksIn(baseBlock);
 const sheetDefinedTokens = new Set<string>([
   ...lightDeclared.keys(),
   ...darkDeclared.keys(),
+  ...metricDeclared.keys(),
   ...baseDeclared.keys(),
   ...baseVarFallback.keys(),
 ]);
 
 // ---------------------------------------------------------------------------------------------
-// Tokens with no CSS presence at all — their real default lives in a TypeScript file, not the
-// sheet (CLAUDE.md's stop-rule names `--fg-grid-pane-width` as this exact case, #157). Each entry
-// names the file and the exact source line pattern that carries the number, so a future change to
-// that constant flows through this guard without anyone having to remember to update it here.
+// Tokens whose `:root` declaration interpolates a TypeScript constant (`${SOME_CONSTANT}px`)
+// rather than restating the number as a literal — the value the guard must check is the
+// constant's own source, named here, the same import `styles.ts` itself uses. Each entry names
+// the file and the exact source line pattern that carries the number, so a future change to that
+// constant flows through this guard without anyone having to remember to update it here.
 // ---------------------------------------------------------------------------------------------
 
 interface ExternalDefault {
@@ -91,7 +101,7 @@ interface ExternalDefault {
   unit: 'px';
 }
 
-const EXTERNAL_PIXEL_TOKENS: Record<string, ExternalDefault> = {
+const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
   '--fg-row-height': {
     file: 'src/view/frame-settings.ts',
     pattern: /export const DEFAULT_ROW_HEIGHT = (\d+(?:\.\d+)?);/,
@@ -99,12 +109,12 @@ const EXTERNAL_PIXEL_TOKENS: Record<string, ExternalDefault> = {
   },
   '--fg-grid-pane-width': {
     file: 'src/view/pane-layout.ts',
-    pattern: /GRID_PANE_WIDTH_POLICY = \{ fallback: (\d+(?:\.\d+)?),/,
+    pattern: /export const DEFAULT_GRID_PANE_WIDTH_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
   '--fg-splitter-width': {
     file: 'src/view/pane-layout.ts',
-    pattern: /SPLITTER_WIDTH_POLICY = \{ fallback: (\d+(?:\.\d+)?),/,
+    pattern: /export const DEFAULT_SPLITTER_WIDTH_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
   '--fg-bar-min-width': {
@@ -124,15 +134,9 @@ const EXTERNAL_PIXEL_TOKENS: Record<string, ExternalDefault> = {
   },
   '--fg-column-min-width': {
     file: 'src/view/column-chrome.ts',
-    pattern: /DEFAULT_MIN_COLUMN_WIDTH = (\d+(?:\.\d+)?);/,
+    pattern: /export const DEFAULT_COLUMN_MIN_WIDTH_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
-};
-
-/** Tokens whose sheet-side default is a template interpolation (`${SOME_CONSTANT}px`), not a
- *  literal — the value the guard must check is the constant's own source, named here, the same
- *  import `styles.ts` itself uses. */
-const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
   '--fg-tick-box-floor': {
     file: 'src/layout/frame.ts',
     pattern: /export const DEFAULT_TICK_BOX_FLOOR_PX = (\d+(?:\.\d+)?);/,
@@ -156,14 +160,13 @@ function resolveExternalDefault(token: string, def: ExternalDefault): string {
   return `${match[1]}${def.unit}`;
 }
 
-/** A structural/pixel token's real default, resolved from wherever it actually lives — the sheet's
- *  own literal fallback, a TypeScript constant the sheet interpolates, or (for the seven tokens with
- *  no CSS presence at all) the TypeScript file that owns it outright. */
+/** A structural/pixel token's real default, resolved from wherever it actually lives — a
+ *  TypeScript constant the `:root` declaration interpolates, or the sheet's own literal `var(…,
+ *  default)` fallback. */
 function resolvePixelTokenDefault(token: string): string {
-  if (token in EXTERNAL_PIXEL_TOKENS) return resolveExternalDefault(token, EXTERNAL_PIXEL_TOKENS[token]!);
   if (token in INTERPOLATED_PIXEL_TOKENS)
     return resolveExternalDefault(token, INTERPOLATED_PIXEL_TOKENS[token]!);
-  const literal = baseVarFallback.get(token);
+  const literal = baseVarFallback.get(token) ?? baseDeclared.get(token);
   if (literal === undefined) {
     throw new Error(`theming-contract guard: no known default source for ${token}`);
   }
@@ -235,12 +238,10 @@ describe('the sheet and the published token tables name the same tokens', () => 
   });
 
   it('never documents a consumer token the sheet does not define', () => {
-    const phantom = [...documentedConsumerTokens].filter(
-      (token) => !sheetDefinedTokens.has(token) && !(token in EXTERNAL_PIXEL_TOKENS),
-    );
+    const phantom = [...documentedConsumerTokens].filter((token) => !sheetDefinedTokens.has(token));
     expect(
       phantom,
-      `docs/05-consumer-api.md documents these --fg-* tokens but styles.ts never defines them, and they are not on the known outside-the-sheet allowlist:\n${phantom.join('\n')}`,
+      `docs/05-consumer-api.md documents these --fg-* tokens but styles.ts never defines them:\n${phantom.join('\n')}`,
     ).toEqual([]);
   });
 

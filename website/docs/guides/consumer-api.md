@@ -88,6 +88,19 @@ prefers over its fallback (U4). A pixel metric is read through one shared reader
 shadow token is a plain CSS custom property the base stylesheet's own class rules consume directly —
 no JS reads it.
 
+Two kinds of `--fg-*` property share the prefix, and only one kind is a consumer's to read or set
+(#383). Every token in the two tables below is a **consumer token**: the base stylesheet declares its
+default outright, once, on `:root`, in addition to reading it as `var(--fg-x, default)` inside its own
+rules. That declaration is what makes the default *readable*, not just overridable — a consumer's own
+CSS rule can write `border-radius: var(--fg-bar-radius)` with no fallback of its own and get the real
+4px back, from any element in the document, and a closer declaration (a wrapper, `.fg-container`, an
+inline style) still wins by ordinary inheritance proximity — the same reach colour tokens already had.
+The other kind, a **per-element channel**, is never declared on `:root` or anywhere else: the library
+writes it inline, on one element, because a single stylesheet rule cannot express what it carries — a
+column's own flex-grow, a row's own depth. Its `var(--fg-x, default)` fallback *is* its unset case, and
+a consumer declaration would only fight the next write, which overwrites it. See "Internal tokens —
+not a consumer's to set" below for the four channels.
+
 ### Structural and pixel tokens
 
 | Token | Default | Read by |

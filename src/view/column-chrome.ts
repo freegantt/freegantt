@@ -17,8 +17,10 @@ import { DEFAULT_COLUMN_WIDTH_PX, isHidden, resolveGanttFields, toGridColumn } f
 import type { ResolveColumnsBind } from './grid-columns.js';
 
 const MIN_COLUMN_WIDTH_PROPERTY = '--fg-column-min-width';
-const DEFAULT_MIN_COLUMN_WIDTH = 40;
-const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_MIN_COLUMN_WIDTH, accepts: 'positive' } as const;
+/** Shipped default for `--fg-column-min-width` (docs/05-consumer-api.md) — `styles.ts` declares the
+ *  same number on `:root` so a consumer can read it back (#383). */
+export const DEFAULT_COLUMN_MIN_WIDTH_PX = 40;
+const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_COLUMN_MIN_WIDTH_PX, accepts: 'positive' } as const;
 const COLUMN_WIDTH_PROPERTY = '--fg-column-width';
 const COLUMN_WIDTH_POLICY = { fallback: DEFAULT_COLUMN_WIDTH_PX, accepts: 'positive' } as const;
 /** One `Shift+Arrow` step (D-S5-18's keyboard parity) and the on-screen width read back when a flex
