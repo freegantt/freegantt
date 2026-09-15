@@ -105,6 +105,15 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
     ],
   },
+  'mount-destroy': {
+    demonstrates:
+      'A linked pair mounts and destroys over and over on one page, the way a single-page app ' +
+      'mounts it on every visit. The shared TimeScaleModel and ScrollModel outlive every pair.',
+    config: ['gantt.destroy()', 'new Gantt({ container, dataset, scale, scroll })'],
+    specLinks: [
+      { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
+    ],
+  },
   'large-dataset': {
     demonstrates:
       'Five thousand entries render at a fixed frame cost. The DOM holds only the rows the viewport ' +
