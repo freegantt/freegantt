@@ -386,6 +386,15 @@ export { ignoreSegments, followSegments } from '../layout/index.js';
 // until an author installs it. `bar` and `summary` keep their plain names on purpose — the three read
 // as one family at a call site — see `bar()`'s own note in `layout/items/variants.ts` (F13).
 export { bar, summary, diamond } from '../layout/index.js';
+// #265: shipped Grid-column cell renderers. `meterCell()` paints a percent as a
+// track. `imageCell({ alt })` paints a stored URL as an img. Both take `()`, the
+// same factory shape as `diamond()`. `cellRenderer` stays on the Gantt column
+// (D-S5-17).
+export { meterCell, imageCell } from '../layout/index.js';
+// #264: a currency Field type is a factory, not a seeded name — `{ key: 'cost', type: currency({
+// code: 'EUR' }) }`. Consumers name `percent` / `text` / `number` with the string; those stay off
+// this barrel.
+export { currency } from '../data/fields/field-types.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day

@@ -59,8 +59,29 @@ function mergeColumn(field: Field, bundle: FieldType | undefined): Field['column
   return { ...fromRest, ...ownRest, ...sizingOfColumn(own, from) };
 }
 
+/** Call: `typeBundleOf(field, types)` — the bundle this Field names, or the object it passed as
+ *  `type`. A string looks up the table; an unknown string is `UnknownFieldTypeError`. An object is
+ *  the bundle itself. */
+function typeBundleOf(field: Field, types: Readonly<Record<string, FieldType>>): FieldType | undefined {
+  const declared = field.type;
+  if (declared === undefined) return undefined;
+  if (typeof declared !== 'string') return declared;
+  const named = types[declared];
+  if (named === undefined) throw new UnknownFieldTypeError(declared);
+  return named;
+}
+
+/** An inline `type` bundle must not stay on the resolved Field — it is a function object, not a
+ *  name. Drop it before the spread so `{ ...bundle, ...field }` cannot write it back. */
+function fieldWithoutInlineType(field: Field): Field {
+  if (typeof field.type === 'string' || field.type === undefined) return field;
+  const { type: _inline, ...rest } = field;
+  return rest;
+}
+
 function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField {
-  const merged = bundle === undefined ? { ...field } : { ...bundle, ...field };
+  const declared = fieldWithoutInlineType(field);
+  const merged = bundle === undefined ? { ...declared } : { ...bundle, ...declared };
   const column = mergeColumn(field, bundle);
   return toStoredEditable({ ...merged, ...(column !== undefined ? { column } : {}) });
 }
@@ -199,10 +220,7 @@ export class FieldRegistry {
       return;
     }
     if (this.#byKey.has(key)) throw new DuplicateFieldKeyError(key);
-    if (field.type !== undefined && this.#fieldTypes[field.type] === undefined) {
-      throw new UnknownFieldTypeError(field.type);
-    }
-    const merged = mergeField(field, field.type === undefined ? undefined : this.#fieldTypes[field.type]);
+    const merged = mergeField(field, typeBundleOf(field, this.#fieldTypes));
     // ADR 0011: a `compute` Field has no stored home, so `rollUp`/`editable` beside it is refused here,
     // at registration — before `editable`, or the surviving message tells a consumer to declare an
     // `editable` this door already rejects.

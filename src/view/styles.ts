@@ -373,6 +373,15 @@ ${DARK_COLOR_TOKENS}
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-row-label[data-align='center'], .fg-row-cell[data-align='center'] { justify-content: center; text-align: center; }
+/* #265: meterCell()'s own look. A cell renderer cannot carry a css string the way a variant can,
+   so the track lives in the always-on sheet. Fill width is inline geometry (style.width). */
+.fg-meter { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.fg-meter-track { position: relative; flex: 1 1 auto; min-width: 0; height: 6px; border-radius: 3px; background: var(--fg-splitter-color); overflow: hidden; }
+.fg-meter-fill { position: absolute; inset: 0 auto 0 0; width: 0; height: 100%; border-radius: inherit; background: var(--fg-header-subtext); }
+.fg-meter-text { flex: none; font-variant-numeric: tabular-nums; }
+/* imageCell({ alt }): the img must fit the row. Height follows the row token minus the cell's own
+   block padding, so a tall photo cannot stretch the row. */
+.fg-image-cell { display: block; height: calc(var(--fg-row-height, ${DEFAULT_ROW_HEIGHT}px) - 2 * var(--fg-cell-padding-block, 4px)); width: auto; max-width: 100%; object-fit: cover; }
 /* S5.6, D-S5-15: registered decoration providers' own layers — one mounted below .fg-bars, one
    above. DOM order alone gives the paint order (no z-index needed against .fg-bars either). */
 .fg-decorations-under, .fg-decorations-over { position: relative; }
