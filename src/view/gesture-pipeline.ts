@@ -209,7 +209,7 @@ export class GesturePipeline {
   session(grabbed: EntryId, gesture: EntryGesture): EntryGestureSession | undefined {
     // #272/#273: a new gesture supersedes a held one instead of refusing to arm over it — the old
     // "arm lock" let one hung handler on one bar refuse every gesture in the Gantt, forever.
-    this.#discardHeldGesture('superseded');
+    this.#dropHeldGesture('superseded');
     const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
     const bars = this.#entriesForGesture(grabbed, capability, edge);
@@ -606,14 +606,12 @@ export class GesturePipeline {
    *  and raises one `'discarded'` report. `false` when nothing was held — Escape and `destroy()` both
    *  read that to decide whether they did anything (Escape falls through to clearing the selection
    *  instead; `destroy()` just no-ops). Public because `EntryGestureContext` (both the Escape handler
-   *  and `GanttShell.destroy()`) reach it from outside this file; `session()`'s own supersede call
-   *  uses the private `'superseded'` form below instead, so the two reasons cannot be confused at
-   *  their call sites (#272, #273). */
+   *  and `GanttShell.destroy()`) reach it from outside this file (#272, #273). */
   discardHeldGesture(): boolean {
-    return this.#discardHeldGesture('discarded');
+    return this.#dropHeldGesture('discarded');
   }
 
-  #discardHeldGesture(because: GestureDroppedReason): boolean {
+  #dropHeldGesture(because: GestureDroppedReason): boolean {
     const held = this.#held;
     if (held === undefined) return false;
     this.#reportGestureDropped(held.refusal, because);
