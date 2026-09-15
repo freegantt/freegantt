@@ -41,9 +41,36 @@
 // `data-fg-theme="dark"` on a wrapper around its own chrome — a toolbar above the Gantt — and
 // `--fg-*` means the same thing there as inside. The library still only ever writes the attribute on
 // its own container.
+//
+// Two kinds of `--fg-*` property share the prefix, and only one kind is a consumer's to read or set
+// (#383). A CONSUMER TOKEN — every metric and colour this sheet's own rules read as
+// `var(--fg-x, default)` — is declared outright, once, on `:root` (the metrics block below, beside
+// the colour blocks above), for the same reason colour lives there and not on `.fg-container`: a
+// bare `var(--fg-x)` in a consumer's own rule then resolves to the shipped default from any element
+// in the document, and any closer declaration — a wrapper, `.fg-container`, an inline style — still
+// wins by ordinary inheritance proximity. Before this, only three metrics (`--fg-indent-width`,
+// `--fg-bar-label-gap`, `--fg-bar-opacity`) were declared anywhere; every other consumer token lived
+// only as the fallback half of a library rule's own `var(...)`, unreadable from a consumer's separate
+// rule or from `getComputedStyle`. A PER-ELEMENT CHANNEL is the other kind, and it is never declared
+// here or anywhere else: the library writes it inline, on one element, because a single stylesheet
+// rule cannot express what it carries — a column's own flex-grow, a row's own depth. Its
+// `var(--fg-x, default)` fallback *is* its unset case; a consumer declaration would only fight the
+// next write, which overwrites it. The four channels: `--fg-col-flex` and `--fg-row-depth`
+// (`render/dom/index.ts`, per column/row), `--fg-grid-content-width` (`pane-layout.ts`, per grid
+// pane), `--fg-popup-max-height` (`extensions/popup.ts`, per popup). `--fg-bar-fill-painted` is a
+// fifth name outside both kinds — `.fg-bar`'s own rule computes it from `--fg-bar-fill` and
+// `--fg-bar-opacity`, so there is nothing for a consumer to set on it directly either.
 
-import { DEFAULT_TICK_BOX_FLOOR_PX } from '../layout/index.js';
+import {
+  DEFAULT_TICK_BOX_FLOOR_PX,
+  DEFAULT_MIN_BAR_WIDTH_PX,
+  DEFAULT_BAR_HEIGHT_PX,
+} from '../layout/index.js';
 import { DEFAULT_BAR_LABEL_GAP_PX } from '../render/dom/dom-contract.js';
+import { DEFAULT_ROW_HEIGHT } from './frame-settings.js';
+import { DEFAULT_GRID_PANE_WIDTH_PX, DEFAULT_SPLITTER_WIDTH_PX } from './pane-layout.js';
+import { DEFAULT_COLUMN_WIDTH_PX } from './grid-columns.js';
+import { DEFAULT_COLUMN_MIN_WIDTH_PX } from './column-chrome.js';
 
 const MARKER_ATTR = 'data-freegantt-styles';
 
@@ -159,6 +186,34 @@ const DARK_COLOR_TOKENS = `
   --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
 `.trimEnd();
 
+// #383: every consumer-facing metric this sheet's own rules read as `var(--fg-x, default)`, declared
+// once, outright, on `:root` — not theme-dependent, so the same value applies in light and dark and a
+// `data-fg-theme` pin never touches it (#294's rule: a theme pin must never change a layout metric).
+// `--fg-indent-width` and `--fg-bar-label-gap` moved here from `.fg-container` (#383): a declaration
+// on `.fg-container` itself always wins over anything inherited, so an ancestor's own
+// `--fg-indent-width` could never reach the container before this move — the same reach colour tokens
+// already have, above. `--fg-bar-opacity` stays behind on `.fg-container` (see the note near
+// `.fg-bar`'s own rule below) because its mix runs on `.fg-bar` itself, not here.
+const METRIC_TOKENS = `
+  --fg-row-height: ${DEFAULT_ROW_HEIGHT}px;
+  --fg-grid-pane-width: ${DEFAULT_GRID_PANE_WIDTH_PX}px;
+  --fg-splitter-width: ${DEFAULT_SPLITTER_WIDTH_PX}px;
+  --fg-band-height: 24px;
+  --fg-tick-box-floor: ${DEFAULT_TICK_BOX_FLOOR_PX}px;
+  --fg-bar-min-width: ${DEFAULT_MIN_BAR_WIDTH_PX}px;
+  --fg-bar-height: ${DEFAULT_BAR_HEIGHT_PX}px;
+  --fg-bar-radius: 4px;
+  --fg-column-width: ${DEFAULT_COLUMN_WIDTH_PX}px;
+  --fg-column-min-width: ${DEFAULT_COLUMN_MIN_WIDTH_PX}px;
+  --fg-column-resizer-hit: 12px;
+  --fg-cell-padding-inline: 10px;
+  --fg-cell-padding-block: 4px;
+  --fg-indent-width: 12px;
+  --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
+  --fg-ghost-opacity: 0.4;
+  --fg-pending-opacity: 0.6;
+`.trimEnd();
+
 // ADR 0021: the whole sheet ships inside one cascade layer, `@layer freegantt`, so an unlayered
 // consumer rule beats it at any specificity, with no `!important`. One layer, not several — the
 // normal cascade still applies inside it, so every equal-specificity-plus-document-order rule
@@ -167,14 +222,16 @@ const BASE_STYLESHEET = `
 @layer freegantt {
 :root {
 ${LIGHT_COLOR_TOKENS}
+${METRIC_TOKENS}
 }
 .fg-container {
-  --fg-indent-width: 12px;
-  /* Inside padding for the label span, and the gap between a bar's right edge and an outside label —
-     one design value, one token (render/dom/dom-contract.ts's own DEFAULT_BAR_LABEL_GAP_PX states the
-     same number as its JS-side fallback). A px metric, not a colour, so it lives here rather than in
-     the light/dark token blocks above — a theme pin must never change a layout metric (#294). */
-  --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
+  /* --fg-bar-opacity fades a bar's own paint without fading its label or border (see the note near
+     .fg-bar's own rule below, and docs/05-consumer-api.md). It stays declared here, not on :root,
+     because the mix it feeds runs on the bar element itself: a barRenderer that overrides the fill
+     colour on one bar must see that override reflected in the mix, which only happens when both
+     reads sit at the same element. Kept off the light/dark token blocks above for the same reason as
+     every metric — a theme pin must never change a layout-adjacent value (#294) — and inherits down
+     from here unchanged so one setting still covers every bar. */
   --fg-bar-opacity: 1;
 }
 @media (prefers-color-scheme: dark) {

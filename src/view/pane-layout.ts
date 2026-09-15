@@ -14,10 +14,16 @@ import { readPixelProperty } from '../render/dom/pixel-property.js';
 import type { Size } from '../model/index.js';
 
 const GRID_PANE_WIDTH_PROPERTY = '--fg-grid-pane-width';
+/** Shipped default for `--fg-grid-pane-width` (docs/05-consumer-api.md) — `styles.ts` declares the
+ *  same number on `:root` so a consumer can read it back (#383). */
+export const DEFAULT_GRID_PANE_WIDTH_PX = 160;
 /** Zero is authored, not nonsense: a container that wants no grid pane sets `--fg-grid-pane-width: 0`. */
-const GRID_PANE_WIDTH_POLICY = { fallback: 160, accepts: 'zeroOrMore' } as const;
+const GRID_PANE_WIDTH_POLICY = { fallback: DEFAULT_GRID_PANE_WIDTH_PX, accepts: 'zeroOrMore' } as const;
 const SPLITTER_WIDTH_PROPERTY = '--fg-splitter-width';
-const SPLITTER_WIDTH_POLICY = { fallback: 4, accepts: 'positive' } as const;
+/** Shipped default for `--fg-splitter-width` (docs/05-consumer-api.md) — `styles.ts` declares the
+ *  same number on `:root` so a consumer can read it back (#383). */
+export const DEFAULT_SPLITTER_WIDTH_PX = 4;
+const SPLITTER_WIDTH_POLICY = { fallback: DEFAULT_SPLITTER_WIDTH_PX, accepts: 'positive' } as const;
 /** #127: wide enough for one narrow column, so a splitter drag cannot take the pane to nothing by
  *  accident. A consumer who wants the old no-floor behaviour passes `minGridWidth: 0`. */
 const DEFAULT_MIN_GRID_WIDTH = 40;
