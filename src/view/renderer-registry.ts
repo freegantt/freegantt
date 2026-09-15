@@ -9,7 +9,7 @@ import type { Disposer, PluginId } from '../model/index.js';
 import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
   TooltipRenderer,
   RendererPoint,
@@ -17,7 +17,7 @@ import type {
   ResolvedRenderer,
 } from '../layout/index.js';
 
-type AnyRenderer = BarRenderer | CellRenderer | HeaderRenderer | TooltipRenderer;
+type AnyRenderer = BarRenderer | GridCellRenderer | HeaderRenderer | TooltipRenderer;
 
 interface Registration {
   renderer: AnyRenderer;
@@ -46,7 +46,7 @@ export class RendererRegistry {
   }
 
   /** D-S5-11: the consumer's own renderer always wins over a plugin's; with neither, "nothing" (the
-   *  caller's own default). Call: `registry.resolve('cell', gantt.cellRenderer)`. */
+   *  caller's own default). Call: `registry.resolve('gridCell', gantt.gridCellRenderer)`. */
   resolve<P extends RendererPoint>(
     point: P,
     consumerRenderer: RendererFor<P> | undefined,

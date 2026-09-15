@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // screenshot would do that badly — but the three claims it exists to make:
 //
 //   1. Colour is tokens. A bar's phase hue moves between themes with no script re-deriving it.
-//   2. A cell the design draws as a picture is a `cellRenderer`, and it paints real nodes.
+//   2. A cell the design draws as a picture is a `columnRenderer`, and it paints real nodes.
 //   3. A theme the library never heard of is a consumer class over `--fg-*` alone.
 //
 // Only a real browser answers any of them: jsdom resolves no custom property and runs no CSS.

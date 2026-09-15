@@ -91,7 +91,7 @@ where they do something beyond re-export.
 | `layout/frame-memory.ts` | `FrameMemory` | Holds one layout pass's cross-render memory — the `RowHeightIndex` plus a `Map` of per-row item memos — so a later frame reuses geometry where the inputs did not change. |
 | `layout/row-height-index.ts` | `RowHeightIndex, PrefixSumHeightIndex` | O(log n) prefix sums with binary search for `indexAtY`. Behind an interface so variable row heights can swap the implementation without touching `computeFrame`. |
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
-| `layout/cells.ts` | `meterCell(), imageCell()` | Shipped Grid-column cell renderers as DOM-free description trees (#265). `meterCell()` paints a percent as a track; `imageCell()` paints a stored URL as an img. The look lives in the always-on sheet — a cell renderer cannot carry a css string the way a variant can. |
+| `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees (#265). `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
@@ -99,7 +99,7 @@ where they do something beyond re-export.
 | `layout/frame-row.ts` | `FrameRow` | The painted-row shape `computeFrame` emits and a cell renderer reads. |
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
 | `layout/registration-table.ts` | `createRegistrationTable()` | Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf that `extensions/` may import. |
-| `layout/renderer.ts` | `BarRenderer, CellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
+| `layout/renderer.ts` | `BarRenderer, GridCellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
 | `layout/items/produce-items.ts` | `produceItemsForRow(), resolveItems()` | Turns a row's entries into Items. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Items (ADR 0018). A header row produces none. |
 | `layout/rows/resolve-rows.ts` | `resolveRows()` | Dispatches to the correct row source based on `source.source`, stamping each row with a sequential index. |
 | `layout/rows/row-source.ts` | `RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.` | Pure data types defining the three row-source configs and their shared options (`filter`, `sort`, `filterPolicy`). |

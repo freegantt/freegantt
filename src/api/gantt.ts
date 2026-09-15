@@ -24,7 +24,7 @@ import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
   TooltipRenderer,
   EntryVariant,
@@ -192,9 +192,9 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
    *  the later one wins. Default `[]`. */
   variants?: readonly EntryVariant<TProps>[];
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
-  cellRenderer?: CellRenderer;
+  gridCellRenderer?: GridCellRenderer;
   /** Live (S5.4, D-S5-11). Grid column header chrome (S5.7 paints through it). */
   headerRenderer?: HeaderRenderer;
   /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
@@ -320,7 +320,7 @@ export class Gantt<TProps = unknown> {
         'collapsed',
         'barLabels',
         'barRenderer',
-        'cellRenderer',
+        'gridCellRenderer',
         'headerRenderer',
         'tooltipRenderer',
         'zoomPresets',
@@ -559,12 +559,12 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
-  get cellRenderer(): CellRenderer | undefined {
-    return this.#shell.cellRenderer;
+  get gridCellRenderer(): GridCellRenderer | undefined {
+    return this.#shell.gridCellRenderer;
   }
 
-  set cellRenderer(renderer: CellRenderer | undefined) {
-    this.#shell.cellRenderer = renderer;
+  set gridCellRenderer(renderer: GridCellRenderer | undefined) {
+    this.#shell.gridCellRenderer = renderer;
   }
 
   /** Live (S5.4, D-S5-11). */
