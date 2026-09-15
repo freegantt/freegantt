@@ -214,7 +214,7 @@ export type {
   ScrollState,
 } from '../layout/index.js';
 // Catchable errors (plans/02 §7): FreeGanttError is the base; a consumer can catch broadly or on `.code`.
-// `BuiltInThrownCode` names every code the library throws, so a `switch` on `.code` is exhaustive;
+// `BuiltInThrownCode` names every code a consumer can catch, so a `switch` on `.code` is exhaustive;
 // `ThrownCode` is that plus a consumer's own, for a subclass they write themselves.
 export type { BuiltInThrownCode, ThrownCode } from '../model/index.js';
 export {

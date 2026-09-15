@@ -19,9 +19,9 @@ import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
 import type { TimeSpan, TimeUnit } from './time.js';
 
-/** Every code the library itself throws, one closed union (#333). Every `super(…)` below writes its
- *  literal `satisfies BuiltInThrownCode`, so `super('invlid-instant')` is a compile error rather
- *  than a shipped typo.
+/** Every code a consumer can catch, one closed union (#333, narrowed by #380). Every `super(…)` below
+ *  writes its literal `satisfies BuiltInThrownCode`, so `super('invlid-instant')` is a compile error
+ *  rather than a shipped typo.
  *
  *  `satisfies` at each site, and not a narrower base class the built-ins extend. That base reaches
  *  the published `.d.ts` through 42 `extends` clauses, so API Extractor asks for it to be exported —
@@ -29,8 +29,9 @@ import type { TimeSpan, TimeUnit } from './time.js';
  *  extend. `satisfies` checks the same literal, costs nothing at runtime, and leaves `FreeGanttError`
  *  the one base a consumer ever sees.
  *
- *  Two codes have no class of their own, and each one names its site here. Both report an internal
- *  invariant a consumer cannot reach, let alone act on, so neither earns a public class to catch.
+ *  Every code here has a `FreeGanttError` subclass a consumer can catch. A code that reports an
+ *  internal invariant no consumer can reach is `InternalThrownCode` instead — it stays off this
+ *  union, and off `switch (error.code)`'s autocomplete, because a consumer cannot act on it (#380).
  *
  *  A thrown code is not a report code. This names what an exception *carries*; `error-report.ts`'s
  *  `BuiltInReportCode` names what a recovered fault *reports*. Two codes sit in both, and
@@ -77,7 +78,12 @@ export type BuiltInThrownCode =
   | 'registration-closed'
   | 'plugin-setup-failed'
   | 'renderer-already-registered'
-  | 'unknown-command'
+  | 'unknown-command';
+
+/** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
+ *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
+ *  the `satisfies` guard at its one raise site, which is why it is a union and not a bare string. */
+export type InternalThrownCode =
   // `layout/viewport/viewport.ts`: a second `bind` on one Viewport.
   | 'viewport-already-bound'
   // `data/fields/field-registry.ts`: a declared core Field missing from the resolved list.
