@@ -25,7 +25,7 @@ pnpm build          # production build of the same pages into dist-harness/
 | --- | --- | --- |
 | `index.html` | The general demo: timeline, viewport, selection, snap, and theme. Driven by `harness/main.ts`. | [Lifecycle](./lifecycle.md) |
 | `hierarchy.html` | Tree and grouped row sources, filter and sort, collapse, declared-field rollup, and JSON round-trip. Driven by `harness/hierarchy.ts`. | [Class map](./classes.md) |
-| `scroll-sync.html` | Two Gantts sharing one `ScrollModel` and one `TimeScaleModel`. | [Class map](./classes.md) |
+| `scroll-sync.html` | One pair of Gantts sharing a `TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a pair sharing only the `y` axis. | [Class map](./classes.md) |
 | `grid-scroll.html` | The grid pane as its own vertical scroll surface, kept in step with the timeline rows. | [Lifecycle](./lifecycle.md) |
 | `zoom.html` | Presets, zoom in/out, pan to a date, pan to today, and the header bands. | [Timeline render](./timeline.md) |
 | `large-dataset.html` | Row virtualization under a large entry count. | [Lifecycle](./lifecycle.md) |

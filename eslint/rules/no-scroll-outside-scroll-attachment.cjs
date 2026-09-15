@@ -1,7 +1,7 @@
-// I12 (plans/01 §8.2, §11): ban scrollLeft/scrollTop/scrollTo outside the ScrollModel binding.
-// The DOM-facing binding is src/view/scroll-attachment.ts (S1.5, #9) — the only file allowed to
-// touch element scroll; this rule is in force from S0 per plans/04 §3.3 so it's already
-// red-tested before there's real code to violate it.
+// I12 (plans/01 §8.2, §11): ban scrollLeft/scrollTop/scrollTo outside the ScrollAxis binding.
+// The DOM-facing binding is src/view/scroll-attachment.ts (S1.5, #9; D-S6-1) — the only file
+// allowed to touch element scroll; this rule is in force from S0 per plans/04 §3.3 so it's
+// already red-tested before there's real code to violate it.
 
 'use strict';
 
@@ -13,12 +13,12 @@ module.exports = {
     type: 'problem',
     docs: {
       description:
-        'ban scrollLeft/scrollTop/scrollTo outside the ScrollModel binding (plans/01 §8.2, invariant I12)',
+        'ban scrollLeft/scrollTop/scrollTo outside the ScrollAxis binding (plans/01 §8.2, invariant I12)',
     },
     messages: {
       scrollProp:
-        '`{{prop}}` is banned outside the ScrollModel binding (plans/01 §8.2, I12). Read/write scroll only through the bound ScrollModel.',
-      scrollTo: '`scrollTo()` is banned outside the ScrollModel binding (plans/01 §8.2, I12).',
+        '`{{prop}}` is banned outside the ScrollAxis binding (plans/01 §8.2, I12). Read/write scroll only through a bound ScrollAxis.',
+      scrollTo: '`scrollTo()` is banned outside the ScrollAxis binding (plans/01 §8.2, I12).',
     },
     schema: [],
   },

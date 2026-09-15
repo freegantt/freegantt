@@ -48,6 +48,14 @@ export interface ScrollAxes {
   readonly y?: ScrollAxis;
 }
 
+/** @internal — `layout/viewport/viewport.ts` only. Both directions resolved to a concrete
+ * `ScrollAxis`, never optional: what `Viewport.scroll` holds once its private defaults are
+ * applied. Distinct from `ScrollAxes`, whose directions stay optional for `GanttOptions.scroll`. */
+export interface BoundScrollPair {
+  readonly x: ScrollAxis;
+  readonly y: ScrollAxis;
+}
+
 function clamp(value: number, max: number): number {
   if (value < 0) return 0;
   if (value > max) return max;

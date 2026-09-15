@@ -7,7 +7,7 @@
 import { TimeScaleModel, bindTimeScale } from './time-scale-model.js';
 import type { ScaleBinding, ScaleBindingHandle, TimeScaleFit } from './time-scale-model.js';
 import { ScrollAxis, bindScrollAxis } from './scroll-axis.js';
-import type { ScrollAxes, ScrollAxisBindingHandle } from './scroll-axis.js';
+import type { BoundScrollPair, ScrollAxes, ScrollAxisBindingHandle } from './scroll-axis.js';
 import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
@@ -63,7 +63,7 @@ export class Viewport {
   readonly scale: TimeScaleModel;
   /** Two independent directions (D-S6-1) — `scroll.x`/`scroll.y` are the shareable units; this
    *  record itself is per-Viewport, built once at construction. */
-  readonly scroll: ScrollAxes & { readonly x: ScrollAxis; readonly y: ScrollAxis };
+  readonly scroll: BoundScrollPair;
   #overscan: Overscan;
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Default: the
    *  shipped nine-rung set. */

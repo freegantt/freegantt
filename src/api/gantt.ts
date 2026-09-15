@@ -94,7 +94,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   dataset: Dataset<TProps>;
   /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
    * instances to sync that direction; omit a direction to keep it private. Independent of
-   * `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time axis, both, or
+   * `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its scale, both, or
    * neither. */
   scroll?: ScrollAxes;
   /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'

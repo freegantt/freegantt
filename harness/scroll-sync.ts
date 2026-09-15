@@ -3,9 +3,11 @@
 // `TimeScaleModel`, matching D9's "x, y, or both"), with the second chart holding far fewer rows
 // than the first — the U3 clamp/pin case happy-dom cannot express.
 //
-// Two pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
+// Three pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
 // existing S1.5 checks). #xonly-a/#xonly-b share only x (D-S6-1): each keeps a private y, so a
 // vertical scroll on one never reaches the other, even though the two hold different row counts.
+// #yonly-a/#yonly-b share only y (D-S6-1): each keeps a private x, so a horizontal scroll on one
+// never reaches the other.
 
 import './harness-nav.ts';
 import { Gantt, Dataset, ScrollAxis, TimeScaleModel } from 'freegantt';
@@ -49,4 +51,24 @@ new Gantt({
   scale: xOnlyScale,
   scroll: { x: sharedX },
   a11yLabel: 'X-only Gantt B',
+});
+
+const yOnlyADataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+const yOnlyBDataset = new Dataset({ entries: demoEntryInputs.slice(0, 20), timeZone: 'UTC' });
+
+const sharedY = new ScrollAxis();
+
+// Only `y` is shared: each Gantt keeps its own private `x`, so scrolling one horizontally never
+// moves the other (D-S6-1). Scale is not shared here — y-sync does not depend on it.
+new Gantt({
+  container: '#yonly-a',
+  dataset: yOnlyADataset,
+  scroll: { y: sharedY },
+  a11yLabel: 'Y-only Gantt A',
+});
+new Gantt({
+  container: '#yonly-b',
+  dataset: yOnlyBDataset,
+  scroll: { y: sharedY },
+  a11yLabel: 'Y-only Gantt B',
 });
