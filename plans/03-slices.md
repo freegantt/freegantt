@@ -264,7 +264,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
 - [ ] 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
 - [ ] Linked-scroll demo works with both axes shared, and with x shared while y stays private, with zero Gantt-side special-casing. Both-axis sharing is proved by `[S1-A4]`; **per-axis sharing is a build, #405** — ruled 2026-09-15. Shared y alone is representable and unadvertised (**D-S6-1**). Slice plan: `plans/s6-scale-and-sync/README.md` §5.3.
-- [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
+- [x] 100 mount/destroy cycles leak no nodes, listeners, or observables. **#403, 2026-09-15.** `test/dom/leak-cycles.test.ts` runs 100 cycles for a bare Gantt, a Gantt with four plugins and a selection, and a pair sharing one `ScrollModel` and one `TimeScaleModel`; it counts listeners, observers, animation frames and nodes, and asserts a shared model holds no binding once its Gantts are destroyed. `e2e/mount-destroy.spec.ts` counts nodes, listeners and heap in Chromium, which a fake DOM cannot. `GanttShell.destroy()` is now one `disposeAll()` call. Gate: `verify:full PASS — all 17 checks green, test:e2e included`.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
 
 ---

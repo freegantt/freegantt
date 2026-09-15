@@ -63,6 +63,7 @@ import type { CommandContext } from '../extensions/commands.js';
 import { registerCoreCommands } from './core-commands.js';
 import type { CoreCommandPorts } from './core-commands.js';
 import { Keymap } from '../extensions/keymap.js';
+import { DisposableStore } from '../extensions/disposables.js';
 import { attachScroll } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
@@ -523,6 +524,17 @@ export class GanttShell {
   #keymap!: Keymap<unknown>;
   #keymapListener!: (event: KeyboardEvent) => void;
   #documentKeymapListener!: (event: KeyboardEvent) => void;
+  /** What does this shell have to let go of?
+   *
+   *  Every resource registers its own release here, on the line that builds it. So `destroy()` is
+   *  one call, and no resource is built without a release. Releases run in reverse construction
+   *  order. That order is what the two documented constraints ask for. A plugin disposer still
+   *  finds its overlay node (D-S5-3). A pane is torn down after everything that reads it.
+   *
+   *  A `DisposableStore`, not a plain array — `#consumerVariantDisposers` states the reason in
+   *  reverse. A store latches on its first `disposeAll()`. That is right for a lifetime which ends
+   *  exactly once, so a second `destroy()` costs nothing (#272). */
+  readonly #teardown = new DisposableStore();
   #destroyed = false;
   /** #376: flipped true on this constructor's last line. A constructor-supplied plugin has already
    *  subscribed by the time the rest of the constructor runs. `#emit` reads this flag. Construction
@@ -600,11 +612,15 @@ export class GanttShell {
       ...(typeof options.gridWidth === 'number' ? { gridWidth: options.gridWidth } : {}),
       ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
     });
+    this.#teardown.add(() => this.#paneLayout.destroy());
+    // Registered first, released last: every resource below draws into these panes.
+    this.#teardown.add(() => this.#frames.cancel());
     this.#panes = this.#paneLayout.panes;
     this.#gridPaneWidth = new GridPaneWidth(this.#gridPaneWidthPorts(), options.gridWidth === 'fitColumns');
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#containerResize = new ContainerResize(this.#container);
+    this.#teardown.add(() => this.#containerResize.destroy());
     this.#overlay = new DomMountLayer(
       this.#panes.overlay,
       () => this.#paneLayout.overlayBounds(),
@@ -673,6 +689,7 @@ export class GanttShell {
     // variant's own rule must land after the base sheet. Only then can it cancel `.fg-bar`'s
     // background and state ring at equal specificity. Starts empty; `#installConsumerVariants` fills it.
     this.#variantStyles = attachVariantStyles(this.#container.ownerDocument, this.#registrations.variants);
+    this.#teardown.add(() => this.#variantStyles.destroy());
     // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
     // synchronously, and that onChange IS this shell's first render. A consumer variant installed
     // after it would paint nothing until something else invalidated the frame.
@@ -746,6 +763,7 @@ export class GanttShell {
           };
         },
       });
+    this.#teardown.add(() => this.#backend.destroy());
     this.#backend.mount({
       grid: this.#panes.rows,
       timeline: this.#panes.timeline,
@@ -775,11 +793,15 @@ export class GanttShell {
       const context = (options.wiring.buildPluginContext ?? (() => ({})))(parts);
       return { context, disposables: parts.disposables, registrationGate: gate };
     }, this.#raiseError);
+    // D-S5-3: registered after the panes and the backend, so it releases before them. A plugin
+    // disposer may still reach for its overlay node.
+    this.#teardown.add(() => this.#pluginRuntime.disposeAll());
 
     // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
     // D-S1.7-1), so this field is never undefined during a render.
     this.#scrollAttachment = attachScroll(this.#panes.timeline, this.#viewport);
+    this.#teardown.add(() => this.#scrollAttachment.detach());
 
     // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
@@ -793,6 +815,10 @@ export class GanttShell {
         this.#emitNavigationChange();
       },
     );
+    // The shared-model case (#403): this binding is the whole of this Gantt's footprint on a
+    // `TimeScaleModel` or a `ScrollModel` it shares with another Gantt. Unbinding is what lets a
+    // shared model outlive this shell without accumulating a dead binding per mount.
+    this.#teardown.add(() => this.#viewportHandle.unbind());
     // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
     // the bound viewport, and request a frame. That is the changeset mechanism's own fan-out, not a
     // second reactivity path. #33's `setEntries()` warning is against a *public* one (see
@@ -804,6 +830,7 @@ export class GanttShell {
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
     });
+    this.#teardown.add(() => this.#datasetChanges.unsubscribe());
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. The `attachPaneSize` call below takes over
     // from here. It takes every measurement after this one, live, for as long as the shell lives
@@ -812,6 +839,7 @@ export class GanttShell {
     this.#paneSizeAttachment = attachPaneSize(this.#panes.timeline, (size) =>
       this.#applyPaneMeasurement(size),
     );
+    this.#teardown.add(() => this.#paneSizeAttachment.detach());
     // #127/#139: the splitter proposes a raw px delta, and `GridPaneWidth` applies both bounds on
     // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
@@ -827,6 +855,7 @@ export class GanttShell {
       },
       commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
     });
+    this.#teardown.add(() => this.#splitterAttachment.detach());
     this.#interactions = options.interactions ?? {};
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
@@ -850,8 +879,10 @@ export class GanttShell {
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
     });
     this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
+    this.#teardown.add(() => this.#rovingFocus.detach());
     this.#liveRegion = new LiveRegion(this.#container, this);
     this.#liveRegion.attach();
+    this.#teardown.add(() => this.#liveRegion.detach());
     this.#gesturePipeline = new GesturePipeline({
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
@@ -912,6 +943,7 @@ export class GanttShell {
       }
     };
     this.#container.addEventListener('keydown', this.#keymapListener);
+    this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
     // Document-level capture-phase fallback (issue #137 F1,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
@@ -928,6 +960,11 @@ export class GanttShell {
       }
     };
     this.#container.ownerDocument.addEventListener('keydown', this.#documentKeymapListener, true);
+    // The one listener that outlives its container: it sits on the document, so nothing removes it
+    // when the container is dropped from the page.
+    this.#teardown.add(() =>
+      this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true),
+    );
 
     // S5.7, D-S5-18: same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
     // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
@@ -953,15 +990,18 @@ export class GanttShell {
       this.#container,
       columnGestureContext,
     );
+    this.#teardown.add(() => this.#columnGestures?.detach());
     this.#entryGestures = options.wiring.entryGestures?.(
       this.#panes.timeline,
       this.#panes.rows,
       this.#container,
       gestureContext,
     );
+    this.#teardown.add(() => this.#entryGestures?.detach());
     // S5.11, D-S5-39: scoped to the timeline pane, not the whole container. A bar's nudge/resize
     // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
     this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
+    this.#teardown.add(() => this.#keyboardEditing?.detach());
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
@@ -970,6 +1010,7 @@ export class GanttShell {
       panBy: (dx, dy) => this.#panBy(dx, dy),
     };
     this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, wheelNavigationCtx);
+    this.#teardown.add(() => this.#wheelNavigation?.detach());
     // #126: the grid pane has no scroll of its own (D-S1.8-1). So this forwards its wheel input
     // into the same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
     // zoom anchored on the timeline's time axis, since the grid pane's own x-axis isn't time.
@@ -977,9 +1018,11 @@ export class GanttShell {
       anchorPane: this.#panes.timeline,
       forwardPlainWheel: true,
     });
+    this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
     this.#rowTwistyAttachment = attachRowTwisty(this.#panes.rows, {
       toggleCollapse: (id) => this.toggleCollapse(id),
     });
+    this.#teardown.add(() => this.#rowTwistyAttachment.detach());
     if (options.collapsed !== undefined) {
       this.#treeCollapse.hydrate(options.collapsed);
     }
@@ -1004,6 +1047,9 @@ export class GanttShell {
     this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
     this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
+    this.#teardown.add(() =>
+      this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener),
+    );
     // #330/#376: the true baseline, resolved before this Gantt writes its own `data-fg-theme` (if
     // any). The write below then diffs `#syncResolvedTheme` against a real prior answer, never
     // `undefined`. `#emit` (below) is what keeps construction's own write silent now. This ordering
@@ -1030,6 +1076,7 @@ export class GanttShell {
       subtree: true,
       attributeFilter: ['data-fg-theme'],
     });
+    this.#teardown.add(() => this.#themePinObserver.disconnect());
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
     // #376: last line, on purpose — a constructor-supplied plugin's own subscription, installed by
     // `plugins=` above, starts hearing real changes only from here. Everything above it was wiring.
@@ -2303,33 +2350,10 @@ export class GanttShell {
   destroy(): void {
     if (this.#destroyed) return;
     // #272/#273: a held gesture's Promise can otherwise outlive this Gantt, settling into a shell
-    // with nothing left to paint or write through. First, before anything else.
+    // with nothing left to paint or write through. It settles a pending answer rather than
+    // releasing a resource, which is why it is the one line outside `#teardown` and stays first.
     this.#gesturePipeline.discardHeldGesture();
-    // S5.1, D-S5-3: plugins first. A disposer may still need its overlay node or another pane-owned
-    // resource, so it must run before any pane below is torn down.
-    this.#pluginRuntime.disposeAll();
-    this.#rovingFocus.detach();
-    this.#liveRegion.detach();
-    this.#containerResize.destroy();
-    this.#container.removeEventListener('keydown', this.#keymapListener);
-    this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
-    this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener);
-    this.#themePinObserver.disconnect();
-    this.#frames.cancel();
-    this.#entryGestures?.detach();
-    this.#keyboardEditing?.detach();
-    this.#columnGestures?.detach();
-    this.#wheelNavigation?.detach();
-    this.#wheelNavigationGrid?.detach();
-    this.#rowTwistyAttachment.detach();
-    this.#datasetChanges.unsubscribe();
-    this.#scrollAttachment.detach();
-    this.#paneSizeAttachment.detach();
-    this.#splitterAttachment.detach();
-    this.#viewportHandle.unbind();
-    this.#backend.destroy();
-    this.#paneLayout.destroy();
-    this.#variantStyles.destroy();
+    this.#teardown.disposeAll();
     this.#destroyed = true;
   }
 }
