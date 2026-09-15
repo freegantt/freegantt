@@ -43,6 +43,7 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 **Time** (`plans/01` §5):
 - Storage is half-open `[start, end)`; display is inclusive via one formatting helper — no inline `end - 1` arithmetic.
 - All zone-aware date arithmetic goes through `time/` in the dataset's IANA zone. (A *plain* time is a wall-clock reading with no zone attached — Temporal's term, and ours; see `CONTEXT.md`.)
+- **A time question has an answer in `time/` before it has a policy.** DST, leap days, week starts, midnight wraps — read `src/time/zone.ts` and write down what it already does. It wraps `temporal-polyfill`, so the semantics are Temporal's and they are settled: `fromPlain` resolves a wall-clock reading with `disambiguation: 'compatible'`, which is why a 17:00→07:00 band measures 13 hours on a short day and 15 on a long one. None of that is yours to rule. **This binds specs, issues and plans, not only `src/`** — asking an author to decide time semantics the façade has already decided is re-derivation wearing a different face, and no lint catches it (#404, 2026-09-15: an issue demanded a DST ruling that `zone.ts:60` had made).
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 
 **Data** (`plans/01` §6):
