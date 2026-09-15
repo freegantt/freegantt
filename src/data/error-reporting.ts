@@ -4,11 +4,12 @@
 // `extensions/` may not reach `data/` at all, so they take a `RaiseError` by injection instead.
 
 import type {
+  BuiltInReportCode,
   EntryId,
-  ReportCode,
   ErrorReport,
   ErrorReportInput,
   FieldUpdated,
+  GestureDroppedReason,
   RaiseError,
 } from '../model/index.js';
 import { FreeGanttError } from '../model/index.js';
@@ -45,6 +46,12 @@ export function createErrorRaiser(bus: ErrorBus): RaiseError {
  *  `data/transaction.ts`, and the gesture pair at `view/gesture-pipeline.ts`. */
 export type RefusalEvent = 'beforeChange' | 'beforeEntryMove' | 'beforeEntryResize';
 
+/** The gesture half of `RefusalEvent` — a `beforeChange` refusal has no gesture, so nothing dropped
+ *  it either, which is why `GestureDroppedReportInit.event` and `GESTURE_DROPPED_CODE`'s key both
+ *  narrow to this instead of the wider `RefusalEvent` (#377 "Decision taken"). Exported for
+ *  `view/gesture-pipeline.ts`, the one file outside this one that names a gesture's `before*` event. */
+export type BeforeGestureEvent = Exclude<RefusalEvent, 'beforeChange'>;
+
 /** The English word for what one `before*` event refuses, keyed by the event itself so
  *  `buildRefusalReport` needs no separate "kind" from its caller. */
 const REFUSAL_NOUN: Record<RefusalEvent, string> = Object.freeze({
@@ -53,8 +60,19 @@ const REFUSAL_NOUN: Record<RefusalEvent, string> = Object.freeze({
   beforeEntryResize: 'resize',
 });
 
+/** This report's own code, one per `before*` veto (#377 "Decision taken") — code and event are 1:1 at
+ *  every caller (`data/transaction.ts` always pairs `beforeChange` with `'mutation-cancelled'`;
+ *  `view/gesture-pipeline.ts` always pairs a gesture's event with its own cancelled code), so
+ *  `buildRefusalReport` mints the code from `event` instead of a caller passing one that could
+ *  disagree with it. `BuiltInReportCode`, not the open `ReportCode`: a typo here would otherwise
+ *  compile silently (#333). */
+const CANCELLED_CODE: Record<RefusalEvent, BuiltInReportCode> = Object.freeze({
+  beforeChange: 'mutation-cancelled',
+  beforeEntryMove: 'entry-move-cancelled',
+  beforeEntryResize: 'entry-resize-cancelled',
+});
+
 export interface RefusalReportInit {
-  readonly code: ReportCode;
   readonly event: RefusalEvent;
   /** What the first refusing handler said, if anything (#210) — `buildRefusalReport` reads
    *  `note.reason` once, at report time, the same way `#reportRefusal` used to. */
@@ -74,13 +92,16 @@ export interface RefusalReportInit {
  *  error's own `message` rather than rebuilding it: `model/errors.ts` owns that wording, `model/` is
  *  types only and cannot import this file, and the thrown error already says exactly what the report
  *  should. A silent gesture veto (`view/gesture-pipeline.ts`) has no error object to read, so this
- *  builds the sentence itself from `event` and the words `note` collected. */
+ *  builds the sentence itself from `event` and the words `note` collected.
+ *
+ *  `code` is minted from `event` (`CANCELLED_CODE`), never taken from the caller (#377 "Decision
+ *  taken"): a `RefusalReportInit` cannot lend the wrong code to the wrong veto if it carries none. */
 export function buildRefusalReport(init: RefusalReportInit): ErrorReportInput {
-  const { code, event, note, entryId, cause } = init;
+  const { event, note, entryId, cause } = init;
   const reason = note.reason;
   const message = cause instanceof FreeGanttError ? cause.message : refusalSentence(event, reason);
   return {
-    code,
+    code: CANCELLED_CODE[event],
     message,
     severity: 'info',
     by: 'consumer',
@@ -97,27 +118,21 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
 }
 
 /** Why core dropped a held gesture itself, instead of a `before*` handler saying no (#272, #273).
- *  Never a consumer's own veto, so `buildGestureDroppedReport` reads no `RefusalNote` — there are no
- *  words to quote.
+ *  `GestureDroppedReason` itself lives in `model/` and is public (#377) — see its own doc there for
+ *  what each member means. `buildGestureDroppedReport` reads no `RefusalNote` for any of them: this
+ *  is never a consumer's own veto, so there are no words to quote.
  *
- *  `'data-changed'` — the rows the draft was measured from were replaced while the handler was still
- *  deciding (Part 3). `'entry-gone'` — the entry the settle would write was removed (Part 2's
- *  `EntryNotFoundError` fold). `'write-refused'` — the commit reached the store and the store said
- *  no, the way an envelope-only cascade against a several-Segment Entry is refused (#341, D-S5-44).
- *  `'superseded'` — a new gesture armed before the handler decided (Part 1). `'discarded'` — the
- *  user pressed Escape, or the Gantt was destroyed, before the handler decided (Part 1).
- *
- *  The first three only happen to a gesture a handler still holds. `'entry-gone'` and
- *  `'write-refused'` also happen on a plain mouseup that commits in its own tick, so their
- *  sentences below say what happened and never when (#341). */
-export type GestureDroppedReason =
-  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
-
+ *  The first three (`'data-changed'`, `'entry-gone'`, `'write-refused'`) only happen to a gesture a
+ *  handler still holds. `'entry-gone'` and `'write-refused'` also happen on a plain mouseup that
+ *  commits in its own tick, so their sentences below say what happened and never when (#341). */
 export interface GestureDroppedReportInit {
-  readonly code: ReportCode;
-  readonly event: RefusalEvent;
+  /** Which of the two gesture events dropped — mints this report's own code (#377): a dropped
+   *  gesture is not a refusal, so it must never carry `refusal.code`, which
+   *  `entry-move-cancelled`/`entry-resize-cancelled` already claim for an actual `before*` veto
+   *  (branch review F2). */
+  readonly event: BeforeGestureEvent;
   readonly entryId: EntryId;
-  readonly because: GestureDroppedReason;
+  readonly droppedReason: GestureDroppedReason;
 }
 
 /** One sentence per reason, quoting no handler — core is the one talking. */
@@ -129,23 +144,33 @@ const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.fr
   discarded: 'the wait ended before the handler decided',
 });
 
+/** This report's own code, one per gesture kind (#377) — never a refusal's code, which names an
+ *  actual `before*` veto (see `CANCELLED_CODE` above). `BuiltInReportCode`, not the open
+ *  `ReportCode`: a typo here would otherwise compile silently (#333). */
+const GESTURE_DROPPED_CODE: Record<BeforeGestureEvent, BuiltInReportCode> = Object.freeze({
+  beforeEntryMove: 'entry-move-dropped',
+  beforeEntryResize: 'entry-resize-dropped',
+});
+
 /** The one builder for a gesture core dropped on its own, not a `before*` handler's `false`
  *  (#272, #273 fix). `by: 'core'` is the field that tells a consumer this was not their handler's
  *  veto — `buildRefusalReport`'s reports are always `by: 'consumer'`, and this is the reason the two
  *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the three
  *  reasons where real work was lost (`'data-changed'`, `'entry-gone'`, `'write-refused'`); `'info'`
- *  for the two the user caused on purpose (`'superseded'`, `'discarded'`). */
+ *  for the two the user caused on purpose (`'superseded'`, `'discarded'`). `droppedReason` rides onto
+ *  the report itself (#377), so a consumer reads it instead of matching `message`'s English sentence. */
 export function buildGestureDroppedReport(init: GestureDroppedReportInit): ErrorReportInput {
-  const { code, event, entryId, because } = init;
+  const { event, entryId, droppedReason } = init;
   const noun = REFUSAL_NOUN[event];
   const severity: ErrorReportInput['severity'] =
-    because === 'superseded' || because === 'discarded' ? 'info' : 'warning';
+    droppedReason === 'superseded' || droppedReason === 'discarded' ? 'info' : 'warning';
   return {
-    code,
-    message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[because]}.`,
+    code: GESTURE_DROPPED_CODE[event],
+    message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[droppedReason]}.`,
     severity,
     by: 'core',
     entryId,
+    droppedReason,
   };
 }
 
