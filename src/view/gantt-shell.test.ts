@@ -1286,6 +1286,153 @@ describe('resolvedTheme / themeChange (#330)', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  // #375: an ancestor's own `data-fg-theme` pin (#271) is a documented, supported way to resolve
+  // this Gantt's theme, and it can flip with no write of this Gantt's own — a wrapping app's own
+  // dark-mode switch, say. `resolvedTheme` must answer the new value the instant it is read, with no
+  // cache lag, and `themeChange` must fire once for the move. happy-dom delivers `MutationObserver`
+  // records on a macrotask, not a microtask — `await Promise.resolve()` alone does not flush it.
+  const flushMutationObserver = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("an ancestor's own pin flipping answers resolvedTheme synchronously, with no cache lag", () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+
+      expect(shell.resolvedTheme).toBe('light');
+
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      // The read itself needs no flush: `resolvedTheme` re-resolves on every read, uncached.
+      expect(shell.resolvedTheme).toBe('dark');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("an ancestor's own pin flipping fires exactly one themeChange, with the right from/to", async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      // A `MutationObserver` needs an attached tree in happy-dom to deliver records — attach and
+      // detach around the assertion, same as a real container always sits inside `document`.
+      document.body.append(ancestor);
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      await flushMutationObserver();
+
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+      ancestor.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a pinned Gantt's own theme wins over a dark ancestor, and answers/emits nothing on the flip", async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      document.body.append(ancestor);
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(entries),
+        theme: 'light',
+      });
+      const events: unknown[] = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      await flushMutationObserver();
+
+      expect(shell.resolvedTheme).toBe('light');
+      expect(events).toEqual([]);
+
+      shell.destroy();
+      ancestor.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // #375 follow-up: `getRootNode()` reads the container's root once, at construction. A container
+  // built inside a detached tree and mounted afterwards — an ordinary mount pattern — must still see
+  // an ancestor pin gained on mount, because `resolvedTheme` itself already answers it correctly; only
+  // the event lagged before this fix (the observer stayed bound to the detached root forever).
+  it('a Gantt built detached and mounted afterwards still fires themeChange for an ancestor pin', async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const wrapper = document.createElement('div');
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      wrapper.append(ancestor);
+      // container/ancestor/wrapper built fully detached — no document.body.append yet.
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      // Mounted only now, after construction.
+      document.body.append(wrapper);
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      await flushMutationObserver();
+
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+      wrapper.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('destroy disconnects the ancestor-pin observer — a flip after destroy fires nothing', async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      document.body.append(ancestor);
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const events: unknown[] = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      shell.destroy();
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      await flushMutationObserver();
+
+      expect(events).toEqual([]);
+      ancestor.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
