@@ -92,8 +92,10 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
   dataset: Dataset<TProps>;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
-   * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
-   * both, or neither. */
+   * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time
+   * axis, both, or neither. Those are the two *objects*, not two directions — one shared
+   * `ScrollModel` syncs x and y **together**, and a Gantt cannot share one direction alone today
+   * (D-S1.5-3). Sharing x with a private y is #405. */
   scroll?: ScrollModel;
   /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'
    *  own right edge and keep it there as the columns change. Reads back in px either way. Default:

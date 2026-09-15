@@ -254,7 +254,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - **Measured spike against the growth targets** (the numbers that decide, not guess): 10k entries / 5k rows scroll p95 frame time; pack-heavy rows layout cost; prefix-sum vs. log-time height index crossover; reconciler cost on 20k-bar sync + 200-bar commit; zone arithmetic per-tick cost. Graph and SVG-link cost wait for S7, when links exist.
 - Act on the spike: swap in the log-time height index if warranted (interface already in place); any reconciler fixes. A worker seam for `schedule()` is not this slice's — measure it after S7 if the plugin's numbers demand it (D2).
 - Performance budgets in CI on reference hardware; regressions fail the build.
-- Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. Neither Gantt needs the scheduling plugin.
+- Linked-Gantt demo: a delivery-schedule Gantt + a workforce Gantt bound to the same `TimeScaleModel`/`ScrollModel` (x, y, and both variants) — the D9 acceptance demo. **The variants are sharing shapes, not axes read separately:** both axes together is what sharing one `ScrollModel` gives, and x shared with y private is #405, whose caller arrived 2026-09-15. Neither Gantt needs the scheduling plugin.
 - Hardening: error-path audit (typed errors everywhere), memory-leak pass (mount/destroy cycles), `exports` map sealing internals, semver/API-report tooling (I11 automated), bundle-size budget in CI.
 - **Known gap (issue #91 §9-I, remaining half; tracked as issue #112 seam B):** `GanttShellOptions.backend` closed the hardcoded `createDomBackend()` call site, but `render/null`'s backend is still unreachable from `view/` — `PaneLayout` mounts real `HTMLElement`s regardless of which backend paints them. If this slice's measurement/hardening work wants a DOM-free `view/`+`layout/` harness, `PaneLayout` (or an equivalent) needs to accept a non-DOM surface too, not just a swappable backend. Plan and current code shape: `plans/issues/open/112-di-seams.md` (Seam B).
 - Release plumbing: versioned docs from the harness gallery, CHANGELOG, publishing pipeline. Product 1.0 waits for S7 (D3).
@@ -263,7 +263,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 - [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
 - [ ] 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
-- [ ] Linked-scroll demo works in x, y, and both modes with zero Gantt-side special-casing.
+- [ ] Linked-scroll demo works in x, y, and both modes with zero Gantt-side special-casing. (Both-axis sharing is proved by `[S1-A4]`; **x shared with y private is a build, #405** — ruled 2026-09-15. Slice plan: `plans/s6-scale-and-sync/README.md` §5.3.)
 - [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
 

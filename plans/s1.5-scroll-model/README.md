@@ -49,6 +49,8 @@ The cost is honest and small: `state.position` can read beyond `state.max`. That
 
 ### D-S1.5-3 — Sharing shares both axes; no axis views in S1
 
+> **Later note, 2026-09-15 — the return condition fired.** The decision below is S1's record and stands unchanged: nothing named here is built, and the both-axis fallback is still what ships. What changed is the one thing this decision made conditional. A caller now needs "share x, private y" — two panes over one time axis holding different row sets — so **#405** carries it. Both rejections below are live objections that #405 has to answer, not history it may skip.
+
 `xOnly()`, `yOnly()`, `ScrollSource` and `ScrollAxis` are **not built**. `GanttOptions.scroll` takes a `ScrollModel` and sharing it links both axes.
 
 The **designed and tested** case is charts on a shared `TimeScaleModel`, where `contentWidth` is identical for every binding by construction — so on x there is no aggregation question, no local clamp, no pinning, and no disagreement between scrollbars. This matches the whole ecosystem: every surveyed library that links two components links the **domain (x) axis** — AG Grid's `alignedGrids` is horizontal-only and offers no vertical equivalent; ECharts `connect`, uPlot's `sync(key)`, and charting-platform "sync charts" features all share the time/x range.
@@ -387,5 +389,5 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 | `gantt.reveal(entryId)` | S1.8 | a pane height that re-measures (S1.7b, #8) — `Viewport`, `frame.rows` and `RowHeightIndex` all ship at S1.7 |
 | `gantt.scale =` / `gantt.scroll =` setters | S1.8 | the already-built `Viewport` (S1.7) owning unbind → rebind → re-render |
 | `panBy(delta)` | S4 | wheel / keyboard controllers producing deltas |
-| `xOnly()` / `yOnly()` | when a host needs "share x, private y" | a real caller (D-S1.5-3) |
+| `xOnly()` / `yOnly()` | **now — the caller arrived 2026-09-15 (#405)** | a shape that answers D-S1.5-3's two rejections, not one that repeats them |
 | One-scrollbar treatment for linked charts | its own issue against S1.8 | a linked-group concept in `view/` |
