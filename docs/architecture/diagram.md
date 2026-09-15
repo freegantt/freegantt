@@ -1,7 +1,4 @@
----
-id: diagram
-title: "FreeGantt module map"
----
+# FreeGantt module map
 
 <style>
   .fg-architecture-doc {
