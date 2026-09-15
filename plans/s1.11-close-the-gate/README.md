@@ -6,7 +6,7 @@
 
 This directory is the settled spec for S1.11, in the same form as [`plans/s1.10-theming-and-a11y/README.md`](../s1.10-theming-and-a11y/README.md).
 
-**Superseded S6 (D-S6-1, 2026-09-15, #405): `ScrollModel` is retired.** Every mention of `ScrollModel` below, including Q1's "confirmed cut" for `xOnly()`/`yOnly()` and the `[S1-A4]`/U4 references to sharing "one `ScrollModel`", describes the S1.5–S1.11 design accurately as history. `harness/scroll-sync.ts` now shares a `ScrollAxis` per direction instead, `[S1-A4]` still passes unmodified against the both-axis pair, and a new pair on the same page demonstrates x-only sharing (`[S6-A3]`, `e2e/scroll-sync.spec.ts`). See `plans/s1.5-scroll-model/README.md` D-S1.5-3 and `plans/03-slices.md` §S6 for what changed and why.
+**Superseded S6 (D-S6-1, 2026-09-15, #405): `ScrollModel` is retired.** Every mention of `ScrollModel` below, including Q1's "confirmed cut" for `xOnly()`/`yOnly()` and the `[S1-A4]`/U4 references to sharing "one `ScrollModel`", describes the S1.5–S1.11 design accurately as history. `harness/scroll-sync.ts` now shares a `ScrollAxis` per direction instead, `[S1-A4]` still passes unmodified against the both-axis pair, and two new pairs on the same page demonstrate x-only and y-only sharing (`[S6-A3]`, `[S6-A4]`, `e2e/scroll-sync.spec.ts`). See `plans/s1.5-scroll-model/README.md` D-S1.5-3 and `plans/03-slices.md` §S6 for what changed and why.
 
 S1.11 adds no rendering behaviour. It makes the S1 → S2 gate a **command instead of an opinion**, and it closes the vocabulary debt S1 accumulated. Two of its findings are load-bearing enough to state before anything else:
 

@@ -4,7 +4,8 @@ import { test, expect } from '@playwright/test';
 // property that neither clamps nor fires an event — so both checks pass vacuously in
 // src/view/scroll-attachment.test.ts. harness/scroll-sync.html mounts two Gantts sharing a
 // ScrollAxis per direction: #tall has every fixture entry, #short has the first 20 (fewer rows ->
-// a smaller max). A second pair, #xonly-a/#xonly-b, shares only the x ScrollAxis (S6 R3, D-S6-1).
+// a smaller max). A second pair, #xonly-a/#xonly-b, shares only the x ScrollAxis, and a third,
+// #yonly-a/#yonly-b, shares only the y ScrollAxis (S6 R3, D-S6-1).
 //
 // The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#tall`/`#short` themselves no
 // longer scroll, so every read/write below targets each container's `.fg-timeline-pane` child.
@@ -157,4 +158,48 @@ test('[S6-A3] two Gantts sharing only x move together in x and stay private in y
   await expect.poll(async () => (await xOnlyPositions()).a.y).toBe(150);
   const afterY = await xOnlyPositions();
   expect(afterY.b.y).toBe(before.b.y);
+});
+
+// S6 R3 (plans/03-slices.md, D-S6-1): #yonly-a/#yonly-b share only the y ScrollAxis. A vertical
+// scroll on either moves both; a horizontal scroll on one stays private.
+test('[S6-A4] two Gantts sharing only y move together in y and stay private in x (D-S6-1)', async ({
+  page,
+}) => {
+  await page.goto('/scroll-sync.html');
+  await expect(page.locator('#yonly-a .fg-bar').first()).toBeVisible();
+
+  async function yOnlyPositions() {
+    return page.evaluate(() => ({
+      a: {
+        x: document.querySelector('#yonly-a .fg-timeline-pane')!.scrollLeft,
+        y: document.querySelector('#yonly-a .fg-timeline-pane')!.scrollTop,
+      },
+      b: {
+        x: document.querySelector('#yonly-b .fg-timeline-pane')!.scrollLeft,
+        y: document.querySelector('#yonly-b .fg-timeline-pane')!.scrollTop,
+      },
+    }));
+  }
+
+  const before = await yOnlyPositions();
+
+  // A vertical scroll on #yonly-a reaches #yonly-b.
+  await page.evaluate(() => {
+    const el = document.querySelector('#yonly-a .fg-timeline-pane')!;
+    el.scrollTop = 150;
+    el.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(async () => (await yOnlyPositions()).b.y).toBeGreaterThan(before.b.y);
+  const afterY = await yOnlyPositions();
+  expect(afterY.a.y).toBe(afterY.b.y);
+
+  // A horizontal scroll on #yonly-a stays on #yonly-a: #yonly-b's x is untouched.
+  await page.evaluate(() => {
+    const el = document.querySelector('#yonly-a .fg-timeline-pane')!;
+    el.scrollLeft = 400;
+    el.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(async () => (await yOnlyPositions()).a.x).toBeGreaterThan(before.a.x);
+  const afterX = await yOnlyPositions();
+  expect(afterX.b.x).toBe(before.b.x);
 });

@@ -1,5 +1,5 @@
 // view/ — the DOM-facing counterpart to layout/viewport/viewport.ts (plans/01 §8.2). The only file
-// allowed to touch element scroll (I12) — eslint/rules/no-scroll-outside-scroll-model.cjs is scoped
+// allowed to touch element scroll (I12) — eslint/rules/no-scroll-outside-scroll-attachment.cjs is scoped
 // to exempt this file and no other.
 //
 // Owns no binding (S1.7, D-S1.7-1): Viewport already binds scale and scroll in one place. This file

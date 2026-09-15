@@ -1299,9 +1299,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       rowBandLayer = document.createElement('div');
       rowBandLayer.className = 'fg-row-bands';
       // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
-      // so nothing else in this DOM makes `timelineHost` actually overflow — without this, the x/y
-      // `ScrollAxis`es' `panTo` have nowhere real to write. Zero visual footprint; `sync()` moves it
-      // to the frame's bottom-right corner every render.
+      // so nothing else in this DOM makes `timelineHost` actually overflow — without this, neither the
+      // x nor the y `ScrollAxis`'s `panTo` has anywhere real to write. Zero visual footprint; `sync()`
+      // moves it to the frame's bottom-right corner every render.
       contentSizer = document.createElement('div');
       contentSizer.setAttribute('aria-hidden', 'true');
       contentSizer.className = 'fg-content-sizer';

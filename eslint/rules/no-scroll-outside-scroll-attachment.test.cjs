@@ -1,13 +1,13 @@
 'use strict';
 
 const { RuleTester } = require('eslint');
-const rule = require('./no-scroll-outside-scroll-model.cjs');
+const rule = require('./no-scroll-outside-scroll-attachment.cjs');
 
 const ruleTester = new RuleTester({
   languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
 });
 
-ruleTester.run('no-scroll-outside-scroll-model', rule, {
+ruleTester.run('no-scroll-outside-scroll-attachment', rule, {
   valid: [
     'const x = el.clientWidth;',
     'model.setScrollLeft(10);',
@@ -17,13 +17,14 @@ ruleTester.run('no-scroll-outside-scroll-model', rule, {
   invalid: [
     { code: 'el.scrollLeft = 10;', errors: [{ messageId: 'scrollProp' }] },
     { code: 'el.scrollTo(0, 0);', errors: [{ messageId: 'scrollTo' }] },
-    // The old exemption path is retargeted (S1.5) — a file at the pre-S1.5 name is no longer exempt.
+    // Only the one exempt filename is exempt — anything else, including a plausible-looking
+    // retired name, still reports.
     {
       code: 'el.scrollTop = 10;',
-      filename: '/repo/src/view/scroll-model.ts',
+      filename: '/repo/src/view/scroll-axis.ts',
       errors: [{ messageId: 'scrollProp' }],
     },
   ],
 });
 
-console.log('no-scroll-outside-scroll-model: all cases passed.');
+console.log('no-scroll-outside-scroll-attachment: all cases passed.');
