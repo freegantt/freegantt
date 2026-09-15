@@ -42,8 +42,9 @@ const variantAllows =
     markedVariant(entry) === variant ? can : undefined;
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
- *  registers — `start`/`end` roll up and are editable, `duration` computes, `kind` is neither. One
- *  `override` re-declares a single key, the way `DatasetOptions.fields` does (#142). */
+ *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId`/`segments`
+ *  ship `'api'`. One `override` re-declares a single key, the way `DatasetOptions.fields` does
+ *  (#142). */
 function fieldsWith(...overrides: readonly Partial<Field>[]): (key: FieldKey) => Field | undefined {
   const byKey = new Map<FieldKey, Field>(CORE_FIELDS.map((field) => [field.key, field]));
   for (const override of overrides) {
@@ -145,13 +146,17 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(entry(), 'nothing-declares-this').ok).toBe(false);
   });
 
-  // ADR 0015: the default is `'anywhere'`, so a core Field that declares no `editable` answers yes
-  // here. `parentId` never reaches a cell anyway — it declares no `column`, so no grid asks — and
-  // that absent column is what keeps it out of the grid, not a second declaration restating it.
+  // ADR 0015: the default is `'anywhere'`, so a declared Field that states no `editable` answers yes.
   it('answers yes for a declared Field that states no editable of its own', () => {
+    const caps = capabilities({}, { key: 'owner' });
+    expect(caps.canWrite(entry(), 'owner').ok).toBe(true);
+  });
+
+  // `parentId` and `segments` ship `'api'`: a column object may show them, and the cell stays dead.
+  it('refuses the grid for parentId and segments — the app writes them, the user never types them', () => {
     const caps = capabilities();
-    expect(caps.canWrite(entry(), 'parentId').ok).toBe(true);
-    expect(caps.canWrite(entry(), 'segments').ok).toBe(true);
+    expect(caps.canWrite(entry(), 'parentId')).toEqual({ ok: false });
+    expect(caps.canWrite(entry(), 'segments')).toEqual({ ok: false });
   });
 
   // The middle state: the app writes it through `entries.update()`, the user never types it.

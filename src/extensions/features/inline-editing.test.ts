@@ -280,6 +280,36 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
+  it('a parentId or segments column keeps its cell dead, while entries.update() writes parentId', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({ entries: structuredClone([...ENTRIES]), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: [
+        'name',
+        { field: 'parentId', header: 'Authored parent' },
+        { field: 'segments', header: 'Parts' },
+      ],
+      plugins: [inlineEditing()],
+    });
+
+    dblclick(cellFor(container, 'e1', 'parentId'));
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
+
+    dblclick(cellFor(container, 'e3', 'segments'));
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
+
+    dataset.entries.update('e1', { parentId: 'e2' });
+    expect(dataset.entries.get('e1')?.read('parentId')).toBe('e2');
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('interactions.edit: false refuses every cell', () => {
     const container = document.createElement('div');
     document.body.append(container);

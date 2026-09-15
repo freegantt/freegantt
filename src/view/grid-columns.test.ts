@@ -118,23 +118,27 @@ describe('resolveColumns (D-S4-12)', () => {
   });
 
   it("gridColumns: ['parentId'] throws FieldColumnNotDefinedError", () => {
-    expect(() => resolveColumns(['parentId'], lookupFrom(CORE_FIELDS), { timeZone: zone })).toThrow(
-      FieldColumnNotDefinedError,
-    );
+    let thrown: unknown;
     try {
       resolveColumns(['parentId'], lookupFrom(CORE_FIELDS), { timeZone: zone });
     } catch (error) {
-      expect(error).toMatchObject({ code: 'field-column-not-defined', key: 'parentId' });
+      thrown = error;
     }
+    expect(thrown).toBeInstanceOf(FieldColumnNotDefinedError);
+    expect(thrown).toMatchObject({ code: 'field-column-not-defined', key: 'parentId' });
   });
 
-  it("gridColumns: [{ field: 'parentId', header: 'Parent' }] resolves", () => {
-    const columns = resolveColumns([{ field: 'parentId', header: 'Parent' }], lookupFrom(CORE_FIELDS), {
-      timeZone: zone,
-    });
+  it("gridColumns: [{ field: 'parentId', header: 'Authored parent' }] resolves", () => {
+    const columns = resolveColumns(
+      [{ field: 'parentId', header: 'Authored parent' }],
+      lookupFrom(CORE_FIELDS),
+      {
+        timeZone: zone,
+      },
+    );
     expect(columns).toHaveLength(1);
     expect(columns[0]?.field).toBe('parentId');
-    expect(columns[0]?.header).toBe('Parent');
+    expect(columns[0]?.header).toBe('Authored parent');
     expect(columns[0]?.width).toBe(DEFAULT_COLUMN_WIDTH_PX);
     expect(columns[0]?.align).toBe('start');
   });
