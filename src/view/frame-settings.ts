@@ -19,7 +19,7 @@ import {
 import type {
   BarLabels,
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   DateLine,
   DateLineLabelPlacement,
   FieldCompare,
@@ -113,7 +113,7 @@ interface FrameSettingsValues {
   rowSource: RowSource;
   barLabels: BarLabels;
   barRenderer: BarRenderer | undefined;
-  cellRenderer: CellRenderer | undefined;
+  gridCellRenderer: GridCellRenderer | undefined;
   headerRenderer: HeaderRenderer | undefined;
   tooltipRenderer: TooltipRenderer | undefined;
   /** Written by the Field bind itself (`GanttShell`'s `#bindColumns`), never by a consumer. */
@@ -143,7 +143,7 @@ function defaultSettings(): FrameSettingsValues {
     rowSource: DEFAULT_ROW_SOURCE,
     barLabels: 'fitBar',
     barRenderer: undefined,
-    cellRenderer: undefined,
+    gridCellRenderer: undefined,
     headerRenderer: undefined,
     tooltipRenderer: undefined,
     fieldCompares: [],
@@ -167,7 +167,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   rowSource: 'invalidateItems',
   barLabels: 'repaint',
   barRenderer: 'repaint',
-  cellRenderer: 'repaint',
+  gridCellRenderer: 'repaint',
   headerRenderer: 'repaint',
   tooltipRenderer: 'repaint',
   fieldCompares: 'none',
@@ -243,8 +243,8 @@ export class FrameSettings {
     return this.#values.barRenderer;
   }
 
-  get cellRenderer(): CellRenderer | undefined {
-    return this.#values.cellRenderer;
+  get gridCellRenderer(): GridCellRenderer | undefined {
+    return this.#values.gridCellRenderer;
   }
 
   get headerRenderer(): HeaderRenderer | undefined {

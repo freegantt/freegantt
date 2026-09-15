@@ -11,7 +11,7 @@ import type { FrameBar, FrameRow } from './frame.js';
 import type { ResolvedColumn } from './column.js';
 
 /** One of the four renderer points (D-S5-11): one slot each. */
-export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
+export type RendererPoint = 'bar' | 'gridCell' | 'header' | 'tooltip';
 
 /** Which side of the bar the label paints on. This is the *answer* for one bar at one width, not the
  *  `barLabels` policy that produced it: `'fitBar'` reads `'inside'` for a bar the text fits and
@@ -37,7 +37,7 @@ export interface BarRendererContext {
 /** `undefined` keeps the library's own output for this one bar (D-S5-11). */
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
 
-export interface CellRendererContext {
+export interface GridCellRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row (`layout/rows`). */
   entry?: Entry | undefined;
   row: FrameRow;
@@ -49,7 +49,7 @@ export interface CellRendererContext {
    *  this; one that paints text reads `value`. `undefined` on a row with no Entry. */
   fieldValue: unknown;
 }
-export type CellRenderer = (ctx: CellRendererContext) => ElementDescription | undefined;
+export type GridCellRenderer = (ctx: GridCellRendererContext) => ElementDescription | undefined;
 
 export interface HeaderRendererContext {
   column: ResolvedColumn;
@@ -69,8 +69,8 @@ export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescriptio
  *  variant's own `paint` is where that job lives now. */
 export type RendererFor<P extends RendererPoint> = P extends 'bar'
   ? BarRenderer
-  : P extends 'cell'
-    ? CellRenderer
+  : P extends 'gridCell'
+    ? GridCellRenderer
     : P extends 'header'
       ? HeaderRenderer
       : TooltipRenderer;

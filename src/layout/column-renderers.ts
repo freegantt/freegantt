@@ -2,10 +2,10 @@
 // (plans/01 §1). A variant can carry its own `css`; a cell renderer cannot, so the
 // look lives in the always-on sheet (`view/styles.ts`).
 //
-// What shape it draws? `meterCell()` a track and optional text; `imageCell()` an img.
+// What shape it draws? `meter()` a track and optional text; `image()` an img.
 // How it looks? `.fg-meter*` / `.fg-image-cell` in the base sheet.
 
-import type { ColumnCellRenderer, ElementDescription } from '../model/index.js';
+import type { ColumnRenderer, ElementDescription } from '../model/index.js';
 
 /** The track's own scale. Paint clamps to this; the formatted text does not. */
 const TRACK_FULL = 100;
@@ -38,7 +38,7 @@ function meterTrack(paintPercent: number, hidden: boolean): ElementDescription &
   return track;
 }
 
-/** `meterCell()` — core's meter, for a `percent` Field. Call: "the progress column's
+/** `meter()` — core's meter, for a `percent` Field. Call: "the progress column's
  *  cell renderer is a meter cell."
  *
  *  Default `{ text: true }`: a track plus the Field's formatted `value` (`35%`).
@@ -50,7 +50,7 @@ function meterTrack(paintPercent: number, hidden: boolean): ElementDescription &
  *
  *  Missing or non-numeric `fieldValue` paints an empty cell: no track, no role.
  *  `0` is a real reading and paints an empty fill. Out of range clamps paint only. */
-export function meterCell(options?: { text?: boolean }): ColumnCellRenderer {
+export function meter(options?: { text?: boolean }): ColumnRenderer {
   const showText = options?.text ?? true;
   return ({ value, fieldValue }) => {
     const reading = meterReading(fieldValue);
@@ -75,7 +75,7 @@ export function meterCell(options?: { text?: boolean }): ColumnCellRenderer {
   };
 }
 
-/** `imageCell()` — core's image cell, for a Field that stores a URL string.
+/** `image()` — core's image cell, for a Field that stores a URL string.
  *  Call: "the photo column's cell renderer is an image cell."
  *
  *  Default: `alt` is the Field's formatted `value` (the caption a reader
@@ -87,7 +87,7 @@ export function meterCell(options?: { text?: boolean }): ColumnCellRenderer {
  *  Column `tooltip` already defaults `false`. `tooltip: true` on an image
  *  column shows the stored URL unless the Field's `formatValue` returns a
  *  caption. The default tooltip body never sees the renderer. */
-export function imageCell(options?: { alt?: string }): ColumnCellRenderer {
+export function image(options?: { alt?: string }): ColumnRenderer {
   const staticAlt = options?.alt;
   return ({ fieldValue, value }) => {
     if (typeof fieldValue !== 'string' || fieldValue === '') return undefined;

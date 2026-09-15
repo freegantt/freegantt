@@ -32,7 +32,7 @@ import type {
   ResolvedRenderer,
   BarLabels,
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
   TooltipRenderer,
   FrameBar,
@@ -246,11 +246,11 @@ export interface GanttShellWiring {
         }
       | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
       // S5.11, D-S5-26/D-S5-39: the roving-focus grid pane fills two `CommandTarget` kinds a
-      // right-click never reaches on its own. `'row'` names a focused Row. `'cell'` names a
+      // right-click never reaches on its own. `'row'` names a focused Row. `'gridCell'` names a
       // focused Grid cell, and `field` names its column. The splitter also gains its own kind,
       // for parity with the panes either side of it.
       | { kind: 'row'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
-      | { kind: 'cell'; field?: FieldKey; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      | { kind: 'gridCell'; field?: FieldKey; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
       | { kind: 'splitter'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
@@ -325,9 +325,9 @@ export interface GanttShellOptions {
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
   barRenderer?: BarRenderer;
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. */
-  cellRenderer?: CellRenderer;
+  gridCellRenderer?: GridCellRenderer;
   /** Live (S5.4, D-S5-11). Not painted until a later step consumes it (S5.7's grid header chrome).
    *  The resolution slot exists now, so a plugin's `registerRenderer('header', …)` has somewhere to
    *  register into. It also keeps this option honest about not being a no-op forever. */
@@ -702,33 +702,40 @@ export class GanttShell {
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
         // string it already threads through `CellItem.key`.
-        resolveCellRenderer: (columnKey) => {
+        resolveGridCellRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
-          // S5.7, D-S5-17: a per-column `cellRenderer` (this Gantt's own `gridColumns`) beats the
+          // S5.7, D-S5-17: a per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
           // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
           // from the consumer's own config until S5.9's `registerGridColumn` exists.
-          if (column.cellRenderer !== undefined) {
-            const columnCellRenderer = column.cellRenderer;
+          if (column.columnRenderer !== undefined) {
+            const perColumnRenderer = column.columnRenderer;
             return {
               renderer: (ctx) =>
-                columnCellRenderer({
+                perColumnRenderer({
                   ...(ctx.entry !== undefined ? { entry: ctx.entry } : {}),
                   value: ctx.value,
                   fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
                 }),
             };
           }
-          const resolved = this.#registrations.renderers.resolve('cell', this.#frameSettings.cellRenderer);
+          const resolved = this.#registrations.renderers.resolve(
+            'gridCell',
+            this.#frameSettings.gridCellRenderer,
+          );
           if (resolved === undefined) return undefined;
-          const cellRenderer = resolved.renderer;
+          const gridCellRenderer = resolved.renderer;
           return {
             renderer: (ctx) =>
-              cellRenderer({ ...ctx, column, fieldValue: this.#fieldValueForCell(ctx.entry, column.field) }),
+              gridCellRenderer({
+                ...ctx,
+                column,
+                fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
+              }),
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
-        // S5.4, D-S5-11: same bind-in-here posture as `resolveCellRenderer` just above. A
+        // S5.4, D-S5-11: same bind-in-here posture as `resolveGridCellRenderer` just above. A
         // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
         // ever resolves the Gantt-wide/plugin one, bound to its column.
         resolveHeaderRenderer: (columnKey) => {
@@ -1105,12 +1112,12 @@ export class GanttShell {
     this.#frameSettings.set({ barRenderer: renderer });
   }
 
-  get cellRenderer(): CellRenderer | undefined {
-    return this.#frameSettings.cellRenderer;
+  get gridCellRenderer(): GridCellRenderer | undefined {
+    return this.#frameSettings.gridCellRenderer;
   }
 
-  set cellRenderer(renderer: CellRenderer | undefined) {
-    this.#frameSettings.set({ cellRenderer: renderer });
+  set gridCellRenderer(renderer: GridCellRenderer | undefined) {
+    this.#frameSettings.set({ gridCellRenderer: renderer });
   }
 
   get headerRenderer(): HeaderRenderer | undefined {
@@ -1466,10 +1473,10 @@ export class GanttShell {
         return { kind: 'splitter' as const, entryIds: [], segmentIds: [] };
       case 'row':
         return { kind: 'row' as const, entryIds, segmentIds };
-      case 'cell':
+      case 'gridCell':
         return domTarget.field !== undefined
-          ? { kind: 'cell' as const, field: domTarget.field, entryIds, segmentIds }
-          : { kind: 'cell' as const, entryIds, segmentIds };
+          ? { kind: 'gridCell' as const, field: domTarget.field, entryIds, segmentIds }
+          : { kind: 'gridCell' as const, entryIds, segmentIds };
       case 'bar':
         return { kind: 'bar' as const, entryIds, segmentIds };
     }
@@ -1592,7 +1599,7 @@ export class GanttShell {
     return {
       locale: options.locale,
       barRenderer: options.barRenderer,
-      cellRenderer: options.cellRenderer,
+      gridCellRenderer: options.gridCellRenderer,
       headerRenderer: options.headerRenderer,
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
@@ -1646,7 +1653,7 @@ export class GanttShell {
   #focusedCell(): { entryId: EntryId; field: FieldKey } | undefined {
     const focused = this.#rovingFocus.focusedElement();
     const target = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
-    if (target?.kind !== 'cell' || target.entry === undefined || target.field === undefined) {
+    if (target?.kind !== 'gridCell' || target.entry === undefined || target.field === undefined) {
       return undefined;
     }
     return { entryId: target.entry.id, field: target.field };
@@ -1829,7 +1836,7 @@ export class GanttShell {
     return this.#options.dataset.entries.get(entryIdOfItem(item));
   }
 
-  /** Review H3: `CellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
+  /** Review H3: `GridCellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
    *  core, `props`-addressed or `compute` Field alike (ADR 0011, ADR 0017). It shares the memo
    *  `column.format` already uses, so a renderer branching on a number never parses `value` back.
    *  A row with no Entry (a grouping header, a custom row) has no Field value to read. */

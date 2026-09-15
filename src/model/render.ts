@@ -2,7 +2,7 @@
 // is what a plugin hands back instead of a live node: `render/dom/element-description.ts` is the only
 // place that turns it into DOM, and it stays inside the reconciler's hard-bounded scope (plans/01
 // §8.1) — attrs/class/style/text plus keyed children, no lifecycle hook. S5.3's `Popup.content` is
-// this type's first caller; S5.4 widens the same shape to `barRenderer`/`cellRenderer` output.
+// this type's first caller; S5.4 widens the same shape to `barRenderer`/`gridCellRenderer` output.
 
 /** Plain data, never a live node (`plans/02` §4) — a virtualized bar or a recycled popup content node
  *  must be able to rebuild from this every time. `text` is the only text channel and is set as

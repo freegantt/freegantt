@@ -1847,18 +1847,18 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a per-column cellRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
+  it('a per-column columnRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const gantt = new Gantt({
       container,
       dataset,
-      gridColumns: [{ field: 'name', cellRenderer: () => ({ text: 'per-column' }) }],
+      gridColumns: [{ field: 'name', columnRenderer: () => ({ text: 'per-column' }) }],
       plugins: [
         {
           id: 'demo.cell-renderer',
           view(ctx) {
-            ctx.view.registerRenderer('cell', () => ({ text: 'plugin' }));
+            ctx.view.registerRenderer('gridCell', () => ({ text: 'plugin' }));
             return () => {};
           },
         },
@@ -1871,7 +1871,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a cellRenderer reads the Field value beside the formatted string (review H3)', () => {
+  it('a gridCellRenderer reads the Field value beside the formatted string (review H3)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1889,7 +1889,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
       container,
       dataset,
       gridColumns: ['name', 'cost'],
-      cellRenderer: ({ column, value, fieldValue }) => {
+      gridCellRenderer: ({ column, value, fieldValue }) => {
         if (column.field === 'cost') seen.push({ value, fieldValue });
         return undefined;
       },
@@ -1901,7 +1901,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a per-column cellRenderer reads the same Field value (review H3)', () => {
+  it('a per-column columnRenderer reads the same Field value (review H3)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1918,7 +1918,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         'name',
         {
           field: 'cost',
-          cellRenderer: ({ value, fieldValue }) =>
+          columnRenderer: ({ value, fieldValue }) =>
             typeof fieldValue === 'number' && fieldValue > 1000 ? { text: `over: ${value}` } : undefined,
         },
       ],
@@ -2075,7 +2075,7 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
       container,
       dataset,
       gridColumns: ['name', { field: 'start' }],
-      cellRenderer: ({ column }) => {
+      gridCellRenderer: ({ column }) => {
         cellColumns.push(String(column.field));
         return undefined;
       },
@@ -2220,27 +2220,27 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
 });
 
 describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
-  it('barRenderer/cellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
+  it('barRenderer/gridCellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
     expect(gantt.barRenderer).toBeUndefined();
-    expect(gantt.cellRenderer).toBeUndefined();
+    expect(gantt.gridCellRenderer).toBeUndefined();
     expect(gantt.headerRenderer).toBeUndefined();
     expect(gantt.tooltipRenderer).toBeUndefined();
 
     const barRenderer = () => ({ text: 'bar' });
-    const cellRenderer = () => ({ text: 'cell' });
+    const gridCellRenderer = () => ({ text: 'gridCell' });
     const headerRenderer = () => ({ text: 'header' });
     const tooltipRenderer = () => ({ text: 'tooltip' });
     gantt.barRenderer = barRenderer;
-    gantt.cellRenderer = cellRenderer;
+    gantt.gridCellRenderer = gridCellRenderer;
     gantt.headerRenderer = headerRenderer;
     gantt.tooltipRenderer = tooltipRenderer;
 
     expect(gantt.barRenderer).toBe(barRenderer);
-    expect(gantt.cellRenderer).toBe(cellRenderer);
+    expect(gantt.gridCellRenderer).toBe(gridCellRenderer);
     expect(gantt.headerRenderer).toBe(headerRenderer);
     expect(gantt.tooltipRenderer).toBe(tooltipRenderer);
 
@@ -2575,14 +2575,14 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
           {
             id: 'demo.renderer-one',
             view(ctx) {
-              ctx.view.registerRenderer('cell', () => undefined);
+              ctx.view.registerRenderer('gridCell', () => undefined);
               return () => {};
             },
           },
           {
             id: 'demo.renderer-two',
             view(ctx) {
-              ctx.view.registerRenderer('cell', () => undefined);
+              ctx.view.registerRenderer('gridCell', () => undefined);
               return () => {};
             },
           },
@@ -5436,9 +5436,9 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const plugin = {
-      id: 'demo.cellRenderer',
+      id: 'demo.gridCellRenderer',
       view(ctx: PluginContext) {
-        ctx.view.registerRenderer('cell', () => ({ text: 'from the plugin' }));
+        ctx.view.registerRenderer('gridCell', () => ({ text: 'from the plugin' }));
         return () => {};
       },
     };

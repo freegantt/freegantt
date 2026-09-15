@@ -26,22 +26,22 @@ export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' 
  *  enum, so `dataset.fields.all` reads one word back. */
 export type FieldEditable = 'never' | 'api' | 'anywhere';
 
-/** What a per-column `cellRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
- *  `CellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
+/** What a per-column `columnRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
+ *  `GridCellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
  *  — the consumer wrote it right there in the same `GridColumn` — so it needs no `column` argument to
  *  branch on, and no `row` either (the sample in D-S5-17 reads only `value`/`entry`). This also keeps
- *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `CellRenderer`
+ *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `GridCellRenderer`
  *  lives in `layout/` because its context names `FrameRow`/`ResolvedColumn`, and `model/` may not
  *  import `layout/`. */
-export interface ColumnCellRendererContext {
+export interface ColumnRendererContext {
   /** Undefined for a row with no backing Entry — a group or custom row. */
   entry?: Entry | undefined;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
-  /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `CellRendererContext`. */
+  /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `GridCellRendererContext`. */
   fieldValue: unknown;
 }
-export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
 
 /** Where a cell's text and header sit within the column's width. Default `'start'`. */
 export type ColumnAlign = 'start' | 'center' | 'end';
@@ -53,8 +53,8 @@ export interface GridColumnBase {
   field: FieldKey;
   header?: string;
   align?: ColumnAlign;
-  /** S5.7 — per-column, more specific than `GanttOptions.cellRenderer` (D-S5-11). */
-  cellRenderer?: ColumnCellRenderer;
+  /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer` (D-S5-11). */
+  columnRenderer?: ColumnRenderer;
   /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
@@ -175,14 +175,14 @@ export type Field<TValue = unknown> =
        *  `dateInput` seam instead (D-S5-20). For a full widget swap, not just the native input type, veto
        *  with `beforeEntryEdit` and mount your own control. */
       inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
-      /** D-S5-17: `cellRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
+      /** D-S5-17: `columnRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
        *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
        *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
        *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
        *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
        *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
        *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
-      column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
     }
   | {
       key: FieldKey;
@@ -198,7 +198,7 @@ export type Field<TValue = unknown> =
       compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
       compare?(a: TValue | undefined, b: TValue | undefined): number;
       formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-      column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
       // Declared `never` (never abbreviated away, unlike the ADR's shorthand comment) so a caller
       // holding a bare `Field` can read `field.equals`/`.parseValue`/`.inputType` without narrowing
       // the union first — the same reason `rollUp`/`editable`/`compute` cross-declare above.
@@ -230,7 +230,7 @@ export interface FieldType<TValue = unknown> {
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
   parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
-  column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+  column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
 }
 
 /** What `createFieldContext` and column resolve need — `FieldRegistry.get` and `dataset.field` both satisfy this. */

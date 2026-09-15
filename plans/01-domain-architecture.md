@@ -276,7 +276,7 @@ interface GridColumn {
   width?: number; flex?: number;
   align?: 'start' | 'end' | 'center';
   hidden?: boolean;                                 // S5, D-S5-34: declared and not painted; keeps its width and its place
-  // cellRenderer arrives in S5, on the Gantt column, when code honours it (I11).
+  // columnRenderer arrives in S5, on the Gantt column, when code honours it (I11).
   // #142: editable lives on the Field only, not here — a Grid column carries no override of its own.
 }
 
@@ -316,7 +316,7 @@ Rules:
 - **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested parents settle together. Structure says which **entries** derive (has children); the registry says how each **field** derives. The two are orthogonal and both are needed.
 - **Aggregation never lives on a grid column.** A stored value must not depend on whether a column is visible, and the rollup has already run before any Gantt is constructed.
 - **A Field may declare its own column defaults, so `gridColumns` is mostly ordering.** `gridColumns: ['name', 'start', 'cost']` names fields in display order; the object form (`{ field: 'cost', header: 'Budget — site A' }`) overrides this Gantt's presentation only, and never the data half.
-- **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `cellRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
+- **Text and structure stay separate.** `formatValue` returns a string, is DOM-free, and fills the frame's row cells; `columnRenderer` returns element descriptions and is applied by `render/`. Same split as `FrameBar.label` and `barRenderer` (§8).
 - **`{ key: 'cost', type: 'money' }` is the common call.** The key decides the home. A `compute` Field is the explicit other shape.
 - **A Field type supplies the default `rollUp`, `formatValue`, `compare`, and column defaults.** The registry merges the Field onto its type first; the Field's own keys win. After that merge, absent `rollUp` or `'none'` means the Field does not participate. The type's `rollUp` is an Aggregator name — shipped or a consumer name in `aggregators`. `percent` is the one shipped Field type, and it carries no `rollUp` — a default aggregator would overwrite an authored parent value on every dataset naming it (ADR 0008); there is no global default Aggregator — `sum` is what a consumer puts on `money`, not what an Instant uses. The Span rollup stays `start` as `min` and `end` as `max` on those core Fields (D-S4-3).
 - **Writability is one key, two thresholds (ADR 0015).** Gestures ask `canWrite` — writable iff `'anywhere'`. `entries.update()` refuses only `'never'`. Default is `'anywhere'`. Check `compute` before `editable`. Core `name`/`start`/`end` declare `'anywhere'`. `{ editable: false }` still constructs and stores as `'never'`.
@@ -379,7 +379,7 @@ interface GeometryFrame {
   /** Only rows in the vertical window; `top` in absolute content coordinates. `cells` holds one
    *  library-formatted string per configured grid column, in column order, produced by each field's
    *  `formatValue` (§2.6). It is derived text on the `a11yLabel` precedent, not consumer render
-   *  output — a `cellRenderer` is applied by `render/`, never here. */
+   *  output — a `columnRenderer` is applied by `render/`, never here. */
   rows: Array<{
     id: RowId; kind: PlannedRowKind; index: number; top: number; height: number;
     depth: number; expandable: boolean; expanded: boolean;
