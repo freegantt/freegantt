@@ -1313,7 +1313,7 @@ preset · range · fit · gridColumns
 rowSource · collapsed · collapsedIds
 </text>
 <text x="185" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-selection · selectionEntries
+selection · selectedEntries
 </text>
 <text x="185" y="142" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 interactions · plugins · commands

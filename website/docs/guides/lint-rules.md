@@ -106,7 +106,8 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Flags:** comparisons (`===`, `!==`, `switch` discriminant, `case`) where one side is a member expression whose property is `kind` and the other is a string literal; and `switch` statements whose discriminant is `*.kind`.
 
-**Allowlist — exactly the four seams, one file each:**
+**Allowlist — exactly the four seams, one file each (planned paths, see the note below — three of
+these files were never created):**
 
 | Path | Seam |
 |---|---|
@@ -119,7 +120,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
-**Never shipped, and its premise is now superseded.** The four seams below landed by S6 with no stored `kind` to dispatch on: [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](../adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](../adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/items/produce-items.ts` exists at the path this table names: [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](../adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](../adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
 
 ---
 
