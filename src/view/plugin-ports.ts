@@ -327,7 +327,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     /** S5.9, D-S5-21: registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order. A duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
-     *  ordinary Field registry (`UnknownFieldError`/`FieldNotColumnableError` apply unchanged). Legal
+     *  ordinary Field registry (`UnknownFieldError`/`FieldColumnNotDefinedError` apply unchanged). Legal
      *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. When two
      *  plugins register the same field, the newest registration wins, and disposing one plugin never
      *  disturbs the other plugin's registration. The returned `Disposer` removes the column sooner —

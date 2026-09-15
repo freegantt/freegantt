@@ -247,7 +247,7 @@ export {
   UnknownAggregatorError,
   AggregatorFailedError,
   UnknownFieldTypeError,
-  FieldNotColumnableError,
+  FieldColumnNotDefinedError,
   DuplicateRowIdError,
   MutationDuringNotificationError,
   MutationDuringExtensionHookError,

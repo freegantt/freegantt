@@ -83,7 +83,7 @@ export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' |
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-not-columnable' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
@@ -860,6 +860,13 @@ export type Field<TValue = unknown> = {
 };
 
 // @public
+export class FieldColumnNotDefinedError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public
 export interface FieldContext {
     // (undocumented)
     readonly timeZone: string;
@@ -880,13 +887,6 @@ export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValu
 } & {
     [key: string]: unknown;
 };
-
-// @public
-export class FieldNotColumnableError extends FreeGanttError {
-    constructor(key: string);
-    // (undocumented)
-    readonly key: string;
-}
 
 // @public
 export class FieldNotEditableError extends FreeGanttError {
