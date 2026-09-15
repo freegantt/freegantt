@@ -396,8 +396,12 @@ _Avoid_: Buffer, padding, margin
 One row of the time-axis header, emitted per `ViewPreset.headers` entry, coarsest first (e.g. months over weeks). Each band carries its own `unit`/`increment` and Ticks; `render/dom` keys bands by index and ticks within a band, so a preset with one header renders one `.fg-band` wrapper.
 _Avoid_: Header row (Header band is the term of art; "row" is reserved for grid Rows)
 
+**ScrollAxis**:
+One direction's scroll position and its bound (`{position, max}`), and **the unit two Gantt instances share** — D-S6-1, ruled 2026-09-15. A Gantt holds two, one per direction, and a caller aims each one independently, so sharing x, y, both or neither are all the same mechanism and the library ships no sharing modes. `scroll` takes `{ x?, y? }`, and omitting a direction keeps it private — one spelling for all four cases. **This retires ScrollModel**, whose name told the first consumer that sharing it would share the horizontal scroll alone; a container that hides which directions it couples is the defect, not the ergonomics. **Decided, not built** — #405 carries it; until then sharing one ScrollModel shares both directions. Say _time axis_, never bare "axis", wherever the TimeScaleModel is meant.
+_Avoid_: `xOnly()` / `yOnly()` (withdrawn — a filtered view over a model is not what this is), scroll direction, axis view
+
 **ScrollModel**:
-The standalone, shareable object owning a scroll position on both axes, and the only route by which any view or interaction code may read or write it. It resolves two things: the **position** — where the caller asked to be — and **max**, the loosest bound any bound Gantt needs, which is what a Pan clamps against. Max is not a claim about any one Gantt's scroller: each bound Gantt clamps the shared position to its own content, so a shorter chart stops at its last row while a taller one keeps going, and picks up where it stopped on the way back. Shared between Gantt instances the same way a TimeScaleModel is.
+**Retires with #405 — see ScrollAxis.** The standalone, shareable object owning a scroll position on both axes, and the only route by which any view or interaction code may read or write it. It resolves two things: the **position** — where the caller asked to be — and **max**, the loosest bound any bound Gantt needs, which is what a Pan clamps against. Max is not a claim about any one Gantt's scroller: each bound Gantt clamps the shared position to its own content, so a shorter chart stops at its last row while a taller one keeps going, and picks up where it stopped on the way back. Shared between Gantt instances the same way a TimeScaleModel is, and sharing one instance shares **both** directions. Decided 2026-09-15, not built: the shared unit becomes one scroll axis, so a caller shares x, y, both or neither (#405, D-S6-1). This entry describes what ships.
 _Avoid_: Scroll position, offset, viewport state
 
 **Pan**:
@@ -473,7 +477,7 @@ One step of the time axis at the current ViewPreset's resolution — the unit th
 _Avoid_: Gridline (a gridline is one way a Tick is drawn), step
 
 **Tick box floor**:
-The smallest CSS border-box a painted Tick cell can occupy (`--fg-tick-box-floor`, default 9). Distinct from Tick width (density on the axis). A sticky header label clamps to the pane edge only when the remaining cell is at least this wide; a thinner remainder keeps the Tick's true x.
+The smallest CSS border-box a painted Tick cell can occupy (`--fg-tick-box-floor`, default 9). Distinct from Tick width (density on the time axis). A sticky header label clamps to the pane edge only when the remaining cell is at least this wide; a thinner remainder keeps the Tick's true x.
 _Avoid_: min-width (that is Tick width's `minTickWidthPx`), sticky min width, STICKY_LABEL_MIN_WIDTH_PX
 
 ### Direct manipulation
