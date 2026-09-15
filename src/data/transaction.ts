@@ -228,10 +228,7 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
     // rather than rebuilding it, since `model/errors.ts` already owns that wording. No `fallback`:
     // this site printed nothing before and stays silent. `changeSet` is not copied onto the report —
     // `cause` already holds the error that carries it.
-    raiseErrorOn(
-      data.bus,
-      buildRefusalReport({ code: 'mutation-cancelled', event: 'beforeChange', note, cause: refusal }),
-    );
+    raiseErrorOn(data.bus, buildRefusalReport({ event: 'beforeChange', note, cause: refusal }));
     throw refusal;
   }
 

@@ -704,7 +704,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]).toMatchObject({
         code: 'entry-move-dropped',
         by: 'core',
-        because: 'superseded',
+        droppedReason: 'superseded',
       });
       expect(reported[0]?.message).toContain('dropped');
     });
@@ -727,7 +727,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const secondSession = pipeline.session(entryId('a'), { kind: 'move' });
       expect(secondSession).toBeDefined();
       expect(reported).toHaveLength(1); // the superseded first gesture reported once, right away
-      expect(reported[0]).toMatchObject({ code: 'entry-move-dropped', because: 'superseded' });
+      expect(reported[0]).toMatchObject({ code: 'entry-move-dropped', droppedReason: 'superseded' });
       expect(reported[0]?.message).toContain('dropped');
 
       resolveVeto(true);
@@ -737,8 +737,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     });
 
     // #377: the two dropped codes must pick move vs resize the same way the two cancelled codes
-    // already do, and `because` must ride onto the report itself, not just the message.
-    it('[#377] discarding a held resize reports entry-resize-dropped with because: discarded', async () => {
+    // already do, and `droppedReason` must ride onto the report itself, not just the message.
+    it('[#377] discarding a held resize reports entry-resize-dropped with droppedReason: discarded', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
         resolveVeto = resolve;
@@ -755,7 +755,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]).toMatchObject({
         code: 'entry-resize-dropped',
         by: 'core',
-        because: 'discarded',
+        droppedReason: 'discarded',
         severity: 'info',
       });
 
@@ -826,7 +826,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]).toMatchObject({
         code: 'entry-move-dropped',
         by: 'core',
-        because: 'entry-gone',
+        droppedReason: 'entry-gone',
       });
     });
 
@@ -901,7 +901,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         code: 'entry-move-dropped',
         severity: 'warning',
         entryId: entryId('a'),
-        because: 'data-changed',
+        droppedReason: 'data-changed',
       });
     });
 
@@ -1029,7 +1029,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         severity: 'warning',
         by: 'core',
         entryId: a.id,
-        because: 'write-refused',
+        droppedReason: 'write-refused',
       });
       expect(reported[0]?.message).toContain('the store refused the write it asked for');
     });
@@ -1166,7 +1166,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]).toMatchObject({
         code: 'entry-move-dropped',
         by: 'core',
-        because: 'entry-gone',
+        droppedReason: 'entry-gone',
       });
       expect(reported[0]?.message).toContain('was removed before the write');
     });

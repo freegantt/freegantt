@@ -43,7 +43,7 @@ export type BuiltInReportCode =
   | 'entry-move-cancelled'
   | 'entry-resize-cancelled'
   // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides
-  // on `ErrorReport.because` (`GestureDroppedReason`). Its own group, not the refusal group above:
+  // on `ErrorReport.droppedReason` (`GestureDroppedReason`). Its own group, not the refusal group above:
   // `by: 'core'` here, always `by: 'consumer'` above, and conflating the two misreports which one
   // happened (branch review F2).
   | 'entry-move-dropped'
@@ -150,9 +150,12 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  handler decided. `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the
  *  handler decided.
  *
- *  A consumer reads this to tell "the user did this on purpose" (`'superseded'`, `'discarded'`) from
- *  "real work was lost" (the other three) without matching on `message`'s English sentence
- *  (`ErrorReport.because`, branch review F2). */
+ *  `severity` alone already tells "the user did this on purpose" (`'superseded'`, `'discarded'`,
+ *  `severity: 'info'`) from "real work was lost" (the other three, `severity: 'warning'`) — see
+ *  `buildGestureDroppedReport`. What `severity` cannot do is tell the three `'warning'` reasons apart
+ *  from each other: `'data-changed'`, `'entry-gone'` and `'write-refused'` are three different
+ *  failures a consumer may want to handle three different ways. `droppedReason` carries that,
+ *  without matching on `message`'s English sentence (`ErrorReport.droppedReason`, branch review F2). */
 export type GestureDroppedReason =
   'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
 
@@ -178,8 +181,20 @@ export interface ErrorReport {
   readonly reason?: string;
   /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and
    *  `'entry-resize-dropped'` (#377). One of five closed reasons, never prose: a consumer reads this
-   *  instead of matching `message`'s English sentence. */
-  readonly because?: GestureDroppedReason;
+   *  instead of matching `message`'s English sentence.
+   *
+   *  ```ts
+   *  gantt.on('error', (report) => {
+   *    if (report.droppedReason === 'write-refused') retryFromLatest();
+   *    else if (report.droppedReason === 'entry-gone') return; // the entry is gone, nothing to retry
+   *    else if (report.droppedReason === 'data-changed') refreshDraftAndRetry();
+   *  });
+   *  ```
+   *  `severity` alone already sorts `'superseded'`/`'discarded'` (`'info'`, the user's own doing) from
+   *  the other three (`'warning'`, real work lost) — see `GestureDroppedReason`'s own doc. What
+   *  `severity` cannot do is tell `'data-changed'` from `'entry-gone'` from `'write-refused'`, and
+   *  that is the distinction this field exists for. */
+  readonly droppedReason?: GestureDroppedReason;
   /** The entry the report is about, when it is about one. */
   readonly entryId?: EntryId;
   /** The Field key the report is about, when it is about one. */

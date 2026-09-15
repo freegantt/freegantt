@@ -11,7 +11,6 @@ import type {
   Entry,
   StoredEntry,
   EntryId,
-  ReportCode,
   GestureDroppedReason,
   Instant,
   ItemId,
@@ -24,6 +23,7 @@ import type {
 import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.js';
 import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
+import type { BeforeGestureEvent } from '../data/error-reporting.js';
 import {
   buildCommitFaultReport,
   buildGestureDroppedReport,
@@ -142,11 +142,11 @@ function proposedDatesOf(entry: EntryId, edit: ProposedEdit): ProposedDates {
  *  `note` rather than a finished message, because the reason arrives after this is built: a sync veto
  *  states it during the emit, an async one states it before it resolves (#210). `#reportRefusal`
  *  hands this straight to `buildRefusalReport` (`data/error-reporting.ts`), which derives the
- *  sentence's noun from `event` alone — that is what lets this carry no separate `kind`. */
+ *  sentence's noun *and* the report's code from `event` alone (#377 "Decision taken") — that is what
+ *  lets this carry no separate `kind`, and no `code` of its own to lend to the wrong veto. */
 interface GestureRefusal {
-  code: ReportCode;
   /** The `before*` name whose handler refused. */
-  event: 'beforeEntryMove' | 'beforeEntryResize';
+  event: BeforeGestureEvent;
   entryId: EntryId;
   note: RefusalNote;
 }
@@ -408,7 +408,6 @@ export class GesturePipeline {
     const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
     const before = this.#deps.emit(event.before, beforePayload);
     const refusal: GestureRefusal = {
-      code: gesture.kind === 'resize' ? 'entry-resize-cancelled' : 'entry-move-cancelled',
       event: event.before,
       entryId: grabbed.entry,
       note,
@@ -518,7 +517,6 @@ export class GesturePipeline {
   #reportRefusal(refusal: GestureRefusal): void {
     this.#deps.raiseError(
       buildRefusalReport({
-        code: refusal.code,
         event: refusal.event,
         note: refusal.note,
         entryId: refusal.entryId,
@@ -527,17 +525,17 @@ export class GesturePipeline {
   }
 
   /** One report per gesture *core* dropped on its own — never a `before*` handler's `false`, so this
-   *  takes no `GestureRefusal`: that shape's `code`/`note` say a handler refused, and none did here
-   *  (#272, #273, #377 branch review F2). `event` still says which gesture, the same way
-   *  `buildRefusalReport` reads it for a noun — `buildGestureDroppedReport` mints its own code from
-   *  it instead of reusing a refusal's. `by: 'core'` is what tells a consumer this was not their
+   *  takes no `GestureRefusal`: that shape's `note` says a handler refused, and none did here (#272,
+   *  #273, #377 branch review F2). `event` still says which gesture, the same way `buildRefusalReport`
+   *  reads it for a noun — `buildGestureDroppedReport` mints its own code from it, the same way
+   *  `buildRefusalReport` now mints its own. `by: 'core'` is what tells a consumer this was not their
    *  handler's veto. */
   #reportGestureDropped(
     entryId: EntryId,
-    event: 'beforeEntryMove' | 'beforeEntryResize',
-    because: GestureDroppedReason,
+    event: BeforeGestureEvent,
+    droppedReason: GestureDroppedReason,
   ): void {
-    this.#deps.raiseError(buildGestureDroppedReport({ event, entryId, because }));
+    this.#deps.raiseError(buildGestureDroppedReport({ event, entryId, droppedReason }));
   }
 
   /** #341: the commit half of the fault `#reportExtenderFault` reports for the preview. The shape
@@ -611,10 +609,10 @@ export class GesturePipeline {
     return this.#dropHeldGesture('discarded');
   }
 
-  #dropHeldGesture(because: GestureDroppedReason): boolean {
+  #dropHeldGesture(droppedReason: GestureDroppedReason): boolean {
     const held = this.#held;
     if (held === undefined) return false;
-    this.#reportGestureDropped(held.refusal.entryId, held.refusal.event, because);
+    this.#reportGestureDropped(held.refusal.entryId, held.refusal.event, droppedReason);
     this.#releaseHold();
     return true;
   }
