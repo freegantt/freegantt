@@ -94,19 +94,27 @@
             </ul>
           </div>
           <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
-            <p class="text-xs uppercase tracking-wider text-amber-700">Findings below</p>
+            <p class="text-xs uppercase tracking-wider text-amber-700">
+              Findings below — after pass 2
+            </p>
             <ul class="list-disc pl-5 space-y-1">
-              <li>2 <span class="font-semibold text-emerald-700">Strong</span> — F1, F2</li>
-              <li>1 <span class="font-semibold text-emerald-700">Strong</span> naming — F3</li>
               <li>
-                5 <span class="font-semibold text-amber-700">Worth exploring</span> — F4, F5, F6, F7,
-                F8
+                <span class="font-semibold text-emerald-700">9 Confirmed</span> — F1, F2, F3, F4, F5,
+                F6, F7, F8, F10
               </li>
-              <li>2 <span class="font-semibold text-slate-600">Speculative</span> — F9, F10</li>
+              <li><span class="font-semibold text-red-700">1 Wrong, struck</span> — F9</li>
+              <li>
+                <span class="font-semibold text-amber-700">Act first:</span> F1, F3, F2, then F10
+              </li>
+              <li>
+                <span class="font-semibold text-slate-600">Downgraded:</span> F4 (unreachable state,
+                module-private type)
+              </li>
             </ul>
             <p class="pt-2 text-xs text-slate-600">
               No finding says the branch is wrong to have landed. Every one is a surface or a
-              vocabulary question, which is where this codebase spends its care.
+              vocabulary question, which is where this codebase spends its care. Pass 2 corrected
+              line cites on five findings, shrank the fix on three, and struck one outright.
             </p>
           </div>
         </div>
@@ -122,9 +130,14 @@
               <span class="font-mono text-sm text-slate-400">F1</span> ·
               <code>resolvedTheme</code> goes stale under the one case it was built for
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
-              >Strong</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
+                >Strong</span
+              >
+            </div>
           </div>
           <div class="flex flex-wrap gap-2 text-xs">
             <span class="border border-slate-300 px-2 py-0.5">in-process</span>
@@ -183,6 +196,23 @@ flowchart LR
             <li>One resolution path, no second copy to age</li>
             <li>Locality: the walk lives in <code>theme.ts</code> alone</li>
           </ul>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed</p>
+            <p>
+              Proved with a throwaway test, since deleted: with <code>theme: 'auto'</code>, after
+              <code>wrapper.setAttribute('data-fg-theme','dark')</code>,
+              <code>container.closest(…)</code> answers <code>dark</code>,
+              <code>gantt.resolvedTheme</code> still answers <code>light</code>, and zero
+              <code>themeChange</code> events fired.
+            </p>
+            <p>
+              <span class="font-semibold">The proposed fix is incomplete.</span> Resolving in the
+              getter stops the getter lying, but <code>themeChange</code> still needs the cached
+              field as its <code>from</code>, so an ancestor flip still fires no event. Closing the
+              event half needs a <code>MutationObserver</code> — or a decision, recorded in
+              CONTEXT.md, that <code>themeChange</code> deliberately does not cover the ancestor path.
+            </p>
+          </div>
         </article>
 
         <!-- F2 -->
@@ -192,17 +222,23 @@ flowchart LR
               <span class="font-mono text-sm text-slate-400">F2</span> · A gesture core dropped
               reports <code>'entry-move-cancelled'</code>, and nobody cancelled it
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
-              >Strong</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
+                >Strong</span
+              >
+            </div>
           </div>
           <div class="flex flex-wrap gap-2 text-xs">
             <span class="border border-slate-300 px-2 py-0.5">in-process</span>
             <span class="border border-slate-300 px-2 py-0.5">#272 · #273 · #341</span>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/view/gesture-pipeline.ts:410–411, 532–539 · src/data/error-reporting.ts:546–597 ·
-            src/model/error-report.ts:38–47
+            src/view/gesture-pipeline.ts:410–411, 532–540, 147–149 · src/data/error-reporting.ts:99–150
+            · src/model/error-report.ts:41–44, 52–57
+            <span class="text-amber-700">(cites corrected by pass 2)</span>
           </p>
 
           <div class="grid md:grid-cols-2 gap-4">
@@ -234,14 +270,22 @@ message:  "…broke while it saved…"</pre>
 
           <p>
             <span class="font-semibold">Problem.</span>
-            <code>#reportGestureDropped</code> (gesture-pipeline.ts:532–539) passes
+            <code>#reportGestureDropped</code> (gesture-pipeline.ts:532–540) passes
             <code>refusal.code</code> straight through, and <code>refusal.code</code> is fixed at
             <code>'entry-resize-cancelled'</code> / <code>'entry-move-cancelled'</code> when the
             gesture is built (410–411). All five <code>GestureDroppedReason</code> values land under
-            that code — including <code>'data-changed'</code>, <code>'entry-gone'</code> and
-            <code>'write-refused'</code>, where no <code>before*</code> handler was involved at all.
-            <code>model/error-report.ts:38–40</code> files those two codes under the comment "A
-            refusal core observed", which is now only true for some of their occurrences.
+            that code — <code>'data-changed'</code> (467), <code>'entry-gone'</code> (501),
+            <code>'write-refused'</code> (505), <code>'superseded'</code> and
+            <code>'discarded'</code> (619) — and in three of those no <code>before*</code> handler
+            was involved at all. <code>model/error-report.ts:41–44</code> files both codes under the
+            comment "A refusal core observed", which is now only true for some of their occurrences.
+          </p>
+          <p>
+            <span class="font-semibold">Pass 2 adds one thing the finding missed.</span>
+            <code>GestureRefusal.code</code> sits beside <code>event</code>, whose own docblock
+            (gesture-pipeline.ts:147–149) reads "The <code>before*</code> name whose handler
+            refused". So this is a refusal record reused wholesale for a non-refusal, not a stray
+            code on an otherwise neutral struct.
           </p>
           <p>
             <span class="font-semibold">Why the <code>by</code> field is not the answer.</span> The
@@ -273,17 +317,23 @@ message:  "…broke while it saved…"</pre>
               <code>'overlayOnTimeLine'</code> / <code>'overlayOnGanttBody'</code> name no glossary
               term
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
-              >Strong</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-1"
+                >Strong</span
+              >
+            </div>
           </div>
           <div class="flex flex-wrap gap-2 text-xs">
             <span class="border border-slate-300 px-2 py-0.5">app-author surface</span>
             <span class="border border-slate-300 px-2 py-0.5">#318 · #225</span>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/layout/date-line.ts:28–37 · src/api/gantt.ts:53–60, 171–178 · CONTEXT.md:448 ·
-            etc/freegantt.api.md (DateLineLabelPlacement)
+            src/layout/date-line.ts:35, 37 · src/api/gantt.ts:120–128, 726–732 · CONTEXT.md:446, 448 ·
+            etc/freegantt.api.md:452–454
+            <span class="text-amber-700">(cites corrected by pass 2)</span>
           </p>
 
           <div class="rounded border border-slate-200 bg-stone-50 p-4 space-y-3">
@@ -295,8 +345,8 @@ message:  "…broke while it saved…"</pre>
                   <td class="py-2 text-red-700">
                     Fails. <em>Gantt body</em> appears nowhere in CONTEXT.md or
                     <code>plans/00</code>–<code>04</code>. <em>Time line</em> as two words appears
-                    nowhere either. The region both values talk about has a glossary name already:
-                    the <strong>Header</strong> (<code>.fg-header</code>, Header bands).
+                    nowhere either. Both values are measured from the
+                    <strong>Header</strong> (<code>.fg-header</code>), which is a glossary term.
                   </td>
                 </tr>
                 <tr class="border-b border-slate-200">
@@ -318,9 +368,10 @@ message:  "…broke while it saved…"</pre>
                 <tr class="border-b border-slate-200">
                   <td class="py-2 pr-4 font-semibold">4 · One word, one meaning</td>
                   <td class="py-2 text-red-700">
-                    Fails, and CONTEXT.md says so out loud: the Date line entry (line 445) lists
-                    <code>_Avoid_: Timeline (the pane, not the marker)</code>. This value spells it
-                    <code>TimeLine</code> and means neither.
+                    Fails, and CONTEXT.md says so out loud: the Date line entry (line 446) lists
+                    <code>_Avoid_: Timeline (the pane, not this marker)</code>. This value spells it
+                    <code>TimeLine</code> and means neither. CONTEXT.md:284 shows the glossary's own
+                    name for the pane is <strong>Timeline pane</strong>.
                   </td>
                 </tr>
                 <tr>
@@ -345,6 +396,26 @@ message:  "…broke while it saved…"</pre>
             This is a public enum on the app-author surface and it has shipped to nobody. Changing it
             costs one rename; leaving it costs a glossary term with two meanings, forever.
           </div>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed</p>
+            <p>
+              <span class="font-semibold">One overstatement corrected.</span> The finding said the
+              two values talk about one region. They do not:
+              <code>'overlayOnTimeLine'</code> anchors <em>inside</em> the header bands
+              (<code>top: 0</code>), and <code>'overlayOnGanttBody'</code> anchors at
+              <code>top: 100%</code> of <code>.fg-header</code> — below the bands, over the rows
+              (styles.ts:397–402). Both are <em>measured from</em> the header, which is what makes
+              the proposed <code>'inHeader'</code>/<code>'belowHeader'</code> pair accurate; the
+              original reasoning reached the right pair for a slightly wrong reason.
+            </p>
+            <p>
+              <span class="font-semibold">Budget the rename wider than the type.</span> Pass 2 found
+              four more sites: the <code>data-placement</code> attribute value in
+              <code>styles.ts:402</code>, and three tests asserting that literal —
+              <code>render/dom/index.test.ts:956, 1058</code> and
+              <code>view/styles.test.ts:169</code> — plus CONTEXT.md:448 and the API report.
+            </p>
+          </div>
         </article>
 
         <!-- F4 -->
@@ -354,12 +425,18 @@ message:  "…broke while it saved…"</pre>
               <span class="font-mono text-sm text-slate-400">F4</span> ·
               <code>DateLineLabelGeom</code> can represent a combination that means nothing
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
-              >Worth exploring</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-slate-200 text-slate-700 px-2 py-1"
+                >Tidy when you touch it</span
+              >
+            </div>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/render/dom/date-line.ts:7–14, 81–83, 110–126
+            src/render/dom/date-line.ts:8–15, 82–83, 119–132
+            <span class="text-amber-700">(cites corrected by pass 2)</span>
           </p>
 
           <div class="grid md:grid-cols-2 gap-4">
@@ -398,11 +475,30 @@ message:  "…broke while it saved…"</pre>
           </p>
           <p>
             <span class="font-semibold">Also on this file.</span>
-            <code>sync(decorations, contentHeight, paneHeight, labelPlacement?)</code> (line 26) is
-            now four positional arguments, the last a defaulted optional. A reader at the call site
-            (<code>render/dom/index.ts:1373–1378</code>) counts positions to know which number is
-            which. Not a bug; worth one object argument before a fifth arrives.
+            <code>sync(decorations, contentHeight, paneHeight, labelPlacement?)</code> (lines 19–24,
+            81) is now four positional arguments, the last a defaulted optional. A reader at the call
+            site (<code>render/dom/index.ts:1373–1378</code>) counts positions to know which number
+            is which. Not a bug; worth one object argument before a fifth arrives.
           </p>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">
+              Pass 2 · Confirmed, and downgraded
+            </p>
+            <p>
+              The state is real and representable, and the "costs nothing" claim checks out —
+              <code>KeyedLayer</code> diffs geoms with <code>shallowEqual</code> per key
+              (<code>sync-keyed.ts:8–14</code>), so one <code>string | number</code> field compares
+              exactly as two fields do.
+            </p>
+            <p>
+              <span class="font-semibold">But the weight was wrong.</span>
+              <code>DateLineLabelGeom</code> is a module-private render type, and the CLAUDE.md rule
+              this finding quotes ("Illegal combinations are unrepresentable") sits under
+              <strong>API</strong> (<code>plans/02</code>), which governs the public surface. The
+              invalid state also cannot occur today — both fields are derived three lines apart from
+              one source. Tidy it when this file is open for another reason; do not queue it.
+            </p>
+          </div>
         </article>
 
         <!-- F5 -->
@@ -412,13 +508,18 @@ message:  "…broke while it saved…"</pre>
               <span class="font-mono text-sm text-slate-400">F5</span> · Two internal-only codes
               autocomplete on the public surface
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
-              >Worth exploring</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+                >Worth exploring</span
+              >
+            </div>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/model/errors.ts:22–34, 84–86 · src/data/fields/field-registry.ts:104–120 ·
-            src/layout/viewport/viewport.ts:96–100 · etc/freegantt.api.md (BuiltInThrownCode)
+            src/model/errors.ts:32–33, 38–84, 89 · src/data/fields/field-registry.ts:109–121 ·
+            src/layout/viewport/viewport.ts:96–102 · etc/freegantt.api.md:85–86
           </p>
 
           <p>
@@ -449,6 +550,22 @@ message:  "…broke while it saved…"</pre>
             <li>Interface shrinks; the check stays</li>
             <li>Published union means "you can catch this"</li>
           </ul>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed</p>
+            <p>
+              44 codes in the union, 42 with classes; the two without are exactly the ones named. The
+              docblock quote is verbatim.
+            </p>
+            <p>
+              <span class="font-semibold">The fix is smaller than proposed.</span> "The constructor
+              taking <code>ThrownCode | InternalThrownCode</code>" is unnecessary —
+              <code>ThrownCode = BuiltInThrownCode | (string &amp; {})</code>
+              (<code>errors.ts:89</code>) already absorbs any string literal, so an
+              <code>InternalThrownCode</code> is assignable today. The whole change is: move the two
+              codes into an unpublished union, and repoint the two
+              <code>satisfies</code> clauses at it.
+            </p>
+          </div>
         </article>
 
         <!-- F6 -->
@@ -459,13 +576,19 @@ message:  "…broke while it saved…"</pre>
               <code>discardHeldGesture</code> is one name for two jobs, separated only by a
               <code>#</code>
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
-              >Worth exploring</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+                >Worth exploring</span
+              >
+            </div>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/view/gesture-pipeline.ts:210, 605–620 · src/view/entry-gesture-context.ts:117–122 ·
-            src/view/gantt-shell.ts:884, 2233
+            src/view/gesture-pipeline.ts:212, 605–622 · src/view/entry-gesture-context.ts:117–121 ·
+            src/view/gantt-shell.ts:884, 2235
+            <span class="text-amber-700">(cites corrected by pass 2)</span>
           </p>
 
           <div class="rounded border border-slate-200 bg-stone-50 p-4">
@@ -497,6 +620,14 @@ flowchart TB
             <code>buildGestureDroppedReport</code> already spell the domain word
             <em>dropped</em>, so this also brings the method into the vocabulary its own report uses.
           </p>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm">
+            <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">Pass 2 · Confirmed</p>
+            <p>
+              The docblock at 605–611 is seven lines, the last four of which exist only to keep the
+              two apart. The rename is private-method only — no public surface moves, so it is the
+              cheapest finding in this report to close.
+            </p>
+          </div>
         </article>
 
         <!-- F7 -->
@@ -506,12 +637,18 @@ flowchart TB
               <span class="font-mono text-sm text-slate-400">F7</span> ·
               <code>'Parent (checked)'</code> ships internal jargon to an end user
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
-              >Worth exploring</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+                >Worth exploring</span
+              >
+            </div>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/data/fields/core-fields.ts:111–118 · docs/adr/0024-…md:29
+            src/data/fields/core-fields.ts:110–118 · src/data/hierarchy-source.ts:53 ·
+            docs/adr/0024-…md:29
           </p>
 
           <p>
@@ -526,12 +663,29 @@ flowchart TB
           <p>
             <span class="font-semibold">Solution.</span> The header states what the column shows, not
             how core got it: <code>'Parent'</code>, with the stored-vs-tree distinction where it
-            already lives — the Field docblock and ADR 0024. If both columns are on screen at once
-            the pair is <code>'Parent'</code> (tree) and <code>'Parent id'</code> (stored), which is
-            the distinction a user can act on.
+            already lives — the Field docblock and ADR 0024.
           </p>
           <div class="rounded bg-amber-50 border border-amber-200 px-4 py-2 text-sm">
             ADR 0024 records this literal too (line 29), so the ADR follows the fix.
+          </div>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed</p>
+            <p>
+              Every sibling header is a plain noun — 'Name', 'Start', 'End', 'Duration'. "Checked" is
+              this repo's internal word (<code>checkHierarchyAnswers</code>,
+              <code>hierarchy-source.ts:53</code>); CONTEXT.md uses it only as mechanism prose, never
+              as a user-facing term.
+            </p>
+            <p>
+              <span class="font-semibold">Half the proposed fix was unreachable, and is removed
+              above.</span>
+              The original suggested a <code>'Parent'</code> / <code>'Parent id'</code> pair if both
+              columns are on screen. They cannot be: <code>parentId</code>
+              (<code>core-fields.ts:96–99</code>) declares no <code>column</code> at all, and naming
+              a column-less Field in <code>gridColumns</code> throws
+              <code>field-not-columnable</code>. The fix is one string. Giving
+              <code>parentId</code> a column is a separate decision.
+            </p>
           </div>
         </article>
 
@@ -542,11 +696,18 @@ flowchart TB
               <span class="font-mono text-sm text-slate-400">F8</span> · The harness still restates a
               library default "under protest" — and this window edited the protest
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
-              >Worth exploring</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+                >Worth exploring</span
+              >
+            </div>
           </div>
-          <p class="font-mono text-sm text-slate-600">harness/planner.html:58–68</p>
+          <p class="font-mono text-sm text-slate-600">
+            harness/planner.html:58–68 · src/view/styles.ts:322, 171–179, 33–36
+          </p>
 
           <div class="rounded border border-red-200 bg-white p-4">
             <pre class="text-xs font-mono whitespace-pre-wrap">/* NOT a page choice — 4px is the library's own default, restated here under protest.
@@ -584,18 +745,43 @@ flowchart TB
           <div class="rounded bg-amber-50 border border-amber-200 px-4 py-2 text-sm">
             Record as an API gap against the current slice, per the stop rule. Not a harness fix.
           </div>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed</p>
+            <p>
+              The gap is real: <code>styles.ts:322</code> publishes the radius only as
+              <code>var(--fg-bar-radius, 4px)</code> inside <code>.fg-bar</code>, so consumer CSS
+              cannot read it back, while <code>.fg-container</code> (171–179) declares three metrics
+              outright. <code>git diff</code> confirms this window rewrote three of those comment
+              lines and left the gap open.
+            </p>
+            <p>
+              <span class="font-semibold">Do not apply the proposed fix unexamined.</span> Declaring
+              a metric on <code>.fg-container</code> makes it unreachable from above — the same
+              cascade argument <code>styles.ts:33–36</code> already makes for colour ("a declaration
+              on an element always beats an inherited one"). A consumer who sets
+              <code>--fg-bar-radius</code> on a wrapper would stop reaching the Gantt. #294's rule is
+              satisfied either way; the readback-vs-override trade is the actual decision, and it is
+              why these are fallbacks today.
+            </p>
+            <p>
+              <span class="font-semibold">Bonus.</span> The harness comment is itself now stale — it
+              claims <code>--fg-indent-width</code> is the only metric on
+              <code>.fg-container</code>, but <code>--fg-bar-label-gap</code> joined it
+              (<code>styles.ts:177</code>).
+            </p>
+          </div>
         </article>
 
         <!-- F9 -->
-        <article id="F9" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+        <article id="F9" class="struck rounded-lg border-2 border-red-300 bg-white p-6 space-y-4">
           <div class="flex items-baseline justify-between gap-4">
             <h3 class="font-serif text-xl">
               <span class="font-mono text-sm text-slate-400">F9</span> ·
               <code>lastWritten</code> is never cleared, so one class of real user scroll is
               swallowed
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-slate-200 text-slate-700 px-2 py-1"
-              >Speculative</span
+            <span class="text-xs uppercase tracking-wider bg-red-600 text-white px-2 py-1 shrink-0"
+              >Pass 2 · Wrong — struck</span
             >
           </div>
           <p class="font-mono text-sm text-slate-600">src/view/scroll-attachment.ts:25–65</p>
@@ -623,6 +809,40 @@ flowchart TB
             model followed. If no such path exists, the finding is Wrong and the answer is one
             sentence in the comment saying <code>writePosition</code> runs on every model change.
           </p>
+          <div
+            class="rounded bg-red-50 border-2 border-red-300 px-4 py-3 text-sm space-y-2"
+            style="opacity: 1"
+          >
+            <p class="text-xs uppercase tracking-wider text-red-700">
+              Pass 2 · Wrong — struck by the verifier
+            </p>
+            <p class="text-slate-900">
+              <span class="font-semibold">No such path exists, so the premise fails.</span>
+              <code>GanttShell.render()</code> calls
+              <code>this.#scrollAttachment.writePosition()</code> unconditionally
+              (<code>gantt-shell.ts:2219</code>). Every viewport change reaches it:
+              <code>viewport.bind</code>'s <code>onChange</code> (771–778) calls
+              <code>#frames.request()</code> for any scale, scroll, pane or content change, and
+              <code>FrameScheduler.request()</code> coalesces to the next rAF and always runs
+              <code>render()</code> (<code>frame-scheduler.ts:20–27</code>). The one suppressed path
+              is <code>#phase === 'constructing'</code>, which ends in a synchronous
+              <code>#frames.flush()</code> (985) and during which <code>lastWritten</code> is still
+              <code>undefined</code>, so the guard cannot fire.
+            </p>
+            <p class="text-slate-900">
+              So <code>lastWritten</code> is stale only within one animation frame — and during that
+              frame the element still <em>displays</em> <code>lastWritten</code>, which means a
+              scroll event reporting it there carries no information by construction. The scenario
+              the finding describes needs the element to already sit elsewhere, and if it does, the
+              first check passes and the model follows.
+            </p>
+            <p class="text-slate-900">
+              <span class="font-semibold">What is left.</span> The finding's own stated criterion
+              applies: one added sentence in the comment at
+              <code>scroll-attachment.ts:25–33</code> saying <code>render()</code> calls
+              <code>writePosition</code> unconditionally. Not a queue item.
+            </p>
+          </div>
         </article>
 
         <!-- F10 -->
@@ -632,12 +852,17 @@ flowchart TB
               <span class="font-mono text-sm text-slate-400">F10</span> · Three new
               definite-assignment assertions on <code>GanttShell</code>
             </h3>
-            <span class="text-xs uppercase tracking-wider bg-slate-200 text-slate-700 px-2 py-1"
-              >Speculative</span
-            >
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs uppercase tracking-wider bg-emerald-600 text-white px-2 py-1"
+                >Pass 2 · Confirmed by run</span
+              >
+              <span class="text-xs uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-1"
+                >Raised from Speculative</span
+              >
+            </div>
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/view/gantt-shell.ts:546, 550, 551, 989–994
+            src/view/gantt-shell.ts:546, 550, 551, 987, 991–995, 1795–1799, 1818, 1821
           </p>
 
           <p>
@@ -665,6 +890,32 @@ flowchart TB
             constructs a <code>Gantt</code> with <code>theme: 'dark'</code> and asserts no
             <code>themeChange</code> emit occurred during construction. Delete it after.
           </p>
+          <div class="rounded bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm space-y-2">
+            <p class="text-xs uppercase tracking-wider text-emerald-700">Pass 2 · Confirmed by run</p>
+            <p>
+              The test was written, run and deleted. Constructing
+              <code>new Gantt({ container, dataset, theme: 'dark' })</code> with
+              <code>EventBus.prototype.emit</code> patched recorded
+              <code>themeChange</code> during construction. (The cite was 986; it is 987.)
+            </p>
+            <p>
+              <span class="font-semibold">A second defect the finding missed.</span> The recorded
+              payload was <code>{"to":"dark"}</code> — <code>from</code> is absent because it is
+              <code>undefined</code>. So the emitted payload also violates the published
+              <code>ThemeChange</code> type, which declares
+              <code>{ from: ResolvedTheme; to: ResolvedTheme }</code>. It reaches no subscriber
+              today, but it is a type the library publishes and does not honour.
+            </p>
+            <p>
+              <span class="font-semibold">The proposed fix does not work.</span> Moving the three
+              assignments above line 987 seeds <code>#resolvedTheme</code> under the default
+              <code>'auto'</code>, and then <code>this.theme = 'dark'</code> still runs the setter
+              and still emits — now with a real <code>from</code>, but still from inside the
+              constructor, which is exactly what the comment at 989–990 says must not happen. The
+              correct fix is to gate <code>#syncResolvedTheme</code> on
+              <code>#phase === 'live'</code>, or keep today's plain read after the theme write.
+            </p>
+          </div>
         </article>
       </section>
 
@@ -679,12 +930,22 @@ flowchart TB
           <p class="text-sm text-stone-300">
             It is the only finding on the app-author surface that gets harder to fix with time, and
             it fails four of the five naming checks against a glossary that already has the right
-            word. One <code>pk-rename-symbol</code> pass plus CONTEXT.md:448 and the API report.
+            word. Pass 2 widened the cost: the type, plus the
+            <code>data-placement</code> literal in <code>styles.ts:402</code>, three tests,
+            CONTEXT.md:448 and the API report.
           </p>
           <p class="text-sm text-stone-300">
-            <a href="#F1" class="underline decoration-stone-500">F1</a> and
-            <a href="#F2" class="underline decoration-stone-500">F2</a> follow — both are correctness
-            of a published answer, and both have a smaller fix than the code that created them.
+            <span class="font-semibold text-stone-100">Pass 2 puts F1 first instead.</span> It is the
+            one finding proved to produce a wrong published answer under a move the library's own
+            stylesheet documents as supported, and the fix is one getter. Then
+            <a href="#F3" class="underline decoration-stone-500">F3</a>, then
+            <a href="#F2" class="underline decoration-stone-500">F2</a> (real, but diagnostics
+            quality, not correctness), and
+            <a href="#F10" class="underline decoration-stone-500">F10</a> alongside F1 — same file,
+            same field, and the correct fix is a phase gate, not the move this report proposed.
+            <a href="#F5" class="underline decoration-stone-500">F5</a>,
+            <a href="#F6" class="underline decoration-stone-500">F6</a> and
+            <a href="#F7" class="underline decoration-stone-500">F7</a> are cheap and can ride along.
           </p>
         </div>
       </section>
@@ -692,8 +953,10 @@ flowchart TB
       <section class="space-y-4">
         <h2 class="font-serif text-2xl">Pass 2 verdicts</h2>
         <p class="text-sm text-slate-600">
-          A fresh <code>reviewer-planner</code> sub-agent opens every file each finding cites and
-          decides whether the finding describes that code correctly. Verdicts land here.
+          A fresh <code>reviewer-planner</code> sub-agent opened every file each finding cites, cold,
+          and decided whether the finding describes that code correctly. It ran two throwaway probes
+          (F1 and F10) and deleted them. It edited no code and no part of this report — the verdicts
+          below were applied by the coordinating session.
         </p>
         <div class="rounded-lg border border-slate-200 bg-white p-6">
           <table class="w-full text-sm">
@@ -706,54 +969,77 @@ flowchart TB
             </thead>
             <tbody id="verdicts" class="align-top">
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F1</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F1">F1</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  Proved by a throwaway test: with <code>theme: 'auto'</code>, after a wrapper takes
+                  <code>data-fg-theme="dark"</code>, <code>closest()</code> answers
+                  <code>dark</code>, <code>gantt.resolvedTheme</code> still answers
+                  <code>light</code>, zero <code>themeChange</code> fired.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F2</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F2">F2</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  Code account correct; two line cites were wrong and are fixed in the finding.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F3</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F3">F3</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  Naming argument holds. One overstatement corrected: the two values name two
+                  regions, not one. Cites fixed.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F4</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F4">F4</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  <span class="text-amber-700">Downgraded to Tidy-when-you-touch-it</span> — the
+                  state is unreachable today and the type is module-private.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F5</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F5">F5</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">Fix is smaller than proposed — no constructor change needed.</td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F6</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F6">F6</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">One cite off by two lines; fixed.</td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F7</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F7">F7</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  Fix shrinks to one string — the suggested two-column pairing is unreachable.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F8</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F8">F8</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed</td>
+                <td class="py-2">
+                  Genuine stop-rule case. The proposed fix carries a cascade trade the finding did
+                  not weigh.
+                </td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2 font-mono">F9</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F9">F9</a></td>
+                <td class="py-2 font-semibold text-red-700">Wrong — struck</td>
+                <td class="py-2">
+                  The call graph settles it. Struck by the pass-2 verifier; see the finding.
+                </td>
               </tr>
               <tr>
-                <td class="py-2 font-mono">F10</td>
-                <td class="py-2 text-slate-400">pending</td>
-                <td class="py-2 text-slate-400">—</td>
+                <td class="py-2 font-mono"><a class="underline" href="#F10">F10</a></td>
+                <td class="py-2 font-semibold text-emerald-700">Confirmed by run</td>
+                <td class="py-2">
+                  The emit happens, and carries <code>from: undefined</code> — a second defect the
+                  finding missed. The proposed fix does not work; see the finding.
+                </td>
               </tr>
             </tbody>
           </table>
@@ -815,10 +1101,22 @@ flowchart TB
         </div>
       </section>
 
+      <section class="space-y-4">
+        <h2 class="font-serif text-2xl">One thing pass 2 noticed and did not chase</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-6 text-sm">
+          <p>
+            Construction also emits <code>navigationChange</code> before any subscriber can exist —
+            the same shape as <a href="#F10" class="underline">F10</a>, seen in the same probe
+            output. Not investigated, and not counted as a finding.
+          </p>
+        </div>
+      </section>
+
       <footer class="pt-8 text-xs text-slate-500 border-t border-slate-200">
-        Pass 1 of the <code>pk-branch-review</code> two-pass review. Pass 1 reports; it does not
-        redesign. Every finding carries a stable id, the files it cites and the lines it cites, so
-        pass 2 can answer by id.
+        Both passes of the <code>pk-branch-review</code> two-pass review are complete. Pass 1
+        reported; it did not redesign. Pass 2 verified each finding cold against the files it cites:
+        nine Confirmed, one Wrong and struck, five with corrected line cites, three with a smaller
+        fix than proposed. Every finding carries a stable id.
       </footer>
     </main>
   </body>
