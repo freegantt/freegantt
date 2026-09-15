@@ -66,13 +66,13 @@ import {
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
  *  keyed by `GanttShell` per `FrameColumn.field` (S5.4, D-S5-11). */
-type BoundCellRenderer = (ctx: {
+type BoundGridCellRenderer = (ctx: {
   entry?: Entry | undefined;
   row: FrameRow;
   value: string;
 }) => ElementDescription | undefined;
 
-/** A header renderer, already bound to its `ResolvedColumn` the same way `BoundCellRenderer` above
+/** A header renderer, already bound to its `ResolvedColumn` the same way `BoundGridCellRenderer` above
  *  is bound (render/dom never receives `ResolvedColumn` either) — nothing else varies per header
  *  cell, so the bound form takes no context at all. */
 type BoundHeaderRenderer = () => ElementDescription | undefined;
@@ -96,7 +96,7 @@ export interface DomBackendOptions {
    *  a test backend built with no options — falls back to `DEFAULT_DATE_LINE_LABEL_PLACEMENT`. */
   readDateLineLabelPlacement?: () => DateLineLabelPlacement;
   resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined;
-  resolveCellRenderer: (columnKey: string) => ResolvedRenderer<BoundCellRenderer> | undefined;
+  resolveGridCellRenderer: (columnKey: string) => ResolvedRenderer<BoundGridCellRenderer> | undefined;
   resolveHeaderRenderer: (columnKey: string) => ResolvedRenderer<BoundHeaderRenderer> | undefined;
 }
 
@@ -143,7 +143,7 @@ type CellItem = {
   flex?: number;
   expandable: boolean;
   expanded: boolean;
-  /** S5.4, D-S5-11: a resolved `cellRenderer`'s output for this one cell — undefined keeps `text`. */
+  /** S5.4, D-S5-11: a resolved `columnRenderer`'s output for this one cell — undefined keeps `text`. */
   content?: ElementDescription;
   /** S5.7, D-S5-18: header cells only — `cellItemsForRow`'s row cells never set these. */
   resizable?: boolean;
@@ -177,7 +177,7 @@ type HeaderCellGeom = {
 type RowGeom = {
   top: number;
   height: number;
-  cells: readonly string[];
+  gridCells: readonly string[];
   index: number;
   rowCount: number;
   /** S5.11, D-S5-25: `aria-level`, `aria-expanded`, `aria-posinset` and `aria-setsize` belong to a
@@ -279,12 +279,12 @@ function flagTokens(flags: BarFlags): string {
 }
 
 function cellItemsFor(
-  cells: readonly string[],
+  gridCells: readonly string[],
   columns: readonly FrameColumn[],
   expandable: boolean,
   expanded: boolean,
 ): readonly CellItem[] {
-  return cells.map((text, i) => {
+  return gridCells.map((text, i) => {
     const column = columns[i];
     const item: CellItem = {
       key: column !== undefined ? String(column.field) : String(i),
@@ -329,7 +329,7 @@ function cellGeom(item: CellItem): CellGeom {
 }
 
 export function createDomBackend(options: DomBackendOptions): RenderBackend<HTMLElement> {
-  const { entryById, resolveBarRenderer, resolveCellRenderer, resolveHeaderRenderer } = options;
+  const { entryById, resolveBarRenderer, resolveGridCellRenderer, resolveHeaderRenderer } = options;
   const readBarLabels = options.readBarLabels ?? ((): BarLabels => 'fitBar');
   const readDateLineLabelPlacement =
     options.readDateLineLabelPlacement ?? ((): DateLineLabelPlacement => DEFAULT_DATE_LINE_LABEL_PLACEMENT);
@@ -978,7 +978,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const geom: RowGeom = {
           top: row.top,
           height: row.height,
-          cells: row.cells,
+          gridCells: row.gridCells,
           index: row.index,
           rowCount,
           tree,
@@ -1034,15 +1034,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   function cellItemsForRow(
     row: FrameRow,
     columns: readonly FrameColumn[],
-    renderers: readonly (ResolvedRenderer<BoundCellRenderer> | undefined)[],
+    renderers: readonly (ResolvedRenderer<BoundGridCellRenderer> | undefined)[],
   ): readonly CellItem[] {
     const subject = row.entryIds[0];
     const entry = subject !== undefined ? entryById(subject) : undefined;
-    return cellItemsFor(row.cells, columns, row.expandable, row.expanded).map((item, i) => {
+    return cellItemsFor(row.gridCells, columns, row.expandable, row.expanded).map((item, i) => {
       const resolved = renderers[i];
       if (resolved === undefined) return item;
       const content = callRenderer(
-        'cell',
+        'gridCell',
         resolved,
         {
           ...(entry !== undefined ? { entry } : {}),
@@ -1058,10 +1058,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   function syncCellsForEachRow(rows: readonly FrameRow[], columns: readonly FrameColumn[]): void {
     // #175: which renderer paints a cell depends on the column alone, never on the row. Resolving
     // inside the per-cell map asked the same question once per painted cell, and each answer is a
-    // fresh object holding a fresh closure (`view/gantt-shell.ts`'s `resolveCellRenderer`). Frames
+    // fresh object holding a fresh closure (`view/gantt-shell.ts`'s `resolveGridCellRenderer`). Frames
     // fire on scroll, so that was two allocations per cell per scrolled frame. `plans/01` §8: the
     // hot path allocates nothing. One resolve per column per frame answers every row.
-    const renderers = columns.map((column) => resolveCellRenderer(column.field));
+    const renderers = columns.map((column) => resolveGridCellRenderer(column.field));
     rows.forEach((row) => {
       const rowNode = rowLayer.node(row.id);
       if (!rowNode) return;

@@ -490,7 +490,7 @@ export function placeFrame(
       expandable: planned.expandable,
       expanded: planned.expanded,
       ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
-      cells: cellsForRow(planned, input.columns, entryById),
+      gridCells: cellsForRow(planned, input.columns, entryById),
       // A header row stands for no Entry (D-S4-23), so it owns none and never becomes selectable.
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
       // A reference copy of the set `RowMemory` already resolved for this row (#230 R5) — no

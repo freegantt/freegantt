@@ -68,13 +68,13 @@ function columnFrom(
   const candidates = {
     width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
     flex,
-    // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column —
+    // S5.7, D-S5-17: per-column `columnRenderer` comes only from this Gantt's own column —
     // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
-    cellRenderer: input.cellRenderer,
+    columnRenderer: input.columnRenderer,
   };
   return {
     ...column,
-    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer']),
+    ...pickDefined(candidates, ['width', 'flex', 'columnRenderer']),
     ...(tooltip === undefined ? {} : { tooltip }),
   };
 }
@@ -88,7 +88,7 @@ export function toGridColumn(column: ResolvedColumn): GridColumn {
     field: column.field,
     header: column.header,
     align: column.align,
-    ...pickDefined(column, ['cellRenderer', 'resizable', 'movable', 'tooltip']),
+    ...pickDefined(column, ['columnRenderer', 'resizable', 'movable', 'tooltip']),
   };
   // `GridColumn`'s sizing pair is exclusive (#249), so `shared` cannot carry `width` or `flex` — one
   // literal per branch is the only construction `tsc` checks against that union; a single `out`

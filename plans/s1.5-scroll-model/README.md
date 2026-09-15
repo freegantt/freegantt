@@ -393,5 +393,6 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 | `gantt.reveal(entryId)` | S1.8 | a pane height that re-measures (S1.7b, #8) — `Viewport`, `frame.rows` and `RowHeightIndex` all ship at S1.7 |
 | `gantt.scale =` / `gantt.scroll =` setters | S1.8 | the already-built `Viewport` (S1.7) owning unbind → rebind → re-render |
 | `panBy(delta)` | S4 | wheel / keyboard controllers producing deltas |
-| `xOnly()` / `yOnly()` | when a host needs "share x, private y" | a real caller (D-S1.5-3) |
+| `xOnly()` / `yOnly()` as *views over a model* | **never — withdrawn 2026-09-15** | nothing. D-S6-1 makes one scroll axis the shared unit instead, so there is no model to take a filtered view of |
+| Per-axis sharing (share x, y, both or neither) | **now — the caller arrived 2026-09-15 (#405)** | the build. The shape is settled: **D-S6-1**, `plans/s6-scale-and-sync/README.md` §5.3. It answers both rejections above rather than repeating them |
 | One-scrollbar treatment for linked charts | its own issue against S1.8 | a linked-group concept in `view/` |

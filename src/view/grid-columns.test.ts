@@ -202,7 +202,7 @@ describe('resolveFieldCompares (D-S4-13)', () => {
   });
 });
 
-describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5-17/D-S5-18)', () => {
+describe('resolveColumns — columnRenderer/editable/resizable/movable (S5.7, D-S5-17/D-S5-18)', () => {
   it('resolve and merge like the existing keys: this Gantt beats the Field default, which beats the built-in default', () => {
     const registry = new FieldRegistry({
       fieldTypes: {
@@ -214,11 +214,11 @@ describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5
       fields: [{ key: 'cost', type: 'money', editable: true }],
     });
     const renderer = () => ({ text: 'x' });
-    const columns = resolveColumns([{ field: 'cost', cellRenderer: renderer, movable: false }], registry, {
+    const columns = resolveColumns([{ field: 'cost', columnRenderer: renderer, movable: false }], registry, {
       timeZone: zone,
       locale,
     });
-    expect(columns[0]?.cellRenderer).toBe(renderer);
+    expect(columns[0]?.columnRenderer).toBe(renderer);
     // this Gantt's own gridColumns entry never set resizable — the Field's own column default (false) wins.
     expect(columns[0]?.resizable).toBe(false);
     // this Gantt's own gridColumns entry sets movable directly, over no Field default.
@@ -231,24 +231,24 @@ describe('resolveColumns — cellRenderer/editable/resizable/movable (S5.7, D-S5
     expect(columns[0]?.movable).toBe(true);
   });
 
-  it('cellRenderer/editable stay absent when nothing set them', () => {
+  it('columnRenderer/editable stay absent when nothing set them', () => {
     const columns = resolveColumns(['cost'], costRegistry(), { timeZone: zone, locale });
-    expect(columns[0]).not.toHaveProperty('cellRenderer');
+    expect(columns[0]).not.toHaveProperty('columnRenderer');
     expect(columns[0]).not.toHaveProperty('editable');
   });
 
-  it("a Field's own column default never supplies cellRenderer, even set directly on the object (B5, D-S5-17)", () => {
+  it("a Field's own column default never supplies columnRenderer, even set directly on the object (B5, D-S5-17)", () => {
     const rogueRenderer = () => ({ text: 'x' });
     const registry = new FieldRegistry({
       fieldTypes: {
-        // `Field.column`'s type excludes `cellRenderer` (model/field.ts); this cast simulates the
+        // `Field.column`'s type excludes `columnRenderer` (model/field.ts); this cast simulates the
         // pre-fix bug's shape reaching `columnFrom` anyway, to prove the merge itself now refuses it.
-        money: { column: { width: 90, cellRenderer: rogueRenderer } as { width: number } },
+        money: { column: { width: 90, columnRenderer: rogueRenderer } as { width: number } },
       },
       fields: [{ key: 'cost', type: 'money' }],
     });
     const columns = resolveColumns(['cost'], registry, { timeZone: zone, locale });
-    expect(columns[0]).not.toHaveProperty('cellRenderer');
+    expect(columns[0]).not.toHaveProperty('columnRenderer');
   });
 });
 
@@ -256,7 +256,7 @@ describe('toGridColumn (S5.7, D-S5-18)', () => {
   it('maps a resolved column back to the public GridColumn shape, dropping format', () => {
     const renderer = () => ({ text: 'x' });
     const [resolved] = resolveColumns(
-      [{ field: 'cost', header: 'Budget', cellRenderer: renderer, resizable: false }],
+      [{ field: 'cost', header: 'Budget', columnRenderer: renderer, resizable: false }],
       costRegistry(),
       { timeZone: zone, locale },
     );
@@ -268,7 +268,7 @@ describe('toGridColumn (S5.7, D-S5-18)', () => {
       width: 90,
       resizable: false,
       movable: true,
-      cellRenderer: renderer,
+      columnRenderer: renderer,
     });
     expect(column).not.toHaveProperty('format');
   });

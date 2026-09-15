@@ -403,7 +403,7 @@ Everything below lands on top of a merged, green S1.11a.
 | Deferred | Returns at | Needs |
 |---|---|---|
 | #33 — change signalling between `Dataset` and `GanttShell` | S2 | the data core's changeset events; S1 has no mutation API to signal about (D-S1.11-7) |
-| Throughput measurement for the 5,000-entry page ("smoothly") | S7 | D2's measured perf spike and a reference-hardware budget; a timing assertion in CI is a flaky proxy (D-S1.11-5) |
+| Throughput measurement for the large-dataset page ("smoothly") | **S6 — corrected 2026-09-15** | D2's measured perf spike and a reference-hardware budget; a timing assertion in CI is a flaky proxy (D-S1.11-5). **This cell read S7 until 2026-09-15.** `plans/03` §S6 R1 and D2 both put the budgets in S6, and the S6 plan carries the measurement as #95. D-S1.11-5's reason is unchanged — it rules out a CI timing assertion, not the slice. |
 | `addDays`/`startOf` (or an equivalent) re-exported from `api/` | when a consumer must **author** zone-aware dates | today a consumer authoring dates has `instant()` and nothing else; the seeded fixture sidesteps it with UTC alignment, so S1 has no caller (D-S1.11-2) |
 | Writing the thirteen missing `freegantt/*` rules | each rule's own slice, as `docs/01` will then say | S1.11 corrects the *claims*; writing an S3 scheduling rule before `scheduling/` has code would be a guard with nothing to guard (D-S1.11-11) |
 | An e2e job in CI | when the `push`/`pull_request` triggers come back on | the repository owner's call on what every push costs; the pre-push hook is the local half either way (D-S1.11-12) |

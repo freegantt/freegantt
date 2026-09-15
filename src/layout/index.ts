@@ -16,8 +16,8 @@ export { wholeEntryItem, fixedWidthItem, ignoreSegments, followSegments } from '
 export type { BarAnchor, FixedBarBox, Item, ItemProducer, VariantItems } from './items/item.js';
 export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 // #265: shipped Grid-column cell renderers. DOM-free description trees, same factory
-// shape as `diamond()` — `meterCell()`, `imageCell()`.
-export { meterCell, imageCell } from './cells.js';
+// shape as `diamond()` — `meter()`, `image()`.
+export { meter, image } from './column-renderers.js';
 export type {
   DoubleVariantClaim,
   EntryVariant,
@@ -113,8 +113,8 @@ export type {
   RendererPoint,
   BarRenderer,
   BarRendererContext,
-  CellRenderer,
-  CellRendererContext,
+  GridCellRenderer,
+  GridCellRendererContext,
   HeaderRenderer,
   HeaderRendererContext,
   TooltipRenderer,

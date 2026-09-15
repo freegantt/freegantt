@@ -1,13 +1,11 @@
 ---
 id: classes
 title: "Class map, layer by layer"
-last_update:
-  date: 2026-09-14
 ---
 
 What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
-first. For when these run, read [Lifecycle](./lifecycle.md); for the file each one lives in, read
-[File inventory](./files.md).
+first. For when these run, read [Lifecycle](lifecycle.md); for the file each one lives in, read
+[File inventory](files.md).
 
 ## `layout/` & `view/`
 

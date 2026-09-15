@@ -173,7 +173,7 @@ gantt.gridWidth = 'fitColumns';         // #157 — as wide as the columns, and 
 gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clamps gridWidth to (default 40)
 ```
 
-Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the axis; a row-source change re-resolves rows) — never a full remount.
+Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the time axis; a row-source change re-resolves rows) — never a full remount.
 
 **Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
 
@@ -326,7 +326,7 @@ Documented in this order; each level solves what the previous can't, and consume
 |---|---|---|
 | 1 | **CSS custom properties** | `--fg-bar-radius: 3px; --fg-row-height: 32px;` |
 | 2 | **State classes / parts** | `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--warn) }` |
-| 3 | **Renderer callbacks** | `barRenderer`, `cellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
+| 3 | **Renderer callbacks** | `barRenderer`, `gridCellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | one `definePlugin({ data, view })` (see `01` §10): fields, decorations, columns, controllers, commands |
 
@@ -791,7 +791,7 @@ const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, 
 const workforce  = new Gantt({ container: '#bottom', dataset: staffing,         scale, scroll: { x } });
 ```
 
-The two Gantts hold **different** datasets — D9's own example is a delivery-schedule Gantt above a workforce Gantt. What is shared is the axis and the scroll, never the data. Two Gantts *may* bind one `Dataset`: nothing forbids it, a second Gantt is simply a second subscriber to `dataset.on('change')` (D-S2-24), and it costs the library nothing. It is not a case the library designs around or tests, and a consumer who wants it owns the arrangement.
+The two Gantts hold **different** datasets — D9's own example is a delivery-schedule Gantt above a workforce Gantt. What is shared is the time axis and the scroll, never the data. Two Gantts *may* bind one `Dataset`: nothing forbids it, a second Gantt is simply a second subscriber to `dataset.on('change')` (D-S2-24), and it costs the library nothing. It is not a case the library designs around or tests, and a consumer who wants it owns the arrangement.
 
 Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `ScrollModel`, which fused both directions into one object, is retired (S6, D-S6-1); `ScrollAxis` is one direction, so `scroll: { x?, y? }` shares exactly the directions a caller supplies. The example above shares `x` and leaves `y` private on each Gantt — sharing `y` too, or instead, is `scroll: { x, y }` or `scroll: { y }`. Whichever direction is shared, a shorter chart's own row (or content) count clamps the shared position locally, so it pins at its own last row while a taller chart keeps going, with zero remembered state.
 
