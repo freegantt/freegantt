@@ -389,5 +389,6 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 | `gantt.reveal(entryId)` | S1.8 | a pane height that re-measures (S1.7b, #8) — `Viewport`, `frame.rows` and `RowHeightIndex` all ship at S1.7 |
 | `gantt.scale =` / `gantt.scroll =` setters | S1.8 | the already-built `Viewport` (S1.7) owning unbind → rebind → re-render |
 | `panBy(delta)` | S4 | wheel / keyboard controllers producing deltas |
-| `xOnly()` / `yOnly()` | **now — the caller arrived 2026-09-15 (#405)** | a shape that answers D-S1.5-3's two rejections, not one that repeats them |
+| `xOnly()` | **now — the caller arrived 2026-09-15 (#405)** | a shape that answers D-S1.5-3's two rejections, not one that repeats them |
+| `yOnly()` | **still deferred** | a real caller. #405 shares x and keeps y private, so this half still has none — the exact ground D-S1.5-3 cut it on |
 | One-scrollbar treatment for linked charts | its own issue against S1.8 | a linked-group concept in `view/` |

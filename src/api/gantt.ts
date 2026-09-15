@@ -93,7 +93,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   dataset: Dataset<TProps>;
   /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
    * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time
-   * axis, both, or neither. Those are the two *objects*, not two directions — one shared
+   * axis, both, or neither. Those are the two *objects*, not two directions. One shared
    * `ScrollModel` syncs x and y **together**, and a Gantt cannot share one direction alone today
    * (D-S1.5-3). Sharing x with a private y is #405. */
   scroll?: ScrollModel;
