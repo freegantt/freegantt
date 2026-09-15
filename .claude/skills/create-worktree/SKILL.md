@@ -99,7 +99,9 @@ success, so empty `stdout` proves nothing on its own.
 
 ## Clean up when the work merges
 
-Close the workspace first, then remove the checkout from the project root:
+If `git -C .worktrees/<issue>-<slug> status --porcelain` prints any line, stop and report. Leave it.
+
+Otherwise close the workspace, then remove the checkout:
 
 ```
 herdr workspace close <workspace-id>
