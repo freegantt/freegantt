@@ -2,8 +2,7 @@
 // (plans/01 §1). A variant can carry its own `css`; a cell renderer cannot, so the
 // look lives in the always-on sheet (`view/styles.ts`).
 //
-// What shape it draws? `meterCell()` a track and optional text; `imageCell({ alt })`
-// an img.
+// What shape it draws? `meterCell()` a track and optional text; `imageCell()` an img.
 // How it looks? `.fg-meter*` / `.fg-image-cell` in the base sheet.
 
 import type { ColumnCellRenderer, ElementDescription } from '../model/index.js';
@@ -76,20 +75,23 @@ export function meterCell(options?: { text?: boolean }): ColumnCellRenderer {
   };
 }
 
-/** `imageCell({ alt })` — core's image cell, for a Field that stores a URL string.
+/** `imageCell()` — core's image cell, for a Field that stores a URL string.
+ *  Call: "the photo column's cell renderer is an image cell."
  *
- *  `alt` is required: this cell is an image with no adjacent text, so the
- *  alternative text is the only name a reader of the cell hears.
+ *  Default: `alt` is the Field's formatted `value` (the caption a reader
+ *  hears). Optional `{ alt: 'Company logo' }` is a static override for a
+ *  column that is one picture.
  *
  *  Empty or non-string `fieldValue` paints an empty cell, never a broken img.
  *
  *  Column `tooltip` already defaults `false`. `tooltip: true` on an image
  *  column shows the stored URL unless the Field's `formatValue` returns a
  *  caption. The default tooltip body never sees the renderer. */
-export function imageCell(options: { alt: string }): ColumnCellRenderer {
-  const { alt } = options;
-  return ({ fieldValue }) => {
+export function imageCell(options?: { alt?: string }): ColumnCellRenderer {
+  const staticAlt = options?.alt;
+  return ({ fieldValue, value }) => {
     if (typeof fieldValue !== 'string' || fieldValue === '') return undefined;
+    const alt = staticAlt ?? value;
     return { tag: 'img', class: { 'fg-image-cell': true }, attrs: { src: fieldValue, alt } };
   };
 }

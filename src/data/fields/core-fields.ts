@@ -5,8 +5,6 @@ import type { Entry, StoredEntry, Field, FieldKey, Instant } from '../../model/i
 import { DATE_TIME_FORMAT, formatEndInclusive } from '../../time/index.js';
 import { formatInstant } from './field-types.js';
 
-export { stringifyPrimitive } from './field-types.js';
-
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
 // Segment identity is part of the value (#212, ADR 0010): an id-only write — the same start and end,

@@ -166,9 +166,12 @@ export class FieldRegistry {
 
   constructor(options: FieldRegistryOptions = {}) {
     this.#aggregators = { ...SHIPPED_AGGREGATORS, ...options.aggregators };
-    // A consumer `fieldTypes` name of the same key silently wins this spread — `registerType` on
-    // an already-seeded name still throws (DuplicateFieldKeyError), the asymmetry the option and
-    // the method are meant to have.
+    // Seed first so a consumer can override a shipped name at construction (#264). `registerType`
+    // on that same name still throws DuplicateFieldKeyError — the two doors are meant to disagree.
+    // The cost: core `start` and `end` name `type: 'date'`, so replacing `date` rewrites `start`'s
+    // formatValue and compare, and `end`'s compare only (`end` keeps formatEnd because mergeField
+    // is `{ ...bundle, ...declared }`). The Field-key door stays locked:
+    // `{ key: 'start', type: 'text' }` still throws IllegalCoreFieldOverrideError.
     this.#fieldTypes = { ...SHIPPED_FIELD_TYPES, ...options.fieldTypes };
 
     for (const field of CORE_FIELDS) this.#add(field, false);

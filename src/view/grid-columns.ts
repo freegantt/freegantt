@@ -3,7 +3,7 @@
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
 
-import { stringifyPrimitive } from '../data/fields/core-fields.js';
+import { stringifyPrimitive } from '../data/fields/field-types.js';
 import { sizingOfColumn } from '../data/fields/column-sizing.js';
 import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
