@@ -38,16 +38,22 @@
         <div class="flex flex-wrap gap-2 text-xs">
           <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1">gate: <code class="font-mono">verify:full PASS — all 17 checks green, test:e2e included (66s).</code></span>
           <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1">harness/main.ts: clean, no API gap</span>
-          <span class="rounded bg-amber-100 text-amber-900 px-2 py-1">20 findings</span>
+          <span class="rounded bg-amber-100 text-amber-900 px-2 py-1">22 findings</span>
           <span class="rounded bg-rose-100 text-rose-900 px-2 py-1">6 high</span>
+          <span class="rounded bg-indigo-100 text-indigo-900 px-2 py-1">pass 2 complete — 0 struck</span>
         </div>
 
         <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2">
           <div class="rounded border border-slate-200 bg-white p-3"><dt class="uppercase tracking-wider text-slate-500">Claim ledger</dt><dd class="text-lg">9 verified · 1 mis-described</dd></div>
           <div class="rounded border border-slate-200 bg-white p-3"><dt class="uppercase tracking-wider text-slate-500">Plan's 4 defects</dt><dd class="text-lg">4 real · 1 missed</dd></div>
           <div class="rounded border border-slate-200 bg-white p-3"><dt class="uppercase tracking-wider text-slate-500">Brief §7 leakage</dt><dd class="text-lg">none</dd></div>
-          <div class="rounded border border-slate-200 bg-white p-3"><dt class="uppercase tracking-wider text-slate-500">Pass 2</dt><dd class="text-lg">pending</dd></div>
+          <div class="rounded border border-slate-200 bg-white p-3"><dt class="uppercase tracking-wider text-slate-500">Pass 2</dt><dd class="text-lg">17 confirmed · 3 re-described</dd></div>
         </dl>
+
+        <div class="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-4 text-sm space-y-2">
+          <p><strong>Pass 2 landed 2026-09-15.</strong> A <code class="font-mono">reviewer-planner</code> sub-agent opened every cited file cold and re-ran all four measurements. <strong>17 Confirmed · 3 Mis-described · 0 Wrong · 0 Unproven.</strong> Nothing was struck.</p>
+          <p>Each finding below carries its verdict badge. The three re-described findings (<a class="underline text-indigo-700" href="#F4">F4</a>, <a class="underline text-indigo-700" href="#F10">F10</a>, <a class="underline text-indigo-700" href="#F18">F18</a>) have had their accounts replaced with the correct ones — in every case the defect survives and the <em>fix</em> changes size. Pass 2 also found two findings pass 1 missed: <a class="underline text-indigo-700" href="#F21">F21</a> (High) and <a class="underline text-indigo-700" href="#F22">F22</a>, and down-ranked <a class="underline text-indigo-700" href="#F6">F6</a> from High to Medium. All of pass 2's own claims were re-checked against the files before being written here.</p>
+        </div>
       </header>
 
       <!-- ─────────────────────────────── VERDICTS ─────────────────────────────── -->
@@ -63,11 +69,11 @@
               <tr><td class="px-4 py-2 font-mono">#401 per-tick value rows</td><td class="px-4 py-2 text-emerald-700 font-semibold">sound</td><td class="px-4 py-2 fid">F15</td></tr>
               <tr><td class="px-4 py-2 font-mono">#402 Segment props</td><td class="px-4 py-2 text-emerald-700 font-semibold">sound</td><td class="px-4 py-2 fid">F15</td></tr>
               <tr><td class="px-4 py-2 font-mono">#403 leak check</td><td class="px-4 py-2 text-emerald-700 font-semibold">sound</td><td class="px-4 py-2 fid">—</td></tr>
-              <tr class="bg-rose-50"><td class="px-4 py-2 font-mono">#404 <code>shading()</code></td><td class="px-4 py-2 text-rose-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F4 F5 F6 F7 F8 F16 F19</td></tr>
+              <tr class="bg-rose-50"><td class="px-4 py-2 font-mono">#404 <code>shading()</code></td><td class="px-4 py-2 text-rose-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F4 F5 F6 F7 F8 F16 F19 F22</td></tr>
               <tr class="bg-amber-50"><td class="px-4 py-2 font-mono">#405 share x, private y</td><td class="px-4 py-2 text-amber-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F12</td></tr>
               <tr class="bg-amber-50"><td class="px-4 py-2 font-mono">#406 10k fixture</td><td class="px-4 py-2 text-amber-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F9 F10</td></tr>
               <tr class="bg-amber-50"><td class="px-4 py-2 font-mono">plans/s6-scale-and-sync/README.md</td><td class="px-4 py-2 text-amber-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F2 F3 F9 F11 F15</td></tr>
-              <tr class="bg-rose-50"><td class="px-4 py-2 font-mono">spec edits (plans/00–03, s1.5, s1.11)</td><td class="px-4 py-2 text-rose-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F1 F2 F13 F18 F20</td></tr>
+              <tr class="bg-rose-50"><td class="px-4 py-2 font-mono">spec edits (plans/00–03, s1.5, s1.11)</td><td class="px-4 py-2 text-rose-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F1 F2 F13 F18 F20 <strong>F21</strong></td></tr>
               <tr><td class="px-4 py-2 font-mono">src/api/gantt.ts comment</td><td class="px-4 py-2 text-emerald-700 font-semibold">sound</td><td class="px-4 py-2 fid">F17</td></tr>
               <tr><td class="px-4 py-2 font-mono">comments on #95, #97, #265, #302, #342</td><td class="px-4 py-2 text-emerald-700 font-semibold">sound</td><td class="px-4 py-2 fid">—</td></tr>
               <tr><td class="px-4 py-2 font-mono">comment on #95 (5,000 claim)</td><td class="px-4 py-2 text-amber-700 font-semibold">sound with fixes</td><td class="px-4 py-2 fid">F9</td></tr>
@@ -86,6 +92,7 @@
         <article id="F1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F1 — The gate row says "three sharing shapes" and names two</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
@@ -101,6 +108,7 @@
         <article id="F2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F2 — R3 still demands a "y" mode that no decision retires and no issue carries</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
@@ -130,6 +138,7 @@ flowchart LR
         <article id="F3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F3 — The plan says a consumer waits on #406; the brief says the opposite, in one sentence</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">fidelity</span>
           </div>
@@ -143,6 +152,8 @@ flowchart LR
         <article id="F4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F4 — #404 builds <code class="font-mono">hours()</code>, which the brief never asked for, and it alone forces the issue's one prerequisite</h3>
+            <span class="rounded bg-sky-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Mis-described</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">account replaced below</span>
             <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">fidelity</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">scope</span>
@@ -150,14 +161,18 @@ flowchart LR
           <p class="font-mono text-sm text-slate-600">#404 "The gap" ¶2 and "Prerequisite" · brief §6 (plans/handoff/2026-09-15-crm-filament-labor.md:140–144)</p>
           <p><strong>What the brief says.</strong> "a tenant's <code class="font-mono">WorkSchedule</code> defines working <strong>days</strong>, so the shaded set is per-dataset data, not <code class="font-mono">day % 7</code>. If it ships as a plugin taking <strong>a predicate or a list of spans</strong>, we are covered." Shading is the brief's <strong>lowest</strong> priority (Ask 5, LOW, §9 rank 4).</p>
           <p><strong>What #404 says.</strong> "working days, <strong>and working hours inside them</strong>." Those five words are not in the brief.</p>
-          <p><strong>Why it matters, concretely.</strong> The inflation is load-bearing. Trace what only <code class="font-mono">hours()</code> needs:</p>
-          <ul class="list-disc pl-6 space-y-1 text-sm">
-            <li><code class="font-mono">ZonedTime.step</code> and <code class="font-mono">ZonedTime.each</code> — the issue's single named prerequisite. <code class="font-mono">daysOfWeek</code>, <code class="font-mono">dates</code> and <code class="font-mono">spans</code> all run on the existing <code class="font-mono">eachDay</code>/<code class="font-mono">addDays</code>.</li>
-            <li><code class="font-mono">PlainTimeInput</code>, a public type that does not exist (<a class="text-indigo-700 underline" href="#F19">F19</a>).</li>
-            <li>The midnight-wrap rule, and its "23-hour and 25-hour day" DST tests.</li>
-            <li>The <code class="font-mono">hour</code> row of the zoom-defaults table and its pinning test.</li>
-          </ul>
-          <p><strong>Not a settled decision.</strong> The five decisions the issue declares settled are: install site, factory name, selector shape, ISO day numbers, zoom control. <em>Which builders ship</em> is not among them, so deferring <code class="font-mono">hours()</code> relitigates nothing.</p>
+          <div class="rounded border-2 border-sky-300 bg-sky-50 p-4 space-y-3 text-sm">
+            <p class="font-semibold text-sky-900">Account replaced after pass 2. Pass 1 wrote that <code class="font-mono">hours()</code> alone forces the prerequisite. Two of its four bullets were wrong, and the true fix is <em>bigger</em>, not smaller.</p>
+            <p><strong>What <code class="font-mono">hours()</code> really costs.</strong> Two of the four, verified:</p>
+            <ul class="list-disc pl-6 space-y-1">
+              <li><code class="font-mono">PlainTimeInput</code>, a public type that does not exist (<a class="text-indigo-700 underline" href="#F19">F19</a>).</li>
+              <li>The <code class="font-mono">hour</code> row of the zoom-defaults table, and the midnight-wrap rule with its own pinning test.</li>
+            </ul>
+            <p><strong>What it does not cost.</strong> The <code class="font-mono">ZonedTime.step</code>/<code class="font-mono">each</code> prerequisite is <em>not</em> hours-only. #404's own prerequisite section says so in as many words: "<em><code class="font-mono">hours()</code> cannot be written against it, <strong>and neither can <code class="font-mono">{ every: 'hour', covers }</code></strong></em>." The escape hatch's <code class="font-mono">every</code> is typed <code class="font-mono">TimeUnit</code>, and <code class="font-mono">ZonedTime</code> walks days and nothing else (<code class="font-mono">src/time/zoned-time.ts:16–28</code>), so <strong>any</strong> <code class="font-mono">every</code> other than <code class="font-mono">'day'</code> already needs the facade change. Nor are the DST tests hours-only: the acceptance box reads "<em>Each builder has unit tests in a non-UTC zone across both DST boundaries</em>", which binds <code class="font-mono">daysOfWeek</code> and <code class="font-mono">dates</code> equally — a 23-hour day must shade its true width whichever builder drew it.</p>
+            <p><strong>The corrected fix.</strong> Cutting <code class="font-mono">hours()</code> removes the prerequisite <em>only if</em> <code class="font-mono">every</code> is narrowed at the same time to what <code class="font-mono">eachDay</code> supports. That is the right shape anyway — the brief's ask is a day-granularity predicate — but it is a second decision, and #404 does not frame it as one.</p>
+          </div>
+          <p><strong>The scope claim itself stands.</strong> Brief §6 asks for working <em>days</em> and says "a predicate or a list of spans" covers it. Shading is rank 4, LOW. Neither is changed by the above.</p>
+          <p><strong>Not a settled decision.</strong> The decisions the issue declares settled are: install site, factory name, selector shape, ISO day numbers, zoom control. <em>Which builders ship</em> is not among them, so deferring <code class="font-mono">hours()</code> relitigates nothing. (The issue counts those decisions as four and lists five — <a class="text-indigo-700 underline" href="#F22">F22</a>.)</p>
           <p><strong>Failure scenario.</strong> An agent picks up <code class="font-mono">ready for agent</code> #404, spends the bulk of the work on the facade change, the DST tests and a new public type — all for the builder the consumer never asked for — while #401, the consumer's blocking ask, sits at <code class="font-mono">needs grill</code> with no slice.</p>
         </article>
 
@@ -165,6 +180,8 @@ flowchart LR
         <article id="F5" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F5 — <code class="font-mono">ShadingRule</code> does not make the illegal combination unrepresentable</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">re-proved independently</span>
             <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">API</span>
             <span class="rounded bg-emerald-100 text-emerald-800 text-xs px-2 py-1">proved by probe</span>
@@ -190,8 +207,10 @@ flowchart LR
         <!-- F6 -->
         <article id="F6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
-            <h3 class="font-serif text-xl">F6 — #404 names the memo hazard and misses the sharper one: <code class="font-mono">gantt.plugins =</code> is a silent no-op</h3>
-            <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
+            <h3 class="font-serif text-xl">F6 — #404 names the memo hazard and misses the other one: <code class="font-mono">gantt.plugins =</code> is a silent no-op</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">re-ranked High → Medium</span>
+            <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">API</span>
           </div>
           <p class="font-mono text-sm text-slate-600">#404 "The reconfigure hazard" · src/view/gantt-shell.ts:2119–2132 · src/api/gantt.ts:200</p>
@@ -201,12 +220,17 @@ flowchart LR
           <p><strong>What it misses.</strong> ADR 0019 sells <code class="font-mono">gantt.plugins</code> as live-reconfigurable, and that is the door a consumer reaches for first. But the setter diffs by <code class="font-mono">id</code>: "<em>A plugin present in both lists is left alone</em>" (<code class="font-mono">gantt-shell.ts:2119</code>), and "<em>same id, new object is ignored (a dev build warns; production stays silent)</em>" (<code class="font-mono">api/gantt.ts:200</code>). <code class="font-mono">shading()</code> always mints id <code class="font-mono">freegantt.shading</code>.</p>
           <p><strong>Failure scenario.</strong> The tenant changes its <code class="font-mono">WorkSchedule</code>. The consumer writes <code class="font-mono">gantt.plugins = [shading(next)]</code> — the documented live-reconfigure move. Nothing repaints, nothing throws, production logs nothing. They conclude shading is broken. The issue's own guidance ("uninstall then install") is correct; it is the <em>only</em> door, and the issue does not say that the obvious other door fails quietly.</p>
           <p><strong>Fix.</strong> One line in the hazard section, and one acceptance box: reassigning <code class="font-mono">gantt.plugins</code> with the same id does not change the rules, and the call-site doc says so.</p>
+          <div class="rounded border-2 border-sky-300 bg-sky-50 p-4 text-sm space-y-2">
+            <p class="font-semibold text-sky-900">Down-ranked High → Medium after pass 2.</p>
+            <p>The behaviour is confirmed, but two documents already cover it, and pass 1 weighed neither. <code class="font-mono">src/api/gantt.ts:203–204</code> — the doc an app author reads on the option they are assigning to — already prints the remedy: "<em>Reconfigure with two assignments (remove, then add) or a distinct id.</em>" #404's hazard section prints the same recipe. So the failure needs a consumer to ignore both. That is a prose gap in one issue, not a hole in a published type.</p>
+          </div>
         </article>
 
         <!-- F7 -->
         <article id="F7" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F7 — Seven new root exports for one LOW-priority feature, including a bare <code class="font-mono">not</code></h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-orange-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Med-High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">naming</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">API</span>
@@ -239,6 +263,7 @@ flowchart LR
         <article id="F8" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F8 — <code class="font-mono">TimeCover.bands()</code> gives "band" a third meaning, and returns no bands</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-orange-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Med-High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">naming</span>
           </div>
@@ -257,11 +282,12 @@ flowchart LR
         <article id="F9" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F9 — "<code class="font-mono">fixtures/seeded-dataset.test.ts</code> pins 5,000" is wrong in detail, in three artifacts</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-orange-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Med-High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">claim ledger</span>
           </div>
           <p class="font-mono text-sm text-slate-600">plans/s6-scale-and-sync/README.md:130 · #406 (mismatch table, scope item 2) · comment on #95</p>
-          <p><strong>What the file actually holds.</strong> <code class="font-mono">fixtures/seeded-dataset.test.ts</code> tests the <em>generator</em>, not the fixture size. It uses <code class="font-mono">count: 200</code> twice, <code class="font-mono">count: 0</code>, <code class="font-mono">count: 500</code>, and <code class="font-mono">count: 5000</code> three times — once to prove <code class="font-mono">count</code> is honoured (<code class="font-mono">toHaveLength(5000)</code>) and twice as a sample size for "never calls <code class="font-mono">Math.random</code>" and "never calls <code class="font-mono">Date.now</code>". <code class="font-mono">seededEntryInputs</code> is parameterized. <strong>Exactly one line in the repository chooses the large-dataset fixture's size: <code class="font-mono">harness/large-dataset.ts:13</code>.</strong></p>
+          <p><strong>What the file actually holds.</strong> <code class="font-mono">fixtures/seeded-dataset.test.ts</code> tests the <em>generator</em>, not the fixture size. It uses <code class="font-mono">count: 200</code> in two tests (four occurrences, lines 9, 10, 15, 16), <code class="font-mono">count: 0</code>, <code class="font-mono">count: 500</code>, and <code class="font-mono">count: 5000</code> three times — once to prove <code class="font-mono">count</code> is honoured (<code class="font-mono">toHaveLength(5000)</code>) and twice as a sample size for "never calls <code class="font-mono">Math.random</code>" and "never calls <code class="font-mono">Date.now</code>". <code class="font-mono">seededEntryInputs</code> is parameterized. <strong>Exactly one line in the repository chooses the large-dataset fixture's size: <code class="font-mono">harness/large-dataset.ts:13</code>.</strong></p>
           <p><strong>Failure scenario.</strong> #244's lesson, repeated: the finding is real (the fixture is 5,000, the row says 10,000) and the account of the code is wrong, so the proposed fix is bigger than the true one. A builder edits three assertions that had nothing to do with the mismatch, and a reviewer later asks why a determinism test now allocates 10,000 entries twice.</p>
           <p><strong>True fix.</strong> One line in <code class="font-mono">harness/large-dataset.ts</code>, plus the places listed in <a class="text-indigo-700 underline" href="#F10">F10</a>. The generator test needs no edit at all.</p>
         </article>
@@ -270,11 +296,19 @@ flowchart LR
         <article id="F10" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F10 — #406's acceptance is wider than its scope, and both miss the gate label</h3>
+            <span class="rounded bg-sky-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Mis-described</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">account replaced below</span>
             <span class="rounded bg-orange-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Med-High</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
-          <p class="font-mono text-sm text-slate-600">#406 scope 1–3 vs acceptance box 1 · scripts/slice-gate.mjs:83 · src/layout/frame.test.ts:917,921 · harness/large-dataset.ts:2 · e2e/large-dataset.spec.ts:4,5,18</p>
-          <p><strong>Defect.</strong> #406's scope names two files. Its first acceptance box says "<em>No fixture or test still pins 5,000 large-dataset count</em>" — a sweep over the repository. The two do not describe the same job, and the sweep's real targets are not in the scope:</p>
+          <p class="font-mono text-sm text-slate-600">#406 scope item 4 and acceptance box 1 · scripts/slice-gate.mjs:83 · src/layout/frame.test.ts:917,921 · harness/large-dataset.ts:2 · e2e/large-dataset.spec.ts:4,5,18 · fixtures/seeded-dataset.ts:1,5,41 · harness/large-dataset.html:44 · plans/03-slices.md:56</p>
+          <div class="rounded border-2 border-sky-300 bg-sky-50 p-4 space-y-3 text-sm">
+            <p class="font-semibold text-sky-900">Account replaced after pass 2. Pass 1 claimed #406's scope and acceptance describe different jobs. They do not — the mismatch it alleged is not there.</p>
+            <p>#406's Scope has <strong>four</strong> items, not the two pass 1 counted. Item 4 reads "<em>Check nothing else pins 5,000.</em>" That is the same sweep as acceptance box 1, so the scope-versus-acceptance divergence does not exist.</p>
+            <p><strong>The real defect, narrower and still worth fixing.</strong> A <em>label</em> is not a <em>pin</em>. <code class="font-mono">scripts/slice-gate.mjs:83</code> carries the string <code class="font-mono">'5,000-entry fixture: only windowed rows exist in the DOM'</code> as <code class="font-mono">[S1-A1]</code>'s gate label, and neither "check nothing else pins 5,000" nor "no fixture or test still pins 5,000" plainly tells a builder to fix prose. The same goes for every comment below. <strong>The fix is one added scope line naming labels and comments, not a rewritten issue.</strong></p>
+            <p><strong>And the site list was short by four.</strong> Pass 2 found three more comments in <code class="font-mono">fixtures/seeded-dataset.ts:1,5,41</code>, one in <code class="font-mono">harness/large-dataset.html:44</code>, and one in <code class="font-mono">plans/03-slices.md:56</code> — all naming 5,000, all stale at 10,000.</p>
+          </div>
+          <p><strong>The sites, corrected:</strong></p>
           <div class="overflow-x-auto rounded border border-slate-200">
             <table class="w-full text-sm">
               <thead class="bg-slate-100 text-xs uppercase tracking-wider text-slate-600"><tr><th class="text-left px-3 py-2">Site</th><th class="text-left px-3 py-2">What it is</th><th class="text-left px-3 py-2">In #406?</th></tr></thead>
@@ -284,18 +318,22 @@ flowchart LR
                 <tr class="bg-amber-50"><td class="px-3 py-2">src/layout/frame.test.ts:917,921</td><td class="px-3 py-2 font-sans">A1's supporting unit test, titled "5,000 entries"</td><td class="px-3 py-2 text-amber-700">no</td></tr>
                 <tr class="bg-amber-50"><td class="px-3 py-2">harness/large-dataset.ts:2</td><td class="px-3 py-2 font-sans">the file's own header comment</td><td class="px-3 py-2 text-amber-700">no</td></tr>
                 <tr class="bg-amber-50"><td class="px-3 py-2">e2e/large-dataset.spec.ts:4,5,18</td><td class="px-3 py-2 font-sans">three comments naming 5,000</td><td class="px-3 py-2 text-amber-700">no</td></tr>
-                <tr class="bg-slate-50"><td class="px-3 py-2">fixtures/seeded-dataset.test.ts</td><td class="px-3 py-2 font-sans">generator sample size — <strong>should not change</strong> (F9)</td><td class="px-3 py-2 text-rose-700">yes, wrongly</td></tr>
+                <tr class="bg-amber-50"><td class="px-3 py-2">fixtures/seeded-dataset.ts:1,5,41</td><td class="px-3 py-2 font-sans">three comments, "the 5,000-entry acceptance page" <span class="text-xs text-sky-700">(pass 2)</span></td><td class="px-3 py-2 text-amber-700">no</td></tr>
+                <tr class="bg-amber-50"><td class="px-3 py-2">harness/large-dataset.html:44</td><td class="px-3 py-2 font-sans">page copy naming 5,000 <span class="text-xs text-sky-700">(pass 2)</span></td><td class="px-3 py-2 text-amber-700">no</td></tr>
+                <tr class="bg-amber-50"><td class="px-3 py-2">plans/03-slices.md:56</td><td class="px-3 py-2 font-sans">spec text naming 5,000 <span class="text-xs text-sky-700">(pass 2)</span></td><td class="px-3 py-2 text-amber-700">no</td></tr>
+                <tr class="bg-slate-50"><td class="px-3 py-2">fixtures/seeded-dataset.test.ts</td><td class="px-3 py-2 font-sans">generator sample size — <strong>should not change</strong> (F9)</td><td class="px-3 py-2 text-rose-700">yes, wrongly (scope item 2)</td></tr>
               </tbody>
             </table>
           </div>
           <p><strong>Failure scenario.</strong> The gate label is the bad one. <code class="font-mono">slice-gate.mjs</code> greps a test title for <code class="font-mono">[S1-A1]</code> and prints its own label beside the result. After #406 the harness holds 10,000 and the gate keeps printing "5,000-entry fixture" — a green gate stating a false number, which is the <code class="font-mono">[S1-A2]</code> lesson the S6 plan itself cites in §5.4.</p>
-          <p><strong>Note.</strong> #406 is labelled <code class="font-mono">quickie</code>. It is still small, but it is not two files.</p>
+          <p><strong>Note.</strong> #406 is labelled <code class="font-mono">quickie</code>. It still is one, but it is eight sites and one wrong instruction (scope item 2, per <a class="text-indigo-700 underline" href="#F9">F9</a>), not two files.</p>
         </article>
 
         <!-- F11 -->
         <article id="F11" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F11 — The fifth defect the plan missed: S1.11 defers R2's throughput measurement to S7</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
@@ -311,6 +349,7 @@ flowchart LR
         <article id="F12" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F12 — #405 presents an inference as the consumer's stated requirement</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">fidelity</span>
           </div>
@@ -325,6 +364,7 @@ flowchart LR
         <article id="F13" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F13 — One fact, ten restatements, already disagreeing</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">simplify</span>
           </div>
@@ -357,6 +397,7 @@ flowchart TB
         <article id="F14" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F14 — The brief's mapping table is nine unverified claims about the code, and no artifact owns checking them</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">fidelity</span>
           </div>
@@ -371,6 +412,7 @@ flowchart TB
         <article id="F15" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F15 — The order of work never says the consumer's second priority is unscheduled</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-amber-500 text-white text-xs px-2 py-1 uppercase tracking-wider">Medium</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">fidelity</span>
           </div>
@@ -384,6 +426,7 @@ flowchart TB
         <article id="F16" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F16 — <code class="font-mono">CoverTest</code> puts this repo's busiest word at the end of a public type</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low-Med</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">naming</span>
           </div>
@@ -397,13 +440,15 @@ flowchart TB
         <article id="F17" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F17 — The branch's one code change adds a 27-word sentence, in the file the guard cannot see</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">one number corrected</span>
             <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">house rule</span>
           </div>
           <p class="font-mono text-sm text-slate-600">src/api/gantt.ts:94 · scripts/check-sentence-length.mjs <code class="font-mono">SCOPED_FILES</code></p>
           <p><strong>Measured.</strong> <code class="font-mono">node scripts/check-sentence-length.mjs src/api/gantt.ts</code> reports the new sentence at <strong>27 words against a ceiling of 25</strong>:</p>
           <blockquote class="border-l-4 border-amber-400 pl-4 text-sm italic">Those are the two <em>objects</em>, not two directions — one shared <code class="font-mono">ScrollModel</code> syncs x and y <strong>together</strong>, and a Gantt cannot share one direction alone today (D-S1.5-3).</blockquote>
-          <p><code class="font-mono">src/api/gantt.ts</code> is not in <code class="font-mono">SCOPED_FILES</code>, so <code class="font-mono">verify</code> stays green — as it did: <code class="font-mono">verify:full PASS — all 17 checks green</code>. The file already carries 14 other over-ceiling sentences, so this is the backlog, not a regression. It is still one more.</p>
+          <p><code class="font-mono">src/api/gantt.ts</code> is not in <code class="font-mono">SCOPED_FILES</code>, so <code class="font-mono">verify</code> stays green — as it did: <code class="font-mono">verify:full PASS — all 17 checks green</code>. The file already carries <strong>40 other</strong> over-ceiling sentences (41 in total), so this is the backlog, not a regression. It is still one more. <span class="text-sky-700">(Pass 1 said 14 — it read a truncated run of the checker. Corrected after pass 2.)</span></p>
           <p><strong>Fix.</strong> Two sentences: "Those are the two objects, not two directions. One shared <code class="font-mono">ScrollModel</code> syncs x and y together, and a Gantt cannot share one direction alone today (D-S1.5-3)." 9 words and 21 words.</p>
         </article>
 
@@ -411,18 +456,25 @@ flowchart TB
         <article id="F18" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F18 — The same deferred row got two different treatments in two tables</h3>
+            <span class="rounded bg-sky-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Mis-described</span>
+            <span class="rounded bg-slate-100 text-slate-600 text-xs px-2 py-1 italic">account replaced below</span>
             <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
           <p class="font-mono text-sm text-slate-600">plans/s1.5-scroll-model/README.md:392 vs plans/s1.11-close-the-gate/README.md:408</p>
-          <p><strong>Defect.</strong> Both tables carry the <code class="font-mono">xOnly()</code>/<code class="font-mono">yOnly()</code> row with columns <em>Deferred · Returns at · Needs</em>. The S1.5 edit rewrote both live columns — "Returns at: now — the caller arrived (#405)", "Needs: a shape that answers D-S1.5-3's two rejections, not one that repeats them." The S1.11 edit rewrote only "Returns at" and left "Needs" holding history: "cut at S1.5 and confirmed cut here; the D9 demo shares both axes."</p>
-          <p><strong>Failure scenario.</strong> A reader of the S1.11 table sees a row whose "Needs" column argues the deferral it is announcing the end of. It reads as an unresolved contradiction rather than as a record.</p>
+          <div class="rounded border-2 border-sky-300 bg-sky-50 p-4 space-y-3 text-sm">
+            <p class="font-semibold text-sky-900">Account replaced after pass 2. Pass 1 wrote that S1.11's "Needs" column was left holding history. It was not — it was edited, and it closes itself.</p>
+            <p><code class="font-mono">plans/s1.11-close-the-gate/README.md:408</code>'s Needs cell ends: "<em>The cut was right for S1 and stays in the record; the return condition has simply been met.</em>" That clause resolves the reading pass 1 called an unresolved contradiction. The row is a record, and it says so.</p>
+            <p><strong>What is actually asymmetric,</strong> and it is small: <code class="font-mono">plans/s1.5-scroll-model/README.md:392</code>'s Needs states a <em>forward requirement</em> — "a shape that answers D-S1.5-3's two rejections, not one that repeats them" — while <code class="font-mono">:408</code>'s states the record. Two tables, same row, two jobs. <strong>The fix is at most one clause</strong> pointing <code class="font-mono">:408</code> at #405's open design question, and arguably none is needed.</p>
+            <p><strong>Keep the finding for one reason:</strong> re-reading these two rows side by side is what surfaced <a class="text-indigo-700 underline" href="#F21">F21</a>, which is High.</p>
+          </div>
         </article>
 
         <!-- F19 -->
         <article id="F19" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F19 — <code class="font-mono">PlainTimeInput</code> does not exist</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">API</span>
           </div>
@@ -435,12 +487,40 @@ flowchart TB
         <article id="F20" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-serif text-xl">F20 — D9's headline still reads "both axes" with a note that the first caller wants the opposite</h3>
+            <span class="rounded bg-emerald-600 text-white text-xs px-2 py-1 uppercase tracking-wider">pass 2: Confirmed</span>
             <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low</span>
             <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
           </div>
           <p class="font-mono text-sm text-slate-600">plans/00-overview.md:36 (D9)</p>
           <p><strong>Defect.</strong> D9 opens "must eventually <strong>scroll together on both axes</strong>" and now ends "the first consumer needs x shared and y private … the decision itself is unchanged." Both readings are available and the row does not choose: is "both axes" still the requirement, or the capability set from which a caller picks?</p>
           <p><strong>The pattern already exists two rows up.</strong> D7 handles the same problem explicitly: "<em>This row read "versioned <code class="font-mono">toJSON</code>/<code class="font-mono">fromJSON</code>" until ADR 0016. The headline — persistence is the consumer's — is what that ADR makes truer; only the mechanism is retired.</em>" D9's edit needs one clause of that kind: both axes stays the capability; which axes a given pair shares is the caller's.</p>
+        </article>
+        <!-- F21 -->
+        <article id="F21" class="rounded-lg border-2 border-indigo-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-xl">F21 — Two deferred tables now announce that <code class="font-mono">yOnly()</code>'s deferral has ended. It has not.</h3>
+            <span class="rounded bg-rose-600 text-white text-xs px-2 py-1 uppercase tracking-wider">High</span>
+            <span class="rounded bg-indigo-600 text-white text-xs px-2 py-1 uppercase tracking-wider">found in pass 2</span>
+            <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">plans/s1.5-scroll-model/README.md:392 · plans/s1.11-close-the-gate/README.md:408 · #405 (title, and the "shipping only the half with a caller" line)</p>
+          <p><strong>Defect.</strong> Both deferred-table rows are keyed on the <strong>pair</strong> <code class="font-mono">xOnly()</code> / <code class="font-mono">yOnly()</code>. This branch rewrote the "Returns at" cell of both to <strong>"now — the caller arrived 2026-09-15 (#405)"</strong>. But #405 is titled "<em><code class="font-mono">xOnly()</code>'s real caller arrived</em>", and it says plainly that "<em>shipping only the half with a caller may dissolve most of the cost</em>". One caller arrived, for one half. Two spec tables now say the deferral ended for both.</p>
+          <p><strong>Failure scenario.</strong> This is the sharp edge of the worry <a class="text-indigo-700 underline" href="#F2">F2</a> states abstractly. A builder picks up #405, opens the deferred table — the very document #405 cites as the source of the return condition — reads "now", and ships both halves. That re-creates exactly the shape D-S1.5-3 rejected, and it rejected it for having no caller. <code class="font-mono">yOnly()</code> still has none.</p>
+          <p><strong>Fix.</strong> Split the row, or write the cell as: "<code class="font-mono">xOnly()</code> now (#405); <code class="font-mono">yOnly()</code> still deferred — no caller." Two tables, one clause each.</p>
+        </article>
+
+        <!-- F22 -->
+        <article id="F22" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="font-serif text-xl">F22 — #404 says "Four decisions were taken" above a table of five</h3>
+            <span class="rounded bg-yellow-400 text-slate-900 text-xs px-2 py-1 uppercase tracking-wider">Low</span>
+            <span class="rounded bg-indigo-600 text-white text-xs px-2 py-1 uppercase tracking-wider">found in pass 2</span>
+            <span class="rounded bg-slate-200 text-slate-700 text-xs px-2 py-1">spec</span>
+          </div>
+          <p class="font-mono text-sm text-slate-600">#404, "The API — decided by the author, 2026-09-15"</p>
+          <p><strong>Defect.</strong> The line reads "<em>Four decisions were taken before this spec was written. They are settled.</em>" The table below it has five rows: install site, factory name, selector shape, day of week, zoom control.</p>
+          <p><strong>Failure scenario.</strong> The sentence exists to fence off what may not be relitigated. A reader who trusts the count has to guess which of the five is not settled — and "which builders ship" is exactly the question <a class="text-indigo-700 underline" href="#F4">F4</a> needs to reopen, so the ambiguity lands on the one live decision.</p>
+          <p><strong>Note.</strong> Same shape as <a class="text-indigo-700 underline" href="#F1">F1</a>, a count that disagrees with the list beneath it. Pass 1 counted five in F4's own text and did not flag the mismatch.</p>
         </article>
       </section>
 
@@ -556,15 +636,37 @@ flowchart TB
         <h2 class="font-serif text-2xl">Top recommendation</h2>
         <p class="text-lg">Fix <a class="underline decoration-emerald-400" href="#F2">F2</a> and <a class="underline decoration-emerald-400" href="#F1">F1</a> before anything else: rewrite R3 instead of glossing it.</p>
         <p class="text-sm text-stone-300">Four documents now carry the phrase "x, y, and both" with a correction appended beside it, and the two corrections already disagree on how many shapes there are. R3 is an acceptance row on a gate that decides whether S7 may start. It costs one sentence to rewrite and it removes the whole class of finding (F1, F2, F13, F20) in one pass.</p>
+        <p class="text-sm text-stone-300"><strong>Do <a class="underline decoration-rose-400" href="#F21">F21</a> in the same edit</strong> — pass 2 found it, and it is the same mistake with teeth. Two deferred tables now say <code class="font-mono">yOnly()</code>'s deferral has ended. Only <code class="font-mono">xOnly()</code> has a caller. A builder reading those rows ships the shape D-S1.5-3 rejected for having no caller.</p>
         <p class="text-sm text-stone-300">Then: <a class="underline decoration-amber-400" href="#F4">F4</a> — cut <code class="font-mono">hours()</code> from #404's first landing. It is the only builder the brief never asked for, and it is the only reason the issue has a prerequisite at all.</p>
       </section>
 
       <!-- ─────────────────────────────── PASS 2 ─────────────────────────────── -->
       <section id="pass-2" class="space-y-4">
         <h2 class="font-serif text-2xl">Pass 2 — verdicts</h2>
-        <p class="text-sm text-slate-600">A <code class="font-mono">reviewer-planner</code> sub-agent opens every file each finding cites, cold, and returns one verdict per id: Confirmed · Mis-described · Wrong · Unproven. This section is filled in after that report lands.</p>
-        <div class="rounded-lg border-2 border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
-          <p class="text-sm">Pending.</p>
+        <p class="text-sm text-slate-600">A <code class="font-mono">reviewer-planner</code> sub-agent opened every file each finding cites, cold, and re-ran all four of pass 1's measurements. <strong>17 Confirmed · 3 Mis-described · 0 Wrong · 0 Unproven.</strong> Nothing was struck. Each of pass 2's own claims was re-checked against the file before being written into this report.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-xs uppercase tracking-wider text-slate-600"><tr><th class="text-left px-3 py-2">ID</th><th class="text-left px-3 py-2">Verdict</th><th class="text-left px-3 py-2">What changed in this report</th></tr></thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-3 py-2 font-mono">F1 F2 F3</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Nothing. Line numbers and quotes check out.</td></tr>
+              <tr class="bg-sky-50"><td class="px-3 py-2 font-mono">F4</td><td class="px-3 py-2 text-sky-700 font-semibold">Mis-described</td><td class="px-3 py-2">Account replaced. The <code class="font-mono">step</code>/<code class="font-mono">each</code> prerequisite is forced by any non-day <code class="font-mono">every</code>, not by <code class="font-mono">hours()</code> alone, and the DST tests bind every builder. <strong>True fix is bigger:</strong> cutting <code class="font-mono">hours()</code> only removes the prerequisite if <code class="font-mono">every</code> narrows too. Scope claim stands.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F5</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Re-proved independently, with an <code class="font-mono">@ts-expect-error</code> control that reported <code class="font-mono">TS2578</code> — so case 4 is genuinely not an error.</td></tr>
+              <tr class="bg-amber-50"><td class="px-3 py-2 font-mono">F6</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Down-ranked High → Medium. <code class="font-mono">src/api/gantt.ts:203–204</code> already prints the remedy, which pass 1 did not weigh.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F7 F8</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Nothing. Every cited collision exists.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F9</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">One count made precise: <code class="font-mono">count: 200</code> is four occurrences across two tests.</td></tr>
+              <tr class="bg-sky-50"><td class="px-3 py-2 font-mono">F10</td><td class="px-3 py-2 text-sky-700 font-semibold">Mis-described</td><td class="px-3 py-2">Account replaced. #406's scope has four items and item 4 <em>is</em> the sweep, so the alleged mismatch is not there. <strong>True fix is smaller in shape</strong> (one scope line covering labels and comments) <strong>and larger in sites</strong> — four more found.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F11 … F16</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Nothing.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F17</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">One number corrected: 40 other over-ceiling sentences, not 14. Pass 1 read a truncated run.</td></tr>
+              <tr class="bg-sky-50"><td class="px-3 py-2 font-mono">F18</td><td class="px-3 py-2 text-sky-700 font-semibold">Mis-described</td><td class="px-3 py-2">Account replaced. S1.11's "Needs" cell <em>was</em> edited and closes itself. <strong>True fix is smaller — arguably none.</strong> Kept because re-reading the two rows produced F21.</td></tr>
+              <tr><td class="px-3 py-2 font-mono">F19 F20</td><td class="px-3 py-2 text-emerald-700 font-semibold">Confirmed</td><td class="px-3 py-2">Nothing.</td></tr>
+              <tr class="bg-indigo-50"><td class="px-3 py-2 font-mono">F21 F22</td><td class="px-3 py-2 text-indigo-700 font-semibold">Added</td><td class="px-3 py-2">Pass 1 missed both. F21 is High.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-5 text-sm space-y-2">
+          <p class="font-semibold">What pass 2 did not disturb</p>
+          <p>The claim ledger's ten rows, the four-defects verdict, the fifth missed defect (F11), and the <code class="font-mono">harness/main.ts</code> assessment all stand as written. <code class="font-mono">pnpm gate</code> was re-run independently and its output matches the ledger word for word.</p>
+          <p class="text-slate-500 text-xs">Pass 2 made no edits, no commits, no pushes, and no issue comments. Its two probe files were deleted after the run.</p>
         </div>
       </section>
 
