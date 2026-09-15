@@ -701,7 +701,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(commitEntryEdits).not.toHaveBeenCalled();
       expect(reported).toHaveLength(1);
-      expect(reported[0]?.by).toBe('core');
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-dropped',
+        by: 'core',
+        droppedReason: 'superseded',
+      });
       expect(reported[0]?.message).toContain('dropped');
     });
 
@@ -723,12 +727,40 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const secondSession = pipeline.session(entryId('a'), { kind: 'move' });
       expect(secondSession).toBeDefined();
       expect(reported).toHaveLength(1); // the superseded first gesture reported once, right away
+      expect(reported[0]).toMatchObject({ code: 'entry-move-dropped', droppedReason: 'superseded' });
       expect(reported[0]?.message).toContain('dropped');
 
       resolveVeto(true);
       await new Promise((resolve) => setTimeout(resolve, 0));
       // The stale settle from the superseded first gesture never commits.
       expect(commitEntryEdits).not.toHaveBeenCalled();
+    });
+
+    // #377: the two dropped codes must pick move vs resize the same way the two cancelled codes
+    // already do, and `droppedReason` must ride onto the report itself, not just the message.
+    it('[#377] discarding a held resize reports entry-resize-dropped with droppedReason: discarded', async () => {
+      let resolveVeto!: (value: boolean) => void;
+      const veto = new Promise<boolean>((resolve) => {
+        resolveVeto = resolve;
+      });
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        emit: ((name: string) => (name === 'beforeEntryResize' ? veto : true)) as GesturePipelineDeps['emit'],
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'resize', edge: 'end' })!;
+      void session.commit(50);
+
+      expect(pipeline.discardHeldGesture()).toBe(true);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-resize-dropped',
+        by: 'core',
+        droppedReason: 'discarded',
+        severity: 'info',
+      });
+
+      resolveVeto(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     it('an async veto resolving false commits nothing', async () => {
@@ -791,7 +823,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await expect(commitPromise).resolves.toBe(false);
       expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeDefined();
       expect(reported).toHaveLength(1);
-      expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-dropped',
+        by: 'core',
+        droppedReason: 'entry-gone',
+      });
     });
 
     // The sibling of the test above, and #341 reversed what it pins. #273 let a plain fault reach
@@ -862,9 +898,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(afterEmitted).toEqual([]);
       expect(reported).toHaveLength(1);
       expect(reported[0]).toMatchObject({
-        code: 'entry-move-cancelled',
+        code: 'entry-move-dropped',
         severity: 'warning',
         entryId: entryId('a'),
+        droppedReason: 'data-changed',
       });
     });
 
@@ -988,10 +1025,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(commitEntryEdits).toHaveBeenCalledTimes(1);
       expect(reported).toHaveLength(1);
       expect(reported[0]).toMatchObject({
-        code: 'entry-move-cancelled',
+        code: 'entry-move-dropped',
         severity: 'warning',
         by: 'core',
         entryId: a.id,
+        droppedReason: 'write-refused',
       });
       expect(reported[0]?.message).toContain('the store refused the write it asked for');
     });
@@ -1125,7 +1163,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await expect(session.commit(50)).resolves.toBe(false);
 
       expect(reported).toHaveLength(1);
-      expect(reported[0]).toMatchObject({ code: 'entry-move-cancelled', by: 'core' });
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-dropped',
+        by: 'core',
+        droppedReason: 'entry-gone',
+      });
       expect(reported[0]?.message).toContain('was removed before the write');
     });
 
