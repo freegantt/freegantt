@@ -69,7 +69,7 @@ grep -rln 'gantt-shell' website/docs/architecture/*.md   # which pages cover thi
    (a bar is what an Item renders). Row, not line. Field is what a value *is*; a grid column is
    where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
    units-sold-per-week are as much the intended use as a construction plan.
-5. **Two guards scan this folder.** `scripts/check-vendor-names.mjs` fails on a vendor Gantt
+5. **Four guards scan this folder.** `scripts/check-vendor-names.mjs` fails on a vendor Gantt
    product name, and `test/guards/retired-words.test.ts` fails on a retired word — that file holds
    the current list and the ADR behind each one, and it is the only place the list lives. Both read
    `website/docs/**`, with the ADRs and the TypeDoc-generated `api/` pages out of scope. Both run in
@@ -77,6 +77,14 @@ grep -rln 'gantt-shell' website/docs/architecture/*.md   # which pages cover thi
    same commit that deletes the type it named. A name that outlives its type keeps teaching a
    concept the library dropped, and four pages here taught one for months because no guard read
    them.
+
+   The other two read what the pages measure rather than what they say.
+   `test/guards/file-inventory.test.ts` fails when [File inventory](./files.md) misses a live
+   `src/` file, keeps a row for a deleted one, or credits a file with an export it does not
+   contain — that page claims to list every non-test file, and the claim was false for 24 of them.
+   `test/guards/diagram-text-fits.test.ts` fails when a diagram label draws past its own box. Text
+   overflows silently: nothing marks it, and the page still builds. Both are pure Node, so they
+   cost nothing to run.
 6. **Match the existing structure.** Prefer extending a diagram to adding a new one. When a page
    grows past roughly a thousand lines, split it into another page rather than adding a section
    nobody scrolls to.
@@ -165,4 +173,7 @@ again: that is a bug, and it belongs in the tracker rather than on a page here.
 - Every file path named in prose still exists (`git ls-files src`).
 - Every cross-page link resolves.
 - The page renders in both light and dark, and no diagram makes the body scroll sideways.
+- A diagram you moved still connects: widen a column and every arrow into it moves too, and free
+  text below it can fall off the `viewBox`. `pnpm guards` measures the labels, not the arrows, so
+  look at the diagram.
 - `pnpm --dir website build`, `pnpm guards` and `pnpm vendor-names` pass.

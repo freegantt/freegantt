@@ -12,6 +12,10 @@
 // A published page differs from its source in exactly two ways, and both are the site's, not the
 // author's: Docusaurus needs frontmatter and takes the page title from it, and a relative link that
 // leaves the published set has nowhere to land on the site.
+//
+// What that second rule costs, so nobody reads it as an oversight: `website/docs/architecture/` is
+// written on the site and has no source here, so a doc under `docs/` cannot link to it. That is why
+// `docs/05-consumer-api.md` names the Architecture section in prose instead.
 
 import fs from 'node:fs';
 import path from 'node:path';

@@ -61,10 +61,10 @@ orient="auto-start-reverse"
 <text class="t hotink" x="420" y="184" text-anchor="middle">computeFrame headers</text>
 <text class="s" x="420" y="202" text-anchor="middle">dropRepeatedGranularity</text>
 <text class="s" x="420" y="216" text-anchor="middle">clamp tick.x to pane left</text>
-<rect class="bx dom" x="616" y="160" width="200" height="64" />
+<rect class="bx dom" x="608" y="160" width="216" height="64" />
 <text class="t" x="716" y="186" text-anchor="middle">DOM backend.sync</text>
 <text class="s" x="716" y="202" text-anchor="middle">syncKeyed .fg-tick</text>
-<rect class="bx dom" x="616" y="280" width="200" height="64" />
+<rect class="bx dom" x="608" y="280" width="216" height="64" />
 <text class="t" x="716" y="306" text-anchor="middle">.fg-tick CSS</text>
 <text class="s" x="716" y="322" text-anchor="middle">ellipsis · padding · sticky header</text>
 <line
@@ -287,7 +287,7 @@ pair keeps the month band as Sep 2026 and the week band as the day number only.
 <rect class="bx pure" x="692" y="80" width="96" height="36" />
 <text class="s" x="704" y="102">15</text>
 <rect class="bx hot" x="788" y="80" width="132" height="36" />
-<text class="s hotink" x="800" y="102">22 — month already above</text>
+<text class="s hotink" x="800" y="102">22 — month above</text>
 <text class="s" x="40" y="148">hour bands use formatHour, not Intl</text>
 <text class="s" x="40" y="168">
 en-US still zero-pads { hour: 'numeric', hour12: false }. formatHour prints 9:00.
