@@ -7,7 +7,7 @@
 // calendar so it starts `WEEKS_BACK` weeks before whatever "now" is when the module loads.
 
 import { sampleEntryInputs } from './sample-dataset.js';
-import { addMs, instant, MS } from 'freegantt';
+import { addMs, currency, instant, MS } from 'freegantt';
 import type { EntryInput, InstantInput } from 'freegantt';
 
 const ORIGINAL_START_MS = Date.UTC(2026, 8, 1); // sampleEntryInputs's entry-1 start
@@ -129,34 +129,17 @@ export function separateSegments(start: InstantInput) {
 }
 
 export const demoFieldOptions = {
-  fieldTypes: {
-    money: {
-      rollUp: 'sum' as const,
-      formatValue: (value: unknown, ctx: { locale: Intl.LocalesArgument }) =>
-        typeof value === 'number'
-          ? new Intl.NumberFormat(ctx.locale, {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0,
-            }).format(value)
-          : '',
-      // S5.8, D-S5-20, issue #137 F12: the harness's own inverse of `formatValue` above, so the
-      // Budget column (`main.ts`'s own header for this field) is editable in the gallery demo.
-      parseValue: (text: string): number | undefined => {
-        const n = Number(text.replace(/[^0-9.-]/g, ''));
-        return Number.isFinite(n) ? n : undefined;
-      },
-      // #142: `editable` moved off the Grid column onto the Field — one home for whether the
-      // Budget cell (`main.ts`'s own header for this field) opens in the gallery demo.
-      editable: true,
-      column: { align: 'end' as const, header: 'Cost' },
-    },
-  },
   // #142: `end` keeps its demo intent — `harness/index.html`'s own copy names only "Name, Start or
   // Budget" as editable. `CORE_FIELDS.end` now defaults to editable, so this page states the
   // override itself, the same way `hierarchy-dataset.ts` does.
   fields: [
-    { key: 'cost' as const, type: 'money' },
+    {
+      key: 'cost' as const,
+      type: currency({ code: 'USD' }),
+      rollUp: 'sum',
+      editable: true,
+      column: { header: 'Cost' },
+    },
     { key: 'team' as const },
     // ADR 0018: the page's own word for the one row it paints as a milestone.
     { key: 'milestone' as const },
