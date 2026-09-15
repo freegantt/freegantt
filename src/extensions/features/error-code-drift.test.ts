@@ -18,6 +18,8 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'mutation-cancelled': true,
   'entry-move-cancelled': true,
   'entry-resize-cancelled': true,
+  'entry-move-dropped': true,
+  'entry-resize-dropped': true,
   'renderer-failed': true,
   'disposer-failed': true,
   'extender-preview-failed': true,
