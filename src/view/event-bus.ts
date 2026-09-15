@@ -141,7 +141,13 @@ export interface GanttEventMap {
   gridWidthChange: GridWidthChange;
   navigationChange: NavigationChange;
   /** #330. No `before*` pair, the same reason `navigationChange` has none: the OS half of this is
-   *  not a vetoable gesture, and the `theme` half already has its own live setter. */
+   *  not a vetoable gesture, and the `theme` half already has its own live setter.
+   *  #375: fires for any of three causes the library can see moving `resolvedTheme` — a `theme`
+   *  write, the OS, or an ancestor's own `data-fg-theme` pin (#271). The `theme`-write and OS causes
+   *  fire synchronously; the ancestor-pin cause fires on a later task (a `MutationObserver`'s own).
+   *  `resolvedTheme` itself already answers correctly, synchronously, in every case — only this
+   *  event's timing differs by cause. Re-parenting the container under a differently-pinned wrapper
+   *  moves `resolvedTheme`'s answer too, but fires no event: no `data-fg-theme` attribute changed. */
   themeChange: ThemeChange;
   /** S3, D-S3-10. Sync veto: returning `false` leaves the selection untouched. */
   beforeSelectionChange: SelectionChange;

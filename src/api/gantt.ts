@@ -432,7 +432,10 @@ export class Gantt<TProps = unknown> {
   }
 
   /** #330. Never `'auto'` — the answer `theme` resolved to, once an ancestor's own pin (#271) or
-   *  the OS actually settles it one way or the other. Fires `themeChange` when this answer moves. */
+   *  the OS actually settles it one way or the other. Computed on every read, never cached (#375), so
+   *  it is always correct synchronously, including right after an ancestor's own pin changed. Fires
+   *  `themeChange` when this answer moves — synchronously for a `theme` write or an OS flip, one task
+   *  later for an ancestor's pin (`GanttEventMap`'s own doc on `themeChange`). */
   get resolvedTheme(): ResolvedTheme {
     return this.#shell.resolvedTheme;
   }
