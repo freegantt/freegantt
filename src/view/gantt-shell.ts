@@ -539,16 +539,21 @@ export class GanttShell {
    * timeline pane's content is `contentWidth` wide, full stop. */
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
-  /** #330. The last value `resolvedTheme` answered — compared against on every OS flip and every
-   *  `theme` write, so `themeChange` fires exactly when that answer actually moves. Set for real
-   *  once the constructor knows `#container` and `#theme` (both required to resolve anything),
-   *  never read before then. */
-  #resolvedTheme!: ResolvedTheme;
+  /** #375. The value `themeChange` last reported — and so the next emit's `from`. `resolvedTheme`
+   *  itself is never cached (see the getter): this field exists only so `#syncResolvedTheme` can
+   *  tell whether the computed answer actually moved. Set for real once the constructor knows
+   *  `#container` and `#theme` (both required to resolve anything), never read before then. */
+  #reportedTheme!: ResolvedTheme;
   /** #330. `window.matchMedia('(prefers-color-scheme: dark)')`, held so its `'change'` listener can
    *  detach in `destroy()`. Queried once, at construction. A `MediaQueryList` stays live and keeps
    *  firing `'change'` for its own query, so nothing here ever re-queries it. */
   #darkSchemeQuery!: MediaQueryList;
   #darkSchemeQueryListener!: () => void;
+  /** #375. An ancestor's own `data-fg-theme` pin is a supported way to resolve this Gantt's theme
+   *  (#271). A wrapping app can change that pin with no write of this Gantt's own — a whole-chrome
+   *  dark-mode switch, say. `attributeFilter` keeps this cheap: it wakes only on a `data-fg-theme`
+   *  write, anywhere under the root node, never on unrelated DOM churn. */
+  #themePinObserver!: MutationObserver;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
@@ -988,10 +993,20 @@ export class GanttShell {
     else this.#applyTheme();
     // #330: a plain read, not #syncResolvedTheme(). Nothing has subscribed to `themeChange` yet.
     // Firing one here would tell a handler the theme "changed" from nothing, which never happened.
-    this.#resolvedTheme = resolveTheme(this.#container, (query) => window.matchMedia(query));
+    this.#reportedTheme = resolveTheme(this.#container, (query) => window.matchMedia(query));
     this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
     this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
+    // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
+    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the root
+    // node. That includes the library's own write in `#applyTheme`, which re-enters here and emits
+    // nothing, because the computed answer didn't move.
+    this.#themePinObserver = new MutationObserver(() => this.#syncResolvedTheme());
+    this.#themePinObserver.observe(this.#container.getRootNode(), {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['data-fg-theme'],
+    });
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
   }
 
@@ -1803,21 +1818,29 @@ export class GanttShell {
     else this.#container.setAttribute('data-fg-theme', this.#theme);
   }
 
-  /** #330. `'auto'` answers the nearest explicit pin up the tree, else the OS. `'light'`/`'dark'`
-   *  answer themselves straight back — this container's own pin is that nearest pin. */
+  /** #330/#375. `'auto'` answers the nearest explicit pin up the tree, else the OS. `'light'`/`'dark'`
+   *  answer themselves straight back — this container's own pin is that nearest pin. Computed on
+   *  every read, never cached. An ancestor's own pin (#271) can move this answer with no write of
+   *  this Gantt's own. A cached copy would go stale under exactly that case (#375). The read
+   *  itself is always synchronously correct. Only `themeChange`'s timing differs by cause — see
+   *  `#syncResolvedTheme`. */
   get resolvedTheme(): ResolvedTheme {
-    return this.#resolvedTheme;
+    return resolveTheme(this.#container, (query) => window.matchMedia(query));
   }
 
-  /** #330. Re-resolves and fires `themeChange` exactly when the answer actually moved. Called after
-   *  every `theme` write, and every OS `'change'` (`#darkSchemeQuery`, set up once in the
-   *  constructor). A write that keeps the same resolved answer fires nothing. That covers an
-   *  already-`'light'` Gantt pinned to `'light'` again, or an OS flip an ancestor's pin shadows. */
+  /** #330/#375. Re-resolves and fires `themeChange` exactly when the answer actually moved, against
+   *  `#reportedTheme` — the value the last emit reported. Called after every `theme` write, every OS
+   *  `'change'` (`#darkSchemeQuery`), and every `data-fg-theme` mutation anywhere under the root node
+   *  (`#themePinObserver`, #375). A write that keeps the same resolved answer fires nothing. That
+   *  covers an already-`'light'` Gantt pinned to `'light'` again, or an OS flip an ancestor's pin
+   *  shadows. A `theme` write reaches here synchronously. An ancestor's pin reaches here on the
+   *  `MutationObserver`'s own later task, so that cause's event lands one task after the DOM write
+   *  that caused it. `resolvedTheme` itself has already answered correctly by then, either way. */
   #syncResolvedTheme(): void {
     const next = resolveTheme(this.#container, (query) => window.matchMedia(query));
-    if (next === this.#resolvedTheme) return;
-    const from = this.#resolvedTheme;
-    this.#resolvedTheme = next;
+    if (next === this.#reportedTheme) return;
+    const from = this.#reportedTheme;
+    this.#reportedTheme = next;
     this.#events.emit('themeChange', { from, to: next });
   }
 
@@ -2242,6 +2265,7 @@ export class GanttShell {
     this.#container.removeEventListener('keydown', this.#keymapListener);
     this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true);
     this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener);
+    this.#themePinObserver.disconnect();
     this.#frames.cancel();
     this.#entryGestures?.detach();
     this.#keyboardEditing?.detach();
