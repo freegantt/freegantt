@@ -9,7 +9,6 @@ decided: a chrome-only plugin — one with no `data` half — keeps its own inst
 open: nothing. A plugin with a `data` half, handed to a `Gantt`, raises **`PluginSetupError`**, and the message says where to install it (2026-09-11, author's ruling — `Q4`). No new error type ships. **The type refuses it before the runtime does** — `GanttOptions.plugins` takes a chrome-only plugin alone (2026-09-11, review fix) — see *The compiler refuses it first*. A silent install of the `view` half alone is refused — see *Consequences*. This ADR also takes ownership of the live-install hazard that [#192](https://github.com/Pawel-IT/FreeGantt/issues/192) left behind (2026-09-11); it names the hazard and does not repair it.
 ---
 
-
 **Lands after [0017](0017-the-entry-answers-questions-about-itself.md) and [0018](0018-a-variant-is-a-rule-not-an-id-list.md).** Those two join the row. This one joins the plugin that reads it.
 
 ## Context
@@ -44,7 +43,7 @@ const dataset = new Dataset({ entries, plugins: [scheduling()] });
 const gantt = new Gantt({ dataset }); // its Fields, variants, bars and menu are already there
 ```
 
-**The install site is where the state lives.** A plugin with a `data` half installs on the `Dataset`, because a Field must exist before the first Rollup. Every `Gantt` bound to that Dataset then runs the `view` half once, each with its own context. Two Gantts on one page still share nothing, so I2 holds: one `view(ctx)` call is one Gantt's worth of state, the same way one factory call is today.
+**The install site is where the state lives.** A plugin with a `data` half installs on the `Dataset`, because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs the `view` half once, each with its own context. Two Gantts on one page still share nothing, so I2 holds: one `view(ctx)` call is one Gantt's worth of state, the same way one factory call is today.
 
 A chrome-only plugin — `weekendShading()` — has no `data` half and keeps installing on the `Gantt`. `gantt.plugins` stays live-reconfigurable. `dataset.plugins` stays read-only, for the reason it already is.
 

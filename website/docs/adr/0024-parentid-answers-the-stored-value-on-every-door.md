@@ -9,7 +9,6 @@ decided: `entry.read('parentId')` answers the stored value, uniformly, on every 
 open: nothing. [#336](https://github.com/Pawel-IT/FreeGantt/issues/336) tracks reconsidering the name `hierarchyParentId` later; it is not a blocker.
 ---
 
-
 **Reverses one ruling inside [0017](0017-the-entry-answers-questions-about-itself.md).** That ADR is not rewritten — see the notice at its top. Everything else in it stands, `read()` as the one by-key value door included.
 
 ## Context

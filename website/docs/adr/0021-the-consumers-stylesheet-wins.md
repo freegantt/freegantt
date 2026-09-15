@@ -9,7 +9,6 @@ decided: the base stylesheet ships inside one cascade layer, `@layer freegantt`,
 open: nothing this record answers. Per-look stylesheet splitting is [#286](https://github.com/Pawel-IT/FreeGantt/issues/286), and [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) answers it.
 ---
 
-
 ## Context
 
 `plans/02` §4 sells five levels of customization, and level 2 is "state classes / parts". Its worked example is this:

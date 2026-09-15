@@ -3,14 +3,15 @@ id: plugin-authoring
 title: "Plugin authoring guide"
 ---
 
-
 A plugin adds behavior to FreeGantt without a fork. This guide shows the one
 plugin type and its two halves, where each half installs, every registration
 seam a plugin can use, and the errors an author meets.
 
-For what `installPlugin` does under the hood — when a plugin's own half may call a `register*`,
-and what `uninstallPlugin` tears down — see [Plugin lifecycle](../architecture/plugins.md). This
-guide describes HEAD, and its fenced examples typecheck against HEAD.
+A second rendering of the same surface lives on the Docusaurus site at
+`website/docs/guides/plugin-authoring.md`, with runnable examples. All four
+ADRs are accepted, so the two pages describe one shipped surface and not a
+draft of one. This guide describes HEAD, and its fenced examples typecheck
+against HEAD.
 
 Every claim below names the test that proves it. If a claim in an earlier
 draft had no test, this guide drops the claim instead of stating it as fact.
@@ -144,7 +145,7 @@ A plugin with a `data` half handed to a `Gantt` raises `PluginSetupError`, and
 the message names the Dataset as the site to use instead
 (`src/api/define-plugin.test.ts`, "the message says where to install it").
 
-## Why a factory, not a name-keyed table
+## Why a factory, not a name-keyed table (D-S5-2)
 
 `weekendShading()` and `ownerField()` are functions that return a plugin
 object. FreeGantt has no registry that variants a plugin up by a string name.
@@ -173,13 +174,13 @@ plugins claim the same key.
 | `fields.registerAggregator(name, fn)` | aggregator name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it (ADR 0020) | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
-| `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it (ADR 0002) | `src/data/edit-extension.test.ts` |
+| `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it (D-S5-23) | `src/data/edit-extension.test.ts` |
 
 `store.read<T>(pluginId)` is not a registration. It gives one plugin
 read-only access (`get`/`all`, no `set`/`remove`) to a store another plugin
 reserved, or `undefined` if that plugin never reserved one.
 
-## The registration gate
+## The registration gate (D-S5-4)
 
 Every `register*` and `fields.register*` call is legal only while that
 plugin's own half is running. The moment that half returns, the gate closes for
