@@ -15,7 +15,7 @@ import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../.
 import {
   ComputedFieldCannotBeWrittenError,
   FreeGanttError,
-  type BuiltInThrownCode,
+  type InternalThrownCode,
   UnknownFieldError,
   ReservedFieldKeyError,
   DuplicateFieldKeyError,
@@ -114,7 +114,7 @@ export function requireResolvedIndex(
   const index = resolved.indexOf(target);
   if (index === -1) {
     throw new FreeGanttError(
-      'field-registry-resolved-key-missing' satisfies BuiltInThrownCode,
+      'field-registry-resolved-key-missing' satisfies InternalThrownCode,
       `FieldRegistry: core Field "${key}" is declared but missing from the resolved list. This is an internal error; report it.`,
     );
   }
