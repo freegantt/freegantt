@@ -1375,6 +1375,40 @@ describe('resolvedTheme / themeChange (#330)', () => {
     }
   });
 
+  // #375 follow-up: `getRootNode()` reads the container's root once, at construction. A container
+  // built inside a detached tree and mounted afterwards — an ordinary mount pattern — must still see
+  // an ancestor pin gained on mount, because `resolvedTheme` itself already answers it correctly; only
+  // the event lagged before this fix (the observer stayed bound to the detached root forever).
+  it('a Gantt built detached and mounted afterwards still fires themeChange for an ancestor pin', async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const wrapper = document.createElement('div');
+      const ancestor = document.createElement('div');
+      const container = document.createElement('div');
+      ancestor.append(container);
+      wrapper.append(ancestor);
+      // container/ancestor/wrapper built fully detached — no document.body.append yet.
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      // Mounted only now, after construction.
+      document.body.append(wrapper);
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      ancestor.setAttribute('data-fg-theme', 'dark');
+      await flushMutationObserver();
+
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+      wrapper.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('destroy disconnects the ancestor-pin observer — a flip after destroy fires nothing', async () => {
     const { query } = fakeDarkSchemeQuery(false);
     vi.stubGlobal('matchMedia', () => query);
