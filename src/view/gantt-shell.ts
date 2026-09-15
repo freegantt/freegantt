@@ -524,6 +524,12 @@ export class GanttShell {
   #keymapListener!: (event: KeyboardEvent) => void;
   #documentKeymapListener!: (event: KeyboardEvent) => void;
   #destroyed = false;
+  /** #376: flipped true on this constructor's last line. A constructor-supplied plugin has already
+   *  subscribed by the time the rest of the constructor runs. `#emit` reads this flag. Construction
+   *  itself — an initial `theme`/`selection` write, the first frame's own preset settling — never
+   *  reaches a subscriber as a reported change. A plugin that wants the starting state reads it
+   *  straight off `ctx.gantt` in `setup()` instead. */
+  #constructed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
   #layout = new FrameLayout();
@@ -543,14 +549,14 @@ export class GanttShell {
    *  itself is never cached (see the getter): this field exists only so `#syncResolvedTheme` can
    *  tell whether the computed answer actually moved. Set for real once the constructor knows
    *  `#container` and `#theme` (both required to resolve anything), never read before then. */
-  #reportedTheme!: ResolvedTheme;
+  #reportedTheme: ResolvedTheme;
   /** #330. `window.matchMedia('(prefers-color-scheme: dark)')`, held so its `'change'` listener can
    *  detach in `destroy()`. Queried once, at construction. A `MediaQueryList` stays live and keeps
    *  firing `'change'` for its own query, so nothing here ever re-queries it. Every `resolveTheme`
    *  call below reuses this same instance instead of calling `matchMedia` again. `resolvedTheme` is
    *  read often, and a fresh `MediaQueryList` per read is pure waste. */
-  #darkSchemeQuery!: MediaQueryList;
-  #darkSchemeQueryListener!: () => void;
+  #darkSchemeQuery: MediaQueryList;
+  #darkSchemeQueryListener: () => void;
   /** Bound once, passed to every `resolveTheme` call. `resolveTheme` always passes the same query,
    *  `'(prefers-color-scheme: dark)'` — the one `#darkSchemeQuery` was built for. So this answers
    *  that live `MediaQueryList` instead of building a fresh one. */
@@ -559,7 +565,7 @@ export class GanttShell {
    *  (#271). A wrapping app can change that pin with no write of this Gantt's own — a whole-chrome
    *  dark-mode switch, say. `attributeFilter` keeps this cheap: it wakes only on a `data-fg-theme`
    *  write, anywhere under the root node, never on unrelated DOM churn. */
-  #themePinObserver!: MutationObserver;
+  #themePinObserver: MutationObserver;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
@@ -857,7 +863,7 @@ export class GanttShell {
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
       entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
-      emit: (name, payload) => this.#events.emit(name, payload),
+      emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
@@ -995,14 +1001,16 @@ export class GanttShell {
     this.#phase = 'live';
     this.#frames.flush();
 
-    if (options.theme !== undefined) this.theme = options.theme;
-    else this.#applyTheme();
     this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    // #330: a plain read, not #syncResolvedTheme(). Nothing has subscribed to `themeChange` yet.
-    // Firing one here would tell a handler the theme "changed" from nothing, which never happened.
-    this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
     this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
+    // #330/#376: the true baseline, resolved before this Gantt writes its own `data-fg-theme` (if
+    // any). The write below then diffs `#syncResolvedTheme` against a real prior answer, never
+    // `undefined`. `#emit` (below) is what keeps construction's own write silent now. This ordering
+    // is a correctness question for the field, not a leak-prevention trick for the event.
+    this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
+    if (options.theme !== undefined) this.theme = options.theme;
+    else this.#applyTheme();
     // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
     // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the watched
     // root. That includes the library's own write in `#applyTheme`, which re-enters here and emits
@@ -1023,6 +1031,9 @@ export class GanttShell {
       attributeFilter: ['data-fg-theme'],
     });
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+    // #376: last line, on purpose — a constructor-supplied plugin's own subscription, installed by
+    // `plugins=` above, starts hearing real changes only from here. Everything above it was wiring.
+    this.#constructed = true;
   }
 
   get locale(): Intl.LocalesArgument | undefined {
@@ -1166,13 +1177,25 @@ export class GanttShell {
     apply: () => void,
     rollback?: () => void,
   ): boolean {
-    if (this.#events.emit(before, change) === false) {
+    if (this.#emit(before, change) === false) {
       rollback?.();
       return false;
     }
     apply();
-    this.#events.emit(after, change);
+    this.#emit(after, change);
     return true;
+  }
+
+  /** #376: the one door every emit in this class goes through. "No event fires before construction
+   *  ends" is one `if` here, not a copy of it at each call site a future event adds. Short-circuits
+   *  to the answer an `EventBus` with no handlers gives — `true`, never vetoed. A plugin's
+   *  subscription exists by now, but construction itself reports no change for it to hear. */
+  #emit<K extends keyof GanttEventMap>(
+    name: K,
+    payload: GanttEventMap[K],
+  ): K extends AsyncCancelableEvent ? boolean | Promise<boolean> : boolean {
+    if (!this.#constructed) return true;
+    return this.#events.emit(name, payload);
   }
 
   get todayLine(): boolean | Instant {
@@ -1322,7 +1345,7 @@ export class GanttShell {
       canGesture: (capability, id) => this.#canGesture(capability, id),
       confirm: (change, apply) =>
         this.#proposeChange('beforeSelectionChange', 'selectionChange', change, apply),
-      announce: (change) => this.#events.emit('selectionChange', change),
+      announce: (change) => this.#emit('selectionChange', change),
       paint: (segmentIds) => {
         this.#interactionState.selectedSegmentIds = segmentIds;
         this.#refreshAffordances();
@@ -1608,9 +1631,9 @@ export class GanttShell {
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
       canWrite: (entry, field) => this.#capabilities.canWrite(entry, field),
       variantFor: (entry) => this.variantFor(entry),
-      proposeEntryEdit: (payload) => this.#events.emit('beforeEntryEdit', payload),
+      proposeEntryEdit: (payload) => this.#emit('beforeEntryEdit', payload),
       announceEntryEdit: (payload) => {
-        this.#events.emit('entryEdit', payload);
+        this.#emit('entryEdit', payload);
       },
       focusedCell: () => this.#focusedCell(),
     };
@@ -1867,7 +1890,7 @@ export class GanttShell {
     if (next === this.#reportedTheme) return;
     const from = this.#reportedTheme;
     this.#reportedTheme = next;
-    this.#events.emit('themeChange', { from, to: next });
+    this.#emit('themeChange', { from, to: next });
   }
 
   get a11yLabel(): string {
@@ -2130,7 +2153,7 @@ export class GanttShell {
   }
 
   #emitNavigationChange(): void {
-    this.#events.emit('navigationChange', {
+    this.#emit('navigationChange', {
       presetId: this.#viewport.preset.id,
       fit: this.#viewport.fit,
       canZoomIn: this.#viewport.canZoomIn,
