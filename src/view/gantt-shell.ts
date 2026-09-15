@@ -1866,6 +1866,17 @@ export class GanttShell {
     return resolveTheme(this.#container, this.#matchMedia);
   }
 
+  /** #394: the getter above is always correct. But nothing tells this Gantt to look again after a
+   *  consumer re-parents its container — no `data-fg-theme` attribute changed, so
+   *  `#themePinObserver` never wakes. A consumer that just moved the container calls this method to
+   *  say so. It re-resolves now, and fires `themeChange` exactly when the answer actually moved —
+   *  the same rule every other cause already follows. Returns the resolved answer, so a caller does
+   *  not need a separate `resolvedTheme` read after. */
+  checkResolvedTheme(): ResolvedTheme {
+    this.#syncResolvedTheme();
+    return this.resolvedTheme;
+  }
+
   /** #330/#375. Re-resolves and fires `themeChange` exactly when the answer actually moved, against
    *  `#reportedTheme` — the value the last emit reported. Called after every `theme` write, every OS
    *  `'change'` (`#darkSchemeQuery`), and every `data-fg-theme` mutation anywhere under the root node

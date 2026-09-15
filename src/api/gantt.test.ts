@@ -1170,6 +1170,38 @@ describe('Gantt theme and a11yLabel (S1.10)', () => {
     gantt.destroy();
   });
 
+  it('[#394] checkResolvedTheme() re-resolves after a re-parent and fires themeChange when the answer moved', () => {
+    const outerLight = document.createElement('div');
+    const outerDark = document.createElement('div');
+    outerDark.setAttribute('data-fg-theme', 'dark');
+
+    const container = document.createElement('div');
+    outerLight.append(container);
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    expect(gantt.resolvedTheme).toBe('light');
+
+    const events: Array<{ from: string; to: string }> = [];
+    gantt.on('themeChange', (change) => {
+      events.push(change);
+    });
+
+    // Re-parent under the differently-pinned wrapper. No attribute of this Gantt's own changed, so
+    // the getter already answers 'dark' but no event has fired yet.
+    outerDark.append(container);
+    expect(gantt.resolvedTheme).toBe('dark');
+    expect(events).toEqual([]);
+
+    expect(gantt.checkResolvedTheme()).toBe('dark');
+    expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+    // Calling again with no further move fires nothing more.
+    expect(gantt.checkResolvedTheme()).toBe('dark');
+    expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+    gantt.destroy();
+  });
+
   it('[#376] fires no event before the constructor returns, and themeChange never carries from: undefined', () => {
     const container = document.createElement('div');
     const events: Array<{ event: string; payload: unknown }> = [];
