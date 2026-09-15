@@ -72,6 +72,8 @@ CLAUDE.md: *"A plan or review's account of the code is a claim. Open the file be
 | The S6 leak row is unticked | #403, slice plan | `plans/03-slices.md` |
 | The harness plugin hard-codes `time.dayOfWeek(day) >= 6`; `ZonedTime` exposes **no hour step**; `time/zone.ts` already has generic `stepBy` and `startOf`; hour presets exist; `DecorationInput.class` is one string; a chrome-only plugin installs on the `Gantt` | #404 | `harness/plugins/weekend-shading.ts`, `src/time/zoned-time.ts`, `src/time/zone.ts`, `src/time/presets.ts`, `src/layout/decoration.ts`, `docs/adr/0019-*` |
 | D-S1.5-3's text, its two rejections, and the deferred-table row `xOnly()/yOnly() — returns at: when a host needs "share x, private y"` | #405, slice plan §5.3 | `plans/s1.5-scroll-model/README.md` |
+
+> **Superseded later on 2026-09-15 — D-S6-1.** The row above was split into `xOnly()` / `yOnly()` halves during this review. The author then ruled that the shared unit is one **scroll axis**, not a view over a `ScrollModel`, so both halves are withdrawn and shared y comes free instead of being withheld. F21's finding stands; its proposed fix does not. See `plans/s6-scale-and-sync/README.md` §5.3 and #405.
 | `[S1-A4]` proves a scroll on one Gantt moves the other in x and y | #405, slice plan | `e2e/scroll-sync.spec.ts` |
 | The large-dataset harness seeds 5,000, and `fixtures/seeded-dataset.test.ts` pins 5,000 | #406, slice plan §5.2 | `harness/large-dataset.ts`, `fixtures/seeded-dataset.test.ts` |
 | `plans/01` ends at §11, and two documents cite a `plans/01` §12 | slice plan §5.1 | `plans/01-domain-architecture.md`, `plans/03-slices.md:264`, `docs/adr/0018-*` |
