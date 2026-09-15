@@ -66,15 +66,17 @@ test('the cells the design draws as pictures are real rendered nodes', async ({ 
   // states only which rows wear one, and `diamond()`'s own `css` paints the glyph on `::before`.
   await expect(page.locator('#gantt .fg-bar.fg-bar-diamond').first()).toBeVisible();
 
-  // The progress meter is described, not two anonymous divs.
-  const meter = page.locator('.demo-progress-track').first();
-  await expect(meter).toHaveAttribute('role', 'img');
-  await expect(meter).toHaveAttribute('aria-label', /complete$/);
+  // The Done cell is core's meter: the graphic is hidden from AT, and the formatted text beside it
+  // carries the value once. Never a progressbar, and never a labelled img that restates the number.
+  const meter = page.locator('.fg-meter-track').first();
+  await expect(meter).toHaveAttribute('aria-hidden', 'true');
+  await expect(meter).not.toHaveAttribute('role');
+  await expect(page.locator('#gantt [role="progressbar"]')).toHaveCount(0);
 
   // A phase row rolls its children's progress up, duration-weighted, through a named Aggregator.
   const phaseDone = await page.evaluate(() => {
     const row = document.querySelector<HTMLElement>('#gantt .fg-row[data-entry-id="pre-construction"]');
-    return row?.querySelector('.demo-progress-text')?.textContent;
+    return row?.querySelector('.fg-meter-text')?.textContent;
   });
   expect(phaseDone).toBe('100%');
 });

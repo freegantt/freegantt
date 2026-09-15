@@ -182,13 +182,15 @@ describe('resolveFieldCompares (D-S4-13)', () => {
   });
 
   it('the duration cell on a dateless row is blank, not "NaN d" (ADR 0012 Gate)', () => {
-    const columns = resolveColumns(['duration'], lookupFrom(CORE_FIELDS), { timeZone: zone, locale });
+    const registry = new FieldRegistry();
+    const columns = resolveColumns(['duration'], registry, { timeZone: zone, locale });
     const dateless = entryDouble({ id: 'none' });
     expect(columns[0]?.format(dateless)).toBe('');
   });
 
   it('duration compareStored orders by Duration.value from the compute read', () => {
-    const compares = resolveFieldCompares(lookupFrom(CORE_FIELDS), CORE_FIELDS, {
+    const registry = new FieldRegistry();
+    const compares = resolveFieldCompares(registry, registry.all, {
       timeZone: zone,
       locale,
     });

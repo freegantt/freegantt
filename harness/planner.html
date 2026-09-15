@@ -194,32 +194,22 @@
         font-size: 10px;
         font-weight: 600;
       }
-      .demo-progress {
-        display: flex;
-        align-items: center;
+      /* The design's compact Done cell: a short track, not the full column. Core's meter is the
+         renderer; this page only tightens the track. */
+      .fg-meter {
         justify-content: flex-end;
-        gap: 6px;
-        width: 100%;
       }
-      .demo-progress-track {
-        position: relative;
-        flex: 1 1 auto;
+      .fg-meter-track {
         max-width: 30px;
         height: 4px;
         border-radius: 2px;
-        background: var(--fg-splitter-color);
-        overflow: hidden;
       }
-      .demo-progress-fill {
-        position: absolute;
-        inset: 0 auto 0 0;
+      .fg-meter-fill {
         border-radius: 2px;
-        background: var(--fg-header-subtext);
       }
-      .demo-progress-text {
+      .fg-meter-text {
         min-width: 30px;
         text-align: right;
-        font-variant-numeric: tabular-nums;
       }
 
       /* The progress shading inside a span bar (DESIGN-FACTS §2.2): a child rect pinned to the
