@@ -805,12 +805,12 @@ export interface ErrorFeed {
 // @public
 export interface ErrorReport {
     readonly at: Instant;
-    readonly because?: GestureDroppedReason;
     // (undocumented)
     readonly by: ErrorReporter;
     readonly cause?: unknown;
     // (undocumented)
     readonly code: ReportCode;
+    readonly droppedReason?: GestureDroppedReason;
     readonly entryId?: EntryId;
     readonly field?: FieldKey;
     readonly message: string;
