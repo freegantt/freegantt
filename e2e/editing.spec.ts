@@ -42,7 +42,7 @@ test('Escape reverts a Budget edit with no commit', async ({ page }) => {
   await cell.dblclick();
   const input = page.locator('#gantt .fg-cell-editor-control');
   await expect(input).toBeVisible();
-  await input.fill('$999');
+  await input.fill('999');
   await input.press('Escape');
 
   await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(0);

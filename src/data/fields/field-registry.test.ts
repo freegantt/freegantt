@@ -418,6 +418,27 @@ describe('core Fields consume the shipped type table', () => {
       formatDate('UTC', end, 'en-US', DATE_TIME_FORMAT),
     );
   });
+
+  // Same constructor spread the percent test already pins. Core Fields name `date`, so the
+  // replacement reaches `start` and `end`. mergeField is `{ ...bundle, ...declared }`: `end`
+  // keeps formatEnd and takes only compare.
+  it('overriding date rewrites start formatValue and compare; end keeps formatEnd and takes only compare', () => {
+    const registry = new FieldRegistry({
+      fieldTypes: { date: { formatValue: () => 'OVERRIDE', compare: () => 42 } },
+    });
+    const start = instant('2026-06-15T00:00:00Z');
+    const end = instant('2026-06-20T00:00:00Z');
+    const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
+    const withStart = { start, end } as Entry;
+
+    expect(registry.get('start')!.formatValue!(start, formatCtx, withStart)).toBe('OVERRIDE');
+    expect(registry.get('start')!.compare!(start, end)).toBe(42);
+    expect(registry.get('end')!.compare!(start, end)).toBe(42);
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).toBe(
+      formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT),
+    );
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).not.toBe('OVERRIDE');
+  });
 });
 
 describe('requireResolvedIndex — a -1 index refuses to write, instead of landing on "-1" (#260)', () => {

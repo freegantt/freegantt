@@ -80,18 +80,27 @@ describe('meterCell()', () => {
   });
 });
 
-describe('imageCell({ alt })', () => {
-  it('paints an img with the given alt and the stored URL as src', () => {
-    const src = 'https://example.com/owner.png';
-    expect(imageCell({ alt: 'Owner' })(cell(src, src))).toEqual({
+describe('imageCell()', () => {
+  it("imageCell()(cell(url, 'Ada')) uses the formatted value as alt", () => {
+    const src = 'https://example.com/ada.png';
+    expect(imageCell()(cell(src, 'Ada'))).toEqual({
       tag: 'img',
       class: { 'fg-image-cell': true },
-      attrs: { src, alt: 'Owner' },
+      attrs: { src, alt: 'Ada' },
+    });
+  });
+
+  it("imageCell({ alt: 'Logo' }) keeps the static alt, not the formatted value", () => {
+    const src = 'https://example.com/logo.png';
+    expect(imageCell({ alt: 'Logo' })(cell(src, 'Ada'))).toEqual({
+      tag: 'img',
+      class: { 'fg-image-cell': true },
+      attrs: { src, alt: 'Logo' },
     });
   });
 
   it('a non-string or empty fieldValue paints an empty cell, no img', () => {
-    const render = imageCell({ alt: 'Owner' });
+    const render = imageCell();
     expect(render(cell(undefined))).toBeUndefined();
     expect(render(cell(35))).toBeUndefined();
     expect(render(cell(''))).toBeUndefined();

@@ -387,7 +387,7 @@ export { ignoreSegments, followSegments } from '../layout/index.js';
 // as one family at a call site — see `bar()`'s own note in `layout/items/variants.ts` (F13).
 export { bar, summary, diamond } from '../layout/index.js';
 // #265: shipped Grid-column cell renderers. `meterCell()` paints a percent as a
-// track. `imageCell({ alt })` paints a stored URL as an img. Both take `()`, the
+// track. `imageCell()` paints a stored URL as an img. Both take `()`, the
 // same factory shape as `diamond()`. `cellRenderer` stays on the Gantt column
 // (D-S5-17).
 export { meterCell, imageCell } from '../layout/index.js';

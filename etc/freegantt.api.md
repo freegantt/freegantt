@@ -1369,8 +1369,8 @@ export class IllegalCoreFieldOverrideError extends FreeGanttError {
 }
 
 // @public
-export function imageCell(options: {
-    alt: string;
+export function imageCell(options?: {
+    alt?: string;
 }): ColumnCellRenderer;
 
 // @public
