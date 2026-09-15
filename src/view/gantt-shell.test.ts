@@ -4,7 +4,7 @@ import type { GanttShellOptions } from './gantt-shell.js';
 import {
   DEFAULT_MIN_BAR_WIDTH_PX,
   FrameLayout,
-  ScrollModel,
+  ScrollAxis,
   TimeScaleModel,
   fixedWidthItem,
 } from '../layout/index.js';
@@ -280,7 +280,7 @@ describe('GanttShell.destroy()', () => {
 });
 
 describe('scroll (D9, #9)', () => {
-  it('constructs a private default ScrollModel when scroll is omitted', () => {
+  it('constructs a private default ScrollAxis pair when scroll is omitted', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     // No shared model was passed; the shell still renders and destroys cleanly, proving a
@@ -298,12 +298,12 @@ describe('scroll (D9, #9)', () => {
   // element as the scroller). happy-dom does no layout, so these drive the same FakeResizeObserver
   // seam pane-size-attachment.test.ts uses, feeding the pane height GanttShell reads on construction.
 
-  it('two shells sharing one ScrollModel both contribute to the shared max (U1/U2)', () => {
+  it('two shells sharing one y ScrollAxis both contribute to the shared max (U1/U2)', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const containerA = document.createElement('div');
       const containerB = document.createElement('div');
 
@@ -311,19 +311,19 @@ describe('scroll (D9, #9)', () => {
         wiring: {},
         container: containerA,
         dataset: fakeDataset(tallEntries(50)),
-        scroll,
+        scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
       const shellB = new GanttShell({
         wiring: {},
         container: containerB,
         dataset: fakeDataset(tallEntries(50)),
-        scroll,
+        scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-      // 50 rows at the default row height, in a 100px pane -> the same max.y for either chart.
-      expect(scroll.state.max.y).toBe(50 * DEFAULT_ROW_HEIGHT - 100);
+      // 50 rows at the default row height, in a 100px pane -> the same max for either chart.
+      expect(scrollY.state.max).toBe(50 * DEFAULT_ROW_HEIGHT - 100);
 
       shellA.destroy();
       shellB.destroy();
@@ -337,10 +337,15 @@ describe('scroll (D9, #9)', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const container = document.createElement('div');
 
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tallEntries(50)), scroll });
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(tallEntries(50)),
+        scroll: { y: scrollY },
+      });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 10 * DEFAULT_ROW_HEIGHT }); // 10 rows
       shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
 
@@ -355,7 +360,7 @@ describe('scroll (D9, #9)', () => {
       expect(labelsAt()).toContain('Entry 0');
       expect(labelsAt()).not.toContain('Entry 40');
 
-      scroll.panTo({ y: 40 * DEFAULT_ROW_HEIGHT }); // scroll 40 rows down
+      scrollY.panTo(40 * DEFAULT_ROW_HEIGHT); // scroll 40 rows down
       shell.render();
 
       expect(labelsAt()).not.toContain('Entry 0');
@@ -372,7 +377,7 @@ describe('scroll (D9, #9)', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const shortContainer = document.createElement('div');
       const tallContainer = document.createElement('div');
 
@@ -380,20 +385,20 @@ describe('scroll (D9, #9)', () => {
         wiring: {},
         container: shortContainer,
         dataset: fakeDataset(tallEntries(5)),
-        scroll,
+        scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
       const tallShell = new GanttShell({
         wiring: {},
         container: tallContainer,
         dataset: fakeDataset(tallEntries(500)),
-        scroll,
+        scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
       // Loosest bound across both bindings: the tall chart's 500 rows dwarf the short chart's 5
-      // (D-S1.5-1) — proving both extents actually reached the shared model.
-      expect(scroll.state.max.y).toBe(500 * DEFAULT_ROW_HEIGHT - 100);
+      // (D-S1.5-1) — proving both extents actually reached the shared axis.
+      expect(scrollY.state.max).toBe(500 * DEFAULT_ROW_HEIGHT - 100);
 
       shortShell.destroy();
       tallShell.destroy();
@@ -512,13 +517,13 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
 });
 
 describe('pane-size attachment (S1.7b, #8)', () => {
-  it('a live resize reaches both TimeScaleModel and ScrollModel, re-renders, and destroy() detaches', () => {
+  it('a live resize reaches both TimeScaleModel and the y ScrollAxis, re-renders, and destroy() detaches', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
       const scale = new TimeScaleModel(); // range: 'fitDataset' — pxPerMs depends on paneWidth
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const container = document.createElement('div');
       const tall = Array.from({ length: 50 }, (_, i) => {
         const start = rangeStart;
@@ -532,7 +537,13 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           props: {},
         };
       });
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(tall), scale, scroll });
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(tall),
+        scale,
+        scroll: { y: scrollY },
+      });
 
       // Exactly one observer for this one Gantt.
       expect(FakeResizeObserver.instances).toHaveLength(1);
@@ -542,25 +553,25 @@ describe('pane-size attachment (S1.7b, #8)', () => {
       // distance the scale assigns to one fixed instant span. It moves iff pxPerMs moved.
       const oneDayWidth = (): number => scale.scale.xForInstant(instant('2026-09-02T00:00:00Z'));
       const widthBefore = oneDayWidth();
-      const maxYBefore = scroll.state.max.y;
+      const maxYBefore = scrollY.state.max;
 
       FakeResizeObserver.instances[0]!.fire({ width: 900, height: 400 });
 
       // TimeScaleModel: a new paneWidth re-fits pxPerMs.
       expect(oneDayWidth()).not.toBe(widthBefore);
-      // ScrollModel: a new pane height moves max.y (50 rows at the default height, less 400).
-      expect(scroll.state.max.y).toBe(50 * DEFAULT_ROW_HEIGHT - 400);
-      expect(scroll.state.max.y).not.toBe(maxYBefore);
+      // ScrollAxis: a new pane height moves max (50 rows at the default height, less 400).
+      expect(scrollY.state.max).toBe(50 * DEFAULT_ROW_HEIGHT - 400);
+      expect(scrollY.state.max).not.toBe(maxYBefore);
       // Re-rendered with the new geometry — no remount, the container keeps its band wrapper.
       expect(container.querySelector('.fg-band')).not.toBeNull();
 
       shell.destroy(); // unbind() also drops this shell's own contribution to the shared max.
       const widthAfterDestroy = oneDayWidth();
-      const maxYAfterDestroy = scroll.state.max.y;
+      const maxYAfterDestroy = scrollY.state.max;
       FakeResizeObserver.instances[0]!.fire({ width: 100, height: 50 });
       // detach() unhooked the observer: a later fire reaches neither model.
       expect(oneDayWidth()).toBe(widthAfterDestroy);
-      expect(scroll.state.max.y).toBe(maxYAfterDestroy);
+      expect(scrollY.state.max).toBe(maxYAfterDestroy);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -632,20 +643,25 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     shell.destroy();
   });
 
-  it('reveal(entryId) pans the bound ScrollModel to bring an off-screen row into view; unknown id throws', () => {
+  it('reveal(entryId) pans the bound y ScrollAxis to bring an off-screen row into view; unknown id throws', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const rowEntries = tallEntries(50);
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(rowEntries), scroll });
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(rowEntries),
+        scroll: { y: scrollY },
+      });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
 
-      expect(scroll.state.position.y).toBe(0);
+      expect(scrollY.state.position).toBe(0);
       shell.reveal(entryId('e40'));
-      expect(scroll.state.position.y).toBeGreaterThan(0);
+      expect(scrollY.state.position).toBeGreaterThan(0);
 
       expect(() => shell.reveal(entryId('does-not-exist'))).toThrow(RevealTargetNotFoundError);
 
@@ -661,7 +677,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const parent: StoredEntry = {
         id: entryId('p'),
         name: 'p',
@@ -683,7 +699,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([parent, child]),
-        scroll,
+        scroll: { y: scrollY },
         rowSource: { source: 'entries', tree: true },
         collapsed: [rowId('p')],
       });
@@ -705,7 +721,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollY = new ScrollAxis();
       const alpha: StoredEntry = {
         id: entryId('a'),
         name: 'a',
@@ -718,7 +734,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([alpha], [{ key: 'team' }]),
-        scroll,
+        scroll: { y: scrollY },
         rowSource: {
           source: 'group',
           groupBy: (row) => String(row.read('team')),
@@ -745,7 +761,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const pxPerMs = 0.01;
       const at = instant('2026-09-01T00:10:00Z'); // 600,000ms after rangeStart, at pxPerMs above
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
@@ -762,7 +778,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([marker]),
-        scroll,
+        scroll: { x: scrollX },
         scale,
         variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
       });
@@ -774,8 +790,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const centerX = scale.scale.xForInstant(at);
       const expectedX = centerX + boxWidthPx / 2 - viewportWidth;
       const floorFallbackX = centerX + DEFAULT_MIN_BAR_WIDTH_PX / 2 - viewportWidth;
-      expect(scroll.state.position.x).toBe(expectedX);
-      expect(scroll.state.position.x).not.toBe(floorFallbackX);
+      expect(scrollX.state.position).toBe(expectedX);
+      expect(scrollX.state.position).not.toBe(floorFallbackX);
 
       shell.destroy();
     } finally {
@@ -792,7 +808,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const pxPerMs = 0.01;
       // t1 sits far enough into the range that its own floored Item never goes negative — this test
       // means to exercise the right-edge reveal branch alone, not the left-edge one.
@@ -810,7 +826,13 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         ],
         props: {},
       };
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset([spread]), scroll, scale });
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([spread]),
+        scroll: { x: scrollX },
+        scale,
+      });
       const viewportWidth = 50;
       FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
 
@@ -818,8 +840,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
       const unionRight = scale.scale.xForInstant(t2) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
       const rawEnvelopeRight = scale.scale.xForInstant(t2); // the entry's own `end`, unfloored
-      expect(scroll.state.position.x).toBe(unionRight - viewportWidth);
-      expect(scroll.state.position.x).not.toBe(rawEnvelopeRight - viewportWidth);
+      expect(scrollX.state.position).toBe(unionRight - viewportWidth);
+      expect(scrollX.state.position).not.toBe(rawEnvelopeRight - viewportWidth);
 
       shell.destroy();
     } finally {
@@ -836,7 +858,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const pxPerMs = 0.01;
       const at = instant('2026-09-01T00:10:00Z');
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
@@ -862,7 +884,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([parent, child]),
-        scroll,
+        scroll: { x: scrollX },
         scale,
         rowSource: { source: 'entries', tree: true },
         collapsed: [rowId('p')],
@@ -876,7 +898,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       expect(shell.collapsed.map(String)).not.toContain('p');
       const centerX = scale.scale.xForInstant(at);
       const expectedX = centerX + boxWidthPx / 2 - viewportWidth;
-      expect(scroll.state.position.x).toBe(expectedX);
+      expect(scrollX.state.position).toBe(expectedX);
 
       shell.destroy();
     } finally {
@@ -893,7 +915,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const at = instant('2026-09-01T00:10:00Z');
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
       const boxWidthPx = 13;
@@ -909,7 +931,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([marker]),
-        scroll,
+        scroll: { x: scrollX },
         scale,
         variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
       });
@@ -921,7 +943,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
       const bar = container.querySelector<HTMLElement>(`[data-item-id="${itemId(entryId('marker'))}"]`)!;
       expect(pxWidth(bar)).toBe(boxWidthPx);
-      expect(scroll.state.position.x).toBe(translateX(bar) + pxWidth(bar) - viewportWidth);
+      expect(scrollX.state.position).toBe(translateX(bar) + pxWidth(bar) - viewportWidth);
 
       shell.destroy();
     } finally {
@@ -938,7 +960,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const first = instant('2026-09-01T00:02:00Z');
       const last = instant('2026-09-01T00:10:00Z');
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
@@ -958,7 +980,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([marker]),
-        scroll,
+        scroll: { x: scrollX },
         scale,
         variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
       });
@@ -969,8 +991,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
       const boxRight = (scale.scale.xForInstant(first) + scale.scale.xForInstant(last)) / 2 + boxWidthPx / 2;
       const segmentSpanRight = scale.scale.xForInstant(last) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
-      expect(scroll.state.position.x).toBe(boxRight - viewportWidth);
-      expect(scroll.state.position.x).not.toBe(segmentSpanRight - viewportWidth);
+      expect(scrollX.state.position).toBe(boxRight - viewportWidth);
+      expect(scrollX.state.position).not.toBe(segmentSpanRight - viewportWidth);
 
       shell.destroy();
     } finally {
@@ -987,7 +1009,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scrollX = new ScrollAxis();
       const drawnStart = instant('2026-09-01T00:02:00Z');
       const drawnEnd = instant('2026-09-01T00:03:00Z');
       const undrawnStart = instant('2026-09-01T00:10:00Z');
@@ -1008,7 +1030,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         wiring: {},
         container,
         dataset: fakeDataset([split]),
-        scroll,
+        scroll: { x: scrollX },
         scale,
         variants: [
           {
@@ -1039,8 +1061,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
       const ownDatesRight = scale.scale.xForInstant(undrawnEnd);
       const siblingBarRight = scale.scale.xForInstant(drawnEnd);
-      expect(scroll.state.position.x).toBe(ownDatesRight - viewportWidth);
-      expect(scroll.state.position.x).not.toBe(siblingBarRight - viewportWidth);
+      expect(scrollX.state.position).toBe(ownDatesRight - viewportWidth);
+      expect(scrollX.state.position).not.toBe(siblingBarRight - viewportWidth);
 
       shell.destroy();
     } finally {

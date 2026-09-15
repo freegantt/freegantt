@@ -6,6 +6,8 @@
 
 This directory is the settled spec for S1.11, in the same form as [`plans/s1.10-theming-and-a11y/README.md`](../s1.10-theming-and-a11y/README.md).
 
+**Superseded S6 (D-S6-1, 2026-09-15, #405): `ScrollModel` is retired.** Every mention of `ScrollModel` below, including Q1's "confirmed cut" for `xOnly()`/`yOnly()` and the `[S1-A4]`/U4 references to sharing "one `ScrollModel`", describes the S1.5–S1.11 design accurately as history. `harness/scroll-sync.ts` now shares a `ScrollAxis` per direction instead, `[S1-A4]` still passes unmodified against the both-axis pair, and a new pair on the same page demonstrates x-only sharing (`[S6-A3]`, `e2e/scroll-sync.spec.ts`). See `plans/s1.5-scroll-model/README.md` D-S1.5-3 and `plans/03-slices.md` §S6 for what changed and why.
+
 S1.11 adds no rendering behaviour. It makes the S1 → S2 gate a **command instead of an opinion**, and it closes the vocabulary debt S1 accumulated. Two of its findings are load-bearing enough to state before anything else:
 
 1. **The gate design published in the issue comment does not work.** `vitest -t` and `playwright -g` take *regexes*. Measured on this repo at `33594ed`: `-t "[S1-A2]"` runs **62 of 83** dom tests, because `[S1-A2]` is a character class. Escaped to `-t "\[S1-A2\]"` it runs 1 — but for an id that does not exist yet it runs **0 tests and still exits 0**. A gate built as written would report every check ✔ on a repo where none of the five acceptance tests exist. §2 D-S1.11-1.
@@ -405,4 +407,4 @@ Everything below lands on top of a merged, green S1.11a.
 | `addDays`/`startOf` (or an equivalent) re-exported from `api/` | when a consumer must **author** zone-aware dates | today a consumer authoring dates has `instant()` and nothing else; the seeded fixture sidesteps it with UTC alignment, so S1 has no caller (D-S1.11-2) |
 | Writing the thirteen missing `freegantt/*` rules | each rule's own slice, as `docs/01` will then say | S1.11 corrects the *claims*; writing an S3 scheduling rule before `scheduling/` has code would be a guard with nothing to guard (D-S1.11-11) |
 | An e2e job in CI | when the `push`/`pull_request` triggers come back on | the repository owner's call on what every push costs; the pre-push hook is the local half either way (D-S1.11-12) |
-| `xOnly()`/`yOnly()` on `ScrollModel` | when a consumer needs "share x, keep y private" | cut at S1.5 (D-S1.5-3) and confirmed cut here; the D9 demo shares both axes, which is what `plans/02` §5 documents (Q1) |
+| ~~`xOnly()`/`yOnly()` on `ScrollModel`~~ | **Shipped S6 (D-S6-1, #405)** | cut at S1.5 (D-S1.5-3) and confirmed cut here, deferred until a consumer needed "share x, keep y private" — that consumer arrived, and the answer was not `xOnly()`/`yOnly()` views on a fused model but retiring `ScrollModel` in favour of `ScrollAxis`, one shared unit per direction. `harness/scroll-sync.html` now shows an x-only pair beside the both-axis pair `plans/02` §5 documents. |

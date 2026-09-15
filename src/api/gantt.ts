@@ -11,9 +11,10 @@ import type {
   Theme,
   ViewportGestures,
 } from '../view/index.js';
-import { ScrollModel, TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
+import { TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
 import type {
   PresetRef,
+  ScrollAxes,
   SnapSetting,
   TimeScaleFit,
   ViewPreset,
@@ -91,10 +92,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  a Gantt built on a `Dataset<{ team: string }, { cost: number }>` hands that same typed
    *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
   dataset: Dataset<TProps>;
-  /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
-   * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its axis,
-   * both, or neither. */
-  scroll?: ScrollModel;
+  /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
+   * instances to sync that direction; omit a direction to keep it private. Independent of
+   * `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time axis, both, or
+   * neither. */
+  scroll?: ScrollAxes;
   /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'
    *  own right edge and keep it there as the columns change. Reads back in px either way. Default:
    *  `--fg-grid-pane-width`, fallback 160. Never wider than the columns (#139); a splitter drag

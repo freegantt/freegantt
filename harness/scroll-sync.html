@@ -21,6 +21,14 @@
       }
       #short {
         height: 240px;
+        margin-bottom: 1rem;
+      }
+      #xonly-a {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #xonly-b {
+        height: 240px;
       }
       /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar, and their
          top/left origin, now ship in the library's own base stylesheet (S1.10/S1.11, view/styles.ts)
@@ -46,10 +54,20 @@
     <main>
       <h1>FreeGantt — S1.5 scroll sync</h1>
       <nav class="harness-site-nav" aria-label="Harness pages"></nav>
-      <p>Two Gantts sharing one ScrollModel. #tall has every fixture entry; #short has the first 20.</p>
+      <p>
+        Two Gantts sharing one ScrollAxis per direction (both x and y). #tall has every fixture entry; #short
+        has the first 20.
+      </p>
       <div id="page-brief"></div>
       <div id="tall" class="fg-gantt"></div>
       <div id="short" class="fg-gantt"></div>
+      <h2>x-only sharing (D-S6-1)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis. Each keeps a private y, so a vertical scroll on one
+        never moves the other, even with different row counts.
+      </p>
+      <div id="xonly-a" class="fg-gantt"></div>
+      <div id="xonly-b" class="fg-gantt"></div>
     </main>
     <script type="module" src="./scroll-sync.ts"></script>
   </body>

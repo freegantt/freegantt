@@ -4,7 +4,6 @@
 import {
   barSpan,
   FrameLayout,
-  ScrollModel,
   TimeScaleModel,
   Viewport,
   createVariantRegistry,
@@ -19,6 +18,7 @@ import type {
   Overscan,
   PresetRef,
   RowSource,
+  ScrollAxes,
   SnapSetting,
   TimeScaleFit,
   ViewportHandle,
@@ -268,10 +268,9 @@ export interface GanttShellOptions {
    * concept"). The default resolves its zone, span and fit from this shell's binding, so it needs
    * no arguments. */
   scale?: TimeScaleModel;
-  /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
-   * Constructs a private default when omitted; sharing one instance links both axes (S1.5 README
-   * D-S1.5-3). */
-  scroll?: ScrollModel;
+  /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
+   * instances to sync that direction. Each omitted direction builds a private default. */
+  scroll?: ScrollAxes;
   /** Initial grid pane width (S1.8, D-S1.8-3). A number is px; `'fitColumns'` (#157) sits the pane
    *  on its columns' own edge and keeps it there. Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: GridWidth;
@@ -896,7 +895,7 @@ export class GanttShell {
       },
       setHovered: (item) => this.#setHovered(item),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
-      contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.state.position.x,
+      contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };
@@ -1501,8 +1500,8 @@ export class GanttShell {
       selectPreviousSegment: () => this.#segmentSelection.step(-1),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
-      panToStart: () => this.#viewport.scroll.panTo({ x: 0 }),
-      panToEnd: () => this.#viewport.scroll.panTo({ x: this.#viewport.scroll.state.max.x }),
+      panToStart: () => this.#viewport.scroll.x.panTo(0),
+      panToEnd: () => this.#viewport.scroll.x.panTo(this.#viewport.scroll.x.state.max),
       panRight: () => this.#panBy(this.#viewport.preset.preferredTickWidthPx, 0),
       panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
       panDown: () => this.#panBy(0, this.#frameSettings.rowHeight),
@@ -1534,7 +1533,7 @@ export class GanttShell {
       revealRow: (index) => {
         const y = this.#layout.rowTop(index);
         this.#viewport.reveal({
-          x: this.#viewport.scroll.state.position.x,
+          x: this.#viewport.scroll.x.state.position,
           y,
           width: 0,
           height: this.#frameSettings.rowHeight,
@@ -1771,8 +1770,12 @@ export class GanttShell {
   }
 
   #panBy(dx: number, dy: number): void {
-    const { x, y } = this.#viewport.scroll.state.position;
-    this.#viewport.scroll.panTo({ x: x + dx, y: y + dy });
+    const x = this.#viewport.scroll.x.state.position;
+    const y = this.#viewport.scroll.y.state.position;
+    this.#viewport.batch(() => {
+      this.#viewport.scroll.x.panTo(x + dx);
+      this.#viewport.scroll.y.panTo(y + dy);
+    });
   }
 
   /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
@@ -2052,11 +2055,11 @@ export class GanttShell {
    *  stays exactly where it was (#232-adjacent gap, ADR 0012, Build 1). */
   #revealRow(ownerId: EntryId): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
-    const position = this.#viewport.scroll.state.position;
-    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : position.y;
+    const x = this.#viewport.scroll.x.state.position;
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
     // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
     // only y — the same no-op-on-x idiom `#rovingFocusPorts`'s own `revealRow` above already uses.
-    this.#viewport.reveal({ x: position.x, y, width: 0, height: this.#frameSettings.rowHeight });
+    this.#viewport.reveal({ x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
   /** Reveals the whole Entry: the union of the painted extents of every Item it draws (#295). An
@@ -2104,7 +2107,7 @@ export class GanttShell {
   }
 
   #revealRect(rowIndex: number, x: number, width: number): void {
-    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.state.position.y;
+    const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
     this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
   }
 

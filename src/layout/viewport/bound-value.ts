@@ -11,7 +11,7 @@
 // "call my reaction when I might be stale", that is still the signal to consolidate under `data/`'s
 // reactivity façade (D-A), not to widen this.
 //
-// `TimeScaleModel` and `ScrollModel` differ only in what they resolve and in what counts as a
+// `TimeScaleModel` and `ScrollAxis` differ only in what they resolve and in what counts as a
 // change, so that is exactly what each one supplies here.
 
 import { BatchedNotifier } from './batched-notifier.js';

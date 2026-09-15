@@ -62,7 +62,11 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     if (Math.abs(element.scrollLeft - to.x) < EPSILON && Math.abs(element.scrollTop - to.y) < EPSILON) {
       return;
     }
-    viewport.scroll.panTo({ x: element.scrollLeft, y: element.scrollTop });
+    // One batch, one notification, even though each axis moves through its own `ScrollAxis` (D-S6-1).
+    viewport.batch(() => {
+      viewport.scroll.x.panTo(element.scrollLeft);
+      viewport.scroll.y.panTo(element.scrollTop);
+    });
   }
 
   element.addEventListener('scroll', onNativeScroll);

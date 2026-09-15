@@ -1249,7 +1249,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     minGridWidth?: number;
     plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
-    scroll?: ScrollModel;
+    scroll?: ScrollAxes;
     selectedSegmentIds?: readonly (SegmentId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
@@ -2004,21 +2004,26 @@ export interface RowStripe {
     rowId: RowId;
 }
 
+// @public
+export interface ScrollAxes {
+    // (undocumented)
+    readonly x?: ScrollAxis;
+    // (undocumented)
+    readonly y?: ScrollAxis;
+}
+
 // @public (undocumented)
-export class ScrollModel {
-    constructor(position?: Partial<ScrollPosition>);
+export class ScrollAxis {
+    constructor(position?: number);
     batch(run: () => void): void;
-    panTo(to: Partial<ScrollPosition>): void;
-    get state(): ScrollState;
+    panTo(position: number): void;
+    get state(): ScrollAxisState;
 }
 
 // @public
-export type ScrollPosition = Point;
-
-// @public
-export interface ScrollState {
-    readonly max: ScrollPosition;
-    readonly position: ScrollPosition;
+export interface ScrollAxisState {
+    readonly max: number;
+    readonly position: number;
 }
 
 // @public

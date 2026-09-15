@@ -7,6 +7,8 @@ title: "Friend-only methods move off the class, into a WeakMap-backed function"
 
 We moved `bind`/`unbind` off both classes entirely, into free functions in `layout/viewport/` (`bindTimeScale`, `bindScroll`) that close over a module-private `WeakMap<Model, InternalState>` populated in each class's own constructor. Only `view/gantt-shell.ts` imports these functions; they are never re-exported from `view/index.ts` or `api/index.ts`. The exported `TimeScaleModel`/`ScrollModel` classes genuinely have no `bind` method — there is nothing to hide because it was never a method.
 
+**Superseded S6 (D-S6-1, #405): `ScrollModel` is retired, and `bindScroll` is `bindScrollAxis`.** `ScrollModel` fused x+y into one object; `ScrollAxis` is one direction, so a Gantt now closes over two `WeakMap` entries — one per bound `ScrollAxis` — instead of one. The pattern below is unchanged: `bindScrollAxis` is still the only free function that reaches `ScrollAxis`'s internal `BoundValue`, still never re-exported, and still guards its `WeakMap.get` the same way.
+
 ## Considered options
 
 - **Interface+const declaration merging** (export a hand-authored narrower type for the constructed value, backed by a differently-shaped implementation class). Rejected: this project's public types come entirely from `tsc`-emitted `.d.ts`; this would be the first hand-authored type in the surface, and it only narrows the *variable's* type — a caller who does `const s = new TimeScaleModel(...)` still gets the full constructor return type unless the constructor itself is wrapped, which reintroduces a factory-function call site the project didn't otherwise want (see "Call site first," `CLAUDE.md`).
