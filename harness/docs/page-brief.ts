@@ -64,7 +64,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       'A shipped design, built on the public surface alone. Colour is tokens, cells the design draws ' +
       'as pictures are cell renderers, and a third theme the library never heard of is a consumer class.',
     config: [
-      "gridColumns: [{ field: 'owner', cellRenderer }, …]",
+      "gridColumns: [{ field: 'owner', columnRenderer }, …]",
       "barRenderer: { '*': ({ entry }) => ({ style: { '--fg-bar-fill': … } }) }",
       "body.theme-paper #gantt { --fg-pane-bg: …; --fg-bar-fill: … }",
     ],

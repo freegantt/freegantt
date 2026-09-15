@@ -1,13 +1,11 @@
 ---
 id: lifecycle
 title: "Construction, render, notification"
-last_update:
-  date: 2026-09-14
 ---
 
 Three passes, in the order they run: what `new Gantt(…)` builds, what one `render()` does, and how
 an edit reaches the screen. Counts on this page are measured, not estimated —
-[Maintaining](./maintaining.md) holds the recipe that re-measures them.
+[Maintaining](maintaining.md) holds the recipe that re-measures them.
 
 ## Construction: the call sequence
 

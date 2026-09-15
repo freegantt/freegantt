@@ -76,8 +76,8 @@ export type {
   GridColumnBase,
   GridColumnSizing,
   ColumnAlign,
-  ColumnCellRenderer,
-  ColumnCellRendererContext,
+  ColumnRenderer,
+  ColumnRendererContext,
   EntityAdded,
   EntityRemoved,
   FieldUpdated,
@@ -324,7 +324,7 @@ export type { ElementDescription, TooltipColumn } from '../model/index.js';
 // S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
 // `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
 // `ResolvedColumn` ride along because the context types name them (`BarRendererContext.item`,
-// `CellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
+// `GridCellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
 // importable, not just structurally inferred.
 export type {
   RendererPoint,
@@ -334,8 +334,8 @@ export type {
   BarLabels,
   BarLabelPlacement,
   ResolvedBarLabel,
-  CellRenderer,
-  CellRendererContext,
+  GridCellRenderer,
+  GridCellRendererContext,
   HeaderRenderer,
   HeaderRendererContext,
   TooltipRenderer,
@@ -386,11 +386,11 @@ export { ignoreSegments, followSegments } from '../layout/index.js';
 // until an author installs it. `bar` and `summary` keep their plain names on purpose — the three read
 // as one family at a call site — see `bar()`'s own note in `layout/items/variants.ts` (F13).
 export { bar, summary, diamond } from '../layout/index.js';
-// #265: shipped Grid-column cell renderers. `meterCell()` paints a percent as a
-// track. `imageCell()` paints a stored URL as an img. Both take `()`, the
-// same factory shape as `diamond()`. `cellRenderer` stays on the Gantt column
+// #265: shipped Grid-column cell renderers. `meter()` paints a percent as a
+// track. `image()` paints a stored URL as an img. Both take `()`, the
+// same factory shape as `diamond()`. `columnRenderer` stays on the Gantt column
 // (D-S5-17).
-export { meterCell, imageCell } from '../layout/index.js';
+export { meter, image } from '../layout/index.js';
 // #264: a currency Field type is a factory, not a seeded name — `{ key: 'cost', type: currency({
 // code: 'EUR' }) }`. Consumers name `percent` / `text` / `number` with the string; those stay off
 // this barrel.

@@ -89,20 +89,6 @@ export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
 // @public (undocumented)
-export type CellRenderer = (ctx: CellRendererContext) => ElementDescription | undefined;
-
-// @public (undocumented)
-export interface CellRendererContext {
-    // (undocumented)
-    column: ResolvedColumn;
-    entry?: Entry | undefined;
-    fieldValue: unknown;
-    // (undocumented)
-    row: FrameRow;
-    value: string;
-}
-
-// @public (undocumented)
 export type ChangeOrigin = 'user' | 'undo' | 'redo';
 
 // @public (undocumented)
@@ -157,10 +143,10 @@ export interface CollapseChange {
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
-export type ColumnCellRenderer = (ctx: ColumnCellRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
 
 // @public
-export interface ColumnCellRendererContext {
+export interface ColumnRendererContext {
     entry?: Entry | undefined;
     fieldValue: unknown;
     value: string;
@@ -848,7 +834,7 @@ export type Field<TValue = unknown> = {
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
-    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
 } | {
     key: FieldKey;
     type?: FieldTypeName | FieldType<TValue>;
@@ -857,7 +843,7 @@ export type Field<TValue = unknown> = {
     compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
     equals?: never;
     parseValue?: never;
     inputType?: never;
@@ -908,7 +894,7 @@ export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[];
 // @public
 export interface FieldType<TValue = unknown> {
     // (undocumented)
-    column?: Omit<GridColumnBase, 'field' | 'cellRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
@@ -1025,7 +1011,6 @@ export interface FrameColumn {
 
 // @public (undocumented)
 export interface FrameRow {
-    cells: readonly string[];
     // (undocumented)
     depth: number;
     entryIds: readonly EntryId[];
@@ -1033,6 +1018,7 @@ export interface FrameRow {
     expandable: boolean;
     // (undocumented)
     expanded: boolean;
+    gridCells: readonly string[];
     // (undocumented)
     height: number;
     // (undocumented)
@@ -1068,8 +1054,6 @@ export class Gantt<TProps = unknown> {
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
-    get cellRenderer(): CellRenderer | undefined;
-    set cellRenderer(renderer: CellRenderer | undefined);
     checkResolvedTheme(): ResolvedTheme;
     clearCapabilityRule(capability: keyof Interactions): void;
     // (undocumented)
@@ -1095,6 +1079,8 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    get gridCellRenderer(): GridCellRenderer | undefined;
+    set gridCellRenderer(renderer: GridCellRenderer | undefined);
     // (undocumented)
     get gridColumns(): readonly GridColumnInput[];
     set gridColumns(columns: readonly GridColumnInput[]);
@@ -1235,12 +1221,12 @@ export interface GanttOptionsBase<TProps = unknown> {
     a11yLabel?: string;
     barLabels?: BarLabels;
     barRenderer?: BarRenderer;
-    cellRenderer?: CellRenderer;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
     dataset: Dataset<TProps>;
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
+    gridCellRenderer?: GridCellRenderer;
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
@@ -1280,6 +1266,20 @@ export type GanttScaleOptions = {
 // @public
 export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
 
+// @public (undocumented)
+export type GridCellRenderer = (ctx: GridCellRendererContext) => ElementDescription | undefined;
+
+// @public (undocumented)
+export interface GridCellRendererContext {
+    // (undocumented)
+    column: ResolvedColumn;
+    entry?: Entry | undefined;
+    fieldValue: unknown;
+    // (undocumented)
+    row: FrameRow;
+    value: string;
+}
+
 // @public
 export type GridColumn = GridColumnBase & GridColumnSizing;
 
@@ -1287,7 +1287,7 @@ export type GridColumn = GridColumnBase & GridColumnSizing;
 export interface GridColumnBase {
     // (undocumented)
     align?: ColumnAlign;
-    cellRenderer?: ColumnCellRenderer;
+    columnRenderer?: ColumnRenderer;
     // (undocumented)
     field: FieldKey;
     // (undocumented)
@@ -1369,9 +1369,9 @@ export class IllegalCoreFieldOverrideError extends FreeGanttError {
 }
 
 // @public
-export function imageCell(options?: {
+export function image(options?: {
     alt?: string;
-}): ColumnCellRenderer;
+}): ColumnRenderer;
 
 // @public
 export function inlineEditing(options?: InlineEditingOptions): ChromePlugin;
@@ -1541,9 +1541,9 @@ export interface MenuItem {
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits;
 
 // @public
-export function meterCell(options?: {
+export function meter(options?: {
     text?: boolean;
-}): ColumnCellRenderer;
+}): ColumnRenderer;
 
 // @public
 export class MissingPluginError extends FreeGanttError {
@@ -1880,10 +1880,10 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
 }
 
 // @public
-export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer : P extends 'cell' ? CellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
+export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer : P extends 'gridCell' ? GridCellRenderer : P extends 'header' ? HeaderRenderer : TooltipRenderer;
 
 // @public
-export type RendererPoint = 'bar' | 'cell' | 'header' | 'tooltip';
+export type RendererPoint = 'bar' | 'gridCell' | 'header' | 'tooltip';
 
 // @public
 export type ReportCode = BuiltInReportCode | (string & {});
@@ -1906,7 +1906,7 @@ export interface ResolvedBarLabel {
 // @public
 export interface ResolvedColumn extends FrameColumn {
     // (undocumented)
-    cellRenderer?: ColumnCellRenderer;
+    columnRenderer?: ColumnRenderer;
     // (undocumented)
     format(entry: Entry): string;
     // (undocumented)
@@ -2119,7 +2119,7 @@ export interface StoreRowUpdated {
 export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
-export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
+export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';

@@ -25,7 +25,7 @@ import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
   TooltipRenderer,
   EntryVariant,
@@ -190,9 +190,9 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
    *  the later one wins. Default `[]`. */
   variants?: readonly EntryVariant<TProps>[];
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
-  cellRenderer?: CellRenderer;
+  gridCellRenderer?: GridCellRenderer;
   /** Live (S5.4, D-S5-11). Grid column header chrome (S5.7 paints through it). */
   headerRenderer?: HeaderRenderer;
   /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
@@ -210,7 +210,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   plugins?: readonly ChromePlugin<TProps>[];
 }
 
-/** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
+/** Two ways to set the time axis, made mutually exclusive at the type level (issue #84 — the prior shape
  * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with only a warning
  * to say so). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
  * for the same job; a caller states one or the other. */
@@ -318,7 +318,7 @@ export class Gantt<TProps = unknown> {
         'collapsed',
         'barLabels',
         'barRenderer',
-        'cellRenderer',
+        'gridCellRenderer',
         'headerRenderer',
         'tooltipRenderer',
         'zoomPresets',
@@ -557,12 +557,12 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
-  get cellRenderer(): CellRenderer | undefined {
-    return this.#shell.cellRenderer;
+  get gridCellRenderer(): GridCellRenderer | undefined {
+    return this.#shell.gridCellRenderer;
   }
 
-  set cellRenderer(renderer: CellRenderer | undefined) {
-    this.#shell.cellRenderer = renderer;
+  set gridCellRenderer(renderer: GridCellRenderer | undefined) {
+    this.#shell.gridCellRenderer = renderer;
   }
 
   /** Live (S5.4, D-S5-11). */

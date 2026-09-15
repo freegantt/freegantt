@@ -19,7 +19,7 @@ import type {
   RowSource,
   DatasetEventMap,
   EntryVariant,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
 } from 'freegantt';
 import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
@@ -415,7 +415,7 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11: `cellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
+// S5.4, D-S5-10/11: `gridCellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
 // ADR 0022: `diamond()` is core's own shipped glyph, so this page states only which rows wear one —
 // the `milestone` Field the fixture writes on "Requirements review" (`fixtures/demo-dataset.ts`), so
 // `update(id, { milestone: true })` would pin a second row with no code change here. The purple fill
@@ -434,7 +434,7 @@ const BUDGET_THRESHOLD = 5000;
 const demoVariants: readonly EntryVariant<DemoEntryProps>[] = [
   diamond({ name: 'milestone', when: { milestone: true } }),
 ];
-const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
+const demoGridCellRenderer: GridCellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
@@ -449,11 +449,11 @@ const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-tog
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
     gantt.variants = demoVariants;
-    gantt.cellRenderer = demoCellRenderer;
+    gantt.gridCellRenderer = demoGridCellRenderer;
     gantt.headerRenderer = demoHeaderRenderer;
   } else {
     gantt.variants = [];
-    gantt.cellRenderer = undefined;
+    gantt.gridCellRenderer = undefined;
     gantt.headerRenderer = undefined;
   }
 });

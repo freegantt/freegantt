@@ -738,7 +738,7 @@ nav.harness-site-nav a[aria-current='page'] {
 /* ---------------------------------------------------------------- demo renderers */
 
 /* Paint for the custom renderers the S5 demo installs. Harness-owned because the renderers are
-   harness-owned: they exist to prove `barRenderer`/`cellRenderer`/`headerRenderer` reach the DOM. */
+   harness-owned: they exist to prove `barRenderer`/`gridCellRenderer`/`headerRenderer` reach the DOM. */
 .demo-over-budget {
   background: color-mix(in srgb, var(--signal) 13%, transparent);
   color: var(--signal);

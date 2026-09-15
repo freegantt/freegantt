@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RendererRegistry } from './renderer-registry.js';
 import { RendererAlreadyRegisteredError } from '../model/index.js';
 import type { PluginId } from '../model/index.js';
-import type { BarRenderer, CellRenderer } from '../layout/index.js';
+import type { BarRenderer, GridCellRenderer } from '../layout/index.js';
 
 const pluginA = 'plugin-a' as PluginId;
 const pluginB = 'plugin-b' as PluginId;
@@ -52,41 +52,41 @@ describe('RendererRegistry (S5.4, D-S5-11; ADR 0018 retired the per-variant bar 
   it('register: two different points do not collide', () => {
     const registry = new RendererRegistry();
     const bar: BarRenderer = () => undefined;
-    const cell: CellRenderer = () => undefined;
+    const cell: GridCellRenderer = () => undefined;
     expect(() => {
       registry.register('bar', bar, pluginA);
-      registry.register('cell', cell, pluginB);
+      registry.register('gridCell', cell, pluginB);
     }).not.toThrow();
   });
 
   it('register returns a Disposer that frees the point for the next claim (#155)', () => {
     const registry = new RendererRegistry();
-    const first: CellRenderer = () => undefined;
-    const second: CellRenderer = () => undefined;
-    const free = registry.register('cell', first, pluginA);
+    const first: GridCellRenderer = () => undefined;
+    const second: GridCellRenderer = () => undefined;
+    const free = registry.register('gridCell', first, pluginA);
 
     // While it stands, the point is taken — for the same plugin as much as for any other.
-    expect(() => registry.register('cell', second, pluginB)).toThrow(RendererAlreadyRegisteredError);
+    expect(() => registry.register('gridCell', second, pluginB)).toThrow(RendererAlreadyRegisteredError);
 
     free();
-    expect(registry.resolve('cell', undefined)).toBeUndefined();
-    expect(() => registry.register('cell', second, pluginB)).not.toThrow();
-    expect(registry.resolve('cell', undefined)).toEqual({ renderer: second, pluginId: pluginB });
+    expect(registry.resolve('gridCell', undefined)).toBeUndefined();
+    expect(() => registry.register('gridCell', second, pluginB)).not.toThrow();
+    expect(registry.resolve('gridCell', undefined)).toEqual({ renderer: second, pluginId: pluginB });
 
     // Idempotent: a plugin's `DisposableStore` disposes the same Disposer the plugin may have
     // already called, and that must not free the point the next plugin now holds.
     free();
-    expect(registry.resolve('cell', undefined)).toEqual({ renderer: second, pluginId: pluginB });
+    expect(registry.resolve('gridCell', undefined)).toEqual({ renderer: second, pluginId: pluginB });
   });
 
   it('resolve: config over plugin at every point alike, bar included (review P6)', () => {
     const registry = new RendererRegistry();
-    const pluginCell: CellRenderer = () => undefined;
-    const consumerCell: CellRenderer = () => undefined;
-    registry.register('cell', pluginCell, pluginA);
+    const pluginCell: GridCellRenderer = () => undefined;
+    const consumerCell: GridCellRenderer = () => undefined;
+    registry.register('gridCell', pluginCell, pluginA);
 
-    expect(registry.resolve('cell', consumerCell)).toEqual({ renderer: consumerCell });
-    expect(registry.resolve('cell', undefined)).toEqual({ renderer: pluginCell, pluginId: pluginA });
+    expect(registry.resolve('gridCell', consumerCell)).toEqual({ renderer: consumerCell });
+    expect(registry.resolve('gridCell', undefined)).toEqual({ renderer: pluginCell, pluginId: pluginA });
     expect(registry.resolve('header', undefined)).toBeUndefined();
     expect(registry.resolve('tooltip', undefined)).toBeUndefined();
   });

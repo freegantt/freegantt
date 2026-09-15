@@ -86,7 +86,7 @@ export interface ActedOn {
  *  Neither is ever `undefined`, so a `when` counts them with no fallback. */
 export interface CommandTarget extends ActedOn {
   kind: TargetKind;
-  /** Which Grid column this landed on, for a `'header'` or `'cell'` target. `field` names a column
+  /** Which Grid column this landed on, for a `'header'` or `'gridCell'` target. `field` names a column
    *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
    *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
   field?: FieldKey;

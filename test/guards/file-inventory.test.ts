@@ -1,4 +1,4 @@
-// `website/docs/architecture/files.md` claims to list every non-test file in `src/`. That claim
+// `docs/architecture/files.md` claims to list every non-test file in `src/`. That claim
 // was false for 24 files and had been false for long enough that nobody knew which of the 142 rows
 // still described a live file. Nothing checked it, because the page is prose and prose is read by
 // people, not by CI.
@@ -20,7 +20,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const inventoryPage = path.join(root, 'website/docs/architecture/files.md');
+// The source page, not the copy `pnpm docs:publish` writes under `website/`. A guard that reads
+// the copy reports a file nobody edits.
+const inventoryPage = path.join(root, 'docs/architecture/files.md');
 const sourceRoot = path.join(root, 'src');
 
 /** A row in the inventory opens with the file's path in a code span: ``| `view/theme.ts` | …``. */
