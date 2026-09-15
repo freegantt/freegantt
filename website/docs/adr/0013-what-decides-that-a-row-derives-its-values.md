@@ -9,7 +9,6 @@ decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry deri
 open: nothing. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). See `plans/field-redesign/BUILD-LOG.md` J34, J35, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
-
 > **Narrowed on 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed).** Read every *"core does not ship a diamond"* below as the sentence this record produced in 2026-09-10, not as the rule today. Core ships `diamond()` among its shipped variants; no row wears it until a rule claims it; and core still reads no stored word to decide a look. This record's own decision — an Entry carries no stored classification — stands untouched.
 
 **Lands after [0016](0016-the-library-holds-no-save-format.md), [0012](0012-dates-are-optional-on-every-kind.md) and [0011](0011-consumer-values-live-in-props.md).** The working material is [`plans/field-redesign/0013-what-decides-derivation/`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/field-redesign/0013-what-decides-derivation/README.md). **No schema number** — ADR 0016 deleted the Document.
@@ -37,7 +36,7 @@ HEAD writes a parent's `start`, `end` and `cost` as though a person authored the
 
 **[ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document.** The half that remains is the write rule: nothing but the Rollup writes a rolling-up parent's cell. A stale derived value in a file is no longer possible, because there is no file. The refusal at `entries.update()` still is.
 
-**The refusal stands on its own.** Nothing but the Rollup writes a rolling-up parent's cell. A constructor `entries` array of 500 parents over three rolling-up Fields would otherwise raise 1,500 warnings. A consumer fixes the whole ingest at once. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'` (ADR 0009), **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it.
+**The refusal stands on its own.** Nothing but the Rollup writes a rolling-up parent's cell. A constructor `entries` array of 500 parents over three rolling-up Fields would otherwise raise 1,500 warnings. A consumer fixes the whole ingest at once. The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'` (ADR 0009), **always** — `reportCorrectedRollUps` was gated on `isDevMode()`, which resolves when *this repo* builds `dist/`, so no consumer ever saw a line of it (D-S5-41).
 
 **On a rolling-up parent, an Aggregator's `undefined` means _no value_.** It is documented as *no opinion — keep the stored value*. Once nothing but the Rollup can write that cell, "keep" means "keep the previous derived answer", which is stale by construction. Elsewhere the current reading stands.
 
@@ -255,11 +254,11 @@ untouched here: `update()` reads the derived arm only.
 ## Consequences
 
 - **One report per operation, not per value.** The report names the count, the Field keys, and up to three Entry ids. It goes through `raiseError` at `severity: 'warning'`, **always**.
-- **`props` is carried by reference, except on a rolling-up parent.** [ADR 0011](0011-consumer-values-live-in-props.md) states the flat rule; this is the one exception. The `meta` namespace is never walked field by field — say so where that rule is written ([ADR 0005](0005-fields-are-declared-and-grid-columns-reference-them.md)), rather than leaving two rules to disagree in silence.
+- **`props` is carried by reference, except on a rolling-up parent.** [ADR 0011](0011-consumer-values-live-in-props.md) states the flat rule; this is the one exception. D-S2-12 says the namespace is never walked field by field — say so where D-S2-12 is written, rather than leaving two rules to disagree in silence.
 - **There is no Document.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted it. The omission half of this ADR's head decision has nowhere to omit to. The write-refusal half stands.
 - **`plans/01` §2.5's authored-kind rule, the promote-only clause, and the shipped `'milestone'` are overruled.** The prose sweep rewrites those sentences. `kind` leaves `Entry`. Core does not ship a diamond.
 - **`reportCorrectedRollUps` is already gone** — ADR 0016 deleted it with the reader. Decision 5's warning is a different thing, and this ADR still writes it.
-- **Four seams lose `entry.kind` as their join.** They ask structure, or a plugin store. [0015](0015-what-the-write-door-refuses.md) decision 18 loses its `kind` row.
+- **D-S5-22's four seams lose `entry.kind` as their join.** They ask structure, or a plugin store. [0015](0015-what-the-write-door-refuses.md) decision 18 loses its `kind` row.
 - **When every child is dateless, the parent's dates clear.** An Aggregator's `undefined` means no value, not *keep the last envelope*. HEAD keep-stale leaves a parent that lies about dates. Combined spike Improvement D.
 
 ## Ordering constraints

@@ -3,7 +3,6 @@ id: lint-rules
 title: "FreeGantt — Lint Rule Specifications"
 ---
 
-
 Twenty-three rules enforce the spec (S2.7 correction — the original count of nineteen predates §3.3a and drifted as rules landed). **Eleven are configuration of ESLint builtins** (`no-restricted-syntax`, `no-restricted-properties`, `no-restricted-globals`, `no-restricted-imports`) scoped by directory — zero maintenance, no plugin code. **Twelve need real AST logic** and live in a local flat-config plugin. Prefer the builtin vehicle whenever it expresses the rule honestly: every custom rule is code we own, test, and debug.
 
 ---
@@ -48,7 +47,7 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 | B3 | `no-random` | `no-restricted-properties` (`Math.random`, `crypto.randomUUID`) | Nondeterminism in pure layers | tests only — no production id minter uses randomness: `model/ids.ts`'s `changeSetId` takes a per-instance counter (S2.7 correction; the plan's original `src/data/id.ts` allowlist entry named a path that was never written) | I4 |
 | B4 | `no-scroll-outside-scroll-model` (shipped as a custom rule — `scrollLeft`/`scrollTop`/`scrollTo` need AST-level filename exemption, past what `no-restricted-properties` alone expresses) | `eslint/rules/no-scroll-outside-scroll-model.cjs` | Direct scroll manipulation | `src/view/scroll-attachment.ts` | I12 |
 | B5 | `no-inner-html` | `no-restricted-properties` (`innerHTML`, `outerHTML`, `insertAdjacentHTML`) + `no-restricted-syntax` on `document.write` | HTML injection paths | `src/render/dom/raw-html.ts` (the opt-in flag path) | I13 |
-| B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, ADR 0002 |
+| B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, D4 |
 | B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) — S2.7 correction: the plan's original text named only `alien-signals`/`reactivity.ts`; the shipped rule confines both façades | `plans/04` §1 |
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
 | B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Item`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
@@ -57,12 +56,12 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 
 ### dependency-cruiser removable leaves (not ESLint rules)
 
-These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-test.mjs` (S4):
+These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-test.mjs` (D-S2-23, S4):
 
 | Rule | Module | Allowed importers | Invariant |
 |---|---|---|---|
-| `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | Delete the file and parents keep caller-assigned values |
-| ~~`autogroup-is-removable`~~ **RETIRED 2026-09-11** | ~~`src/data/hierarchy.ts`~~ | — | [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values) deleted `data/hierarchy.ts` itself, so the rule's guarded file no longer exists. `autoGroup` is gone, not merely unreachable. |
+| `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-7 — delete the file and parents keep caller-assigned values |
+| ~~`autogroup-is-removable`~~ **RETIRED 2026-09-11** | ~~`src/data/hierarchy.ts`~~ | — | [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `data/hierarchy.ts` itself, so the rule's guarded file no longer exists. `autoGroup` is gone, not merely unreachable. |
 | `layout-boundary` | `src/layout/**` | may import `time/`, `model/` only | I1 — `layout/` never imports `data/` |
 
 *(B11 duplicates dependency-cruiser deliberately: `depcruise` is the authority and understands the whole graph; the ESLint mirror gives the red squiggle in-editor and inside the Claude Code PostToolUse hook, where a full graph crawl would be too slow.)*
@@ -121,13 +120,13 @@ these files were never created):**
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
-**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/items/produce-items.ts` exists at the path this table names: [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](../adr/0018-a-variant-is-a-rule-not-an-id-list), [ADR 0022](../adr/0022-core-ships-variants-and-a-variant-answers-about-itself)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/items/produce-items.ts` exists at the path this table names: [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](../adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](../adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
 
 ---
 
 ### 3.3a `freegantt/no-kind-literal` — syntactic · `01` §2.5 · shipped S2.7
 
-**Narrower cousin of §3.3, landed early.** The span rollup is the first kind-dependent
+**Narrower cousin of §3.3, landed early.** D-S2-22's span rollup is the first kind-dependent
 behaviour in `data/`, before any of §3.3's four seam files exist (S3–S6). Rather than ship §3.3's
 seam-allowlist shape against seams that don't exist yet, S2.7 lands the part that is checkable today:
 no file may compare a kind string literal against `.kind` at all, in `src/data/**` or `src/layout/**`
@@ -143,7 +142,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Message:** `kind is dispatched through a lookup, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
 
-**Resolved, not by folding into §3.3.** [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values) deleted `Entry.kind` itself, so §3.3's seam-allowlist rule was never built — there is no stored `kind` left to compare at any seam. This rule stays registered as a general backstop against inline `.kind` dispatch in `data/` and `layout/`, but its original target (`entry.kind ?? 'span'`) no longer exists in the model.
+**Resolved, not by folding into §3.3.** [ADR 0013](../adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` itself, so §3.3's seam-allowlist rule was never built — there is no stored `kind` left to compare at any seam. This rule stays registered as a general backstop against inline `.kind` dispatch in `data/` and `layout/`, but its original target (`entry.kind ?? 'span'`) no longer exists in the model.
 
 ---
 
@@ -186,7 +185,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
 
-**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem`, plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem` (D-S4-25), plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 
@@ -224,7 +223,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ### 3.10 `freegantt/no-flow-layout-rows` — syntactic · I9 · `AUTO-PARTIAL`
 
-**Flags:** in `src/view/**` and `src/render/dom/**` (S1.8 — the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed) — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
+**Flags:** in `src/view/**` and `src/render/dom/**` (S1.8, D-S1.8-8 — the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed) — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
 
 **Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs.
 
@@ -234,7 +233,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ---
 
-### 3.11 `freegantt/no-inline-style-outside-geometry` — syntactic · S1.10 (`plans/s1.10-theming-and-a11y/README.md`)
+### 3.11 `freegantt/no-inline-style-outside-geometry` — syntactic · S1.10 (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-6)
 
 **Flags:** in `src/render/**` and `src/view/**` — any `node.style.<prop> = …` assignment where `<prop>` is not `transform`, `width`, or `height`.
 

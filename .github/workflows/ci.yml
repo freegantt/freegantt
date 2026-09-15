@@ -106,7 +106,18 @@ jobs:
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
+      # `website/` is its own pnpm project with its own lockfile, and `pnpm docs:site-builds` inside
+      # the gate installs it. Cached here so a run that changes no website dependency installs
+      # nothing. The cache is all this file may contribute: the gate is one command, and a `run:`
+      # step beside it is the subset this workflow must never run (`gate-is-one-command`).
+      - uses: actions/cache@v6
+        with:
+          path: website/node_modules
+          key: website-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'website/pnpm-lock.yaml') }}
+
       # The gate itself. Every check the local gate runs, in the same order, from one script that
       # reads its check list out of `package.json` at run time. A check cannot join `verify` and
       # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
+      - run: pnpm verify:full
+
       - run: pnpm verify:full

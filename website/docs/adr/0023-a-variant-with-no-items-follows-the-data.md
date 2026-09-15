@@ -16,7 +16,6 @@ keeps*.
 open: nothing this record answers.
 ---
 
-
 [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) shipped
 `EntryVariant.items` and its default. #292 found that default wrong.
 

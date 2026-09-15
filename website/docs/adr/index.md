@@ -3,7 +3,6 @@ id: index
 title: "The decision records"
 ---
 
-
 One file per decision, numbered in the order the decision was taken. A record says **why**, and it names the evidence. A spec (`plans/00`–`04`) says **what is true now**. When the two disagree, `src/` is the answer.
 
 An accepted record is superseded, never rewritten. A later record states the change, and the earlier body stays as it was written.

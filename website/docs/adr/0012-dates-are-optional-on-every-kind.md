@@ -9,7 +9,6 @@ decided (*"core does not paint a diamond"* narrowed 2026-09-12 by [ADR 0022](002
 open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The working material is in `plans/field-redesign/0012-optional-dates/`.
 ---
 
-
 > **One sentence here is retired.** The paragraph on the duration Field cites ADR 0014 *decision 13* for deleting `FieldContext.durationOf`. The author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](index.md#the-gap-at-0014)), so `durationOf` still ships and [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) is still open. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) closes both. **The guard this ADR asked for landed, and the decision stands.**
 
 **This ADR carries no open decision, and it lands second**, after [ADR 0016](0016-the-library-holds-no-save-format.md). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands. **There is no Document**, so this ADR writes no schema number.
@@ -52,11 +51,11 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 
 The duration **compute Field** returns `Duration | undefined` until both dates exist, and the cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard the calculation first. [ADR 0014](index.md#the-gap-at-0014) decision 13 deletes `FieldContext.durationOf` — duration is that compute Field, not a fourth door. The full call-site list is in [ADR 0012's work](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
 
-**A zero-length span stays legal, and needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. `start === end` is an authored shape. **Core does not paint a diamond.** The bar has no width.
+**A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. `start === end` is an authored shape. **Core does not paint a diamond.** The bar has no width.
 
 End with no start is allowed. Inclusive-end formatting has no start: show the stored end as a plain instant. Do not guess a day.
 
-`entry-reader.ts:170` gives a childless parent a zero-length span at `referenceDate` today — a clock reading taken when the Dataset was built, never saved, so an empty parent reloads somewhere else. **The fill is deleted.** This is written down in two source places that must be updated together.
+`entry-reader.ts:170` gives a childless parent a zero-length span at `referenceDate` today — a clock reading taken when the Dataset was built, never saved, so an empty parent reloads somewhere else. **The fill is deleted.** It is written down under D-S2-10 **and** D-S2-22.
 
 
 ## Consequences
@@ -64,8 +63,8 @@ End with no start is allowed. Inclusive-end formatting has no start: show the st
 - **`Entry.segments` stops being *never empty*.** The biconditional replaces it: an Entry holds at least one Segment iff it spans. A one-date row holds no Segments. `update(id, { segments: [] })` still throws `EmptySegmentsError` ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212)).
 - **Last-segment-remove un-dates both dates.** ADR 0010's *"An Entry never survives as an empty record"* is revised here, not in that file. `removeSegments` of the last Segment keeps the Entry and clears start and end. `entries.remove(id)` deletes it. Clearing one **cell** leaves the other date and drops the Segment. Two intents.
 - **Default `gridColumns` is `['name', 'start', 'end']`.** Hide is live if a product wants fewer columns. The date editor must open on a blank cell (today it refuses with `no-date-value`). It still writes one Field.
-- **The `referenceDate` fill is deleted.** It is written down in two source places. Name both halves separately or a reader retires the wrong sentence.
-- **A zero-length span stays legal, and needs no rewrite.** Core does not paint a diamond.
+- **The `referenceDate` fill is deleted.** It is written down under D-S2-10 **and** D-S2-22. Name both halves separately or a reader retires the wrong sentence.
+- **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Core does not paint a diamond.
 - **No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. Optional dates live on `Entry` and on constructor ingest only.
 - **A parent whose every child does not span has no bar.** The Rollup skips holes: all children start-only → parent has a start, no end, no bar. [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) owns the Rollup pass; this biconditional is what that pass must restore. Combined spike Improvement D.
 
