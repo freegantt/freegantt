@@ -29,7 +29,7 @@
   <body class="bg-stone-50 text-slate-900 font-sans">
     <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
       <header class="space-y-4">
-        <h1 class="font-serif text-4xl">FreeGantt — branch review (pass 1)</h1>
+        <h1 class="font-serif text-4xl">FreeGantt — branch review (pass 1 + pass 2 verified)</h1>
         <p class="text-sm text-slate-600 font-mono">
           Working-tree diff vs <span class="bg-stone-200 px-1">origin/main (d07b628)</span> · Branch
           <span class="bg-stone-200 px-1">Pawel-IT/264_265</span> · 2026-09-15 · no commits yet, 23
@@ -44,9 +44,16 @@
           <a class="underline" href="https://github.com/Pawel-IT/FreeGantt/issues/265">#265</a>
           (shipped <code>meterCell()</code> / <code>imageCell({ alt })</code>)
         </p>
-        <p class="text-sm font-mono bg-amber-50 border border-amber-200 px-3 py-2 inline-block">
-          Pass 1 reports. It does not run <code>verify:full</code>. Pass 2 verifies each finding id
-          against the files it cites.
+        <p class="text-sm font-mono bg-emerald-50 border border-emerald-200 px-3 py-2 inline-block">
+          verify:full PASS — all 17 checks green, test:e2e included (66s), on the pre-push of the
+          pass-1 report commit. Feature work is still uncommitted in the working tree and was in
+          that run.
+        </p>
+        <p class="text-sm text-slate-700 max-w-3xl">
+          Pass 2 (cold <code>reviewer-planner</code>) opened every cited file. F1 and F3–F7
+          Confirmed. F2 is Mis-described: the back door is real, but <code>end</code> keeps its own
+          inclusive <code>formatValue</code> and loses only <code>compare</code>. Account below
+          replaced.
         </p>
         <div class="flex flex-wrap gap-3 text-xs uppercase tracking-wider text-slate-500 pt-2">
           <span class="border border-slate-400 px-2 py-1">solid box = module</span>
@@ -263,7 +270,8 @@ flowchart TB
         <h2 class="font-serif text-2xl">Findings</h2>
         <p class="text-sm text-slate-600">
           7 findings. None of them undoes the type table or the meter. F1 is the one that disagrees
-          with the originating issue's a11y rule. Pass 2 answers by id.
+          with the originating issue's a11y rule. Pass 2: F1, F3–F7 Confirmed; F2 Mis-described
+          (account replaced). No finding struck.
         </p>
 
         <article id="F1" class="rounded-lg border-2 border-red-300 bg-white p-6 space-y-4">
@@ -277,7 +285,7 @@ flowchart TB
             >
           </div>
           <p class="font-mono text-sm text-slate-600">
-            src/layout/cells.ts:79–94 · src/model/field.ts:36–42 · issue #265 a11y section
+            src/layout/cells.ts:79–95 · src/model/field.ts:36–43 · issue #265 a11y section
           </p>
           <p>
             <span class="font-semibold">Call site.</span>
@@ -314,6 +322,14 @@ flowchart TB
             <code>cellRenderer: imageCell()</code> — "the photo column's cell renderer is an image
             cell" — and the formatted caption is the alt.
           </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Function body matches the quoted code. Context carries <code>value: string</code>
+              unused. #265 states both the factory signature and the formatted-value alt rule; the
+              implementation kept the signature. Cited range corrected to 79–95.
+            </p>
+          </div>
         </article>
 
         <article id="F2" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
@@ -341,10 +357,13 @@ flowchart TB
             <code>new FieldRegistry({ fieldTypes: { date: myBundle } })</code>
             and the constructor spread
             <code>{ ...SHIPPED_FIELD_TYPES, ...options.fieldTypes }</code>
-            silently replaces the bundle those core Fields merge. Format and compare of
-            <code>start</code>/<code>end</code> change. The date editor still routes, because
-            <code>isDateField</code> reads the string <code>'date'</code> on the Field, not the
-            bundle body.
+            silently replaces the bundle those core Fields merge.
+            <code>start</code>'s format and compare both change.
+            <code>end</code> keeps its own inclusive <code>formatValue</code> (<code>formatEnd</code>
+            at core-fields.ts:69; <code>mergeField</code>'s <code>{ ...bundle, ...declared }</code>
+            keeps the Field's own key) and loses only its <code>compare</code>. The date editor
+            still routes, because <code>isDateField</code> reads the string <code>'date'</code> on
+            the Field, not the bundle body.
           </p>
           <p>
             <span class="font-semibold">Why it is new.</span> The silent option-vs-
@@ -358,9 +377,21 @@ flowchart TB
           <p>
             <span class="font-semibold">Deletion test.</span> Deleting the silent override would
             concentrate the rule in one place: a shipped name is not replaceable at construction,
-            same as <code>registerType</code>. Keeping it means core's "cannot redeclare" rule is
+            same as             <code>registerType</code>. Keeping it means core's "cannot redeclare" rule is
             a Field-key check only.
           </p>
+          <div class="rounded border border-amber-300 bg-amber-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-amber-800">Pass 2 — Mis-described (account replaced).</p>
+            <p>
+              Mechanics confirmed: overridable keys, constructor spread, illegal-override throw,
+              core <code>type: 'date'</code>, pinning test, <code>isDateField</code>. A throwaway
+              registry probe with
+              <code>fieldTypes: { date: { formatValue: () =&gt; 'OVERRIDE', compare: () =&gt; 42 } }</code>
+              showed <code>start</code> taking both overrides and <code>end</code> taking only
+              <code>compare</code>. Probe deleted. The finding stands with the corrected sentence
+              above.
+            </p>
+          </div>
         </article>
 
         <article id="F3" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
@@ -394,6 +425,15 @@ flowchart TB
               seeded types plus <code>currency()</code>.
             </li>
           </ul>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Line 75 names <code>kind</code> and <code>meta</code>; <code>CORE_FIELDS</code> holds
+              seven keys and neither of those. Line 82 still describes percent alone.
+              <code>git diff</code> shows exactly one added line in this file, the
+              <code>layout/cells.ts</code> row.
+            </p>
+          </div>
         </article>
 
         <article id="F4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
@@ -420,6 +460,13 @@ flowchart TB
             re-export. <code>view/</code> already imports <code>data/fields/</code>
             (<code>column-sizing.ts</code> on the next line).
           </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Four hits outside <code>plans/</code>: definition, use inside <code>text</code>, the
+              re-export, and the one importer. <code>core-fields.ts</code> never calls the symbol.
+            </p>
+          </div>
         </article>
 
         <article id="F5" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
@@ -457,6 +504,13 @@ flowchart TB
             This is not a new workaround in <code>harness/main.ts</code>. It is the library's first
             consumer not eating the new factory. Same shape the stop rule exists to catch.
           </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Both fixtures match the quoted bundle. The factory takes only <code>{ code }</code>,
+              ships bare <code>Number(text.trim())</code>, and has no fraction-digits parameter.
+            </p>
+          </div>
         </article>
 
         <article id="F6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
@@ -500,6 +554,14 @@ flowchart TB
             fighting core class names (planner.html:197–213) instead of passing a fragment the way
             a variant does.
           </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              Header comment, hard-coded class names, always-on sheet, variant <code>css</code>
+              key, and planner overrides all sit where cited.
+              <code>ColumnCellRenderer</code> is a bare function type with no <code>css</code> seam.
+            </p>
+          </div>
         </article>
 
         <article id="F7" class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
@@ -527,6 +589,14 @@ flowchart TB
             <code>{ key: 'due', type: 'date' }</code> call site. #264 is the larger half of the
             branch; its call sites live only in CONTEXT.md, the API Extractor dump, and tests.
           </p>
+          <div class="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm space-y-1">
+            <p class="font-semibold text-emerald-800">Pass 2 — Confirmed.</p>
+            <p>
+              <code>docs/05</code> grep for type names returns only the existing
+              <code>fieldTypes</code> bullet and the meter-fill Parts row. Website guide carries
+              the same text. CONTEXT.md lists all five types plus the factory.
+            </p>
+          </div>
         </article>
       </section>
 
