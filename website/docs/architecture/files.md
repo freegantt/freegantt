@@ -1,12 +1,10 @@
 ---
 id: files
 title: "File inventory"
-last_update:
-  date: 2026-09-14
 ---
 
-An index of the tree: find the file here, then follow it into [Class map](./classes.md) for what
-the class does, and into [Lifecycle](./lifecycle.md) for when it runs.
+An index of the tree: find the file here, then follow it into [Class map](classes.md) for what
+the class does, and into [Lifecycle](lifecycle.md) for when it runs.
 
 Every non-test file in `src/`, with the one thing it is for. Barrels (`index.ts`) are listed only
 where they do something beyond re-export.

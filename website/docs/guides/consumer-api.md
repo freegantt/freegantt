@@ -341,6 +341,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-Architecture and API documentation live on the Docusaurus site under `website/` — run `pnpm docs` to
-view it locally. The site's API reference is generated from TSDoc comments via TypeDoc, so it never
-drifts from the source.
+The [Architecture pages](../architecture/index.md) map what the code does now — the files, the classes,
+the call order. Run `pnpm docs` to read them, and everything else, as the site. The API reference is
+generated from TSDoc comments via TypeDoc, so it never drifts from the source.
