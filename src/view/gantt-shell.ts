@@ -546,9 +546,15 @@ export class GanttShell {
   #reportedTheme!: ResolvedTheme;
   /** #330. `window.matchMedia('(prefers-color-scheme: dark)')`, held so its `'change'` listener can
    *  detach in `destroy()`. Queried once, at construction. A `MediaQueryList` stays live and keeps
-   *  firing `'change'` for its own query, so nothing here ever re-queries it. */
+   *  firing `'change'` for its own query, so nothing here ever re-queries it. Every `resolveTheme`
+   *  call below reuses this same instance instead of calling `matchMedia` again. `resolvedTheme` is
+   *  read often, and a fresh `MediaQueryList` per read is pure waste. */
   #darkSchemeQuery!: MediaQueryList;
   #darkSchemeQueryListener!: () => void;
+  /** Bound once, passed to every `resolveTheme` call. `resolveTheme` always passes the same query,
+   *  `'(prefers-color-scheme: dark)'` — the one `#darkSchemeQuery` was built for. So this answers
+   *  that live `MediaQueryList` instead of building a fresh one. */
+  #matchMedia = (): Pick<MediaQueryList, 'matches'> => this.#darkSchemeQuery;
   /** #375. An ancestor's own `data-fg-theme` pin is a supported way to resolve this Gantt's theme
    *  (#271). A wrapping app can change that pin with no write of this Gantt's own — a whole-chrome
    *  dark-mode switch, say. `attributeFilter` keeps this cheap: it wakes only on a `data-fg-theme`
@@ -991,18 +997,27 @@ export class GanttShell {
 
     if (options.theme !== undefined) this.theme = options.theme;
     else this.#applyTheme();
+    this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     // #330: a plain read, not #syncResolvedTheme(). Nothing has subscribed to `themeChange` yet.
     // Firing one here would tell a handler the theme "changed" from nothing, which never happened.
-    this.#reportedTheme = resolveTheme(this.#container, (query) => window.matchMedia(query));
-    this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
     this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
     // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
-    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the root
-    // node. That includes the library's own write in `#applyTheme`, which re-enters here and emits
+    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the watched
+    // root. That includes the library's own write in `#applyTheme`, which re-enters here and emits
     // nothing, because the computed answer didn't move.
+    // The root to watch: `getRootNode()` answers whatever root `#container` has right now. A
+    // container built inside a detached tree keeps an `Element`/`Document` root today, before the
+    // app ever mounts it. Any ancestor it gains on mount is still an ancestor of that same root.
+    // Watching `ownerDocument` covers both the mounted and the not-yet-mounted case. A `ShadowRoot`
+    // is the one exception: it stays its own boundary (a `DOCUMENT_FRAGMENT_NODE`), matching
+    // `resolveTheme`'s own `closest()` walk, which never crosses it either.
+    const themePinRoot = this.#container.getRootNode();
+    const themePinTarget =
+      themePinRoot.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? themePinRoot : this.#container.ownerDocument;
     this.#themePinObserver = new MutationObserver(() => this.#syncResolvedTheme());
-    this.#themePinObserver.observe(this.#container.getRootNode(), {
+    this.#themePinObserver.observe(themePinTarget, {
       attributes: true,
       subtree: true,
       attributeFilter: ['data-fg-theme'],
@@ -1825,7 +1840,7 @@ export class GanttShell {
    *  itself is always synchronously correct. Only `themeChange`'s timing differs by cause — see
    *  `#syncResolvedTheme`. */
   get resolvedTheme(): ResolvedTheme {
-    return resolveTheme(this.#container, (query) => window.matchMedia(query));
+    return resolveTheme(this.#container, this.#matchMedia);
   }
 
   /** #330/#375. Re-resolves and fires `themeChange` exactly when the answer actually moved, against
@@ -1837,7 +1852,7 @@ export class GanttShell {
    *  `MutationObserver`'s own later task, so that cause's event lands one task after the DOM write
    *  that caused it. `resolvedTheme` itself has already answered correctly by then, either way. */
   #syncResolvedTheme(): void {
-    const next = resolveTheme(this.#container, (query) => window.matchMedia(query));
+    const next = resolveTheme(this.#container, this.#matchMedia);
     if (next === this.#reportedTheme) return;
     const from = this.#reportedTheme;
     this.#reportedTheme = next;
