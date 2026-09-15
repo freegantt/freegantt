@@ -119,10 +119,10 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
   dateLines?: readonly DateLineInput[];
   /** Live (#318 follow-up to #225). Where a Date line's own label paints, relative to the sticky
-   *  header. `'overlayOnGanttBody'` (the default) anchors below the header, clear of its ticks — the
+   *  header. `'belowHeader'` (the default) anchors below the header, clear of its ticks — the
    *  shape #225 shipped. It can still meet a bar: the header stays put while the timeline pane
    *  scrolls, so whichever row's bar is scrolled to the top sits right under it.
-   *  `'overlayOnTimeLine'` anchors inside the header instead, where no row can ever scroll under it,
+   *  `'inHeader'` anchors inside the header instead, where no row can ever scroll under it,
    *  at the cost of #225's own ticks collision when the label's x lands on one. A `number` is a px
    *  offset from the header's own top edge, for a caller who wants neither shorthand. */
   dateLineLabelPlacement?: DateLineLabelPlacement;

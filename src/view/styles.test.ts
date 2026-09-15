@@ -162,11 +162,11 @@ describe('ensureBaseStyles', () => {
     expect(css).toMatch(/\.fg-cursor-line-label\s*\{[^}]*top:\s*100%/);
   });
 
-  it("[#318] the Date line label's default anchor is scoped to data-placement='overlayOnGanttBody', not every label", () => {
+  it("[#318] the Date line label's default anchor is scoped to data-placement='belowHeader', not every label", () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
-    expect(css).toMatch(/\.fg-date-line-label\[data-placement='overlayOnGanttBody'\]\s*\{[^}]*top:\s*100%/);
+    expect(css).toMatch(/\.fg-date-line-label\[data-placement='belowHeader'\]\s*\{[^}]*top:\s*100%/);
   });
 
   it('setting --fg-bar-fill on the container before construction overrides the shipped default', () => {

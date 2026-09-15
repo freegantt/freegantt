@@ -81,7 +81,7 @@ describe('FrameSettings — the invalidation table', () => {
     { setting: 'dateLines', patch: { dateLines: [] }, expected: ['requestFrame'] },
     {
       setting: 'dateLineLabelPlacement',
-      patch: { dateLineLabelPlacement: 'overlayOnTimeLine' },
+      patch: { dateLineLabelPlacement: 'inHeader' },
       expected: ['requestFrame'],
     },
     { setting: 'barLabels', patch: { barLabels: 'outside' }, expected: ['requestFrame'] },
@@ -187,7 +187,7 @@ describe('FrameSettings — the pixel properties', () => {
     expect(settings.rowHeight).toBe(DEFAULT_ROW_HEIGHT);
     expect(settings.minBarWidthPx).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(settings.todayLineMarginTicks).toBe(DEFAULT_TODAY_LINE_MARGIN_TICKS);
-    expect(settings.dateLineLabelPlacement).toBe('overlayOnGanttBody');
+    expect(settings.dateLineLabelPlacement).toBe('belowHeader');
   });
 
   it('each property keeps its own policy — the fallback answers an unusable value', () => {

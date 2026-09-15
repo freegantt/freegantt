@@ -80,11 +80,11 @@ const gantt = new Gantt({
   gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true },
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
-  // #318: the default (`'overlayOnGanttBody'`) anchors below the header, which a scrolled-up row's
+  // #318: the default (`'belowHeader'`) anchors below the header, which a scrolled-up row's
   // own bar can still reach — this page's own "Program" summary bar does, right where it lands.
   // The header itself never scrolls, so anchoring the label there instead is the one placement no
   // row can ever paint under.
-  dateLineLabelPlacement: 'overlayOnTimeLine',
+  dateLineLabelPlacement: 'inHeader',
 });
 gantt.panToToday();
 

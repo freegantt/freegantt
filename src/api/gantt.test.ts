@@ -874,7 +874,7 @@ describe('Gantt dateLines (S1.13)', () => {
       // placement would carry travels the same property).
       const x = /^translateX\((.+)\)$/.exec(lines[0]!.style.transform)?.[1];
       expect(labels[0]!.style.transform).toBe(`translate(${x}, 0px)`);
-      expect(labels[0]!.dataset['placement']).toBe('overlayOnGanttBody');
+      expect(labels[0]!.dataset['placement']).toBe('belowHeader');
 
       gantt.destroy();
     } finally {
@@ -1019,9 +1019,9 @@ describe('Gantt dateLines (S1.13)', () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const label = container.querySelector<HTMLElement>('.fg-date-line-label')!;
-      expect(label.dataset['placement']).toBe('overlayOnGanttBody');
+      expect(label.dataset['placement']).toBe('belowHeader');
 
-      gantt.dateLineLabelPlacement = 'overlayOnTimeLine';
+      gantt.dateLineLabelPlacement = 'inHeader';
       await new Promise((resolve) => requestAnimationFrame(resolve));
       expect(label.dataset['placement']).toBeUndefined();
 
@@ -6042,7 +6042,7 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(reads['fit']).toBe('pane');
     expect(reads['todayLine']).toBe(true);
     expect(reads['dateLines']).toEqual([]);
-    expect(reads['dateLineLabelPlacement']).toBe('overlayOnGanttBody');
+    expect(reads['dateLineLabelPlacement']).toBe('belowHeader');
     expect(reads['resolvedTheme']).toBe('light');
     expect(Array.isArray(reads['zoomPresets'])).toBe(true);
     expect((reads['zoomPresets'] as unknown[]).length).toBeGreaterThan(0);
@@ -6069,8 +6069,8 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     const container = document.createElement('div');
     const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
 
-    gantt.dateLineLabelPlacement = 'overlayOnTimeLine';
-    expect(gantt.dateLineLabelPlacement).toBe('overlayOnTimeLine');
+    gantt.dateLineLabelPlacement = 'inHeader';
+    expect(gantt.dateLineLabelPlacement).toBe('inHeader');
     gantt.dateLineLabelPlacement = 24;
     expect(gantt.dateLineLabelPlacement).toBe(24);
 
