@@ -8,7 +8,7 @@ type DateLineGeom = { x: number; height: number; className: string; today: boole
 type DateLineLabelGeom = {
   x: number;
   yOffset: number;
-  overlayOnGanttBody: boolean;
+  belowHeader: boolean;
   label: string;
   className: string;
   today: boolean;
@@ -79,7 +79,7 @@ export function attachDateLines(
 
   return {
     sync(decorations, contentHeight, paneHeight, labelPlacement = DEFAULT_DATE_LINE_LABEL_PLACEMENT) {
-      const overlayOnGanttBody = labelPlacement === 'overlayOnGanttBody';
+      const belowHeader = labelPlacement === 'belowHeader';
       const yOffset = typeof labelPlacement === 'number' ? labelPlacement : 0;
       // `.fg-date-line` CSS gives `top: 0` but not a height. This node is a child of
       // `.fg-timeline-pane`, which is both the positioned ancestor and the `overflow: auto`
@@ -111,18 +111,18 @@ export function attachDateLines(
         toGeom: ({ line }) => ({
           x: line.x,
           yOffset,
-          overlayOnGanttBody,
+          belowHeader,
           label: line.label ?? '',
           className: line.className ?? '',
           today: line.today === true,
         }),
         patch: (node, geom) => {
           node.className = classListFor(geom.className, 'fg-date-line-label');
-          // `overlayOnGanttBody` (default) anchors at `top: 100%` (CSS, #225); every other placement
-          // anchors at `top: 0` and nudges down by `yOffset` px instead — 0 for `'overlayOnTimeLine'`,
+          // `belowHeader` (default) anchors at `top: 100%` (CSS, #225); every other placement
+          // anchors at `top: 0` and nudges down by `yOffset` px instead — 0 for `'inHeader'`,
           // a caller's own number otherwise. transform stays the one inline geometry write (D-S1.10-6).
           node.style.transform = `translate(${geom.x}px, ${geom.yOffset}px)`;
-          if (geom.overlayOnGanttBody) node.dataset['placement'] = 'overlayOnGanttBody';
+          if (geom.belowHeader) node.dataset['placement'] = 'belowHeader';
           else delete node.dataset['placement'];
           node.textContent = geom.label;
           // The label carries the flag its own stroke carries, so the chip can take the Today colour.
