@@ -191,6 +191,13 @@ that just made that move calls `checkResolvedTheme()` to say so — it re-resolv
 `themeChange` if the answer moved, and returns that answer either way, so a caller needs no separate
 `resolvedTheme` read after.
 
+**No event fires before `new Gantt()` returns** (#376) — `themeChange` included, and this is the
+whole reason it never used to. A constructor-supplied plugin has already subscribed by the time the
+constructor keeps wiring, but the `theme` write that constructor applies, an initial `selection`,
+and the first frame's own preset settling are construction finishing, not a reported change. A
+plugin that wants the starting state reads it straight off `ctx.gantt` in `setup()` instead —
+`resolvedTheme`, `selection`, and `preset` are all gettable there already.
+
 **`--fg-bar-opacity` fades a bar's fill without fading its label or its border.** `.fg-bar` reads
 `--fg-bar-fill` and `--fg-bar-opacity` together and writes the mix to `--fg-bar-fill-painted`:
 `color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent)`. A

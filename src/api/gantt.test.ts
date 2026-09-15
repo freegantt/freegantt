@@ -1202,6 +1202,39 @@ describe('Gantt theme and a11yLabel (S1.10)', () => {
     gantt.destroy();
   });
 
+  it('[#376] fires no event before the constructor returns, and themeChange never carries from: undefined', () => {
+    const container = document.createElement('div');
+    const events: Array<{ event: string; payload: unknown }> = [];
+    const spy: ChromePlugin = {
+      id: 'test.themeSpy',
+      view: (ctx) => {
+        ctx.events.on('themeChange', (payload) => {
+          events.push({ event: 'themeChange', payload });
+        });
+        ctx.events.on('navigationChange', (payload) => {
+          events.push({ event: 'navigationChange', payload });
+        });
+      },
+    };
+
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      theme: 'dark',
+      plugins: [spy],
+    });
+
+    // Construction reported nothing — not the initial preset settling, not the theme this Gantt
+    // just wrote for the first time. A plugin reads starting state off `ctx.gantt` instead.
+    expect(events).toEqual([]);
+    expect(gantt.resolvedTheme).toBe('dark');
+
+    gantt.theme = 'light';
+    expect(events).toEqual([{ event: 'themeChange', payload: { from: 'dark', to: 'light' } }]);
+
+    gantt.destroy();
+  });
+
   it('a11yLabel setter updates aria-label on the container live', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
