@@ -43,6 +43,7 @@ export type {
   ReportCode,
   ErrorSeverity,
   ErrorReporter,
+  GestureDroppedReason,
   Refusable,
   PluginErrorReport,
 } from '../model/index.js';

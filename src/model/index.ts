@@ -135,6 +135,7 @@ export type {
   ReportCode,
   ErrorSeverity,
   ErrorReporter,
+  GestureDroppedReason,
   Refusable,
   RaiseError,
   PluginErrorReport,

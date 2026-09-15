@@ -38,10 +38,16 @@ export type ErrorSeverity = 'error' | 'warning' | 'info';
  *  literal too, so the two tables cannot drift apart in either direction (I11). A `type`, not a
  *  runtime tuple: `model/` carries zero runtime beyond its id/brand helpers (`plans/01` §1). */
 export type BuiltInReportCode =
-  // A refusal core observed.
+  // A refusal core observed: a `before*` handler said no.
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
   | 'entry-resize-cancelled'
+  // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides
+  // on `ErrorReport.because` (`GestureDroppedReason`). Its own group, not the refusal group above:
+  // `by: 'core'` here, always `by: 'consumer'` above, and conflating the two misreports which one
+  // happened (branch review F2).
+  | 'entry-move-dropped'
+  | 'entry-resize-dropped'
   // A fault core recovered from.
   | 'renderer-failed'
   | 'disposer-failed'
@@ -134,6 +140,22 @@ export interface Refusable {
  *  literals in a reader's autocomplete — the same trick `ReportCode` uses. */
 export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
 
+/** Why core dropped a held gesture itself, instead of a `before*` handler saying no (#272, #273,
+ *  #377). Never a consumer's own veto, so a dropped report carries no `reason` — there are no words
+ *  to quote, only one of these.
+ *
+ *  `'data-changed'` — the rows the draft was measured from were replaced while a handler was still
+ *  deciding. `'entry-gone'` — the entry the settle would write was removed. `'write-refused'` — the
+ *  commit reached the store and the store said no. `'superseded'` — a new gesture armed before the
+ *  handler decided. `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the
+ *  handler decided.
+ *
+ *  A consumer reads this to tell "the user did this on purpose" (`'superseded'`, `'discarded'`) from
+ *  "real work was lost" (the other three) without matching on `message`'s English sentence
+ *  (`ErrorReport.because`, branch review F2). */
+export type GestureDroppedReason =
+  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
+
 /** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
  *
  *  Flat fields plus `cause`, not a wrapped error: every report renders and serializes with no type
@@ -154,6 +176,10 @@ export interface ErrorReport {
    *  `undefined`. `message` quotes it too, so a console fallback prints it; this member is here so a
    *  consumer can show their own words without core's framing around them. */
   readonly reason?: string;
+  /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and
+   *  `'entry-resize-dropped'` (#377). One of five closed reasons, never prose: a consumer reads this
+   *  instead of matching `message`'s English sentence. */
+  readonly because?: GestureDroppedReason;
   /** The entry the report is about, when it is about one. */
   readonly entryId?: EntryId;
   /** The Field key the report is about, when it is about one. */

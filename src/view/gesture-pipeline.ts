@@ -12,6 +12,7 @@ import type {
   StoredEntry,
   EntryId,
   ReportCode,
+  GestureDroppedReason,
   Instant,
   ItemId,
   ProposedEdit,
@@ -23,7 +24,6 @@ import type {
 import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.js';
 import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
-import type { GestureDroppedReason } from '../data/error-reporting.js';
 import {
   buildCommitFaultReport,
   buildGestureDroppedReport,
@@ -464,7 +464,7 @@ export class GesturePipeline {
           // Part 3 (#273): the settle is honest, but the rows the draft was measured from are not the
           // rows in the store any more. Writing now would silently overwrite whatever changed them —
           // last writer wins, with no conflict and no report. Refuse instead.
-          this.#reportGestureDropped(refusal, 'data-changed');
+          this.#reportGestureDropped(refusal.entryId, refusal.event, 'data-changed');
           this.#releaseHold();
           return false;
         }
@@ -498,11 +498,11 @@ export class GesturePipeline {
       return finish();
     } catch (error) {
       if (error instanceof EntryNotFoundError) {
-        this.#reportGestureDropped(refusal, 'entry-gone');
+        this.#reportGestureDropped(refusal.entryId, refusal.event, 'entry-gone');
         return false;
       }
       if (isEnvelopeRefusal(error)) {
-        this.#reportGestureDropped(refusal, 'write-refused');
+        this.#reportGestureDropped(refusal.entryId, refusal.event, 'write-refused');
         return false;
       }
       this.#reportCommitFault(refusal, error);
@@ -527,17 +527,17 @@ export class GesturePipeline {
   }
 
   /** One report per gesture *core* dropped on its own — never a `before*` handler's `false`, so this
-   *  never reads `refusal.note` (#272, #273). `buildGestureDroppedReport`'s `by: 'core'` is what
-   *  tells a consumer this was not their handler's veto. */
-  #reportGestureDropped(refusal: GestureRefusal, because: GestureDroppedReason): void {
-    this.#deps.raiseError(
-      buildGestureDroppedReport({
-        code: refusal.code,
-        event: refusal.event,
-        entryId: refusal.entryId,
-        because,
-      }),
-    );
+   *  takes no `GestureRefusal`: that shape's `code`/`note` say a handler refused, and none did here
+   *  (#272, #273, #377 branch review F2). `event` still says which gesture, the same way
+   *  `buildRefusalReport` reads it for a noun — `buildGestureDroppedReport` mints its own code from
+   *  it instead of reusing a refusal's. `by: 'core'` is what tells a consumer this was not their
+   *  handler's veto. */
+  #reportGestureDropped(
+    entryId: EntryId,
+    event: 'beforeEntryMove' | 'beforeEntryResize',
+    because: GestureDroppedReason,
+  ): void {
+    this.#deps.raiseError(buildGestureDroppedReport({ event, entryId, because }));
   }
 
   /** #341: the commit half of the fault `#reportExtenderFault` reports for the preview. The shape
@@ -614,7 +614,7 @@ export class GesturePipeline {
   #dropHeldGesture(because: GestureDroppedReason): boolean {
     const held = this.#held;
     if (held === undefined) return false;
-    this.#reportGestureDropped(held.refusal, because);
+    this.#reportGestureDropped(held.refusal.entryId, held.refusal.event, because);
     this.#releaseHold();
     return true;
   }
