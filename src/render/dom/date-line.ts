@@ -7,21 +7,22 @@ import { KeyedLayer } from './sync-keyed.js';
 type DateLineGeom = { x: number; height: number; className: string; today: boolean };
 type DateLineLabelGeom = {
   x: number;
-  yOffset: number;
-  belowHeader: boolean;
+  placement: DateLineLabelPlacement;
   label: string;
   className: string;
   today: boolean;
 };
 type LabelledDateLine = { line: DateLineDecoration; index: number };
 
+export interface DateLineSyncInput {
+  decorations: readonly FrameDecoration[];
+  contentHeight: number;
+  paneHeight: number;
+  labelPlacement?: DateLineLabelPlacement;
+}
+
 export interface DateLineAttachment {
-  sync(
-    decorations: readonly FrameDecoration[],
-    contentHeight: number,
-    paneHeight: number,
-    labelPlacement?: DateLineLabelPlacement,
-  ): void;
+  sync(input: DateLineSyncInput): void;
   destroy(): void;
 }
 
@@ -78,9 +79,7 @@ export function attachDateLines(
   const labels = new KeyedLayer<LabelledDateLine, number, DateLineLabelGeom>();
 
   return {
-    sync(decorations, contentHeight, paneHeight, labelPlacement = DEFAULT_DATE_LINE_LABEL_PLACEMENT) {
-      const belowHeader = labelPlacement === 'belowHeader';
-      const yOffset = typeof labelPlacement === 'number' ? labelPlacement : 0;
+    sync({ decorations, contentHeight, paneHeight, labelPlacement = DEFAULT_DATE_LINE_LABEL_PLACEMENT }) {
       // `.fg-date-line` CSS gives `top: 0` but not a height. This node is a child of
       // `.fg-timeline-pane`, which is both the positioned ancestor and the `overflow: auto`
       // scroller. A CSS `bottom: 0` would size to the pane's clientHeight, not scrollHeight.
@@ -110,19 +109,19 @@ export function attachDateLines(
         create: () => createHiddenDiv(),
         toGeom: ({ line }) => ({
           x: line.x,
-          yOffset,
-          belowHeader,
+          placement: labelPlacement,
           label: line.label ?? '',
           className: line.className ?? '',
           today: line.today === true,
         }),
         patch: (node, geom) => {
           node.className = classListFor(geom.className, 'fg-date-line-label');
-          // `belowHeader` (default) anchors at `top: 100%` (CSS, #225); every other placement
-          // anchors at `top: 0` and nudges down by `yOffset` px instead — 0 for `'inHeader'`,
-          // a caller's own number otherwise. transform stays the one inline geometry write (D-S1.10-6).
-          node.style.transform = `translate(${geom.x}px, ${geom.yOffset}px)`;
-          if (geom.belowHeader) node.dataset['placement'] = 'belowHeader';
+          // `belowHeader` anchors at `top: 100%` (CSS, #225); every other placement anchors at
+          // `top: 0` and nudges down by a pixel offset instead — 0 for `'inHeader'`, a caller's
+          // own number otherwise. transform stays the one inline geometry write (D-S1.10-6).
+          const yOffset = typeof geom.placement === 'number' ? geom.placement : 0;
+          node.style.transform = `translate(${geom.x}px, ${yOffset}px)`;
+          if (geom.placement === 'belowHeader') node.dataset['placement'] = 'belowHeader';
           else delete node.dataset['placement'];
           node.textContent = geom.label;
           // The label carries the flag its own stroke carries, so the chip can take the Today colour.
