@@ -30,7 +30,7 @@
 | **Q7** | Does `computeFrame` grow row sources, trees, emitters and packing inside its current loop? | **No.** It becomes composition over four named stages, each its own module with one reason to change. The function is 293 lines and already carries culling, header bands and decorations; four more concerns inside it is the ball of mud this slice is most likely to produce. §S4.6, D-S4-19. |
 | **Q8** | Is `hierarchy: { autoGroup: true }` the default? | **Yes.** Nesting is the common case. Pass `{ autoGroup: false }` to keep a `'span'` parent as authored. §S4.5, D-S4-17. |
 | **Q9** | Is `progress` a core Field? | **No — it is scheduling-plugin data (ADR 0008).** It is not on `Entry`. `weightedMeanByDuration` still ships as an Aggregator. |
-| **Q10** | How does a Field become a Grid column? | **It declares `column`.** Same split a comparable data grid uses (row data vs `columnDefs`), except aggregation stays on the Field, not on the column. `gridColumns` lists which columnable Fields this Gantt shows. Default is still `['name']`. `parentId` / `segments` / `meta` have no `column`. Naming them throws `FieldNotColumnableError`. §S4.3, D-S4-12. |
+| **Q10** | How does a Field become a Grid column? | **A Grid column names a Field.** `Field.column` is optional defaults for the bare-key shorthand. A column object supplies presentation. Aggregation stays on the Field, not on the column. Default is still `['name']`. A bare key with no defaults throws `FieldColumnNotDefinedError`. `{ field: 'parentId', header: 'Authored parent' }` resolves — that header is not `hierarchyParentId`'s shipped `Parent`. Same rule for every Field. §S4.3, D-S4-12. |
 | **Q11** | What does a shipped Aggregator do with holes? | **It skips them** and never throws. All skipped → `undefined` (keep stored). §S4.1, D-S4-3. |
 | **Q12** | After a Segment write, who owns `start`/`end`? | **The envelope, in the same transaction.** A `start`/`end` write on a segmented entry throws `SegmentsOutOfSyncError`. §S4.10, D-S4-30. |
 | **Q13** | Does `autoGroup` promote a Kind that is not `'span'`? | **No.** `'span'` only. Already-`'group'` is a no-op. No throw. §S4.5, D-S4-17. |
@@ -217,7 +217,7 @@ Full prose lives in the step file that implements each decision.
 | D-S4-9 | `AggregatorFailedError` fails the transaction | S4.2 |
 | D-S4-10 | Computed Fields memoized on dataset revision | S4.2 |
 | D-S4-11 | View state never changes a stored value | S4.2 |
-| D-S4-12 | `gridColumns` is names plus overrides; `column` means columnable | S4.3 |
+| D-S4-12 | `gridColumns` is names plus overrides; `Field.column` is optional defaults | S4.3 |
 | D-S4-13 | Visible `columns` for cells; `fieldCompares` for sort | S4.3 |
 | D-S4-14 | `formatValue` is text; renderers stay out of `data/` | S4.3 |
 | D-S4-15 | The Document carries the data half of a Field | S4.4 |

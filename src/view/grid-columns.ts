@@ -1,7 +1,7 @@
 // view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns where a Field's value lives.
 
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
-import { FieldNotColumnableError, UnknownFieldError } from '../model/index.js';
+import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
 
 import { stringifyPrimitive } from '../data/fields/core-fields.js';
 import { sizingOfColumn } from '../data/fields/column-sizing.js';
@@ -45,15 +45,18 @@ function columnFrom(
 ): Omit<ResolvedColumn, 'format'> {
   const input: GridColumn = typeof item === 'string' ? { field: item } : item;
   const defaults = field.column;
-  if (defaults === undefined) throw new FieldNotColumnableError(String(field.key));
+  // A bare key needs Field.column defaults. A column object supplies presentation itself.
+  if (defaults === undefined && typeof item === 'string') {
+    throw new FieldColumnNotDefinedError(String(field.key));
+  }
   const column: Omit<ResolvedColumn, 'format'> = {
     field: field.key,
-    header: input.header ?? defaults.header ?? String(field.key),
-    align: input.align ?? defaults.align ?? 'start',
+    header: input.header ?? defaults?.header ?? String(field.key),
+    align: input.align ?? defaults?.align ?? 'start',
     // S5.7, D-S5-18: default `true`, same merge order (this Gantt's own column, then the Field's
     // own `column` default) every other key here already follows.
-    resizable: input.resizable ?? defaults.resizable ?? true,
-    movable: input.movable ?? defaults.movable ?? true,
+    resizable: input.resizable ?? defaults?.resizable ?? true,
+    movable: input.movable ?? defaults?.movable ?? true,
   };
   // #139: a Grid column is fixed-width by default. `flex` is the one opt-out — a column that names
   // one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
@@ -61,17 +64,18 @@ function columnFrom(
   // (#249): a Gantt asking for `flex: 1` never silently loses to a `width` the Field happened to
   // declare.
   const { width: authoredWidth, flex } = sizingOfColumn(input, defaults);
+  const tooltip = input.tooltip ?? defaults?.tooltip;
   const candidates = {
     width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
     flex,
     // S5.7, D-S5-17: per-column `cellRenderer` comes only from this Gantt's own column —
     // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
     cellRenderer: input.cellRenderer,
-    tooltip: input.tooltip ?? defaults.tooltip,
   };
   return {
     ...column,
-    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer', 'tooltip']),
+    ...pickDefined(candidates, ['width', 'flex', 'cellRenderer']),
+    ...(tooltip === undefined ? {} : { tooltip }),
   };
 }
 
@@ -102,7 +106,7 @@ function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
  *  What comes back is what the Gantt paints. A column that declares `hidden: true` (D-S5-34) stays
  *  out of the result. It therefore stays out of everything downstream — the frame, the pane width,
  *  `ctx.view.resolvedColumns()`, and the two column gestures. It is still resolved first, so a
- *  misspelled field or a Field with no `column` throws where the column is declared. A mistake that
+ *  misspelled field or a bare key with no column defined throws where the column is declared. A mistake that
  *  waited for the column to be shown would report the wrong moment. */
 export function resolveColumns(
   gridColumns: readonly GridColumnInput[],

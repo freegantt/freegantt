@@ -63,7 +63,7 @@ export type BuiltInThrownCode =
   | 'unknown-aggregator'
   | 'unknown-field-type'
   | 'aggregator-failed'
-  | 'field-not-columnable'
+  | 'field-column-not-defined'
   | 'unknown-grid-column'
   | 'mutation-during-notification'
   | 'mutation-during-extension-hook'
@@ -610,17 +610,18 @@ export class AggregatorFailedError extends FreeGanttError {
   }
 }
 
-/** `code: 'field-not-columnable'` — `gridColumns` named a Field that did not declare `column`
- *  (D-S4-12). Thrown when S4.3 resolves columns. */
-export class FieldNotColumnableError extends FreeGanttError {
+/** `code: 'field-column-not-defined'` — `gridColumns` used a bare key, and that Field has no
+ *  `column` defaults (D-S4-12). Pass a column object in `gridColumns`, or add a `column` section
+ *  on a Field you declared. Thrown when S4.3 resolves columns. */
+export class FieldColumnNotDefinedError extends FreeGanttError {
   readonly key: string;
 
   constructor(key: string) {
     super(
-      'field-not-columnable' satisfies BuiltInThrownCode,
-      `gridColumns: the field "${key}" cannot be shown as a column. Add a "column" section to its field declaration.`,
+      'field-column-not-defined' satisfies BuiltInThrownCode,
+      `gridColumns: the field "${key}" has no column defined. Pass a column object in gridColumns, or add a "column" section on a Field you declared.`,
     );
-    this.name = 'FieldNotColumnableError';
+    this.name = 'FieldColumnNotDefinedError';
     this.key = key;
   }
 }

@@ -483,7 +483,7 @@ This review is a stale. **Superseded by ADR 0011.**
 
   Compile-time exclusion requires a typed Gantt or typed Field tokens. That cost is not justified.
 
-  Keep the runtime FieldNotColumnableError.
+  Keep the runtime FieldColumnNotDefinedError.
 
   Remove meta from core Fields. Mark parentId and segments internal.
 
