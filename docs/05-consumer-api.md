@@ -181,14 +181,23 @@ No named
 multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
 I2-safe place a `registerThemePreset`-shaped seam can live.
 
-### Theme API — resolvedTheme and themeChange
+### Theme API — resolvedTheme, themeChange, checkResolvedTheme
 
 **`gantt.resolvedTheme` answers `'light'` or `'dark'` — never `'auto'`** (#330): the getter reads
 back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
 getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
-moves — a `theme` assignment that changes the pin, or the OS flipping under `'auto'` with no
-ancestor pin in the way. It has no `before*` pair, the same reason `navigationChange` has none: the
-OS half is not a vetoable gesture, and the `theme` half already has its own live setter.
+moves, for any of three causes the library can see on its own — a `theme` assignment that changes
+the pin, the OS flipping under `'auto'` with no ancestor pin in the way, or an ancestor's own pin
+changing (#375, watched by a `MutationObserver` scoped to `data-fg-theme`). It has no `before*`
+pair, the same reason `navigationChange` has none: none of these causes is a vetoable gesture, and
+the `theme` half already has its own live setter.
+
+**`gantt.checkResolvedTheme()`** (#394) covers the one case those three causes miss: re-parenting.
+Moving this Gantt's own container under a differently-pinned wrapper changes what `resolvedTheme`
+answers, but writes no `data-fg-theme` attribute, so nothing wakes the observer above. A consumer
+that just made that move calls `checkResolvedTheme()` to say so — it re-resolves now, fires
+`themeChange` if the answer moved, and returns that answer either way, so a caller needs no separate
+`resolvedTheme` read after.
 
 **No event fires before `new Gantt()` returns** (#376) — `themeChange` included, and this is the
 whole reason it never used to. A constructor-supplied plugin has already subscribed by the time the
