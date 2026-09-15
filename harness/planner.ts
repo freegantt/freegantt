@@ -8,11 +8,11 @@ import {
   formatDate,
   formatEndInclusive,
   diamond,
-  meterCell,
+  meter,
 } from 'freegantt';
 import type {
   BarRendererContext,
-  ColumnCellRendererContext,
+  ColumnRendererContext,
   ElementDescription,
   EntryId,
   GridColumnInput,
@@ -40,13 +40,13 @@ const dataset = new Dataset<PlannerEntryProps>({
 // the width, the alignment, and where a cell paints something other than its formatted text.
 const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'ref', align: 'center', width: 44 },
-  { field: 'name', header: 'Task', width: 210, cellRenderer: taskCell },
-  { field: 'owner', width: 48, cellRenderer: ownerCell },
-  { field: 'duration', header: 'Dur', align: 'end', width: 52, cellRenderer: durationCell },
-  { field: 'start', align: 'end', width: 72, cellRenderer: startCell },
-  { field: 'end', header: 'Finish', align: 'end', width: 72, cellRenderer: finishCell },
+  { field: 'name', header: 'Task', width: 210, columnRenderer: taskCell },
+  { field: 'owner', width: 48, columnRenderer: ownerCell },
+  { field: 'duration', header: 'Dur', align: 'end', width: 52, columnRenderer: durationCell },
+  { field: 'start', align: 'end', width: 72, columnRenderer: startCell },
+  { field: 'end', header: 'Finish', align: 'end', width: 72, columnRenderer: finishCell },
   // The Done cell is core's meter. This page does not re-implement it.
-  { field: 'progress', header: 'Done', width: 82, cellRenderer: meterCell() },
+  { field: 'progress', header: 'Done', width: 82, columnRenderer: meter() },
 ];
 
 // ---- Cells the design paints as something other than text ------------------------------------
@@ -59,7 +59,7 @@ function phaseFill(phase: unknown): string | undefined {
 
 /** The Task cell: a phase-coloured tag and the name. A group and a checkpoint carry no tag — their
  *  bar already says which phase they are. */
-function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
+function taskCell({ entry, value }: ColumnRendererContext): ElementDescription | undefined {
   if (entry === undefined) return undefined;
   const phase = entry.read('phase');
   const isPhase = entry.hasChildren;
@@ -73,9 +73,9 @@ function taskCell({ entry, value }: ColumnCellRendererContext): ElementDescripti
   return { class: { 'demo-task-cell': true, 'demo-task-cell-group': isPhase }, children };
 }
 
-/** The Own cell: initials in a phase-coloured disc. `imageCell` paints a photo; this column stays
+/** The Own cell: initials in a phase-coloured disc. `image()` paints a photo; this column stays
  *  initials — the design's own mark, not a URL. */
-function ownerCell({ entry, value }: ColumnCellRendererContext): ElementDescription | undefined {
+function ownerCell({ entry, value }: ColumnRendererContext): ElementDescription | undefined {
   if (value === '') return { text: '' };
   const fill = phaseFill(entry?.read('phase'));
   return {
@@ -94,14 +94,14 @@ const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month:
 
 /** The Start cell: `formatDate` alone, in the compact format — a start needs no inclusive-end
  *  conversion (that is `formatEndInclusive`'s job, below). */
-function startCell({ fieldValue }: ColumnCellRendererContext): ElementDescription | undefined {
+function startCell({ fieldValue }: ColumnRendererContext): ElementDescription | undefined {
   if (fieldValue === undefined) return { text: '' };
   return { text: formatDate(dataset.timeZone, fieldValue as Instant, undefined, COMPACT_DATE_FORMAT) };
 }
 
 /** The Finish cell: `formatEndInclusive`, the one place storage's half-open `end` becomes the
  *  inclusive date a reader expects, in the same compact format as Start. */
-function finishCell({ entry, fieldValue }: ColumnCellRendererContext): ElementDescription | undefined {
+function finishCell({ entry, fieldValue }: ColumnRendererContext): ElementDescription | undefined {
   if (entry === undefined || fieldValue === undefined) return { text: '' };
   // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
   // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
@@ -115,7 +115,7 @@ function finishCell({ entry, fieldValue }: ColumnCellRendererContext): ElementDe
 /** The Dur cell: the design's `12d` — no space, lowercase `d`. The core `duration` Field already
  *  formats `12 d`; this tightens that string's own punctuation rather than re-deriving a day count,
  *  so no time arithmetic runs on this page. */
-function durationCell({ value }: ColumnCellRendererContext): ElementDescription | undefined {
+function durationCell({ value }: ColumnRendererContext): ElementDescription | undefined {
   return { text: value.replace(' d', 'd') };
 }
 

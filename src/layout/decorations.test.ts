@@ -24,7 +24,7 @@ const row: FrameRow = {
   depth: 0,
   expandable: false,
   expanded: false,
-  cells: [],
+  gridCells: [],
   entryIds: [],
   segmentIds: [],
 };

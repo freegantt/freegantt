@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ColumnCellRendererContext, ElementDescription } from '../model/index.js';
-import { imageCell, meterCell } from './cells.js';
+import type { ColumnRendererContext, ElementDescription } from '../model/index.js';
+import { image, meter } from './column-renderers.js';
 
-function cell(fieldValue: unknown, value = ''): ColumnCellRendererContext {
+function cell(fieldValue: unknown, value = ''): ColumnRendererContext {
   return { value, fieldValue };
 }
 
@@ -22,9 +22,9 @@ function rolesIn(tree: ElementDescription | undefined): string[] {
   return roles;
 }
 
-describe('meterCell()', () => {
+describe('meter()', () => {
   it("with fieldValue 35 and value '35%' paints a hidden track, fill 35%, and the text", () => {
-    const tree = meterCell()(cell(35, '35%'));
+    const tree = meter()(cell(35, '35%'));
     const track = child(tree, 'track');
     const fill = child(track, 'fill');
     expect(track?.attrs?.['aria-hidden']).toBe('true');
@@ -34,11 +34,11 @@ describe('meterCell()', () => {
   });
 
   it('fieldValue undefined returns undefined — no track, no stand-in for "not stated"', () => {
-    expect(meterCell()(cell(undefined))).toBeUndefined();
+    expect(meter()(cell(undefined))).toBeUndefined();
   });
 
   it("fieldValue 0 paints a track with fill 0% — 'nothing done', not 'not stated'", () => {
-    const tree = meterCell()(cell(0, '0%'));
+    const tree = meter()(cell(0, '0%'));
     const track = child(tree, 'track');
     expect(track).toBeDefined();
     expect(child(track, 'fill')?.style?.['width']).toBe('0%');
@@ -46,24 +46,24 @@ describe('meterCell()', () => {
   });
 
   it("fieldValue 120 clamps fill to 100% and still prints the true '120%'", () => {
-    const tree = meterCell()(cell(120, '120%'));
+    const tree = meter()(cell(120, '120%'));
     expect(child(child(tree, 'track'), 'fill')?.style?.['width']).toBe('100%');
     expect(child(tree, 'text')?.text).toBe('120%');
   });
 
   it('a negative reading clamps paint to 0 and still prints the formatted value', () => {
-    const tree = meterCell()(cell(-5, '-5%'));
+    const tree = meter()(cell(-5, '-5%'));
     expect(child(child(tree, 'track'), 'fill')?.style?.['width']).toBe('0%');
     expect(child(tree, 'text')?.text).toBe('-5%');
   });
 
   it('NaN and a non-number paint nothing', () => {
-    expect(meterCell()(cell(Number.NaN, 'NaN'))).toBeUndefined();
-    expect(meterCell()(cell('35', '35%'))).toBeUndefined();
+    expect(meter()(cell(Number.NaN, 'NaN'))).toBeUndefined();
+    expect(meter()(cell('35', '35%'))).toBeUndefined();
   });
 
-  it('meterCell({ text: false }) is a meter role with no text child, never a progressbar', () => {
-    const tree = meterCell({ text: false })(cell(35, '35%'));
+  it('meter({ text: false }) is a meter role with no text child, never a progressbar', () => {
+    const tree = meter({ text: false })(cell(35, '35%'));
     expect(child(tree, 'text')).toBeUndefined();
     expect(tree?.attrs?.['role']).toBe('meter');
     expect(tree?.attrs?.['aria-valuemin']).toBe('0');
@@ -73,26 +73,26 @@ describe('meterCell()', () => {
   });
 
   it('text: false at 120 sets valuenow and valuemax to 120, so AT is not told 100', () => {
-    const tree = meterCell({ text: false })(cell(120, '120%'));
+    const tree = meter({ text: false })(cell(120, '120%'));
     expect(child(child(tree, 'track'), 'fill')?.style?.['width']).toBe('100%');
     expect(tree?.attrs?.['aria-valuenow']).toBe('120');
     expect(tree?.attrs?.['aria-valuemax']).toBe('120');
   });
 });
 
-describe('imageCell()', () => {
-  it("imageCell()(cell(url, 'Ada')) uses the formatted value as alt", () => {
+describe('image()', () => {
+  it("image()(cell(url, 'Ada')) uses the formatted value as alt", () => {
     const src = 'https://example.com/ada.png';
-    expect(imageCell()(cell(src, 'Ada'))).toEqual({
+    expect(image()(cell(src, 'Ada'))).toEqual({
       tag: 'img',
       class: { 'fg-image-cell': true },
       attrs: { src, alt: 'Ada' },
     });
   });
 
-  it("imageCell({ alt: 'Logo' }) keeps the static alt, not the formatted value", () => {
+  it("image({ alt: 'Logo' }) keeps the static alt, not the formatted value", () => {
     const src = 'https://example.com/logo.png';
-    expect(imageCell({ alt: 'Logo' })(cell(src, 'Ada'))).toEqual({
+    expect(image({ alt: 'Logo' })(cell(src, 'Ada'))).toEqual({
       tag: 'img',
       class: { 'fg-image-cell': true },
       attrs: { src, alt: 'Logo' },
@@ -100,7 +100,7 @@ describe('imageCell()', () => {
   });
 
   it('a non-string or empty fieldValue paints an empty cell, no img', () => {
-    const render = imageCell();
+    const render = image();
     expect(render(cell(undefined))).toBeUndefined();
     expect(render(cell(35))).toBeUndefined();
     expect(render(cell(''))).toBeUndefined();

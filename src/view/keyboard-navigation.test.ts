@@ -416,7 +416,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     }
 
     expect(readTargetKindFrom(rows(container)[0]!)).toBe('row');
-    expect(readTargetKindFrom(container.querySelector<HTMLElement>('.fg-row-label')!)).toBe('cell');
+    expect(readTargetKindFrom(container.querySelector<HTMLElement>('.fg-row-label')!)).toBe('gridCell');
     expect(readTargetKindFrom(bars(container)[0]!)).toBe('bar');
     expect(
       readTargetKindFrom(container.querySelector<HTMLElement>('.fg-col-header[data-field="name"]')!),

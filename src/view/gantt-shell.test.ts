@@ -33,7 +33,7 @@ function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement
   const backend = createDomBackend({
     entryById: () => undefined,
     resolveBarRenderer: () => undefined,
-    resolveCellRenderer: () => undefined,
+    resolveGridCellRenderer: () => undefined,
     resolveHeaderRenderer: () => undefined,
   });
   return {
