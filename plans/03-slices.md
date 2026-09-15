@@ -303,6 +303,28 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 ---
 
+## S9 — The first consumer's public surface  ·  **runs next, ahead of the rest of S6**
+
+**The number is a name, not a position.** S0–S7 are in slice order; S9 is not. It was given a high number to park it, then promoted. **There is no S8.** Do not read "S9" as "after S7" — it runs **before any further S6 work**, and only S6 work that serves it continues past it (author's ruling, 2026-09-15; `plans/s6-scale-and-sync/README.md` §4 Q3).
+
+**Goal:** the four public-surface asks the first real consumer raised (`plans/handoff/2026-09-15-crm-filament-labor.md`), which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
+
+**Tracker:** `plans/s9-consumer-surface/README.md` — the row-by-row state, the acceptance lists, and the order.
+
+**Scope**
+
+- **R1 · #401** — a row that paints one value per tick. A **Timeline cell** is one Row by one Tick (#411 split the vocabulary already). New geometry (`FrameTimelineCell`, `GeometryFrame.timelineCells`, `TimelineCellId`), never a widened `Item`. One producer per visible row, taking `readonly TimeSpan[]` and no pixels. A fifth renderer point, `'timelineCell'`, plus `--fg-timeline-cell-*` tokens and `data-variant`. A `timelineCellClick` event that does not consume D-S3-10's empty-timeline clear. **Design settled** in [#401's own comment](https://github.com/Pawel-IT/FreeGantt/issues/401#issuecomment-5689299551).
+- **R2 · #402** — a `Segment` carries consumer data, reaching the renderer that paints it. No design yet.
+- **R3 · #404** — non-working-time shading ships as a first-party plugin, not a harness demo.
+- **R4 · #408** — a gesture creates a `Segment`, **only if still wanted after R1**. R1's event gives an app the create path already, so what is left is "does the library mint the Segment itself?".
+
+**Not in scope:** #400 (packaging) stays S6's R5 — it blocks every consumer including this slice. No `Dependency`, no `schedule()`, no link geometry: still S7. No per-bucket rollup — R1's producer is keyed by row, so an aggregate row is a row the consumer answers for.
+
+**Gate:** mint `[S9-A1]`–`[S9-A4]` and add the entry to `scripts/slice-gate.mjs`, which has nothing past `S5 → S6` today. Whoever starts R1 flips `.slice` to `S9`.
+
+---
+
+
 ## After S7 — the reserved seams (in likely order)
 
 Each of these was designed-for above; none requires a core change:
