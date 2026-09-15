@@ -96,10 +96,15 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
     key: 'parentId',
     equals: byReference,
+    // A column object may show this Field. The app writes it through `entries.update()`;
+    // the user never types it (ADR 0015 `'api'`).
+    editable: 'api',
   },
   {
     key: 'segments',
     equals: segmentsEqual,
+    // Same as `parentId`: showable, not typed. A string in this cell is not a Segment list.
+    editable: 'api',
   },
   {
     key: 'duration',
