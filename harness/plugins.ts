@@ -1,6 +1,6 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, contextMenu, diamond } from 'freegantt';
-import type { CellRenderer, ChromePlugin, EntryVariant } from 'freegantt';
+import type { GridCellRenderer, ChromePlugin, EntryVariant } from 'freegantt';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
 import { weekendShading } from './plugins/weekend-shading.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -14,7 +14,7 @@ import { mountPageBrief } from './docs/page-brief.js';
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'plugins');
 
 // S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
-// red over-budget cost cell, painted through `barRenderer`/`cellRenderer` alone — no bespoke
+// red over-budget cost cell, painted through `barRenderer`/`gridCellRenderer` alone — no bespoke
 // paint path — with a toggle that switches both off live, no remount.
 const BUDGET_THRESHOLD = 1000;
 // Adjacent rows and adjacent days (`fixtures/sample-dataset.ts`) — one `reveal()` below brings
@@ -101,7 +101,7 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11/12: `barRenderer`/`cellRenderer` are `GanttOptions.*` — the consumer's own,
+// S5.4, D-S5-10/11/12: `barRenderer`/`gridCellRenderer` are `GanttOptions.*` — the consumer's own,
 // level 3 of the ladder (D-S5-11) — so setting them here needs no plugin at all. The cell renderer
 // below branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and paints
 // `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
@@ -122,7 +122,7 @@ const demoVariants: readonly EntryVariant[] = [
   { name: 'buffer', when: { buffer: true }, paint: () => ({ class: { 'demo-buffer-bar': true } }) },
   { name: 'risk', when: { risk: true }, paint: () => ({ class: { 'demo-risk-bar': true } }) },
 ];
-const demoCellRenderer: CellRenderer = ({ column, value, fieldValue }) =>
+const demoGridCellRenderer: GridCellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
@@ -131,11 +131,11 @@ const renderersToggle = document.querySelector<HTMLInputElement>('#renderers-tog
 renderersToggle.addEventListener('change', () => {
   if (renderersToggle.checked) {
     gantt.variants = demoVariants;
-    gantt.cellRenderer = demoCellRenderer;
+    gantt.gridCellRenderer = demoGridCellRenderer;
     writeLog('renderers demo: custom milestone diamond + over-budget cost cell on');
   } else {
     gantt.variants = [];
-    gantt.cellRenderer = undefined;
+    gantt.gridCellRenderer = undefined;
     writeLog('renderers demo: back to the library default, no remount (I8)');
   }
 });

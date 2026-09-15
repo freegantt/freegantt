@@ -326,7 +326,7 @@ Documented in this order; each level solves what the previous can't, and consume
 |---|---|---|
 | 1 | **CSS custom properties** | `--fg-bar-radius: 3px; --fg-row-height: 32px;` |
 | 2 | **State classes / parts** | `.fg-bar[data-flag~="conflict"] { outline: 2px solid var(--warn) }` |
-| 3 | **Renderer callbacks** | `barRenderer`, `cellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
+| 3 | **Renderer callbacks** | `barRenderer`, `gridCellRenderer`, `headerRenderer`, `tooltipRenderer` — return plain element-description objects |
 | 4 | **Events + feature config** | veto a drop, custom context-menu items, replace the editor |
 | 5 | **Plugins** | one `definePlugin({ data, view })` (see `01` §10): fields, decorations, columns, controllers, commands |
 

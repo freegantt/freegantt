@@ -828,7 +828,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
       // The whole "which cell, which entry, which Field" walk is one answer now, instead of four
       // hand-written `.fg-*` lookups.
       ctx.view.onDomEvent('dblclick', (_event, target) => {
-        if (target?.kind !== 'cell') return;
+        if (target?.kind !== 'gridCell') return;
         const { entry, field: fieldKey } = target;
         if (entry === undefined || fieldKey === undefined) return;
         const field = ctx.dataset.field(fieldKey);

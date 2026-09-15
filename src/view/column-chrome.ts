@@ -88,7 +88,7 @@ export class ColumnChrome {
   /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — one column per field (#147, #154), appended
    *  after the consumer's own columns by `effectiveInput()`, in registration order. A duplicate field
    *  the consumer's own list already names is dropped, the same "config beats a plugin" posture
-   *  `barRenderer`/`cellRenderer` already take. Two plugins registering the same field stack on one
+   *  `barRenderer`/`gridCellRenderer` already take. Two plugins registering the same field stack on one
    *  key: the newest registration wins, and disposing one never disturbs the other's. */
   #pluginColumns = createRegistrationTable<FieldKey, PluginColumnRegistration>();
   /** The resolved columns in paint order, and the same columns keyed for lookup. `#adoptColumns`

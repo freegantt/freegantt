@@ -122,7 +122,7 @@ const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts
     'interaction.registerKeybinding',
     (p) => p.interaction.registerKeybinding({ chord: 'Mod+K', command: 'demo.run' }),
   ],
-  ['view.registerRenderer', (p) => p.view.registerRenderer('cell', () => ({ text: '' }))],
+  ['view.registerRenderer', (p) => p.view.registerRenderer('gridCell', () => ({ text: '' }))],
   ['view.registerDecoration', (p) => p.view.registerDecoration('underBars', () => [])],
   ['view.registerGridColumn', (p) => p.view.registerGridColumn('cost')],
   ['variants.add', (p) => p.variants.add({ name: 'buffer' })],

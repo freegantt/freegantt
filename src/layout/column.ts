@@ -1,6 +1,6 @@
 // layout/ — plain-data column types. No registry, no Dataset, no Field value access (D-S4-13).
 
-import type { ColumnAlign, ColumnCellRenderer, Entry, FieldKey } from '../model/index.js';
+import type { ColumnAlign, ColumnRenderer, Entry, FieldKey } from '../model/index.js';
 
 export type { ColumnAlign } from '../model/index.js';
 
@@ -24,11 +24,11 @@ export interface FrameColumn {
 
 /** Visible Grid column, bound with this Gantt's locale (D-S4-13). `resizable`/`movable` are optional
  *  — absent reads as the default `true` (S5.7, D-S5-18); a fixture that never mentions column chrome
- *  stays unchanged. `cellRenderer` stays optional too: undefined means "fall back to the Gantt-wide
+ *  stays unchanged. `columnRenderer` stays optional too: undefined means "fall back to the Gantt-wide
  *  one" (D-S5-17). */
 export interface ResolvedColumn extends FrameColumn {
   format(entry: Entry): string;
-  cellRenderer?: ColumnCellRenderer;
+  columnRenderer?: ColumnRenderer;
   resizable?: boolean;
   movable?: boolean;
   /** D-S5-13 — `true` marks this column for the default tooltip body. Not a paint concern, so it

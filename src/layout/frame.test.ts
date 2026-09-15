@@ -170,7 +170,7 @@ describe('computeFrame', () => {
       variants: variantRegistry,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
-    expect(frame.rows[0]?.cells).toEqual([]);
+    expect(frame.rows[0]?.gridCells).toEqual([]);
     expect(frame.columns).toEqual([]);
   });
 
@@ -205,7 +205,7 @@ describe('computeFrame', () => {
         },
       ],
     });
-    expect(frame.rows[0]?.cells).toEqual([
+    expect(frame.rows[0]?.gridCells).toEqual([
       nameField.formatValue(sampleEntries[0]!.name),
       idField.formatValue(sampleEntries[0]!.id),
     ]);
@@ -226,7 +226,7 @@ describe('computeFrame', () => {
         { field: 'id', header: 'Id', align: 'start', format: (entry) => entry.id },
       ],
     });
-    expect(frame.rows[0]?.cells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.id]);
+    expect(frame.rows[0]?.gridCells).toEqual([sampleEntries[0]?.name, sampleEntries[0]?.id]);
     expect(frame.columns.map((c) => c.field)).toEqual(['name', 'id']);
   });
 
