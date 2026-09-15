@@ -6,7 +6,7 @@
 **Governed by:** `plans/00` **D2** (scale posture — design for growth, validate by measured spike) and **D9** (multi-Gantt sync), `plans/01` §11 (invariants I1–I14), `plans/04` §5 (the gate).
 **Builds on:** S1.5's `ScrollModel`/`TimeScaleModel` and its two-Gantt fixture, S1.7's windowed frame, S4's row-height index seam, S5's plugin runtime and its disposal contract.
 
-> **What this slice is not.** No `Dependency`, no `schedule()`, no link geometry — S7, and the graph and SVG-link cost measurements wait for it, because links do not exist yet. No worker seam for `schedule()`: measure that after S7 if the plugin's own numbers demand it (D2). No new public feature. S6 proves the core at scale and makes the package shippable.
+> **What this slice is not.** No `Dependency`, no `schedule()`, no link geometry — S7, and the graph and SVG-link cost measurements wait for it, because links do not exist yet. No worker seam for `schedule()`: measure that after S7 if the plugin's own numbers demand it (D2). No new public feature, with **one stated exception**: R3 is an acceptance row of this slice and cannot be ticked without a per-axis `scroll` surface (**D-S6-1**, §5.3). That surface is in scope; #401, #402, #404 and #408 are the ones held out, and §4 Q3 decides where they land. S6 proves the core at scale and makes the package shippable.
 
 ---
 
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | Not started. The spike has not run. See §5.1 — the section it cites does not exist. | #95 (profile the harness), #342 (bundle number) |
 | **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | Harness seeds **5,000** and the row says 10,000. Ruled 2026-09-15: **the fixture goes to 10k.** See §5.2. | **#406** (fixture), #95 (measurement) |
-| **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Not a tick.** `[S1-A4]` proves both-axis sharing. The second shape is `xOnly()` — deferred by D-S1.5-3 until a real caller appeared. One has. `yOnly()` stays deferred; it still has no caller. See §5.3. | **#405** |
+| **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Not a tick.** `[S1-A4]` proves both-axis sharing. The second shape is a build, and the shape is settled: one **scroll axis** becomes the shared unit, so a caller shares x, y, both or neither — **D-S6-1**, §5.3. Shared y alone is representable and unadvertised. | **#405** |
 | **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | Not started. The consumer's case is two Gantts on **shared** models, which is where a leak has somewhere to accumulate. | **#403** |
 | **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | Not started, and now blocking. A `github:` install lands with no `dist/` at all. | **#400** |
 
@@ -44,7 +44,7 @@ So R2 is the timing half of a fixture that already exists. It needs the count ra
 
 `harness/scroll-sync.html` mounts two Gantts on one `ScrollModel` and one `TimeScaleModel`, with a short dataset under a tall one so the clamp case is observable. `e2e/scroll-sync.spec.ts` covers the echo case (D-S1.5-6), the short-chart pin and resume (U3), and `[S1-A4]` for x and y together.
 
-What is left is the second sharing shape: x shared, y private. See §5.3.
+What is left is per-axis sharing: the shared unit becomes one scroll axis, so x, y, both and neither are all the caller's. See §5.3, **D-S6-1**.
 
 ### R4 — the leak check → **#403**
 
@@ -79,7 +79,7 @@ Written as hygiene. It is now the blocker: `version` is `0.0.0`, `dist/` is giti
 |---|---|---|
 | **#400** | R5 | Blocking. The first consumer cannot install the library. |
 | **#403** | R4 | The shared-model case is the one that matters. |
-| **#405** | R3 | x shared, y private. `needs grill` — D-S1.5-3's rejection has to be answered. |
+| **#405** | R3 | Per-axis sharing. **The design is settled — D-S6-1, §5.3**, which answers D-S1.5-3's two rejections rather than repeating them. `needs grill` is discharged; the issue is a build. |
 | **#406** | R2 | Raise the fixture to 10,000. Mechanical, and it gates every R2 measurement. |
 | #95 | R1, R2 | Profile the large-dataset harness in DevTools. The spike's first half. |
 | #342 | R1 | The bundle number. #400 does not wait for it. |
@@ -98,7 +98,7 @@ Three issues raised by the same consumer brief are **not** S6: #401 (per-tick va
 | # | Question | Why it blocks |
 |---|---|---|
 | **Q1** | What does "§12-style budgets" mean, now that no §12 exists? | R1 cannot be written down, let alone enforced. See §5.1. |
-| ~~**Q2**~~ | ~~Does R3 mean "both axes move" or "three sharing modes"?~~ | **Answered 2026-09-15 (author): only x needs to sync.** R3 is a build, not a tick. `xOnly()`'s caller has arrived — #405. See §5.3. |
+| ~~**Q2**~~ | ~~Does R3 mean "both axes move" or "three sharing modes"?~~ | **Answered 2026-09-15 (author), in two steps.** First: only x needs to sync, so R3 is a build. Then: the shared unit becomes one **scroll axis**, so x, y, both and neither are all the caller's and the library ships no modes — **D-S6-1**, §5.3. |
 | **Q3** | Do #401, #402, #404 and #408 land inside S6, after it, or in a new slice? | They are public surface, and S6's whole posture is "no new public feature". A consumer is waiting on the first three, and **#401 is its blocking ask**. Until this is answered, three of the brief's five asks have no slice and no date, and the consumer learns that by waiting. This is **step 0** of §6. |
 | ~~**Q4**~~ | ~~Does the 10k number stay 10k?~~ | **Answered 2026-09-15 (author): yes, do 10k.** The row stands and the fixture rises — #406. See §5.2. |
 | **Q5** | Does #112 Seam B land here or defer to S7? | Only S6's own measurement work can say whether it needs a DOM-free harness. |
@@ -107,7 +107,7 @@ Three issues raised by the same consumer brief are **not** S6: #401 (per-tick va
 
 ## 5. Six defects this file found in `plans/03` §S6
 
-These are in the spec, not in the code. The first four make a row unbuildable as written. §5.5 and §5.6 were added on 2026-09-15 after the branch review; §5.5 is a defect this section first claimed to be complete without.
+These are in the spec, not in the code. The first four make a row unbuildable as written. §5.5 and §5.6 were added on 2026-09-15 after the branch review; §5.5 is a defect this section first claimed to be complete without. **§5.3 also carries a decision, `D-S6-1`** — the defect it found could not be closed without one.
 
 ### 5.1 R1 cites a section that does not exist, and it is not the only citation
 
@@ -138,23 +138,103 @@ A measurement at 5k does not discharge a row that says 10k, and quietly reading 
 
 **Answered 2026-09-15 (author): do 10k.** The row stands as written, D2's target is the target, and the fixture rises to meet it — **#406**. That lands before any number measured on that page ticks R2.
 
-### 5.3 R3 is a build, because only x needs to sync
+### 5.3 R3 is a build, and the shared unit becomes one scroll axis
 
-R3 read _"Linked-scroll demo works in **x, y, and both modes** with zero Gantt-side special-casing"_ until 2026-09-15. That phrasing named three modes and only two have an owner, so the row was rewritten rather than glossed: **both axes shared, and x shared while y stays private.** `yOnly()` stays deferred — it has no caller (D-S1.5-3).
+R3 read _"Linked-scroll demo works in **x, y, and both modes** with zero Gantt-side special-casing"_ until 2026-09-15. That phrasing named three modes, and the row was rewritten twice that day. The settled reading is below, and D-S6-1 is the decision behind it.
 
-D9: _"Sharing a `ScrollModel` links both axes (S1.5, D-S1.5-3) — **partial (x-only/y-only) sharing is deferred** until a caller actually needs it."_
+D9 read: _"Sharing a `ScrollModel` links both axes (S1.5, D-S1.5-3) — **partial (x-only/y-only) sharing is deferred** until a caller actually needs it."_
 
 **A caller now needs it.** The first consumer's page is two panes over one time axis: labor requests on top, workers below. The brief's §1 says it plainly — _"one shared time axis, one shared **horizontal** scroll."_ Its own mapping table then writes "shared `ScrollModel` + `TimeScaleModel`", but that is the consumer naming a mechanism, not a requirement. A shared `ScrollModel` links **both** axes, and the two panes hold different row sets, so a shared y means scrolling the worker list also scrolls the request list.
 
-**Who asked for which half.** The consumer asked for a shared horizontal scroll, and that is all its brief states. **Private vertical is the author's ruling of 2026-09-15**, taken because the two panes hold different row sets. Both halves are well founded; only the first is the consumer's, and #405 must source them that way. The private-y half is what carries the implementation cost D-S1.5-3 rejected, so nobody should read it as a consumer requirement nobody may revisit.
+**Who asked for which half.** The consumer asked for a shared horizontal scroll, and that is all its brief states. **Private vertical is the author's ruling of 2026-09-15**, taken because the two panes hold different row sets. Both halves are well founded; only the first is the consumer's, and #405 must source them that way.
 
-So R3 is a build. `xOnly()` is the deferred piece, and its return condition in `plans/s1.5-scroll-model/README.md` is met word for word: _"when a host needs 'share x, private y' — a real caller."_ It is carried by **#405**.
+---
 
-**This is not a defect in D-S1.5-3.** That decision defined the both-axis fallback, documented it, and tested it — `e2e/scroll-sync.spec.ts` proves the shorter pane pins at its own max and resumes (U3). The consumer can ship on that behaviour today. It is defined, not broken. It is simply not what this page wants.
+#### D-S6-1 — the shared unit is one scroll axis, not a whole `ScrollModel`
 
-**The rejected alternative has to be re-read, not re-used.** D-S1.5-3 rejected _"strict x-only sharing with per-Gantt private y"_ as _"simpler in prose, more implementation — x in the model and y per-binding is two lifetimes in one object."_ That objection stands on its own merits and did not depend on there being no caller. #405 has to answer it rather than skip past it.
+**Ruled 2026-09-15 by the author, after `xOnly()` was examined a second time and withdrawn.**
 
-**An earlier draft of this file said the opposite** — that the consumer shares both axes and had asked for no partial mode, and that this was evidence for keeping the deferral. That reading came from the brief's mapping table instead of its §1, and it is wrong. Corrected 2026-09-15.
+`ScrollModel` fuses the two directions into one object. It owns one `#position: Point` and one `BoundValue` whose resolved value is `{position, max}` — four numbers, compared as a unit by `sameScrollState`. Two Gantts sharing it bind into the **same** `BoundValue`, so both directions travel together. **That is the object's shape, not a policy**, which is why no configuration can take half of it.
+
+**The unit becomes one axis.** A scroll axis owns `{ position, max }` for one direction: one binding set, one `resolve`, one `equals`, **one lifetime**. A Gantt holds two of them — an x source and a y source — and a caller aims each one independently.
+
+The consequence is that **the library ships no sharing modes.** Share x, share y, share both, share neither: all four are the caller pointing two references, not four code paths.
+
+**This answers D-S1.5-3's two rejections rather than repeating them.**
+
+- _"x in the model and y per-binding is two lifetimes in one object."_ That objection describes **splitting a fused object**. Nothing is split here. There are two objects, one lifetime each, and each is simpler than the fused one it replaces.
+- _"an `axes` array, axis-tagged notification, and a `ScrollSource` interface whose `xOnly()` returns something that can be `yOnly()`'d into an object with no axes."_ **An axis has no axes to filter.** There is no array, no tag and no view type, so there is nothing that can be filtered twice into nothing.
+
+**`yOnly` is not banned, and that is a saving rather than a concession.** Shared y is what two Gantts aiming their y references at one object *means*. Forbidding it would cost code; allowing it costs none. It gets no advertised surface, no doc example and no new acceptance row. The behaviour behind it is already built and already proven: `[S1-A4]`, the U3 pin-and-resume test in `e2e/scroll-sync.spec.ts`, the local clamp (D-S1.7-2) and the echo rule (D-S1.5-6). **`plans/s1.5` and `plans/s1.11` both recorded `yOnly()` as "still deferred" earlier on 2026-09-15; this decision supersedes those two rows, and both files now say so.**
+
+**The surgery is small, and the shipped code already says so.** Measured against `main` @ `d07b628`:
+
+- **13 `panTo` write sites in `src/`** (tests excluded). **Nine are already x-only.** Four touch y: `view/scroll-attachment.ts` (element → model), `view/gantt-shell.ts` (the pan gesture), and `layout/viewport/viewport.ts` twice (the content-width re-clamp, and `reveal`).
+- `panTo(to: Partial<ScrollPosition>)` already clamps each direction independently — it is already a per-axis write.
+- `Viewport.visible` already computes `maxX` and `maxY` as two separate clamps.
+- **Nothing memoizes on `scroll.state` object identity.** All twelve reads in `src/` are field reads, so assembling `state` from two axis sources is safe.
+
+**`ScrollModel` retires with this decision, and that is the point rather than a side effect.** Demoting it to a shorthand for "share both" would leave the trap standing. The first consumer's brief wrote _"two panes scrolling as one → shared `ScrollModel` + `TimeScaleModel`"_ and meant a shared **horizontal** scroll. **The name told them it would work.** A container whose name hides which directions it couples is the defect this issue exists to remove, so it goes rather than being kept beside the fix. Ruled 2026-09-15, after a first pass had kept it.
+
+**The surface, settled 2026-09-15.** The type is **`ScrollAxis`**. S1.5 rejected a `ScrollAxis` *tag* inside a filtered-view design; this is an axis *model*, and the name was free because no type ever used it. Bare "axis" meaning the time scale was tightened to "time axis" wherever it could now be read two ways — #7's rule is to retire the ambiguous word, not to pick a synonym.
+
+```ts
+/** One direction's scroll position and its bound — the unit two Gantt instances share. */
+export declare class ScrollAxis {
+  constructor(position?: number);
+  /** Resolved + clamped, frozen. `position` may exceed `max` after a shrink (D-S1.5-2);
+   *  `max` is the loosest bound any bound Gantt needs (D-S1.5-1). */
+  get state(): ScrollAxisState;
+  /** Move this direction. Clamps to `[0, max]` at write time. */
+  panTo(position: number): void;
+  batch(run: () => void): void;
+}
+
+export interface ScrollAxisState {
+  readonly position: number;
+  readonly max: number;
+}
+
+/** What `GanttOptions.scroll` takes. Omit a direction to keep it private. */
+export interface ScrollAxes {
+  readonly x?: ScrollAxis;
+  readonly y?: ScrollAxis;
+}
+```
+
+One spelling covers all four cases:
+
+```ts
+new Gantt({ container: '#plan', dataset });                          // share nothing
+
+const x = new ScrollAxis();
+const y = new ScrollAxis();
+new Gantt({ container: '#top',    dataset: a, scroll: { x, y } });   // share both
+new Gantt({ container: '#bottom', dataset: b, scroll: { x, y } });
+
+new Gantt({ container: '#requests', dataset: r, scale, scroll: { x } }); // share x, private y
+new Gantt({ container: '#workers',  dataset: w, scale, scroll: { x } });
+```
+
+`scroll` stays **one** config key — one config tree per job. **Omitting a direction is what keeps it private**, so there is no mode to name, no shorthand-versus-long-form to document, and no illegal pair to represent.
+
+**What this costs, stated plainly.** Sharing both directions now takes two objects where it took one, and `gantt.scroll` reads back as `{ x, y }` rather than a model — `gantt.scroll.x.state.position` in place of `gantt.scroll.state.position.x`. `harness/scroll-sync.ts` and `[S1-A4]` need their construction updated; the e2e assertions themselves do not change. `ScrollState` retires with the class. Twelve `scroll.state` read sites in `src/` move, and most already read one direction only. Against that, one concept replaces two and the misleading name is gone.
+
+**Unchanged by all of this:** `gantt.reveal()`, `panToDate()`, `panToToday()`, `Viewport.visible` (what rendering actually reads), the local clamp, the echo rule, and every acceptance assertion behind `[S1-A4]`.
+
+**Settled during the build, not here.**
+
+1. Whether `Viewport` holds two `ScrollAxis` references directly or one small `ScrollAxes` record.
+2. Where the two-direction batch lives, so a `panTo` touching both fires one reaction. `Viewport` already coalesces scale and scroll into one notification, so that layer is the candidate.
+
+**This is not a defect in D-S1.5-3.** That decision defined the both-axis fallback, documented it and tested it — the consumer can ship on that behaviour today. It is defined, not broken. It is simply not what this page wants, and its own return condition has now fired.
+
+---
+
+**Two earlier drafts of this section were wrong, and both are recorded here rather than overwritten.**
+
+1. The first said the consumer shares both axes and had asked for no partial mode, and read that as evidence for keeping the deferral. It came from the brief's mapping table instead of its §1. Corrected 2026-09-15.
+2. The second carried `xOnly()` as the shape to build, with `yOnly()` still deferred. **D-S6-1 supersedes it:** once the axis is the unit, neither half is a feature to grant or withhold, and a design that shipped only "x-only" would need extra code to forbid the other half.
 
 ### 5.4 `pnpm gate` has no S6 checklist
 

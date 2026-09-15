@@ -95,7 +95,9 @@ export interface GanttOptionsBase<TProps = unknown> {
    * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time
    * axis, both, or neither. Those are the two *objects*, not two directions. One shared
    * `ScrollModel` syncs x and y **together**, and a Gantt cannot share one direction alone today
-   * (D-S1.5-3). Sharing x with a private y is #405. */
+   * (D-S1.5-3). The decided direction makes one `ScrollAxis` the shared unit and retires this
+   * class: `scroll` takes `{ x?, y? }`, and omitting a direction keeps it private (#405, D-S6-1).
+   * This comment describes what ships until that lands. */
   scroll?: ScrollModel;
   /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'
    *  own right edge and keep it there as the columns change. Reads back in px either way. Default:
@@ -210,7 +212,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   plugins?: readonly ChromePlugin<TProps>[];
 }
 
-/** Two ways to set the axis, made mutually exclusive at the type level (issue #84 — the prior shape
+/** Two ways to set the time axis, made mutually exclusive at the type level (issue #84 — the prior shape
  * accepted both and silently ignored `preset`/`range`/`fit` in favor of `scale`, with only a warning
  * to say so). Sharing an axis and building a private one from `preset`/`range`/`fit` are not two knobs
  * for the same job; a caller states one or the other. */
