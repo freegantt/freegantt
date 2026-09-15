@@ -1,7 +1,4 @@
----
-id: row-source-updates
-title: "Row source — change one setting, keep the rest"
----
+# Row source — change one setting, keep the rest
 
 **Scope:** `gantt.rowSource` for app authors. The row source is one object that carries several
 settings together: which rows to build, which filter to apply, which sort to apply. This guide shows
@@ -137,13 +134,13 @@ holds `team` to label its own button.
 `harness/main.ts` drives three toolbar buttons this way. Run `pnpm dev`, open
 `http://localhost:5173`, and use **Group by team**, **Filter team**, and **Sort by name** together.
 
-- [`harness/main.ts`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/main.ts) — the three
+- [`harness/main.ts`](../harness/main.ts) — the three
   handlers. Two spread one key. The grouping button switches `source`, so it builds a new source.
-- [`harness/hierarchy.ts`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/hierarchy.ts) —
+- [`harness/hierarchy.ts`](../harness/hierarchy.ts) —
   the same settings driven from `<select>` controls.
 
 ## Related
 
-- [Consumer API index](consumer-api.md) — the rest of the app-author surface.
-- [API reference](../api/) — generated `RowSource`, `EntriesRowSource`, `GroupRowSource`,
+- [Consumer API index](05-consumer-api.md) — the rest of the app-author surface.
+- [API reference](../etc/freegantt.api.md) — generated `RowSource`, `EntriesRowSource`, `GroupRowSource`,
   `CustomRowSource` and `RowSourceCommon`.

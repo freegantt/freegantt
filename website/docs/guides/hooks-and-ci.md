@@ -3,7 +3,6 @@ id: hooks-and-ci
 title: "FreeGantt — Hooks, CI, and Guard Tests"
 ---
 
-
 The execution layer: which command runs where, what blocks what, and how we keep the guards themselves honest.
 
 **One rule governs this whole document: hooks and CI run the *same* npm scripts.** A hook that runs a slightly different command drifts, and the drift always resolves as "passes locally, fails in CI."
@@ -53,7 +52,10 @@ Agent-time enforcement. The value here is specific: a violation surfaced **insid
       "hooks": [{ "type": "command", "command": ".claude/hooks/protect-spec.sh" }]
     }, {
       "matcher": "Bash",
-      "hooks": [{ "type": "command", "command": ".claude/hooks/require-draft-pr.sh" }]
+      "hooks": [
+        { "type": "command", "command": ".claude/hooks/require-draft-pr.sh" },
+        { "type": "command", "command": ".claude/hooks/require-pr-wait.sh" }
+      ]
     }]
   }
 }
@@ -91,7 +93,27 @@ Why a hook, and not a line in this document: an agent runs the command it was gi
 
 It reads the command text, so a heredoc that only *writes* those words is blocked too. The message says to use the Write or Edit tool for that. A false block costs one turn; a missed create spends minutes on unfinished work and asks for a review nobody wanted.
 
-### 2.4 Optional: `Stop` hook
+### 2.4 `require-pr-wait.sh` — PreToolUse on `Bash` (#354)
+
+Blocks a hand-written CI wait, and names `pnpm pr-wait <n>` instead (§5.2). Exit `2` returns the
+reason: a poll written on the spot reads `state` against the `bucket` word the human output prints,
+so it never matches and the loop exits on its first evaluation. A wait that never waited looks
+exactly like one that ran.
+
+Scope is narrow on purpose, because a hook people route around enforces nothing. Only the *fake*
+waits are refused: a loop around a status read, a `sleep` beside one, and `--watch` on the pull
+request's own checks. Single reads pass — a run list, a log read, one JSON read of the checks. So
+does `gh run watch <id>`, which really does block and is the only tool for a `workflow_dispatch`
+run, because a dispatch run has no pull request and so no `pr-wait`.
+
+Why a hook, and not a line in this document: the session that wrote `pr-wait` hand-rolled a status
+loop afterwards anyway. A rule an agent must remember breaks on a busy turn, and this rule decides
+whether a red gate gets reported as green.
+
+Like the draft-PR hook, it reads the command text, so a heredoc that only *writes* those words is
+blocked too, and the message says to use the Write or Edit tool for that.
+
+### 2.5 Optional: `Stop` hook
 
 A `Stop` hook running `pnpm verify` when `git status --porcelain src/` is non-empty gives a clean end-of-turn signal. **Recommended off by default** and enabled per-preference: on a fast machine it is 45 seconds of latency at the end of every turn, and the PostToolUse hook plus CI already cover the same ground. Documented here so the choice is deliberate rather than absent.
 
@@ -120,9 +142,9 @@ The warning names the **intersection** only, never every dirty file. A warning t
 
 `pnpm test:e2e` sits outside `pnpm verify` and inside `pnpm verify:full`. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`), and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable.
 
-For a long time nothing ran it on the server. Every trigger in `.github/workflows/ci.yml` was off by decision, so `pre-push` was the only thing between a broken invariant and `main`. That is the half of #255 the `verify:full` wrapper could not close: the wrapper fixed what an agent proves, and left the pull-request page with no signal at all.
+For a long time nothing ran it on the server. Every trigger in `.github/workflows/ci.yml` was off by decision (D-S1.11-12), so `pre-push` was the only thing between a broken invariant and `main`. That is the half of #255 the `verify:full` wrapper could not close: the wrapper fixed what an agent proves, and left the pull-request page with no signal at all.
 
-The owner took the trigger decision on 2026-09-13, and CI now runs the whole gate — `test:e2e` included — on every pull request that asks for review (§5). `plans/s1.11-close-the-gate/README.md` still records that decision as it stood. A plan records what was decided then; this section records what holds now.
+The owner took the trigger decision on 2026-09-13, and CI now runs the whole gate — `test:e2e` included — on every pull request that asks for review (§5). `plans/s1.11-close-the-gate/README.md` still records D-S1.11-12 as it stood. A plan records what was decided then; this section records what holds now.
 
 `pre-push` stays, and it stays as the same command. It is the faster half, because a failure surfaces before the push rather than after a wait on a runner. It is also the only half that covers a push nobody opens a pull request for.
 
@@ -172,8 +194,9 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | Builtin-restriction configs (B1–B11) | `test/guards/lint-fixtures.test.ts` — runs ESLint programmatically over `test/fixtures/violations/*.ts` and asserts the expected rule id fires on the expected line | a `files:` glob is edited so a rule silently stops covering a directory |
 | dependency-cruiser graph | `scripts/guard-red-test.mjs` (`03-boundaries-and-config.md` §1.3) | the graph config is loosened or the tool is misconfigured |
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
-| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a gate check that runs, and that no row's status is blank; **and** (added in S1.11) that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
+| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts every I1–I14 row names a gate check that runs, and that no row's status is blank; **and** (S1.11, D-S1.11-11) that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
 | One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify:full` and no single check beside it, that `pre-push` runs that same command, that the check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
+| The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
 | The S1 → S2 gate itself | `test/guards/slice-gate.test.ts` (S1.11, plans/s1.11-close-the-gate/README.md §3.4) — drives `tagged()` against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted — U2's own scenario |
 
@@ -187,12 +210,12 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 
 | Case | Rule it proves |
 |---|---|
-| `scheduling/ -> render/` | `scheduling-boundary` — `scheduling/` never reaches a DOM layer (ADR 0002) |
+| `scheduling/ -> render/` | `scheduling-boundary` — D4, `scheduling/` never reaches a DOM layer |
 | `interaction/ -> layout/` | `interaction-boundary` — P3's one-arrow widening (`model/` only) stays to one arrow |
 | `rollup-is-removable: second importer` | `rollup-is-removable` — the Rollup leaf keeps exactly one legal importer |
 | `dataset-change-subscription-is-removable: second importer` | `dataset-change-subscription-is-removable` — same shape, S2/S4 leaf |
 | `history-is-removable: second importer` | `history-is-removable` — same shape, undo/redo leaf |
-| `extensions/ -> view/` | `extensions-public-only` — the dogfood gate: a built-in feature may see only `api/` and `model/` |
+| `extensions/ -> view/` | `extensions-public-only` — D-S5-5's dogfood gate: a built-in feature may see only `api/` and `model/` |
 | `render/ -> data/transaction.js` | the `data/dev-mode.ts` leaf widening stays scoped to that one file, not `data/` generally |
 | `extensions/ -> data/transaction.js` | same, from the `extensions/` side |
 | `harness/ -> src/` (an internal, `import '../src/layout/items/variants.js'`) | `harness-public-api-only` (#287) — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
@@ -262,6 +285,7 @@ Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start
 ```bash
 pnpm open-pr --title "<title>" --body-file <path>   # pushes the branch, then opens a DRAFT
 gh pr ready <n>                                     # the decision to merge — this starts CI
+pnpm pr-wait <n>                                    # waits for the gate, states the result in one line
 ```
 
 The draft is not a formality. It is what the trigger set reads:

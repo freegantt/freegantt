@@ -3,7 +3,6 @@ id: 0007-friend-only-methods-move-off-the-class-into-a-weakmap-backed-function
 title: "Friend-only methods move off the class, into a WeakMap-backed function"
 ---
 
-
 `TimeScaleModel.bind`/`ScrollModel.bind` (`layout/viewport/`) were marked `@internal — view/ only` in a comment, but the classes are re-exported as values from `api/index.ts` (D9's shared-axis call site needs `new TimeScaleModel(...)` to be public), so `bind` was fully public on the published type regardless of the comment — the exact "pipeline name leaking into the public surface" pattern issue #84 was filed to close out. TypeScript has no "internal to this module, public to this other module" visibility modifier: a class member is `public`, `#private`, or `protected`, none of which express "callable only from `view/`."
 
 We moved `bind`/`unbind` off both classes entirely, into free functions in `layout/viewport/` (`bindTimeScale`, `bindScroll`) that close over a module-private `WeakMap<Model, InternalState>` populated in each class's own constructor. Only `view/gantt-shell.ts` imports these functions; they are never re-exported from `view/index.ts` or `api/index.ts`. The exported `TimeScaleModel`/`ScrollModel` classes genuinely have no `bind` method — there is nothing to hide because it was never a method.

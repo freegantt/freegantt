@@ -3,7 +3,6 @@ id: boundaries-and-config
 title: "FreeGantt — Boundaries, Types, and Test Rig"
 ---
 
-
 The guards that aren't lint rules: the layer graph, the type-system settings that make whole bug classes unrepresentable, the sealed package surface, and the Vitest project split that proves the purity claims by construction.
 
 ---
@@ -42,10 +41,10 @@ From that one object the config generates:
 | `not-to-dev-dep` | error | A runtime import of a devDependency |
 | `only-data-imports-reactive-dep` | error | `alien-signals` reached from anywhere but `src/data/reactivity.ts` |
 | `no-deprecated-core` | error | Node builtins in `src/` (the library must run in a browser) |
-| `pure-may-not-reach-dom-layers` | error | The scheduling-isolation rule (ADR 0002) stated in the diagram's own vocabulary, for a message that cites it |
+| `pure-may-not-reach-dom-layers` | error | The D4 rule stated in the diagram's own vocabulary, for a message that cites D4 |
 | `harness-public-api-only` | error | `harness/`, `e2e/` or `fixtures/` reaching an internal under `src/` by a relative path (#287) |
 
-The last one before `harness-public-api-only` is redundant against the generated per-layer rules and exists for the error message: `scheduling/ and render/view/interaction never import each other — they meet only through data/` is a better failure than a generic allowlist violation.
+The last one before `harness-public-api-only` is redundant against the generated per-layer rules and exists for the error message: `scheduling/ and render/view/interaction never import each other — they meet only through data/ (D4)` is a better failure than a generic allowlist violation.
 
 `harness-public-api-only` is the one rule in this file scoped outside `src/`: it treats `harness/`, `e2e/` and `fixtures/` as the library's first consumers, so a workaround inside them meets the same sealed `exports` map a real published package meets, and cannot silently reach an internal (CLAUDE.md's stop rule). **What it actually enforces is narrower than "never a relative path."** dependency-cruiser matches *resolved* paths, and the `freegantt` alias (`vite.config.ts`) resolves to `src/api/index.ts` — the same file a hand-written `'../src/api/index.js'` resolves to. So `pathNot: '^src/api/index\.ts$'`, the clause that lets the alias through, lets that hand-written path through with it; the rule catches a relative reach *past* the index, not a relative path *naming* the index. Closing that second case is `eslint.config.js`'s `no-restricted-imports`/`no-restricted-syntax` block, scoped to the same three folders — it reads the specifier text an author wrote, which is the thing a resolved-path tool cannot see. The two guards are belt and braces; `pnpm boundaries` scans all four folders for the first, `pnpm lint` for the second, and `scripts/guard-red-test.mjs` proves both actually block a violation (review finding F7, #287).
 
@@ -138,7 +137,7 @@ export default defineConfig({
 });
 ```
 
-`assert-no-dom.ts` does one thing: define `document`/`window`/`navigator` as getters that throw with a message citing the scheduling-isolation rule (ADR 0002). In plain Node they'd be `undefined` and a violation would surface as a confusing `TypeError`; this way the failure names the rule.
+`assert-no-dom.ts` does one thing: define `document`/`window`/`navigator` as getters that throw with a message citing D4. In plain Node they'd be `undefined` and a violation would surface as a confusing `TypeError`; this way the failure names the rule.
 
 **Consequence worth stating plainly:** a pure module that acquires a DOM dependency fails its own unit tests immediately, before lint, before CI, before review. That is the earliest possible layer, and it costs one setup file.
 

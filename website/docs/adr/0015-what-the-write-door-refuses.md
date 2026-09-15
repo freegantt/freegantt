@@ -9,7 +9,6 @@ decided: `editable: false` refuses `entries.update()` — one rule at two doors,
 open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---
 
-
 **This ADR blocks nothing.** It changes the default posture of a public door, which is why it deserves its own decision rather than a bullet inside a storage rename. The working material is [`plans/field-redesign/0015-write-door/`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/field-redesign/0015-write-door/README.md).
 
 ## Context

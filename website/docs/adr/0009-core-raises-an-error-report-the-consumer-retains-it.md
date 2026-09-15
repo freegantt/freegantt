@@ -3,7 +3,6 @@ id: 0009-core-raises-an-error-report-the-consumer-retains-it
 title: "Core raises an Error report; the consumer retains it"
 ---
 
-
 A refusal is a throw, a CSS state, or a `console` line, and then it is gone. Twenty-odd
 `attemptMutation(...)` call sites in `harness/` keep a boolean and discard the
 `MutationCancelledError` that explains it. Seven `console.error`/`console.warn` sites in `src/`

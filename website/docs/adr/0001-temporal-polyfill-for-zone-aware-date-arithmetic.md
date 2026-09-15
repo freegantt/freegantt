@@ -3,7 +3,6 @@ id: 0001-temporal-polyfill-for-zone-aware-date-arithmetic
 title: "Use `temporal-polyfill` for zone-aware date arithmetic"
 ---
 
-
 D6 puts every day boundary, week start, and snap through the dataset's IANA zone, so `time/zone.ts` has to convert between Instants and plain (wall-clock) times correctly in any zone. The original hand-rolled implementation (`Intl.DateTimeFormat.formatToParts` plus fixed-point iteration) had no *documented* behavior for the two cases that matter — a DST fold, where a plain time is ambiguous (1:30 AM on the fall-back day happens twice), and a DST gap, where it does not exist at all (2:30 AM on the spring-forward day). It resolved them incidentally rather than deliberately, and nothing tested which way. We adopted `temporal-polyfill` because it implements Temporal's explicit disambiguation model (`compatible` / `earlier` / `later` / `reject`), which turns fold and gap from undefined behavior into a policy we chose and can test.
 
 This is a deliberate exception to the one-runtime-dependency budget, and the second dependency the project has ever taken.
@@ -17,7 +16,7 @@ This is a deliberate exception to the one-runtime-dependency budget, and the sec
 
 ## Consequences
 
-- **The escape hatch stays open.** Only `time/zone.ts` imports the package, via `/fns/*` entry points, and `time/`'s public surface (`instant`, `toPlain`, `fromPlain`, `startOfDay`, `addDays`, `diffDays`) did not change. Swapping to native `Temporal` when it ships is a one-file change. Header and a11y date formatting go through `Intl.DateTimeFormat` directly, not the polyfill's `toLocaleString`, so that single-import-site consequence still holds; `weekOfYear` is the one new polyfill call, and it lives in `zone.ts` (S1.12).
+- **The escape hatch stays open.** Only `time/zone.ts` imports the package, via `/fns/*` entry points, and `time/`'s public surface (`instant`, `toPlain`, `fromPlain`, `startOfDay`, `addDays`, `diffDays`) did not change. Swapping to native `Temporal` when it ships is a one-file change. Header and a11y date formatting go through `Intl.DateTimeFormat` directly, not the polyfill's `toLocaleString`, so that single-import-site consequence still holds; `weekOfYear` is the one new polyfill call, and it lives in `zone.ts` (S1.12, D-S1.12-13).
 - **Accepted bus-factor risk.** ~95% of the package's commits come from a single maintainer. We took this knowingly rather than by oversight; the pin is `^1.0.4` (not exact) so patch and minor updates — security fixes included — land automatically and are caught by the DST fold/gap and multi-zone round-trip tests in `zone.test.ts` before merge.
 - **One live workaround.** `temporal-polyfill@1.0.4`'s zoned day-unit diff throws (`prepareZonedEpochDiff is not a function`) in every zone, UTC included — a packaging bug in that build. `diffDays` routes through `PlainDate.diffDays` instead, which is exact there because both operands are already calendar day-starts. Re-check this when the version bumps.
 
