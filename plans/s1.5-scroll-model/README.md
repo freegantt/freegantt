@@ -49,6 +49,12 @@ The cost is honest and small: `state.position` can read beyond `state.max`. That
 
 ### D-S1.5-3 — Sharing shares both axes; no axis views in S1
 
+> **Later note, 2026-09-15 — the return condition fired, and the answer is not the shape below.** The decision below is S1's record and stands unchanged: nothing named here is built, and the both-axis fallback is still what ships. What changed is the one thing this decision made conditional. A caller now needs "share x, private y" — two panes over one time axis holding different row sets — so **#405** carries it.
+>
+> **Both rejections below were answered, not skipped — see D-S6-1 (`plans/s6-scale-and-sync/README.md` §5.3).** The answer is not `xOnly()`. It makes one **scroll axis** the shared unit, so a Gantt holds an x source and a y source and a caller aims each one. Nothing is split, so there are never "two lifetimes in one object" — there are two objects, one lifetime each. And an axis has no `axes` array to tag or to filter twice into nothing.
+>
+> **`yOnly()` is therefore not withheld.** Shared y is what two Gantts aiming their y references at one object *means*; banning it would cost code that allowing it does not. It gets no advertised surface and no new acceptance row.
+
 `xOnly()`, `yOnly()`, `ScrollSource` and `ScrollAxis` are **not built**. `GanttOptions.scroll` takes a `ScrollModel` and sharing it links both axes.
 
 The **designed and tested** case is charts on a shared `TimeScaleModel`, where `contentWidth` is identical for every binding by construction — so on x there is no aggregation question, no local clamp, no pinning, and no disagreement between scrollbars. This matches the whole ecosystem: every surveyed library that links two components links the **domain (x) axis** — AG Grid's `alignedGrids` is horizontal-only and offers no vertical equivalent; ECharts `connect`, uPlot's `sync(key)`, and charting-platform "sync charts" features all share the time/x range.
@@ -387,5 +393,6 @@ Guardrails and types first (`plans/04` §3.2/§3.3), then the pure model, then t
 | `gantt.reveal(entryId)` | S1.8 | a pane height that re-measures (S1.7b, #8) — `Viewport`, `frame.rows` and `RowHeightIndex` all ship at S1.7 |
 | `gantt.scale =` / `gantt.scroll =` setters | S1.8 | the already-built `Viewport` (S1.7) owning unbind → rebind → re-render |
 | `panBy(delta)` | S4 | wheel / keyboard controllers producing deltas |
-| `xOnly()` / `yOnly()` | when a host needs "share x, private y" | a real caller (D-S1.5-3) |
+| `xOnly()` / `yOnly()` as *views over a model* | **never — withdrawn 2026-09-15** | nothing. D-S6-1 makes one scroll axis the shared unit instead, so there is no model to take a filtered view of |
+| Per-axis sharing (share x, y, both or neither) | **now — the caller arrived 2026-09-15 (#405)** | the build. The shape is settled: **D-S6-1**, `plans/s6-scale-and-sync/README.md` §5.3. It answers both rejections above rather than repeating them |
 | One-scrollbar treatment for linked charts | its own issue against S1.8 | a linked-group concept in `view/` |
