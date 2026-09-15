@@ -65,6 +65,7 @@ The single table a reviewer (human or agent) checks against. Every rule from `pl
 | Hot path / structure inline-style split (`01` §3, S1.10 D-S1.10-6) | `freegantt/no-inline-style-outside-geometry` (`02` §3.11) — bans `node.style.<prop> = …` for `prop` outside `{ transform, width, height }`, scoped to `src/render/**` + `src/view/**`; structure moves to `view/styles.ts`'s base stylesheet instead | `lint` | `AUTO` |
 | Published `--fg-*` tokens and `.fg-*` Parts match the sheet (`plans/02` §4, #261, #334) | `test/guards/theming-contract.test.ts` — every sheet token and class is in `docs/05-consumer-api.md`, internal names never leak into a consumer table, and documented token defaults match their real source | `guards` | `AUTO` |
 | The published site serves what `docs/` says (#221) | `scripts/build-website-docs.mjs --check` — every page under `website/docs/guides/` and `website/docs/adr/` is generated from its `docs/` source, and a page with no source fails. `pnpm docs:publish` rewrites them | `docs:published-is-current` | `AUTO` |
+| Every link on the site resolves, and the API reference builds | `pnpm --dir website build` — `docusaurus.config.ts` sets `onBrokenLinks: 'throw'`, so a link that points at nothing fails the build, and TypeDoc runs over `src/` in the same pass | `docs:site-builds` | `AUTO` |
 
 ---
 
