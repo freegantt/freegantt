@@ -114,7 +114,7 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     // source (ADR 0020) can make the two disagree, on purpose.
     key: 'hierarchyParentId',
     compute: (_entry, ctx) => ctx.hierarchyParentId(),
-    column: { header: 'Parent (checked)', width: 120 },
+    column: { header: 'Parent', width: 120 },
   },
 ]);
 

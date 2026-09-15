@@ -26,7 +26,7 @@ A second cost sat beside it. `data/rollup.ts`'s `collectTouchedIds` reads a **pr
 {
   key: 'hierarchyParentId',
   compute: (_entry, ctx) => ctx.hierarchyParentId(),
-  column: { header: 'Parent (checked)', width: 120 },
+  column: { header: 'Parent', width: 120 },
 },
 ```
 
