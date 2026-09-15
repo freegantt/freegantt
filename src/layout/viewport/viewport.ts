@@ -11,8 +11,9 @@ import { diffMs, resolvePreset, ZOOM_PRESETS } from '../../time/index.js';
 import type { PresetRef, TimeScale, ViewPreset } from '../../time/index.js';
 import { BatchedNotifier } from './batched-notifier.js';
 import { FreeGanttError } from '../../model/index.js';
-import type { BuiltInThrownCode } from '../../model/index.js';
 import type { Entry, Instant, Rect, Size, TimeSpan } from '../../model/index.js';
+// Not re-exported from `model/index.ts` — a code a consumer cannot reach stays off its barrel too (#380).
+import type { InternalThrownCode } from '../../model/errors.js';
 import { DEFAULT_OVERSCAN } from '../frame.js';
 import type { Overscan } from '../frame.js';
 
@@ -96,7 +97,7 @@ export class Viewport {
   bind(dataset: DatasetBinding, onChange: () => void): ViewportHandle {
     if (this.#onChange) {
       throw new FreeGanttError(
-        'viewport-already-bound' satisfies BuiltInThrownCode,
+        'viewport-already-bound' satisfies InternalThrownCode,
         'Viewport.bind: this Viewport is already bound. One Viewport serves one Gantt; share a TimeScaleModel or ScrollModel instead (D9).',
       );
     }
