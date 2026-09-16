@@ -2,6 +2,16 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
+import path from 'node:path';
+
+import linkOutsideDocsToGitHub from './plugins/link-outside-docs-to-github.mjs';
+
+/** True for an ADR. Thirteen of them open with a `status:`/`decided:`/`open:` block that a reader
+ *  sees on the page. It is prose between two rules, it is not YAML, and it is not front matter. */
+function isDecisionRecord(filePath: string): boolean {
+  return filePath.split(path.sep).join('/').includes('/docs/adr/');
+}
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
@@ -20,7 +30,6 @@ const config: Config = {
   projectName: 'FreeGantt',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'throw',
 
   i18n: {
     defaultLocale: 'en',
@@ -32,8 +41,13 @@ const config: Config = {
       'classic',
       {
         docs: {
+          // The repository's own `docs/` folder, served as it is written. There is no copy of it
+          // here, so a page cannot drift from its source and a merge cannot conflict over output.
+          path: '../docs',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/Pawel-IT/FreeGantt/tree/main/website/',
+          // A link that leaves `docs/` has no page to land on, so it becomes the file on GitHub.
+          beforeDefaultRemarkPlugins: [linkOutsideDocsToGitHub],
+          editUrl: ({ docPath }) => `https://github.com/Pawel-IT/FreeGantt/blob/main/docs/${docPath}`,
           routeBasePath: '/',
           // A page states when it was last made true. `last_update.date` in the front matter is that
           // statement; a page with none falls back to its last commit date.
@@ -54,9 +68,28 @@ const config: Config = {
     // 'detect' parses .md files as plain CommonMark (no JSX/MDX compilation) so that HTML passes
     // through untouched; .mdx files, if any are added later, still get full MDX.
     format: 'detect',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
+    // An ADR's opening block is body content, so Docusaurus must not read it as front matter.
+    parseFrontMatter: async (params) =>
+      isDecisionRecord(params.filePath)
+        ? { frontMatter: {}, content: params.fileContent }
+        : params.defaultParseFrontMatter(params),
   },
 
   plugins: [
+    // The API reference is generated from `src/`, so it gets its own docs instance and stays out of
+    // the authored `docs/` tree above.
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'api',
+        path: 'docs/api',
+        routeBasePath: 'api',
+        sidebarPath: './sidebars-api.ts',
+      },
+    ],
     [
       'docusaurus-plugin-typedoc',
       {
@@ -105,6 +138,7 @@ const config: Config = {
         {
           type: 'docSidebar',
           sidebarId: 'apiSidebar',
+          docsPluginId: 'api',
           position: 'left',
           label: 'API reference',
         },
@@ -121,7 +155,7 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            { label: 'Guides', to: '/guides/guardrails-overview' },
+            { label: 'Guides', to: '/guardrails-overview' },
             { label: 'ADRs', to: '/adr/' },
             { label: 'API reference', to: '/api/' },
           ],
