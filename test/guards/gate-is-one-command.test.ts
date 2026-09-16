@@ -114,8 +114,8 @@ describe('the workflow runs for review, and never for a draft (#255)', () => {
   // Two event types reach this workflow for one branch, and both must land in one concurrency
   // group. Keying on `pull_request.number` gave `workflow_dispatch` no number, so it fell back to
   // `github.ref` and got a group of its own: one branch, two groups, nothing cancelled, the whole
-  // gate run twice in parallel and billed twice. `docs/04` §5.2 sends a reader down exactly that
-  // path when `gh pr ready` does not fire the trigger, so this is the common case, not the corner.
+  // gate run twice in parallel and billed twice. `workflow_dispatch` stays a human door, so the
+  // shared group still has to hold.
   it('puts both event types for one branch in one concurrency group', () => {
     const group = /^\s*group:\s*(.+)$/m.exec(workflow)?.[1] ?? '';
     expect(group, 'the concurrency group must key on the branch').toContain('head.ref');
