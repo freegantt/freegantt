@@ -20,7 +20,7 @@
   <body class="bg-stone-50 text-slate-900 font-sans">
     <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
       <header class="border-b border-slate-200 pb-6 space-y-3">
-        <p class="text-xs uppercase tracking-wider text-slate-500">grok · FreeGantt · branch review (pass 1)</p>
+        <p class="text-xs uppercase tracking-wider text-slate-500">grok · FreeGantt · branch review (pass 2)</p>
         <h1 class="font-serif text-3xl">Ship <span class="font-mono text-2xl">timeShading()</span> — issue #404</h1>
         <p class="text-sm text-slate-600">
           Branch <code class="font-mono text-slate-700">Pawel-IT/ship-shading-non-working-time-shading-as-a-first</code>
@@ -44,9 +44,19 @@
         </div>
       </header>
 
-      <section id="pass2" class="rounded-lg border border-dashed border-slate-300 bg-white p-5">
+      <section id="pass2" class="rounded-lg border border-slate-300 bg-white p-5 space-y-3">
         <h2 class="text-xs uppercase tracking-wider text-slate-500">Pass 2 — fresh sub-agent verification</h2>
-        <p class="mt-2 text-sm text-slate-600">Not run yet. A cold-start sub-agent will open every cited line and return one verdict per id: Confirmed, Mis-described, Wrong, or Unproven.</p>
+        <p class="text-sm text-slate-700">A cold-start sub-agent re-read every cited line against <code class="font-mono">git diff 96a49b9...HEAD</code>, re-probed F1, F6 and F8, then deleted the probe. Six findings are <span class="font-mono text-emerald-700">Confirmed</span>. Two are <span class="font-mono text-amber-700">Mis-described</span>: the problem is real, one word or one sub-claim was wrong. Accounts below now match the code.</p>
+        <ul class="text-sm text-slate-700 grid md:grid-cols-4 gap-x-4 gap-y-1 font-mono">
+          <li>F1 Confirmed</li>
+          <li>F2 Confirmed</li>
+          <li>F3 Confirmed</li>
+          <li>F4 Mis-described</li>
+          <li>F5 Mis-described</li>
+          <li>F6 Confirmed</li>
+          <li>F7 Confirmed</li>
+          <li>F8 Confirmed</li>
+        </ul>
       </section>
 
       <section id="what-held" class="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
@@ -64,7 +74,7 @@
       <section id="axes" class="grid md:grid-cols-2 gap-4 text-sm">
         <article class="rounded-lg border border-slate-200 bg-white p-4">
           <h2 class="text-xs uppercase tracking-wider text-slate-500">Standards</h2>
-          <p class="mt-2">Hard: F2 (catchable error not on the public surface), F4 (live reconfigure is the wanted job; the factory documents a silent no-op instead). Judgement: F3 (one word, two throw sites), F7 (tests name a builder they do not call). I10 holds for DST; clip math is epoch min/max, not zone arithmetic.</p>
+          <p class="mt-2">Hard: F2 (catchable error not on the public surface), F4 (live reconfigure is the wanted job; assignment drops the new instance, warns, and never re-runs <code class="font-mono">view()</code>). Judgement: F3 (one word, two throw sites), F7 (tests name a builder they do not call). I10 holds for DST; clip math is epoch min/max, not zone arithmetic.</p>
         </article>
         <article class="rounded-lg border border-slate-200 bg-white p-4">
           <h2 class="text-xs uppercase tracking-wider text-slate-500">Spec</h2>
@@ -78,7 +88,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F1</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
-            <span class="text-xs text-slate-500">architecture · simplicity · spec</span>
+            <span class="text-xs text-slate-500">architecture · simplicity · spec · pass 2: Confirmed</span>
             <span class="text-xs font-medium text-emerald-700">Strong</span>
           </div>
           <p class="text-xl font-serif">daysOfWeek() walks day boundaries, not days that intersect the window</p>
@@ -131,7 +141,7 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F2</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
-            <span class="text-xs text-slate-500">API surface</span>
+            <span class="text-xs text-slate-500">API surface · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif">EmptyCoversError is catchable by code, not by name</p>
           <p class="font-mono text-xs text-slate-500">src/model/errors.ts:83,937-948 · src/model/index.ts:129 · src/api/index.ts:226-275 · etc/freegantt.api.md · src/extensions/features/time-shading.test.ts:6,204</p>
@@ -144,7 +154,7 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F3</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">naming</span>
+            <span class="text-xs text-slate-500">naming · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif">EmptyCoversError's message blames notCovered() on a path that never calls it</p>
           <p class="font-mono text-xs text-slate-500">src/model/errors.ts:937-948 · src/extensions/features/time-shading.ts:95-99 · src/extensions/features/time-shading-covers.ts:175-177</p>
@@ -156,20 +166,21 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F4</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
-            <span class="text-xs text-slate-500">API surface</span>
+            <span class="text-xs text-slate-500">API surface · pass 2: Mis-described</span>
             <span class="text-xs font-medium text-emerald-700">Strong</span>
           </div>
-          <p class="text-xl font-serif">Live reconfigure is the wanted job — the factory documents a silent no-op</p>
-          <p class="font-mono text-xs text-slate-500">src/api/plugin.ts:34-36 · src/extensions/features/time-shading.ts:117-124 · docs/06-plugin-authoring.md:27-28,122-134 · src/view/gantt-shell.ts:2176-2178</p>
+          <p class="text-xl font-serif">Live reconfigure is the wanted job — assignment drops the new instance</p>
+          <p class="font-mono text-xs text-slate-500">src/api/plugin.ts:34-36 · src/extensions/features/time-shading.ts:117-124 · docs/06-plugin-authoring.md:27-28,122-134 · src/view/gantt-shell.ts:2176-2178 · src/extensions/plugin-runtime.ts:159-175</p>
           <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             <span class="font-medium">Decided 2026-09-16.</span> Live reconfigure is the close. An app author who writes <code class="font-mono">gantt.plugins = [timeShading(next)]</code> must get the new rules. Documenting the uninstall/install pair as the product is not the close.
           </div>
-          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">ChromePlugin</code> JSDoc names <code class="font-mono">timeShading()</code> as the example, then says <code class="font-mono">gantt.plugins</code> reconfigures it live. <code class="font-mono">docs/06</code> repeats that sentence. The factory's own JSDoc says <code class="font-mono">gantt.plugins = [timeShading(next)]</code> is a silent no-op, because the setter diffs by id and every call mints <code class="font-mono">freegantt.timeShading</code>. The call site already reads as the job. The implementation refuses it.</p>
-          <p class="text-sm text-slate-700"><strong>Solution.</strong> Make assignment apply the new rules — same id, new covers. The two-call recipe leaves the report. The factory JSDoc that treats the no-op as intended leaves with it. How the runtime replaces a same-id occupant is an implementation detail behind that one interface.</p>
+          <p class="text-sm text-slate-700"><strong>Pass 2 correction.</strong> The drop is not silent. <code class="font-mono">plugin-runtime.ts:159-175</code> raises <code class="font-mono">plugin-reconfigure-dropped</code> as a warning. An author who subscribes to errors sees it. The new rules still never reach <code class="font-mono">view()</code>.</p>
+          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">ChromePlugin</code> JSDoc names <code class="font-mono">timeShading()</code> as the example, then says <code class="font-mono">gantt.plugins</code> reconfigures it live. <code class="font-mono">docs/06</code> repeats that sentence. The factory's own JSDoc says <code class="font-mono">gantt.plugins = [timeShading(next)]</code> is a silent no-op, because the setter diffs by id and every call mints <code class="font-mono">freegantt.timeShading</code>. The call site already reads as the job. The runtime keeps the old occupant, warns, and never re-runs <code class="font-mono">view()</code>.</p>
+          <p class="text-sm text-slate-700"><strong>Solution.</strong> Make assignment apply the new rules — same id, new covers. The two-call recipe leaves the report. The factory JSDoc that treats the drop as intended leaves with it. How the runtime replaces a same-id occupant is an implementation detail behind that one interface.</p>
           <div class="grid md:grid-cols-2 gap-4">
             <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
               <p class="text-xs uppercase tracking-wider text-red-700 mb-2">Before — the job leaks across two doors</p>
-              <p class="font-mono text-xs">gantt.plugins = [timeShading(next)] → no-op</p>
+              <p class="font-mono text-xs">gantt.plugins = [timeShading(next)] → warn, old rules stay</p>
               <p class="font-mono text-xs mt-1">uninstall + install → new rules</p>
               <p class="mt-2 text-red-800">The type's interface says live. The factory's interface says two calls. The wanted job is live.</p>
             </div>
@@ -185,18 +196,19 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F5</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
-            <span class="text-xs text-slate-500">spec</span>
+            <span class="text-xs text-slate-500">spec · pass 2: Mis-described</span>
           </div>
           <p class="text-xl font-serif">docs/06 never names timeShading()'s Part or Token</p>
           <p class="font-mono text-xs text-slate-500">plans/issues/open/404-time-shading.md:138-140 · docs/06-plugin-authoring.md · docs/architecture/files.md:220-221 · CONTEXT.md:602-616 · docs/05-consumer-api.md:164,303 · README.md:433-479</p>
-          <p class="text-sm text-slate-700">Spec: “<code class="font-mono">docs/06-plugin-authoring.md</code>'s Decorations example, <code class="font-mono">docs/architecture/files.md</code>'s row, <code class="font-mono">CONTEXT.md</code>'s glossary entry, and the Token list all name <code class="font-mono">timeShading()</code>'s shipped Part and Token.” Grep of <code class="font-mono">docs/06-plugin-authoring.md</code> finds no <code class="font-mono">timeShading</code>, no <code class="font-mono">.fg-time-shading</code>, no <code class="font-mono">--fg-time-shading-fill</code>. The file has no Decorations section; its worked example is <code class="font-mono">overBudgetRows()</code> only. The other three sites do carry both names. README's Decorations section names the factory but not the Part or Token.</p>
+          <p class="text-sm text-slate-700">Spec: “<code class="font-mono">docs/06-plugin-authoring.md</code>'s Decorations example, <code class="font-mono">docs/architecture/files.md</code>'s row, <code class="font-mono">CONTEXT.md</code>'s glossary entry, and the Token list all name <code class="font-mono">timeShading()</code>'s shipped Part and Token.” Grep of <code class="font-mono">docs/06-plugin-authoring.md</code> finds no <code class="font-mono">timeShading</code>, no <code class="font-mono">.fg-time-shading</code>, no <code class="font-mono">--fg-time-shading-fill</code>. The file has no Decorations section; its worked factories are <code class="font-mono">ownerField()</code> and <code class="font-mono">overBudgetRows()</code>.</p>
+          <p class="text-sm text-slate-700"><strong>Pass 2 correction.</strong> Only two of the other three sites carry both names: <code class="font-mono">CONTEXT.md:602-613</code> and <code class="font-mono">docs/05-consumer-api.md:164,303</code>. <code class="font-mono">docs/architecture/files.md:220-221</code> names the factory and the builders, not the Part or the Token. README's Decorations section names the factory without either. Closing the spec sentence means adding Part and Token to <code class="font-mono">docs/06</code> <em>and</em> to the files.md row.</p>
         </article>
 
         <article id="F6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F6</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">spec</span>
+            <span class="text-xs text-slate-500">spec · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif">hours() wraps when from equals to — spec says “earlier”</p>
           <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading-covers.ts:122 · plans/issues/open/404-time-shading.md:33-34</p>
@@ -208,7 +220,7 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F7</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">test quality</span>
+            <span class="text-xs text-slate-500">test quality · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif">Two tests name a builder they never call</p>
           <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading.test.ts:162-177 · src/extensions/features/time-shading-covers.test.ts:111-119</p>
@@ -220,7 +232,7 @@ flowchart TD
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F8</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">spec · naming</span>
+            <span class="text-xs text-slate-500">spec · naming · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif">A zero-argument builder reaches the state EmptyCoversError exists to stop</p>
           <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading-covers.ts:91-103,133-144,156-168,175-177 · plans/issues/open/404-time-shading.md:49-50</p>
@@ -236,7 +248,7 @@ flowchart TD
       <section id="api-questions" class="rounded-lg border border-slate-200 bg-white p-6 space-y-2 text-sm">
         <h2 class="text-xs uppercase tracking-wider text-slate-500">API surface checklist</h2>
         <ul class="list-disc ml-5 space-y-1">
-          <li>Does an app author read the call site as the job? <strong>Yes</strong> for install. Reconfigure already reads as <code class="font-mono">gantt.plugins = [timeShading(next)]</code> — that is the wanted live job (F4). The branch documents a no-op instead.</li>
+          <li>Does an app author read the call site as the job? <strong>Yes</strong> for install. Reconfigure already reads as <code class="font-mono">gantt.plugins = [timeShading(next)]</code> — that is the wanted live job (F4). Assignment warns and keeps the old rules.</li>
           <li>Does the branch add a knob the author must set for the default? <strong>No.</strong></li>
           <li>Can the code say what a comment says? The <code class="font-mono">every?: never</code> comment is load-bearing. The ten-line “issue still says shading()” note on the factory can go once the issue file (already edited) is the record.</li>
           <li>Does a new kind extend through a seam? <strong>Yes</strong> — <code class="font-mono">TimeCover</code> and <code class="font-mono">CoverPredicate</code>.</li>
