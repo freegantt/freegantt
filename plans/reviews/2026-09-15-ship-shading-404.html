@@ -18,10 +18,15 @@
         <p class="mt-2 text-sm text-slate-600">
           Branch <code class="font-mono text-slate-700">ship-shading-non-working-time-shading-as-a-first</code>
           · fixed point <code class="font-mono text-slate-700">96a49b9</code> (<code class="font-mono text-slate-700">git diff 96a49b9...HEAD</code>)
-          · 6 commits · +1560 / −168 · reviewed 2026-09-15
+          · 7 authored commits · +1608 / −216 · 39 files · reviewed 2026-09-15
         </p>
         <p class="mt-4 text-sm text-slate-600">Severity legend: <span class="font-medium text-amber-600">Medium</span> — worth fixing; <span class="font-medium text-sky-600">Low</span> — fix when nearby; <span class="font-medium text-slate-500">Note</span> — decide and move on. Findings carry stable ids F1…F6; pass 2 answers by id.</p>
       </header>
+
+      <section id="pass2" class="rounded-lg border border-slate-300 bg-white p-5">
+        <h2 class="text-xs uppercase tracking-wider text-slate-500">Pass 2 — fresh sub-agent verification</h2>
+        <p class="mt-2 text-sm text-slate-700">A cold-start sub-agent re-read every cited line against <code class="font-mono">git diff 96a49b9...HEAD</code> and returned one verdict per finding. All six findings are <span class="font-mono text-emerald-700">Confirmed</span>; every cited line lies inside the branch diff. The sub-agent also caught that the header numbers were wrong — corrected above to <code class="font-mono">7 authored commits · +1608 / −216</code>. The report commit itself lands outside those counts.</p>
+      </section>
 
       <section id="what-held" class="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
         <h2 class="text-xs uppercase tracking-wider text-emerald-700">What held up under review</h2>
@@ -41,7 +46,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F1</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
-            <span class="text-xs text-slate-500">API surface</span>
+            <span class="text-xs text-slate-500">API surface · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">EmptyCoversError never reaches the public surface — its sibling errors do.</p>
           <p class="mt-3 text-sm text-slate-700">The thrown <code class="font-mono">code: 'empty-covers'</code> is already a public <code class="font-mono">BuiltInThrownCode</code> member, the class is exported from <code class="font-mono">src/model/index.ts:129</code> (internal barrel), but it is absent from the catchable-errors export block in <code class="font-mono">src/api/index.ts:226-248</code> — where <code class="font-mono">InvalidPlainTimeError</code> (line 236) and <code class="font-mono">EmptySegmentsError</code> (line 246) sit — so it is also absent from <code class="font-mono">etc/freegantt.api.md</code>. A consumer who catches on <code class="font-mono">instanceof</code> cannot name this error, and the spec ties the refusal to the public <code class="font-mono">EmptySegmentsError</code> precedent (a consumer mistake at the config boundary). Tests catch it through the internal barrel, so no test proves the public door.</p>
@@ -59,7 +64,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F2</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">naming</span>
+            <span class="text-xs text-slate-500">naming · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">EmptyCoversError's message blames notCovered() on a path that never calls it.</p>
           <p class="mt-3 text-sm text-slate-700">The message at <code class="font-mono">src/model/errors.ts:945</code> begins <code class="font-mono">'notCovered: "covers" must name at least one cover. …'</code>. Two throw sites share the class: the <code class="font-mono">notCovered()</code> builder (<code class="font-mono">time-shading-covers.ts:177</code>) and the factory's own <code class="font-mono">assertNoEmptyCoversList</code> (<code class="font-mono">time-shading.ts:95-99</code>). A plugin author who writes <code class="font-mono">timeShading([{ covers: [] }])</code> never called <code class="font-mono">notCovered</code> — the message attributes their mistake to a function they did not use.</p>
@@ -71,7 +76,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F3</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">test quality</span>
+            <span class="text-xs text-slate-500">test quality · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">The wraps-midnight test does not assert the wrap it is named for.</p>
           <p class="mt-3 text-sm text-slate-700">In <code class="font-mono">src/extensions/features/time-shading-covers.test.ts:59-73</code> the test finds the evening band then asserts <code class="font-mono">evening.end &gt; evening.start</code>. After clipping to the window, any present band passes that — including one that ended at the window edge instead of the next morning's 07:00 reading. The DST neighbours (lines 75-109) pin exact boundaries, so the mechanism is covered, but this test's title is a claim the body cannot fail on.</p>
@@ -83,7 +88,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F4</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
-            <span class="text-xs text-slate-500">code hygiene</span>
+            <span class="text-xs text-slate-500">code hygiene · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">view(_ctx) uses the parameter it names as unused.</p>
           <p class="mt-3 text-sm text-slate-700"><code class="font-mono">view(_ctx: PluginContext)</code> at <code class="font-mono">src/extensions/features/time-shading.ts:135</code> reads <code class="font-mono">_ctx.view</code> on the next line. The underscore prefix signals "deliberately unused"; the code contradicts that. A repo-wide search shows <code class="font-mono">_ctx</code> appears in no other <code class="font-mono">src/</code> file, so this is not an established house pattern — it is a leftover from the harness-era plugin where the parameter began unused.</p>
@@ -95,7 +100,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F5</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-note">note</span>
-            <span class="text-xs text-slate-500">doc hygiene</span>
+            <span class="text-xs text-slate-500">doc hygiene · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">One comment still names the retired weekendShading().</p>
           <p class="mt-3 text-sm text-slate-700">The disposer comment at <code class="font-mono">src/extensions/features/time-shading.ts:148</code> cites <code class="font-mono">"weekendShading()'s own precedent"</code>, but the branch deleted that function — the precedent now lives in the deleted file's history, not in the repo. (ADR 0019:45 also cites <code class="font-mono">weekendShading()</code>; that one is a historical record, leave it.)</p>
@@ -107,7 +112,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold">F6</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-note">note</span>
-            <span class="text-xs text-slate-500">spec / naming</span>
+            <span class="text-xs text-slate-500">spec / naming · pass 2: Confirmed</span>
           </div>
           <p class="text-xl font-serif mt-3">The shipped name is timeShading(); the issue text still says shading().</p>
           <p class="mt-3 text-sm text-slate-700">Issue #404 asks to ship <code class="font-mono">shading()</code> with pipe members <code class="font-mono">.fg-shading</code>/<code class="font-mono">--fg-shading-fill</code>. The branch ships <code class="font-mono">timeShading()</code>, <code class="font-mono">.fg-time-shading</code>, <code class="font-mono">--fg-time-shading-fill</code>, and the issue stays open. The rename reads well — it matches the library's <code class="font-mono">time-*</code> pipe vocabulary and the domain rule that time questions belong in <code class="font-mono">time/</code> — and the divergence is documented at the top of <code class="font-mono">time-shading.ts:7-11</code> and in the plan file. It is a deliberate decision, not an accident.</p>
