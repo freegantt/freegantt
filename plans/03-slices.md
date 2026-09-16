@@ -308,20 +308,19 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **The number is a name, not a position.** S0–S7 are in slice order; S9 is not. It was given a high number to park it, then promoted. **There is no S8.** Do not read "S9" as "after S7" — it runs **before any further S6 work**, and only S6 work that serves it continues past it (author's ruling, 2026-09-15; `plans/s6-scale-and-sync/README.md` §4 Q3).
 
-**Goal:** the four public-surface asks the first real consumer raised (`plans/handoff/2026-09-15-crm-filament-labor.md`), which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
+**Goal:** the public-surface asks the first real consumer raised (`plans/handoff/2026-09-15-crm-filament-labor.md`), which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
 
-**Tracker:** `plans/s9-consumer-surface/README.md` — the row-by-row state, the acceptance lists, and the order.
+**Tracker:** none yet. The first tracker described a design the author withdrew, so it was deleted rather than edited (2026-09-16). **Whoever starts R1 writes the plan first**, in a new `plans/s9-consumer-surface/`, from #421.
 
 **Scope**
 
-- **R1 · #401** — a row that paints one value per tick. A **Timeline cell** is one Row by one Tick (#411 split the vocabulary already). New geometry (`FrameTimelineCell`, `GeometryFrame.timelineCells`, `TimelineCellId`), never a widened `Item`. One producer per visible row, taking `readonly TimeSpan[]` and no pixels. A fifth renderer point, `'timelineCell'`, plus `--fg-timeline-cell-*` tokens and `data-variant`. A `timelineCellClick` event that does not consume D-S3-10's empty-timeline clear. **Design settled** in [#401's own comment](https://github.com/Pawel-IT/FreeGantt/issues/401#issuecomment-5689299551).
-- **R2 · #402** — a `Segment` carries consumer data, reaching the renderer that paints it. No design yet.
-- **R3 · #404** — non-working-time shading ships as a first-party plugin, not a harness demo.
-- **R4 · #408** — a gesture creates a `Segment`, **only if still wanted after R1**. R1's event gives an app the create path already, so what is left is "does the library mint the Segment itself?".
+- **R1 · #421** — a Segment is a bar: its own optional `name`, its own `props` from the one `fields` registry, its own variant rule, its own `can`, and `entries.updateSegment()` as the write door. A box names the field it prints, for Entry bars and Segment boxes alike. **No plan yet — write one before any code.**
+- **R2 · #404** — non-working-time shading ships as a first-party plugin, not a harness demo.
+- **R3 · #408** — a gesture creates a `Segment`. Open on its own merits: `EntryEdit.segments` replaces the whole array, so an additive door is owed whoever writes the create path.
 
-**Not in scope:** #400 (packaging) stays S6's R5 — it blocks every consumer including this slice. No `Dependency`, no `schedule()`, no link geometry: still S7. No per-bucket rollup — R1's producer is keyed by row, so an aggregate row is a row the consumer answers for.
+**Not in scope:** #400 (packaging) stays S6's R5 — it blocks every consumer including this slice. No `Dependency`, no `schedule()`, no link geometry: still S7. **No Timeline cells and no row of one value per tick** — #401's design was withdrawn and the issue is closed; a row of boxes is authored Segments (#421). **No tick-aligned merging**: a Segment draws its true span at every zoom, and merging is a later, opt-in look.
 
-**Gate:** mint `[S9-A1]`–`[S9-A4]` and add the entry to `scripts/slice-gate.mjs`, which has nothing past `S5 → S6` today. Whoever starts R1 flips `.slice` to `S9`.
+**Gate:** mint `[S9-A1]`–`[S9-A3]` and add the entry to `scripts/slice-gate.mjs`, which has nothing past `S5 → S6` today. Whoever starts R1 flips `.slice` to `S9`.
 
 ---
 
