@@ -106,7 +106,6 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
     colorMode: {
       respectPrefersColorScheme: true,
     },
@@ -155,7 +154,7 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            { label: 'Guides', to: '/guardrails-overview' },
+            { label: 'Guides', to: '/' },
             { label: 'ADRs', to: '/adr/' },
             { label: 'API reference', to: '/api/' },
           ],
