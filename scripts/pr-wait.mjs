@@ -1,53 +1,62 @@
 #!/usr/bin/env node
 // `pnpm pr-wait <n>` — wait for a pull request's CI to finish, and state the result in words.
 //
-// Why a script, and not a poll written on the spot. `gh pr checks` carries two status vocabularies
-// on one object: `bucket` is lowercase and coarse (`pending`, `pass`, `fail`), and `state` is
-// uppercase and fine (`QUEUED`, `IN_PROGRESS`, `SUCCESS`). The human output prints the bucket word.
-// So a loop written from reading that output — `until [ "$(gh pr checks N --json state …)" !=
-// "PENDING" ]` — compares a `state` against a `bucket` word, never matches, and falls through on
-// its first evaluation while still printing the word `pending`. A wait that exits at once looks
-// exactly like a wait that ran. That is `verify:full`'s `EXIT: $?` lesson in a second place: read
-// the wrong field, believe it, report green.
+// Why a script, and not a poll written on the spot. A wait written from `gh pr checks` reads the
+// pull request's check-suite rollup. This workflow skips the `gate` job on every draft push, and
+// again on close, so that rollup is full of `SKIPPED` rows that share the required check name.
+// `gh pr checks` then reports "nothing started" while `gh run list` already shows a live
+// `pull_request` run — or it prints `pass` from `--watch` and returns empty JSON on the re-read.
+// Both look like a red gate. Neither is. That is the #415 / #420 failure: the observer lied, the
+// job was fine, and the documented fallback (`gh workflow run`) cancelled the live run through the
+// shared concurrency group.
 //
-// The fix is the same one. Nobody polls by hand — `gh pr checks --watch` does the waiting, and the
-// verdict is computed from a fresh read afterwards, never from the watch's exit code. Every run
+// So this script never reads check suites. It lists CI workflow runs for the pull request's head
+// commit, ignores skipped and cancelled rows, and gives the waiting to `gh run watch`. Every run
 // prints exactly one verdict line, and it is the last line. Green needs that exact line. A run a
 // signal kills has no verdict line, and reads as unproven, never as green.
 //
-// This script also knows the two ways CI reports nothing while looking fine, both from docs/04 §5.2:
+// Two ways CI reports nothing while looking fine, both from docs/04 §5.2:
 //   - A draft runs nothing, by design (#255). That is not a pass.
-//   - `gh pr ready` does not always fire the `ready_for_review` trigger (#298, #235). The newest run
-//     stays the stale draft-time run, `conclusion: skipped`, and nothing queues. This script names
-//     the documented fallback — `gh workflow run ci.yml --ref <branch>` — instead of waiting out a
-//     run that will never start.
-//
-// A third case wears the second one's clothes for a few seconds, and it is the harder one.
-// `gh pr ready` returns before its run appears, and the stale draft-time run is already on the
-// board, SKIPPED. So an all-skipped board tells one of two opposite stories: the trigger never
-// fired, or the real run is seconds away. One read cannot tell them apart. On #360 that misread
-// cost a needless `gh workflow run` dispatch, and the dispatch then cancelled the real run through
-// the shared concurrency group. So a skipped check never counts as a started run, and the wait
-// below holds until a check arrives that is not skipped.
+//   - No live `pull_request` run after the start wait. Push a commit so `synchronize` fires. Do
+//     not dispatch: a `workflow_dispatch` run is on the branch, not the pull request, so it cannot
+//     close this wait, and concurrency cancels the real run (#415).
 
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-/** How long to wait for a run to appear after "ready" before calling the trigger gap (§5.2). */
+/** How long to wait for a live `pull_request` run to appear after "ready". */
 const START_TIMEOUT_SECONDS = 120;
+/** How long to wait for a replacement run after concurrency cancels the one we were watching. */
+const REPLACEMENT_TIMEOUT_SECONDS = 60;
 const POLL_SECONDS = 10;
+const WORKFLOW = 'ci.yml';
 
-/** Buckets `gh pr checks` uses for a check that has not settled yet. */
-const UNSETTLED = new Set(['pending']);
-/** Buckets that mean the gate did not go green. */
-const FAILING = new Set(['fail', 'cancel']);
+const RUN_JSON_FIELDS = 'databaseId,status,conclusion,event,headSha,url,createdAt';
 
 /**
- * True when a real run is on the board. A skipped check is the leftover draft-time run, so it
- * never counts as a start — see the header for the two opposite stories an all-skipped board tells.
+ * True when this row is the gate for `headSha`: a `pull_request` run that actually ran.
+ * A skipped row is the draft-time or close-time job `if:`; a cancelled row is a superseded attempt.
  */
-export function hasRunStarted(checks) {
-  return checks.some((check) => check.bucket !== 'skipping');
+export function isLiveGateRun(run, headSha) {
+  return (
+    run.event === 'pull_request' &&
+    run.headSha === headSha &&
+    run.conclusion !== 'skipped' &&
+    run.conclusion !== 'cancelled'
+  );
+}
+
+/**
+ * The newest live gate run for this head.
+ * `gateRunForHead(runs, pr.headSha)` reads "the gate run for this head".
+ */
+export function gateRunForHead(runs, headSha) {
+  let newest;
+  for (const run of runs) {
+    if (!isLiveGateRun(run, headSha)) continue;
+    if (newest === undefined || run.createdAt > newest.createdAt) newest = run;
+  }
+  return newest;
 }
 
 function gh(argv, options = {}) {
@@ -59,76 +68,51 @@ function sleepSeconds(seconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
 }
 
-/** The checks on a pull request, or `[]` when GitHub reports none at all. */
-function readChecks(number) {
-  const result = gh(['pr', 'checks', String(number), '--json', 'name,state,bucket,link']);
-  if (result.status !== 0 && !result.stdout.trim().startsWith('[')) return [];
-  try {
-    return JSON.parse(result.stdout);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * What a set of checks says about the gate, in the words the reader needs to act on it.
- * `checks` is `gh pr checks --json name,state,bucket,link` output. Returns the verdict text and
- * whether the run is settled, so the caller never has to read a bucket or a state itself.
- */
-export function summarizeChecks(checks, { number, seconds, branch }) {
-  const took = `(${seconds}s)`;
-
-  if (checks.length === 0) {
-    return {
-      settled: true,
-      ok: false,
-      verdict:
-        `pr-wait FAILED — #${number} reports no checks after ${seconds}s, so CI never started. ` +
-        `This is the ready_for_review trigger gap (docs/04 §5.2, #298/#235). ` +
-        `Force the same gate job: \`gh workflow run ci.yml --ref ${branch}\`.`,
-    };
-  }
-
-  const failed = checks.filter((check) => FAILING.has(check.bucket));
-  if (failed.length > 0) {
-    const names = failed.map((check) => `"${check.name}"`).join(', ');
-    const link = failed[0]?.link ?? '';
-    return {
-      settled: true,
-      ok: false,
-      verdict: `pr-wait FAILED — ${names} failed on #${number}: ${link} ${took}`,
-    };
-  }
-
-  if (checks.some((check) => UNSETTLED.has(check.bucket))) {
-    return { settled: false, ok: false, verdict: '' };
-  }
-
-  // Every check skipped means the newest run predates "ready" — the stale draft-time run §5.2
-  // describes. A skipped gate proves nothing, so this is never a pass. The caller waits this state
-  // out first (see `hasRunStarted`), because the real run often queues seconds after `gh pr ready`.
-  if (checks.every((check) => check.bucket === 'skipping')) {
-    return {
-      settled: true,
-      ok: false,
-      verdict:
-        `pr-wait FAILED — every check on #${number} is SKIPPED after ${seconds}s, so this is the ` +
-        `stale draft-time run, not a gate that ran (docs/04 §5.2, #298/#235). ` +
-        `Force the same gate job: \`gh workflow run ci.yml --ref ${branch}\`.`,
-    };
-  }
-
-  const green = checks.filter((check) => check.bucket === 'pass').length;
-  return {
-    settled: true,
-    ok: true,
-    verdict: `pr-wait PASS — ${green} of ${checks.length} checks green on #${number} ${took}`,
-  };
-}
-
 function stop(message) {
   console.log(`pr-wait FAILED — ${message}`);
   process.exit(1);
+}
+
+/**
+ * What a gate run says, in the words the reader needs to act on it.
+ * `run` is one `gh run list` / `gh run view` row, or `undefined` when none is live.
+ */
+export function summarizeGateRun(run, { number, seconds, branch, dispatchUrl }) {
+  const took = `(${seconds}s)`;
+
+  if (run === undefined) {
+    const dispatch =
+      dispatchUrl === undefined
+        ? ''
+        : ` A workflow_dispatch run is on this commit (${dispatchUrl}) and cannot close this wait — it may have cancelled the gate.`;
+    return {
+      settled: true,
+      ok: false,
+      verdict:
+        `pr-wait FAILED — #${number} has no live pull_request gate run after ${seconds}s.${dispatch} ` +
+        `Push a commit so synchronize fires, then run this again. ` +
+        `Confirm with \`gh run list --branch ${branch} --workflow ${WORKFLOW}\`.`,
+    };
+  }
+
+  if (run.status !== 'completed') {
+    return { settled: false, ok: false, verdict: '' };
+  }
+
+  const url = run.url ?? '';
+  if (run.conclusion === 'success') {
+    return {
+      settled: true,
+      ok: true,
+      verdict: `pr-wait PASS — gate succeeded on #${number}: ${url} ${took}`,
+    };
+  }
+
+  return {
+    settled: true,
+    ok: false,
+    verdict: `pr-wait FAILED — gate ${run.conclusion} on #${number}: ${url} ${took}`,
+  };
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
@@ -146,7 +130,7 @@ if (isMain) {
     'view',
     ...(asked ? [asked] : []),
     '--json',
-    'number,url,isDraft,state,headRefName',
+    'number,url,isDraft,state,headRefName,headRefOid',
   ]);
   if (view.status !== 0) {
     stop(
@@ -158,6 +142,7 @@ if (isMain) {
 
   const pr = JSON.parse(view.stdout);
   const branch = pr.headRefName;
+  const headSha = pr.headRefOid;
 
   if (pr.state !== 'OPEN') {
     stop(`#${pr.number} is ${pr.state}, so there is nothing to wait for. ${pr.url}`);
@@ -169,33 +154,109 @@ if (isMain) {
     );
   }
 
-  // First: has a real run started? Waiting inside `--watch` for a run that never queues is the
-  // trigger gap's failure mode, and it looks like a slow CI rather than a missing one. An
-  // all-skipped board is not a start either, so this loop waits it out before it believes the gap.
-  let checks = readChecks(pr.number);
-  while (!hasRunStarted(checks) && elapsed() < START_TIMEOUT_SECONDS) {
-    console.log(
-      `pr-wait: #${pr.number} shows no run yet — waiting for one to queue ` +
-        `(${elapsed()}s of ${START_TIMEOUT_SECONDS}s).`,
-    );
-    sleepSeconds(POLL_SECONDS);
-    checks = readChecks(pr.number);
+  function ghJson(argv) {
+    const result = gh(argv);
+    if (result.status !== 0) {
+      stop(`\`${argv.join(' ')}\` failed. ${(result.stderr || result.stdout).trim()}`);
+    }
+    try {
+      return JSON.parse(result.stdout);
+    } catch {
+      stop(`\`${argv.join(' ')}\` did not return JSON.`);
+    }
   }
 
-  if (hasRunStarted(checks)) {
-    console.log(`pr-wait: watching ${checks.length} check(s) on #${pr.number} — ${pr.url}`);
-    // `gh` owns the waiting. This script never polls a status field itself, which is the whole
-    // point: there is no vocabulary here to read wrong.
-    gh(['pr', 'checks', String(pr.number), '--watch', '--fail-fast'], { stdio: 'inherit' });
+  function listPullRequestRuns() {
+    return ghJson([
+      'run',
+      'list',
+      '--commit',
+      headSha,
+      '--event',
+      'pull_request',
+      '--workflow',
+      WORKFLOW,
+      '--limit',
+      '20',
+      '--json',
+      RUN_JSON_FIELDS,
+    ]);
   }
 
-  // The verdict comes from a fresh read, never from the watch's exit code — same reason
-  // `verify:full` states its result in the output stream instead of leaving it to `$?`.
-  const summary = summarizeChecks(readChecks(pr.number), {
-    number: pr.number,
-    seconds: elapsed(),
-    branch,
-  });
-  console.log(`\n${summary.verdict}`);
-  process.exit(summary.ok ? 0 : 1);
+  function listDispatchRunUrl() {
+    const runs = ghJson([
+      'run',
+      'list',
+      '--commit',
+      headSha,
+      '--event',
+      'workflow_dispatch',
+      '--workflow',
+      WORKFLOW,
+      '--limit',
+      '1',
+      '--json',
+      'url',
+    ]);
+    return runs[0]?.url;
+  }
+
+  function readRun(id) {
+    return ghJson(['run', 'view', String(id), '--json', RUN_JSON_FIELDS]);
+  }
+
+  function waitForLiveRun(timeoutSeconds) {
+    const deadline = elapsed() + timeoutSeconds;
+    let run = gateRunForHead(listPullRequestRuns(), headSha);
+    while (run === undefined && elapsed() < deadline) {
+      console.log(
+        `pr-wait: #${pr.number} shows no live gate run yet — waiting for one to queue ` +
+          `(${elapsed()}s, ${timeoutSeconds}s budget).`,
+      );
+      sleepSeconds(POLL_SECONDS);
+      run = gateRunForHead(listPullRequestRuns(), headSha);
+    }
+    return run;
+  }
+
+  function failNoLiveRun() {
+    const dispatchUrl = listDispatchRunUrl();
+    const summary = summarizeGateRun(undefined, {
+      number: pr.number,
+      seconds: elapsed(),
+      branch,
+      ...(dispatchUrl === undefined ? {} : { dispatchUrl }),
+    });
+    console.log(`\n${summary.verdict}`);
+    process.exit(1);
+  }
+
+  let run = waitForLiveRun(START_TIMEOUT_SECONDS);
+  if (run === undefined) failNoLiveRun();
+
+  for (;;) {
+    if (run.status !== 'completed') {
+      console.log(`pr-wait: watching run ${run.databaseId} on #${pr.number} — ${run.url}`);
+      // `gh` owns the waiting. This script never polls a status field itself.
+      gh(['run', 'watch', String(run.databaseId), '--compact'], { stdio: 'inherit' });
+    }
+
+    const fresh = readRun(run.databaseId);
+    if (fresh.conclusion === 'cancelled') {
+      console.log(
+        `pr-wait: run ${run.databaseId} was cancelled — waiting for a replacement pull_request run.`,
+      );
+      run = waitForLiveRun(REPLACEMENT_TIMEOUT_SECONDS);
+      if (run === undefined) failNoLiveRun();
+      continue;
+    }
+
+    const summary = summarizeGateRun(fresh, {
+      number: pr.number,
+      seconds: elapsed(),
+      branch,
+    });
+    console.log(`\n${summary.verdict}`);
+    process.exit(summary.ok ? 0 : 1);
+  }
 }
