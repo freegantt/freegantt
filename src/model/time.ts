@@ -64,6 +64,16 @@ export interface TimeSpanInput {
 }
 
 /**
+ * A wall-clock time of day, with no date and no zone attached — `'17:00'` or `'17:00:00'`.
+ *
+ * A narrower cousin of a Plain time (`PlainParts`): a Plain time names a full reading, year through
+ * second, while a `PlainTimeInput` names only the hour, minute and optional second, because its date
+ * comes from elsewhere (the day a builder is already walking). `time/readPlainTime` is the one place
+ * this string is read.
+ */
+export type PlainTimeInput = string;
+
+/**
  * How a *date-only* `end` input (`'2026-09-08'`, no time of day) is read.
  *
  * Storage is half-open [start, end) (plans/01 §5), but a consumer writing a bare date on `end` means the

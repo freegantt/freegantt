@@ -11,6 +11,11 @@ issue plans land here as they're opened.
 
 **Closed:**
 
+- [#404](https://github.com/Pawel-IT/FreeGantt/issues/404) — ship shading as a first-party plugin.
+  `timeShading()` ships from `'freegantt'` with five `TimeCover` builders (`daysOfWeek`, `hours`,
+  `dates`, `spans`, `notCovered`), floors at the default ladder's zoom rungs (D-H), and merges
+  adjacent spans with no hairline. `weekendShading()`, the harness-only plugin it replaces, is
+  retired. See [404-time-shading.md](./404-time-shading.md).
 - [#160](https://github.com/Pawel-IT/FreeGantt/issues/160) — an open Cell editor whose
   commit was refused had one exit, Escape, and nothing on screen said so. Shipped: a
   discard button inside the editor's own wrapper, `freegantt.discardCellEdit` behind

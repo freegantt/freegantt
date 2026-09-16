@@ -31,7 +31,7 @@ export interface PluginIdentity {
   requires?: readonly PluginId[];
 }
 
-/** A plugin that is chrome and nothing else — `weekendShading()`. It declares no Field, reserves no
+/** A plugin that is chrome and nothing else — `timeShading()`. It declares no Field, reserves no
  *  store and claims no edit hook. So it installs on the `Gantt`, and `gantt.plugins` reconfigures it
  *  live.
  *

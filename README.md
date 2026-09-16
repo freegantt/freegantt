@@ -417,9 +417,9 @@ has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired t
 
 ## Plugins
 
-`docs/06-plugin-authoring.md` covers both plugin contracts (`GanttPlugin`, `DatasetPlugin`), every
-registration seam, and the errors an author meets. `tooltips()`, `contextMenu()`, and
-`inlineEditing()` ship as built-in plugins; installing none of them keeps them out of a consumer's
+`docs/06-plugin-authoring.md` covers both plugin contracts (`ChromePlugin`, `DataPlugin`), every
+registration seam, and the errors an author meets. `tooltips()`, `contextMenu()`, `inlineEditing()`,
+and `timeShading()` ship as built-in plugins; installing none of them keeps them out of a consumer's
 bundle.
 
 ```ts
@@ -430,53 +430,53 @@ const gantt = new Gantt({ container, dataset, plugins: [tooltips(), contextMenu(
 
 ### Decorations — painting behind or over the bars
 
-A decoration is a band the timeline paints that is not an Entry: a weekend, a holiday, a freeze
-window, a highlighted row. A plugin registers a provider, and the library calls it with the visible
-window each time that window changes.
+A decoration is a band the timeline paints that is not an Entry: a weekend (`timeShading()`, a
+shipped built-in — see `docs/06-plugin-authoring.md`), a highlighted row, a freeze window. A plugin
+registers a provider, and the library calls it with the visible window each time that window
+changes.
 
 ```ts
-import type { GanttPlugin } from 'freegantt';
+import { definePlugin } from 'freegantt';
 
-export function weekendShading(): GanttPlugin {
-  return {
-    id: 'demo.weekendShading',
-    setup(ctx) {
-      ctx.view.registerDecoration('underBars', ({ span, time, tickUnit, tickIncrement }) => {
-        // Only where a reader can see individual days — a weekend is meaningless at month zoom.
-        if (tickUnit !== 'day' || tickIncrement !== 1) return [];
-        return time
-          .eachDay(span)
-          .filter((day) => time.dayOfWeek(day) === 6) // Saturday
-          .map((saturday) => ({
-            kind: 'rangeBand' as const,
-            start: saturday,
-            // One band for the whole weekend. Two adjacent one-day bands meet at a fractional
-            // pixel, and the remainder shows through as a hairline splitting every stripe.
-            end: time.addDays(saturday, 2),
-            class: 'demo-weekend-band',
-          }));
-      });
+function overBudgetRows(threshold: number) {
+  return definePlugin({
+    id: 'demo.overBudgetRows',
+    view(ctx) {
+      ctx.view.registerDecoration('underBars', ({ rows }) =>
+        rows
+          .filter((row) => {
+            const entryId = row.entryIds[0];
+            if (entryId === undefined) return false;
+            const cost = ctx.dataset.entries.get(entryId)?.read('cost');
+            return typeof cost === 'number' && cost > threshold;
+          })
+          .map((row) => ({ kind: 'rowStripe' as const, rowId: row.id })),
+      );
     },
-  };
+  });
 }
+
+export { overBudgetRows };
 ```
 
 Three things make this work, and they are the whole contract:
 
-- **A provider states time, never pixels.** It returns `Instant`s; the library converts them through
-  the bound `TimeScale`. That is what lets two Gantts share one axis without a provider knowing.
-- **`ctx` answers what the window is.** `span` is the visible range (already widened by overscan),
-  `rows` are the rows in it, `time` is zone-bound date maths, and `tickUnit`/`tickIncrement` say what
-  one tick column stands for — so a provider that only makes sense at some granularity can return
-  nothing at the others.
-- **`class` is how it gets its paint.** It lands on the node beside the library's own
-  `.fg-range-band`, so a consumer styles it in CSS. The library never invents a colour for you.
+- **A provider states time or rows, never pixels.** A `rangeBand` names `Instant`s; the library
+  converts them through the bound `TimeScale`. That is what lets two Gantts share one axis without a
+  provider knowing.
+- **`ctx` answers what the window is.** `rows` are the rows in view, `span` is the visible time range
+  (already widened by overscan), `time` is zone-bound date maths, and `tickUnit`/`tickIncrement` say
+  what one tick column stands for — so a provider that only makes sense at some granularity can
+  return nothing at the others.
+- **`class` is how it gets its paint.** It lands on the node beside the library's own `.fg-row-stripe`
+  or `.fg-range-band`, so a consumer styles it in CSS. The library never invents a colour for you.
 
 `'underBars'` paints below the bar layer, `'overBars'` above it. The other input kind is
-`{ kind: 'rowStripe', rowId, class }`, for shading a row rather than a date range. Registration is
-retracted with the plugin — `ctx.disposables` already holds it, so there is no disposer to return.
+`{ kind: 'rangeBand', start, end, class }`, for shading a date range rather than a whole row —
+`timeShading()` is the shipped example. Registration is retracted with the plugin —
+`ctx.disposables` already holds it, so there is no disposer to return.
 
-A worked example lives in `harness/plugins/weekend-shading.ts`, written against the public entry
+A worked example lives in `harness/plugins/over-budget-rows.ts`, written against the public entry
 point only. `docs/06-plugin-authoring.md` has the full contract.
 
 ## Events
@@ -569,15 +569,15 @@ To customize dark mode instead of just light mode, scope the override to the dar
 
 ## Further reading
 
-| Doc                           | Audience                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| `plans/02-public-api.md`      | Full consumer API — events, errors, serialization, customization ladder          |
-| `docs/05-consumer-api.md`     | Consumer API index and S4 surface summary                                        |
-| `CONTEXT.md`                  | Glossary (Entry, Field, Row, Row source, Rollup, …)                              |
-| `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                         |
-| `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                               |
-| `docs/06-plugin-authoring.md` | Plugin authoring guide — `GanttPlugin`, `DatasetPlugin`, every registration seam |
-| `website/` (`pnpm docs`)      | Docusaurus site — architecture, guides, ADRs, and generated API reference        |
+| Doc                           | Audience                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| `plans/02-public-api.md`      | Full consumer API — events, errors, serialization, customization ladder        |
+| `docs/05-consumer-api.md`     | Consumer API index and S4 surface summary                                      |
+| `CONTEXT.md`                  | Glossary (Entry, Field, Row, Row source, Rollup, …)                            |
+| `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                       |
+| `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                             |
+| `docs/06-plugin-authoring.md` | Plugin authoring guide — `ChromePlugin`, `DataPlugin`, every registration seam |
+| `website/` (`pnpm docs`)      | Docusaurus site — architecture, guides, ADRs, and generated API reference      |
 
 ## Development
 
