@@ -4,6 +4,20 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
+**Status, 2026-09-16. One question waits. Do not re-open a ruled one.**
+
+| | Question | Status |
+|---|---|---|
+| Q1 | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless |
+| Q2 | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays |
+| Q3 | does `addSegment` ship beside `updateSegment`? | **Ruled** — yes, in B3 |
+| Q4 | does `updateSegment` write the Entry's envelope row? | **Ruled** — yes, the min/max over its Segments |
+| Q5 | can an `EditExtender` propose a one-Segment edit? | **Ruled** — yes, and `SegmentEdits` is its own collection |
+| Q6 | is there one write door, or two? | **OPEN** — reserved for a grill. No build settles it |
+| J1–J3 | the three spike findings | Ruled, from `SPIKE-FINDINGS.md` |
+
+**Two entries record a call that was reversed.** Q1's first ruling was wrong, and Q5's first shape was wrong. Both keep the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
+
 ---
 
 ## Q1 — does `update(id, { segments: [] })` make an Entry plain?
@@ -158,7 +172,7 @@ measured at `d87cbdd` — but it starts from the table, which this check found a
 
 ### The question as it was raised
 
-**OPEN until the ruling above, 2026-09-16.**
+**Answered by the ruling above. The wording below is kept as the record of what was asked.**
 
 Today, an envelope-only edit on a **sole**-Segment Entry mirrors into both the Entry's own
 `start`/`end` and that one Segment (`reconcileEnvelope`, `entry-reader.ts:320-343`) — one bar, one
