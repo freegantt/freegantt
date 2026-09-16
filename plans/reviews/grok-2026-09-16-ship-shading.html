@@ -64,7 +64,7 @@
       <section id="axes" class="grid md:grid-cols-2 gap-4 text-sm">
         <article class="rounded-lg border border-slate-200 bg-white p-4">
           <h2 class="text-xs uppercase tracking-wider text-slate-500">Standards</h2>
-          <p class="mt-2">Hard: F2 (catchable error not on the public surface), F4 (two public stories for one reconfigure job). Judgement: F3 (one word, two throw sites), F7 (tests name a builder they do not call). I10 holds for DST; clip math is epoch min/max, not zone arithmetic.</p>
+          <p class="mt-2">Hard: F2 (catchable error not on the public surface), F4 (live reconfigure is the wanted job; the factory documents a silent no-op instead). Judgement: F3 (one word, two throw sites), F7 (tests name a builder they do not call). I10 holds for DST; clip math is epoch min/max, not zone arithmetic.</p>
         </article>
         <article class="rounded-lg border border-slate-200 bg-white p-4">
           <h2 class="text-xs uppercase tracking-wider text-slate-500">Spec</h2>
@@ -157,22 +157,26 @@ flowchart TD
             <span class="font-mono font-bold">F4</span>
             <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
             <span class="text-xs text-slate-500">API surface</span>
-            <span class="text-xs font-medium text-amber-700">Worth exploring</span>
+            <span class="text-xs font-medium text-emerald-700">Strong</span>
           </div>
-          <p class="text-xl font-serif">App authors get two stories for one reconfigure job</p>
+          <p class="text-xl font-serif">Live reconfigure is the wanted job — the factory documents a silent no-op</p>
           <p class="font-mono text-xs text-slate-500">src/api/plugin.ts:34-36 · src/extensions/features/time-shading.ts:117-124 · docs/06-plugin-authoring.md:27-28,122-134 · src/view/gantt-shell.ts:2176-2178</p>
-          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">ChromePlugin</code> JSDoc names <code class="font-mono">timeShading()</code> as the example, then says <code class="font-mono">gantt.plugins</code> reconfigures it live. <code class="font-mono">docs/06</code> repeats that sentence. The factory's own JSDoc says <code class="font-mono">gantt.plugins = [timeShading(next)]</code> is a silent no-op, because the setter diffs by id and every call mints <code class="font-mono">freegantt.timeShading</code>. Both sentences are locally true. Together they fail the call-site test: an app author who reads the type and assigns a new rule list gets no change.</p>
-          <p class="text-sm text-slate-700"><strong>Solution.</strong> One story on the factory, and the type must not contradict it. Either mint a fresh id per call (then the setter really reconfigures), or drop <code class="font-mono">timeShading()</code> from the “reconfigures live” sentence and show the uninstall/install pair next to the constructor example.</p>
+          <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            <span class="font-medium">Decided 2026-09-16.</span> Live reconfigure is the close. An app author who writes <code class="font-mono">gantt.plugins = [timeShading(next)]</code> must get the new rules. Documenting the uninstall/install pair as the product is not the close.
+          </div>
+          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">ChromePlugin</code> JSDoc names <code class="font-mono">timeShading()</code> as the example, then says <code class="font-mono">gantt.plugins</code> reconfigures it live. <code class="font-mono">docs/06</code> repeats that sentence. The factory's own JSDoc says <code class="font-mono">gantt.plugins = [timeShading(next)]</code> is a silent no-op, because the setter diffs by id and every call mints <code class="font-mono">freegantt.timeShading</code>. The call site already reads as the job. The implementation refuses it.</p>
+          <p class="text-sm text-slate-700"><strong>Solution.</strong> Make assignment apply the new rules — same id, new covers. The two-call recipe leaves the report. The factory JSDoc that treats the no-op as intended leaves with it. How the runtime replaces a same-id occupant is an implementation detail behind that one interface.</p>
           <div class="grid md:grid-cols-2 gap-4">
             <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
-              <p class="text-xs uppercase tracking-wider text-red-700 mb-2">Before — two interfaces for one job</p>
+              <p class="text-xs uppercase tracking-wider text-red-700 mb-2">Before — the job leaks across two doors</p>
               <p class="font-mono text-xs">gantt.plugins = [timeShading(next)] → no-op</p>
               <p class="font-mono text-xs mt-1">uninstall + install → new rules</p>
-              <p class="mt-2 text-red-800">The type's interface says the first. The factory's interface says the second.</p>
+              <p class="mt-2 text-red-800">The type's interface says live. The factory's interface says two calls. The wanted job is live.</p>
             </div>
             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
-              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — one interface</p>
-              <p>Depth: the factory owns reconfigure. Callers learn one pair. The setter keeps its id-diff for every other plugin.</p>
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — one interface, live</p>
+              <p class="font-mono text-xs">gantt.plugins = [timeShading(next)] → new rules</p>
+              <p class="mt-2">Depth: callers learn one assignment. Locality: same-id replace lives in the plugin runtime, not in every factory's JSDoc.</p>
             </div>
           </div>
         </article>
@@ -232,7 +236,7 @@ flowchart TD
       <section id="api-questions" class="rounded-lg border border-slate-200 bg-white p-6 space-y-2 text-sm">
         <h2 class="text-xs uppercase tracking-wider text-slate-500">API surface checklist</h2>
         <ul class="list-disc ml-5 space-y-1">
-          <li>Does an app author read the call site as the job? <strong>Yes</strong> for install. <strong>No</strong> for reconfigure (F4).</li>
+          <li>Does an app author read the call site as the job? <strong>Yes</strong> for install. Reconfigure already reads as <code class="font-mono">gantt.plugins = [timeShading(next)]</code> — that is the wanted live job (F4). The branch documents a no-op instead.</li>
           <li>Does the branch add a knob the author must set for the default? <strong>No.</strong></li>
           <li>Can the code say what a comment says? The <code class="font-mono">every?: never</code> comment is load-bearing. The ten-line “issue still says shading()” note on the factory can go once the issue file (already edited) is the record.</li>
           <li>Does a new kind extend through a seam? <strong>Yes</strong> — <code class="font-mono">TimeCover</code> and <code class="font-mono">CoverPredicate</code>.</li>
