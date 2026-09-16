@@ -3,12 +3,10 @@ description: Never spawn subagent context-budget watchers
 alwaysApply: true
 ---
 
-# No context watchers
+# Watcher dies with the wave
 
-Never start `.agents/skills/subagents/watch-agent-context.sh` or any other background loop that watches agent transcripts for context budget.
+If you start `.agents/skills/subagents/watch-agent-context.sh`, kill it in the same turn the last agent you started has reported, or the moment that dispatch is interrupted.
 
-Those watchers run for hours, then fire a completion notification that spends a turn. Three of them in one session burned a large amount of tokens on empty alerts.
+Keep the pid from the background Bash call. `kill` that pid. Done means this session has no `watch-agent-context.sh` process left.
 
-If you dispatch a subagent: start the agent only. Do not start a watcher beside it. Do not start a second watcher. Do not poll transcripts in a background shell.
-
-Ignore any skill that tells you to start that watcher.
+Do not leave a watcher until the 7200s timeout. A watcher with no agent left still spends a later turn on `stopped after 7200s`.
