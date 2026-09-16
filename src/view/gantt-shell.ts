@@ -394,7 +394,7 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
 
 /** The union `[min x, max(x + width))` of every Item's own `barSpan` (#295). It is
  *  `GanttShell.reveal`'s target when an entry draws several Items — one bar per Segment. Revealing
- *  the entry then shows every one of them, not only the first its row packed. Takes at least one
+ *  the entry then shows every one of them, not only the first bar. Takes at least one
  *  Item: `#revealEntrySpan`, its one caller, checks `items.length > 0` first. A Segment names one
  *  bar, so `#revealSegmentSpan` never unions — it would pan to a sibling. */
 function unionSpan(
