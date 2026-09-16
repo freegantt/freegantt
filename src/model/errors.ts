@@ -934,16 +934,22 @@ export class UnknownCommandError extends FreeGanttError {
   }
 }
 
-/** `code: 'empty-covers'` — a shading rule's `notCovered` builder given `{ covers: [] }` (#404). An
- *  empty list has no complement to compute: every instant would read as "not covered", which paints
- *  the whole window and is never what a plugin author meant to write. Modeled on
- *  `EmptySegmentsError`'s shape: a consumer mistake at the config boundary, not a value core derives. */
+/** `code: 'empty-covers'` — an empty cover list, from either door that takes one: `notCovered([])`,
+ *  or a shading rule written `{ covers: [] }` (#404). An empty list has no complement to compute:
+ *  every instant would read as "not covered", which paints the whole window and is never what a
+ *  plugin author meant to write. Modeled on `EmptySegmentsError`'s shape: a consumer mistake at the
+ *  config boundary, not a value core derives. `operation` names the caller, because two of them
+ *  reach this and a baked-in prefix would tell one about a call it never made (see the file header,
+ *  #239; #404 review F3). */
 export class EmptyCoversError extends FreeGanttError {
-  constructor() {
+  readonly operation: string;
+
+  constructor(operation: string) {
     super(
       'empty-covers' satisfies BuiltInThrownCode,
-      'notCovered: "covers" must name at least one cover. An empty list has no complement.',
+      `${operation}: "covers" must name at least one cover. An empty list has no complement.`,
     );
     this.name = 'EmptyCoversError';
+    this.operation = operation;
   }
 }

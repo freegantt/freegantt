@@ -72,6 +72,33 @@ the plugin is removed (review P4; `src/extensions/plugin-runtime.test.ts`,
 Wrap `definePlugin` in a factory, as above. One factory call is one install's
 worth of state, so two Gantts on one page share none of it.
 
+### Give every band a Part, and theme it with a Token
+
+A decoration paints a bare rectangle. Put a class on it, and CSS can reach it.
+The shipped `timeShading()` plugin is the example to copy: every band it writes
+carries the Part `.fg-time-shading`, and that Part's background reads the Token
+`--fg-time-shading-fill`, so the plugin looks right with no page CSS at all.
+
+```ts
+import { timeShading, daysOfWeek, type Gantt } from 'freegantt';
+
+declare const gantt: Gantt;
+
+gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
+```
+
+```css
+/* Level 1: retheme every band, no selector needed. */
+:root { --fg-time-shading-fill: rgb(0 0 0 / 0.08); }
+
+/* Level 2: a rule's own `class` rides beside the Part, so two rules differ. */
+.fg-time-shading.weekend { background: rgb(180 40 40 / 0.06); }
+```
+
+Write the Part yourself for your own plugin, the same way: one stable class on
+every band, plus whatever the caller asked for. A consumer then themes your
+plugin with a Token and never has to know your selector.
+
 ## The smallest working `data` half
 
 A `data` half declares a field and reads it back through the dataset's own
@@ -120,10 +147,14 @@ export { gantt };
 ### Live, on a `Gantt` only
 
 `gantt.plugins` is a live, reconfigurable property. Assign a new array and
-FreeGantt diffs it by `id`: a plugin already installed under the same `id`
-is left running, a new `id` is set up, and a missing `id` is disposed
-(`src/extensions/plugin-runtime.test.ts`, "runs setup once per plugin, in
-list order" and "assigning list same ids sets nothing up again").
+FreeGantt diffs it by `id`, then by object identity: a new `id` is set up, a
+missing `id` is disposed, the same object is left running, and a *fresh*
+object under an installed `id` replaces that occupant. The last rule is what
+makes one assignment reconfigure a plugin — `gantt.plugins =
+[timeShading(next)]` paints the new rules (`src/extensions/plugin-runtime.test.ts`,
+"runs setup once per plugin, in list order", "assigning the same object again
+sets nothing up again" and "a fresh instance under an installed id replaces
+it").
 
 ```ts
 import type { ChromePlugin, Gantt } from 'freegantt';

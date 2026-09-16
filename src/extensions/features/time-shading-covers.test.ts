@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from '../../api/dataset.js';
 import type { ZonedTime } from '../../api/time-facade.js';
-import { EmptyCoversError } from '../../model/index.js';
+// Through the public barrel: a consumer catches on `instanceof` (#404 review F2).
+import { EmptyCoversError } from '../../api/index.js';
 import type { TimeSpan } from '../../model/index.js';
 import {
   coarsestFloor,
@@ -34,6 +35,38 @@ describe('daysOfWeek()', () => {
     ]);
   });
 
+  it('shades the rest of a day the window opens inside (#404 review F1)', () => {
+    const time = zonedTime(CHICAGO);
+    // A decoration window opens wherever the pan left it, so it is almost never day-aligned. The
+    // Saturday this window opens inside must still shade from `window.start` to its own midnight.
+    const saturdayMorning = time.fromPlain({
+      ...time.toPlain(time.toInstant('2026-06-06')),
+      hour: 10,
+      minute: 0,
+      second: 0,
+    });
+    const window: TimeSpan = { start: saturdayMorning, end: time.toInstant('2026-06-08') };
+
+    const merged = mergeSpans(daysOfWeek(6, 7).coveredSpans(window, time));
+
+    expect(merged).toEqual([{ start: saturdayMorning, end: time.toInstant('2026-06-08') }]);
+  });
+
+  it('leaves nothing uncovered when the window opens inside a covered day (#404 review F1)', () => {
+    const time = zonedTime(CHICAGO);
+    const saturdayMorning = time.fromPlain({
+      ...time.toPlain(time.toInstant('2026-06-06')),
+      hour: 10,
+      minute: 0,
+      second: 0,
+    });
+    const window: TimeSpan = { start: saturdayMorning, end: time.toInstant('2026-06-08') };
+
+    // The whole window is weekend, so its complement is empty. Before the fix this painted
+    // Saturday 10:00 to midnight as "not weekend" — working time over a Saturday afternoon.
+    expect(notCovered(daysOfWeek(6, 7)).coveredSpans(window, time)).toEqual([]);
+  });
+
   it('shades the spring-forward day (23 hours) as a whole day, wall-clock to wall-clock', () => {
     const time = zonedTime(CHICAGO);
     const day = time.startOfDay(time.toInstant('2026-03-08'));
@@ -59,17 +92,32 @@ describe('hours()', () => {
   it('wraps midnight — the evening reading until the next morning reading', () => {
     const time = zonedTime(CHICAGO);
     const day = time.startOfDay(time.toInstant('2026-06-15'));
-    const window: TimeSpan = { start: day, end: time.addDays(day, 1) };
-    const cover = hours('17:00', '07:00');
-    const spansFound = cover
+    // Two days wide on purpose. A one-day window clips the band at its own midnight, so the wrap
+    // itself would be unobservable and any present band would pass (#404 review F3).
+    const window: TimeSpan = { start: day, end: time.addDays(day, 2) };
+    const eveningReading = time.fromPlain({ ...time.toPlain(day), hour: 17, minute: 0, second: 0 });
+    const nextMorningReading = time.fromPlain({
+      ...time.toPlain(time.addDays(day, 1)),
+      hour: 7,
+      minute: 0,
+      second: 0,
+    });
+
+    const evening = hours('17:00', '07:00')
       .coveredSpans(window, time)
-      .filter((span) => span.start >= day && span.start < window.end);
-    // The evening band starting on `day` itself reaches past midnight into the next day.
-    const evening = spansFound.find(
-      (span) => span.start === time.fromPlain({ ...time.toPlain(day), hour: 17, minute: 0, second: 0 }),
-    );
-    expect(evening).toBeDefined();
-    expect(evening!.end > evening!.start).toBe(true);
+      .find((span) => span.start === eveningReading);
+
+    expect(evening).toEqual({ start: eveningReading, end: nextMorningReading });
+  });
+
+  it('shades nothing when both readings are equal (#404 review F6)', () => {
+    const time = zonedTime(CHICAGO);
+    const day = time.startOfDay(time.toInstant('2026-06-15'));
+    const window: TimeSpan = { start: day, end: time.addDays(day, 1) };
+
+    // Equal readings name a band of no width. Reading them as a wrap would shade all 24 hours —
+    // the opposite of what `hours('09:00', '09:00')` says.
+    expect(hours('09:00', '09:00').coveredSpans(window, time)).toEqual([]);
   });
 
   it('resolves both boundaries through ZonedTime.fromPlain, adding no arithmetic of its own — 13 hours across the spring-forward transition', () => {
@@ -108,14 +156,21 @@ describe('hours()', () => {
     expect(time.each(band!, 'hour')).toHaveLength(15);
   });
 
-  it('a plain time that does not exist on the spring-forward day resolves forward by the gap size (fromPlain, disambiguation: compatible)', () => {
+  it('starts a band on a plain time that does not exist that day, resolved forward by the gap size (fromPlain, disambiguation: compatible)', () => {
     const time = zonedTime(CHICAGO);
     const day = time.startOfDay(time.toInstant('2026-03-08'));
     // 02:30 never happens on a spring-forward day in America/Chicago (clocks jump 02:00 -> 03:00).
     // 'compatible' shifts it forward by the gap's own size (one hour), landing on 03:30, not 03:00.
-    const skipped = time.fromPlain({ ...time.toPlain(day), hour: 2, minute: 30, second: 0 });
+    // `hours()` adds no arithmetic of its own, so the band inherits that reading (#404 review F7:
+    // this asserts through the builder, so a builder that stopped using `fromPlain` fails it).
     const shiftedForward = time.fromPlain({ ...time.toPlain(day), hour: 3, minute: 30, second: 0 });
-    expect(skipped).toBe(shiftedForward);
+    const window: TimeSpan = { start: day, end: time.addDays(day, 1) };
+
+    const band = hours('02:30', '06:00')
+      .coveredSpans(window, time)
+      .find((span) => span.start >= day);
+
+    expect(band?.start).toBe(shiftedForward);
   });
 });
 
@@ -189,5 +244,19 @@ describe('notCovered()', () => {
 
   it('throws EmptyCoversError on an empty list — there is no complement to compute', () => {
     expect(() => notCovered([])).toThrow(EmptyCoversError);
+  });
+});
+
+// #404 review F8: a builder that names nothing matches nothing, and `notCovered()` around it shades
+// the whole window — the state `EmptyCoversError` refuses at the list door, reached through a cover
+// that door cannot see. The first argument is required, so the call never compiles.
+describe('a builder always names at least one thing', () => {
+  it('refuses a zero-argument call at compile time', () => {
+    // @ts-expect-error — daysOfWeek() names no days.
+    expect(() => daysOfWeek()).toBeDefined();
+    // @ts-expect-error — dates() names no dates.
+    expect(() => dates()).toBeDefined();
+    // @ts-expect-error — spans() names no spans.
+    expect(() => spans()).toBeDefined();
   });
 });
