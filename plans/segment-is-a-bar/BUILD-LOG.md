@@ -18,6 +18,8 @@ Today it throws `EmptySegmentsError` (`data/entry-reader.ts:607`): under ADR 001
 
 **The corrected ruling.** `update(id, { segments: [] })` is **legal** and leaves the row **dateless**, unless the same edit names `start` and `end`. `EmptySegmentsError` retires, because empty is no longer illegal. It is simply not a span.
 
+**Why the error's own reason died.** It had one: ADR 0012's biconditional, *an Entry holds at least one Segment if and only if it spans* (`docs/adr/0012-dates-are-optional-on-every-kind.md`, §Consequences). #421 retires that rule, because a plain bar stores dates and `segments: []`. The reason goes with the rule.
+
 **How a consumer makes a plain bar from a segmented row:** `update(id, { segments: [], start, end })`. One edit names both the clearing and the span the row keeps. Nothing is derived from nothing.
 
 **Two dating rules, one sentence each.** An Entry with no Segments keeps the dates it named, read straight (ADR 0012). An Entry with Segments takes their envelope. This is today's rule, and #421 does not change it.
@@ -25,14 +27,6 @@ Today it throws `EmptySegmentsError` (`data/entry-reader.ts:607`): under ADR 001
 **What B2 must change.**
 - `EmptySegmentsError` retires — `src/model/errors.ts:370`, the throw at `src/data/entry-reader.ts:607`, and the two public re-exports (`src/model/index.ts:100`, `src/api/index.ts:246`).
 - `envelopeOfSegments` throws on an empty array with a message naming the retired invariant — *"every stored Entry keeps at least one"* (`src/time/instant.ts:59`). The guard at `entry-reader.ts:222` keeps the call from reaching it, so the throw stays; the message must stop citing a dead rule.
-- ADR 0012 needs a revision note. The biconditional is dead, and ADR 0006's rule applies: the new ADR carries the revision, and 0012 is not edited in place.
-- `plans/02-public-api.md:120` and `:230` state the retired rule twice.
-- Two tests assert the throw, one by name: `src/data/entry-reader.test.ts:245` and `src/data/entry-store.mutation.test.ts:123` ("ADR 0012 Gate").
-
-**Why no reason held it back.** The error had one reason: ADR 0012's biconditional, *an Entry holds at least one Segment if and only if it spans* (`docs/adr/0012-dates-are-optional-on-every-kind.md`, §Consequences). #421 retires that rule, because a plain bar stores dates and `segments: []`. The reason goes with the rule. No ambiguity arrives: `segments: []` clears the pieces, and `{ start: undefined, end: undefined }` un-dates. Two verbs, two jobs.
-
-**What B2 must change.**
-- `EmptySegmentsError` retires — `src/model/errors.ts:370`, the throw at `src/data/entry-reader.ts:607`, and the two public re-exports (`src/model/index.ts:100`, `src/api/index.ts:246`).
 - ADR 0012 needs a revision note. The biconditional is dead, and ADR 0006's rule applies: the new ADR carries the revision, and 0012 is not edited in place.
 - `plans/02-public-api.md:120` and `:230` state the retired rule twice.
 - Two tests assert the throw, one by name: `src/data/entry-reader.test.ts:245` and `src/data/entry-store.mutation.test.ts:123` ("ADR 0012 Gate").
@@ -184,3 +178,24 @@ This is a small yes/no, not a design question, but it is not this plan's call to
 changes what one `updateSegment` call writes to the ChangeSet, which #421's acceptance list checks
 against ("The ChangeSet row names the `segmentId`, and undo replays it" — plural rows, if the
 envelope mirror stays).
+
+## Q5 — can an `EditExtender` propose a one-Segment edit?
+
+**Raised 2026-09-16, from the S1 spike, as "not settled". RULED the same day: yes. It must.**
+
+**The ruling, in the author's words:** "it needs to be able to propose a segment update if we want undo states to work and for it to be consistent with everything else".
+
+**Why undo forces it.** `data/`'s rule is that undo records user edits and engine cascades **atomically**. A cascade that can only propose a whole `segments` array writes a whole-array ChangeSet row. Undo then restores the whole array. That loses the per-Segment address the same transaction just gained on the user's own row, and it overwrites values the cascade never meant to touch. One transaction would carry two row shapes for one job.
+
+**Why consistency forces it.** `plans/02`: extra field writes use the same object `update()` takes, and illegal combinations are unrepresentable. A surface where the app author writes one Segment by id, and the plugin author can only rewrite the array, is two shapes for one job.
+
+**Recommended shape — decide the key name with the naming skill before B3.**
+
+- The extender proposes a **`SegmentEdit`** keyed by **`SegmentId`** — the same object `entries.updateSegment(segmentId, edit)` takes. One write shape, as `EntryEdit` already is for an Entry.
+- It rides on the owner's edit, so `EditRequest.proposed` stays `Map<EntryId, ProposedEdit>`. A Segment has exactly one owner, so no second top-level collection is needed.
+- `EntryEdit` gains the same door, because an extender returns an `EntryEdit` (`plans/02`). `entries.update(id, { …segment edits… })` then becomes the expert long form, and `updateSegment` stays the shorthand.
+- Each proposed `SegmentEdit` becomes one `segmentId`-addressed ChangeSet row (J-plan-3), so undo inverts it per Segment, beside the user's own rows.
+
+**The one refusal this adds.** A single edit that names both the whole `segments` array and a value edit for a Segment in it says two things about one Segment. Refuse it, the way `SegmentsOutOfSyncError` refuses an envelope that disagrees with its Segments. Structural and value writes stay two questions, never two answers to one.
+
+**Scope.** B3, beside `updateSegment` and `FieldUpdated.segmentId`. It is new plugin-author surface, so `plans/02` gains it and the spec's Writes section names it.
