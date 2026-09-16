@@ -144,19 +144,11 @@ and one agent crossing 200k wakes you four times — four alerts, one event, and
 codes read as four failures. Leave four watchers alive after the agents finish, and you get
 four timeout turns hours later.
 
-**Your watcher outlives your own agent, and can alert on someone else's.** It is scoped to the
-project directory, so with several sessions working one repo it sees their agents too. This kills
-the inference that feels safest:
-
-> "My agent already finished, so this exit must be stale."
-
-That reasoning is sound only if the watcher watched your agent alone, and it does not. On
-2026-09-06 two sessions made exactly this call on the same afternoon, and one of them dismissed a
-true alert about the *other* session's agent, which then ran to 275k — past its landing window.
-Both agents landed anyway, which was luck and not process.
-
-So: read the name in the printed line. If it is not your agent, tell the session that owns it
-rather than dropping the alert.
+**A live watcher can alert on someone else's agent.** It is scoped to the
+project directory, so with several sessions working one repo it sees their agents too.
+That does not keep it alive after *your* wave ends — kill it anyway. If it exits
+with a 200k line while it is still running, read the name. If it is not your agent,
+tell the session that owns it rather than dropping the alert.
 
 ## Wind down
 
