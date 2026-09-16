@@ -156,6 +156,12 @@ const LIGHT_COLOR_TOKENS = `
   --fg-popup-bg: #FFFFFF;
   --fg-popup-border: #E6E2D9;
   --fg-popup-shadow: 0 8px 24px rgb(26 24 21 / 0.12);
+  /* #404: non-working time reads as a wash, not a block — the same ink family --fg-tick-line-color
+     already steps off (rgb(26 24 21)), one notch past its major-line alpha (0.16) so a shaded band
+     still separates from a coarse tick line crossing it, but well short of --fg-row-hover-bg's own
+     weight. Under a bar (--fg-bar-fill, opaque) the wash is invisible by construction — it only
+     shows on the pane a bar does not cover. */
+  --fg-time-shading-fill: rgb(26 24 21 / 0.05);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -193,6 +199,9 @@ const DARK_COLOR_TOKENS = `
   --fg-popup-bg: #22252B;
   --fg-popup-border: #3A3F48;
   --fg-popup-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
+  /* Same rule as Light's pair: the theme's own light ink (rgb(236 234 227)), one notch past
+     --fg-tick-line-strong-color's own alpha (0.17) for the same separation-from-a-tick-line reason. */
+  --fg-time-shading-fill: rgb(236 234 227 / 0.07);
 `.trimEnd();
 
 // #383: every consumer-facing metric this sheet's own rules read as `var(--fg-x, default)`, declared
@@ -386,6 +395,11 @@ ${DARK_COLOR_TOKENS}
    above. DOM order alone gives the paint order (no z-index needed against .fg-bars either). */
 .fg-decorations-under, .fg-decorations-over { position: relative; }
 .fg-range-band { position: absolute; top: 0; left: 0; pointer-events: none; }
+/* #404: timeShading()'s own Part. Every band it writes carries this class beside .fg-range-band, so
+   the zero-CSS default (--fg-time-shading-fill) always applies, and a rule's own class still tells
+   two rules' bands apart. Layer underBars beneath .fg-bars is what keeps the wash invisible under
+   an opaque bar. */
+.fg-time-shading { background: var(--fg-time-shading-fill); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 .fg-bars { position: relative; }
 /* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must

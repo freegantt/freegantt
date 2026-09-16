@@ -201,6 +201,15 @@ export type {
   DateInput,
   DateInputFactory,
 } from '../extensions/features/inline-editing.js';
+// #404: the fourth shipped built-in, same posture as the three above — a value a consumer imports
+// (`plugins: [timeShading([{ covers: daysOfWeek(6, 7) }])]`), confined to the same
+// `extensions-public-only` boundary. `daysOfWeek`/`hours`/`dates`/`spans`/`notCovered` are the
+// `TimeCover` builders a rule's `covers` names; `TimeCover` itself is public only so a consumer can
+// write one by hand for a calendar no builder covers.
+export { timeShading } from '../extensions/features/time-shading.js';
+export type { ShadingRule, CoverPredicate } from '../extensions/features/time-shading.js';
+export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
+export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
 // TimeScaleModel/ScrollAxis are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
@@ -302,6 +311,7 @@ export type {
   InstantInput,
   TimeSpanInput,
   DateOnlyEndRule,
+  PlainTimeInput,
 } from '../model/index.js';
 export type {
   RowSource,

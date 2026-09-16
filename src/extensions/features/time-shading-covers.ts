@@ -9,7 +9,14 @@
 // here because `notCovered` needs them for its own merge, and `time-shading.ts` reuses them rather
 // than re-deriving the same walk.
 
-import type { Instant, InstantInput, TimeSpan, TimeSpanInput, TimeUnit } from '../../model/index.js';
+import type {
+  Instant,
+  InstantInput,
+  PlainTimeInput,
+  TimeSpan,
+  TimeSpanInput,
+  TimeUnit,
+} from '../../model/index.js';
 import { EmptyCoversError } from '../../model/index.js';
 import { isCoarserThan, readPlainTime } from '../../api/time-facade.js';
 import type { ZonedTime } from '../../api/time-facade.js';
@@ -101,7 +108,7 @@ export function daysOfWeek(...days: readonly DayOfWeek[]): TimeCover {
  *  DST is `fromPlain`'s answer, not this builder's (`time/zone.ts`, `disambiguation: 'compatible'`) —
  *  the band measures 13 hours on a short day and 15 on a long one, and a plain time that does not
  *  exist that day (the spring-forward gap) resolves forward. Hides above `'hour'`. */
-export function hours(from: string, to: string): TimeCover {
+export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover {
   const start = readPlainTime(from, 'hours');
   const end = readPlainTime(to, 'hours');
   return {
