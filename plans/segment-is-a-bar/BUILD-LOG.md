@@ -181,21 +181,54 @@ envelope mirror stays).
 
 ## Q5 — can an `EditExtender` propose a one-Segment edit?
 
-**Raised 2026-09-16, from the S1 spike, as "not settled". RULED the same day: yes. It must.**
+**Raised 2026-09-16, from the S1 spike, as "not settled". RULED the same day: yes, it must. The shape was then CORRECTED the same day — read the correction.**
 
 **The ruling, in the author's words:** "it needs to be able to propose a segment update if we want undo states to work and for it to be consistent with everything else".
 
 **Why undo forces it.** `data/`'s rule is that undo records user edits and engine cascades **atomically**. A cascade that can only propose a whole `segments` array writes a whole-array ChangeSet row. Undo then restores the whole array. That loses the per-Segment address the same transaction just gained on the user's own row, and it overwrites values the cascade never meant to touch. One transaction would carry two row shapes for one job.
 
-**Why consistency forces it.** `plans/02`: extra field writes use the same object `update()` takes, and illegal combinations are unrepresentable. A surface where the app author writes one Segment by id, and the plugin author can only rewrite the array, is two shapes for one job.
+**Why consistency forces it.** `plans/02`: extra field writes use the same object the write door takes, and illegal combinations are unrepresentable. A surface where the app author writes one Segment by id, and the plugin author can only rewrite the array, is two shapes for one job.
 
-**Recommended shape — decide the key name with the naming skill before B3.**
+### The shape, first answer — wrong
 
-- The extender proposes a **`SegmentEdit`** keyed by **`SegmentId`** — the same object `entries.updateSegment(segmentId, edit)` takes. One write shape, as `EntryEdit` already is for an Entry.
-- It rides on the owner's edit, so `EditRequest.proposed` stays `Map<EntryId, ProposedEdit>`. A Segment has exactly one owner, so no second top-level collection is needed.
-- `EntryEdit` gains the same door, because an extender returns an `EntryEdit` (`plans/02`). `entries.update(id, { …segment edits… })` then becomes the expert long form, and `updateSegment` stays the shorthand.
+"The extender proposes a `SegmentEdit` keyed by `SegmentId`, riding on the owner Entry's edit. `EntryEdit` gains a `segmentEdits` key, so `EditRequest.proposed` stays `Map<EntryId, ProposedEdit>`."
+
+### The shape, corrected
+
+**The author asked why a Segment edit sits under an Entry when the `SegmentId` is already the address. It should not.**
+
+A `SegmentId` is a complete address on its own. Two Segments never share one, on the same Entry or across two Entries (`CONTEXT.md`, *Segment*). The store resolves the owner from the id alone through `entryIdOfSegment` (`data/entry-store.ts:463`), backed by a `SegmentId → EntryId` index (`:169`). Every public Segment door already keys this way: `removeSegments(ids)` takes ids only (`model/dataset.ts:69`) and crosses several Entries in one transaction, and `updateSegment(segmentId, edit)` names no Entry.
+
+**Nesting would make a plugin author supply what the store already holds.** That is the stop rule's smell. A cascade over ten Segments on three Entries would have to bucket them by owner before writing. Core does that, and already does.
+
+- **`SegmentEdits` is its own top-level collection:** `ReadonlyMap<SegmentId, SegmentEdit>`, beside `EntryEdits`, never inside an `EntryEdit`.
+- **`EntryEdit` gains no key.** One fewer knob. The app-author door stays `entries.updateSegment('d2', { hours: 4 })`, which names no Entry because none is needed.
+- **`SegmentEdit` is the write shape for one Segment** — `name`, `start`, `end` and props keys, the object `updateSegment` takes. It mirrors `EntryEdit` exactly.
 - Each proposed `SegmentEdit` becomes one `segmentId`-addressed ChangeSet row (J-plan-3), so undo inverts it per Segment, beside the user's own rows.
+- Core still recomputes the owner's envelope. It resolves the owner itself, so the edit never states one (Q4).
 
-**The one refusal this adds.** A single edit that names both the whole `segments` array and a value edit for a Segment in it says two things about one Segment. Refuse it, the way `SegmentsOutOfSyncError` refuses an envelope that disagrees with its Segments. Structural and value writes stay two questions, never two answers to one.
+**What this costs.** `EditExtender` is `(request: EditRequest) => EntryEdits` today (`CONTEXT.md`, *EditExtender*). It would return two maps instead of one. #209 hardened the rule that *a plugin author names no other type to write a cascade — the hook writes exactly what `update()` takes*. Under #421 `update()` is no longer the only write door, because `updateSegment()` is one too. So the rule generalizes: the hook writes exactly what the public doors take, keyed the way those doors key them. It does not break.
+
+**The one refusal this adds.** One transaction that names the whole `segments` array for an Entry **and** a value edit for a Segment inside it says two things about one Segment. Refuse it, the way `SegmentsOutOfSyncError` refuses an envelope that disagrees with its Segments. Structural and value writes stay two questions, never two answers to one.
+
+**Names settled by the naming skill, 2026-09-16.** `SegmentEdit` and `SegmentEdits`, mirroring `EntryEdit`/`EntryEdits`. Rejected: `segmentPatch` (*Patch* is under **Avoid** in `CONTEXT.md`, and `*Patch` is barred from the app-author surface), `segmentWrites` (*Edit* is already the glossary's word for a write shape), `bySegment` (names the key, never the payload). **One cleanup:** a grep for `SegmentEdit` answers 14 hits today, all of them the local test helper `singleSegmentEdit` in `layout/gesture-draft.test.ts`. Rename it with `pk-rename-symbol` in B3 so the grep shows the concept.
 
 **Scope.** B3, beside `updateSegment` and `FieldUpdated.segmentId`. It is new plugin-author surface, so `plans/02` gains it and the spec's Writes section names it.
+
+---
+
+## Q6 — is there one write door, or two?
+
+**Raised 2026-09-16, out of Q5's correction. B3. OPEN — the author reserved this for a grill session.**
+
+Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `EntryId`, and `SegmentEdits` keyed by `SegmentId`. The public surface has the matching pair, `entries.update(id, edit)` and `entries.updateSegment(segmentId, edit)`.
+
+**The question:** should these be one door or two? Two shapes for two addressable things is honest, and it is what the store already does. One door that takes either address is fewer names for an author to learn. Nothing is decided.
+
+**What a grill must weigh.**
+- `EntryEdits` and `SegmentEdits` are the same map shape over two id brands. A single door keyed by a union address is representable, and `plans/02` warns that illegal combinations should be unrepresentable — a union key makes every read narrow first.
+- The extender's return type needs a name if it stays two maps. The working recommendation is `DatasetEdits`, the edits a transaction applies to the Dataset. `Edits` alone fails the search test. `CascadeEdits` claims every extender write is a cascade, which is not true.
+- #209's rule is the constraint to argue against: a plugin author names no other type to write a cascade.
+- Whatever wins must keep the per-Segment ChangeSet row (Q5) and the envelope recompute (Q4).
+
+**Do not settle this inside a build.** It changes the plugin-author surface, so it is an API decision, not an implementation one.
