@@ -1,8 +1,6 @@
 ---
 id: layers
 title: "Layers & import rules"
-last_update:
-  date: 2026-09-14
 ---
 
 Which directories may import which, and the lint rules that hold the line. The rule itself lives
@@ -76,7 +74,7 @@ context menu, inline editing
 <div class="name">layout/</div>
 <div class="sub">
 <code>computeFrame</code> · <code>FrameLayout</code> · rows/items ·
-<code>TimeScaleModel</code> · <code>ScrollModel</code>
+<code>TimeScaleModel</code> · <code>ScrollAxis</code>
 </div>
 </div>
 <div class="box pure">
@@ -135,7 +133,7 @@ listing its *only* legal targets. Anything not listed fails the build (invariant
 :::note The thirteen custom lint rules
 `eslint/rules/` holds what dependency-cruiser cannot see, all scoped to `src/**`. Time (I10):
 `no-date-outside-time`, `no-magic-time-constants`, `no-instant-arithmetic`. Geometry (I12):
-`no-time-to-pixel-math`, `no-scroll-outside-scroll-model` (exempt:
+`no-time-to-pixel-math`, `no-scroll-outside-scroll-attachment` (exempt:
 `view/scroll-attachment.ts`), `no-flow-layout-rows`, `no-inline-style-outside-geometry`. Shape:
 `no-module-level-state`, `model-is-types-only`, `no-store-mutation-outside-transaction`,
 `require-invariant-header`, `no-kind-literal`, `no-derived-in-json`. Each rule ships a

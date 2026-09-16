@@ -16,5 +16,5 @@ export type KeyChord = string;
  *  for a DOM node. Both name the same five things, so both name them from here — a second union
  *  would be the same concept spelled twice. Zero dependencies, so it belongs in `model/`.
  *
- *  `'cell'` is one Grid column's box on one Row; `'header'` is one Grid column's header cell. */
-export type TargetKind = 'row' | 'cell' | 'bar' | 'header' | 'splitter';
+ *  `'gridCell'` is one Grid column's box on one Row; `'header'` is one Grid column's header cell. */
+export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter';

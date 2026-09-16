@@ -305,7 +305,7 @@ Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start
 
 ```bash
 pnpm open-pr --title "<title>" --body-file <path>   # pushes the branch, then opens a DRAFT
-gh pr ready <n>                                     # the decision to merge — this starts CI
+pnpm open-pr --ready                                # the decision to merge — this starts CI
 pnpm pr-wait <n>                                    # waits for the gate, states the result in one line
 ```
 
@@ -318,6 +318,10 @@ The draft is not a formality. It is what the trigger set reads:
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
 
 **`gh pr ready <n>` does not always start CI (#298, #235).** The `ready_for_review` webhook event is what the workflow trigger in §5 waits for, and the GitHub CLI's `ready` call does not reliably fire it — on two pull requests in the same session, `gh pr checks <n>` kept reporting the stale `SKIPPED` run from when the pull request was still a draft, with no new run queued. Confirm with `gh run list --branch <branch> --limit 5`: if the newest run still has `event: pull_request` and `conclusion: skipped` from before `gh pr ready` ran, nothing started. The fallback is `gh workflow run ci.yml --ref <branch>`, which uses the workflow's `workflow_dispatch` trigger (§5, `if: github.event_name == 'workflow_dispatch' || ...`) to force the same `gate` job regardless of draft state.
+
+**Run `gh run list` before you believe the fallback is needed, because firing it cancels a live run (#415, 2026-09-16).** `pr-wait` reads `gh pr checks`, which reports the pull request's **check suites**, and the 1-second `skipped` draft-time suite sits there beside a real run that is still going. So `pr-wait` can report "every check is SKIPPED" while the gate is running fine. On #415 it did: `gh pr ready` had fired the trigger correctly and the `pull_request` run was two minutes in. Taking the fallback the message printed started a `workflow_dispatch` run, and concurrency cancelled the real one.
+
+**A `workflow_dispatch` run proves the gate and cannot close a `pr-wait`.** It runs on the branch, not on the pull request, so it never becomes a pull-request check and `pr-wait` will report SKIPPED forever after. Read its verdict from `gh run list --branch <branch>` instead, and say plainly that the verdict came from a dispatch run rather than from `pr-wait` — a run with no `pr-wait` verdict line is proven differently, not proven green. To get a `pr-wait` verdict back, push a commit: `synchronize` fires the `pull_request` trigger again.
 
 ---
 

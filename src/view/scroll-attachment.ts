@@ -1,5 +1,5 @@
 // view/ — the DOM-facing counterpart to layout/viewport/viewport.ts (plans/01 §8.2). The only file
-// allowed to touch element scroll (I12) — eslint/rules/no-scroll-outside-scroll-model.cjs is scoped
+// allowed to touch element scroll (I12) — eslint/rules/no-scroll-outside-scroll-attachment.cjs is scoped
 // to exempt this file and no other.
 //
 // Owns no binding (S1.7, D-S1.7-1): Viewport already binds scale and scroll in one place. This file
@@ -62,7 +62,11 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     if (Math.abs(element.scrollLeft - to.x) < EPSILON && Math.abs(element.scrollTop - to.y) < EPSILON) {
       return;
     }
-    viewport.scroll.panTo({ x: element.scrollLeft, y: element.scrollTop });
+    // One batch, one notification, even though each axis moves through its own `ScrollAxis` (D-S6-1).
+    viewport.batch(() => {
+      viewport.scroll.x.panTo(element.scrollLeft);
+      viewport.scroll.y.panTo(element.scrollTop);
+    });
   }
 
   element.addEventListener('scroll', onNativeScroll);

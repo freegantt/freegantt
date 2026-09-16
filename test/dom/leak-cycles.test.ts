@@ -1,6 +1,6 @@
 // S6 acceptance R4 (#403): 100 mount/destroy cycles leak no nodes, listeners, or observables — and
-// the case that matters is two Gantts on one shared model, because a shared model is the one thing
-// that outlives a Gantt and so the one place a dead binding can pile up (D9).
+// the case that matters is two Gantts on one shared axis, because a shared axis is the one thing
+// that outlives a Gantt and so the one place a dead binding can pile up (D9, D-S6-1).
 //
 // The library is imported through the bare `freegantt` specifier, the door a consumer uses. A leak
 // is a property of the shipped surface, not of an internal.
@@ -20,7 +20,8 @@
 // counts below are what it is actually for.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Dataset, Gantt, ScrollModel, TimeScaleModel } from 'freegantt';
+import { Dataset, Gantt, ScrollAxis, TimeScaleModel } from 'freegantt';
+import type { ScrollAxes } from 'freegantt';
 import { sampleEntryInputs } from '../../fixtures/sample-dataset.js';
 // The same four plugins `[S5-A3]` treats as the acceptance object (#153): a re-implementation would
 // not fail when a real plugin's disposer stops retracting something.
@@ -199,7 +200,7 @@ function newDataset(): Dataset {
 
 /** Mounts a Gantt in a container attached to the page, runs `use`, then destroys both. Attached and
  *  not detached: a node count means nothing for a container the document never held. */
-function mountAndDestroy(options: { scale?: TimeScaleModel; scroll?: ScrollModel } = {}): void {
+function mountAndDestroy(options: { scale?: TimeScaleModel; scroll?: ScrollAxes } = {}): void {
   const container = document.createElement('div');
   document.body.append(container);
   const gantt = new Gantt({
@@ -264,9 +265,9 @@ describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
     expect(census.read()).toEqual(baseline);
   });
 
-  it('two Gantts sharing one ScrollModel and one TimeScaleModel return to their baseline', () => {
+  it('two Gantts sharing one TimeScaleModel and both scroll axes return to their baseline', () => {
     const scale = new TimeScaleModel({ fit: 'preset' });
-    const scroll = new ScrollModel();
+    const scroll: ScrollAxes = { x: new ScrollAxis(), y: new ScrollAxis() };
     const mountPair = (): void => {
       mountAndDestroy({ scale, scroll });
       mountAndDestroy({ scale, scroll });
@@ -281,15 +282,17 @@ describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
   });
 });
 
-/** A binding on a shared model is invisible to the DOM census above: it holds no node, no listener
- *  and no observer. `ScrollModel.state.max` is what makes it observable — it is documented as the
- *  loosest bound any *bound* Gantt needs, so it is a fan-in over the live bindings and nothing
- *  else. A binding left behind by a destroyed Gantt keeps claiming room in it.
+/** A binding on a shared axis is invisible to the DOM census above: it holds no node, no listener
+ *  and no observer. `ScrollAxis.state.max` is what makes it observable — it is the loosest bound any
+ *  *bound* Gantt needs, so it is a fan-in over the live bindings and nothing else. A binding left
+ *  behind by a destroyed Gantt keeps claiming room in it.
  *
- *  These read the same way after #405 renames the shared unit to a scroll axis: the assertion is
- *  about what a shared object reports, not about which class holds the bindings. */
-describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared model (#403)', () => {
-  function mountOn(scale: TimeScaleModel, scroll: ScrollModel): { gantt: Gantt; container: HTMLElement } {
+ *  D-S6-1 (#405) makes one axis the shared unit, so each axis is asked separately — which is what
+ *  "one binding set, one lifetime" has to mean if it means anything. The pairs below share both
+ *  axes, so both get asked; the last test mounts the first consumer's own shape instead, x shared
+ *  with y private. */
+describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared axis (#403, D-S6-1)', () => {
+  function mountOn(scale: TimeScaleModel, scroll: ScrollAxes): { gantt: Gantt; container: HTMLElement } {
     const container = document.createElement('div');
     document.body.append(container);
     return { gantt: new Gantt({ container, dataset: newDataset(), scale, scroll }), container };
@@ -307,16 +310,16 @@ describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared model (#403
     document.body.replaceChildren();
   });
 
-  it('both destroyed: the model claims no room at all, in either destroy order', () => {
+  it('both destroyed: each shared axis claims no room at all, in either destroy order', () => {
     for (const order of ['first-mounted-first', 'last-mounted-first'] as const) {
       const scale = new TimeScaleModel({ fit: 'preset' });
-      const scroll = new ScrollModel();
+      const scroll: ScrollAxes = { x: new ScrollAxis(), y: new ScrollAxis() };
       const a = mountOn(scale, scroll).gantt;
       const b = mountOn(scale, scroll).gantt;
 
       // The instrument has to be able to see a leak before its silence means anything: a bound pair
       // claims room, so a binding left behind would keep claiming it.
-      expect(scroll.state.max.x).toBeGreaterThan(0);
+      expect(scroll.x!.state.max).toBeGreaterThan(0);
 
       if (order === 'first-mounted-first') {
         a.destroy();
@@ -326,27 +329,28 @@ describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared model (#403
         a.destroy();
       }
 
-      expect(scroll.state.max).toEqual({ x: 0, y: 0 });
+      expect(scroll.x!.state.max).toBe(0);
+      expect(scroll.y!.state.max).toBe(0);
     }
   });
 
-  it('one destroyed: the survivor still bounds the shared scroll, zooms and paints', async () => {
+  it('one destroyed: the survivor still bounds the shared axis, zooms and paints', async () => {
     const scale = new TimeScaleModel({ fit: 'preset' });
-    const scroll = new ScrollModel();
+    const scroll: ScrollAxes = { x: new ScrollAxis(), y: new ScrollAxis() };
     const a = mountOn(scale, scroll).gantt;
     const survivor = mountOn(scale, scroll);
-    const boundMax = scroll.state.max.x;
+    const boundMax = scroll.x!.state.max;
 
     a.destroy();
 
     // B alone bounds the model now, and it is the same bound: the two panes hold the same dataset,
     // so A was never the looser of the two.
-    expect(scroll.state.max.x).toBe(boundMax);
+    expect(scroll.x!.state.max).toBe(boundMax);
 
     // A pan past the end clamps to what the *bound* Gantts allow. It lands on B's own bound, so B
     // is what the model is still asking. A leaked A binding would have answered here too.
-    scroll.panTo({ x: Number.MAX_SAFE_INTEGER });
-    expect(scroll.state.position.x).toBe(boundMax);
+    scroll.x!.panTo(Number.MAX_SAFE_INTEGER);
+    expect(scroll.x!.state.position).toBe(boundMax);
 
     // A scroll moves the pane, not the bar — the timeline pane is the native scroller and a bar
     // keeps its place in content space (D-S1.8-1). A zoom is what re-places the bar, and a repaint
@@ -362,16 +366,33 @@ describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared model (#403
 
   it('a fresh pair on the same models reports what the first pair reported', () => {
     const scale = new TimeScaleModel({ fit: 'preset' });
-    const scroll = new ScrollModel();
+    const scroll: ScrollAxes = { x: new ScrollAxis(), y: new ScrollAxis() };
 
     const first = [mountOn(scale, scroll), mountOn(scale, scroll)];
-    const firstMax = { ...scroll.state.max };
+    const firstMax = { x: scroll.x!.state.max, y: scroll.y!.state.max };
     const firstPlace = firstBarPlacement(first[0]!.container);
     for (const mounted of first) mounted.gantt.destroy();
 
     const second = [mountOn(scale, scroll), mountOn(scale, scroll)];
-    expect({ ...scroll.state.max }).toEqual(firstMax);
+    expect({ x: scroll.x!.state.max, y: scroll.y!.state.max }).toEqual(firstMax);
     expect(firstBarPlacement(second[0]!.container)).toBe(firstPlace);
     for (const mounted of second) mounted.gantt.destroy();
+  });
+
+  it('the consumer shape — x shared, y private — leaves the shared x clean (D-S6-1)', () => {
+    // `plans/handoff/2026-09-15-crm-filament-labor.md` §1: two panes, one shared time axis, one
+    // shared horizontal scroll. Private y is the library's own ruling (#405), and it is the shape
+    // that consumer mounts and destroys on every visit.
+    const scale = new TimeScaleModel({ fit: 'preset' });
+    const sharedX = new ScrollAxis();
+    const top = mountOn(scale, { x: sharedX });
+    const bottom = mountOn(scale, { x: sharedX });
+
+    expect(sharedX.state.max).toBeGreaterThan(0);
+
+    top.gantt.destroy();
+    bottom.gantt.destroy();
+
+    expect(sharedX.state.max).toBe(0);
   });
 });

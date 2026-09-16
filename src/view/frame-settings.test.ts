@@ -86,7 +86,7 @@ describe('FrameSettings — the invalidation table', () => {
     },
     { setting: 'barLabels', patch: { barLabels: 'outside' }, expected: ['requestFrame'] },
     { setting: 'barRenderer', patch: { barRenderer: () => undefined }, expected: ['requestFrame'] },
-    { setting: 'cellRenderer', patch: { cellRenderer: () => undefined }, expected: ['requestFrame'] },
+    { setting: 'cellRenderer', patch: { gridCellRenderer: () => undefined }, expected: ['requestFrame'] },
     { setting: 'headerRenderer', patch: { headerRenderer: () => undefined }, expected: ['requestFrame'] },
     { setting: 'tooltipRenderer', patch: { tooltipRenderer: () => undefined }, expected: ['requestFrame'] },
     { setting: 'todayLineMarginTicks', patch: { todayLineMarginTicks: 5 }, expected: [] },

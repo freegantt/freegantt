@@ -3,7 +3,7 @@
 // `Popup` (extensions/popup.ts) is this function's first caller — it rebuilds its content fresh on
 // every `open()` rather than diffing against a previous frame, so this file ships the one-shot build
 // only. S5.4 adds the diffing sibling (`applyElementDescription`, patching an existing node in place)
-// for `barRenderer`/`cellRenderer` repaint — this function is that one's building block, unchanged.
+// for `barRenderer`/`gridCellRenderer` repaint — this function is that one's building block, unchanged.
 
 import type { ElementDescription } from '../../layout/index.js';
 
@@ -44,7 +44,7 @@ export function buildElement(description: ElementDescription): HTMLElement {
 }
 
 // S5.4, D-S5-10: the diffing sibling `buildElement` above flags in its own file header — patches an
-// existing node in place for repaint-without-remount (I8: `barRenderer`/`cellRenderer` reassignment
+// existing node in place for repaint-without-remount (I8: `barRenderer`/`gridCellRenderer` reassignment
 // repaints, never rebuilds, the node it patches). Stays inside the same bounded scope: attrs/class/
 // style/text + keyed children, nothing more. Keyed by a `data-fg-key` attribute stamped once per
 // child at creation, so children stay identifiable across calls with no external node/key cache to

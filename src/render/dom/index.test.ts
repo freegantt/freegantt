@@ -65,7 +65,7 @@ function paintingBackend(
   return createDomBackend({
     entryById: (id) => entries.find((entry) => entry.id === id),
     resolveBarRenderer,
-    resolveCellRenderer: () => undefined,
+    resolveGridCellRenderer: () => undefined,
     resolveHeaderRenderer: () => undefined,
   });
 }
@@ -296,7 +296,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
     });
-    backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, cells: ['Discovery', '5 d'] })) });
+    backend.sync({ ...base, rows: base.rows.map((row) => ({ ...row, gridCells: ['Discovery', '5 d'] })) });
 
     const row = grid.querySelector<HTMLElement>('.fg-row')!;
     expect(row.querySelectorAll('.fg-row-label')).toHaveLength(1);
@@ -363,7 +363,7 @@ describe('render/dom backend', () => {
     backend.sync({
       ...base,
       columns: base.columns.filter((c) => c.field !== 'cost'),
-      rows: base.rows.map((r) => ({ ...r, cells: r.cells.slice(0, 3) })),
+      rows: base.rows.map((r) => ({ ...r, gridCells: r.gridCells.slice(0, 3) })),
     });
     expect(row.querySelector('[data-field="cost"]')).toBeNull();
     expect(costNode.isConnected).toBe(false);
@@ -799,7 +799,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: (id) => (id === base.id ? painted : undefined),
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -850,7 +850,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: (id) => entries.find((entry) => entry.id === id),
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -1035,7 +1035,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: () => undefined,
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
       readDateLineLabelPlacement: () => placements[placementIndex]!,
     });
@@ -1286,7 +1286,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: (id) => (id === drawn.id ? live : id === child.id ? child : undefined),
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -2114,7 +2114,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => ({ renderer: currentRenderer }),
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -2156,7 +2156,7 @@ describe('render/dom backend', () => {
           throw new Error('boom');
         },
       }),
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -2194,7 +2194,7 @@ describe('render/dom backend', () => {
           throw boom;
         },
       }),
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
       raiseError: (report) => reported.push(report),
     });
@@ -2230,7 +2230,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => ({ renderer }),
-      resolveCellRenderer: () => undefined,
+      resolveGridCellRenderer: () => undefined,
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -2412,7 +2412,7 @@ describe('render/dom backend', () => {
       const backend = createDomBackend({
         entryById: entryLookup,
         resolveBarRenderer: () => ({ renderer: () => ({ text: 'custom' }) }),
-        resolveCellRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
       });
       const { grid, timeline } = mountSurfaces();
@@ -2443,7 +2443,7 @@ describe('render/dom backend', () => {
             };
           },
         }),
-        resolveCellRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
       });
       const { grid, timeline } = mountSurfaces();
@@ -2470,7 +2470,7 @@ describe('render/dom backend', () => {
         resolveBarRenderer: () => ({
           renderer: (ctx) => ({ text: ctx.label === undefined ? 'no label' : 'a label' }),
         }),
-        resolveCellRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
         readBarLabels: () => 'none',
       });
@@ -2491,7 +2491,7 @@ describe('render/dom backend', () => {
       const backend = createDomBackend({
         entryById: entryLookup,
         resolveBarRenderer: () => undefined,
-        resolveCellRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
         readBarLabels: () => 'none',
       });
@@ -2549,11 +2549,11 @@ describe('render/dom backend', () => {
     });
   });
 
-  it('a cellRenderer returning undefined keeps the default cell text (D-S5-10)', () => {
+  it('a gridCellRenderer returning undefined keeps the default cell text (D-S5-10)', () => {
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => ({ renderer: () => undefined }),
+      resolveGridCellRenderer: () => ({ renderer: () => undefined }),
       resolveHeaderRenderer: () => undefined,
     });
     const { grid, timeline } = mountSurfaces();
@@ -2587,7 +2587,7 @@ describe('render/dom backend', () => {
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: (columnKey) => {
+      resolveGridCellRenderer: (columnKey) => {
         columnKeysAsked.push(columnKey);
         return undefined;
       },
@@ -2619,12 +2619,12 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it("a resolved cellRenderer paints inside the cell, receiving the row's entry, row and formatted value", () => {
+  it("a resolved gridCellRenderer paints inside the cell, receiving the row's entry, row and formatted value", () => {
     const seen: { entry?: { id: string }; value: string }[] = [];
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: () => ({
+      resolveGridCellRenderer: () => ({
         renderer: (ctx) => {
           seen.push({ ...(ctx.entry ? { entry: { id: ctx.entry.id } } : {}), value: ctx.value });
           return { text: `[${ctx.value}]` };
@@ -2732,16 +2732,16 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it("a per-column cellRenderer's own resolved output beats the Gantt-wide one for that column only (S5.7, D-S5-17)", () => {
-    // GanttShell's own `resolveCellRenderer` binding (view/gantt-shell.ts) is what actually decides
+  it("a per-column columnRenderer's own resolved output beats the Gantt-wide one for that column only (S5.7, D-S5-17)", () => {
+    // GanttShell's own `resolveGridCellRenderer` binding (view/gantt-shell.ts) is what actually decides
     // "per-column wins over Gantt-wide" — this stands in for that resolution the way every other test
-    // in this file already fakes `resolveCellRenderer` rather than constructing a real GanttShell.
+    // in this file already fakes `resolveGridCellRenderer` rather than constructing a real GanttShell.
     // What this backend must prove instead: the resolution is per-column-key, not per-frame — one
     // column paints its own renderer's output while a sibling column keeps the library default.
     const backend = createDomBackend({
       entryById: entryLookup,
       resolveBarRenderer: () => undefined,
-      resolveCellRenderer: (columnKey) =>
+      resolveGridCellRenderer: (columnKey) =>
         columnKey === 'cost' ? { renderer: (ctx) => ({ text: `per-column:${ctx.value}` }) } : undefined,
       resolveHeaderRenderer: () => undefined,
     });

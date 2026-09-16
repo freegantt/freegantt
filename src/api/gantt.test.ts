@@ -7,7 +7,7 @@ import {
   PluginNotInstalledError,
   RegistrationClosedError,
   RendererAlreadyRegisteredError,
-  ScrollModel,
+  ScrollAxis,
   UnknownCommandError,
   UnknownGridColumnError,
   UnsupportedUnitError,
@@ -227,8 +227,8 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     }
   });
 
-  it('U4: reveal(id) moves the bound ScrollModel to bring an off-screen entry into view', () => {
-    // Reads the ScrollModel a caller shared, not the element's scrollLeft/scrollTop — I12 confines
+  it('U4: reveal(id) moves the bound ScrollAxis to bring an off-screen entry into view', () => {
+    // Reads the ScrollAxis a caller shared, not the element's scrollLeft/scrollTop — I12 confines
     // that read to view/scroll-attachment.ts; scroll-attachment.test.ts and e2e/scroll-sync.spec.ts
     // already prove the model's position lands on the live element.
     FakeResizeObserver.instances = [];
@@ -236,22 +236,22 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
-      expect(scroll.state.position.x).toBe(0);
+      expect(scroll.state.position).toBe(0);
 
       // 'entry-50' starts weeks after the dataset's start — off-screen at a 300px pane, day preset.
       gantt.reveal(entryId('entry-50'));
 
-      expect(scroll.state.position.x).toBeGreaterThan(0);
+      expect(scroll.state.position).toBeGreaterThan(0);
 
       gantt.destroy();
     } finally {
@@ -284,7 +284,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const dataset = new Dataset({
         entries: [
           {
@@ -304,24 +304,24 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
         // (`dateOnlyEnd`'s default `'inclusive'` would add a day to every bare end date).
         dateOnlyEnd: 'exclusive',
       });
-      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll });
+      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll: { x: scroll } });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       const split = dataset.entries.get('split')!;
       const segmentId = (id: string): SegmentId => split.segments.find((s) => s.id === id)!.id;
 
       gantt.reveal(segmentId('split-a'));
-      expect(scroll.state.position.x).toBe(0);
+      expect(scroll.state.position).toBe(0);
 
       // Each of the next two reveals starts over from x 0, so "nearest edge" never has an already
       // off-screen far edge to snap back to — the two results are independently comparable.
       gantt.reveal(segmentId('split-b'));
-      const afterB = scroll.state.position.x;
+      const afterB = scroll.state.position;
       expect(afterB).toBeGreaterThan(0);
 
-      scroll.panTo({ x: 0 });
+      scroll.panTo(0);
       gantt.reveal(entryId('split'));
-      expect(scroll.state.position.x).toBeGreaterThan(afterB);
+      expect(scroll.state.position).toBeGreaterThan(afterB);
 
       gantt.destroy();
     } finally {
@@ -338,7 +338,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const dataset = new Dataset({
         entries: [
           { id: 'x', name: 'EntryX', start: '2026-09-01', end: '2026-09-03' },
@@ -353,7 +353,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
         timeZone: 'UTC',
         dateOnlyEnd: 'exclusive',
       });
-      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll });
+      const gantt = new Gantt({ container, dataset, fit: 'preset', preset: 'day', scroll: { x: scroll } });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       const collidingId = dataset.entries.get('y')!.segments[0]!.id;
@@ -361,7 +361,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 
       // Entry "x" sits at the dataset's own start and is already on-screen — a no-op. Reading the
       // id as "y"'s Segment instead would scroll far to the right.
-      expect(scroll.state.position.x).toBe(0);
+      expect(scroll.state.position).toBe(0);
 
       gantt.destroy();
     } finally {
@@ -375,7 +375,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 
     try {
       const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
-      const scroll = new ScrollModel();
+      const scroll = { x: new ScrollAxis(), y: new ScrollAxis() };
       const containerA = document.createElement('div');
       const containerB = document.createElement('div');
       const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
@@ -553,19 +553,19 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
-      expect(scroll.state.position.x).toBe(0);
+      expect(scroll.state.position).toBe(0);
       gantt.panToDate('2026-10-15T00:00:00Z');
-      expect(scroll.state.position.x).toBeGreaterThan(0);
+      expect(scroll.state.position).toBeGreaterThan(0);
 
       gantt.destroy();
     } finally {
@@ -579,21 +579,21 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       gantt.panToDate('2026-10-15T00:00:00Z', 'start');
-      const start = scroll.state.position.x;
+      const start = scroll.state.position;
 
       gantt.panToDate('2026-10-15T00:00:00Z', 'center');
-      const center = scroll.state.position.x;
+      const center = scroll.state.position;
 
       expect(center).toBe(start - 150); // half of the 300px measured pane
       gantt.destroy();
@@ -611,21 +611,21 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       gantt.panToToday('center');
-      const fromToday = scroll.state.position.x;
+      const fromToday = scroll.state.position;
 
       gantt.panToDate(fakeNow, 'center');
-      const fromDate = scroll.state.position.x;
+      const fromDate = scroll.state.position;
 
       expect(fromToday).toBe(fromDate);
       gantt.destroy();
@@ -644,30 +644,30 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       gantt.panToDate(fakeNow, 'start');
-      const flush = scroll.state.position.x;
+      const flush = scroll.state.position;
 
       gantt.panToToday('start');
-      const withMargin = scroll.state.position.x;
+      const withMargin = scroll.state.position;
 
       // Default margin (2 ticks of the 'day' preset): strictly left of the flush landing.
       expect(withMargin).toBeLessThan(flush);
 
       // align 'center' is untouched by the margin (S1.13 follow-up doc: "no effect on 'center'").
       gantt.panToDate(fakeNow, 'center');
-      const centerFlush = scroll.state.position.x;
+      const centerFlush = scroll.state.position;
       gantt.panToToday('center');
-      expect(scroll.state.position.x).toBe(centerFlush);
+      expect(scroll.state.position).toBe(centerFlush);
 
       gantt.destroy();
     } finally {
@@ -685,13 +685,13 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
         todayLineMarginTicks: 0,
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
@@ -699,14 +699,14 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
       // 0 ticks of margin: panToToday('start') lands exactly where panToDate('start') does.
       gantt.panToDate(fakeNow, 'start');
-      const flush = scroll.state.position.x;
+      const flush = scroll.state.position;
       gantt.panToToday('start');
-      expect(scroll.state.position.x).toBe(flush);
+      expect(scroll.state.position).toBe(flush);
 
       // Raising it live moves the landing further left of the flush position.
       gantt.todayLineMarginTicks = 5;
       gantt.panToToday('start');
-      expect(scroll.state.position.x).toBeLessThan(flush);
+      expect(scroll.state.position).toBeLessThan(flush);
 
       gantt.destroy();
     } finally {
@@ -721,21 +721,21 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       expect(() => gantt.panToDate('1990-01-01T00:00:00Z')).not.toThrow();
-      expect(scroll.state.position.x).toBe(0); // well before range.start, clamped down to 0
+      expect(scroll.state.position).toBe(0); // well before range.start, clamped down to 0
 
       expect(() => gantt.panToDate('2099-01-01T00:00:00Z')).not.toThrow();
-      expect(scroll.state.position.x).toBe(scroll.state.max.x); // well past range.end, clamped up
+      expect(scroll.state.position).toBe(scroll.state.max); // well past range.end, clamped up
 
       gantt.destroy();
     } finally {
@@ -749,22 +749,22 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
         fit: 'preset',
         preset: 'day',
-        scroll,
+        scroll: { x: scroll },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
       gantt.panToDate('2026-10-15T00:00:00Z');
-      const fromString = scroll.state.position.x;
+      const fromString = scroll.state.position;
 
       // A Date object is `toInstant`'s job (`time/input.test.ts`); I10 bans `new Date()` here.
       gantt.panToDate(Date.parse('2026-10-15T00:00:00Z'));
-      expect(scroll.state.position.x).toBe(fromString);
+      expect(scroll.state.position).toBe(fromString);
 
       gantt.destroy();
     } finally {
@@ -1847,18 +1847,18 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a per-column cellRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
+  it('a per-column columnRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const gantt = new Gantt({
       container,
       dataset,
-      gridColumns: [{ field: 'name', cellRenderer: () => ({ text: 'per-column' }) }],
+      gridColumns: [{ field: 'name', columnRenderer: () => ({ text: 'per-column' }) }],
       plugins: [
         {
           id: 'demo.cell-renderer',
           view(ctx) {
-            ctx.view.registerRenderer('cell', () => ({ text: 'plugin' }));
+            ctx.view.registerRenderer('gridCell', () => ({ text: 'plugin' }));
             return () => {};
           },
         },
@@ -1871,7 +1871,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a cellRenderer reads the Field value beside the formatted string (review H3)', () => {
+  it('a gridCellRenderer reads the Field value beside the formatted string (review H3)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1889,7 +1889,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
       container,
       dataset,
       gridColumns: ['name', 'cost'],
-      cellRenderer: ({ column, value, fieldValue }) => {
+      gridCellRenderer: ({ column, value, fieldValue }) => {
         if (column.field === 'cost') seen.push({ value, fieldValue });
         return undefined;
       },
@@ -1901,7 +1901,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
-  it('a per-column cellRenderer reads the same Field value (review H3)', () => {
+  it('a per-column columnRenderer reads the same Field value (review H3)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1918,7 +1918,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         'name',
         {
           field: 'cost',
-          cellRenderer: ({ value, fieldValue }) =>
+          columnRenderer: ({ value, fieldValue }) =>
             typeof fieldValue === 'number' && fieldValue > 1000 ? { text: `over: ${value}` } : undefined,
         },
       ],
@@ -2075,7 +2075,7 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
       container,
       dataset,
       gridColumns: ['name', { field: 'start' }],
-      cellRenderer: ({ column }) => {
+      gridCellRenderer: ({ column }) => {
         cellColumns.push(String(column.field));
         return undefined;
       },
@@ -2220,27 +2220,27 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
 });
 
 describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
-  it('barRenderer/cellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
+  it('barRenderer/gridCellRenderer/headerRenderer/tooltipRenderer are live properties', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
     expect(gantt.barRenderer).toBeUndefined();
-    expect(gantt.cellRenderer).toBeUndefined();
+    expect(gantt.gridCellRenderer).toBeUndefined();
     expect(gantt.headerRenderer).toBeUndefined();
     expect(gantt.tooltipRenderer).toBeUndefined();
 
     const barRenderer = () => ({ text: 'bar' });
-    const cellRenderer = () => ({ text: 'cell' });
+    const gridCellRenderer = () => ({ text: 'gridCell' });
     const headerRenderer = () => ({ text: 'header' });
     const tooltipRenderer = () => ({ text: 'tooltip' });
     gantt.barRenderer = barRenderer;
-    gantt.cellRenderer = cellRenderer;
+    gantt.gridCellRenderer = gridCellRenderer;
     gantt.headerRenderer = headerRenderer;
     gantt.tooltipRenderer = tooltipRenderer;
 
     expect(gantt.barRenderer).toBe(barRenderer);
-    expect(gantt.cellRenderer).toBe(cellRenderer);
+    expect(gantt.gridCellRenderer).toBe(gridCellRenderer);
     expect(gantt.headerRenderer).toBe(headerRenderer);
     expect(gantt.tooltipRenderer).toBe(tooltipRenderer);
 
@@ -2575,14 +2575,14 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
           {
             id: 'demo.renderer-one',
             view(ctx) {
-              ctx.view.registerRenderer('cell', () => undefined);
+              ctx.view.registerRenderer('gridCell', () => undefined);
               return () => {};
             },
           },
           {
             id: 'demo.renderer-two',
             view(ctx) {
-              ctx.view.registerRenderer('cell', () => undefined);
+              ctx.view.registerRenderer('gridCell', () => undefined);
               return () => {};
             },
           },
@@ -4756,15 +4756,15 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
     container: HTMLElement;
     gantt: Gantt;
     dataset: Dataset;
-    scroll: ScrollModel;
+    scroll: ScrollAxis;
     scale: TimeScaleModel;
     timeline: HTMLElement;
   } {
     const container = document.createElement('div');
-    const scroll = new ScrollModel();
+    const scroll = new ScrollAxis();
     const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, scale, scroll });
+    const gantt = new Gantt({ container, dataset, scale, scroll: { x: scroll } });
     FakeResizeObserver.instances.at(-1)!.fire({ width: 300, height: 100 });
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.getBoundingClientRect = () =>
@@ -4793,21 +4793,21 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
 
       expect(a.gantt.preset.id).not.toBe(presetBefore);
       expect(b.gantt.preset.id).toBe(a.gantt.preset.id);
-      expect(a.scroll.state.position.x).not.toBe(b.scroll.state.position.x);
+      expect(a.scroll.state.position).not.toBe(b.scroll.state.position);
 
-      const xBeforePan = a.scroll.state.position.x;
+      const xBeforePan = a.scroll.state.position;
       a.timeline.dispatchEvent(wheel({ shiftKey: true, deltaY: 80 }));
-      expect(a.scroll.state.position.x).toBe(xBeforePan + 80);
+      expect(a.scroll.state.position).toBe(xBeforePan + 80);
 
       a.container.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Home', ctrlKey: true, bubbles: true, cancelable: true }),
       );
-      expect(a.scroll.state.position.x).toBe(0);
+      expect(a.scroll.state.position).toBe(0);
 
       a.container.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'End', ctrlKey: true, bubbles: true, cancelable: true }),
       );
-      expect(a.scroll.state.position.x).toBe(a.scroll.state.max.x);
+      expect(a.scroll.state.position).toBe(a.scroll.state.max);
 
       expect(changes).toEqual([]);
 
@@ -4824,14 +4824,14 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
 
     try {
       const container = document.createElement('div');
-      const scroll = new ScrollModel();
+      const scroll = new ScrollAxis();
       const scale = new TimeScaleModel({ fit: 'preset', preset: 'day' });
       const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
       const gantt = new Gantt({
         container,
         dataset,
         scale,
-        scroll,
+        scroll: { x: scroll },
         viewportGestures: false,
       });
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
@@ -4841,12 +4841,12 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
 
       const pxBefore = scale.scale.pxPerMs;
       const presetBefore = gantt.preset.id;
-      const xBefore = scroll.state.position.x;
+      const xBefore = scroll.state.position;
       timeline.dispatchEvent(wheel({ ctrlKey: true, deltaY: -100, clientX: 0 }));
       container.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
       expect(gantt.preset.id).toBe(presetBefore);
       expect(scale.scale.pxPerMs).toBe(pxBefore);
-      expect(scroll.state.position.x).toBe(xBefore);
+      expect(scroll.state.position).toBe(xBefore);
 
       gantt.zoomBy(2);
       expect(scale.scale.pxPerMs).toBeGreaterThan(pxBefore);
@@ -4867,17 +4867,17 @@ describe('Gantt rows and collapse (S4.6)', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const container = document.createElement('div');
-    const scroll = new ScrollModel();
+    const scroll = new ScrollAxis();
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({
       container,
       dataset,
-      scroll,
+      scroll: { y: scroll },
       rowSource: { source: 'entries', tree: true },
     });
     FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
-    scroll.panTo({ x: 0, y: 80 });
-    const yBefore = scroll.state.position.y;
+    scroll.panTo(80);
+    const yBefore = scroll.state.position;
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const itemId = bar.dataset['itemId'];
 
@@ -4885,7 +4885,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
-    expect(scroll.state.position.y).toBe(yBefore);
+    expect(scroll.state.position).toBe(yBefore);
 
     gantt.destroy();
     vi.unstubAllGlobals();
@@ -4996,12 +4996,12 @@ describe('Gantt scroll re-clamp when the row count shrinks', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const container = document.createElement('div');
-    const scroll = new ScrollModel();
+    const scroll = new ScrollAxis();
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
-    const gantt = new Gantt({ container, dataset, scroll });
+    const gantt = new Gantt({ container, dataset, scroll: { y: scroll } });
     FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
-    scroll.panTo({ x: 0, y: scroll.state.max.y });
-    const yBefore = scroll.state.position.y;
+    scroll.panTo(scroll.state.max);
+    const yBefore = scroll.state.position;
     expect(yBefore).toBeGreaterThan(0);
 
     for (const entry of sampleEntries.slice(0, sampleEntries.length - 3)) {
@@ -5011,12 +5011,12 @@ describe('Gantt scroll re-clamp when the row count shrinks', () => {
 
     // D-S1.5-2: a shrink never rewrites `position` by itself — it stays exactly where the
     // caller last asked, even past the new, smaller `max`, until something re-clamps it.
-    expect(scroll.state.position.y).toBe(yBefore);
-    expect(scroll.state.position.y).not.toBe(0);
+    expect(scroll.state.position).toBe(yBefore);
+    expect(scroll.state.position).not.toBe(0);
 
     scroll.panTo(scroll.state.position);
-    expect(scroll.state.position.y).toBeGreaterThan(0);
-    expect(scroll.state.position.y).toBeLessThanOrEqual(scroll.state.max.y);
+    expect(scroll.state.position).toBeGreaterThan(0);
+    expect(scroll.state.position).toBeLessThanOrEqual(scroll.state.max);
 
     gantt.destroy();
     vi.unstubAllGlobals();
@@ -5436,9 +5436,9 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
     const plugin = {
-      id: 'demo.cellRenderer',
+      id: 'demo.gridCellRenderer',
       view(ctx: PluginContext) {
-        ctx.view.registerRenderer('cell', () => ({ text: 'from the plugin' }));
+        ctx.view.registerRenderer('gridCell', () => ({ text: 'from the plugin' }));
         return () => {};
       },
     };

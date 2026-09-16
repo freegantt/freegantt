@@ -52,13 +52,13 @@ What is left is per-axis sharing: the shared unit becomes one scroll axis, so x,
 
 ### R4 — the leak check → **#403** (done, 2026-09-15)
 
-The work and its acceptance are in the issue. The short version: three counts (nodes, listeners, observables) must return to baseline over 100 cycles, and the same must hold for two Gantts sharing one `ScrollModel` and one `TimeScaleModel`, in three destroy orders.
+The work and its acceptance are in the issue. The short version: three counts (nodes, listeners, observables) must return to baseline over 100 cycles, and the same must hold for two Gantts sharing a viewport model, in three destroy orders. The issue names that model `ScrollModel`, because it was written before D-S6-1 retired it; the shared unit is now one `ScrollAxis` per direction, and the requirement is unchanged.
 
 **What landed, and the two things it taught.**
 
 `GanttShell.destroy()` was a hand-written list of twenty-two teardown calls. A resource added in a later slice could miss that list with nothing to catch it. Each resource now registers its own release on the line that builds it, and `destroy()` is one `disposeAll()`.
 
-The counts live in two places, because one place cannot answer both halves. `test/dom/leak-cycles.test.ts` counts listeners, observers, animation frames and nodes over 100 cycles, and asserts a shared model holds no binding once its Gantts are gone — `ScrollModel.state.max` is the fan-in over live bindings, so a dead one keeps claiming room there. `e2e/mount-destroy.spec.ts` counts nodes, listeners and heap in Chromium, driving `harness/mount-destroy.html`.
+The counts live in two places, because one place cannot answer both halves. `test/dom/leak-cycles.test.ts` counts listeners, observers, animation frames and nodes over 100 cycles, and asserts a shared axis holds no binding once its Gantts are gone — `ScrollAxis.state.max` is the fan-in over live bindings, so a dead one keeps claiming room there. It asks each axis separately, and its last case mounts the first consumer's own shape: x shared, y private. `e2e/mount-destroy.spec.ts` counts nodes, listeners and heap in Chromium, driving `harness/mount-destroy.html`, which mounts that same shape.
 
 1. **A leak census has to be proved red.** A first draft patched `globalThis.EventTarget.prototype` and read clean through a deliberately leaked document listener, because happy-dom's nodes inherit from its own `EventTarget` class and not from that global. Every count here was then checked by injecting a real leak: a missed `removeEventListener`, a missed `disconnect()`, and a missed `unbind()` each turn it red.
 2. **Heap is a question only a real browser answers.** happy-dom retains about 0.2 MB per rendered entry per mount whatever `destroy()` does, and two forced collections do not return it. The same page in Chromium grows 1.4 KB per mount over 150 mounts, with node and listener counts exactly flat. So the fake-DOM tests assert counts and never memory, and they use small fixtures.

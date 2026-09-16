@@ -592,7 +592,7 @@ pnpm open-pr     # push the branch, open a draft pull request (docs/04 §5.2)
 
 `pnpm verify:full` is the one command every caller runs: you, `.githooks/pre-push`, and CI. Its last
 line is the verdict — quote that, never an exit code (`docs/04` §3.2). CI runs it in one job, on any
-pull request that is ready for review; a draft runs nothing, so `gh pr ready <n>` is what starts it.
+pull request that is ready for review; a draft runs nothing, so `pnpm open-pr --ready` is what starts it.
 
 ### `isDevMode()` is a library-build flag, not a consumer's
 

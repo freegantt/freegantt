@@ -11,9 +11,10 @@ import type {
   Theme,
   ViewportGestures,
 } from '../view/index.js';
-import { ScrollModel, TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
+import { TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
 import type {
   PresetRef,
+  ScrollAxes,
   SnapSetting,
   TimeScaleFit,
   ViewPreset,
@@ -24,7 +25,7 @@ import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
   BarRenderer,
-  CellRenderer,
+  GridCellRenderer,
   HeaderRenderer,
   TooltipRenderer,
   EntryVariant,
@@ -91,14 +92,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  a Gantt built on a `Dataset<{ team: string }, { cost: number }>` hands that same typed
    *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
   dataset: Dataset<TProps>;
-  /** Bound scroll object (D9) — pass the same instance to two Gantt instances to scroll-sync them.
-   * Independent of `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its time
-   * axis, both, or neither. Those are the two *objects*, not two directions. One shared
-   * `ScrollModel` syncs x and y **together**, and a Gantt cannot share one direction alone today
-   * (D-S1.5-3). The decided direction makes one `ScrollAxis` the shared unit and retires this
-   * class: `scroll` takes `{ x?, y? }`, and omitting a direction keeps it private (#405, D-S6-1).
-   * This comment describes what ships until that lands. */
-  scroll?: ScrollModel;
+  /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
+   * instances to sync that direction; omit a direction to keep it private. Independent of
+   * `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its scale, both, or
+   * neither. */
+  scroll?: ScrollAxes;
   /** Live. The grid pane's width in px (S1.8), or `'fitColumns'` (#157) to sit it on its columns'
    *  own right edge and keep it there as the columns change. Reads back in px either way. Default:
    *  `--fg-grid-pane-width`, fallback 160. Never wider than the columns (#139); a splitter drag
@@ -192,9 +190,9 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
    *  the later one wins. Default `[]`. */
   variants?: readonly EntryVariant<TProps>[];
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.cellRenderer` (S5.7) wins over this
+  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
-  cellRenderer?: CellRenderer;
+  gridCellRenderer?: GridCellRenderer;
   /** Live (S5.4, D-S5-11). Grid column header chrome (S5.7 paints through it). */
   headerRenderer?: HeaderRenderer;
   /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
@@ -320,7 +318,7 @@ export class Gantt<TProps = unknown> {
         'collapsed',
         'barLabels',
         'barRenderer',
-        'cellRenderer',
+        'gridCellRenderer',
         'headerRenderer',
         'tooltipRenderer',
         'zoomPresets',
@@ -559,12 +557,12 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
-  get cellRenderer(): CellRenderer | undefined {
-    return this.#shell.cellRenderer;
+  get gridCellRenderer(): GridCellRenderer | undefined {
+    return this.#shell.gridCellRenderer;
   }
 
-  set cellRenderer(renderer: CellRenderer | undefined) {
-    this.#shell.cellRenderer = renderer;
+  set gridCellRenderer(renderer: GridCellRenderer | undefined) {
+    this.#shell.gridCellRenderer = renderer;
   }
 
   /** Live (S5.4, D-S5-11). */

@@ -37,7 +37,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 
 ### Gantt
 
-- `gridColumns` — which Fields this view shows, in order. `cellRenderer` stays on the column. `meterCell()` and `imageCell()` are the shipped cell renderers (#265); default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
+- `gridColumns` — which Fields this view shows, in order. `columnRenderer` stays on the column. `meter()` and `image()` are the shipped column renderers (#265); default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
@@ -47,7 +47,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
-- `scroll` — pass the same `ScrollModel` into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
+- `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
 - `variants` — the rules this Gantt paints rows with (ADR 0018); `bar()`, `summary()`, `diamond()` are core's own shipped looks (ADR 0022).
 - `gantt.variantFor(entry): ResolvedVariant` (ADR 0022) — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
 
@@ -278,11 +278,11 @@ gap, not a rename.
 | `.fg-row-label` | First-column label cell. Carries hierarchy indent. |
 | `.fg-row-label-text` | The label cell's text child. |
 | `.fg-row-cell` | A data cell in the grid. |
-| `.fg-meter` | `meterCell()` wrapper. Track plus optional formatted text. |
+| `.fg-meter` | `meter()` wrapper. Track plus optional formatted text. |
 | `.fg-meter-track` | The meter graphic. `aria-hidden` when text sits beside it. |
 | `.fg-meter-fill` | The filled portion of the track. Width is the clamped percent. |
 | `.fg-meter-text` | The Field's formatted value beside the track. |
-| `.fg-image-cell` | `imageCell()` img. |
+| `.fg-image-cell` | `image()` img. |
 | `.fg-row-twisty` | Collapse control on a parent row. |
 | `.fg-header` | Sticky time header in the timeline pane. |
 | `.fg-band` | One header band. Height is `--fg-band-height`. |
@@ -341,6 +341,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-Architecture and API documentation live on the Docusaurus site under `website/` — run `pnpm docs` to
-view it locally. The site's API reference is generated from TSDoc comments via TypeDoc, so it never
-drifts from the source.
+The [Architecture pages](../architecture/index.md) map what the code does now — the files, the classes,
+the call order. Run `pnpm docs` to read them, and everything else, as the site. The API reference is
+generated from TSDoc comments via TypeDoc, so it never drifts from the source.

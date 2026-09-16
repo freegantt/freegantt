@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BoundValue } from './bound-value.js';
 import { BatchedNotifier } from './batched-notifier.js';
 
-// The D-S1.5-4 contract, tested once, on the object that implements it for both viewport models.
-// TimeScaleModel's and ScrollModel's own suites still exercise it end to end through what they
+// The D-S1.5-4 contract, tested once, on the object that implements it for every viewport model.
+// TimeScaleModel's and ScrollAxis's own suites still exercise it end to end through what they
 // resolve; what is here is the contract itself, with a resolution simple enough to read.
 
 interface Contribution {
