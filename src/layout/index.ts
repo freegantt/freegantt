@@ -132,13 +132,13 @@ export type {
   ScaleBinding,
   ScaleBindingHandle,
 } from './viewport/time-scale-model.js';
-export { ScrollModel } from './viewport/scroll-model.js';
+export { ScrollAxis } from './viewport/scroll-axis.js';
 export type {
-  ScrollPosition,
-  ScrollState,
-  ScrollBinding,
-  ScrollBindingHandle,
-} from './viewport/scroll-model.js';
+  ScrollAxisState,
+  ScrollAxes,
+  ScrollAxisBinding,
+  ScrollAxisBindingHandle,
+} from './viewport/scroll-axis.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
 export type {

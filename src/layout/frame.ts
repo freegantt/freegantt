@@ -254,8 +254,8 @@ export interface GeometryFrame {
   tree: boolean;
   /** Always the full extent, never the window's. */
   contentHeight: number;
-  /** Full horizontal extent of the bound `TimeScale`'s range, in px — what `ScrollModel` binds as
-   * its content width (S1.5 README §3.2). Always the full extent, never the window's. */
+  /** Full horizontal extent of the bound `TimeScale`'s range, in px — what the x `ScrollAxis` binds
+   * as its content width (S1.5 README §3.2). Always the full extent, never the window's. */
   contentWidth: number;
   bars: FrameBar[];
   links: readonly FrameLink[];

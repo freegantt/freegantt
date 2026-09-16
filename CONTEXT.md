@@ -258,7 +258,7 @@ The DOM element (or a CSS selector naming one) a consumer hands to `new Gantt({ 
 _Avoid_: Host (retired, see Consumer), Mount target (a Render surface — a different, lower-level concept the Container is split into, see Render surface)
 
 **FrameLayout**:
-The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — the row-height index and `FrameMemory` (per-row item caches). `computeFrame` stays pure; `FrameLayout` is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollModel.
+The `layout/` object that runs one Gantt's layout pass (`layout/frame-layout.ts`) and keeps what that pass must remember between renders — the row-height index and `FrameMemory` (per-row item caches). `computeFrame` stays pure; `FrameLayout` is what makes the index O(log n) _across_ renders rather than per render. One instance per Gantt: the index describes that Gantt's rows and is not shareable, unlike a TimeScaleModel or a ScrollAxis.
 _Avoid_: Layout cache, frame builder (it computes the pass; the cache is how, not what)
 
 **Frame memory**:
@@ -374,7 +374,7 @@ One Gantt's _data_ contribution to a shared pure model, supplied when it joins �
 _Avoid_: Attach (reserved for the DOM side), subscribe, register
 
 **Bound value**:
-The value a viewport model resolves from every current Binding, together with the contract for telling those bindings about it (`layout/viewport/bound-value.ts`, D-S1.5-4): bind always notifies the newcomer, every other notification fires iff the resolved value changed. One collection serves both jobs — the bindings and their reactions are the same map. TimeScaleModel's is `{timeZone, range, pxPerMs}`; ScrollModel's is `{position, max}`. Scoped to `layout/viewport/`'s models by decision (`plans/01` §8.2 D-A), not a general notify primitive.
+The value a viewport model resolves from every current Binding, together with the contract for telling those bindings about it (`layout/viewport/bound-value.ts`, D-S1.5-4): bind always notifies the newcomer, every other notification fires iff the resolved value changed. One collection serves both jobs — the bindings and their reactions are the same map. TimeScaleModel's is `{timeZone, range, pxPerMs}`; each ScrollAxis's is `{position, max}`. Scoped to `layout/viewport/`'s models by decision (`plans/01` §8.2 D-A), not a general notify primitive.
 _Avoid_: Observable, signal, store, subscription (those name `data/`'s reactivity, which is a different mechanism with a different owner)
 
 **Scale binding**:
@@ -389,11 +389,11 @@ The measured drawable box of a pane, measured by `attachPaneSize`, pushed into t
 _Avoid_: Viewport width/size (Viewport is the fan-in object, not a box)
 
 **Viewport**:
-The fan-in object (`layout/viewport/viewport.ts`) that owns one TimeScaleModel and one ScrollModel behind a single `bind`/handle/reaction, so `view/` never holds more than one of either (S1.7, D-S1.7-1). One measurement — a pane resize — fans out through it to the scale's pane width, the scroll model's pane size, and Visible's own width/height, coalesced to one consumer notification. Not exported from `api/`; `view/` is its only caller. One Viewport serves one Gantt — it holds that Gantt's pane and content extents, so a second `bind()` throws rather than replacing the reaction. Sharing is what the models are for.
+The fan-in object (`layout/viewport/viewport.ts`) that owns one TimeScaleModel and two ScrollAxis instances — `x` and `y` — behind a single `bind`/handle/reaction, so `view/` never binds any of them more than once (S1.7, D-S1.7-1). One measurement — a pane resize — fans out through it to the scale's pane width, each axis's own pane size, and Visible's own width/height, coalesced to one consumer notification. Not exported from `api/`; `view/` is its only caller. One Viewport serves one Gantt — it holds that Gantt's pane and content extents, so a second `bind()` throws rather than replacing the reaction. Sharing is what TimeScaleModel and ScrollAxis are for.
 _Avoid_: Viewport width/size (that measurement is Pane size), the rendered/visible region (that is Visible)
 
 **Visible**:
-The culled region a Viewport resolves, in timeline-content coordinates, from the **locally clamped** scroll position — this Gantt's own pushed `{content, pane}` extents, not ScrollModel's loosest-bound-across-bindings `max` (D-S1.7-2). Feeds `LayoutInput.visible` directly and is what `attachScroll` writes back to the element.
+The culled region a Viewport resolves, in timeline-content coordinates, from the **locally clamped** scroll position on each axis — this Gantt's own pushed `{content, pane}` extents, not either ScrollAxis's own loosest-bound-across-bindings `max` (D-S1.7-2). Feeds `LayoutInput.visible` directly and is what `attachScroll` writes back to the element.
 _Avoid_: Viewport (Viewport is the object that resolves this, not the region itself), culling window (fine in prose as a synonym, but the type and field name are `visible`/`Rect`)
 
 **Overscan**:
@@ -405,15 +405,11 @@ One row of the time-axis header, emitted per `ViewPreset.headers` entry, coarses
 _Avoid_: Header row (Header band is the term of art; "row" is reserved for grid Rows)
 
 **ScrollAxis**:
-One direction's scroll position and its bound (`{position, max}`), and **the unit two Gantt instances share** — D-S6-1, ruled 2026-09-15. A Gantt holds two, one per direction, and a caller aims each one independently, so sharing x, y, both or neither are all the same mechanism and the library ships no sharing modes. `scroll` takes `{ x?, y? }`, and omitting a direction keeps it private — one spelling for all four cases. **This retires ScrollModel**, whose name told the first consumer that sharing it would share the horizontal scroll alone; a container that hides which directions it couples is the defect, not the ergonomics. **Decided, not built** — #405 carries it; until then sharing one ScrollModel shares both directions. Say _time axis_, never bare "axis", wherever the TimeScaleModel is meant.
-_Avoid_: `xOnly()` / `yOnly()` (withdrawn — a filtered view over a model is not what this is), scroll direction, axis view
-
-**ScrollModel**:
-**Retires with #405 — see ScrollAxis.** The standalone, shareable object owning a scroll position on both axes, and the only route by which any view or interaction code may read or write it. It resolves two things: the **position** — where the caller asked to be — and **max**, the loosest bound any bound Gantt needs, which is what a Pan clamps against. Max is not a claim about any one Gantt's scroller: each bound Gantt clamps the shared position to its own content, so a shorter chart stops at its last row while a taller one keeps going, and picks up where it stopped on the way back. Shared between Gantt instances the same way a TimeScaleModel is, and sharing one instance shares **both** directions. Decided 2026-09-15, not built: the shared unit becomes one scroll axis, so a caller shares x, y, both or neither (#405, D-S6-1). This entry describes what ships.
-_Avoid_: Scroll position, offset, viewport state
+The standalone, shareable object owning a scroll position on **one** direction, and the only route by which any view or interaction code may read or write it. A Gantt holds two — `x` and `y` — via `GanttOptions.scroll: { x?, y? }` (`ScrollAxes`); omitting a direction keeps it private. It resolves two things: the **position** — where the caller asked to be — and **max**, the loosest bound any bound Gantt needs, which is what a Pan clamps against. Max is not a claim about any one Gantt's scroller: each bound Gantt clamps the shared position to its own content, so a shorter chart stops at its last row while a taller one keeps going, and picks up where it stopped on the way back. Sharing the same instance as `x` (or `y`) between two Gantts syncs only that direction — the shared unit is one axis, never both at once (D-S6-1). `ScrollModel`, which fused both directions into one object, is retired.
+_Avoid_: Scroll position, offset, viewport state, ScrollModel (retired S6, D-S6-1), `xOnly()` / `yOnly()` (withdrawn — a filtered view over a model is not what this is), scroll direction, axis view
 
 **Pan**:
-Moving the shared viewport — `ScrollModel.panTo`, plus the wheel and keyboard viewport gestures that call it (shift+wheel, Page/Home/End, unselected arrows). Public verbs on Gantt are `panToDate` / `panToToday` (loose InstantInput, never `scrollTo*`). One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end. `panToInstant` is the Viewport-internal twin that already holds a branded Instant.
+Moving the shared viewport — `ScrollAxis.panTo`, plus the wheel and keyboard viewport gestures that call it (shift+wheel, Page/Home/End, unselected arrows). Public verbs on Gantt are `panToDate` / `panToToday` (loose InstantInput, never `scrollTo*`). One concept at two layers, which is why they share the word. Distinct from **scroll**, which means one element's native offset and is confined to `view/scroll-attachment.ts` (I12): a Pan may result in no scroll at all when the chart is already at its end. `panToInstant` is the Viewport-internal twin that already holds a branded Instant.
 _Avoid_: Scroll (an element's native offset), move (move is dragging an Entry — `entryMove`), seek
 
 **Viewport gestures**:

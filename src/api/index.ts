@@ -201,18 +201,18 @@ export type {
   DateInput,
   DateInputFactory,
 } from '../extensions/features/inline-editing.js';
-// TimeScaleModel/ScrollModel are layout/'s own — both are public, consumer-constructed objects
+// TimeScaleModel/ScrollAxis are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
-export { TimeScaleModel, ScrollModel } from '../layout/index.js';
+export { TimeScaleModel, ScrollAxis } from '../layout/index.js';
 export type {
   TimeScale,
   TimeScaleModelOptions,
   TimeScaleFit,
   PresetRef,
   ShippedPresetId,
-  ScrollPosition,
-  ScrollState,
+  ScrollAxisState,
+  ScrollAxes,
 } from '../layout/index.js';
 // Catchable errors (plans/02 §7): FreeGanttError is the base; a consumer can catch broadly or on `.code`.
 // `BuiltInThrownCode` names every code a consumer can catch, so a `switch` on `.code` is exhaustive;
@@ -316,8 +316,8 @@ export type {
 } from '../layout/index.js';
 // What `Gantt.rowSource` reads back (#248 S4-2) — every key above a consumer may omit, filled.
 export type { ResolvedRowSource, ResolvedEntriesRowSource, ResolvedGroupRowSource } from '../layout/index.js';
-// Point/Size are the S1.5 ScrollModel's own vocabulary (S1.5 README §5) — a consumer building
-// `new ScrollModel({ x, y })` or reading `ScrollState` needs the shape in the public surface too.
+// General geometry vocabulary (model/geometry.ts) — the public surface's own shapes for a point or
+// a box, alongside `ClientPoint`/`PixelSpan` below.
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 // S5.3, D-S5-10: `ctx.view.renderElement()`'s own input type — the reconciler's vocabulary as plain data.
 export type { ElementDescription, TooltipColumn } from '../model/index.js';

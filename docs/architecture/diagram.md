@@ -352,7 +352,7 @@ frame.ts, items/, rows/, viewport/
 3,568 lines · 29 files · computeFrame(), row/item pipeline
 </text>
 <text x="320" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-TimeScaleModel, ScrollModel, gesture-draft, FrameLayout
+TimeScaleModel, ScrollAxis, gesture-draft, FrameLayout
 </text>
 <!-- data/ — BUILT, solid box -->
 <rect
@@ -1402,7 +1402,7 @@ presets · instant() · now() · addMs · ZonedTime
 instant(), ViewPreset
 </text>
 <text x="1030" y="132" text-anchor="middle" class="box-sub" font-size="10" fill="var(--ink)">
-TimeScaleModel, ScrollModel — D9 x-sync objects
+TimeScaleModel, ScrollAxis — D9 shared-axis objects
 </text>
 <text x="1030" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
 layout/ re-exports widened by issue #91 §9-I
