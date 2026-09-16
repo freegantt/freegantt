@@ -263,6 +263,13 @@ export default tseslint.config(
     },
   },
   {
+    // `scripts/measure-scale.mjs` runs part of itself inside the page, through `page.evaluate`. The
+    // functions it hands over are written here but execute in Chromium, so they legitimately name
+    // browser globals in a file Node runs. Both sets, because the file is genuinely both.
+    files: ['scripts/measure-scale.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
     // #287, review finding F7: `harness-public-api-only` (.dependency-cruiser.cjs) matches
     // *resolved* paths, so it cannot tell a relative path naming `src/api/index.ts` from the
     // `freegantt` alias resolving to the same file — the exception that lets the alias through lets

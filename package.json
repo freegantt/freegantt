@@ -47,7 +47,8 @@
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm guards && pnpm test:node && pnpm test:dom && pnpm vendor-names && pnpm sentence-length && pnpm disables && pnpm build && pnpm api-report && pnpm check-doc-examples && pnpm docs:published-is-current && pnpm bundle-probe && pnpm size-limit",
     "verify:full": "node scripts/verify-full.mjs",
     "open-pr": "node scripts/open-pr.mjs",
-    "pr-wait": "node scripts/pr-wait.mjs"
+    "pr-wait": "node scripts/pr-wait.mjs",
+    "measure:scale": "node scripts/measure-scale.mjs"
   },
   "dependencies": {
     "alien-signals": "^1.0.0",
