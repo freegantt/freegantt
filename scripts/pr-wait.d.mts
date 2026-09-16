@@ -3,12 +3,15 @@
 // declaration file convention for a `.mjs` module (Node ESM), not a signal it should become
 // TypeScript.
 
-/** One row of `gh pr checks <n> --json name,state,bucket,link`. */
-export interface PullRequestCheck {
-  name: string;
-  state: string;
-  bucket: string;
-  link?: string;
+/** One row of `gh run list --json databaseId,status,conclusion,event,headSha,url`. */
+export interface GateRun {
+  databaseId: number;
+  status: string;
+  conclusion: string;
+  event: string;
+  headSha: string;
+  createdAt: string;
+  url?: string;
 }
 
 /** Which pull request the verdict names, and how long the wait took. */
@@ -16,16 +19,20 @@ export interface VerdictContext {
   number: number;
   seconds: number;
   branch: string;
+  dispatchUrl?: string;
 }
 
-/** The one verdict line, and whether the checks settled and went green. */
-export interface CheckSummary {
+/** The one verdict line, and whether the gate run settled and went green. */
+export interface GateVerdict {
   settled: boolean;
   ok: boolean;
   verdict: string;
 }
 
-/** True when a real run is on the board. A skipped check is the stale draft-time run, not a start. */
-export function hasRunStarted(checks: readonly PullRequestCheck[]): boolean;
+/** True when this row is the gate for `headSha`: a `pull_request` run that actually ran. */
+export function isLiveGateRun(run: GateRun, headSha: string): boolean;
 
-export function summarizeChecks(checks: readonly PullRequestCheck[], context: VerdictContext): CheckSummary;
+/** The newest live gate run for this head. */
+export function gateRunForHead(runs: readonly GateRun[], headSha: string): GateRun | undefined;
+
+export function summarizeGateRun(run: GateRun | undefined, context: VerdictContext): GateVerdict;

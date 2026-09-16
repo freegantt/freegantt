@@ -41,6 +41,7 @@ export type BuiltInThrownCode =
   | 'invalid-snap-increment'
   | 'container-not-found'
   | 'invalid-instant'
+  | 'invalid-plain-time'
   | 'unknown-preset'
   | 'invalid-preset'
   | 'entry-not-found'
@@ -78,7 +79,8 @@ export type BuiltInThrownCode =
   | 'registration-closed'
   | 'plugin-setup-failed'
   | 'renderer-already-registered'
-  | 'unknown-command';
+  | 'unknown-command'
+  | 'empty-covers';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -165,6 +167,21 @@ export class InvalidInstantError extends FreeGanttError {
   constructor(message: string, value?: unknown) {
     super('invalid-instant' satisfies BuiltInThrownCode, message);
     this.name = 'InvalidInstantError';
+    this.value = value;
+  }
+}
+
+/** `code: 'invalid-plain-time'` — a `PlainTimeInput` string that names no wall-clock time of day
+ * (`time/readPlainTime`). `value` is the string the consumer wrote. */
+export class InvalidPlainTimeError extends FreeGanttError {
+  readonly value: string;
+
+  constructor(value: string, operation?: string) {
+    super(
+      'invalid-plain-time' satisfies BuiltInThrownCode,
+      `${operation === undefined ? '' : `${operation}: `}${JSON.stringify(value)} is not a wall-clock time of day. Write "17:00" or "17:00:00".`,
+    );
+    this.name = 'InvalidPlainTimeError';
     this.value = value;
   }
 }
@@ -914,5 +931,25 @@ export class UnknownCommandError extends FreeGanttError {
     );
     this.name = 'UnknownCommandError';
     this.commandId = commandId;
+  }
+}
+
+/** `code: 'empty-covers'` — an empty cover list, from either door that takes one: `notCovered([])`,
+ *  or a shading rule written `{ covers: [] }` (#404). An empty list has no complement to compute:
+ *  every instant would read as "not covered", which paints the whole window and is never what a
+ *  plugin author meant to write. Modeled on `EmptySegmentsError`'s shape: a consumer mistake at the
+ *  config boundary, not a value core derives. `operation` names the caller, because two of them
+ *  reach this and a baked-in prefix would tell one about a call it never made (see the file header,
+ *  #239; #404 review F3). */
+export class EmptyCoversError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'empty-covers' satisfies BuiltInThrownCode,
+      `${operation}: "covers" must name at least one cover. An empty list has no complement.`,
+    );
+    this.name = 'EmptyCoversError';
+    this.operation = operation;
   }
 }

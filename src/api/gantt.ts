@@ -197,12 +197,12 @@ export interface GanttOptionsBase<TProps = unknown> {
   headerRenderer?: HeaderRenderer;
   /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
   tooltipRenderer?: TooltipRenderer;
-  /** Live (S5.1, D-S5-1, D-S5-3). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
-   *  never names in a table. Assignment diffs by `id`: a plugin present before and after is left
-   *  alone, even when the new array holds a fresh object for that `id` — same id, new object is
-   *  ignored (a dev build warns; production stays silent). Reconfigure with two assignments
-   *  (remove, then add) or a distinct id. Default `[]`. `gantt.installPlugin`/`uninstallPlugin`
-   *  add or drop one plugin without restating the set (D-S5-36).
+  /** Live (S5.1, D-S5-1, D-S5-3, #404). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
+   *  never names in a table. Assignment diffs by `id`, then by object identity: a new `id` sets up, a
+   *  missing one disposes, the same object is left alone, and a fresh object under an installed `id`
+   *  replaces that occupant — so one assignment reconfigures a plugin. Default `[]`.
+   *  `gantt.installPlugin`/`uninstallPlugin` add or drop one plugin without restating the set
+   *  (D-S5-36).
    *
    *  ADR 0019: chrome only. A plugin with a `data` half declares a Field or claims the edit hook, and
    *  both must be in place before the Dataset's first Rollup — so it installs on the `Dataset`
@@ -896,7 +896,12 @@ export class Gantt<TProps = unknown> {
     this.#shell.reveal(id);
   }
 
-  /** Live (S5.1, D-S5-1, D-S5-3). See `GanttOptions.plugins`. This Gantt's own chrome plugins, and
+  /** Live (S5.1, D-S5-1, D-S5-3, #404). See `GanttOptions.plugins`. Assigning diffs by `id`: a new
+   *  `id` sets up, a missing one disposes, and a fresh object under an installed `id` replaces that
+   *  occupant — so `gantt.plugins = [timeShading(next)]` applies the new rules. Handing back the
+   *  same object (`[...gantt.plugins, extra]`) runs nothing again.
+   *
+   *  This Gantt's own chrome plugins, and
    *  only those: a plugin installed on the Dataset stays off this list, because this Gantt cannot
    *  drop it (ADR 0019). */
   get plugins(): readonly ChromePlugin<TProps>[] {
@@ -909,8 +914,9 @@ export class Gantt<TProps = unknown> {
 
   /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
-   *  plugin whose `id` is already installed throws `DuplicatePluginIdError` — the assignment form
-   *  ignores it and reports `plugin-reconfigure-dropped`, which is the silence this verb replaces. */
+   *  plugin whose `id` is already installed throws `DuplicatePluginIdError`: this verb adds, and
+   *  says so when there is nothing to add. To *change* an installed plugin's options, assign the
+   *  list — `gantt.plugins = [timeShading(next)]` replaces the occupant of that `id` (#404). */
   installPlugin(plugin: ChromePlugin<TProps>): void {
     this.#shell.installPlugin(assertChromeOnly([plugin])[0]!);
   }

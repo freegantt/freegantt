@@ -71,7 +71,7 @@ export class RegistrationGate {
 export class PluginRuntime<TContext> {
   #installed: Installed<TContext>[] = [];
   #buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>;
-  /** S5.12, D-S5-40: where a dropped reconfigure and a throwing disposer are reported. */
+  /** S5.12, D-S5-40: where a throwing disposer is reported. */
   #raiseError: RaiseError;
 
   constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>, raiseError: RaiseError) {
@@ -83,25 +83,51 @@ export class PluginRuntime<TContext> {
     return this.#installed.map((installed) => installed.plugin);
   }
 
-  /** Diffs `next` against what is installed by `id` (D-S5-3): a plugin present in both lists is left
-   *  alone, even when the new array holds a fresh object for that `id` — only the `id`-level
-   *  difference is disposed and set up. New plugins are set up *before* any dropped plugin is
-   *  disposed, and `#installed` is committed last, so a `view()` throw unwinds only this batch's
+  /** Diffs `next` against what is installed, by `id` and then by object identity (D-S5-3, #404
+   *  review F4). Three answers per installed plugin:
+   *
+   *  - the same object is in `next` — left alone, nothing runs again. `[...gantt.plugins, extra]`
+   *    hands back the very objects this runtime installed, so adding one plugin disturbs no other.
+   *  - a *different* object holds its `id` — **replaced**: the old occupant is disposed and the new
+   *    one's `view()` runs. This is what makes `gantt.plugins = [timeShading(next)]` apply the new
+   *    rules, so one assignment reconfigures a plugin the way every other config key already does.
+   *  - its `id` is absent from `next` — dropped, and disposed last.
+   *
+   *  A replacement disposes *before* the new instance sets up, and the two other groups keep the
+   *  order they had. That split is not cosmetic: a `register*` keyed by plugin id (a renderer point
+   *  through `RendererRegistry`, a grid column) reads a still-live outgoing instance as a rival
+   *  claim on the same point and throws, so an id must hand its occupant over before the next one
+   *  claims anything. It costs the `view()`-throw guarantee for that one id only — a replacement
+   *  that throws leaves the `id` uninstalled and raises `PluginSetupError`, exactly as the
+   *  `uninstallPlugin` + `installPlugin` pair it replaces always did.
+   *
+   *  Dropped plugins keep the guarantee in full. New plugins are set up *before* any dropped plugin
+   *  is disposed, and `#installed` is committed last, so a `view()` throw unwinds only this batch's
    *  own already-set-up plugins (in reverse) before rethrowing `PluginSetupError` — the previous
-   *  installed set, dropped plugins included, is untouched either way (issue #137 F4, C1). Disposing
-   *  `removed` before every addition's `view()` had succeeded left `#installed` holding plugins
-   *  already disposed once, primed to be disposed again on the next `install()` call. */
+   *  installed set, dropped plugins included, is untouched (issue #137 F4, C1). Disposing `removed`
+   *  before every addition's `view()` had succeeded left `#installed` holding plugins already
+   *  disposed once, primed to be disposed again on the next `install()` call. */
   install(next: readonly ShellPlugin<TContext>[]): void {
     assertNoDuplicateIds(next);
 
-    const nextIds = new Set(next.map((plugin) => plugin.id));
+    const nextById = new Map(next.map((plugin) => [plugin.id, plugin]));
     const kept: Installed<TContext>[] = [];
+    const replaced: Installed<TContext>[] = [];
     const removed: Installed<TContext>[] = [];
     for (const installed of this.#installed) {
-      (nextIds.has(installed.plugin.id) ? kept : removed).push(installed);
+      const incoming = nextById.get(installed.plugin.id);
+      if (incoming === undefined) removed.push(installed);
+      else if (incoming === installed.plugin) kept.push(installed);
+      else replaced.push(installed);
     }
 
-    this.#reportDroppedReconfigures(next, kept);
+    // Committed before the additions run, so a `view()` throw below never leaves `#installed`
+    // holding a record this loop already disposed (the double-dispose of issue #137 F4).
+    if (replaced.length > 0) {
+      const outgoing = new Set(replaced);
+      this.#installed = this.#installed.filter((installed) => !outgoing.has(installed));
+      for (let i = replaced.length - 1; i >= 0; i--) this.#disposeOne(replaced[i]!);
+    }
 
     // D-S5-31: the whole list is sorted, then the already-installed ones drop out. Sorting `toAdd`
     // alone would read a kept plugin as missing the moment a new one required it.
@@ -148,30 +174,6 @@ export class PluginRuntime<TContext> {
   disposeAll(): void {
     for (let i = this.#installed.length - 1; i >= 0; i--) this.#disposeOne(this.#installed[i]!);
     this.#installed = [];
-  }
-
-  /** Issue #137 F5: `gantt.plugins = [tooltips({ delayMs: 50 })]` after `tooltips()` is already
-   *  installed matches by `id` and is silently a no-op — the new options never reach `view()` again.
-   *
-   *  S5.12, D-S5-41: this used to sit behind `isDevMode()`, which reads a flag Vite resolves when
-   *  *this repo* builds `dist/`. The warning therefore reached nobody but our own harness. It now
-   *  reports every time, and the `console.warn` behind it fires only when nothing is subscribed. */
-  #reportDroppedReconfigures(
-    next: readonly ShellPlugin<TContext>[],
-    kept: readonly Installed<TContext>[],
-  ): void {
-    for (const plugin of next) {
-      const existing = kept.find((installed) => installed.plugin.id === plugin.id);
-      if (existing !== undefined && existing.plugin !== plugin) {
-        const message =
-          `plugin "${plugin.id}" was reassigned with a new instance; its options were ` +
-          'not applied. Reconfigure with two assignments (remove, then add) or a distinct id.';
-        this.#raiseError(
-          { code: 'plugin-reconfigure-dropped', message, severity: 'warning', by: plugin.id },
-          () => console.warn(`FreeGantt: ${message}`),
-        );
-      }
-    }
   }
 
   /** A disposer throwing must not stop the rest from freeing their own resources (issue #137 F4) —

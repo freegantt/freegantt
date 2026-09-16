@@ -81,7 +81,7 @@ describe('PluginRuntime', () => {
     expect(log).toEqual(['dispose a']);
   });
 
-  it('assigning a list with the same ids sets nothing up again', () => {
+  it('assigning the same object again sets nothing up again', () => {
     const log: string[] = [];
     const runtime = makeRuntime(log);
     const a = plugin('a', () => log.push('setup a'));
@@ -89,6 +89,19 @@ describe('PluginRuntime', () => {
     runtime.install([a]);
 
     expect(log).toEqual(['setup a']);
+  });
+
+  it('handing back the installed objects leaves every one of them running (#404 review F4)', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    const a = plugin('a', () => log.push('setup a'));
+    const b = plugin('b', () => log.push('setup b'));
+    runtime.install([a]);
+
+    // The `[...gantt.plugins, extra]` shape: identity is what tells "add one" from "reconfigure".
+    runtime.install([...runtime.plugins, b]);
+
+    expect(log).toEqual(['setup a', 'setup b']);
   });
 
   it('a duplicate id throws DuplicatePluginIdError', () => {
@@ -244,34 +257,57 @@ describe('PluginRuntime', () => {
     errorSpy.mockRestore();
   });
 
-  it('a same-id, new-instance reassignment reports and warns', () => {
-    const log: string[] = [];
-    const runtime = makeRuntime(log);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    runtime.install([plugin('a', () => {})]);
-
-    runtime.install([plugin('a', () => {})]);
-
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0]?.[0]).toContain('"a"');
-    warnSpy.mockRestore();
-  });
-
-  it('a dropped reconfigure raises at warning, no longer gated by the build (D-S5-41)', () => {
+  it('a fresh instance under an installed id replaces it, old disposed first (#404 review F4)', () => {
     const log: string[] = [];
     const reported: ErrorReportInput[] = [];
     const runtime = makeRuntime(log, (report) => reported.push(report));
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    runtime.install([plugin('a', () => {})]);
+    runtime.install([
+      plugin(
+        'a',
+        () => log.push('setup first'),
+        () => log.push('dispose first'),
+      ),
+    ]);
 
-    runtime.install([plugin('a', () => {})]);
+    runtime.install([
+      plugin(
+        'a',
+        () => log.push('setup second'),
+        () => log.push('dispose second'),
+      ),
+    ]);
 
-    expect(reported).toHaveLength(1);
-    expect(reported[0]?.code).toBe('plugin-reconfigure-dropped');
-    expect(reported[0]?.severity).toBe('warning');
-    expect(reported[0]?.by).toBe('a');
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
+    // Disposed before the replacement sets up: a `register*` keyed by plugin id reads a still-live
+    // outgoing instance as a rival claim on the same point and throws.
+    expect(log).toEqual(['setup first', 'dispose first', 'setup second']);
+    expect(reported).toEqual([]);
+  });
+
+  it('a replacement that throws leaves the id uninstalled and raises PluginSetupError', () => {
+    const log: string[] = [];
+    const runtime = makeRuntime(log);
+    runtime.install([
+      plugin(
+        'a',
+        () => log.push('setup first'),
+        () => log.push('dispose first'),
+      ),
+    ]);
+
+    expect(() =>
+      runtime.install([
+        plugin('a', () => {
+          throw new Error('boom');
+        }),
+      ]),
+    ).toThrow(PluginSetupError);
+
+    expect(runtime.plugins).toEqual([]);
+    expect(log).toEqual(['setup first', 'dispose first']);
+
+    // The outgoing record is already gone from `#installed`, so nothing disposes twice later.
+    runtime.install([]);
+    expect(log).toEqual(['setup first', 'dispose first']);
   });
 });
 

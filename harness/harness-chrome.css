@@ -760,11 +760,9 @@ nav.harness-site-nav a[aria-current='page'] {
   --fg-date-line-color: var(--warn);
 }
 
-/* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — the library never invents one).
-   Painted below .fg-bars through ctx.view.registerDecoration. */
-.demo-weekend-band {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-}
+/* #404: timeShading() is the shipped built-in — its paint is --fg-time-shading-fill
+   (view/styles.ts), so this page writes no CSS of its own for it (weekendShading()'s own band
+   class used to live here). */
 
 /* ADR 0022: `diamond()` ships the shape; this page states only the fill. `.fg-bar-diamond` is the
    only diamond this page installs, so the class is an exact scope. Setting `--fg-bar-fill` here

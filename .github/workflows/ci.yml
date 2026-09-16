@@ -32,14 +32,13 @@ on:
 # `ci-refs/heads/fix/341-...` — and nothing cancelled anything. Both runs ran the whole gate, in
 # parallel, and billed twice.
 #
-# That is not a rare path. `docs/04` §5.2 tells a reader to run `gh workflow run ci.yml --ref
-# <branch>` when `gh pr ready` does not fire the trigger. The advice is right, and it doubled the
-# cost every time the pull request run had in fact started. It hit four branches before anyone
-# read the bill.
-#
 # `head.ref` and `ref_name` are both the plain branch name, so the two doors land in one group.
 # `github.ref_name` is `341/merge` on a `pull_request` event, which is why that side reads
 # `head.ref` instead.
+#
+# `workflow_dispatch` stays as a human door. It is not how `pr-wait` closes. A dispatch run is on
+# the branch, not the pull request, so it cannot close that wait, and this group cancels the live
+# `pull_request` run when one is already going (#415).
 concurrency:
   group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
