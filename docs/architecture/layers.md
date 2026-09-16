@@ -1,7 +1,4 @@
----
-id: layers
-title: "Layers & import rules"
----
+# Layers & import rules
 
 Which directories may import which, and the lint rules that hold the line. The rule itself lives
 in [`plans/01`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/01-domain-architecture.md)

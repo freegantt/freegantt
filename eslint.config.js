@@ -113,7 +113,7 @@ export default tseslint.config(
     rules: {
       'freegantt/no-magic-time-constants': 'error',
       'freegantt/no-date-outside-time': 'error',
-      'freegantt/no-scroll-outside-scroll-model': 'error',
+      'freegantt/no-scroll-outside-scroll-attachment': 'error',
       'freegantt/no-instant-arithmetic': 'error',
       'freegantt/no-time-to-pixel-math': 'error',
       'freegantt/no-flow-layout-rows': 'error',

@@ -44,7 +44,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
-- `scroll` — pass the same `ScrollModel` into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
+- `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
 - `variants` — the rules this Gantt paints rows with (ADR 0018); `bar()`, `summary()`, `diamond()` are core's own shipped looks (ADR 0022).
 - `gantt.variantFor(entry): ResolvedVariant` (ADR 0022) — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
 
@@ -338,6 +338,6 @@ Run `pnpm dev` and open `http://localhost:5173`.
 | `harness/index.html` | Tree `rowSource`, `gridColumns`, field rollup (`cost`), live row-source switch, selection, timeline toolbar |
 | `harness/data.html` | Transactions, undo/redo, `change` events |
 
-Architecture and API documentation live on the Docusaurus site under `website/` — run `pnpm docs` to
-view it locally. The site's API reference is generated from TSDoc comments via TypeDoc, so it never
-drifts from the source.
+The [Architecture pages](architecture/index.md) map what the code does now — the files, the classes,
+the call order. Run `pnpm docs` to read them, and everything else, as the site. The API reference is
+generated from TSDoc comments via TypeDoc, so it never drifts from the source.

@@ -14,7 +14,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const CASES: Array<{ file: string; ruleId: string }> = [
   { file: 'no-magic-time-constants.ts', ruleId: 'freegantt/no-magic-time-constants' },
   { file: 'no-date-outside-time.ts', ruleId: 'freegantt/no-date-outside-time' },
-  { file: 'no-scroll-outside-scroll-model.ts', ruleId: 'freegantt/no-scroll-outside-scroll-model' },
+  {
+    file: 'no-scroll-outside-scroll-attachment.ts',
+    ruleId: 'freegantt/no-scroll-outside-scroll-attachment',
+  },
   { file: 'no-derived-in-json-b9.ts', ruleId: 'freegantt/no-derived-in-json' },
 ];
 
@@ -30,7 +33,7 @@ describe('lint fixture violations', () => {
         rules: {
           'freegantt/no-magic-time-constants': 'error',
           'freegantt/no-date-outside-time': 'error',
-          'freegantt/no-scroll-outside-scroll-model': 'error',
+          'freegantt/no-scroll-outside-scroll-attachment': 'error',
           'freegantt/no-derived-in-json': 'error',
         },
       },

@@ -75,7 +75,7 @@ export interface TimeScale {
    *  zone — the cell covering `span.x` is emitted even when its own `x` is left of `span`. Whole-range
    *  callers pass `{ x: 0, width: contentWidth }` — and are greppable. */
   ticks(step: TickStep, span: PixelSpan): readonly Tick[];
-  /** Px extent of the whole range at this zoom — what `ScrollModel` binds as its content width. */
+  /** Px extent of the whole range at this zoom — what the x `ScrollAxis` binds as its content width. */
   readonly contentWidth: number;
 }
 

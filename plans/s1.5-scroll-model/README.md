@@ -5,6 +5,8 @@
 
 This directory is the settled spec for S1.5. It supersedes the S1.5b issue comment where the two disagree; §2 records every decision that moved and why.
 
+**Superseded S6 (D-S6-1, 2026-09-15, #405): `ScrollModel` is retired.** `ScrollAxis` — one direction, one shared unit — takes its place; see D-S1.5-3 and §3.2 below for what changed and why. The rest of this document stays accurate as the record of what S1.5 shipped and why, including the reasoning for the fused design this decision replaces.
+
 ---
 
 ## 1. User stories
@@ -49,11 +51,7 @@ The cost is honest and small: `state.position` can read beyond `state.max`. That
 
 ### D-S1.5-3 — Sharing shares both axes; no axis views in S1
 
-> **Later note, 2026-09-15 — the return condition fired, and the answer is not the shape below.** The decision below is S1's record and stands unchanged: nothing named here is built, and the both-axis fallback is still what ships. What changed is the one thing this decision made conditional. A caller now needs "share x, private y" — two panes over one time axis holding different row sets — so **#405** carries it.
->
-> **Both rejections below were answered, not skipped — see D-S6-1 (`plans/s6-scale-and-sync/README.md` §5.3).** The answer is not `xOnly()`. It makes one **scroll axis** the shared unit, so a Gantt holds an x source and a y source and a caller aims each one. Nothing is split, so there are never "two lifetimes in one object" — there are two objects, one lifetime each. And an axis has no `axes` array to tag or to filter twice into nothing.
->
-> **`yOnly()` is therefore not withheld.** Shared y is what two Gantts aiming their y references at one object *means*; banning it would cost code that allowing it does not. It gets no advertised surface and no new acceptance row.
+**Superseded S6** (D-S6-1, `plans/03-slices.md` §S6): a caller needing "share x, keep y private" arrived (#405). `ScrollModel` retires; `ScrollAxis` — the name rejected below as unneeded in S1 — is now the shared unit, one instance per direction. `GanttOptions.scroll` becomes `ScrollAxes = { x?: ScrollAxis; y?: ScrollAxis }`; omitting a direction keeps it private, and sharing an instance as `x` (or `y`) between two Gantts syncs only that direction. The rest of this decision's reasoning — why the *fused* design was right for S1, with no caller yet for partial sharing — stays accurate as history.
 
 `xOnly()`, `yOnly()`, `ScrollSource` and `ScrollAxis` are **not built**. `GanttOptions.scroll` takes a `ScrollModel` and sharing it links both axes.
 
@@ -140,6 +138,8 @@ export interface Rect extends PixelSpan { readonly y: number; readonly height: n
 `model/` rather than `layout/`: `time/` may not import `layout/`, and `render/` may import only `layout/`. `model/` is the one module every layer already reaches, so this adds no dependency edge.
 
 ### 3.2 `src/layout/viewport/scroll-model.ts` — pure, DOM-free
+
+**Superseded S6** (D-S6-1): `scroll-model.ts` and `ScrollModel` are deleted. `src/layout/viewport/scroll-axis.ts`'s `ScrollAxis` takes over, one instance per direction — `ScrollPosition`'s `{x, y}` becomes `ScrollAxisState`'s single `position: number`, and `ScrollBinding`'s `{content, pane}: Size` becomes `ScrollAxisBinding`'s `{content, pane}: number`, one direction at a time. The shapes below stayed the model's contract from S1.5 through S1.7; this is the record of what they were before D-S6-1 fused-object shape retired.
 
 ```ts
 import type { Point, Size } from '../../model/index.js';
