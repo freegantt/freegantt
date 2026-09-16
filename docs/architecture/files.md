@@ -218,7 +218,7 @@ where they do something beyond re-export.
 | `extensions/features/inline-editing.ts` | `inlineEditing()` | Shipped cell editor. Owns a live control rather than a static `Popup` content tree. |
 | `extensions/features/date-input.ts` | `DateInput, DateInputFactory` | Default date seam: wraps `<input type="date">`. No extra runtime dep. |
 | `extensions/features/time-shading-covers.ts` | `TimeCover, DayOfWeek, daysOfWeek(), hours(), dates(), spans(), notCovered(), mergeSpans(), complement(), coarsestFloor()` | The five `TimeCover` builders behind `timeShading()` (#404), plus the span merge/complement they and the rule level share. |
-| `extensions/features/time-shading.ts` | `timeShading(), ShadingRule, CoverPredicate` | Shipped non-working-time shading plugin. Ordinary `ChromePlugin`, layer `underBars` always. |
+| `extensions/features/time-shading.ts` | `timeShading(), ShadingRule, CoverPredicate` | Shipped plugin that shades regions of the time axis (#404). Ordinary `ChromePlugin`, layer `underBars` always. |
 | `extensions/plugin-order.ts` | `resolveSetupOrder(), assertNoDuplicateIds(), OrderedPlugin` | The one place that answers "in what order do plugins set up?" (D-S5-31). ADR 0019 gives a plugin's two halves one `requires` list between them, so the sort belongs to neither install site alone. Generic over the plugin shape — it reads `id` and `requires` and nothing else. |
 | `extensions/index.ts` | barrel | Re-exports the runtime, commands, keymap, and the shipped built-ins. |
 
