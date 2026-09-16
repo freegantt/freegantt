@@ -614,7 +614,7 @@ export class Gantt<TProps = unknown> {
    *  this getter cannot answer is a value captured *inside* a `filter` closure — the closure comes
    *  back, the value it closed over does not.
    *
-   *  Worked example and the toolbar use case: `website/docs/guides/row-source-updates.md`. */
+   *  Worked example and the toolbar use case: `docs/07-row-source-updates.md`. */
   get rowSource(): ResolvedRowSource {
     const authored = this.#shell.rowSource;
     if (this.#rowSourceCache === undefined || this.#rowSourceCache.authored !== authored) {

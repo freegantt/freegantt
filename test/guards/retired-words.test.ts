@@ -4,12 +4,12 @@
 // and prose that still names it teaches a concept the library does not have. This guard, shaped like
 // `scripts/check-vendor-names.mjs`, keeps any of them from creeping back into prose or an identifier.
 //
-// The published pages are in scope, because that is where the last four escapes happened: `EntryKind`
-// outlived its type on four `website/docs/architecture/` pages, and no guard fired.
+// `docs/` is in scope, because that is where the last four escapes happened: `EntryKind` outlived
+// its type on four `docs/architecture/` pages, and no guard fired. The site serves these files
+// directly, so scanning them covers every page a reader sees.
 //
 // An ADR is exempt by design (ADR 0004's own consequences: ADRs keep their original wording as
-// historical record). `website/docs/api/**` is exempt because TypeDoc generates it from `src/`, which
-// this guard already scans. One narrower exemption covers a legitimate historical citation elsewhere:
+// historical record). One narrower exemption covers a legitimate historical citation elsewhere:
 // a line citing the ADR that retired `Project` (CONTEXT.md's own glossary explains the retirement,
 // which necessarily names the retired word once).
 
@@ -20,9 +20,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-const SCAN_DIRS = ['src', 'harness', 'e2e', 'test', 'scripts', 'fixtures', 'website/docs'];
+const SCAN_DIRS = ['src', 'harness', 'e2e', 'test', 'scripts', 'fixtures', 'docs'];
 /** Read the header for why each one is out of scope. Scoped to a path, never to a file name. */
-const EXEMPT_DIRS = ['docs/adr', 'website/docs/adr', 'website/docs/api'];
+const EXEMPT_DIRS = ['docs/adr'];
 const SCAN_FILES = [
   'CONTEXT.md',
   'CLAUDE.md',

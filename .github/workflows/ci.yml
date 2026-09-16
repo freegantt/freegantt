@@ -110,5 +110,3 @@ jobs:
       # reads its check list out of `package.json` at run time. A check cannot join `verify` and
       # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
       - run: pnpm verify:full
-
-      - run: pnpm verify:full
