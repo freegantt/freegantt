@@ -265,7 +265,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - [ ] All §12-style budgets defined numerically from the spike and enforced in CI.
 - [ ] 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank on reference hardware.
 - [x] Linked-scroll demo works with both axes shared, x shared while y stays private, and y shared while x stays private. Shipped as D-S6-1 (#405): `ScrollModel` retired, `ScrollAxis`/`ScrollAxisState`/`ScrollAxes` are the public shape, `harness/scroll-sync.html` shows an x-only pair and a y-only pair beside the existing both-axis pair, and `e2e/scroll-sync.spec.ts`'s `[S6-A3]`/`[S6-A4]` tests carry the acceptance ids. The consumer's brief asked only for shared horizontal scroll; private y (and the y-only demo) is the library's own ruling, not the consumer's stated ask.
-- [ ] 100 mount/destroy cycles leak no nodes, listeners, or observables.
+- [x] 100 mount/destroy cycles leak no nodes, listeners, or observables. **#403, 2026-09-15.** `test/dom/leak-cycles.test.ts` runs 100 cycles for a bare Gantt, a Gantt with four plugins and a selection, and a pair sharing one `TimeScaleModel` and one `ScrollAxis` per direction; it counts listeners, observers, animation frames and nodes, and asserts a shared axis holds no binding once its Gantts are destroyed. `e2e/mount-destroy.spec.ts` counts nodes, listeners and heap in Chromium, which a fake DOM cannot. `GanttShell.destroy()` is now one `disposeAll()` call. Gate: `verify:full PASS — all 17 checks green, test:e2e included`.
 - [ ] `npm pack` output audited: internals unreachable, types complete, bundle within budget.
 
 ---

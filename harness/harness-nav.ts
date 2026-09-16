@@ -10,7 +10,8 @@ export type HarnessPageId =
   | 'mutation'
   | 'editing'
   | 'planner'
-  | 'plugins';
+  | 'plugins'
+  | 'mount-destroy';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -29,6 +30,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'editing', label: 'Direct manipulation', file: 'editing.html' },
   { id: 'planner', label: 'Planner (design)', file: 'planner.html' },
   { id: 'plugins', label: 'Plugin runtime', file: 'plugins.html' },
+  { id: 'mount-destroy', label: 'Mount & destroy', file: 'mount-destroy.html' },
 ];
 
 function detectCurrentPage(pathname: string): HarnessPageId {
@@ -55,6 +57,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'planner';
     case 'plugins.html':
       return 'plugins';
+    case 'mount-destroy.html':
+      return 'mount-destroy';
     default:
       return 'generic-demo';
   }
