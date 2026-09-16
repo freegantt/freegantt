@@ -33,7 +33,7 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
 }
 
 /** The first grid row whose Entry draws more than one bar, found at test time. The demo dataset
- *  gives one Entry several Segments, and a fixed row packs them all onto one line. */
+ *  gives one Entry several Segments, and they share the row's one band. */
 async function rowWithSeveralBars(page: import('@playwright/test').Page): Promise<string> {
   const entryId = await page.evaluate(() => {
     const root = document.querySelector('#gantt');

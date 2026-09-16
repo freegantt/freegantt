@@ -460,9 +460,9 @@ export function placeFrame(
   }
 
   // Bound the scan with indexAtY instead of walking every row from 0 (#47): start at the row that
-  // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix) so
-  // the buffer stays correct once pack mode makes row heights vary. Rows stay vertical-only (D-B): a
-  // row whose bar is off-screen horizontally is still emitted — the grid pane needs its label.
+  // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix).
+  // Rows stay vertical-only (D-B): a row whose bar is off-screen horizontally is still emitted —
+  // the grid pane needs its label.
   const baseStart = plan.length > 0 ? index.indexAtY(windowTop) : 0;
   const startIndex = Math.max(0, baseStart - verticalRows);
   // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
