@@ -68,10 +68,9 @@ if (git('status', '--porcelain') !== '') {
   console.warn('open-pr: the working tree is dirty. The pull request carries only what you commit and push.');
 }
 
-/** Flips one draft to ready, then names the one command that answers "did the gate pass" (#354).
- *  `gh pr ready` does not always fire the `ready_for_review` trigger, and the stale draft-time run
- *  stays `SKIPPED` when it does not (docs/04 §5.2, #298, #235). `pr-wait` refuses both, so the
- *  caller never reads a wait that never waited. */
+/** Flips one draft to ready, then names the one command that answers "did the gate pass".
+ *  `pr-wait` watches the CI workflow run for the pull request head, so a leftover skipped
+ *  draft-time job is not a verdict (docs/04 §5.2). */
 function markReady(number) {
   const readied = spawnSync('gh', ['pr', 'ready', String(number)], { encoding: 'utf8' });
   process.stderr.write(readied.stderr ?? '');

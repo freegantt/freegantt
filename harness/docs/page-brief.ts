@@ -131,10 +131,12 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
   },
   plugins: {
     demonstrates:
-      'Four plugins install over the public plugin contract alone: weekend shading, a consumer-' +
-      "defined 'buffer' kind, a command bound to a chord, and a popup anchored to a bar.",
+      'Five plugins install over the public plugin contract alone: the shipped timeShading(), an ' +
+      "over-budget row stripe, a consumer-defined 'buffer' kind, a command bound to a chord, and a " +
+      'popup anchored to a bar.',
     config: [
-      'gantt.installPlugin(weekendShading())',
+      'gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7) }]))',
+      'gantt.installPlugin(overBudgetRows(threshold))',
       'gantt.installPlugin(bufferKind())',
       "ctx.commands.register({ id: 'demo.clearSelection', run: … })",
     ],

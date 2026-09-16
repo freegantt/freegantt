@@ -80,10 +80,10 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'plugin-reconfigure-dropped' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
 
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
@@ -243,6 +243,9 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
     duration: Duration;
     hierarchyParentId: EntryId | undefined;
 }
+
+// @public
+export type CoverPredicate = (start: Instant, time: ZonedTime) => boolean;
 
 // @public
 export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
@@ -447,6 +450,15 @@ export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
 // @public
 export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
+// @public
+export function dates(at: InstantInput, ...moreAt: readonly InstantInput[]): TimeCover;
+
+// @public
+export type DayOfWeek = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+// @public
+export function daysOfWeek(day: DayOfWeek, ...moreDays: readonly DayOfWeek[]): TimeCover;
+
 // @public (undocumented)
 export interface DecorationContext {
     rows: readonly FrameRow[];
@@ -616,6 +628,13 @@ export interface ElementDescription {
     tag?: string;
     // (undocumented)
     text?: string;
+}
+
+// @public
+export class EmptyCoversError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -1355,6 +1374,9 @@ export type HierarchySource<TProps = Record<string, unknown>> = (entry: StoredEn
 export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: HierarchySource<TProps>) => HierarchySource<TProps>;
 
 // @public
+export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover;
+
+// @public
 export function ignoreSegments(entry: Entry, variant: string): readonly Item[];
 
 // @public
@@ -1408,6 +1430,13 @@ export class InvalidInstantError extends FreeGanttError {
     constructor(message: string, value?: unknown);
     // (undocumented)
     readonly value: unknown;
+}
+
+// @public
+export class InvalidPlainTimeError extends FreeGanttError {
+    constructor(value: string, operation?: string);
+    // (undocumented)
+    readonly value: string;
 }
 
 // @public
@@ -1607,6 +1636,9 @@ export interface NavigationChange {
     readonly presetId: string;
 }
 
+// @public
+export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
+
 // @public (undocumented)
 export function now(): Instant;
 
@@ -1643,6 +1675,9 @@ export interface PlainParts {
     // (undocumented)
     year: number;
 }
+
+// @public
+export type PlainTimeInput = string;
 
 // @public
 export type PlannedRowKind = 'entry' | 'header';
@@ -2074,6 +2109,19 @@ export interface SelectionChange {
     readonly to: readonly SegmentId[];
 }
 
+// @public
+export type ShadingRule = {
+    covers: TimeCover | readonly TimeCover[];
+    every?: never;
+    hideWhenCoarserThan?: TimeUnit;
+    class?: string;
+} | {
+    covers: CoverPredicate;
+    every: TimeUnit;
+    hideWhenCoarserThan?: TimeUnit;
+    class?: string;
+};
+
 // @public (undocumented)
 export type ShippedPresetId = 'hour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
@@ -2087,6 +2135,9 @@ export interface Size {
 
 // @public
 export type SnapSetting = TickStep | 'tick' | 'none';
+
+// @public
+export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
 
 // @public
 export interface StoredEntry<TProps = Record<string, unknown>> {
@@ -2152,6 +2203,14 @@ export interface TickStep {
     readonly unit: TimeUnit;
 }
 
+// @public
+export interface TimeCover {
+    // (undocumented)
+    coveredSpans(window: TimeSpan, time: ZonedTime): readonly TimeSpan[];
+    // (undocumented)
+    hideWhenCoarserThan: TimeUnit;
+}
+
 // @public (undocumented)
 export interface TimeScale {
     readonly contentWidth: number;
@@ -2194,6 +2253,9 @@ export interface TimeScaleModelOptions {
     preset?: PresetRef;
     range?: 'fitDataset' | TimeSpan;
 }
+
+// @public
+export function timeShading(rules: readonly ShadingRule[]): ChromePlugin;
 
 // @public
 export interface TimeSpan {
@@ -2372,6 +2434,7 @@ export interface ZonedTime {
     dayOfWeek(at: Instant): number;
     // (undocumented)
     diffDays(a: Instant, b: Instant): number;
+    each(span: TimeSpan, unit: TimeUnit): readonly Instant[];
     eachDay(span: TimeSpan): readonly Instant[];
     // (undocumented)
     fromPlain(plain: PlainParts): Instant;
@@ -2379,6 +2442,9 @@ export interface ZonedTime {
     startOf(at: Instant, unit: TimeUnit): Instant;
     // (undocumented)
     startOfDay(at: Instant): Instant;
+    step(at: Instant, unit: TimeUnit, increment?: number): Instant;
+    toEndInstant(input: InstantInput, rule?: DateOnlyEndRule): Instant;
+    toInstant(input: InstantInput): Instant;
     // (undocumented)
     toPlain(at: Instant): PlainParts;
     // (undocumented)
