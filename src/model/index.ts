@@ -126,6 +126,7 @@ export {
   PluginSetupError,
   UnknownCommandError,
   RendererAlreadyRegisteredError,
+  EmptyCoversError,
 } from './errors.js';
 // S5.12, D-S5-40: the Error report the `error` event carries on both buses, plus the raise seam
 // every layer that has no bus of its own is handed.

@@ -79,7 +79,8 @@ export type BuiltInThrownCode =
   | 'registration-closed'
   | 'plugin-setup-failed'
   | 'renderer-already-registered'
-  | 'unknown-command';
+  | 'unknown-command'
+  | 'empty-covers';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -930,5 +931,19 @@ export class UnknownCommandError extends FreeGanttError {
     );
     this.name = 'UnknownCommandError';
     this.commandId = commandId;
+  }
+}
+
+/** `code: 'empty-covers'` — a shading rule's `notCovered` builder given `{ covers: [] }` (#404). An
+ *  empty list has no complement to compute: every instant would read as "not covered", which paints
+ *  the whole window and is never what a plugin author meant to write. Modeled on
+ *  `EmptySegmentsError`'s shape: a consumer mistake at the config boundary, not a value core derives. */
+export class EmptyCoversError extends FreeGanttError {
+  constructor() {
+    super(
+      'empty-covers' satisfies BuiltInThrownCode,
+      'notCovered: "covers" must name at least one cover. An empty list has no complement.',
+    );
+    this.name = 'EmptyCoversError';
   }
 }

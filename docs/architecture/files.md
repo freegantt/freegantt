@@ -198,6 +198,7 @@ where they do something beyond re-export.
 | `api/attempt-mutation.ts` | `attemptMutation()` | Runs a mutating body and returns `false` when `beforeChange` refuses, instead of throwing. |
 | `api/watch-all-errors.ts` | `watchAllErrors()` | One handler over the Dataset `error` feed and the Gantt's, de-duplicated. |
 | `api/time-facade.ts` | `formatDate, formatEndInclusive` | Narrow slice of `time/` that `extensions/features/tooltips.ts` needs without importing the public barrel (that barrel re-exports `tooltips`). |
+| `api/decoration-facade.ts` | `DecorationLayer, DecorationContext, DecorationInput` | Narrow slice of `layout/`'s decoration vocabulary that `extensions/features/time-shading.ts` needs without importing the public barrel (that barrel re-exports `timeShading`). |
 | `api/index.ts` | the public surface | The allow-list with a sealed `exports` map. Re-exports `Gantt`/`Dataset`/the viewport models, the plugin and command contracts, the shipped built-ins, and the `model/` and `time/` types a consumer needs. |
 
 ### `extensions/` — DOM — plugin runtime + shipped built-ins
@@ -216,6 +217,8 @@ where they do something beyond re-export.
 | `extensions/features/menu-view.ts` | `MenuItem, MenuEntry` | Menu vocabulary and `ElementDescription` builder. Pure; no DOM mount. |
 | `extensions/features/inline-editing.ts` | `inlineEditing()` | Shipped cell editor. Owns a live control rather than a static `Popup` content tree. |
 | `extensions/features/date-input.ts` | `DateInput, DateInputFactory` | Default date seam: wraps `<input type="date">`. No extra runtime dep. |
+| `extensions/features/time-shading-covers.ts` | `TimeCover, DayOfWeek, daysOfWeek(), hours(), dates(), spans(), notCovered(), mergeSpans(), complement(), coarsestFloor()` | The five `TimeCover` builders behind `timeShading()` (#404), plus the span merge/complement they and the rule level share. |
+| `extensions/features/time-shading.ts` | `timeShading(), ShadingRule, CoverPredicate` | Shipped non-working-time shading plugin. Ordinary `ChromePlugin`, layer `underBars` always. |
 | `extensions/plugin-order.ts` | `resolveSetupOrder(), assertNoDuplicateIds(), OrderedPlugin` | The one place that answers "in what order do plugins set up?" (D-S5-31). ADR 0019 gives a plugin's two halves one `requires` list between them, so the sort belongs to neither install site alone. Generic over the plugin shape — it reads `id` and `requires` and nothing else. |
 | `extensions/index.ts` | barrel | Re-exports the runtime, commands, keymap, and the shipped built-ins. |
 

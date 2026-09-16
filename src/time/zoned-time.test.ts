@@ -36,4 +36,20 @@ describe('createZonedTime()', () => {
     const hours = time.each({ start, end }, 'hour');
     expect(hours).toHaveLength(25);
   });
+
+  it('toInstant() reads a consumer-written value in this zone, the same as time/toInstant', () => {
+    const time = createZonedTime(CHICAGO);
+    expect(time.toInstant('2026-09-01')).toBe(instant('2026-09-01T05:00:00Z')); // CDT, UTC-5
+    expect(time.toInstant(0)).toBe(0);
+  });
+
+  it("toEndInstant() reads a date-only end inclusively by default — '2026-07-15' covers the 15th", () => {
+    const time = createZonedTime(CHICAGO);
+    expect(time.toEndInstant('2026-07-15')).toBe(instant('2026-07-16T05:00:00Z'));
+  });
+
+  it("toEndInstant() reads a date-only end literally under 'exclusive'", () => {
+    const time = createZonedTime(CHICAGO);
+    expect(time.toEndInstant('2026-07-15', 'exclusive')).toBe(instant('2026-07-15T05:00:00Z'));
+  });
 });
