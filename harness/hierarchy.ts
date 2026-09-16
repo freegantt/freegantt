@@ -3,7 +3,7 @@
 // reader sees the rows each edit produced.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, ScrollModel, attemptMutation, inlineEditing } from 'freegantt';
+import { Dataset, Gantt, ScrollAxis, attemptMutation, inlineEditing } from 'freegantt';
 import type {
   DatasetEventMap,
   Entry,
@@ -62,7 +62,7 @@ const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-c
 
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
-const paneScroll = new ScrollModel();
+const paneScroll = { x: new ScrollAxis(), y: new ScrollAxis() };
 const dataset = createDataset();
 const gantt = mountGantt(dataset);
 

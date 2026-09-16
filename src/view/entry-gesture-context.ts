@@ -107,8 +107,8 @@ export interface EntryGestureContext {
    *  reports no row of its own: over there a bar names the row, and the shell reads it off the frame
    *  rather than asking the pointer twice. */
   setHoveredRow(rowId: RowId | undefined): void;
-  /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound `ScrollModel`'s x — content
-   *  x for the Cursor line. `interaction/` never reads element scroll (I12). */
+  /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound x `ScrollAxis`'s position —
+   *  content x for the Cursor line. `interaction/` never reads element scroll (I12). */
   contentXAtPaneOffset(offsetX: number): number;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries, D-S3-19/22). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in

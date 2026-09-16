@@ -30,12 +30,13 @@ Blocked: open pull requests with `pnpm open-pr`, never with `gh pr create`.
 
   pnpm open-pr --title "<title>" --body-file <path>
 
-It pushes the branch (pre-push runs the gate), opens the pull request as a DRAFT, and prints the
-`gh pr ready <n>` command that starts CI. Every pull request on this repo starts as a draft: CI
-runs on `ready_for_review`, so "ready" means it is up for review and meant to merge (#255,
+It pushes the branch (pre-push runs the gate), opens the pull request as a DRAFT, and names the
+command that starts CI. Every pull request on this repo starts as a draft: CI runs on
+`ready_for_review`, so "ready" means it is up for review and meant to merge (#255,
 docs/04-hooks-and-ci.md §5.2).
 
-Marking one ready is not blocked — `gh pr ready <n>` is the command for it.
+Marking one ready is not blocked — `pnpm open-pr --ready` is the command for it, and it works on a
+draft this branch already has. `gh pr ready <n>` is the call underneath, and it passes too.
 To write these words into a file, use the Write or Edit tool rather than a shell heredoc.
 MESSAGE
   exit 2
