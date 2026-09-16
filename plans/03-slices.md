@@ -314,11 +314,11 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- **R1 · #421** — a Segment is a bar: its own optional `name`, its own `props` from the one `fields` registry, its own variant rule, its own `can`, and `entries.updateSegment()` as the write door. A box names the field it prints, for Entry bars and Segment boxes alike. **No plan yet — write one before any code.**
+- **R1 · #421** — a Segment is a bar: its own optional `name`, its own `props` from the one `fields` registry, its own variant rule (`whenSegment`), its own `can`, and `entries.updateSegment()` as the write door. `Entry.name` becomes optional too. A bar names the field it prints (`barLabels.field`), for Entry bars and Segment bars alike. **No plan yet — write one before any code.**
 - **R2 · #404** — non-working-time shading ships as a first-party plugin, not a harness demo.
 - **R3 · #408** — a gesture creates a `Segment`. Open on its own merits: `EntryEdit.segments` replaces the whole array, so an additive door is owed whoever writes the create path.
 
-**Not in scope:** #400 (packaging) stays S6's R5 — it blocks every consumer including this slice. No `Dependency`, no `schedule()`, no link geometry: still S7. **No Timeline cells and no row of one value per tick** — #401's design was withdrawn and the issue is closed; a row of boxes is authored Segments (#421). **No tick-aligned merging**: a Segment draws its true span at every zoom, and merging is a later, opt-in look.
+**Not in scope:** #400 (packaging) stays S6's R5 — it blocks every consumer including this slice. No `Dependency`, no `schedule()`, no link geometry: still S7. **No row of one value per tick** — that is #423, a later feature; a row of day bars is authored Segments (#421). **No zoom-dependent values, ever**: a Segment draws its true span and shows its own stored values at every zoom. Core never folds several Segments into one bar and never aggregates Segment values for a coarser view. A Segment that stores 8 hours shows 8 hours at day, week and year zoom.
 
 **Gate:** mint `[S9-A1]`–`[S9-A3]` and add the entry to `scripts/slice-gate.mjs`, which has nothing past `S5 → S6` today. Whoever starts R1 flips `.slice` to `S9`.
 

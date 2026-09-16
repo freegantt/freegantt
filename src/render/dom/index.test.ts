@@ -45,7 +45,7 @@ const preset: ViewPreset = {
 const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
 /** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
- *  Segment spans the whole Entry, so a fixed row still packs them onto one line. */
+ *  Segment spans the whole Entry, so they share the row's one band. */
 function segmentsOf(entry: Entry, count: number) {
   return Array.from({ length: count }, (_, index) => ({
     id: segmentId(`${entry.id}-${index}`),
