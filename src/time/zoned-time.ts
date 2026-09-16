@@ -3,7 +3,18 @@
 // arithmetic of its own — I10 stays true: all the math still lives in `zone.ts`.
 
 import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
-import { addDays, dayOfWeek, diffDays, eachDay, fromPlain, startOf, startOfDay, toPlain } from './zone.js';
+import {
+  addDays,
+  dayOfWeek,
+  diffDays,
+  eachDay,
+  eachUnit,
+  fromPlain,
+  startOf,
+  startOfDay,
+  stepBy,
+  toPlain,
+} from './zone.js';
 import type { PlainParts } from './zone.js';
 
 /**
@@ -25,6 +36,12 @@ export interface ZonedTime {
   eachDay(span: TimeSpan): readonly Instant[];
   toPlain(at: Instant): PlainParts;
   fromPlain(plain: PlainParts): Instant;
+  /** `at`, stepped by `increment` (default 1) whole `unit`s — e.g. `step(at, 'hour')` for the next
+   *  hour boundary's worth of time, `step(at, 'hour', -1)` for the previous. */
+  step(at: Instant, unit: TimeUnit, increment?: number): Instant;
+  /** Each `unit` boundary in `[span.start, span.end)`, ascending — `eachDay`'s walk, generalised to
+   *  every unit `time/` supports (#404). */
+  each(span: TimeSpan, unit: TimeUnit): readonly Instant[];
 }
 
 /** Call: `createZonedTime(dataset.timeZone)`. Binds `zone` once; every method below forwards to the
@@ -40,5 +57,7 @@ export function createZonedTime(zone: string): ZonedTime {
     eachDay: (span) => eachDay(zone, span),
     toPlain: (at) => toPlain(zone, at),
     fromPlain: (plain) => fromPlain(zone, plain),
+    step: (at, unit, increment = 1) => stepBy(zone, at, unit, increment),
+    each: (span, unit) => eachUnit(zone, span, unit),
   };
 }

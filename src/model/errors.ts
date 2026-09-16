@@ -41,6 +41,7 @@ export type BuiltInThrownCode =
   | 'invalid-snap-increment'
   | 'container-not-found'
   | 'invalid-instant'
+  | 'invalid-plain-time'
   | 'unknown-preset'
   | 'invalid-preset'
   | 'entry-not-found'
@@ -165,6 +166,21 @@ export class InvalidInstantError extends FreeGanttError {
   constructor(message: string, value?: unknown) {
     super('invalid-instant' satisfies BuiltInThrownCode, message);
     this.name = 'InvalidInstantError';
+    this.value = value;
+  }
+}
+
+/** `code: 'invalid-plain-time'` — a `PlainTimeInput` string that names no wall-clock time of day
+ * (`time/readPlainTime`). `value` is the string the consumer wrote. */
+export class InvalidPlainTimeError extends FreeGanttError {
+  readonly value: string;
+
+  constructor(value: string, operation?: string) {
+    super(
+      'invalid-plain-time' satisfies BuiltInThrownCode,
+      `${operation === undefined ? '' : `${operation}: `}${JSON.stringify(value)} is not a wall-clock time of day. Write "17:00" or "17:00:00".`,
+    );
+    this.name = 'InvalidPlainTimeError';
     this.value = value;
   }
 }

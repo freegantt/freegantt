@@ -224,6 +224,7 @@ export {
   InvalidSnapIncrementError,
   ContainerNotFoundError,
   InvalidInstantError,
+  InvalidPlainTimeError,
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
