@@ -78,6 +78,8 @@ Bash(run_in_background: true):
   .agents/skills/subagents/watch-agent-context.sh
 ```
 
+Keep the pid that Bash returns. You will kill that pid when the wave ends.
+
 It polls every agent transcript in this **project** — from any session, not only yours —
 and exits when one passes 200k or when
 they all finish. A background command that exits re-invokes you, so its exit *is* the
@@ -85,6 +87,20 @@ alert — you get it mid-flight, not after the report lands.
 
 **The watcher reads transcripts. It never stops an agent** — you do that, by message,
 which is what leaves the agent room to land.
+
+**The watcher dies with the wave.** Kill it in the same turn the last agent you
+started has reported, or the moment that dispatch is interrupted. Do not leave it
+until `MAX` (7200s). A watcher with no agent left still runs to timeout, then spends
+a later turn on `stopped after 7200s`. That notification is waste.
+
+```
+kill <pid>
+```
+
+Done means: this session has no `watch-agent-context.sh` process after the last
+report lands, after an interrupt, and after you decide not to dispatch. If the
+watcher already exited because every agent finished under budget, there is nothing
+to kill.
 
 **Exit code 1 is the alert, not a failure.** The harness reports it as
 `Background command ... failed with exit code 1`. That wording is the harness's, not the
@@ -96,8 +112,8 @@ as a crash and the agent runs past its landing window with nobody telling it to 
 |---|---|---|
 | **1** | `... is at N tokens (wind-down M)` | **An agent crossed the mark. Act now.** |
 | | | The line **names the agent** — and it may belong to another session. Read the name before deciding whether it is yours. |
-| 0 | `every agent it watched finished under M tokens.` | All done under budget. Nothing to do. |
-| 0 | `stopped after Ns` | The watcher timed out (`MAX`, 7200s). It says nothing about the agents — restart it if any are still running. |
+| 0 | `every agent it watched finished under M tokens.` | All done under budget. The watcher already died with the wave. |
+| 0 | `stopped after Ns` | The watcher timed out (`MAX`, 7200s). You left it running. Restart it only if an agent you started is still running; otherwise the wave is over. |
 
 Both quiet outcomes exit 0, so the printed line is what separates them. Read it.
 
@@ -112,17 +128,21 @@ Then act on what it says:
     WIND_DOWN=250000 .agents/skills/subagents/watch-agent-context.sh
   ```
 
-  If that one fires too, the agent is spending the window on new work. Tell it to write
-  the handoff now and report.
-- **They all finished under budget** — nothing to do. The watcher stopped on its own.
+  Keep that new pid. Kill it when that agent reports, the same rule as the first
+  watcher. If that one fires too, the agent is spending the window on new work. Tell
+  it to write the handoff now and report.
+- **They all finished under budget** — the watcher already exited. Do not start
+  another.
 
 One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
+When the last of those three has reported, kill that watcher in that turn.
 
 **Never run two at once.** A watcher polls every agent transcript in the project, not the one
 you just dispatched, so a second watcher watches the same agents and tells you the same thing.
 Start another only after the one you have exits. Dispatch across four turns with a watcher each,
 and one agent crossing 200k wakes you four times — four alerts, one event, and the four exit
-codes read as four failures.
+codes read as four failures. Leave four watchers alive after the agents finish, and you get
+four timeout turns hours later.
 
 **Your watcher outlives your own agent, and can alert on someone else's.** It is scoped to the
 project directory, so with several sessions working one repo it sees their agents too. This kills
