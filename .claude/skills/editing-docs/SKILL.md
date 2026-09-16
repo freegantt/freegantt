@@ -33,8 +33,9 @@ generated, gitignored, and served by its own docs plugin instance. It has no sou
   by itself. A link that leaves `docs/` — `plans/`, `CONTEXT.md`, `README.md` — becomes a GitHub
   blob URL, and a link to `etc/freegantt.api.md` becomes the API reference.
   `website/plugins/link-outside-docs-to-github.mjs` does that, and it is the only rewriting left.
-- **Give each page one `# …` heading and no frontmatter.** Docusaurus takes the title from the
-  heading.
+- **Give each page one `# …` heading and no front matter.** Docusaurus takes the title from the
+  heading. One page carries front matter: `docs/00-guardrails-overview.md` holds `slug: /`, because
+  it serves the site root. That is routing, not content. The site has no hand-written landing page.
 
 ## The architecture pages
 

@@ -1,3 +1,7 @@
+---
+slug: /
+---
+
 # FreeGantt — Guardrails Overview
 
 **Status:** Design. No code yet — this folder specifies the enforcement system that `plans/04` §3–§4 calls for, in enough detail that implementing it is mechanical.
