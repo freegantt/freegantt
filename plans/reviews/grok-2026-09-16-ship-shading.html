@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>grok branch review — ship timeShading() (#404)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .sev-med { background: #f59e0b; }
+      .sev-low { background: #0ea5e9; }
+      .sev-note { background: #64748b; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="border-b border-slate-200 pb-6 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-500">grok · FreeGantt · branch review (pass 1)</p>
+        <h1 class="font-serif text-3xl">Ship <span class="font-mono text-2xl">timeShading()</span> — issue #404</h1>
+        <p class="text-sm text-slate-600">
+          Branch <code class="font-mono text-slate-700">Pawel-IT/ship-shading-non-working-time-shading-as-a-first</code>
+          · fixed point <code class="font-mono text-slate-700">96a49b9</code>
+          (<code class="font-mono text-slate-700">git diff 96a49b9...HEAD</code>)
+          · 9 commits · +1740 / −216 · 40 files · reviewed 2026-09-16
+        </p>
+        <p class="text-sm text-slate-600">
+          Spec: <code class="font-mono">plans/issues/open/404-time-shading.md</code>.
+          This report ignores yesterday's review file. Findings carry stable ids F1…F8; pass 2 answers by id.
+        </p>
+        <p class="text-sm text-slate-600">
+          Severity: <span class="font-medium text-amber-600">Medium</span> — worth fixing before merge;
+          <span class="font-medium text-sky-600">Low</span> — fix when nearby.
+        </p>
+        <div class="text-xs text-slate-500 flex gap-4 pt-1">
+          <span><span class="inline-block w-3 h-3 border border-slate-400 align-middle"></span> module</span>
+          <span><span class="inline-block w-6 border-t border-dashed border-slate-500 align-middle"></span> seam</span>
+          <span><span class="inline-block w-6 border-t-2 border-red-600 align-middle"></span> leakage</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle"></span> deep module</span>
+        </div>
+      </header>
+
+      <section id="pass2" class="rounded-lg border border-dashed border-slate-300 bg-white p-5">
+        <h2 class="text-xs uppercase tracking-wider text-slate-500">Pass 2 — fresh sub-agent verification</h2>
+        <p class="mt-2 text-sm text-slate-600">Not run yet. A cold-start sub-agent will open every cited line and return one verdict per id: Confirmed, Mis-described, Wrong, or Unproven.</p>
+      </section>
+
+      <section id="what-held" class="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+        <h2 class="text-xs uppercase tracking-wider text-emerald-700">What held up under review</h2>
+        <ul class="list-disc ml-5 mt-2 text-sm text-emerald-900 space-y-1">
+          <li>The app-author call site reads as the job: <code class="font-mono">gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7) }]))</code>. No extra knob, hook, or handle is required for the default wash.</li>
+          <li>The five builders name one job each. <code class="font-mono">notCovered(daysOfWeek(6, 7))</code> reads true. A new calendar extends through the <code class="font-mono">TimeCover</code> seam or a <code class="font-mono">CoverPredicate</code> — no <code class="font-mono">if (kind === …)</code> chain.</li>
+          <li>DST stays in <code class="font-mono">zone.ts</code>. <code class="font-mono">hours()</code> resolves both walls through <code class="font-mono">fromPlain</code>. The 13-hour spring / 15-hour fall tests pin the façade, not a local ruling.</li>
+          <li>The zoom floor lives in one place: <code class="font-mono">isCoarserThan(tickUnit, floor) || tickIncrement !== 1</code>. A mixed list floors at the coarsest member.</li>
+          <li><code class="font-mono">harness/main.ts</code> installs the shipped plugin through <code class="font-mono">installPlugin</code>. It re-derives none of the library's answers. The planner themes through <code class="font-mono">class: 'planner-weekend'</code> (level 2), not a harness CSS patch of the library token.</li>
+          <li>Empty-list refusal fires at plugin construction, before a full-window band can paint — for the two doors the spec named.</li>
+        </ul>
+      </section>
+
+      <section id="axes" class="grid md:grid-cols-2 gap-4 text-sm">
+        <article class="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 class="text-xs uppercase tracking-wider text-slate-500">Standards</h2>
+          <p class="mt-2">Hard: F2 (catchable error not on the public surface), F4 (two public stories for one reconfigure job). Judgement: F3 (one word, two throw sites), F7 (tests name a builder they do not call). I10 holds for DST; clip math is epoch min/max, not zone arithmetic.</p>
+        </article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 class="text-xs uppercase tracking-wider text-slate-500">Spec</h2>
+          <p class="mt-2">Acceptance boxes land at the paths the issue names. Three misses: F1 (intersecting day vs day-boundary walk — unstated, but the visible window is never day-aligned), F5 (<code class="font-mono">docs/06</code> never names the Part/Token), F6 (wrap uses <code class="font-mono">&lt;=</code>, spec says “earlier”).</p>
+        </article>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+
+        <article id="F1" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F1</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
+            <span class="text-xs text-slate-500">architecture · simplicity · spec</span>
+            <span class="text-xs font-medium text-emerald-700">Strong</span>
+          </div>
+          <p class="text-xl font-serif">daysOfWeek() walks day boundaries, not days that intersect the window</p>
+          <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading-covers.ts:91-102 · src/time/zone.ts:85-93 · src/extensions/features/time-shading.ts:66-70 · src/extensions/features/time-shading-covers.ts:117</p>
+          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">daysOfWeek</code> asks <code class="font-mono">time.eachDay(window)</code>. <code class="font-mono">eachDay</code> is a boundary walker: the first boundary <em>at or after</em> <code class="font-mono">window.start</code>. A decoration window starts wherever the pan left it. When that instant sits inside Saturday, Saturday's own midnight is before the window, so the walk begins on Sunday. <code class="font-mono">clipToWindow</code> cannot recover a day the walk never emitted. <code class="font-mono">hours()</code> already scans from the previous midnight; <code class="font-mono">predicateSpans</code> already steps one <code class="font-mono">every</code> back. The day-walking builder does not share that shape.</p>
+          <p class="text-sm text-slate-700"><strong>Probe (deleted).</strong> Chicago, Saturday 2026-06-06 10:00 → Monday. <code class="font-mono">daysOfWeek(6, 7).coveredSpans</code> returned a first band that starts Sunday 00:00, not 10:00 Saturday. <code class="font-mono">notCovered(daysOfWeek(6, 7))</code> then painted Saturday 10:00–Sunday 00:00 — weekend afternoon as working time.</p>
+          <p class="text-sm text-slate-700"><strong>Solution.</strong> One intersecting-day walk behind the <code class="font-mono">TimeCover</code> seam: start at <code class="font-mono">time.startOfDay(window.start)</code>, then clip. <code class="font-mono">hours()</code> keeps its extra day of overnight reach. Tests must use a window that starts mid-day; today's fixtures all start at midnight, so the miss cannot fail.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — two walks, one leak</p>
+              <pre class="mermaid">
+flowchart TD
+  W[window.start = Sat 10:00]
+  ED["eachDay: first boundary ≥ start"]
+  SUN[Sunday 00:00]
+  CLIP[clipToWindow]
+  MISS[Saturday afternoon gone]
+  W --> ED --> SUN --> CLIP --> MISS
+  H["hours() scans startOfDay - 1 day"]
+  P["predicateSpans steps every - 1"]
+  H -.-> CLIP
+  P -.-> CLIP
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class MISS,ED leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — one intersecting-day module</p>
+              <pre class="mermaid">
+flowchart TD
+  W[window.start = Sat 10:00]
+  ID["intersectingDays: startOfDay then clip"]
+  SAT[Sat 10:00 → Sun 00:00]
+  H["hours() adds overnight reach"]
+  W --> ID --> SAT
+  H --> ID
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a;
+  class ID deep
+              </pre>
+            </div>
+          </div>
+          <ul class="text-sm text-slate-700 list-disc ml-5">
+            <li>locality: day-intersect bugs concentrate in one module</li>
+            <li>leverage: <code class="font-mono">daysOfWeek</code>, <code class="font-mono">hours</code>, and a future day walker share one interface</li>
+            <li>interface shrinks; the scan-back comment on <code class="font-mono">predicateSpans</code> stops naming a special case</li>
+          </ul>
+        </article>
+
+        <article id="F2" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F2</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
+            <span class="text-xs text-slate-500">API surface</span>
+          </div>
+          <p class="text-xl font-serif">EmptyCoversError is catchable by code, not by name</p>
+          <p class="font-mono text-xs text-slate-500">src/model/errors.ts:83,937-948 · src/model/index.ts:129 · src/api/index.ts:226-275 · etc/freegantt.api.md · src/extensions/features/time-shading.test.ts:6,204</p>
+          <p class="text-sm text-slate-700"><code class="font-mono">code: 'empty-covers'</code> is already a <code class="font-mono">BuiltInThrownCode</code> member. The class is exported from the internal model barrel. It is absent from the catchable-errors block in <code class="font-mono">src/api/index.ts</code>, where <code class="font-mono">InvalidPlainTimeError</code> (line 236) and <code class="font-mono">EmptySegmentsError</code> (line 246) sit, and it is absent from <code class="font-mono">etc/freegantt.api.md</code>. Spec models the refusal on <code class="font-mono">EmptySegmentsError</code>: a consumer mistake at the config boundary. Tests catch through <code class="font-mono">../../model/index.js</code>, so no test proves the public door.</p>
+          <p class="text-sm"><span class="font-medium">Fix:</span> add <code class="font-mono">EmptyCoversError</code> to the catchable-errors block, regenerate the API report. One line.</p>
+          <p class="text-sm text-slate-700">Call site that must read true: <code class="font-mono">import { EmptyCoversError } from 'freegantt'</code>.</p>
+        </article>
+
+        <article id="F3" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F3</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
+            <span class="text-xs text-slate-500">naming</span>
+          </div>
+          <p class="text-xl font-serif">EmptyCoversError's message blames notCovered() on a path that never calls it</p>
+          <p class="font-mono text-xs text-slate-500">src/model/errors.ts:937-948 · src/extensions/features/time-shading.ts:95-99 · src/extensions/features/time-shading-covers.ts:175-177</p>
+          <p class="text-sm text-slate-700">The message begins <code class="font-mono">'notCovered: "covers" must name at least one cover.'</code> Two throw sites share the class: <code class="font-mono">notCovered([])</code> and <code class="font-mono">assertNoEmptyCoversList</code> on <code class="font-mono">timeShading([{ covers: [] }])</code>. The JSDoc describes “a shading rule's <code class="font-mono">notCovered</code> builder given <code class="font-mono">{ covers: [] }</code>” — that mixes the two doors in one sentence. Check 4 fails: the operation word names one caller and is thrown by two.</p>
+          <p class="text-sm"><span class="font-medium">Fix:</span> say <code class="font-mono">covers</code> without the builder name, or take an <code class="font-mono">operation</code> argument the way <code class="font-mono">InvalidPlainTimeError</code> already does. Call site: <code class="font-mono">new EmptyCoversError('timeShading')</code> vs <code class="font-mono">new EmptyCoversError('notCovered')</code>.</p>
+        </article>
+
+        <article id="F4" class="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F4</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
+            <span class="text-xs text-slate-500">API surface</span>
+            <span class="text-xs font-medium text-amber-700">Worth exploring</span>
+          </div>
+          <p class="text-xl font-serif">App authors get two stories for one reconfigure job</p>
+          <p class="font-mono text-xs text-slate-500">src/api/plugin.ts:34-36 · src/extensions/features/time-shading.ts:117-124 · docs/06-plugin-authoring.md:27-28,122-134 · src/view/gantt-shell.ts:2176-2178</p>
+          <p class="text-sm text-slate-700"><strong>Problem.</strong> <code class="font-mono">ChromePlugin</code> JSDoc names <code class="font-mono">timeShading()</code> as the example, then says <code class="font-mono">gantt.plugins</code> reconfigures it live. <code class="font-mono">docs/06</code> repeats that sentence. The factory's own JSDoc says <code class="font-mono">gantt.plugins = [timeShading(next)]</code> is a silent no-op, because the setter diffs by id and every call mints <code class="font-mono">freegantt.timeShading</code>. Both sentences are locally true. Together they fail the call-site test: an app author who reads the type and assigns a new rule list gets no change.</p>
+          <p class="text-sm text-slate-700"><strong>Solution.</strong> One story on the factory, and the type must not contradict it. Either mint a fresh id per call (then the setter really reconfigures), or drop <code class="font-mono">timeShading()</code> from the “reconfigures live” sentence and show the uninstall/install pair next to the constructor example.</p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm">
+              <p class="text-xs uppercase tracking-wider text-red-700 mb-2">Before — two interfaces for one job</p>
+              <p class="font-mono text-xs">gantt.plugins = [timeShading(next)] → no-op</p>
+              <p class="font-mono text-xs mt-1">uninstall + install → new rules</p>
+              <p class="mt-2 text-red-800">The type's interface says the first. The factory's interface says the second.</p>
+            </div>
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+              <p class="text-xs uppercase tracking-wider text-emerald-700 mb-2">After — one interface</p>
+              <p>Depth: the factory owns reconfigure. Callers learn one pair. The setter keeps its id-diff for every other plugin.</p>
+            </div>
+          </div>
+        </article>
+
+        <article id="F5" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F5</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-med">medium</span>
+            <span class="text-xs text-slate-500">spec</span>
+          </div>
+          <p class="text-xl font-serif">docs/06 never names timeShading()'s Part or Token</p>
+          <p class="font-mono text-xs text-slate-500">plans/issues/open/404-time-shading.md:138-140 · docs/06-plugin-authoring.md · docs/architecture/files.md:220-221 · CONTEXT.md:602-616 · docs/05-consumer-api.md:164,303 · README.md:433-479</p>
+          <p class="text-sm text-slate-700">Spec: “<code class="font-mono">docs/06-plugin-authoring.md</code>'s Decorations example, <code class="font-mono">docs/architecture/files.md</code>'s row, <code class="font-mono">CONTEXT.md</code>'s glossary entry, and the Token list all name <code class="font-mono">timeShading()</code>'s shipped Part and Token.” Grep of <code class="font-mono">docs/06-plugin-authoring.md</code> finds no <code class="font-mono">timeShading</code>, no <code class="font-mono">.fg-time-shading</code>, no <code class="font-mono">--fg-time-shading-fill</code>. The file has no Decorations section; its worked example is <code class="font-mono">overBudgetRows()</code> only. The other three sites do carry both names. README's Decorations section names the factory but not the Part or Token.</p>
+        </article>
+
+        <article id="F6" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F6</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
+            <span class="text-xs text-slate-500">spec</span>
+          </div>
+          <p class="text-xl font-serif">hours() wraps when from equals to — spec says “earlier”</p>
+          <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading-covers.ts:122 · plans/issues/open/404-time-shading.md:33-34</p>
+          <p class="text-sm text-slate-700">Spec: “wrapping midnight when <code class="font-mono">to</code> reads earlier than <code class="font-mono">from</code>.” Code: <code class="font-mono">if (bandEnd &lt;= bandStart) bandEnd = time.addDays(bandEnd, 1)</code>. Equal is not earlier. Probe: <code class="font-mono">hours('09:00', '09:00')</code> over one Chicago day returned two bands that cover the whole window (yesterday's wrap clipped in, plus today's 24-hour wrap). A zero-width reading would clip away; a 24-hour reading shades everything.</p>
+          <p class="text-sm"><span class="font-medium">Fix:</span> compare with <code class="font-mono">&lt;</code>, or document equal-times as a full day if that is the intended job.</p>
+        </article>
+
+        <article id="F7" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F7</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
+            <span class="text-xs text-slate-500">test quality</span>
+          </div>
+          <p class="text-xl font-serif">Two tests name a builder they never call</p>
+          <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading.test.ts:162-177 · src/extensions/features/time-shading-covers.test.ts:111-119</p>
+          <p class="text-sm text-slate-700"><code class="font-mono">'spans() never hides on granularity, at any tick unit with increment 1'</code> constructs a hand-written <code class="font-mono">TimeCover</code> with <code class="font-mono">hideWhenCoarserThan: 'year'</code>. If <code class="font-mono">spans()</code> changed its floor, this test would still pass. The covers file does assert <code class="font-mono">spans(…).hideWhenCoarserThan === 'year'</code>, but that is not the plugin-level hide path the title claims.</p>
+          <p class="text-sm text-slate-700"><code class="font-mono">'a plain time that does not exist on the spring-forward day…'</code> sits inside <code class="font-mono">describe('hours()')</code> and calls <code class="font-mono">time.fromPlain</code> only. The 13-hour / 15-hour tests do call <code class="font-mono">hours()</code>. This row does not, so a regression that stopped passing a skipped wall-clock into <code class="font-mono">fromPlain</code> would not fail it.</p>
+        </article>
+
+        <article id="F8" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold">F8</span>
+            <span class="text-xs text-white px-2 py-0.5 rounded-full sev-low">low</span>
+            <span class="text-xs text-slate-500">spec · naming</span>
+          </div>
+          <p class="text-xl font-serif">A zero-argument builder reaches the state EmptyCoversError exists to stop</p>
+          <p class="font-mono text-xs text-slate-500">src/extensions/features/time-shading-covers.ts:91-103,133-144,156-168,175-177 · plans/issues/open/404-time-shading.md:49-50</p>
+          <p class="text-sm text-slate-700">Spec refuses <code class="font-mono">{ covers: [] }</code> and <code class="font-mono">notCovered([])</code> because an empty list has no complement and a full-window band is never what the caller meant. <code class="font-mono">daysOfWeek()</code>, <code class="font-mono">dates()</code>, and <code class="font-mono">spans()</code> with no arguments still return a cover that matches nothing. <code class="font-mono">notCovered(daysOfWeek())</code> then shades the whole window — the same outcome, through a cover the empty-list guard does not see. Call site <code class="font-mono">daysOfWeek()</code> reads “days of week” with no days; the sentence is already false.</p>
+        </article>
+      </section>
+
+      <section id="harness" class="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+        <h2 class="text-xs uppercase tracking-wider text-slate-500">harness/main.ts (reviewed, changed)</h2>
+        <p class="text-sm text-slate-700">Install is <code class="font-mono">gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]))</code> (line 467). The checkbox uses the same <code class="font-mono">uninstallPlugin('freegantt.timeShading')</code> verb as every other toggle (I8). No row height, no hand-built scale, no token override. Leftover name only: <code class="font-mono">#weekend-shading-toggle</code> / <code class="font-mono">weekendToggle</code> still describe the retired demo, not the shipped factory. Not a library gap; rename when nearby.</p>
+      </section>
+
+      <section id="api-questions" class="rounded-lg border border-slate-200 bg-white p-6 space-y-2 text-sm">
+        <h2 class="text-xs uppercase tracking-wider text-slate-500">API surface checklist</h2>
+        <ul class="list-disc ml-5 space-y-1">
+          <li>Does an app author read the call site as the job? <strong>Yes</strong> for install. <strong>No</strong> for reconfigure (F4).</li>
+          <li>Does the branch add a knob the author must set for the default? <strong>No.</strong></li>
+          <li>Can the code say what a comment says? The <code class="font-mono">every?: never</code> comment is load-bearing. The ten-line “issue still says shading()” note on the factory can go once the issue file (already edited) is the record.</li>
+          <li>Does a new kind extend through a seam? <strong>Yes</strong> — <code class="font-mono">TimeCover</code> and <code class="font-mono">CoverPredicate</code>.</li>
+          <li>Ball of mud? <strong>No.</strong> Two modules, one paint job, builders behind one interface.</li>
+        </ul>
+      </section>
+
+      <section id="top-recommendation" class="rounded-lg border border-slate-900 bg-slate-900 text-slate-50 p-6">
+        <h2 class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</h2>
+        <p class="mt-2 text-lg font-serif"><a href="#F1" class="underline decoration-slate-500 hover:decoration-white">F1 — intersecting days</a></p>
+        <p class="mt-2 text-sm text-slate-300">A pan that starts inside a weekend drops that day's remainder, and <code class="font-mono">notCovered</code> inverts the remainder. The other builders already know the scan-back. Close the walk once, then F2's one-line export.</p>
+      </section>
+    </main>
+  </body>
+</html>
