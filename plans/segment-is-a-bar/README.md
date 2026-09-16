@@ -29,6 +29,7 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 
 - A **Segment** stores `id`, `start`, `end`, `name?` and `props`. It is a stored/live pair like `Entry` (ADR 0017): `StoredSegment` holds values, `Segment` answers `read(key)`.
 - A **plain Entry** (dates, no authored Segments) stores `segments: []`. `entry.segments` is `[]`. Its bar is still selectable through one minted `SegmentId` that lives in a store index, not in a record (§ The plain bar).
+- **An Entry's dates have one source at a time** (ruled 2026-09-16, Q1/Q2/Q4). With no Segments, the Entry keeps the dates it named, read straight (ADR 0012). With Segments, its span **is** their envelope — the lowest `start` and the highest `end`, which `envelopeOfSegments` already computes (`time/instant.ts:56-68`). So clearing the Segments clears the dates, through either door, and a caller that wants a plain bar names the dates in the same edit: `update(id, { segments: [], start, end })`. Call this pass the **envelope**, never the Rollup — the Rollup runs over children (ADR 0013), and no Aggregator ever runs over Segments.
 - **`name` is optional** on `EntryInput`, `StoredEntry`, `Entry`, `SegmentInput`, `StoredSegment`, `Segment`.
 - **A variant resolves in two phases.** Row phase decides `items`. Item phase decides `paint`, `css`, `can`, `barLabels` for each Item that draws an authored Segment.
 - **`can` and the resize handles resolve per Item.** Chrome and gesture read one answer (I14).
@@ -86,7 +87,7 @@ Publish the invocation an author writes. Read each line aloud before you change 
 | `data/entry-reader.ts:444` `moveEntryTo` | returns a `segments` write | plain → `{ start, end }`; authored → `segments` with each Segment's data kept |
 | `data/rollup.ts:180-186` | mints a Segment for a derived parent, pushes a `segments` row | writes `start`/`end` only; the store mints the plain bar's id on apply |
 | `data/rollup.ts:192` `fitSegmentsToEnvelope` | fits all | fits authored only, data kept |
-| `data/entry-store.ts:720` `#removeSegmentsFrom` | removes by id, un-dates on last | also accepts the plain bar's id: un-dates the Entry. Last authored Segment: see `Q2` |
+| `data/entry-store.ts:720` `#removeSegmentsFrom` | removes by id, un-dates on last | also accepts the plain bar's id: un-dates the Entry. The last authored Segment un-dates it too (Q2, ruled) — S3 measured this branch working with no code change |
 | `data/change-set.ts:128` `segmentIdsDroppedBy` | diffs `segments` rows | deleted. The Selection drops an id when `entryIdOfSegment(id)` is `undefined` after a commit |
 | `data/live-entry.ts:163` `toInput` | emits `segments` with ids | authored only, `name` + `props`, no ids |
 | `data/fields/field-access.ts:220` `measureDuration: 'segments'` | sums Segments | sums authored Segments; a plain Entry answers its span |
@@ -123,9 +124,17 @@ Mirror ADR 0017 exactly. Do not invent a third shape.
 
 ---
 
-## Spikes — throwaway, before B1
+## Spikes — run 2026-09-16, all three answered
 
-Each spike is a probe test, run once, then **deleted**. Write the finding as a **J** entry with the numbers. The issue names the first two. The third is this plan's.
+**All three spikes are done. Read [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md) once before B1.** The rulings are J1, J2 and J3 in the log. Nothing blocks the build, and no spike reversed a design. What each one changed is folded into the build table below. The probes are deleted; the text below states what each one asked, so a reader can judge the answer.
+
+| Spike | Answer | Lands in |
+|---|---|---|
+| **S1** ChangeSet address | The second apply path is real and small: one `FieldUpdated.segmentId?`, one segment-scoped diff, one apply branch. `invertChangeSet` needs no change, so undo-by-id falls out | B3, and **Q4** |
+| **S2** handle pair | **Rule B already ships.** `projectAffordances` brackets the envelope and gates each edge. The gap is that `Capabilities.can` takes no Segment, and hover does not thread the hovered Item into edge resolution | B5 |
+| **S3** plain bar's id | The minted id is **stable across drag and undo with no ChangeSet row** — it is never in one, so undo has nothing to get wrong. `removeSegments` un-dates with no code change | B2 |
+
+Each spike was a probe test, run once, then **deleted**. The issue named the first two. The third was this plan's.
 
 **S1 — the ChangeSet address (about 1 hour).** A two-Segment Entry. `updateSegment('d2', { color: 'grey', end })`. Assert one transaction, rows `{ id, segmentId: 'd2', field: 'color' }` and `{ …, field: 'end' }` plus the Entry's `end` envelope row. `replay` of the undo ChangeSet restores the Segment by id, not by position. `beforeChange` and an `EditExtender` see the `segmentId`. **Risk:** `applyFieldRow` (`entry-store.ts:944`) writes whole Fields today; a per-Segment row needs a second apply path.
 
@@ -146,7 +155,7 @@ S1 S2 S3  →  B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7
 | Build | Job | Lands after | Gate |
 |---|---|---|---|
 | **B1** Segment data | `StoredSegment`/`Segment` pair, `name?` everywhere, Segment props at ingest, `toSegment` keeps data, `toInput()` copies | spikes | ingest tests; copy test creates new Segment ids; grid shows empty name cell |
-| **B2** The plain bar | `segments: []` for plain, minted id in the index, Rollup writes dates, reconcile, draft, `moveEntryTo`, `removeSegments`, Selection drop rule, `LayoutInput` port | B1 | S3's assertions as real tests; every `segments` reader in the table above re-read once |
+| **B2** The plain bar | `segments: []` for plain, minted id in the index, Rollup writes dates, reconcile, draft, `moveEntryTo`, `removeSegments`, Selection drop rule, `LayoutInput` port. **`EmptySegmentsError` retires (Q1).** | B1 | S3's assertions as real tests; every `segments` reader in the table above re-read once |
 | **B3** One write per Segment | `updateSegment`, `addSegment`, `FieldUpdated.segmentId`, per-Segment apply/replay, undo, `EditExtender` sees the address, `WriteRule` third argument, `transaction` batching test | B2 | S1's assertions as real tests; `addSegment` refuses a duplicate id like `add` does, and appends a structural `segments` row (J-plan-3) |
 | **B4** Variants per Item | `whenSegment`, predicate `(entry, segment)`, two-phase resolve, frame carries the winner per bar, `resolveBarRenderer(item)`, `BarRendererContext.segment`, `DoubleVariantClaim` names the Segment, `UnknownFieldMatch` for `whenSegment` | B3 | every shipped rule claims the same Items as before (snapshot); `whenSegment: { hours: 8 }` claims exactly those Items |
 | **B5** Capabilities per Item | `CapabilityRule(entry, segment)`, `can()` takes the Segment, `canGesture(item)` at every caller, handles per Item (S2's rule), grid-row click selects only Items that allow select | B4 | `e2e/write-refusal.spec.ts` locked Segment; a11y and keyboard paths ask the same `can` |
@@ -154,6 +163,12 @@ S1 S2 S3  →  B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7
 | **B7** Harness, glossary, docs | one segmented row with per-Segment text, colour and capabilities; one plain bar with no name; `CONTEXT.md` Segment/Item entries; `docs/` consumer page; close #421 | B5, B6 | `harness/main.ts` reviewed; acceptance list in #421 all ticked |
 
 **Why this order.** B2 before B3: a hidden id has no record, so `updateSegment` on it is impossible by construction, not by a check. B4 before B5: `can` per Item reads the Item-phase winner. B6 after B4: a per-variant label reads the same winner.
+
+**What the spikes added to three builds.** Each line is measured, not predicted. Read `SPIKE-FINDINGS.md` for the evidence.
+
+- **B2.** The Rollup mints and stores its own `segments` array row at `data/rollup.ts:180-189`, on a path that never calls `toSegments` or `reconcileEnvelope`. It gets the *same* `#syncPlainBarSegment` treatment, not a variant of it. `reconcileEnvelope`'s sole-Segment mirror (`entry-reader.ts:320-343`) narrows to fire only when a Segment already exists — S3 found that mirror is today's filtered-record trick, and removing it is what makes a plain drag keep the Entry plain. Expect wide test breakage: the `data/`-layer change **alone** broke 37 tests in 8 files, 20 of them in `api/gantt.test.ts`. Those are deep end-to-end paths over the readers the table names, not readers the table missed.
+- **B3.** The second apply path is three pieces: `FieldUpdated.segmentId?: SegmentId` (`model/change-set.ts:20-25`), a segment-scoped diff beside `diffEdit` (`data/change-set.ts:53-73`) that reads `segment.read(field)`, and one branch in `#applyUpdatedRows` (`data/entry-store.ts:937-946`) keyed on `row.segmentId !== undefined`. `invertChangeSet` (`:150-156`) already swaps `from`/`to` per row, so undo and replay need nothing. **One gap the issue understates:** `EditRequest` carries `ProposedEdits`, a `Map<EntryId, ProposedEdit>` (`model/stored-entry.ts:211`). A consumer of the committed `ChangeSet` sees `segmentId` once the rows carry it, but an `EditExtender` still has no way to *propose* a one-field Segment edit — only a whole `segments` array. That is new plugin-author surface. **Q4 is ruled:** `updateSegment` still writes the Entry's own envelope row, and its value is `envelopeOfSegments` over the row's Segments after the edit. B3 adds no new maths.
+- **B5.** S2 confirmed rule B ships already: `resolveResizableEntry` (`view/affordance-projection.ts:86-114`) brackets the Entry's envelope and `resolveEdges` (`:72-79`) asks the two edges independently. Two real gaps remain. First, `Capabilities.can` (`view/capability.ts:34-36`) and `#canGesture` (`view/gantt-shell.ts:1838-1841`) take `(capability, entry, edge?)` — `edge` is an abstract distinction on the Entry, never "the bar at this edge". Second, hover narrows which Entry's pair shows but does not thread the hovered Item in, so hovering `d1` and hovering `d2` give identical `resizableEdges` today. Close both by resolving `start`/`end` from the row's first and last `ItemId` through `itemIdsForEntry`. The edge-to-Item mapping is structural, so hover does not decide which rule answers.
 
 **Wide mechanical changes.** B1's `name?` touches every `entry.name` read. Let `pnpm typecheck` list them. Do not add `?? ''` at a read site that should print nothing; add it only where a `string` is required by a DOM API.
 
