@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { toEndInstant, toInstant } from './input.js';
-import { InvalidInstantError } from '../model/index.js';
+import { readPlainTime, toEndInstant, toInstant } from './input.js';
+import { InvalidInstantError, InvalidPlainTimeError } from '../model/index.js';
 
 // America/Chicago is the zone the assertions below lean on: it observes DST, so a Plain time read
 // through it proves the reading is zone-aware rather than a UTC parse that happens to agree. In 2026
@@ -125,6 +125,39 @@ describe('toEndInstant()', () => {
       expect(toEndInstant(CHICAGO, '2026-09-08T00:00:00Z', rule)).toBe(utc('2026-09-08T00:00:00Z'));
       expect(toEndInstant(CHICAGO, 0, rule)).toBe(0);
       expect(toEndInstant(CHICAGO, new Date(1234), rule)).toBe(1234);
+    }
+  });
+});
+
+describe('readPlainTime()', () => {
+  it('reads hours and minutes with no seconds', () => {
+    expect(readPlainTime('17:00')).toEqual({ hour: 17, minute: 0, second: 0 });
+    expect(readPlainTime('07:05')).toEqual({ hour: 7, minute: 5, second: 0 });
+  });
+
+  it('reads hours, minutes and seconds', () => {
+    expect(readPlainTime('17:00:30')).toEqual({ hour: 17, minute: 0, second: 30 });
+  });
+
+  it('refuses a string that is not a wall-clock time of day', () => {
+    for (const bad of ['5pm', '17', '17:00:00.5', '2026-09-08', '24:00', '17:60', '17:00:60', '']) {
+      expect(() => readPlainTime(bad)).toThrow(InvalidPlainTimeError);
+    }
+  });
+
+  it("passes the caller's own name through to a bad value (#237)", () => {
+    expect(() => readPlainTime('5pm', 'shading: hours')).toThrow(
+      'shading: hours: "5pm" is not a wall-clock time of day.',
+    );
+  });
+
+  it('carries the original string on the thrown error', () => {
+    try {
+      readPlainTime('5pm');
+      expect.unreachable();
+    } catch (error) {
+      expect((error as InvalidPlainTimeError).value).toBe('5pm');
+      expect((error as InvalidPlainTimeError).code).toBe('invalid-plain-time');
     }
   });
 });

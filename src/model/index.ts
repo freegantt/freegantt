@@ -14,7 +14,7 @@ export {
   changeSetId,
 } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration, DurationMeasure, PlainParts } from './time.js';
-export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
+export type { InstantInput, TimeSpanInput, DateOnlyEndRule, PlainTimeInput } from './time.js';
 export type { Entry } from './entry.js';
 export type {
   StoredEntry,
@@ -87,6 +87,7 @@ export {
   InvalidSnapIncrementError,
   ContainerNotFoundError,
   InvalidInstantError,
+  InvalidPlainTimeError,
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
