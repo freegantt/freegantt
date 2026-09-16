@@ -93,12 +93,13 @@
         /* The weekend column shading `--fg-x-weekend` names in DESIGN-FACTS §7 — a themed colour
            the design wants that the library's own default (--fg-time-shading-fill) does not carry,
            so this page names it the way it already names phase hues: once per theme, read by
-           `timeShading()`'s own `.demo-weekend-band` class (#404).
+           this page's own `.planner-weekend` class — named on the rule's `class` key, beside
+           `timeShading()`'s own `.fg-time-shading` (#404).
            Each value is stated so that, once the band's own 0.55 has composited it over that theme's
            pane, the step off the pane is about the same size in every theme. The dark value is not
            the design's `#1F2126`: the design composites onto a `#15161A` page, our pane is the
            lighter `#1B1D22`, and at 0.55 that leaves a band nobody can see. */
-        --demo-weekend-bg: #e8e6e0;
+        --planner-weekend-bg: #e8e6e0;
       }
       /* The dark set answers the theme the Gantt is actually on, never the reader's OS. A
          `@media (prefers-color-scheme: dark)` rule used to state these too, and it was a bug: it
@@ -112,7 +113,7 @@
         --demo-phase-285: oklch(0.78 0.12 285);
         --demo-phase-15: oklch(0.78 0.12 15);
         --demo-phase-215: oklch(0.78 0.12 215);
-        --demo-weekend-bg: #2d3037;
+        --planner-weekend-bg: #2d3037;
       }
 
       /* ---- Paper ---------------------------------------------------------------------------- */
@@ -127,7 +128,7 @@
         --demo-phase-285: oklch(0.42 0.1 285);
         --demo-phase-15: oklch(0.42 0.1 15);
         --demo-phase-215: oklch(0.42 0.1 215);
-        --demo-weekend-bg: #e3ded0;
+        --planner-weekend-bg: #e3ded0;
       }
       /* Both selectors, one token set, still: choosing Paper leaves `gantt.theme` on `'light'`
          (`planner-toolbar.ts`), so the container still carries `data-fg-theme='light'`, and that
@@ -283,13 +284,13 @@
       }
 
       /* S5.6-style weekend band (DESIGN-FACTS §1.2, §7): #404's shipped `timeShading()`, its own
-         `--fg-time-shading-fill` overridden by this page's `class: 'demo-weekend-band'` rule — the
+         `--fg-time-shading-fill` overridden by this page's `class: 'planner-weekend'` rule — the
          colour is this page's, named once per theme above, because the library ships no
          `--fg-x-weekend` (D-S1.13-8's own posture on an `--fg-x-*` token: a gap the design flags,
          not one the library fills). Most consumers take the library default and write no rule at
          all; this page is the one that shows the override still works. */
-      .demo-weekend-band {
-        background: var(--demo-weekend-bg);
+      .planner-weekend {
+        background: var(--planner-weekend-bg);
         /* The design paints this overlay at 0.55 (DESIGN-FACTS §1.2). At full strength it swallows
            the grid line on its trailing edge, which is exactly where every week boundary falls. */
         opacity: 0.55;
