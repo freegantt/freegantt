@@ -1,5 +1,5 @@
 ---
-description: Never spawn subagent context-budget watchers
+description: Kill the subagent context watcher as soon as the wave ends
 alwaysApply: true
 ---
 
