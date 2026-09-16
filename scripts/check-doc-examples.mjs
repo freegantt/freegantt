@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // D-S5-32 (plans/s5-extensibility-and-editing/s5.13-gallery-and-gate.md §1):
-// website/docs/guides/plugin-authoring.md is prose about an API, and prose about an API rots.
+// docs/06-plugin-authoring.md is prose about an API, and prose about an API rots.
 // Every fenced `ts` block in that guide is
 // extracted and typechecked here against the BUILT package types — `dist/api/index.d.ts`, resolved
 // through package.json's own sealed `exports` map, the way a third party's `import ... from

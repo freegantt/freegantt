@@ -20,8 +20,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-// The source page, not the copy `pnpm docs:publish` writes under `website/`. A guard that reads
-// the copy reports a file nobody edits.
+// The site serves this file directly, so one page exists and this guard reads the page an author
+// edits.
 const inventoryPage = path.join(root, 'docs/architecture/files.md');
 const sourceRoot = path.join(root, 'src');
 
