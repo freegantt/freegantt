@@ -4,7 +4,8 @@
 # Production
 /build
 
-# Generated files
+# Generated files. The site serves the repository's `docs/` folder directly, so the only thing
+# under /docs here is the API reference TypeDoc writes from `src/`.
 .docusaurus
 .cache-loader
 /docs/api

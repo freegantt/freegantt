@@ -133,7 +133,7 @@ Two documents cite one anyway, and they cite it for two different subjects:
 | Citation | Cited for | Probable referent |
 |---|---|---|
 | `plans/03` §S6, R1 | "§12-style budgets" | A performance or budgets section. Never written, or renumbered away. |
-| `docs/adr/0018` line 200 (mirrored in `website/docs/adr/0018`) | "a sibling must not depend on load order (`plans/01` §12)" | §10, `extensions/` — the plugin contract. |
+| `docs/adr/0018` line 200 | "a sibling must not depend on load order (`plans/01` §12)" | §10, `extensions/` — the plugin contract. |
 
 So one dangling section number is being read two ways by two readers, and neither can check the claim it is meant to support.
 
