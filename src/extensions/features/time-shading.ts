@@ -12,6 +12,7 @@
 import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
 import type { DecorationContext, DecorationInput } from '../../api/decoration-facade.js';
 import { isCoarserThan } from '../../api/time-facade.js';
+import type { ZonedTime } from '../../api/time-facade.js';
 import type { Instant, TimeSpan, TimeUnit } from '../../model/index.js';
 import { EmptyCoversError } from '../../model/index.js';
 import { coarsestFloor, mergeSpans } from './time-shading-covers.js';
@@ -19,7 +20,7 @@ import type { TimeCover } from './time-shading-covers.js';
 
 /** Asked once per `every` step in the window, in place of a `TimeCover` — the escape hatch for a
  *  calendar no builder covers (the consumer's own `WorkSchedule`, say). */
-export type CoverPredicate = (start: Instant, time: DecorationContext['time']) => boolean;
+export type CoverPredicate = (start: Instant, time: ZonedTime) => boolean;
 
 /**
  * One shading rule. `covers` names one cover, a list ("covered when any of them covers" — a list
@@ -42,11 +43,13 @@ export type ShadingRule =
   | { covers: CoverPredicate; every: TimeUnit; hideWhenCoarserThan?: TimeUnit; class?: string };
 
 /** The floor a rule hides above: its own `hideWhenCoarserThan` if it named one, otherwise the shape
- *  of what it covers decides it (D-H). A predicate rule floors at its own `every` — the resolution it
- *  is asked at, the same reasoning a builder's own walk already gives its default. A list floors at
- *  the *coarsest* of its members: the floor is a hide threshold, and hiding on the finest member's
- *  floor would hide a rule the moment any one member wants a finer zoom (the `[daysOfWeek(6, 7),
- *  hours('17:00', '07:00')]` case — hide only when *no* member reads). */
+ *  of what it covers decides it (D-H). A walking rule's floor is its walk unit — the issue's own
+ *  table already gives this for `daysOfWeek`/`dates` (day/day) and `hours` (hour/hour); a predicate
+ *  rule is the same shape with the walk named by the caller's `every` instead of by a builder, so it
+ *  floors at `every` too. A list floors at the *coarsest* of its members: the floor is a hide
+ *  threshold, and hiding on the finest member's floor would hide a rule the moment any one member
+ *  wants a finer zoom (the `[daysOfWeek(6, 7), hours('17:00', '07:00')]` case — hide only when *no*
+ *  member reads). */
 type PredicateRule = Extract<ShadingRule, { covers: CoverPredicate }>;
 
 function isPredicateRule(rule: ShadingRule): rule is PredicateRule {
