@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 
+declare global {
+  interface Window {
+    __gantt: import('freegantt').Gantt;
+  }
+}
+
 // S5.5 visible acceptance (s5.5-tooltips-and-context-menu.md §4, D-S5-13/14): the flagship demo
 // (index.html, harness/main.ts) installs both tooltips() and contextMenu() from the start.
 // Right-click/menu behaviour (position, defaults filtered by `when`, items() append/reorder,
@@ -20,6 +26,35 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
 
   await page.mouse.move(0, 0);
   await expect(tooltip).toHaveCount(0);
+});
+
+// #404 acceptance: "shading paints at the default ladder's two hour rungs". ZOOM_PRESETS' finest
+// two rungs are hourPreset and hourDayWeekPreset (src/time/presets.ts) — any Gantt reaches them by
+// zooming in twice with no configuration, so a first-party shading plugin has to keep painting
+// there. index.html (harness/main.ts) installs timeShading() from the start and exposes
+// window.__gantt (S3's own test seam), so this asks it for both rungs directly.
+//
+// A preset switch changes the axis's total pixel width (D-S1.5-2: `ScrollAxis.position` is a raw
+// px offset, never re-anchored to a time when content width changes), so the visible window after
+// a bare preset assignment is not the same instant range the previous preset showed. `panToDate`
+// states the instant this test actually needs — 2026-09-12, a Saturday inside the demo dataset's
+// range (`fixtures/demo-dataset.ts`) — instead of relying on wherever the axis happened to leave
+// the old pixel position.
+test('[#404] timeShading() still paints at both hour zoom rungs', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.preset = 'hour';
+    window.__gantt.panToDate('2026-09-12', 'center');
+  });
+  await expect(page.locator('#gantt .fg-range-band.fg-time-shading').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__gantt.preset = 'hourDayWeek';
+    window.__gantt.panToDate('2026-09-12', 'center');
+  });
+  await expect(page.locator('#gantt .fg-range-band.fg-time-shading').first()).toBeVisible();
 });
 
 // #404: harness/plugins.html installs timeShading() — the shipped built-in, imported from

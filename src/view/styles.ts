@@ -156,7 +156,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-popup-bg: #FFFFFF;
   --fg-popup-border: #E6E2D9;
   --fg-popup-shadow: 0 8px 24px rgb(26 24 21 / 0.12);
-  /* #404: non-working time reads as a wash, not a block — the same ink family --fg-tick-line-color
+  /* #404: a shaded region reads as a wash, not a block — the same ink family --fg-tick-line-color
      already steps off (rgb(26 24 21)), one notch past its major-line alpha (0.16) so a shaded band
      still separates from a coarse tick line crossing it, but well short of --fg-row-hover-bg's own
      weight. Under a bar (--fg-bar-fill, opaque) the wash is invisible by construction — it only

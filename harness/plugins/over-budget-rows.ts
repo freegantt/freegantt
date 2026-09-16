@@ -28,7 +28,7 @@ export function overBudgetRows(threshold: number) {
           .map((row) => ({ kind: 'rowStripe' as const, rowId: row.id, class: 'demo-over-budget-row' })),
       );
       // No disposer: `ctx.disposables` already retracts the registration (review P4, same as
-      // `weekendShading()`'s own precedent).
+      // `timeShading()`'s own precedent).
     },
   });
 }

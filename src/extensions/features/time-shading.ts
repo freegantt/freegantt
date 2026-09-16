@@ -99,8 +99,9 @@ function assertNoEmptyCoversList(rules: readonly ShadingRule[]): void {
 }
 
 /**
- * Shades non-working time — weekends, after-hours, holidays, a shutdown — under the bars. A chrome
- * plugin (no `data` half), id `freegantt.timeShading`, layer `underBars` always.
+ * Shades regions of the time axis under the bars — a weekend, after-hours, a holiday, a shutdown,
+ * whatever a rule's `covers` names. What a shaded region means is the consumer's; this plugin only
+ * paints it. A chrome plugin (no `data` half), id `freegantt.timeShading`, layer `underBars` always.
  *
  * ```ts
  * import { timeShading, daysOfWeek, hours, dates, spans, notCovered } from 'freegantt';
