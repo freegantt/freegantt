@@ -78,17 +78,25 @@ export function addDays(zone: string, i: Instant, days: number): Instant {
   return fromZoned(ZonedDateTimeFns.addDays(toZoned(zone, i), days));
 }
 
-/** Each day boundary in `[span.start, span.end)`, ascending, in `zone` (D-S5-16). Steps by
- * `addDays`, so a spring-forward day still advances exactly one calendar day. */
-export function eachDay(zone: string, span: TimeSpan): readonly Instant[] {
-  const days: Instant[] = [];
-  let cursor = startOfDay(zone, span.start);
-  if (cursor < span.start) cursor = addDays(zone, cursor, 1);
+/** Each `unit` boundary in `[span.start, span.end)`, ascending, in `zone`. Floors to the first
+ * boundary at or after `span.start`, then steps by `unit` until it reaches `span.end` — the walk
+ * `eachDay` already did for `'day'`, generalised to every unit `stepBy`/`startOf` support (the #404
+ * prerequisite: `every` above `'day'` needs this same walk, not a day-only one). */
+export function eachUnit(zone: string, span: TimeSpan, unit: TimeUnit): readonly Instant[] {
+  const boundaries: Instant[] = [];
+  let cursor = startOf(zone, span.start, unit);
+  if (cursor < span.start) cursor = stepBy(zone, cursor, unit, 1);
   while (cursor < span.end) {
-    days.push(cursor);
-    cursor = addDays(zone, cursor, 1);
+    boundaries.push(cursor);
+    cursor = stepBy(zone, cursor, unit, 1);
   }
-  return days;
+  return boundaries;
+}
+
+/** Each day boundary in `[span.start, span.end)`, ascending, in `zone` (D-S5-16). Delegates to
+ * `eachUnit` with `'day'`, so the two walks can never disagree. */
+export function eachDay(zone: string, span: TimeSpan): readonly Instant[] {
+  return eachUnit(zone, span, 'day');
 }
 
 /** Calendar-month stepping (e.g. Jan 31 + 1 month clamps to Feb 28/29, per Temporal's default 'constrain'). */

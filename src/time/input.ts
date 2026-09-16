@@ -7,13 +7,16 @@
 // — "a day" is not always 86,400,000 ms — which CLAUDE.md confines to this layer (I10). api/ maps
 // fields; it never does date math of its own.
 
-import type { DateOnlyEndRule, Instant, InstantInput } from '../model/index.js';
-import { InvalidInstantError } from '../model/index.js';
+import type { DateOnlyEndRule, Instant, InstantInput, PlainTimeInput } from '../model/index.js';
+import { InvalidInstantError, InvalidPlainTimeError } from '../model/index.js';
 import { addMs, instant } from './instant.js';
 import { addDays, fromPlain, toPlain } from './zone.js';
 
 /** A calendar date with no time of day — `'2026-09-08'`. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** A wall-clock time of day with no date — `'17:00'` or `'17:00:00'`. */
+const PLAIN_TIME = /^(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /** A Plain date-time: a date and a wall-clock time, carrying no `Z` and no numeric offset. Seconds
  * and a fractional second are both optional; the separator may be `T` or a space. */
@@ -140,4 +143,26 @@ export function toEndInstant(
   const boundary = toInstant(zone, input, operation);
   if (rule === 'exclusive' || !isDateOnly(input)) return boundary;
   return addDays(zone, boundary, 1);
+}
+
+/**
+ * The hour, minute and second a `PlainTimeInput` names — `'17:00'` or `'17:00:00'`.
+ *
+ * Unlike `toInstant`, this names no `Instant`: a `PlainTimeInput` carries no date, so the caller
+ * supplies one (a day it is already walking) before the reading resolves through `fromPlain`. No
+ * zone is involved here either, for the same reason — a bare time of day is zone-agnostic until a
+ * date and a zone both join it.
+ */
+export function readPlainTime(
+  input: PlainTimeInput,
+  operation?: string,
+): { hour: number; minute: number; second: number } {
+  const parts = PLAIN_TIME.exec(input);
+  if (!parts) throw new InvalidPlainTimeError(input, operation);
+  const [, hourStr, minuteStr, secondStr] = parts;
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  const second = Number(secondStr ?? 0);
+  if (hour > 23 || minute > 59 || second > 59) throw new InvalidPlainTimeError(input, operation);
+  return { hour, minute, second };
 }

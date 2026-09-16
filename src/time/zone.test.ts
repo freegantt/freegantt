@@ -7,6 +7,7 @@ import {
   diffDays,
   dayOfWeek,
   eachDay,
+  eachUnit,
   toPlain,
   fromPlain,
   startOf,
@@ -189,6 +190,55 @@ describe('zone-aware date arithmetic', () => {
     expect(days).toHaveLength(7);
     const plainDays = days.map((day) => toPlain(sydney, day).day);
     expect(plainDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('eachUnit("day") agrees with eachDay exactly (the walk is one implementation, not two)', () => {
+    const start = startOfDay(ZONE, instant('2026-06-15T12:00:00Z'));
+    const end = addDays(ZONE, start, 10);
+    expect(eachUnit(ZONE, { start, end }, 'day')).toEqual(eachDay(ZONE, { start, end }));
+  });
+
+  it('eachUnit("hour") walks every hour boundary across a spring-forward day (23-hour day)', () => {
+    // America/Chicago springs forward on 2026-03-08: 02:00 CST jumps to 03:00 CDT, so the day has 23 hours.
+    const chicago = 'America/Chicago';
+    const start = startOfDay(chicago, instant('2026-03-08T06:00:00Z')); // local midnight
+    const end = addDays(chicago, start, 1);
+    const hours = eachUnit(chicago, { start, end }, 'hour');
+    expect(hours).toHaveLength(23);
+    for (let i = 1; i < hours.length; i++) expect(hours[i]).toBeGreaterThan(hours[i - 1]!);
+    expect(toPlain(chicago, hours[0]!)).toMatchObject({ hour: 0 });
+    expect(toPlain(chicago, hours[hours.length - 1]!)).toMatchObject({ hour: 23 });
+  });
+
+  it('eachUnit("hour") walks every hour boundary across a fall-back day (25-hour day)', () => {
+    // America/Chicago falls back on 2026-11-01: 01:00 CDT repeats as 01:00 CST, so the day has 25 hours.
+    const chicago = 'America/Chicago';
+    const start = startOfDay(chicago, instant('2026-11-01T05:00:00Z'));
+    const end = addDays(chicago, start, 1);
+    const hours = eachUnit(chicago, { start, end }, 'hour');
+    expect(hours).toHaveLength(25);
+    for (let i = 1; i < hours.length; i++) expect(hours[i]).toBeGreaterThan(hours[i - 1]!);
+  });
+
+  it('stepBy with an increment above 1 steps that many whole units, DST included', () => {
+    const chicago = 'America/Chicago';
+    const before = startOfDay(chicago, instant('2026-03-07T12:00:00Z'));
+    const threeDaysOn = stepBy(chicago, before, 'day', 3);
+    expect(diffDays(chicago, before, threeDaysOn)).toBe(3);
+    expect(toPlain(chicago, threeDaysOn)).toMatchObject({ year: 2026, month: 3, day: 10, hour: 0 });
+
+    const monthStart = startOf(chicago, instant('2026-01-15T12:00:00Z'), 'month');
+    const twoMonthsOn = stepBy(chicago, monthStart, 'month', 2);
+    expect(toPlain(chicago, twoMonthsOn)).toMatchObject({ year: 2026, month: 3, day: 1, hour: 0 });
+  });
+
+  it('eachUnit("week") with an increment-1 walk lands on successive week boundaries', () => {
+    const start = startOf(ZONE, instant('2026-06-01T00:00:00Z'), 'week');
+    const end = stepBy(ZONE, start, 'week', 4);
+    const weeks = eachUnit(ZONE, { start, end }, 'week');
+    expect(weeks).toHaveLength(4);
+    expect(weeks[0]).toBe(start);
+    for (let i = 1; i < weeks.length; i++) expect(diffDays(ZONE, weeks[i - 1]!, weeks[i]!)).toBe(7);
   });
 });
 

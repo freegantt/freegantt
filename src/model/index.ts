@@ -14,7 +14,7 @@ export {
   changeSetId,
 } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration, DurationMeasure, PlainParts } from './time.js';
-export type { InstantInput, TimeSpanInput, DateOnlyEndRule } from './time.js';
+export type { InstantInput, TimeSpanInput, DateOnlyEndRule, PlainTimeInput } from './time.js';
 export type { Entry } from './entry.js';
 export type {
   StoredEntry,
@@ -87,6 +87,7 @@ export {
   InvalidSnapIncrementError,
   ContainerNotFoundError,
   InvalidInstantError,
+  InvalidPlainTimeError,
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
@@ -125,6 +126,7 @@ export {
   PluginSetupError,
   UnknownCommandError,
   RendererAlreadyRegisteredError,
+  EmptyCoversError,
 } from './errors.js';
 // S5.12, D-S5-40: the Error report the `error` event carries on both buses, plus the raise seam
 // every layer that has no bus of its own is handed.

@@ -601,6 +601,22 @@ time or a `RowId`, never pixels; `layout/decorations.ts` converts through the bo
 and several providers on one layer all paint, in registration order.
 _Avoid_: Overlay, band (both name one _kind_ of Decoration's shape, not the registration mechanism)
 
+**Time shading**:
+Regions of the time axis, painted under the bars by the shipped `timeShading()` built-in (#404) — a
+`ChromePlugin`, id `freegantt.timeShading`, layer `underBars`. What a shaded region _means_ is the
+consumer's: a weekend, a holiday, a closed shift. The library names only what it is. Each
+`ShadingRule` pairs a `covers` with an optional `class`. A **`TimeCover`** answers
+`coveredSpans(window, time)`; five builders ship — `daysOfWeek()`, `hours()`, `dates()`, `spans()`
+and `notCovered()`. A list of covers means their union. `{ every, covers }` takes a `CoverPredicate`
+instead, asked once per `every` step. A rule hides when the tick is too coarse to read it, and
+`hideWhenCoarserThan` overrides that floor. Every band carries the `.fg-time-shading` Part. The
+`--fg-time-shading-fill` Token themes it (level 1 of the Customization ladder), so a zero-CSS
+install is already visible. A rule's own `class` themes one rule (level 2), as `harness/planner.ts`
+shows.
+_Avoid_: non-working time (what a consumer's shading _means_, never what the library names it),
+`weekendShading()` (the retired harness demo), shading band (a band is one Decoration's shape — see
+**Decoration**)
+
 **Plugin**, **ChromePlugin**, **DataPlugin**:
 The public extension contract (ADR 0019): an `id`, an optional `requires`, and one or both halves.
 `data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs as

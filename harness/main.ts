@@ -12,6 +12,8 @@ import {
   watchAllErrors,
   definePlugin,
   diamond,
+  timeShading,
+  daysOfWeek,
 } from 'freegantt';
 import type {
   Entry,
@@ -30,7 +32,6 @@ import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
-import { weekendShading } from './plugins/weekend-shading.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
@@ -380,7 +381,7 @@ lockResizeCheckbox.addEventListener('change', () => {
 
 const toggleLoggingBtn = document.querySelector<HTMLButtonElement>('#toggle-plugin-btn')!;
 
-// Review H1: the three demo plugins live in `harness/plugins/` now, beside `weekendShading()` and
+// Review H1: the three demo plugins live in `harness/plugins/` now, beside `overBudgetRows()` and
 // the two kind plugins. This page and `plugins.ts` install one copy each. Each takes this page's own
 // log writer, because each page owns its log panel.
 const writeLog = (line: string): void => prependLogLine(log, line);
@@ -459,20 +460,20 @@ renderersToggle.addEventListener('change', () => {
 });
 renderersToggle.dispatchEvent(new Event('change'));
 
-// S5.6, D-S5-15/D-S5-16, [S5-A2]: weekendShading() is written against the public surface alone
-// ('freegantt', harness/plugins/weekend-shading.ts) — no core edit, no private import. Installed
-// from the start; the checkbox removes it live through the same `uninstallPlugin` verb every
-// other plugin toggle on this page already uses (I8: no remount).
-gantt.installPlugin(weekendShading());
+// #404: timeShading() is the shipped built-in — 'freegantt' alone, no harness plugin behind it, and
+// no page CSS (--fg-time-shading-fill covers the paint). Installed from the start; the checkbox
+// removes it live through the same `uninstallPlugin` verb every other plugin toggle on this page
+// already uses (I8: no remount).
+gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
 
-const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
-weekendToggle.addEventListener('change', () => {
-  if (weekendToggle.checked) {
-    gantt.installPlugin(weekendShading());
-    writeLog('weekendShading: installed');
+const timeShadingToggle = document.querySelector<HTMLInputElement>('#time-shading-toggle')!;
+timeShadingToggle.addEventListener('change', () => {
+  if (timeShadingToggle.checked) {
+    gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
+    writeLog('timeShading: installed');
   } else {
-    gantt.uninstallPlugin('demo.weekendShading');
-    writeLog('weekendShading: removed');
+    gantt.uninstallPlugin('freegantt.timeShading');
+    writeLog('timeShading: removed');
   }
 });
 

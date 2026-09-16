@@ -57,17 +57,20 @@
         color: #b3261e;
         font-weight: 600;
       }
-      /* S5.6, [S5-A2]: weekendShading()'s own band class (D-S5-15 — "the library never invents
-         one"). Applied to .fg-range-band, painted below .fg-bars (render/dom/decorations.ts).
-         A dark-tinted color and a light-tinted color: this Gantt sets no `theme` option, so it
-         follows the system scheme (view/styles.ts's own default), and a fixed rgba(0,0,0,…) reads
-         as black-on-black once the system scheme is dark. */
-      .demo-weekend-band {
-        background: rgba(0, 0, 0, 0.06);
+      /* #404: timeShading() is the shipped built-in — its paint is --fg-time-shading-fill
+         (view/styles.ts), so this page writes no CSS of its own for it. The `weekend` class on the
+         rule below (S5-A2's own precedent) exists only so this page's own bands are tellable apart
+         from a second rule's, should one ever join it — nothing here reads that class. */
+      /* S5.6, [S5-A2]: overBudgetRows()'s own row-stripe class (D-S5-15 — "the library never
+         invents one"). Applied to .fg-row-stripe, painted below .fg-bars
+         (render/dom/decorations.ts). Same dark/light pairing weekendShading() used to carry, now
+         doing the same job for a whole row instead of a date range. */
+      .demo-over-budget-row {
+        background: rgba(179, 38, 30, 0.08);
       }
       @media (prefers-color-scheme: dark) {
-        .demo-weekend-band {
-          background: rgba(255, 255, 255, 0.08);
+        .demo-over-budget-row {
+          background: rgba(242, 184, 181, 0.12);
         }
       }
       /* S5.9, [S5-A3]: bufferKind()'s own hatched fill (D-S5-15's precedent — "the library never
@@ -109,11 +112,19 @@
         <code>ElementDescription</code> alone — the toggle below switches both off live, no remount (I8).
       </p>
       <p>
-        <code>weekendShading()</code> (S5.6, D-S5-15/D-S5-16, [S5-A2]): a harness-only, third-party-style
-        plugin — <code>harness/plugins/weekend-shading.ts</code> imports from <code>'freegantt'</code> alone,
-        never a path inside the library. It shades Saturday/Sunday under the bars through
-        <code>ctx.view.registerDecoration</code> and <code>dataset.time</code>. The checkbox below removes it
-        live.
+        <code>timeShading()</code> (#404): the library's own shipped built-in, not a harness plugin —
+        <code>import { timeShading, daysOfWeek } from 'freegantt'</code>, installed with
+        <code>[{ covers: daysOfWeek(6, 7) }]</code>. It shades Saturday/Sunday under the bars, and this page
+        writes no CSS for it: the wash is <code>--fg-time-shading-fill</code>, the same Token every consumer
+        gets by default. The checkbox below removes it live.
+      </p>
+      <p>
+        <code>overBudgetRows()</code> (S5.6, D-S5-15/D-S5-16, [S5-A2]): a harness-only, third-party-style
+        plugin — <code>harness/plugins/over-budget-rows.ts</code> imports from <code>'freegantt'</code> alone,
+        never a path inside the library. It stripes every row whose <code>cost</code> Field reads above the
+        same threshold the cost-cell renderer above uses, through <code>ctx.view.registerDecoration</code>'s
+        <code>rowStripe</code> shape — the one this page had not exercised before. The checkbox below removes
+        it live.
       </p>
       <p>
         <code>bufferKind()</code> (S5.9, D-S5-21/D-S5-22, [S5-A3], ADR 0018): a consumer-defined
@@ -141,7 +152,8 @@
         <label
           ><input id="renderers-toggle" type="checkbox" checked /> Custom milestone + cost renderers</label
         >
-        <label><input id="weekend-shading-toggle" type="checkbox" checked /> Weekend shading</label>
+        <label><input id="time-shading-toggle" type="checkbox" checked /> Time shading (weekends)</label>
+        <label><input id="over-budget-rows-toggle" type="checkbox" checked /> Over-budget rows</label>
         <label
           ><input id="kind-plugins-toggle" type="checkbox" checked /> Buffer + risk kinds (right-click for
           menu)</label

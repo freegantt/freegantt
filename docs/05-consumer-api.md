@@ -161,6 +161,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-popup-bg` | `#FFFFFF` | `#22252B` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
 | `--fg-popup-border` | `#E6E2D9` | `#3A3F48` | `.fg-popup` border |
 | `--fg-popup-shadow` | `0 8px 24px rgb(26 24 21 / 0.12)` | `0 10px 28px rgb(0 0 0 / 0.5)` | `.fg-popup` box-shadow; also the grabbed header cell's lifted shadow during a column reorder drag |
+| `--fg-time-shading-fill` | `rgb(26 24 21 / 0.05)` | `rgb(236 234 227 / 0.07)` | `.fg-time-shading` background — `timeShading()`'s own wash, one notch past `--fg-tick-line-strong-color`'s own alpha so a shaded band still separates from a tick line crossing it |
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere — only
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
@@ -299,6 +300,7 @@ gap, not a rename.
 | `.fg-decorations-over` | Decoration layer above the bars. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
 | `.fg-row-stripe` | A row-height decoration stripe. |
+| `.fg-time-shading` | `timeShading()`'s own band, beside `.fg-range-band` — the Part `--fg-time-shading-fill` paints. |
 | `.fg-popup` | Shared popup surface for tooltips, the context menu, and the reorder wash. |
 | `.fg-tooltip` | `tooltips()` content, inside `.fg-popup`. |
 | `.fg-tooltip-title` | Tooltip title line. |
