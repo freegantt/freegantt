@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Viewport } from './viewport.js';
 import type { DatasetBinding } from './viewport.js';
 import { TimeScaleModel } from './time-scale-model.js';
-import { ScrollModel } from './scroll-model.js';
+import { ScrollAxis } from './scroll-axis.js';
 import { diffMs, instant } from '../../time/index.js';
 import type { Entry } from '../../model/index.js';
 import { entryDouble } from '../entry-double.js';
@@ -29,8 +29,8 @@ function boundViewport(width = 400, height = 200): { viewport: Viewport; calls: 
   let calls = 0;
   const handle = viewport.bind(wideDataset, () => calls++);
   handle.setPaneSize({ width, height });
-  // A real GanttShell.render() pushes this after computing a frame — done by hand here so
-  // ScrollModel.max is non-zero and panTo/reveal have somewhere to move to.
+  // A real GanttShell.render() pushes this after computing a frame — done by hand here so the
+  // x ScrollAxis's max is non-zero and panTo/reveal have somewhere to move to.
   handle.setContentSize({ width: viewport.timeScale.contentWidth, height: 5000 });
   calls = 0;
   return { viewport, calls: () => calls };
@@ -64,9 +64,9 @@ describe('Viewport', () => {
   });
 
   it('visible uses the LOCALLY clamped position when the shared position exceeds this Gantt’s own max (U3, the §0 defect)', () => {
-    const sharedScroll = new ScrollModel();
-    const big = new Viewport({ scroll: sharedScroll });
-    const small = new Viewport({ scroll: sharedScroll });
+    const sharedY = new ScrollAxis();
+    const big = new Viewport({ scroll: { y: sharedY } });
+    const small = new Viewport({ scroll: { y: sharedY } });
     const bigHandle = big.bind(dataset, noop);
     const smallHandle = small.bind(dataset, noop);
 
@@ -76,9 +76,9 @@ describe('Viewport', () => {
     smallHandle.setPaneSize({ width: 0, height: 800 });
 
     // Pin past the small chart's own max (200) but within the big chart's (4200) — the shared
-    // ScrollModel's position is what the user asked for; each chart must still render what it can
+    // ScrollAxis's position is what the user asked for; each chart must still render what it can
     // show, not what was asked for (D-S1.5-2).
-    sharedScroll.panTo({ y: 4200 });
+    sharedY.panTo(4200);
 
     expect(big.visible.y).toBe(4200);
     expect(small.visible.y).toBe(200);
@@ -86,14 +86,14 @@ describe('Viewport', () => {
 
   it('unbind detaches both models', () => {
     const sharedScale = new TimeScaleModel();
-    const sharedScroll = new ScrollModel();
+    const sharedY = new ScrollAxis();
     let otherCalls = 0;
-    const other = new Viewport({ scale: sharedScale, scroll: sharedScroll });
+    const other = new Viewport({ scale: sharedScale, scroll: { y: sharedY } });
     const otherHandle = other.bind(dataset, () => otherCalls++);
     otherHandle.setContentSize({ width: 0, height: 1000 });
     otherHandle.setPaneSize({ width: 0, height: 200 });
 
-    const unbinding = new Viewport({ scale: sharedScale, scroll: sharedScroll });
+    const unbinding = new Viewport({ scale: sharedScale, scroll: { y: sharedY } });
     let calls = 0;
     const handle = unbinding.bind(dataset, () => calls++);
     calls = 0;
@@ -102,7 +102,7 @@ describe('Viewport', () => {
     handle.unbind();
 
     // A change on the remaining binding still notifies it, but not the one that unbound.
-    other.scroll.panTo({ y: 500 });
+    other.scroll.y.panTo(500);
     expect(otherCalls).toBeGreaterThan(0);
     expect(calls).toBe(0);
   });
@@ -192,22 +192,22 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   it('keeps the instant under a stated anchorX fixed across a zoom', () => {
     const { viewport } = boundViewport();
     const anchorX = 100;
-    const before = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+    const before = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
 
     viewport.zoomBy(3, anchorX);
 
-    const after = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+    const after = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
     expect(Math.abs(diffMs(after, before))).toBeLessThanOrEqual(1);
   });
 
   it('with no anchorX, the pane center stays centered', () => {
     const { viewport } = boundViewport(400, 200);
     const centerX = 200;
-    const before = viewport.timeScale.instantForX(viewport.scroll.state.position.x + centerX);
+    const before = viewport.timeScale.instantForX(viewport.scroll.x.state.position + centerX);
 
     viewport.zoomBy(2);
 
-    const after = viewport.timeScale.instantForX(viewport.scroll.state.position.x + centerX);
+    const after = viewport.timeScale.instantForX(viewport.scroll.x.state.position + centerX);
     expect(Math.abs(diffMs(after, before))).toBeLessThanOrEqual(1);
   });
 
@@ -221,13 +221,13 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   it('zoomBy(2) then zoomBy(0.5) returns pxPerMs and scroll.x to their starting values', () => {
     const { viewport } = boundViewport();
     const pxPerMs0 = viewport.timeScale.pxPerMs;
-    const x0 = viewport.scroll.state.position.x;
+    const x0 = viewport.scroll.x.state.position;
 
     viewport.zoomBy(2, 60);
     viewport.zoomBy(0.5, 60);
 
     expect(viewport.timeScale.pxPerMs).toBeCloseTo(pxPerMs0, 8);
-    expect(viewport.scroll.state.position.x).toBeCloseTo(x0, 5);
+    expect(viewport.scroll.x.state.position).toBeCloseTo(x0, 5);
   });
 
   it('random zoomBy sequences keep the anchored instant within 0.5px of anchorX, whenever the anchor is reachable within scroll bounds', () => {
@@ -241,14 +241,14 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
           const { viewport } = boundViewport();
           const anchorX = 80;
           for (const factor of factors) {
-            const before = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+            const before = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
             viewport.zoomBy(factor, anchorX);
-            const { position, max } = viewport.scroll.state;
+            const { position, max } = viewport.scroll.x.state;
             // Clamping at either scroll bound (D-S1.5-2) is the ONE case where the anchor cannot
             // stay fixed — there is no valid position that would keep it there. Away from both
             // bounds, the invariant must hold exactly (to rounding).
-            if (position.x <= 0 || position.x >= max.x) continue;
-            const after = viewport.timeScale.instantForX(position.x + anchorX);
+            if (position <= 0 || position >= max) continue;
+            const after = viewport.timeScale.instantForX(position + anchorX);
             expect(Math.abs(diffMs(after, before))).toBeLessThanOrEqual(1);
           }
         },
@@ -264,7 +264,7 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
 
   it('zoomTo pushes content width into visible so a shrink clamps before the next render', () => {
     const { viewport } = boundViewport(400, 200);
-    viewport.scroll.panTo({ x: 50_000 });
+    viewport.scroll.x.panTo(50_000);
     expect(viewport.visible.x).toBeGreaterThan(0);
 
     viewport.zoomTo(viewport.timeScale.pxPerMs / 20);
@@ -280,13 +280,13 @@ describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
     const startId = viewport.preset.id;
     const startIndex = viewport.zoomPresets.findIndex((p) => p.id === startId);
     const anchorX = 100;
-    const before = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+    const before = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
 
     viewport.zoomIn(anchorX);
 
     expect(calls()).toBe(1);
     expect(viewport.preset.id).toBe(viewport.zoomPresets[startIndex - 1]!.id);
-    const after = viewport.timeScale.instantForX(viewport.scroll.state.position.x + anchorX);
+    const after = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
     expect(Math.abs(diffMs(after, before))).toBeLessThanOrEqual(1);
   });
 
@@ -344,12 +344,12 @@ describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
   it('[S1-A7] zoomIn then zoomOut returns preset and scroll x to their starting values', () => {
     const { viewport } = boundViewport();
     const preset0 = viewport.preset.id;
-    const x0 = viewport.scroll.state.position.x;
+    const x0 = viewport.scroll.x.state.position;
     expect(viewport.canZoomIn).toBe(true);
     viewport.zoomIn(80);
     viewport.zoomOut(80);
     expect(viewport.preset.id).toBe(preset0);
-    expect(viewport.scroll.state.position.x).toBeCloseTo(x0, 5);
+    expect(viewport.scroll.x.state.position).toBeCloseTo(x0, 5);
   });
 });
 
@@ -359,7 +359,7 @@ describe('Viewport.zoomToSpan (S1.12, D-S1.12-7)', () => {
     const start = instant('2026-06-01T00:00:00Z');
     const end = instant('2026-07-01T00:00:00Z');
     viewport.zoomToSpan({ start, end });
-    expect(viewport.scroll.state.position.x).toBe(viewport.timeScale.xForInstant(start));
+    expect(viewport.scroll.x.state.position).toBe(viewport.timeScale.xForInstant(start));
     const spanMs = diffMs(end, start);
     const requested = 400 / spanMs;
     expect(viewport.timeScale.pxPerMs).toBeGreaterThanOrEqual(requested - 1e-12);
@@ -371,7 +371,7 @@ describe('Viewport.panToInstant (S1.12, D-S1.12-8)', () => {
     const { viewport } = boundViewport(400, 200);
     const target = instant('2026-06-15T00:00:00Z');
     viewport.panToInstant(target, 'start');
-    expect(viewport.scroll.state.position.x).toBe(viewport.timeScale.xForInstant(target));
+    expect(viewport.scroll.x.state.position).toBe(viewport.timeScale.xForInstant(target));
   });
 
   it("align 'center' puts the instant at the pane's own centre — exactly paneWidth/2 left of 'start'", () => {
@@ -382,7 +382,7 @@ describe('Viewport.panToInstant (S1.12, D-S1.12-8)', () => {
     startViewport.panToInstant(target, 'start');
     centerViewport.panToInstant(target, 'center');
 
-    expect(centerViewport.scroll.state.position.x).toBe(startViewport.scroll.state.position.x - 200);
+    expect(centerViewport.scroll.x.state.position).toBe(startViewport.scroll.x.state.position - 200);
   });
 
   it('delivers exactly one notification', () => {
@@ -395,13 +395,13 @@ describe('Viewport.panToInstant (S1.12, D-S1.12-8)', () => {
     const { viewport } = boundViewport(400, 200);
     // wideDataset runs Jan-Dec 2026 — well before its own range.start.
     viewport.panToInstant(instant('2020-01-01T00:00:00Z'), 'start');
-    expect(viewport.scroll.state.position.x).toBe(0);
+    expect(viewport.scroll.x.state.position).toBe(0);
   });
 
-  it('an instant past the scale range clamps to scroll.max.x, never past it', () => {
+  it('an instant past the scale range clamps to scroll.x.max, never past it', () => {
     const { viewport } = boundViewport(400, 200);
     viewport.panToInstant(instant('2099-01-01T00:00:00Z'), 'start');
-    expect(viewport.scroll.state.position.x).toBe(viewport.scroll.state.max.x);
+    expect(viewport.scroll.x.state.position).toBe(viewport.scroll.x.state.max);
   });
 });
 
@@ -410,28 +410,30 @@ describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
     const { viewport, calls } = boundViewport(400, 200);
     viewport.reveal({ x: 10, y: 10, width: 20, height: 20 });
     expect(calls()).toBe(0);
-    expect(viewport.scroll.state.position).toEqual({ x: 0, y: 0 });
+    expect(viewport.scroll.x.state.position).toBe(0);
+    expect(viewport.scroll.y.state.position).toBe(0);
   });
 
   it('moves exactly to the near edge on the x axis when off-screen to the right', () => {
     const { viewport } = boundViewport(400, 200);
     viewport.reveal({ x: 500, y: 10, width: 50, height: 20 });
     // Near edge: target's right edge (550) aligns with visible's right edge.
-    expect(viewport.scroll.state.position.x).toBe(550 - 400);
-    expect(viewport.scroll.state.position.y).toBe(0);
+    expect(viewport.scroll.x.state.position).toBe(550 - 400);
+    expect(viewport.scroll.y.state.position).toBe(0);
   });
 
   it('moves exactly to the near edge on the y axis when off-screen above', () => {
     const { viewport } = boundViewport(400, 200);
-    viewport.scroll.panTo({ y: 300 });
+    viewport.scroll.y.panTo(300);
     viewport.reveal({ x: 10, y: 100, width: 20, height: 20 });
-    expect(viewport.scroll.state.position.y).toBe(100);
+    expect(viewport.scroll.y.state.position).toBe(100);
   });
 
   it('moves the minimum distance on both axes at once when off-screen on both', () => {
     const { viewport } = boundViewport(400, 200);
     viewport.reveal({ x: 500, y: 400, width: 50, height: 20 });
-    expect(viewport.scroll.state.position).toEqual({ x: 550 - 400, y: 420 - 200 });
+    expect(viewport.scroll.x.state.position).toBe(550 - 400);
+    expect(viewport.scroll.y.state.position).toBe(420 - 200);
   });
 
   describe('setEntries (S2.4, D-S2-20)', () => {

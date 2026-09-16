@@ -317,16 +317,17 @@ frame 1.
 </figure>
 </div>
 
-### Step 12: why one `bind()` delivers two notifications
+### Step 12: why one `bind()` delivers three notifications
 
 The amber note says `onChange() ×2`. That surprises every new reader, so here is the whole story,
 from the start. No knowledge of the code is assumed.
 
-**A Gantt does not own its time axis or its scroll position.** Two small models own them.
-`TimeScaleModel` answers "which instant sits at which pixel". `ScrollModel` answers "how far is the
-content scrolled, and how far can it go". Both are *shareable*: two Gantts may bind to the same
-model, and that is how `harness/scroll-sync.ts` makes two Gantts pan together. `Viewport` is the
-fan-in over the pair, so `view/` holds one reaction instead of two.
+**A Gantt does not own its time scale or its scroll position.** Three small models own them.
+`TimeScaleModel` answers "which instant sits at which pixel". A `ScrollAxis` answers "how far is
+the content scrolled, and how far can it go" — for *one* direction; a Gantt holds two, `scroll.x`
+and `scroll.y` (D-S6-1). All three are *shareable*: two Gantts may bind to the same instance, and
+that is how `harness/scroll-sync.ts` makes two Gantts pan together, on one axis or both. `Viewport`
+is the fan-in over the three, so `view/` holds one reaction instead of three.
 
 **Every binding follows one rule: bind always notifies the newcomer.** When something binds, the
 model calls it straight back. That first call is not an update. It *is* the newcomer's first
@@ -343,16 +344,17 @@ bind(binding: Binding, onChange: () => void): BoundValueHandle {
 }
 ```
 
-**One `Viewport.bind()` binds two models, and nothing wraps the pair.** Each call reaches
+**One `Viewport.bind()` binds three models, and nothing wraps the three.** Each call reaches
 `#notify`, and each `#notify` delivers straight through to the shell:
 
 ```ts
 // src/layout/viewport/viewport.ts — inside bind()
 const scaleHandle = bindTimeScale(this.scale, scaleBinding, this.#notify); // → onChange() #1
-const scrollHandle = bindScroll(this.scroll, { content, pane }, this.#notify); // → onChange() #2
+const scrollHandleX = bindScrollAxis(this.scroll.x, { content, pane }, this.#notify); // → onChange() #2
+const scrollHandleY = bindScrollAxis(this.scroll.y, { content, pane }, this.#notify); // → onChange() #3
 ```
 
-Compare that with every *later* write through the same handle. Each one wraps its two calls in a
+Compare that with every *later* write through the same handle. Each one wraps its calls in a
 batch, so one caller-visible change costs exactly one notification:
 
 ```ts
@@ -361,7 +363,8 @@ setPaneSize: (size) => {
   this.#paneSize = size;
   this.#notifications.batch(() => {   // ← one delivery at the end of the batch
     scaleHandle.setPaneWidth(size.width);
-    scrollHandle.setPaneSize(size);
+    scrollHandleX.setPaneSize(size.width);
+    scrollHandleY.setPaneSize(size.height);
   });
 },
 ```
@@ -373,16 +376,16 @@ So the count is not a mystery: `bind()` is the one path on the handle with no ba
 <div class="scroller">
 <svg
 class="d"
-viewBox="0 0 960 280"
+viewBox="0 0 960 320"
 role="img"
 aria-labelledby="lc-bind-title lc-bind-desc"
 preserveAspectRatio="xMidYMid meet"
 >
-<title id="lc-bind-title">Why bind notifies twice and setPaneSize notifies once</title>
+<title id="lc-bind-title">Why bind notifies three times and setPaneSize notifies once</title>
 <desc id="lc-bind-desc">
-Two rows. The top row shows bind calling bindTimeScale and bindScroll, each firing its own
-notification, so the shell's onChange runs twice. The bottom row shows setPaneSize wrapping the
-same two calls in one batch, so onChange runs once.
+Two rows. The top row shows bind calling bindTimeScale and bindScrollAxis for x and for y, each
+firing its own notification, so the shell's onChange runs three times. The bottom row shows
+setPaneSize wrapping the same three calls in one batch, so onChange runs once.
 </desc>
 <defs>
 <marker
@@ -398,50 +401,58 @@ orient="auto-start-reverse"
 </marker>
 </defs>
 <!-- row A: bind -->
-<text class="t" x="16" y="22">Viewport.bind(dataset, onChange) — no batch around the pair</text>
+<text class="t" x="16" y="22">Viewport.bind(dataset, onChange) — no batch around the three</text>
 <rect class="bx pure" x="16" y="34" width="260" height="30" />
 <text class="s" x="28" y="53">bindTimeScale(scale, …, #notify)</text>
-<rect class="bx pure" x="16" y="76" width="260" height="30" />
-<text class="s" x="28" y="95">bindScroll(scroll, …, #notify)</text>
+<rect class="bx pure" x="16" y="72" width="260" height="30" />
+<text class="s" x="28" y="91">bindScrollAxis(scroll.x, …, #notify)</text>
+<rect class="bx pure" x="16" y="110" width="260" height="30" />
+<text class="s" x="28" y="129">bindScrollAxis(scroll.y, …, #notify)</text>
 <line class="edge" x1="276" y1="49" x2="330" y2="49" marker-end="url(#a6)" style="color: var(--sub)" />
-<line class="edge" x1="276" y1="91" x2="330" y2="91" marker-end="url(#a6)" style="color: var(--sub)" />
+<line class="edge" x1="276" y1="87" x2="330" y2="87" marker-end="url(#a6)" style="color: var(--sub)" />
+<line class="edge" x1="276" y1="125" x2="330" y2="125" marker-end="url(#a6)" style="color: var(--sub)" />
 <rect class="bx warn" x="336" y="34" width="150" height="30" />
 <text class="s" x="348" y="53">#notify() delivers</text>
-<rect class="bx warn" x="336" y="76" width="150" height="30" />
-<text class="s" x="348" y="95">#notify() delivers</text>
-<path class="edge" d="M486,49 H530 V62 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
-<path class="edge" d="M486,91 H530 V78 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
-<rect class="bx dom" x="566" y="42" width="200" height="56" />
-<text class="t" x="578" y="62">GanttShell onChange()</text>
-<text class="warnink" x="578" y="82">runs twice</text>
-<text class="xs" x="782" y="62">one caller-visible event,</text>
-<text class="xs" x="782" y="76">two deliveries</text>
+<rect class="bx warn" x="336" y="72" width="150" height="30" />
+<text class="s" x="348" y="91">#notify() delivers</text>
+<rect class="bx warn" x="336" y="110" width="150" height="30" />
+<text class="s" x="348" y="129">#notify() delivers</text>
+<path class="edge" d="M486,49 H530 V55 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
+<path class="edge" d="M486,87 H530 V85 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
+<path class="edge" d="M486,125 H530 V115 H560" marker-end="url(#a6)" style="color: var(--smell-line)" />
+<rect class="bx dom" x="566" y="30" width="200" height="110" />
+<text class="t" x="578" y="52">GanttShell onChange()</text>
+<text class="warnink" x="578" y="120">runs three times</text>
+<text class="xs" x="782" y="72">one caller-visible event,</text>
+<text class="xs" x="782" y="86">three deliveries</text>
 <!-- row B: setPaneSize -->
-<text class="t" x="16" y="158">handle.setPaneSize(size) — one batch around the same pair</text>
-<rect class="bx opt" x="16" y="170" width="260" height="80" />
-<text class="s" x="28" y="188">#notifications.batch(() =&gt; {</text>
-<rect class="bx pure" x="30" y="196" width="232" height="22" />
-<text class="s" x="40" y="211">scaleHandle.setPaneWidth(w)</text>
-<rect class="bx pure" x="30" y="222" width="232" height="22" />
-<text class="s" x="40" y="237">scrollHandle.setPaneSize(size)</text>
-<line class="edge" x1="276" y1="210" x2="330" y2="210" marker-end="url(#a6)" style="color: var(--sub)" />
-<rect class="bx pure" x="336" y="194" width="150" height="32" />
-<text class="s" x="348" y="214">#notify() delivers</text>
-<line class="edge" x1="486" y1="210" x2="560" y2="210" marker-end="url(#a6)" style="color: var(--sub)" />
-<rect class="bx dom" x="566" y="188" width="200" height="44" />
-<text class="t" x="578" y="208">GanttShell onChange()</text>
-<text class="s" x="578" y="224">runs once</text>
-<text class="xs" x="782" y="208">the batch flushes at its</text>
-<text class="xs" x="782" y="222">end, once, iff anything moved</text>
+<text class="t" x="16" y="180">handle.setPaneSize(size) — one batch around the same three</text>
+<rect class="bx opt" x="16" y="192" width="260" height="104" />
+<text class="s" x="28" y="208">#notifications.batch(() =&gt; {</text>
+<rect class="bx pure" x="30" y="214" width="232" height="20" />
+<text class="s" x="40" y="228">scaleHandle.setPaneWidth(w)</text>
+<rect class="bx pure" x="30" y="238" width="232" height="20" />
+<text class="s" x="40" y="252">scrollHandleX.setPaneSize(w)</text>
+<rect class="bx pure" x="30" y="262" width="232" height="20" />
+<text class="s" x="40" y="276">scrollHandleY.setPaneSize(h)</text>
+<line class="edge" x1="276" y1="244" x2="330" y2="244" marker-end="url(#a6)" style="color: var(--sub)" />
+<rect class="bx pure" x="336" y="228" width="150" height="32" />
+<text class="s" x="348" y="248">#notify() delivers</text>
+<line class="edge" x1="486" y1="244" x2="560" y2="244" marker-end="url(#a6)" style="color: var(--sub)" />
+<rect class="bx dom" x="566" y="222" width="200" height="44" />
+<text class="t" x="578" y="242">GanttShell onChange()</text>
+<text class="s" x="578" y="258">runs once</text>
+<text class="xs" x="782" y="242">the batch flushes at its</text>
+<text class="xs" x="782" y="256">end, once, iff anything moved</text>
 </svg>
 </div>
 <figcaption>
-Diagram 2 — the same two sub-models, reached two ways. Amber = the unbatched pair at step 12.
+Diagram 2 — the same three sub-models, reached two ways. Amber = the unbatched three at step 12.
 </figcaption>
 </figure>
 </div>
 
-**Nobody outside the shell ever sees those two calls.** `bind()` runs in the constructor and
+**Nobody outside the shell ever sees those three calls.** `bind()` runs in the constructor and
 nowhere else, and the callback the shell passes in returns early for the whole of construction:
 
 ```ts
@@ -449,15 +460,15 @@ nowhere else, and the callback the shell passes in returns early for the whole o
 this.#viewportHandle = this.#viewport.bind(
   { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
   () => {
-    if (this.#phase === 'constructing') return; // ← both bind-time calls stop here
+    if (this.#phase === 'constructing') return; // ← all three bind-time calls stop here
     this.#frames.request();
     this.#emitNavigationChange();
   },
 );
 ```
 
-Measured on a three-entry dataset: constructing a `Gantt` delivers **two** bind-time notifications
-and runs **one** `computeFrame`. A third notification follows that first frame, from the
+Measured on a three-entry dataset: constructing a `Gantt` delivers **three** bind-time notifications
+and runs **one** `computeFrame`. A fourth notification follows that first frame, from the
 `setContentSize` at the end of `render()`. That one arrives after `#phase` is `'live'`, so it does
 what a notification normally does — it asks for the next frame.
 
@@ -468,7 +479,7 @@ what a notification normally does — it asks for the next frame.
 | 4 | **Styles and panes before paint.** `ensureBaseStyles` must run before `PaneLayout` inserts classed elements, or the first frame is unstyled. `mount` needs the grid and timeline panes that `PaneLayout` builds. |
 | 7–8 | **Mount before bind.** Each model's `bind` notifies the newcomer at once. Those calls are dropped while wiring, but the render target must already exist for the deliberate first `flush()` at step 19. |
 | 9 | Before `bind`, so `#scrollAttachment` is never `undefined` during a render. The timeline pane is the single native scroller. |
-| 10–12 | `bind()` always notifies the newcomer, once per sub-model, with no `Viewport` batch around the pair — [the section below](#step-12-why-one-bind-delivers-two-notifications) walks through why that is two. Those two `onChange`s land before `#viewportHandle` is assigned. `#phase` drops them, so neither asks for a frame and neither emits `navigationChange`. The first real frame is step 20. |
+| 10–12 | `bind()` always notifies the newcomer, once per sub-model, with no `Viewport` batch around the three — [the section below](#step-12-why-one-bind-delivers-three-notifications) walks through why that is three. Those three `onChange`s land before `#viewportHandle` is assigned. `#phase` drops them, so none asks for a frame and none emits `navigationChange`. The first real frame is step 20. |
 | 14–15 | One synchronous measurement, because a real `ResizeObserver`'s first callback is queued, not immediate. The viewport gets the *rows'* box, not the pane box: the header sticks to the pane's top and covers that band of rows for the whole scroll, so the measured header height comes off the height. Reporting the full box left the scroll model one header short, and the last row could then never scroll fully into view. All four `--fg-*` pixel properties are re-read here, not per render. |
 | 17–18 | **Capabilities and gestures after the viewport.** The gesture pipeline needs the viewport's scale for draft math, and the capability resolver needs the consumer's `interactions` options which the shell has by then. Keyboard and wheel navigation sit at the end so the elements they attach to exist. |
 | 19–20 | **Plugins before the first frame** (ADR 0019). A constructor-supplied plugin's variant, keybinding, command or selection has to reach frame 1, so the shell applies all of them through its own live setters, then flushes. `theme` is the one setting applied *after* the flush. |
@@ -660,7 +671,7 @@ style="color: var(--sub)"
 />
 <rect class="bx pure" x="300" y="386" width="330" height="34" />
 <text class="t" x="312" y="401">#viewportHandle.setContentSize(…)</text>
-<text class="s" x="312" y="414">→ Viewport.#contentSize → ScrollModel binding.content</text>
+<text class="s" x="312" y="414">→ Viewport.#contentSize → ScrollAxis binding.content</text>
 <rect class="bx dom" x="16" y="424" width="182" height="60" />
 <text class="t" x="28" y="442">FrameScheduler.request()</text>
 <text class="s" x="28" y="456">max changed → notify →</text>
@@ -736,7 +747,7 @@ part of the codebase and the part most worth understanding before changing anyth
 `layout/viewport/`.
 
 *Derived from `layout/viewport/batched-notifier.ts`, `bound-value.ts`, `time-scale-model.ts`,
-`scroll-model.ts`, `viewport.ts`.*
+`scroll-axis.ts`, `viewport.ts`.*
 
 :::note The one contract everything here implements
 *Bind always notifies the newcomer; every other notification fires if and only if the resolved
@@ -757,8 +768,8 @@ preserveAspectRatio="xMidYMid meet"
 >
 <title id="lc-notify-title">Binding and notification topology</title>
 <desc id="lc-notify-desc">
-Two Gantts sharing TimeScaleModel and ScrollModel, showing BoundValue and BatchedNotifier
-layers.
+Two Gantts sharing TimeScaleModel and both ScrollAxis instances, one per direction, showing
+BoundValue and BatchedNotifier layers.
 </desc>
 <defs>
 <marker
@@ -808,12 +819,12 @@ orient="auto-start-reverse"
 <text class="s" x="336" y="174">resolve: zone · narrowest pane · min start/max end</text>
 <text class="s" x="336" y="188">equals: zone + range.start + range.end + pxPerMs</text>
 <rect class="bx pure" x="324" y="226" width="312" height="110" />
-<text class="t" x="336" y="246">ScrollModel — SHAREABLE</text>
-<text class="s" x="336" y="262">owns ONE shared position, frozen on write</text>
+<text class="t" x="336" y="246">ScrollAxis ×2 (x, y) — SHAREABLE</text>
+<text class="s" x="336" y="262">each owns ONE shared position, frozen on write</text>
 <rect class="bx" x="336" y="270" width="288" height="28" />
-<text class="s" x="346" y="289">BoundValue&lt;ScrollBinding, ScrollState&gt;</text>
-<text class="s" x="336" y="314">resolve: max = loosest (content − pane)</text>
-<text class="s" x="336" y="328">equals: position.x/y + max.x/y</text>
+<text class="s" x="346" y="289">BoundValue&lt;ScrollAxisBinding, ScrollAxisState&gt;</text>
+<text class="s" x="336" y="314">resolve: max = loosest (content − pane), per axis</text>
+<text class="s" x="336" y="328">equals: position + max</text>
 <!-- BoundValue internals -->
 <rect class="bx" x="324" y="372" width="312" height="112" />
 <text class="t" x="336" y="392">BoundValue&lt;B, V&gt; — the shared mechanism</text>
@@ -843,10 +854,10 @@ orient="auto-start-reverse"
 <path class="edge ret" d="M642,288 H770" marker-end="url(#a5)" style="color: var(--sub)" />
 <!-- side prose -->
 <text class="xs" x="16" y="356">Sharing a TimeScaleModel syncs x.</text>
-<text class="xs" x="16" y="370">Sharing a ScrollModel syncs both</text>
-<text class="xs" x="16" y="384">axes. Sharing a Viewport is an</text>
-<text class="xs" x="16" y="398">error — it holds ONE Gantt's own</text>
-<text class="xs" x="16" y="412">measured boxes.</text>
+<text class="xs" x="16" y="370">Sharing scroll.x or scroll.y syncs</text>
+<text class="xs" x="16" y="384">that axis only (D-S6-1). Sharing a</text>
+<text class="xs" x="16" y="398">Viewport is an error — it holds ONE</text>
+<text class="xs" x="16" y="412">Gantt's own measured boxes.</text>
 <text class="xs" x="664" y="356">Copy-at-bind everywhere: each model</text>
 <text class="xs" x="664" y="370">keeps its OWN mutable copy of what a</text>
 <text class="xs" x="664" y="384">caller supplied, so a caller holding a</text>
@@ -855,9 +866,9 @@ orient="auto-start-reverse"
 </svg>
 </div>
 <figcaption>
-Diagram 4 — two Gantts sharing one <code>TimeScaleModel</code> and one
-<code>ScrollModel</code> (exactly what <code>harness/scroll-sync.ts</code> builds). Dashed =
-notification, solid = a call in.
+Diagram 4 — two Gantts sharing one <code>TimeScaleModel</code> and both
+<code>ScrollAxis</code> instances (exactly what <code>harness/scroll-sync.ts</code>'s both-axis
+pair builds). Dashed = notification, solid = a call in.
 </figcaption>
 </figure>
 </div>
@@ -868,8 +879,8 @@ notification, solid = a call in.
 | --- | --- | --- |
 | `BatchedNotifier` | a depth counter, a pending flag, one `deliver` callback | bindings, values, what "changed" means. It is the *whole* batching mechanism and nothing else. |
 | `BoundValue<B,V>` | the binding set, the memoized resolved value, the last-notified value, and the notify-iff-changed rule | time, scroll, pixels. It takes `resolve` and `equals` as a contract and has no opinion on either. |
-| `TimeScaleModel` / `ScrollModel` | what to resolve from a binding set, and what counts as a change | each other, and the DOM. They differ *only* in those two functions. |
-| `Viewport` | one Gantt's pane size, content size and overscan; fans both models into one reaction | how either model resolves anything. It uses `BatchedNotifier` alone — it has one subscriber and no value of its own to compare, so `BoundValue`'s comparison half would be a capability it must not have. |
+| `TimeScaleModel` / `ScrollAxis` | what to resolve from a binding set, and what counts as a change | each other, and the DOM. They differ *only* in those two functions. |
+| `Viewport` | one Gantt's pane size, content size and overscan; fans all three models into one reaction | how any model resolves anything. It uses `BatchedNotifier` alone — it has one subscriber and no value of its own to compare, so `BoundValue`'s comparison half would be a capability it must not have. |
 
 #### Where the batches nest
 
@@ -877,15 +888,17 @@ notification, solid = a call in.
 Viewport.batch(run)
   └─ Viewport.#notifications.batch(          // coalesce the consumer reaction
        scale.batch(                          // coalesce within TimeScaleModel
-         scroll.batch(run)))                 // coalesce within ScrollModel
+         scroll.x.batch(                     // coalesce within ScrollAxis x
+           scroll.y.batch(run))))            // coalesce within ScrollAxis y
 
-Viewport.setPaneSize(size)                   // one measurement, two models
+Viewport.setPaneSize(size)                   // one measurement, three models
   └─ #notifications.batch(() => {
        scaleHandle.setPaneWidth(size.width)  // may notify
-       scrollHandle.setPaneSize(size)        // may notify
+       scrollHandleX.setPaneSize(size.width) // may notify
+       scrollHandleY.setPaneSize(size.height)// may notify
      })                                      // → at most ONE render()
 ```
 
-Without `Viewport`'s own batching layer, a single resize would deliver two notifications for one
-caller-visible change: the two models dedupe within themselves, but neither knows the other was
+Without `Viewport`'s own batching layer, a single resize would deliver three notifications for one
+caller-visible change: the three models dedupe within themselves, but none knows the others were
 touched by the same call.

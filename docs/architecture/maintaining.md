@@ -152,7 +152,7 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
 ## Recipe: re-measuring the construction pass count
 
 Construction costs one `computeFrame` call, and a later no-op `render()` costs one. To re-verify
-after touching `render()`, `Viewport` or `ScrollModel`, spy `FrameLayout.prototype.computeFrame`
+after touching `render()`, `Viewport` or `ScrollAxis`, spy `FrameLayout.prototype.computeFrame`
 around `new GanttShell(…)` (use the same dataset fixture as `src/view/gantt-shell.test.ts` — a
 store view, not a plain array). Read the numbers from a throwaway file under `test/dom/`, then
 delete it.

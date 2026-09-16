@@ -41,16 +41,18 @@ Two Gantts, one instance ⇒ x-synced with no event plumbing.
 - **get scale: TimeScale** — Memoized on the *identity* of the resolved options object.
 - **bind() → ScaleBindingHandle** — `unbind()`, `setPaneWidth(w)`. Copy-at-bind.
 
-#### ScrollModel — class
+#### ScrollAxis — class
 
-*`layout/viewport/scroll-model.ts`*
+*`layout/viewport/scroll-axis.ts`*
 
-Shareable scroll position. Owns *one* shared position; each bound Gantt clamps it locally to its
-own content.
+Shareable one-direction scroll position (D-S6-1). Owns *one* shared position for *one* axis; each
+bound Gantt clamps it locally to its own content. A Gantt holds two, `{ x, y }` — sharing an
+instance as one Gantt's `x` and another's `x` syncs that direction only.
 
-- **panTo(partial)** — Clamps to `[0, max]` at write time and nowhere else.
-- **get state: ScrollState** — `{ position, max }` together, frozen.
-- **bind() → ScrollBindingHandle** — `unbind()`, `setContentSize()`, `setPaneSize()`.
+- **panTo(position)** — Clamps to `[0, max]` at write time and nowhere else.
+- **get state: ScrollAxisState** — `{ position, max }` together, frozen.
+- **`bindScrollAxis(axis, binding, onChange)` → ScrollAxisBindingHandle** — free function, not a
+  class method (ADR 0007): `unbind()`, `setContentSize()`, `setPaneSize()`.
 
 #### BoundValue\<B, V\> — class
 
@@ -187,7 +189,7 @@ viewport, layout, gesture pipeline, plugin runtime, collapse state, and the even
 
 *`view/scroll-attachment.ts`*
 
-The one file exempted from `no-scroll-outside-scroll-model`. Owns no binding — it only reads
+The one file exempted from `no-scroll-outside-scroll-attachment`. Owns no binding — it only reads
 `viewport.visible` and reads/writes the element.
 
 - **EPSILON = 1** — Tolerates fractional `scrollTop` and filters the echo so a model-driven
@@ -589,7 +591,7 @@ container.fg-container <span class="c">role=group; not the scroller</span>
 :::note One detail that is load-bearing, not incidental
 The content sizer must land its *far* edge on the content extent, hence the `− 1`: it is 1×1px,
 so translating its origin to the extent would make the browser's native scroll range one pixel
-longer than what `ScrollModel` computed. Header, bars and sizer sit at x=0 in the timeline pane —
+longer than what `ScrollAxis` computed. Header, bars and sizer sit at x=0 in the timeline pane —
 the grid pane owns the label width, so there is no gutter offset in this backend.
 :::
 
@@ -718,8 +720,9 @@ gantt.rowSource = { source: 'entries', tree: true };
 ```
 
 — no restated `rowHeight`, no hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.
-`harness/scroll-sync.ts` is the shared-viewport e2e fixture: two Gantts sharing one `ScrollModel`
-and one `TimeScaleModel`.
+`harness/scroll-sync.ts` is the shared-viewport e2e fixture: one pair of Gantts sharing a
+`TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a
+pair sharing only the `y` axis (D-S6-1).
 
 ## `extensions/`
 
