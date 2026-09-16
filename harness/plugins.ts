@@ -1,8 +1,8 @@
 import './harness-nav.ts';
-import { Gantt, Dataset, contextMenu, diamond } from 'freegantt';
+import { Gantt, Dataset, contextMenu, diamond, timeShading, daysOfWeek } from 'freegantt';
 import type { GridCellRenderer, ChromePlugin, EntryVariant } from 'freegantt';
 import { sampleEntries } from '../fixtures/sample-dataset.js';
-import { weekendShading } from './plugins/weekend-shading.js';
+import { overBudgetRows } from './plugins/over-budget-rows.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { logEverything } from './plugins/log-everything.js';
@@ -81,7 +81,7 @@ toggleBtn.addEventListener('click', () => {
   }
 });
 
-// S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `weekendShading()`
+// S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `overBudgetRows()`
 // and the two variant plugins, so this page and `main.ts` install one copy each instead of holding two
 // (review H1). Both are written against 'freegantt' alone, like every other file in that directory.
 // #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
@@ -141,20 +141,37 @@ renderersToggle.addEventListener('change', () => {
 });
 renderersToggle.dispatchEvent(new Event('change'));
 
-// S5.6, D-S5-15/D-S5-16, [S5-A2]: weekendShading() is written against the public surface alone
-// ('freegantt', harness/plugins/weekend-shading.ts) — no core edit, no private import. Installed
-// from the start; the checkbox removes it live through the same `uninstallPlugin` verb every
-// other plugin toggle on this page already uses (I8: no remount).
-gantt.installPlugin(weekendShading());
+// #404: timeShading() is the shipped built-in — 'freegantt' alone, no harness plugin behind it, and
+// no page CSS (--fg-time-shading-fill covers the paint). Installed from the start; the checkbox
+// removes it live through the same `uninstallPlugin` verb every other plugin toggle on this page
+// already uses (I8: no remount).
+gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
 
 const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
 weekendToggle.addEventListener('change', () => {
   if (weekendToggle.checked) {
-    gantt.installPlugin(weekendShading());
-    writeLog('weekendShading: installed');
+    gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
+    writeLog('timeShading: installed');
   } else {
-    gantt.uninstallPlugin('demo.weekendShading');
-    writeLog('weekendShading: removed');
+    gantt.uninstallPlugin('freegantt.timeShading');
+    writeLog('timeShading: removed');
+  }
+});
+
+// S5.6, D-S5-15/D-S5-16, [S5-A2]: overBudgetRows() is written against the public surface alone
+// ('freegantt', harness/plugins/over-budget-rows.ts) — no core edit, no private import. Dogfoods the
+// `rowStripe` half of `DecorationInput`, beside `timeShading()`'s own `rangeBand` above. Installed
+// from the start; the checkbox removes it live through the same `uninstallPlugin` verb.
+gantt.installPlugin(overBudgetRows(BUDGET_THRESHOLD));
+
+const overBudgetRowsToggle = document.querySelector<HTMLInputElement>('#over-budget-rows-toggle')!;
+overBudgetRowsToggle.addEventListener('change', () => {
+  if (overBudgetRowsToggle.checked) {
+    gantt.installPlugin(overBudgetRows(BUDGET_THRESHOLD));
+    writeLog('overBudgetRows: installed');
+  } else {
+    gantt.uninstallPlugin('demo.overBudgetRows');
+    writeLog('overBudgetRows: removed');
   }
 });
 

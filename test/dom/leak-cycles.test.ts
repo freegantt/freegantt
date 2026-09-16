@@ -20,14 +20,15 @@
 // counts below are what it is actually for.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Dataset, Gantt, ScrollAxis, TimeScaleModel } from 'freegantt';
+import { Dataset, Gantt, ScrollAxis, TimeScaleModel, timeShading, daysOfWeek } from 'freegantt';
 import type { ScrollAxes } from 'freegantt';
 import { sampleEntryInputs } from '../../fixtures/sample-dataset.js';
 // The same four plugins `[S5-A3]` treats as the acceptance object (#153): a re-implementation would
-// not fail when a real plugin's disposer stops retracting something.
+// not fail when a real plugin's disposer stops retracting something. `weekendShading()` retired
+// under #404 — `timeShading()` is its shipped replacement, imported the same way every other plugin
+// here is: through the bare `freegantt` specifier.
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
 import { riskKind } from '../../harness/plugins/risk-kind.js';
-import { weekendShading } from '../../harness/plugins/weekend-shading.js';
 import { popupDemo } from '../../harness/plugins/popup-demo.js';
 
 /** What one census reads. Nodes, listeners and observables are the three #403 names, plus the
@@ -223,7 +224,7 @@ function mountWithPluginsAndDestroy(): void {
   const gantt = new Gantt({
     container,
     dataset,
-    plugins: [bufferKind(), riskKind(), weekendShading(), popupDemo()],
+    plugins: [bufferKind(), riskKind(), timeShading([{ covers: daysOfWeek(6, 7) }]), popupDemo()],
   });
   gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([dataset.entries.all[0]!.id]);
   gantt.destroy();

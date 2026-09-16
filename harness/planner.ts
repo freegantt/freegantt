@@ -9,6 +9,8 @@ import {
   formatEndInclusive,
   diamond,
   meter,
+  timeShading,
+  daysOfWeek,
 } from 'freegantt';
 import type {
   BarRendererContext,
@@ -24,7 +26,6 @@ import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixture
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import type { PlannerThemeChoice } from './planner-toolbar.js';
-import { weekendShading } from './plugins/weekend-shading.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: what this page shows, the config that does it, and the spec section behind it.
@@ -216,9 +217,11 @@ const gantt = new Gantt({
 
 // ---- Chrome ----------------------------------------------------------------------------------
 
-// Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2) — a working plugin over
-// the public surface alone, install and a CSS band, nothing this page re-derives.
-gantt.installPlugin(weekendShading());
+// Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2) — #404's shipped
+// timeShading() built-in. This page overrides the wash with its own themed colour
+// (--demo-weekend-bg below, on the 'demo-weekend-band' class), the level-2 customization ladder
+// rung — most consumers take the library default (--fg-time-shading-fill) and write no CSS at all.
+gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'demo-weekend-band' }]));
 
 const THEME_STORAGE_KEY = 'freegantt-planner-theme';
 
