@@ -23,20 +23,20 @@ pnpm build          # production build of the same pages into dist-harness/
 
 | Page | What it shows | Read alongside |
 | --- | --- | --- |
-| `index.html` | The general demo: timeline, viewport, selection, snap, and theme. Driven by `harness/main.ts`. | [Lifecycle](./lifecycle.md) |
-| `hierarchy.html` | Tree and grouped row sources, filter and sort, collapse, declared-field rollup, and JSON round-trip. Driven by `harness/hierarchy.ts`. | [Class map](./classes.md) |
-| `scroll-sync.html` | Two Gantts sharing one `ScrollModel` and one `TimeScaleModel`. | [Class map](./classes.md) |
-| `grid-scroll.html` | The grid pane as its own vertical scroll surface, kept in step with the timeline rows. | [Lifecycle](./lifecycle.md) |
-| `zoom.html` | Presets, zoom in/out, pan to a date, pan to today, and the header bands. | [Timeline render](./timeline.md) |
-| `large-dataset.html` | Row virtualization under a large entry count. | [Lifecycle](./lifecycle.md) |
-| `data.html` | Mutation, live binding, undo/redo, and JSON export/import. | [Class map](./classes.md) |
-| `editing.html` | Direct manipulation: drag to move, resize, keyboard editing, snapping, inline cell edit, and the lock Dataset plugin. | [Lifecycle](./lifecycle.md) |
-| `plugins.html` | The plugin runtime: weekend shading, a milestone variant, extra variants, commands, and a popup demo. Driven by `harness/plugins.ts`. | [Plugin lifecycle](./plugins.md), [plugin authoring guide](/guides/plugin-authoring) |
+| `index.html` | The general demo: timeline, viewport, selection, snap, and theme. Driven by `harness/main.ts`. | [Lifecycle](lifecycle.md) |
+| `hierarchy.html` | Tree and grouped row sources, filter and sort, collapse, declared-field rollup, and JSON round-trip. Driven by `harness/hierarchy.ts`. | [Class map](classes.md) |
+| `scroll-sync.html` | One pair of Gantts sharing a `TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a pair sharing only the `y` axis. | [Class map](classes.md) |
+| `grid-scroll.html` | The grid pane as its own vertical scroll surface, kept in step with the timeline rows. | [Lifecycle](lifecycle.md) |
+| `zoom.html` | Presets, zoom in/out, pan to a date, pan to today, and the header bands. | [Timeline render](timeline.md) |
+| `large-dataset.html` | Row virtualization under a large entry count. | [Lifecycle](lifecycle.md) |
+| `data.html` | Mutation, live binding, undo/redo, and JSON export/import. | [Class map](classes.md) |
+| `editing.html` | Direct manipulation: drag to move, resize, keyboard editing, snapping, inline cell edit, and the lock Dataset plugin. | [Lifecycle](lifecycle.md) |
+| `plugins.html` | The plugin runtime: weekend shading, a milestone variant, extra variants, commands, and a popup demo. Driven by `harness/plugins.ts`. | [Plugin lifecycle](plugins.md), [plugin authoring guide](../guides/plugin-authoring.md) |
 
 :::note The harness is reviewed like library code
 It sits outside the `src/**` lint scope on purpose, so a rule it breaks fires no lint. Code here
 that re-derives what the library already computes is an API gap — record it and close it in
-`src/` rather than tidying the harness. See [Class map](./classes.md) for the current reading of
+`src/` rather than tidying the harness. See [Class map](classes.md) for the current reading of
 `harness/main.ts`.
 :::
 
@@ -152,29 +152,29 @@ library and are not a consumer reference.
 Maintainer maps of `src/`, in reading order. Each page names the files it was derived from, so a
 change to a file says which page to update.
 
-- **[Layers & import rules](./layers.md)** — the ten directories under `src/`, which of them may
+- **[Layers & import rules](layers.md)** — the ten directories under `src/`, which of them may
   import which, and the custom lint rules that hold the line.
-- **[File inventory](./files.md)** — every non-test file in `src/`, with the one thing it is for.
-- **[Construction, render, notification](./lifecycle.md)** — what `new Gantt(…)` builds, what one
+- **[File inventory](files.md)** — every non-test file in `src/`, with the one thing it is for.
+- **[Construction, render, notification](lifecycle.md)** — what `new Gantt(…)` builds, what one
   `render()` does, and how an edit reaches the screen, with measured pass counts.
-- **[How a refusal reaches the caller](./refusals.md)** — a `beforeChange` veto from the mutator to
+- **[How a refusal reaches the caller](refusals.md)** — a `beforeChange` veto from the mutator to
   the Error report and the thrown `MutationCancelledError`, plus the gesture and cell-editor doors.
-- **[Class map](./classes.md)** — every class in the built layers — `layout/`, `view/`, `time/`,
+- **[Class map](classes.md)** — every class in the built layers — `layout/`, `view/`, `time/`,
   `model/`, `render/`, `api/`, `extensions/` — plus the consumer boundary and the harness reading.
-- **[Timeline render](./timeline.md)** — how the header, density floor, sticky tick labels, and
+- **[Timeline render](timeline.md)** — how the header, density floor, sticky tick labels, and
   today line paint. Includes a pipeline graph and a density chart of the shipped presets.
-- **[Plugin lifecycle](./plugins.md)** — what `installPlugin` and `uninstallPlugin` do, when the
+- **[Plugin lifecycle](plugins.md)** — what `installPlugin` and `uninstallPlugin` do, when the
   registration gate is open, how `install()` diffs a plugin list by id, and how a Dataset plugin's
   setup order resolves from `requires`.
-- **[Module map diagrams](./diagram.md)** — the layer graph as a picture: the DOM-free core on the
+- **[Module map diagrams](diagram.md)** — the layer graph as a picture: the DOM-free core on the
   left, the DOM column on the right, the transaction pipeline, and the public API surface.
-- **[Maintaining these pages](./maintaining.md)** — what to update when a file changes, the rules
+- **[Maintaining these pages](maintaining.md)** — what to update when a file changes, the rules
   for the content, and the recipe that re-measures the construction pass count. Read this before
   editing any page here.
-- **[API reference](/api/)** — generated by TypeDoc. The full exported surface, generated from
+- **[API reference](../api/)** — generated by TypeDoc. The full exported surface, generated from
   `src/api/index.ts` at build time — not a maintainer map like the pages above, the consumer
   reference itself, one folder over.
-- **[Consumer API guide](/guides/consumer-api)** — outside this folder: links to the README,
+- **[Consumer API guide](../guides/consumer-api.md)** — outside this folder: links to the README,
   `plans/02`, `CONTEXT.md`, and the generated export report.
-- **[Plugin authoring guide](/guides/plugin-authoring)** — outside this folder: `definePlugin`, the
+- **[Plugin authoring guide](../guides/plugin-authoring.md)** — outside this folder: `definePlugin`, the
   one plugin's two halves, every registration seam, and the errors an author meets.

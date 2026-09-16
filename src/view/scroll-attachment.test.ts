@@ -36,7 +36,10 @@ describe('attachScroll', () => {
     const element = el();
     const attachment = attachScroll(element, viewport);
 
-    viewport.scroll.panTo({ x: 250, y: 300 });
+    viewport.batch(() => {
+      viewport.scroll.x.panTo(250);
+      viewport.scroll.y.panTo(300);
+    });
     attachment.writePosition();
     expect(element.scrollLeft).toBe(250);
     expect(element.scrollTop).toBe(300);
@@ -54,7 +57,8 @@ describe('attachScroll', () => {
     element.scrollTop = 60;
     element.dispatchEvent(new Event('scroll'));
 
-    expect(viewport.scroll.state.position).toEqual({ x: 40, y: 60 });
+    expect(viewport.scroll.x.state.position).toBe(40);
+    expect(viewport.scroll.y.state.position).toBe(60);
   });
 
   it('writePosition is the only thing that writes the element — it is not automatic (D-S1.5-7)', () => {
@@ -65,7 +69,7 @@ describe('attachScroll', () => {
     const element = el();
     const attachment = attachScroll(element, viewport);
 
-    viewport.scroll.panTo({ y: 50 });
+    viewport.scroll.y.panTo(50);
     // The model changed, but nothing writes the element until the caller says so.
     expect(element.scrollTop).toBe(0);
 
@@ -86,12 +90,12 @@ describe('attachScroll', () => {
     const attachment = attachScroll(element, viewport);
 
     attachment.writePosition(); // writes 0 — the element already starts at 0, so this is a no-op write
-    viewport.scroll.panTo({ x: 250 }); // a newer target, not yet reflected in the element
+    viewport.scroll.x.panTo(250); // a newer target, not yet reflected in the element
     // The element still reads 0 here — nothing has flushed the newer target to it yet. A caller
     // (GanttShell.render(), on a later animation frame) is the only thing that would.
     element.dispatchEvent(new Event('scroll')); // the late echo of the earlier write-to-0
 
-    expect(viewport.scroll.state.position.x).toBe(250);
+    expect(viewport.scroll.x.state.position).toBe(250);
   });
 
   it('detach() removes the listener', () => {
@@ -107,6 +111,6 @@ describe('attachScroll', () => {
     element.scrollLeft = 500;
     element.dispatchEvent(new Event('scroll'));
     // Listener removed: the native event no longer reaches the model.
-    expect(viewport.scroll.state.position.x).toBe(0);
+    expect(viewport.scroll.x.state.position).toBe(0);
   });
 });

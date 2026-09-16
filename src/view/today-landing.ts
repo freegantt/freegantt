@@ -20,5 +20,5 @@ export function panToTodayLine(
     at,
   );
   const x = viewport.timeScale.xForInstant(at) - marginPx;
-  viewport.scroll.panTo({ x });
+  viewport.scroll.x.panTo(x);
 }

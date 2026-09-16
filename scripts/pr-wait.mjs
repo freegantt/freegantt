@@ -165,7 +165,7 @@ if (isMain) {
   if (pr.isDraft) {
     stop(
       `#${pr.number} is a draft, so CI is idle by design (#255). No checks ran. ` +
-        `Run \`gh pr ready ${pr.number}\` when it is meant to merge, then run this again.`,
+        `Run \`pnpm open-pr --ready\` when it is meant to merge, then run this again.`,
     );
   }
 

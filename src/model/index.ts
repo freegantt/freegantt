@@ -75,9 +75,9 @@ export type {
   GridColumnInput,
   GridColumnBase,
   GridColumnSizing,
-  ColumnCellRenderer,
+  ColumnRenderer,
   ColumnAlign,
-  ColumnCellRendererContext,
+  ColumnRendererContext,
   TooltipColumn,
 } from './field.js';
 export type { BuiltInThrownCode, ThrownCode } from './errors.js';

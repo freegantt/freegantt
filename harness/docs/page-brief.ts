@@ -64,7 +64,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       'A shipped design, built on the public surface alone. Colour is tokens, cells the design draws ' +
       'as pictures are cell renderers, and a third theme the library never heard of is a consumer class.',
     config: [
-      "gridColumns: [{ field: 'owner', cellRenderer }, …]",
+      "gridColumns: [{ field: 'owner', columnRenderer }, …]",
       "barRenderer: { '*': ({ entry }) => ({ style: { '--fg-bar-fill': … } }) }",
       "body.theme-paper #gantt { --fg-pane-bg: …; --fg-bar-fill: … }",
     ],
@@ -98,9 +98,15 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
   },
   'scroll-sync': {
     demonstrates:
-      'Two Gantts share one ScrollModel and one TimeScaleModel. Scrolling either one moves both; the ' +
-      "shorter chart pins at its own last row while the taller one keeps going.",
-    config: ['const scroll = new ScrollModel();', 'new Gantt({ container, dataset, scale, scroll })'],
+      'Two Gantts share one ScrollAxis per direction (x and y) and one TimeScaleModel. Scrolling ' +
+      'either one moves both; the shorter chart pins at its own last row while the taller one keeps ' +
+      'going. A second pair below shares only x: each keeps a private y, so a vertical scroll on one ' +
+      'never moves the other (D-S6-1).',
+    config: [
+      'const scroll = { x: new ScrollAxis(), y: new ScrollAxis() };',
+      'new Gantt({ container, dataset, scale, scroll })',
+      '// x-only sharing: new Gantt({ container, dataset, scale, scroll: { x } })',
+    ],
     specLinks: [
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
     ],

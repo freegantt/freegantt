@@ -6,7 +6,7 @@
 // the half of S6's R4 a fake DOM cannot answer, because happy-dom has no detached-node accounting.
 
 import './harness-nav.ts';
-import { Gantt, Dataset, ScrollModel, TimeScaleModel } from 'freegantt';
+import { Gantt, Dataset, ScrollAxis, TimeScaleModel } from 'freegantt';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
@@ -15,10 +15,13 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'mount-de
 const panes = document.querySelector<HTMLDivElement>('#panes')!;
 const cycleCount = document.querySelector<HTMLOutputElement>('[data-testid="cycle-count"]')!;
 
-// The two models the pair shares, built once and never rebuilt. They are the point of the page: a
-// shared model outlives every Gantt bound to it, so it is where a leftover binding would pile up.
+// What the pair shares, built once and never rebuilt. This is the point of the page: a shared
+// object outlives every Gantt bound to it, so it is where a leftover binding would pile up.
+//
+// x only, with y left private — the first consumer's own shape (D-S6-1, #405). Their two panes hold
+// different row sets, so a shared vertical scroll would align rows that mean nothing to each other.
 const scale = new TimeScaleModel({ fit: 'preset' });
-const scroll = new ScrollModel();
+const scroll = { x: new ScrollAxis() };
 
 const dataset = new Dataset({ entries: sampleEntryInputs, timeZone: 'UTC' });
 

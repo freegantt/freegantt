@@ -69,7 +69,7 @@ function paintOneGantt(
   const backend = createDomBackend({
     entryById,
     resolveBarRenderer: () => undefined,
-    resolveCellRenderer: () => undefined,
+    resolveGridCellRenderer: () => undefined,
     resolveHeaderRenderer: () => undefined,
   });
   backend.mount({
@@ -140,7 +140,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
 
     const target = gantt.dom.targetUnder(cell);
 
-    expect(target?.kind).toBe('cell');
+    expect(target?.kind).toBe('gridCell');
     expect(target?.field).toBe('cost');
     expect(target?.entry?.id).toBe(entries[0]!.id);
     gantt.destroy();
@@ -152,7 +152,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
 
     const target = gantt.dom.targetUnder(label);
 
-    expect(target?.kind).toBe('cell');
+    expect(target?.kind).toBe('gridCell');
     expect(target?.field).toBe('name');
     expect(gantt.dom.cellText(target!.element)).toBe(entries[0]!.name);
     gantt.destroy();
@@ -210,7 +210,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
     const target = gantt.dom.targetUnder(cell);
 
     // A click anywhere in the row selects all three (#185), so a right-click there names all three.
-    expect(target?.kind).toBe('cell');
+    expect(target?.kind).toBe('gridCell');
     expect(target?.entryIds).toEqual(threeOnOneRow.map((entry) => entry.id));
     gantt.destroy();
   });

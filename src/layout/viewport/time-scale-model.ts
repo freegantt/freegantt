@@ -137,7 +137,7 @@ export class TimeScaleModel {
   #range: 'fitDataset' | TimeSpan;
   #fit: TimeScaleFit;
   /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
-   * object, shared with `ScrollModel` in implementation and with nothing else (`bound-value.ts`).
+   * object, shared with `ScrollAxis` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
   #scaleOptions = new BoundValue<MutableScaleBinding, ResolvedScale>({
     resolve: (bindings) => ({ options: this.#resolve(bindings), preset: this.#preset }),

@@ -51,7 +51,8 @@
       <nav class="harness-site-nav" aria-label="Harness pages"></nav>
       <p>
         A linked pair mounts and destroys on one page, the way a single-page app mounts it on every visit. The
-        two Gantts share one TimeScaleModel and one ScrollModel, and those two models outlive every pair.
+        two Gantts share one TimeScaleModel and one x ScrollAxis, with y private — the first consumer's own
+        shape. Both shared objects outlive every pair.
       </p>
       <div id="page-brief"></div>
       <div class="controls">

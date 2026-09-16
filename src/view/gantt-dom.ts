@@ -56,7 +56,7 @@ import type { FrameLayoutView } from '../layout/index.js';
  *  row, and for a cell of that row, `entry` is the row's first Entry and `entryIds` is all of them.
  *
  *  `entry` is left out when the row stands for no Entry (a grouping header row), or when the Entry
- *  is gone from the Dataset. `field` is filled for `'cell'` and `'header'`. */
+ *  is gone from the Dataset. `field` is filled for `'gridCell'` and `'header'`. */
 export interface DomTarget {
   kind: TargetKind;
   /** The node the walk stopped on — the bar, the cell, the row, the header cell or the splitter.
@@ -275,7 +275,7 @@ export class ContainerDom implements GanttDom {
     const row = element.closest<HTMLElement>(`.${ROW_CLASS}`);
     const rowId = row === null ? undefined : rowIdFromDataset(row.dataset[ROW_ID_KEY]);
     return freezeTarget({
-      kind: 'cell',
+      kind: 'gridCell',
       element,
       entryIds: this.#entryIdsOfRow(rowId),
       segmentIds: this.#segmentIdsOfRow(rowId),

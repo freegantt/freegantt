@@ -1,12 +1,10 @@
 ---
 id: files
 title: "File inventory"
-last_update:
-  date: 2026-09-14
 ---
 
-An index of the tree: find the file here, then follow it into [Class map](./classes.md) for what
-the class does, and into [Lifecycle](./lifecycle.md) for when it runs.
+An index of the tree: find the file here, then follow it into [Class map](classes.md) for what
+the class does, and into [Lifecycle](lifecycle.md) for when it runs.
 
 Every non-test file in `src/`, with the one thing it is for. Barrels (`index.ts`) are listed only
 where they do something beyond re-export.
@@ -91,7 +89,7 @@ where they do something beyond re-export.
 | `layout/frame-memory.ts` | `FrameMemory` | Holds one layout pass's cross-render memory — the `RowHeightIndex` plus a `Map` of per-row item memos — so a later frame reuses geometry where the inputs did not change. |
 | `layout/row-height-index.ts` | `RowHeightIndex, PrefixSumHeightIndex` | O(log n) prefix sums with binary search for `indexAtY`. Behind an interface so variable row heights can swap the implementation without touching `computeFrame`. |
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
-| `layout/cells.ts` | `meterCell(), imageCell()` | Shipped Grid-column cell renderers as DOM-free description trees (#265). `meterCell()` paints a percent as a track; `imageCell()` paints a stored URL as an img. The look lives in the always-on sheet — a cell renderer cannot carry a css string the way a variant can. |
+| `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees (#265). `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
@@ -99,7 +97,7 @@ where they do something beyond re-export.
 | `layout/frame-row.ts` | `FrameRow` | The painted-row shape `computeFrame` emits and a cell renderer reads. |
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
 | `layout/registration-table.ts` | `createRegistrationTable()` | Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf that `extensions/` may import. |
-| `layout/renderer.ts` | `BarRenderer, CellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
+| `layout/renderer.ts` | `BarRenderer, GridCellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
 | `layout/items/produce-items.ts` | `produceItemsForRow(), resolveItems()` | Turns a row's entries into Items. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Items (ADR 0018). A header row produces none. |
 | `layout/rows/resolve-rows.ts` | `resolveRows()` | Dispatches to the correct row source based on `source.source`, stamping each row with a sequential index. |
 | `layout/rows/row-source.ts` | `RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.` | Pure data types defining the three row-source configs and their shared options (`filter`, `sort`, `filterPolicy`). |
@@ -112,7 +110,7 @@ where they do something beyond re-export.
 | `layout/viewport/batched-notifier.ts` | `BatchedNotifier` | Depth counter + pending flag + `finally` flush. Several writes, at most one notification, no observer ever sees an intermediate state. |
 | `layout/viewport/bound-value.ts` | `BoundValue, BoundValueContract, BoundValueHandle` | The binding side of a shareable model: one `Map<Binding, onChange>` serving both membership and notification, a memoized resolved value, and the notify-iff-changed rule. |
 | `layout/viewport/time-scale-model.ts` | `TimeScaleModel, TimeScaleIntent, ScaleBinding, ScaleBindingHandle` | Shareable x-axis. Takes *intent* (preset, range) and resolves zone/span/zoom from the Gantts bound to it. Two Gantts sharing one instance are x-synced by construction. |
-| `layout/viewport/scroll-model.ts` | `ScrollModel, ScrollPosition, ScrollBinding, ScrollState, ScrollBindingHandle, bindScroll()` | Shareable scroll position. Owns one shared position; each bound Gantt clamps it locally. |
+| `layout/viewport/scroll-axis.ts` | `ScrollAxis, ScrollAxisState, ScrollAxes, ScrollAxisBinding, ScrollAxisBindingHandle, bindScrollAxis()` | Shareable one-direction scroll position (D-S6-1). Owns one shared position for one axis; each bound Gantt clamps it locally. A Gantt holds two, `{ x, y }`. |
 | `layout/viewport/viewport.ts` | `Viewport, ViewportOptions, ViewportHandle` | The fan-in: one bind, one handle, one reaction over both models plus this Gantt's own pane size, content size and overscan. |
 | `layout/items/item.ts` | `Item, ItemProducer, BarAnchor, FixedBarBox, DrawnVariant, VariantItems, entryItem(), wholeEntryItem(), fixedWidthItem()` | What one row draws, as plain data — one Item is one bar. Holds the Item vocabulary alone, so `variants.ts` may name `ItemProducer` and `produce-items.ts` may name both, with no import ring between the three. |
 | `layout/items/variants.ts` | `VariantRegistry, createVariantRegistry(), VariantRule, ResolvedVariant, EntryVariant, bar, summary, diamond` | The Variant rule, and the file where a row meets one (ADR 0018). One object answers five questions about a row's shape: which rows wear it (`when`), what shape it draws (`items`), how it looks (`paint`), what you can do to it (`can`), and the rules its look needs (`css`, ADR 0022 §5). |

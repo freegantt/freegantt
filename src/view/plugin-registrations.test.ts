@@ -56,7 +56,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
   it('a renderer claim repaints on the way in and on the way out', () => {
     const { registrations, counts } = harness();
 
-    const dispose = registrations.registerRenderer('cell', () => ({ text: '' }), PLUGIN);
+    const dispose = registrations.registerRenderer('gridCell', () => ({ text: '' }), PLUGIN);
     expect(counts).toMatchObject({ frames: 1, items: 0, capabilities: 0 });
 
     dispose();
@@ -214,10 +214,10 @@ describe('PluginRegistrations — the tables it reads back', () => {
   it('a refused renderer claim asks for no repaint — nothing changed to show', () => {
     const { registrations, counts } = harness();
 
-    registrations.registerRenderer('cell', () => ({ text: '' }), PLUGIN);
+    registrations.registerRenderer('gridCell', () => ({ text: '' }), PLUGIN);
     expect(counts.frames).toBe(1);
 
-    expect(() => registrations.registerRenderer('cell', () => ({ text: '' }), 'other.plugin')).toThrow();
+    expect(() => registrations.registerRenderer('gridCell', () => ({ text: '' }), 'other.plugin')).toThrow();
     expect(counts.frames).toBe(1);
   });
 });
