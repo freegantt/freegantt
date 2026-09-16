@@ -411,7 +411,7 @@ function markMajorTickLines(
   });
 }
 
-/** Composition over resolve → produce → pack → place (D-S4-19). Culling still windows after resolve
+/** Composition over resolve → produce → place (D-S4-19). Culling still windows after resolve
  * (D-S4-20). Pure: `memory` is what this pass remembers — `FrameLayout` keeps one alive across
  * renders; a one-shot caller omits it and gets memory built and discarded here. `decorations` is the
  * matching per-Gantt memory for registered decoration providers (D-S5-15) — same one-shot-default rule. */

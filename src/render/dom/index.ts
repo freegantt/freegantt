@@ -533,8 +533,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   }
 
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
-   *  it is undefined. Each handle reads its own bar, so a packed Entry whose Segments sit in two
-   *  lanes still gets each handle on the right row (#200). `hidden` is a DOM property write, not
+   *  it is undefined. Each handle reads its own bar: the start handle sits on the leftmost bar
+   *  and the end handle on the rightmost (#200). `hidden` is a DOM property write, not
    *  `.style` — the base stylesheet owns `[hidden] { display: none }`.
    *
    *  #142/#256: `edges` hides one handle independently of the other — one write answer can close
