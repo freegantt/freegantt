@@ -90,9 +90,10 @@
         --demo-phase-285: oklch(0.44 0.11 285);
         --demo-phase-15: oklch(0.44 0.11 15);
         --demo-phase-215: oklch(0.44 0.11 215);
-        /* The weekend column shading `--fg-x-weekend` names in DESIGN-FACTS §7 — a library gap the
-           design flags, not something the library ships, so this page names it the way it already
-           names phase hues: once per theme, read by `weekendShading()`'s own `.demo-weekend-band`.
+        /* The weekend column shading `--fg-x-weekend` names in DESIGN-FACTS §7 — a themed colour
+           the design wants that the library's own default (--fg-time-shading-fill) does not carry,
+           so this page names it the way it already names phase hues: once per theme, read by
+           `timeShading()`'s own `.demo-weekend-band` class (#404).
            Each value is stated so that, once the band's own 0.55 has composited it over that theme's
            pane, the step off the pane is about the same size in every theme. The dark value is not
            the design's `#1F2126`: the design composites onto a `#15161A` page, our pane is the
@@ -281,10 +282,12 @@
         color: var(--fg-row-label-color);
       }
 
-      /* S5.6-style weekend band (DESIGN-FACTS §1.2, §7): `weekendShading()`'s own class, painted
-         below `.fg-bars` through `ctx.view.registerDecoration`. The colour is this page's, named
-         once per theme above — the library ships no `--fg-x-weekend` (D-S1.13-8's own posture on
-         an `--fg-x-*` token: a gap the design flags, not one the library fills). */
+      /* S5.6-style weekend band (DESIGN-FACTS §1.2, §7): #404's shipped `timeShading()`, its own
+         `--fg-time-shading-fill` overridden by this page's `class: 'demo-weekend-band'` rule — the
+         colour is this page's, named once per theme above, because the library ships no
+         `--fg-x-weekend` (D-S1.13-8's own posture on an `--fg-x-*` token: a gap the design flags,
+         not one the library fills). Most consumers take the library default and write no rule at
+         all; this page is the one that shows the override still works. */
       .demo-weekend-band {
         background: var(--demo-weekend-bg);
         /* The design paints this overlay at 0.55 (DESIGN-FACTS §1.2). At full strength it swallows
