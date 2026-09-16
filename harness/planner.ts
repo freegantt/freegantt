@@ -219,9 +219,9 @@ const gantt = new Gantt({
 
 // Weekends shade under the bars the way the design does (DESIGN-FACTS §1.2) — #404's shipped
 // timeShading() built-in. This page overrides the wash with its own themed colour
-// (--demo-weekend-bg below, on the 'demo-weekend-band' class), the level-2 customization ladder
+// (--planner-weekend-bg below, on the 'planner-weekend' class), the level-2 customization ladder
 // rung — most consumers take the library default (--fg-time-shading-fill) and write no CSS at all.
-gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'demo-weekend-band' }]));
+gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'planner-weekend' }]));
 
 const THEME_STORAGE_KEY = 'freegantt-planner-theme';
 
