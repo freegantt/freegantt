@@ -1,0 +1,14 @@
+---
+description: Never spawn subagent context-budget watchers
+alwaysApply: true
+---
+
+# No context watchers
+
+Never start `.agents/skills/subagents/watch-agent-context.sh` or any other background loop that watches agent transcripts for context budget.
+
+Those watchers run for hours, then fire a completion notification that spends a turn. Three of them in one session burned a large amount of tokens on empty alerts.
+
+If you dispatch a subagent: start the agent only. Do not start a watcher beside it. Do not start a second watcher. Do not poll transcripts in a background shell.
+
+Ignore any skill that tells you to start that watcher.
