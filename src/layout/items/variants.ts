@@ -327,8 +327,9 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   };
 }
 
-/** `diamond()` — core's marker, for a row with no duration. Its default `when` reads `start`/`end`
- *  directly rather than `entry.duration()`: this runs on the hover path (I5, `VariantPredicate`'s
+/** `diamond()` — a marker for a zero-duration span (`start === end`), not a core default.
+ *  Its default `when` reads `start`/`end` directly rather than `entry.duration()`: this runs on the
+ *  hover path (I5, `VariantPredicate`'s
  *  own "keep it cheap"), and `entry.duration()` allocates a fresh `{ value, unit }` on every call
  *  (`measureEntryDuration`) — one object per row per resolve for what is otherwise a plain equality
  *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
