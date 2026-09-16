@@ -1,104 +1,150 @@
 // A guard with no failing fixture is presumed broken (docs/04-hooks-and-ci.md §4).
 //
 // `pr-wait` exists because a CI wait written on the spot reports green without having waited.
-// `gh pr checks` carries two status vocabularies on one object — `bucket` is lowercase and coarse,
-// `state` is uppercase and fine — and the human output prints the bucket word. A loop written from
-// reading that output compares a `state` against a bucket word, never matches, and falls through on
-// its first evaluation while still printing `pending`.
+// It watches CI *workflow runs* for the pull request head, not `gh pr checks`. The check-suite
+// rollup keeps skipped draft-time `gate` rows beside the live run, and that board is what made
+// `pr-wait` report "CI never started" while the job was already green (#415, #420).
 //
-// So this file pins the three ways CI reports nothing while looking fine. Each is a case where a
-// hand-written wait says green and the gate never ran:
-//   - no checks at all, the `ready_for_review` trigger gap (docs/04 §5.2, #298/#235);
-//   - every check SKIPPED, the stale draft-time run the same gap leaves behind;
-//   - a check still pending, which is not a verdict and must not settle.
-// A pass needs a check that actually went green.
+// So this file pins the ways a run list looks like a verdict and is not:
+//   - no live `pull_request` run, including an all-skipped board;
+//   - a `workflow_dispatch` run, which proves the gate and cannot close a `pr-wait`;
+//   - a cancelled run, which is a superseded attempt, not a pass;
+//   - a run still in progress, which is not a verdict and must not settle.
+// A pass needs a `pull_request` run on this head that actually succeeded.
 
 import { describe, expect, it } from 'vitest';
-import { hasRunStarted, summarizeChecks } from '../../scripts/pr-wait.mjs';
+import { gateRunForHead, isLiveGateRun, summarizeGateRun } from '../../scripts/pr-wait.mjs';
 
-const CONTEXT = { number: 354, seconds: 12, branch: 'fix/some-branch' };
+const HEAD = 'abc123';
+const OTHER = 'def456';
+const CONTEXT = { number: 420, seconds: 12, branch: 'fix/some-branch' };
 
-const check = (
-  bucket: string,
-  name = 'gate',
-): { name: string; state: string; bucket: string; link: string } => ({
-  name,
-  state: bucket.toUpperCase(),
-  bucket,
-  link: 'https://example.invalid/run/1',
+const run = (
+  parts: Partial<{
+    databaseId: number;
+    status: string;
+    conclusion: string;
+    event: string;
+    headSha: string;
+    createdAt: string;
+    url: string;
+  }> = {},
+) => ({
+  databaseId: parts.databaseId ?? 1,
+  status: parts.status ?? 'completed',
+  conclusion: parts.conclusion ?? 'success',
+  event: parts.event ?? 'pull_request',
+  headSha: parts.headSha ?? HEAD,
+  createdAt: parts.createdAt ?? '2026-09-16T15:41:44Z',
+  url: parts.url ?? 'https://example.invalid/run/1',
 });
 
 describe('pr-wait verdicts', () => {
-  it('a passing gate is the only thing that reads as green', () => {
-    const summary = summarizeChecks([check('pass')], CONTEXT);
+  it('a successful pull_request gate is the only thing that reads as green', () => {
+    const summary = summarizeGateRun(run(), CONTEXT);
     expect(summary).toMatchObject({ settled: true, ok: true });
     expect(summary.verdict).toContain('pr-wait PASS');
-    expect(summary.verdict).toContain('#354');
+    expect(summary.verdict).toContain('#420');
+    expect(summary.verdict).toContain('https://example.invalid/run/1');
   });
 
-  it('no checks is the trigger gap, and names the documented fallback — never a pass', () => {
-    const summary = summarizeChecks([], CONTEXT);
+  it('no live run is not a pass, and names a push — never a dispatch', () => {
+    const summary = summarizeGateRun(undefined, CONTEXT);
     expect(summary.ok).toBe(false);
     expect(summary.verdict).toContain('pr-wait FAILED');
-    expect(summary.verdict).toContain('CI never started');
-    expect(summary.verdict).toContain('gh workflow run ci.yml --ref fix/some-branch');
+    expect(summary.verdict).toContain('no live pull_request gate run');
+    expect(summary.verdict).toContain('Push a commit so synchronize fires');
+    expect(summary.verdict).not.toContain('gh workflow run');
   });
 
-  it('every check SKIPPED is the stale draft-time run — never a pass', () => {
-    const summary = summarizeChecks([check('skipping')], CONTEXT);
+  it('a dispatch run on the same commit is named, and still cannot close the wait', () => {
+    const summary = summarizeGateRun(undefined, {
+      ...CONTEXT,
+      dispatchUrl: 'https://example.invalid/run/dispatch',
+    });
     expect(summary.ok).toBe(false);
-    expect(summary.verdict).toContain('SKIPPED');
-    expect(summary.verdict).toContain('gh workflow run ci.yml');
+    expect(summary.verdict).toContain('workflow_dispatch');
+    expect(summary.verdict).toContain('https://example.invalid/run/dispatch');
+    expect(summary.verdict).toContain('cannot close this wait');
+    expect(summary.verdict).not.toContain('gh workflow run');
   });
 
-  it('a pending check does not settle, so the caller keeps waiting', () => {
-    expect(summarizeChecks([check('pending'), check('pass', 'other')], CONTEXT)).toMatchObject({
+  it('a failing gate names the conclusion and its url', () => {
+    const summary = summarizeGateRun(run({ conclusion: 'failure' }), CONTEXT);
+    expect(summary).toMatchObject({ settled: true, ok: false });
+    expect(summary.verdict).toContain('gate failure');
+    expect(summary.verdict).toContain('https://example.invalid/run/1');
+  });
+
+  it('a timed-out gate is a failure, not a pass', () => {
+    expect(summarizeGateRun(run({ conclusion: 'timed_out' }), CONTEXT).ok).toBe(false);
+  });
+
+  it('an in-progress run does not settle, so the caller keeps waiting', () => {
+    expect(summarizeGateRun(run({ status: 'in_progress', conclusion: '' }), CONTEXT)).toMatchObject({
       settled: false,
       ok: false,
     });
   });
-
-  it('a failing check names the check and its link', () => {
-    const summary = summarizeChecks([check('pass', 'lint'), check('fail')], CONTEXT);
-    expect(summary).toMatchObject({ settled: true, ok: false });
-    expect(summary.verdict).toContain('"gate" failed');
-    expect(summary.verdict).toContain('https://example.invalid/run/1');
-  });
-
-  it('a cancelled check is a failure, not a pass', () => {
-    expect(summarizeChecks([check('cancel')], CONTEXT).ok).toBe(false);
-  });
-
-  it('a skipped check beside a green one still passes — only an all-skipped run is the gap', () => {
-    expect(summarizeChecks([check('pass'), check('skipping', 'optional')], CONTEXT).ok).toBe(true);
-  });
 });
 
-// `gh pr ready` returns before its run appears, and the stale draft-time run is already on the
-// board, SKIPPED. So an all-skipped board tells one of two opposite stories: the trigger never
-// fired, or the real run is seconds away. `summarizeChecks` calls that board the trigger gap, which
-// is right only after the wait. `hasRunStarted` is what holds the wait open, so it must read an
-// all-skipped board as "nothing has started" — on #360 the single read cost a needless dispatch,
-// and the dispatch cancelled the real run through the shared concurrency group.
-describe('pr-wait waits for a real run', () => {
+describe('pr-wait picks the live pull_request run for this head', () => {
   it('reads an empty board as not started', () => {
-    expect(hasRunStarted([])).toBe(false);
+    expect(gateRunForHead([], HEAD)).toBeUndefined();
   });
 
-  it('reads an all-skipped board as not started, because the real run may be seconds away', () => {
-    expect(hasRunStarted([check('skipping'), check('skipping', 'gate')])).toBe(false);
+  it('ignores skipped draft-time runs, because those are not a start', () => {
+    const skipped = run({ conclusion: 'skipped', databaseId: 2 });
+    expect(isLiveGateRun(skipped, HEAD)).toBe(false);
+    expect(gateRunForHead([skipped], HEAD)).toBeUndefined();
   });
 
-  it('reads a queued check as started', () => {
-    expect(hasRunStarted([check('pending')])).toBe(true);
+  it('ignores a cancelled run, because concurrency superseded it', () => {
+    const cancelled = run({ conclusion: 'cancelled', databaseId: 3 });
+    expect(isLiveGateRun(cancelled, HEAD)).toBe(false);
+    expect(gateRunForHead([cancelled], HEAD)).toBeUndefined();
   });
 
-  it('reads a settled check as started', () => {
-    expect(hasRunStarted([check('pass')])).toBe(true);
-    expect(hasRunStarted([check('fail')])).toBe(true);
+  it('ignores a workflow_dispatch run, which cannot close a pr-wait', () => {
+    const dispatch = run({ event: 'workflow_dispatch', databaseId: 4 });
+    expect(isLiveGateRun(dispatch, HEAD)).toBe(false);
+    expect(gateRunForHead([dispatch], HEAD)).toBeUndefined();
   });
 
-  it('reads one live check beside a stale skipped one as started', () => {
-    expect(hasRunStarted([check('skipping'), check('pending', 'real')])).toBe(true);
+  it('ignores a run on another commit', () => {
+    expect(gateRunForHead([run({ headSha: OTHER })], HEAD)).toBeUndefined();
+  });
+
+  it('picks a queued run as started', () => {
+    const queued = run({ status: 'queued', conclusion: '', databaseId: 5 });
+    expect(isLiveGateRun(queued, HEAD)).toBe(true);
+    expect(gateRunForHead([queued], HEAD)?.databaseId).toBe(5);
+  });
+
+  it('picks the newest live run by createdAt, not array order', () => {
+    const older = run({
+      status: 'completed',
+      conclusion: 'failure',
+      databaseId: 10,
+      createdAt: '2026-09-16T15:41:00Z',
+    });
+    const newer = run({
+      status: 'in_progress',
+      conclusion: '',
+      databaseId: 11,
+      createdAt: '2026-09-16T15:42:00Z',
+    });
+    const skipped = run({
+      conclusion: 'skipped',
+      databaseId: 12,
+      createdAt: '2026-09-16T15:43:00Z',
+    });
+    expect(gateRunForHead([skipped, older, newer], HEAD)?.databaseId).toBe(11);
+    expect(gateRunForHead([newer, skipped, older], HEAD)?.databaseId).toBe(11);
+  });
+
+  it('picks a settled success as started', () => {
+    expect(gateRunForHead([run({ conclusion: 'success' })], HEAD)?.conclusion).toBe('success');
+    expect(gateRunForHead([run({ conclusion: 'failure' })], HEAD)?.conclusion).toBe('failure');
   });
 });
