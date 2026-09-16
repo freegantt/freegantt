@@ -94,7 +94,7 @@ function classFor(ruleClass: string | undefined): string {
 
 function assertNoEmptyCoversList(rules: readonly ShadingRule[]): void {
   for (const rule of rules) {
-    if (Array.isArray(rule.covers) && rule.covers.length === 0) throw new EmptyCoversError();
+    if (Array.isArray(rule.covers) && rule.covers.length === 0) throw new EmptyCoversError('timeShading');
   }
 }
 
@@ -114,38 +114,32 @@ function assertNoEmptyCoversList(rules: readonly ShadingRule[]): void {
  * );
  * ```
  *
- * **Reconfiguring the shaded set is two calls, not one.** `gantt.plugins = [timeShading(next)]` is a
- * silent no-op: the setter diffs by id, `timeShading()` always mints `freegantt.timeShading`, and a
- * plugin present in both lists with the same id is left alone. Write:
- *
- * ```ts
- * gantt.uninstallPlugin('freegantt.timeShading');
- * gantt.installPlugin(timeShading(next));
- * ```
+ * Reconfiguring the shaded set is one assignment — `gantt.plugins = [timeShading(next)]` replaces
+ * the occupant of this id and paints the new rules (#404 review F4).
  *
  * A predicate rule that closes over changing data (a consumer's own `WorkSchedule`) does not repaint
- * on its own either: the decoration runner memoizes on the window, and mutating that object in place
- * changes none of it. Reinstalling — the same two calls above — changes the provider identity, which
- * is what makes the memo miss.
+ * when that object mutates in place: the decoration runner memoizes on the window, and mutating the
+ * schedule changes none of it. Assign the list again to repaint — a fresh `timeShading()` is a fresh
+ * provider, which is what makes the memo miss.
  */
 export function timeShading(rules: readonly ShadingRule[]): ChromePlugin {
   assertNoEmptyCoversList(rules);
   return {
     id: 'freegantt.timeShading',
-    view(_ctx: PluginContext) {
-      _ctx.view.registerDecoration('underBars', (ctx: DecorationContext): readonly DecorationInput[] => {
+    view(ctx: PluginContext) {
+      ctx.view.registerDecoration('underBars', (frame: DecorationContext): readonly DecorationInput[] => {
         const bands: DecorationInput[] = [];
         for (const rule of rules) {
           const floor = ruleFloor(rule);
-          if (isCoarserThan(ctx.tickUnit, floor) || ctx.tickIncrement !== 1) continue;
-          for (const span of mergeSpans(ruleCoveredSpans(rule, ctx))) {
+          if (isCoarserThan(frame.tickUnit, floor) || frame.tickIncrement !== 1) continue;
+          for (const span of mergeSpans(ruleCoveredSpans(rule, frame))) {
             bands.push({ kind: 'rangeBand', start: span.start, end: span.end, class: classFor(rule.class) });
           }
         }
         return bands;
       });
-      // No disposer: `ctx.disposables` already retracts the registration (review P4, same as
-      // `weekendShading()`'s own precedent).
+      // No disposer: `ctx.disposables` already retracts the registration the moment this plugin is
+      // disposed (review P4) — the same reason every other gated registration writes none.
     },
   };
 }

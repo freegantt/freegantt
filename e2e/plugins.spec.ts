@@ -103,7 +103,7 @@ test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plug
     .not.toBe(firstBandBefore.x);
 
   // The checkbox removes the plugin live — every band disappears, no remount of anything else.
-  const toggle = page.locator('#weekend-shading-toggle');
+  const toggle = page.locator('#time-shading-toggle');
   await toggle.uncheck();
   await expect(bands).toHaveCount(0);
 

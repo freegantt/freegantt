@@ -147,9 +147,9 @@ renderersToggle.dispatchEvent(new Event('change'));
 // already uses (I8: no remount).
 gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
 
-const weekendToggle = document.querySelector<HTMLInputElement>('#weekend-shading-toggle')!;
-weekendToggle.addEventListener('change', () => {
-  if (weekendToggle.checked) {
+const timeShadingToggle = document.querySelector<HTMLInputElement>('#time-shading-toggle')!;
+timeShadingToggle.addEventListener('change', () => {
+  if (timeShadingToggle.checked) {
     gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
     writeLog('timeShading: installed');
   } else {

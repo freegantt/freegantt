@@ -244,6 +244,7 @@ export {
   ParentCycleError,
   SegmentsOutOfSyncError,
   EmptySegmentsError,
+  EmptyCoversError,
   InvertedSpanError,
   UnknownFieldError,
   UnknownGridColumnError,

@@ -84,17 +84,32 @@ export function coarsestFloor(covers: readonly TimeCover[]): TimeUnit {
     .reduce((coarsest, unit) => (isCoarserThan(unit, coarsest) ? unit : coarsest));
 }
 
-/** Saturday and Sunday, a holiday list, any set of ISO weekdays. Walks days (`ZonedTime.eachDay`) and
- *  shades each matching day whole — a day boundary is a wall-clock boundary, so a 23-hour or 25-hour
- *  Saturday still shades as a full Saturday. Hides above `'day'`: a weekend at month zoom is a smear
- *  across the grid, not two days. */
-export function daysOfWeek(...days: readonly DayOfWeek[]): TimeCover {
-  const wanted = new Set<DayOfWeek>(days);
+/** Which days does `window` touch? Every one, as its own day-start — the day `window.start` sits
+ *  inside included. `ZonedTime.eachDay` answers a different question: it walks day *boundaries* from
+ *  the first one at or after `window.start`, so a window that opens at Saturday 10:00 begins the walk
+ *  on Sunday and Saturday never reads as covered. A decoration window opens wherever the pan left it
+ *  (`layout/frame.ts` asks the scale for the pixel's own instant), so it is almost never day-aligned.
+ *  A day-shading builder asks this instead (#404 review F1). */
+function intersectingDays(window: TimeSpan, time: ZonedTime): readonly Instant[] {
+  return time.eachDay({ start: time.startOfDay(window.start), end: window.end });
+}
+
+/** Saturday and Sunday, a holiday list, any set of ISO weekdays. Shades each matching day whole — a
+ *  day boundary is a wall-clock boundary, so a 23-hour or 25-hour Saturday still shades as a full
+ *  Saturday. Walks the days that intersect the window (`intersectingDays`), so a window opening
+ *  mid-Saturday still shades the rest of that Saturday. Hides above `'day'`: a weekend at month zoom
+ *  is a smear across the grid, not two days.
+ *
+ *  The first day is its own parameter, so `daysOfWeek()` is a compile error (#404 review F8). A
+ *  builder that names nothing matches nothing, and `notCovered()` around it shades the whole window
+ *  — the very state `EmptyCoversError` refuses at the list door, reached through a cover that door
+ *  cannot see. `dates()` and `spans()` read the same way for the same reason. */
+export function daysOfWeek(day: DayOfWeek, ...moreDays: readonly DayOfWeek[]): TimeCover {
+  const wanted = new Set<DayOfWeek>([day, ...moreDays]);
   return {
     hideWhenCoarserThan: 'day',
     coveredSpans(window, time) {
-      const spans = time
-        .eachDay(window)
+      const spans = intersectingDays(window, time)
         .filter((day) => wanted.has(time.dayOfWeek(day) as DayOfWeek))
         .map((day) => ({ start: day, end: time.addDays(day, 1) }));
       return clipToWindow(window, spans);
@@ -107,7 +122,11 @@ export function daysOfWeek(...days: readonly DayOfWeek[]): TimeCover {
  *  resolves each day's two boundaries through `ZonedTime.fromPlain` alone (no arithmetic of its own):
  *  DST is `fromPlain`'s answer, not this builder's (`time/zone.ts`, `disambiguation: 'compatible'`) —
  *  the band measures 13 hours on a short day and 15 on a long one, and a plain time that does not
- *  exist that day (the spring-forward gap) resolves forward. Hides above `'hour'`. */
+ *  exist that day (the spring-forward gap) resolves forward. Hides above `'hour'`.
+ *
+ *  Equal readings shade nothing: `hours('09:00', '09:00')` names a band of no width, and the wrap
+ *  fires only when `to` reads *earlier* than `from` (#404 review F6). Reading equal as a wrap would
+ *  shade all 24 hours instead — the opposite of what the call says. */
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover {
   const start = readPlainTime(from, 'hours');
   const end = readPlainTime(to, 'hours');
@@ -119,7 +138,7 @@ export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover {
         const plain = time.toPlain(day);
         const bandStart = time.fromPlain({ ...plain, ...start });
         let bandEnd = time.fromPlain({ ...plain, ...end });
-        if (bandEnd <= bandStart) bandEnd = time.addDays(bandEnd, 1);
+        if (bandEnd < bandStart) bandEnd = time.addDays(bandEnd, 1);
         return { start: bandStart, end: bandEnd };
       });
       return clipToWindow(window, spans);
@@ -130,11 +149,12 @@ export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover {
 /** One or more whole calendar days — `dates('2026-12-25', '2027-01-01')`. Each `at` reads through
  *  `ZonedTime.toInstant`, so the same loose input `InstantInput` accepts anywhere else. Hides above
  *  `'day'`, the same reason `daysOfWeek` does. */
-export function dates(...at: readonly InstantInput[]): TimeCover {
+export function dates(at: InstantInput, ...moreAt: readonly InstantInput[]): TimeCover {
+  const all = [at, ...moreAt];
   return {
     hideWhenCoarserThan: 'day',
     coveredSpans(window, time) {
-      const spans = at.map((input) => {
+      const spans = all.map((input) => {
         const start = time.startOfDay(time.toInstant(input));
         return { start, end: time.addDays(start, 1) };
       });
@@ -153,13 +173,14 @@ export function dates(...at: readonly InstantInput[]): TimeCover {
  * Never hides on its own: a two-week shutdown is real at month zoom as much as at day zoom. A rule's
  * `hideWhenCoarserThan` still overrides this, and a tick with `tickIncrement !== 1` still hides it.
  */
-export function spans(...at: readonly TimeSpanInput[]): TimeCover {
+export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover {
+  const all = [at, ...moreAt];
   return {
     // The coarsest unit: nothing is ever coarser than 'year', so this floor never triggers on its
     // own — see the JSDoc above.
     hideWhenCoarserThan: 'year',
     coveredSpans(window, time) {
-      const raw = at.map((input) => ({
+      const raw = all.map((input) => ({
         start: time.toInstant(input.start),
         end: time.toEndInstant(input.end),
       }));
@@ -174,7 +195,7 @@ export function spans(...at: readonly TimeSpanInput[]): TimeCover {
  *  no complement to compute, and shading the whole window is never what a caller meant. */
 export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover {
   const covers = Array.isArray(cover) ? cover : [cover];
-  if (covers.length === 0) throw new EmptyCoversError();
+  if (covers.length === 0) throw new EmptyCoversError('notCovered');
   return {
     hideWhenCoarserThan: coarsestFloor(covers),
     coveredSpans(window, time) {

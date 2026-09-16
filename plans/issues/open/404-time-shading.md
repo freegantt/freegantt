@@ -126,10 +126,11 @@ Every acceptance box below names its pinning test.
   EmptyCoversError on an empty list — there is no complement to compute'`.
 - A tick at the floor unit with `tickIncrement > 1` hides the rule — `time-shading.test.ts`, `'a tick
   at the floor unit with tickIncrement above 1 still hides'`.
-- Reassigning `gantt.plugins` with the same id changes nothing, documented beside the
-  uninstall/install recipe — `time-shading.test.ts`, `'two timeShading() calls with different rules
-  both mint the same plugin id'`; the recipe is in `timeShading()`'s own JSDoc
-  (`src/extensions/features/time-shading.ts`).
+- Reassigning `gantt.plugins` with a fresh `timeShading()` applies the new rules: the setter matches
+  the occupant by id, then replaces it because the object differs (review F4) —
+  `plugin-runtime.test.ts`, `'a fresh instance under an installed id replaces it, old disposed
+  first'`; `time-shading.test.ts`, `'two timeShading() calls with different rules both mint the same
+  plugin id'`. One assignment, no uninstall/install pair.
 - The harness plugins page installs the shipped `timeShading()`; a third-party decoration plugin
   survives in `harness/plugins/` — `harness/plugins.html`/`harness/plugins.ts` install
   `timeShading()`; `harness/plugins/over-budget-rows.ts` is the survivor.
