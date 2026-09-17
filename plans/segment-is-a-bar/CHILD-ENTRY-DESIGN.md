@@ -6,6 +6,8 @@ This design replaces Option C if spike S4 passes. Builds B1–B8 in [`README.md`
 
 Every code claim below was measured at `d3ec677`. **A line number is a hint. Open the file.**
 
+The same design, with four diagrams of how a normal bar, a segment bar and a summary bar flow through the system, is published at `docs/08-a-bar-is-an-entry.md`.
+
 ---
 
 ## The idea
@@ -29,11 +31,11 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', tree: true, childrenOnRow: { type: 'request' } },
+  rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } },
 });
 ```
 
-`childrenOnRow` is a placeholder. Run the naming skill before it ships. "Split" is under *Avoid* in `CONTEXT.md`.
+`childrenOnParentRow` is a placeholder. Run the naming skill before it ships. It says whose row, which `childrenOnRow` did not. Rejected so far: `childrenAsBars` (an unclaimed parent's children draw bars too, on their own rows — the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow` ("Split" is under *Avoid* in `CONTEXT.md`).
 
 ---
 
@@ -73,7 +75,7 @@ Every job uses a door that ships today.
 | Job | Call site | New? |
 |---|---|---|
 | Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
-| Draw a parent's children on its row | `rowSource: { source: 'entries', tree: true, childrenOnRow: { type: 'request' } }` | **the one new key** |
+| Draw a parent's children on its row | `rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } }` | **the one new key** |
 | Read a bar's value | `entry.read('hours')` | no |
 | Name the row a bar sits on | `entry.parent()` | no |
 | List a row's bars | the parent's children | no |
@@ -93,7 +95,7 @@ Every job uses a door that ships today.
 
 ## The rule: where it lives, and what it takes
 
-**The value is the `when` pattern.** `childrenOnRow` takes a `VariantRule` (`layout/items/variants.ts`): a field match or `(entry) => boolean`. An author learns one match syntax.
+**The value is the `when` pattern.** `childrenOnParentRow` takes a `VariantRule` (`layout/items/variants.ts`): a field match or `(entry) => boolean`. An author learns one match syntax.
 
 **The rule matches the parent.** A claimed parent gives its children no rows and draws them on its own row.
 
@@ -109,7 +111,7 @@ Every job uses a door that ships today.
 
 ```ts
 fields: [{ key: 'showDaysOnRow', type: 'boolean' }]
-rowSource: { source: 'entries', tree: true, childrenOnRow: { showDaysOnRow: true } }
+rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
 dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows, undoable
 ```
 
