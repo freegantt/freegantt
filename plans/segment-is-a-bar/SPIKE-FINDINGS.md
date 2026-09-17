@@ -18,8 +18,10 @@ three throwaway tests: `test/pure/spike-s4-bench.test.ts`, `spike-s4-q19.test.ts
 `spike-s4-phases.test.ts`. The questions, the method and the pass rule are in
 [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md).
 
-**Verdict: a partial pass.** The cost objection falls. The `entryIds[0]` seam has a winner. Three
-questions were not reached, so the pass rule is not met in full.
+**Verdict: a partial pass. The author ruled on it the same day: Q17 passes, and the design ships.**
+The cost objection falls. The `entryIds[0]` seam has a winner. Three questions were not reached, and
+they become real tests in builds C1 and C3 rather than a second spike. **One claim in this file was
+wrong and is struck through below** — the "tenth `entryIds[0]` site" under Q9.
 
 | Question | Answer |
 |---|---|
@@ -136,7 +138,7 @@ in that list. No rule a consumer writes can match it. A rail under (b) needs a s
 off `subjectEntryId`, outside the producer loop. That is a new seam, not a variant claim. Shape (a)
 keeps the parent reachable to a `when` rule.
 
-**Shape (a) carries a cost the plan did not name.** The `childrenOnParentRow` matcher cannot reuse
+**Shape (a) carries a cost the plan did not name.** The `childrenAsSegments` matcher cannot reuse
 `layout/items/variants.ts`'s `compileRule`. That needs a `fieldFor` lookup for typed `equals`, and
 the `reportUnknownFieldMatch` sink. `layout/rows/row-source.ts` states that the entries source is
 Field-registry-free on purpose (D-S4-19, D-S4-21). The probe therefore matches with `Object.is` per
@@ -160,9 +162,14 @@ author who wants a later start on top sorts their own list. The hit test needs n
 element.
 
 **Q9 — what breaks when a row owns a parent and its children?** One finding, one gap.
-- **A tenth `entryIds[0]` site the design doc does not count.** `SegmentSelection.step()`
-  (`view/segment-selection.ts:170`) reads `this.entryIds[0]` to mean the one selected Entry. That is
-  Selection's own projection, not `PlannedRow.entryIds`, so open point 13's list of nine misses it.
+- ~~**A tenth `entryIds[0]` site the design doc does not count.**~~ **Corrected 2026-09-17 against the
+  code, when the ruling was written: this is a miscount.** `SegmentSelection.step()`
+  (`view/segment-selection.ts:170`) is already in open point 13's list of nine. `grep -rn
+  "entryIds\[0\]" src/` returns **nine reads in seven files**, and no tenth exists.
+  **The finding under it stands, and it is sharper than the count was:** the nine are two different
+  jobs. Seven read a **row's** list and mean "the row's subject" (`render/dom/index.ts:964,1039`,
+  `roving-focus.ts:311`, `sort.ts:53-54`, `filter.ts:9`, `frame.ts:330`); two read the **Selection's**
+  own list and mean "the first selected Entry" (`gantt-shell.ts:1480`, `segment-selection.ts:170`).
   With several child Entries selected on one claimed row, `Mod+ArrowRight` steps the first and
   ignores the rest.
 - **Per-bar hit routing looks safe, unproven.** `produceItemsForRow`
@@ -210,14 +217,15 @@ plus a ruling on whether that is default behaviour or a capability. Not built, b
 
 1. **The Field-registry gap.** Thread `fieldContext` into the entries-row-source pass, as `sort` and
    `filter` already do with `fieldCompares`? Or accept `Object.is` equality for
-   `childrenOnParentRow`, with no typed `equals` and no unknown-key report? Threading it changes
+   `childrenAsSegments`, with no typed `equals` and no unknown-key report? Threading it changes
    `row-source.ts`'s stated architecture (D-S4-19, D-S4-21).
 2. **The `boolean` Field type.** Does core ship one, or do the design's examples change to a type
    that exists?
 3. **Shape (a) or shape (b)?** Shape (b) does not dissolve the rail question. The evidence favours
    shape (a), which the probe implements. Does (a) read as the shipped shape?
-4. **The tenth site.** Does the Selection-unit ADR (open point 15) also name
-   `SegmentSelection.step()`, or is that a smaller fix under either design?
+4. ~~**The tenth site.**~~ **Withdrawn 2026-09-17 — there is no tenth site** (see the correction
+   under Q9). `SegmentSelection.step()` is one of the two Selection-side reads, and the Selection-unit
+   ADR names both. Build C3 fixes all nine.
 5. **The blank row.** Is a blank row right for an empty claimed parent, and for a row whose bars a
    filter all removed? Or does the rule stop applying when it would draw one?
 6. **Does a hierarchy source declare the keys it reads?** The Rollup's new fast path applies only to

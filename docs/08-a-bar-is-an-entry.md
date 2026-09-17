@@ -1,13 +1,15 @@
 # A bar is an Entry
 
-**A proposal, not the shipped design.** It is question **Q17** on
-[issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421), and spike **S4** decides it. Nothing
-on this page is ruled. The plan is
-[`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md);
-the rulings behind it are in
+**The ruled design, not yet the shipped one.** Question **Q17** on
+[issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421) was ruled on 2026-09-17, after spike
+**S4** measured the cost objection away. The build order is
+[`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md)
+(builds C1–C7), the design is
+[`CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md),
+and every ruling is in
 [`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md).
-What ships today is the Segment, described in [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md)
-and [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md).
+**What ships today is still the Segment**, described in [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md)
+and [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md). It retires in build C6.
 
 *Every code claim below was measured at `eb97ea9`. A line number is a hint — open the file.*
 
@@ -167,7 +169,7 @@ aria-label="Three bands comparing authored Entries with the rows and bars they d
 <text x="44" y="247" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd1', parentId: 'req-1', hours: 8, start, end }</text>
 <text x="44" y="265" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd2', parentId: 'req-1', hours: 4, start, end }</text>
 <rect x="44" y="280" width="442" height="34" rx="5" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3" />
-<text x="56" y="301" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { … childrenOnParentRow: { showDaysOnRow: true } }</text>
+<text x="56" y="301" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { … childrenAsSegments: { showDaysOnRow: true } }</text>
 <line x1="508" y1="266" x2="566" y2="266" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga1)" color="var(--ink)" />
 <rect x="575" y="204" width="575" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
 <line x1="705" y1="204" x2="705" y2="328" stroke="var(--border)" stroke-width="1" />
@@ -242,7 +244,7 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } },
+  rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
 });
 ```
 
@@ -253,8 +255,8 @@ question, and the next section answers it.
 | Job | Call site | New? |
 | --- | --- | --- |
 | Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
-| Draw every parent's children on its row | `rowSource: { …, childrenOnParentRow: true }` | **the one new key** |
-| Draw one parent's children on its row | `rowSource: { …, childrenOnParentRow: { showDaysOnRow: true } }`, and mark that parent | the same key |
+| Draw every parent's children on its row | `rowSource: { …, childrenAsSegments: true }` | **the one new key** |
+| Draw one parent's children on its row | `rowSource: { …, childrenAsSegments: { showDaysOnRow: true } }`, and mark that parent | the same key |
 | Open one row into sub-rows, live | `dataset.entries.update('req-1', { showDaysOnRow: false })` | no |
 | Read a bar's value | `entry.read('hours')` | no |
 | Name the row a bar sits on | `entry.parent()` | no |
@@ -281,15 +283,15 @@ Gantt — a read-only board resizes nothing, whatever a row looks like.
 
 ### Set it for the whole Gantt, or for one Entry
 
-**One key answers both.** `childrenOnParentRow` takes `true` for every parent, or a `VariantRule`
+**One key answers both.** `childrenAsSegments` takes `true` for every parent, or a `VariantRule`
 (`src/layout/items/variants.ts`) — the same `when` pattern a variant takes. The rule runs once per
 parent Entry in the layout pass, so the scope of the setting is whatever the rule says:
 
 ```ts
-childrenOnParentRow: true                                      // every parent
-childrenOnParentRow: { team: 'framing' }                       // any value the data already holds
-childrenOnParentRow: { showDaysOnRow: true }                   // the parents the consumer marks
-childrenOnParentRow: (entry) => entry.children().length > 3    // whatever a predicate can ask
+childrenAsSegments: true                                      // every parent
+childrenAsSegments: { team: 'framing' }                       // any value the data already holds
+childrenAsSegments: { showDaysOnRow: true }                   // the parents the consumer marks
+childrenAsSegments: (entry) => entry.children().length > 3    // whatever a predicate can ask
 ```
 
 The common case is the shorthand and the long form is the expert one, as every other config key on
@@ -309,7 +311,7 @@ a value": ask that with a predicate.
 
 **It does not name a variant, and it does not pick one.** `variants` writes the same shape in its
 `when`, so an author learns one match syntax — but the two answer different questions. `when` asks
-*how does this row look*; `childrenOnParentRow` asks *does this parent give its children rows*. A
+*how does this row look*; `childrenAsSegments` asks *does this parent give its children rows*. A
 claimed parent's children each still resolve their own variant afterwards, and that is the per-bar
 name, look and capability #421 asks for.
 
@@ -319,7 +321,7 @@ name, look and capability #421 asks for.
 **claimed** parent's children become rows at all. Neither reads the other, and the fold runs in both
 the flat and the tree branch of `resolveEntriesSource`:
 
-| `tree` | `childrenOnParentRow` | What a reader sees |
+| `tree` | `childrenAsSegments` | What a reader sees |
 | --- | --- | --- |
 | `false` (default) | none | every Entry is a row, flat — today's `grid` |
 | `false` | claims `req-1` | `req-1` is a row with two bars; `d1`/`d2` have no rows. Still a flat `grid` |
@@ -344,7 +346,7 @@ entries: [
   { id: 'd2', parentId: 'req-1', start, end, hours: 4 },
 ]
 
-rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
+rowSource: { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true } }
 ```
 
 Three rows: `site-a` with a summary rail over everything below it, then `req-1` and `req-2`, each
@@ -358,13 +360,17 @@ children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The on
 suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
 stands for. A consumer variant may still paint a rail behind them.
 
-:::caution The name is not ruled
-`childrenOnParentRow` is this page's recommendation, not a decision. Read the call site aloud:
-"children on parent row, where show days on row is true." It says whose row, which `childrenOnRow`
-does not.
-Rejected so far: `childrenAsBars` (an unclaimed parent's children draw bars too, on their own rows —
-the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow`
-("Split" is under *Avoid* in `CONTEXT.md`). Run the naming skill before it ships.
+:::note Why the key says "segments"
+Read the call site aloud: "row source: entries, children as segments, where show-days-on-row is
+true." The name says what the children *become*, and it discriminates — an unclaimed parent's
+children draw a bar on a row of their own, and never a segment of another row's bar. The key carries
+no `Row`, because it already sits on `rowSource` and a name does not repeat its own context.
+
+**The word is free because the type is going.** `Segment` stops being a stored type in build C6, and
+comes back in the glossary with one meaning and nothing behind it: *a child Entry drawn as one piece
+of its parent's row.* Rejected: `childrenAsRowSegments`, `childrenOnParentRow`, `childrenAsBars`
+(an unclaimed parent's children draw bars too), `mergeChildRows` (the mechanism, not the job) and
+`splitRow` ("Split" is under *Avoid* in `CONTEXT.md`).
 :::
 
 ## How it flows through the layout pass
@@ -575,20 +581,23 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 
 | Cost | Where it stands |
 | --- | --- |
-| **Performance** | The decisive objection, and nobody has measured it. A 10,000-child-Entry frame must hold the I5 and S6 budgets. Spike S4 measures it first |
-| **A parent's own bar** | A claimed parent wears `summary()` today, which would paint over its children. Proposed: core draws no Item for it. A consumer variant may still paint a rail |
-| **The Selection unit** | [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md) makes the Segment the unit. A new ADR must revise it |
-| **Mixed children** | The rule matches the parent, so it claims all of that parent's children. A parent with days on its row *and* sub-tasks below cannot be expressed. The escape hatch, unruled: a long form that also matches the child |
-| **A claimed child with children of its own** | Unruled: refuse it, draw the grandchildren on the same row, or give them rows below. `childrenOnParentRow: true` on a tree three levels deep walks into this, which is why a deeper dataset names its level with a match |
-| **Migration** | Segments shipped in S4. 59 non-test sites and 37 test files read `segments` |
+| **Performance** | **Measured, and the objection falls.** 10,000 bars build a frame **20% cheaper** as child Entries than as Segments. One write and one row resolution grew, and each **halves** once the Rollup stops re-deriving an index the store already memoizes (build C4). A browser measurement of the hover path is still owed |
+| **A parent's own bar** | **Ruled: core draws no bar for a claimed parent.** A consumer variant may still paint a rail. Build C2 |
+| **The Selection unit** | **Ruled: the Entry.** A new ADR revises [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md). This is a build, not a delete: 16 non-test files name `segmentIds`. Build C6 |
+| **A shared row's nine call sites** | `entryIds[0]` is read nine times in seven files. Seven mean "the row's subject", and a claimed row holds N+1 ids. Two mean "the first selected Entry", and a claimed row can select several. Each one is read once and fixed in build C3 |
+| **Mixed children** | The rule matches the parent, so it claims all of that parent's children. A parent with days on its row *and* sub-tasks below cannot be expressed. No consumer has asked for it |
+| **A claimed child with children of its own** | **Ruled: a claim is a collapse, one level deeper.** The claimed parent draws its direct children as bars; the subtree below loses its rows, and a child that derives draws one rolled-up bar — what a collapsed parent's bar does today |
+| **Migration** | **Ruled: no legacy.** Segments shipped in S4 and this library has never shipped to a user, so the `segments` key is deleted outright. 59 non-test sites and 37 test files read it |
 | **Copying a row with its bars** | `toInput()` copies one Entry. A subtree copy needs its own door — with or without this design |
 
 ## Read next
 
 | Document | What it holds |
 | --- | --- |
-| [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The full proposal, the eleven open points, and spike S4's questions, method and pass rule |
-| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q17 — every ruling, and why Q17 re-opens Q6 |
+| [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C7, the call sites, and the nine calls the plan makes |
+| [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The ruled design, and what each former open point was ruled to be |
+| [`plans/segment-is-a-bar/SPIKE-FINDINGS.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/SPIKE-FINDINGS.md) | Spike S4 — the numbers, the two shapes written for the subject seam, and the limits on both |
+| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q23 — every ruling, and why Q17 voided Q1–Q16 |
 | [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
 | [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
 | [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |
