@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
         'consumer-api',
         'row-source-updates',
         'plugin-authoring',
+        'a-bar-is-an-entry',
         'edit-extension-flow',
       ],
     },
