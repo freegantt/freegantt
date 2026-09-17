@@ -1,0 +1,527 @@
+# A bar is an Entry
+
+**A proposal, not the shipped design.** It is question **Q17** on
+[issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421), and spike **S4** decides it. Nothing
+on this page is ruled. The plan is
+[`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md);
+the rulings behind it are in
+[`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md).
+What ships today is the Segment, described in [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md)
+and [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md).
+
+*Every code claim below was measured at `eb97ea9`. A line number is a hint — open the file.*
+
+<style>
+  /* Tokens mirror `docs/architecture/diagram.md`. Kept local: that page's block also carries rules
+     for boxes this page's figures do not draw. */
+  .fg-bar-design-doc {
+    --bg: #f1eee3;
+    --bg-raised: #e9e5d6;
+    --ink: #211f19;
+    --muted: #67604d;
+    --border: #c9c1a9;
+    --border-strong: #a89f88;
+    --accent: #b8541f;
+    --accent-ink: #ffffff;
+    --core: #276a63;
+    --core-bg: rgba(39, 106, 99, 0.06);
+    --new-bg: rgba(184, 84, 31, 0.07);
+  }
+
+  html[data-theme='dark'] .fg-bar-design-doc {
+    --bg: #14171a;
+    --bg-raised: #1c2023;
+    --ink: #e9e4d6;
+    --muted: #9a927c;
+    --border: #363b3a;
+    --border-strong: #4b514e;
+    --accent: #e2874a;
+    --accent-ink: #1a1006;
+    --core: #5fb0a5;
+    --core-bg: rgba(95, 176, 165, 0.08);
+    --new-bg: rgba(226, 135, 74, 0.09);
+  }
+
+  .fg-bar-design-doc figure {
+    margin: 0 0 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-raised);
+    padding: 1.25rem 1.25rem 1rem;
+    overflow-x: auto;
+  }
+
+  .fg-bar-design-doc figure svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .fg-bar-design-doc figcaption {
+    font-size: 0.84rem;
+    color: var(--muted);
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
+  .fg-bar-design-doc figcaption code {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-size: 0.88em;
+    color: var(--ink);
+  }
+
+  .fg-bar-design-doc .box-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+  }
+  .fg-bar-design-doc .box-sub,
+  .fg-bar-design-doc .band-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .fg-bar-design-doc .band-title {
+    font-weight: 700;
+  }
+  .fg-bar-design-doc .mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Edge labels may cross box borders; the halo erases the border behind the glyphs. */
+  .fg-bar-design-doc .lbl {
+    paint-order: stroke;
+    stroke: var(--bg-raised);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .fg-bar-design-doc figure {
+      animation: fg-bar-design-rise 0.5s ease-out;
+    }
+  }
+  @keyframes fg-bar-design-rise {
+    from {
+      transform: translateY(6px);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+</style>
+
+## The claim, in one line
+
+**Every bar on the timeline is one Entry.** A normal bar, one of several bars sharing a row, and a
+summary rail are the same authored shape. Two questions decide which one a reader sees, and neither
+one is stored on the Entry:
+
+1. **Does it have children?** That decides derivation and the default look today
+   ([ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md)).
+2. **Does a rule on the row source claim its parent?** That decides whether it gets a row of its own,
+   or draws on its parent's row. This is the one new question.
+
+What #421 calls a Segment becomes a regular Entry with `parentId` set. Nothing on the child marks it.
+
+## Three bars, one shape
+
+<div class="fg-bar-design-doc">
+<figure>
+<svg
+viewBox="0 0 1180 520"
+role="img"
+aria-label="Three bands comparing authored Entries with the rows and bars they draw. Band one: a single leaf Entry draws one bar on its own row. Band two: a parent Entry and two child Entries, with a row source rule claiming the parent, draw two bars on one row under an envelope spanning both. Band three: the same three Entries with the rule off draw a summary rail on the parent's row and one bar on each child's own row."
+>
+<defs>
+<marker id="fga1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+</marker>
+</defs>
+<text x="30" y="30" class="box-sub" font-size="11" fill="var(--muted)">AUTHORED ENTRIES</text>
+<text x="575" y="30" class="box-sub" font-size="11" fill="var(--muted)">ROWS AND BARS</text>
+<!-- ============ band 1 — a normal bar ============ -->
+<text x="30" y="58" class="band-title" font-size="13" fill="var(--ink)">1 — A normal bar</text>
+<text x="168" y="58" class="box-sub" font-size="11.5" fill="var(--muted)">a leaf Entry, on its own row</text>
+<rect x="30" y="70" width="470" height="86" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="44" y="97" class="mono" font-size="11.5" fill="var(--ink)">{ id: 't1', name: 'Design',</text>
+<text x="44" y="115" class="mono" font-size="11.5" fill="var(--ink)">  start: '2026-09-01', end: '2026-09-07' }</text>
+<text x="44" y="141" class="box-sub" font-size="10.5" fill="var(--muted)">no parent, no children</text>
+<line x1="508" y1="113" x2="566" y2="113" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga1)" color="var(--ink)" />
+<rect x="575" y="70" width="575" height="86" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<line x1="705" y1="70" x2="705" y2="156" stroke="var(--border)" stroke-width="1" />
+<text x="589" y="118" class="box-sub" font-size="11.5" fill="var(--ink)">Design</text>
+<rect x="745" y="105" width="160" height="16" rx="3" fill="var(--accent)" />
+<text x="754" y="117" class="mono" font-size="9.5" fill="var(--accent-ink)">t1</text>
+<!-- ============ band 2 — a segment bar ============ -->
+<text x="30" y="192" class="band-title" font-size="13" fill="var(--ink)">2 — A segment bar</text>
+<text x="176" y="192" class="box-sub" font-size="11.5" fill="var(--muted)">a child Entry, drawn on its parent's row</text>
+<rect x="30" y="204" width="470" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="44" y="229" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', type: 'request' }</text>
+<text x="44" y="247" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd1', parentId: 'req-1', hours: 8, start, end }</text>
+<text x="44" y="265" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd2', parentId: 'req-1', hours: 4, start, end }</text>
+<rect x="44" y="280" width="442" height="34" rx="5" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3" />
+<text x="56" y="301" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { … childrenOnParentRow: { type: 'request' } }</text>
+<line x1="508" y1="266" x2="566" y2="266" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga1)" color="var(--ink)" />
+<rect x="575" y="204" width="575" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<line x1="705" y1="204" x2="705" y2="328" stroke="var(--border)" stroke-width="1" />
+<text x="589" y="264" class="box-sub" font-size="11.5" fill="var(--ink)">Framing crew</text>
+<text x="589" y="280" class="box-sub" font-size="10" fill="var(--muted)">12 h</text>
+<line x1="745" y1="238" x2="1005" y2="238" stroke="var(--core)" stroke-width="1.2" />
+<line x1="745" y1="238" x2="745" y2="245" stroke="var(--core)" stroke-width="1.2" />
+<line x1="1005" y1="238" x2="1005" y2="245" stroke="var(--core)" stroke-width="1.2" />
+<text x="875" y="231" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--core)">req-1 start/end — written by the Rollup</text>
+<rect x="745" y="256" width="130" height="16" rx="3" fill="var(--accent)" />
+<text x="754" y="268" class="mono" font-size="9.5" fill="var(--accent-ink)">d1 · 8 h</text>
+<rect x="905" y="256" width="100" height="16" rx="3" fill="var(--accent)" />
+<text x="914" y="268" class="mono" font-size="9.5" fill="var(--accent-ink)">d2 · 4 h</text>
+<text x="745" y="296" class="box-sub" font-size="10" fill="var(--muted)">one Row, three Entries — req-1 draws no bar of its own</text>
+<!-- ============ band 3 — a summary bar ============ -->
+<text x="30" y="364" class="band-title" font-size="13" fill="var(--ink)">3 — A summary bar</text>
+<text x="183" y="364" class="box-sub" font-size="11.5" fill="var(--muted)">the same three Entries, with the rule off</text>
+<rect x="30" y="376" width="470" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="44" y="401" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', type: 'request' }</text>
+<text x="44" y="419" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd1', parentId: 'req-1', hours: 8, start, end }</text>
+<text x="44" y="437" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd2', parentId: 'req-1', hours: 4, start, end }</text>
+<rect x="44" y="452" width="442" height="34" rx="5" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1" stroke-dasharray="4 3" />
+<text x="56" y="473" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { source: 'entries', tree: true }</text>
+<line x1="508" y1="438" x2="566" y2="438" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga1)" color="var(--ink)" />
+<rect x="575" y="376" width="575" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<line x1="705" y1="376" x2="705" y2="500" stroke="var(--border)" stroke-width="1" />
+<line x1="575" y1="418" x2="1150" y2="418" stroke="var(--border)" stroke-width="1" />
+<line x1="575" y1="459" x2="1150" y2="459" stroke="var(--border)" stroke-width="1" />
+<text x="589" y="402" class="box-sub" font-size="11.5" fill="var(--ink)">Framing crew</text>
+<rect x="745" y="394" width="260" height="7" fill="var(--ink)" />
+<path d="M745,401 L754,401 L745,410 z" fill="var(--ink)" />
+<path d="M1005,401 L996,401 L1005,410 z" fill="var(--ink)" />
+<text x="601" y="443" class="box-sub" font-size="11.5" fill="var(--ink)">d1</text>
+<rect x="745" y="431" width="130" height="16" rx="3" fill="var(--accent)" />
+<text x="754" y="443" class="mono" font-size="9.5" fill="var(--accent-ink)">d1 · 8 h</text>
+<text x="601" y="484" class="box-sub" font-size="11.5" fill="var(--ink)">d2</text>
+<rect x="905" y="472" width="100" height="16" rx="3" fill="var(--accent)" />
+<text x="914" y="484" class="mono" font-size="9.5" fill="var(--accent-ink)">d2 · 4 h</text>
+</svg>
+<figcaption>
+Bands 2 and 3 hold the <strong>same three Entries</strong>. Only the row source differs. The rule
+claims <code>req-1</code> in band 2, so its children draw on its row and get no rows of their own; with
+the rule off they are ordinary sub-rows and <code>req-1</code> wears core's <code>summary()</code> rail.
+The Rollup runs identically in both: it writes <code>req-1</code>'s <code>hours</code> cell (12) and its
+<code>start</code>/<code>end</code> envelope from the two children, because a parent derives its
+rolling-up Fields whatever its row source does (ADR 0013).
+Band 1 is the same machinery with nothing to roll up.
+</figcaption>
+</figure>
+</div>
+
+## The API, in call sites
+
+Every job below already ships, except one row.
+
+```ts
+const dataset = new Dataset({
+  fields: [
+    { key: 'type', type: 'text' },
+    { key: 'hours', type: 'number', rollUp: 'sum' },
+    { key: 'locked', type: 'boolean' },
+  ],
+  entries: [
+    { id: 'req-1', name: 'Framing crew', type: 'request' },              // the row
+    { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
+    { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
+    { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
+  ],
+});
+
+new Gantt({
+  dataset,
+  rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } },
+});
+```
+
+| Job | Call site | New? |
+| --- | --- | --- |
+| Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
+| Draw a parent's children on its row | `rowSource: { …, childrenOnParentRow: { type: 'request' } }` | **the one new key** |
+| Read a bar's value | `entry.read('hours')` | no |
+| Name the row a bar sits on | `entry.parent()` | no |
+| List a row's bars | `entry.children()` | no |
+| Total bar values onto the row | `{ key: 'hours', type: 'number', rollUp: 'sum' }` | no |
+| Patch one bar | `dataset.entries.update('d2', { hours: 6 })` | no |
+| Add one bar | `dataset.entries.add({ parentId: 'req-1', start, end, hours: 8 })` | no |
+| Remove a bar | `dataset.entries.remove('d1')` | no — several bars are several calls in one `transaction` |
+| Move a bar to another row | `dataset.entries.update('d1', { parentId: 'req-2' })` | no |
+| Give a bar its own look | `variants: [{ name: 'fullDay', when: { hours: 8 }, paint, css }]` | no |
+| Gate a gesture per bar | `interactions: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |
+| Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
+| Show the same bars as sub-rows | change the rule, or the value it matches | no |
+
+### What the one new key takes
+
+`childrenOnParentRow` takes a `VariantRule` (`src/layout/items/variants.ts`) — the same `when`
+pattern a variant takes. A field match, or a predicate:
+
+```ts
+childrenOnParentRow: { type: 'request' }                        // a field match
+childrenOnParentRow: (entry) => entry.children().length > 3     // a predicate
+```
+
+**It matches the parent.** A claimed parent gives its children no rows and draws them on its own row.
+
+**It lives on the row source.** `resolveRows()` (`src/layout/rows/resolve-rows.ts:71`) already owns
+the row list and takes the entries, the row source and `collapsed` — no variant reaches it. Putting
+the rule on a variant would give the row list two owners. The key exists only on `EntriesRowSource`,
+so it is unrepresentable beside `{ source: 'group' }`, and it is live like every other config key:
+`gantt.rowSource = { … }` switches the view.
+
+**Per-Entry control comes free, and core stores no classification** (`plans/01` §2.5). The consumer
+declares a Field of their own and matches it:
+
+```ts
+fields: [{ key: 'showDaysOnRow', type: 'boolean' }]
+rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
+
+dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows, undoable
+```
+
+**Per-row control is per-Entry control.** For the entries source a `RowId` equals the `EntryId`
+([`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), *Row*).
+
+:::caution The name is not ruled
+`childrenOnParentRow` is this page's recommendation, not a decision. Read the call site aloud:
+"children on parent row, where type is request." It says whose row, which `childrenOnRow` does not.
+Rejected so far: `childrenAsBars` (an unclaimed parent's children draw bars too, on their own rows —
+the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow`
+("Split" is under *Avoid* in `CONTEXT.md`). Run the naming skill before it ships.
+:::
+
+## How it flows through the layout pass
+
+<div class="fg-bar-design-doc">
+<figure>
+<svg
+viewBox="0 0 1240 330"
+role="img"
+aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produceItemsForRow, placeFrame, DomBackend sync, and fg-bar elements. Two callouts mark the only two stages where the three cases differ: the row source rule at resolveRows, and per-Entry variant resolution at produceItemsForRow. A band across the bottom states that the remaining stages are unchanged."
+>
+<defs>
+<marker id="fga2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+</marker>
+</defs>
+<text x="24" y="28" class="box-sub" font-size="11" fill="var(--muted)">ONE LAYOUT PASS — THE SAME PASS FOR ALL THREE BARS</text>
+<rect x="24" y="46" width="178" height="66" rx="7" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1.5" />
+<text x="113" y="74" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">Entry[]</text>
+<text x="113" y="92" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">dataset.entries.all</text>
+<rect x="226" y="46" width="178" height="66" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="2" />
+<text x="315" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">resolveRows()</text>
+<text x="315" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/rows/resolve-rows.ts</text>
+<text x="315" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ PlannedRow[]</text>
+<rect x="428" y="46" width="178" height="66" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="2" />
+<text x="517" y="70" text-anchor="middle" class="box-name" font-size="12" fill="var(--ink)">produceItemsForRow()</text>
+<text x="517" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/items/produce-items.ts</text>
+<text x="517" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ Item[]</text>
+<rect x="630" y="46" width="178" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="719" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">placeFrame()</text>
+<text x="719" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/frame.ts — the TimeScale</text>
+<text x="719" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ FrameBar[]</text>
+<rect x="832" y="46" width="178" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="921" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">backend.sync()</text>
+<text x="921" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">render/dom — keyed reconcile</text>
+<rect x="1034" y="46" width="178" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="1123" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">.fg-bar</text>
+<text x="1123" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">data-variant, data-state</text>
+<g stroke="var(--ink)" stroke-width="1.5" color="var(--ink)">
+<line x1="204" y1="79" x2="222" y2="79" marker-end="url(#fga2)" />
+<line x1="406" y1="79" x2="424" y2="79" marker-end="url(#fga2)" />
+<line x1="608" y1="79" x2="626" y2="79" marker-end="url(#fga2)" />
+<line x1="810" y1="79" x2="828" y2="79" marker-end="url(#fga2)" />
+<line x1="1012" y1="79" x2="1030" y2="79" marker-end="url(#fga2)" />
+</g>
+<!-- callout A -->
+<polyline points="315,112 315,136 250,136 250,160" fill="none" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3" />
+<rect x="40" y="160" width="420" height="88" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1.5" />
+<text x="56" y="182" class="box-name" font-size="11" fill="var(--accent)">THE ONE NEW DECISION</text>
+<text x="56" y="202" class="box-sub" font-size="10.5" fill="var(--ink)">A claimed parent's children fold into its own</text>
+<text x="56" y="218" class="box-sub" font-size="10.5" fill="var(--ink)">row.entryIds and get no row of their own.</text>
+<text x="56" y="236" class="box-sub" font-size="10" fill="var(--muted)">entries-source.ts:40 writes that list today.</text>
+<!-- callout B -->
+<polyline points="517,112 517,136 790,136 790,160" fill="none" stroke="var(--core)" stroke-width="1.2" stroke-dasharray="4 3" />
+<rect x="580" y="160" width="420" height="88" rx="7" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1.5" />
+<text x="596" y="182" class="box-name" font-size="11" fill="var(--core)">ALREADY PER-ENTRY</text>
+<text x="596" y="202" class="box-sub" font-size="10.5" fill="var(--ink)">The loop resolves a variant per Entry, not per</text>
+<text x="596" y="218" class="box-sub" font-size="10.5" fill="var(--ink)">row — so each bar keeps its own name, props,</text>
+<text x="596" y="234" class="box-sub" font-size="10.5" fill="var(--ink)">variant and capabilities. That is #421's title.</text>
+<rect x="24" y="272" width="1188" height="38" rx="7" fill="var(--bg)" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="5 4" />
+<text x="618" y="296" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">Unchanged: geometry, paint, hit tests and the reconciler never learn how many Entries a Row owns. A group row already owns several.</text>
+</svg>
+<figcaption>
+The three bars take one path. They part at two points only, and one of the two already ships:
+<code>produceItemsForRow</code> loops <code>row.entryIds</code> and calls
+<code>registry.resolveFor(entry)</code> per Entry, so a shared row carries several variants today.
+The new work is the fold at <code>resolveEntriesSource</code>, plus suppressing a claimed parent's
+own Item so <code>summary()</code>'s rail does not paint over its children.
+</figcaption>
+</figure>
+</div>
+
+### What each stage answers, per case
+
+| Stage | A normal bar | A segment bar | A summary bar |
+| --- | --- | --- | --- |
+| `resolveRows` | one row, `entryIds: ['t1']` | one row, `entryIds: ['req-1','d1','d2']`; children get none | one row each; children nest at `depth + 1` |
+| Row is expandable | no | no — the rule opens it, not a chevron | yes |
+| `resolveFor(entry)` | `bar()`, the last resort | per child: whatever rule claims it | `summary()` claims on `entry.hasChildren` |
+| `variant.items(entry)` | one Item over `[start, end)` | one Item per child Entry | one rail Item (`ignoreSegments`) |
+| Rollup writes | nothing | the parent's `hours`, `start`, `end` | the same three, identically |
+| `placeFrame` | one `FrameBar` | one `FrameBar` per Item | one rail `FrameBar` |
+| Selection unit | the Entry | the Entry | the Entry |
+
+## How a bar gets updated
+
+<div class="fg-bar-design-doc">
+<figure>
+<svg
+viewBox="0 0 1240 340"
+role="img"
+aria-label="A five-stage pipeline for one write: entries.update, runTransaction against a staged store, the extension hook, the Rollup, and one ChangeSet. Below it, the two ChangeSet rows the write produces: the child's own hours change and the parent's rolled-up hours change, both addressed to the entries store."
+>
+<defs>
+<marker id="fga3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+</marker>
+</defs>
+<text x="24" y="26" class="box-sub" font-size="11" fill="var(--muted)">EDIT ONE SEGMENT BAR'S VALUE — THE PATH EVERY MUTATION TAKES</text>
+<rect x="24" y="42" width="200" height="66" rx="7" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1.5" />
+<text x="124" y="70" text-anchor="middle" class="box-name" font-size="11" fill="var(--ink)">entries.update('d2',</text>
+<text x="124" y="86" text-anchor="middle" class="box-name" font-size="11" fill="var(--ink)">{ hours: 6 })</text>
+<text x="124" y="101" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">api/dataset.ts</text>
+<rect x="256" y="42" width="200" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="356" y="72" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">runTransaction()</text>
+<text x="356" y="90" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">body runs on a staged store</text>
+<rect x="488" y="42" width="200" height="66" rx="7" fill="var(--bg)" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4" />
+<text x="588" y="68" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">extension hook</text>
+<text x="588" y="85" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">identityExtender by default</text>
+<text x="588" y="99" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">called once, EntryEdits in and out</text>
+<rect x="720" y="42" width="200" height="66" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="2" />
+<text x="820" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">the Rollup</text>
+<text x="820" y="88" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">data/rollup.ts — bottom-up</text>
+<rect x="952" y="42" width="200" height="66" rx="7" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1.5" />
+<text x="1052" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">one ChangeSet</text>
+<text x="1052" y="88" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">beforeChange → change → undo</text>
+<g stroke="var(--ink)" stroke-width="1.5" color="var(--ink)">
+<line x1="226" y1="75" x2="252" y2="75" marker-end="url(#fga3)" />
+<line x1="458" y1="75" x2="484" y2="75" marker-end="url(#fga3)" />
+<line x1="690" y1="75" x2="716" y2="75" marker-end="url(#fga3)" />
+<line x1="922" y1="75" x2="948" y2="75" marker-end="url(#fga3)" />
+</g>
+<polyline points="1052,108 1052,132 700,132 700,150" fill="none" stroke="var(--core)" stroke-width="1.2" stroke-dasharray="4 3" />
+<rect x="180" y="150" width="1040" height="92" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<text x="196" y="176" class="mono" font-size="11.5" fill="var(--ink)">{ store: 'entries', id: 'd2',    field: 'hours', from: 4,  to: 6  }</text>
+<text x="700" y="176" class="box-sub" font-size="10" fill="var(--muted)">← the bar's own write</text>
+<text x="196" y="200" class="mono" font-size="11.5" fill="var(--ink)">{ store: 'entries', id: 'req-1', field: 'hours', from: 12, to: 14 }</text>
+<text x="700" y="200" class="box-sub" font-size="10" fill="var(--muted)">← the Rollup's write onto the row (ADR 0013)</text>
+<text x="196" y="228" class="box-sub" font-size="10.5" fill="var(--muted)">One store. One address shape. One undo step covering both rows.</text>
+<rect x="24" y="266" width="1188" height="56" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="5 4" />
+<text x="618" y="289" text-anchor="middle" class="box-sub" font-size="11" fill="var(--ink)">A date write is the same path: the bar's own start/end change, and the Rollup rewrites the row's envelope from its children.</text>
+<text x="618" y="309" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">One transaction per gesture, at commit. A drag preview allocates nothing and writes nothing until the pointer lifts.</text>
+</svg>
+<figcaption>
+The envelope is the Rollup, not a second mechanism — which is what ruling Q9 already decided for
+Option C, and what this design gets for free. A direct write to <code>req-1.start</code> is refused
+with <code>DerivedFieldNotWritableError</code>, the refusal every parent already gives
+(ADR 0013). Nothing here
+branches on whether the Entry draws on its own row or its parent's: the write door never learns the
+row source.
+</figcaption>
+</figure>
+</div>
+
+## How a bar moves to another row
+
+<div class="fg-bar-design-doc">
+<figure>
+<svg
+viewBox="0 0 1180 300"
+role="img"
+aria-label="Before and after mini-timelines. Before: the Framing crew row carries bars d1 and d2, and the Roofing crew row carries d3. After a single update setting d1's parentId to req-2, the Framing crew row carries d2 alone and the Roofing crew row carries d3 and d1."
+>
+<defs>
+<marker id="fga4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+</marker>
+</defs>
+<text x="585" y="40" text-anchor="middle" class="box-name" font-size="13.5" fill="var(--ink)">dataset.entries.update('d1', { parentId: 'req-2' })</text>
+<text x="30" y="78" class="box-sub" font-size="11" fill="var(--muted)">BEFORE</text>
+<rect x="30" y="86" width="520" height="160" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<line x1="175" y1="86" x2="175" y2="246" stroke="var(--border)" stroke-width="1" />
+<line x1="30" y1="166" x2="550" y2="166" stroke="var(--border)" stroke-width="1" />
+<text x="44" y="131" class="box-sub" font-size="11.5" fill="var(--ink)">Framing crew</text>
+<rect x="200" y="118" width="90" height="16" rx="3" fill="var(--accent)" />
+<text x="208" y="130" class="mono" font-size="9.5" fill="var(--accent-ink)">d1</text>
+<rect x="310" y="118" width="70" height="16" rx="3" fill="var(--accent)" />
+<text x="318" y="130" class="mono" font-size="9.5" fill="var(--accent-ink)">d2</text>
+<text x="44" y="211" class="box-sub" font-size="11.5" fill="var(--ink)">Roofing crew</text>
+<rect x="310" y="198" width="110" height="16" rx="3" fill="var(--accent)" />
+<text x="318" y="210" class="mono" font-size="9.5" fill="var(--accent-ink)">d3</text>
+<line x1="558" y1="166" x2="612" y2="166" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga4)" color="var(--ink)" />
+<text x="620" y="78" class="box-sub" font-size="11" fill="var(--muted)">AFTER — ONE WRITE</text>
+<rect x="620" y="86" width="520" height="160" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
+<line x1="765" y1="86" x2="765" y2="246" stroke="var(--border)" stroke-width="1" />
+<line x1="620" y1="166" x2="1140" y2="166" stroke="var(--border)" stroke-width="1" />
+<text x="634" y="131" class="box-sub" font-size="11.5" fill="var(--ink)">Framing crew</text>
+<rect x="900" y="118" width="70" height="16" rx="3" fill="var(--accent)" />
+<text x="908" y="130" class="mono" font-size="9.5" fill="var(--accent-ink)">d2</text>
+<text x="634" y="211" class="box-sub" font-size="11.5" fill="var(--ink)">Roofing crew</text>
+<rect x="900" y="198" width="110" height="16" rx="3" fill="var(--accent)" />
+<text x="908" y="210" class="mono" font-size="9.5" fill="var(--accent-ink)">d3</text>
+<rect x="790" y="198" width="90" height="16" rx="3" fill="var(--accent)" stroke="var(--core)" stroke-width="2" />
+<text x="798" y="210" class="mono" font-size="9.5" fill="var(--accent-ink)">d1</text>
+<text x="30" y="276" class="box-sub" font-size="11" fill="var(--muted)">The id, the values, the Selection and the undo row all survive. Two Rollups re-run — the old parent's and the new one's — in the same transaction.</text>
+</svg>
+<figcaption>
+This is the main gesture of a shift roster, and the clearest gain over a Segment type: a Segment
+belongs to its Entry, so moving one between rows is a remove plus an add, and the id does not
+survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy source
+(ADR 0020) answers the new tree.
+</figcaption>
+</figure>
+</div>
+
+## What each layer sees
+
+| Layer | What changes |
+| --- | --- |
+| `model/` | `Segment`, `StoredSegment`, `SegmentId`, `SegmentInput`, `SegmentEdit` and the four Segment errors are deleted. Nothing replaces them |
+| `data/` | `updateSegment`, `addSegment`, `removeSegments` and the `store: 'segments'` apply path go. The Rollup already gives a parent its children's values, and that is now also the envelope |
+| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a claimed parent draws no Item of its own. `followSegments` collapses into `wholeEntryItem` |
+| `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Item.segmentId` go. A bar keys on its `ItemId` and names its `EntryId`, as it did before Segments |
+| `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForItem`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
+| `scheduling/` (S7) | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
+
+## What it costs
+
+| Cost | Where it stands |
+| --- | --- |
+| **Performance** | The decisive objection, and nobody has measured it. A 10,000-child-Entry frame must hold the I5 and S6 budgets. Spike S4 measures it first |
+| **A parent's own bar** | A claimed parent wears `summary()` today, which would paint over its children. Proposed: core draws no Item for it. A consumer variant may still paint a rail |
+| **The Selection unit** | [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md) makes the Segment the unit. A new ADR must revise it |
+| **Mixed children** | The rule matches the parent, so it claims all of that parent's children. A parent with days on its row *and* sub-tasks below cannot be expressed |
+| **A claimed child with children of its own** | Unruled: refuse it, draw the grandchildren on the same row, or give them rows below |
+| **Migration** | Segments shipped in S4. 59 non-test sites and 37 test files read `segments` |
+| **Copying a row with its bars** | `toInput()` copies one Entry. A subtree copy needs its own door — with or without this design |
+
+## Read next
+
+| Document | What it holds |
+| --- | --- |
+| [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The full proposal, the eleven open points, and spike S4's questions, method and pass rule |
+| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q17 — every ruling, and why Q17 re-opens Q6 |
+| [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
+| [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
+| [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |
+| [Row source updates](./07-row-source-updates.md) | Changing one row-source setting and keeping the rest |
