@@ -225,8 +225,10 @@ Every job below already ships, except one row.
 
 ```ts
 const dataset = new Dataset({
+  // Core ships `name`, `start`, `end` and `duration`. Every Field below is this consumer's own,
+  // declared on the same code path as core's (ADR 0005).
   fields: [
-    { key: 'showDaysOnRow', type: 'boolean' },
+    { key: 'showDaysOnRow', type: 'boolean' },   // the marker the row rule reads
     { key: 'hours', type: 'number', rollUp: 'sum' },
     { key: 'locked', type: 'boolean' },
   ],
@@ -298,6 +300,28 @@ with a predicate.
 *how does this row look*; `childrenOnParentRow` asks *does this parent give its children rows*. A
 claimed parent's children each still resolve their own variant afterwards, and that is the per-bar
 name, look and capability #421 asks for.
+
+### Where `showDaysOnRow` comes from
+
+**It is the consumer's value, and core knows nothing about it.** The consumer declares it on the
+`Dataset` and authors it flat on the Entry, beside `name`:
+
+```ts
+fields: [{ key: 'showDaysOnRow', type: 'boolean' }]          // declare it once
+entries: [{ id: 'req-1', name: 'Framing crew', showDaysOnRow: true }]   // author it flat
+dataset.entries.update('req-1', { showDaysOnRow: false });   // write it later
+dataset.entries.get('req-1')?.read('showDaysOnRow');         // read it — the one value door
+```
+
+A declared Field key sits at the **top level**, never nested. `props` is the bag for the keys a
+consumer has **not** declared — passenger data, carried at ingest and invisible to `update()`. Naming
+one key in both places throws (`src/model/stored-entry.ts`, `EntryInput.props`).
+
+**Declaring it is what lets the rule see it at all.** The stored value does live in the Entry's
+`props` bag — that is the Field key's address (ADR 0011) — but nothing reads it there:
+`entry.read(key)` is the one value door, and a field match resolves through the Field registry. So a
+key that no Field declares claims **no** parent, in silence. The `fields` line is not decoration; it
+is the difference between a rule that works and a rule that quietly matches nothing.
 
 **Per Entry, the consumer declares one Field and the rule matches it.** Core stores no classification
 (`plans/01` §2.5), so the marker is the consumer's own Field, not a core key:
