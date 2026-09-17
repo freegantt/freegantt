@@ -4,7 +4,7 @@
 
 Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A line number is a hint. Open the file.**
 
-**Rewritten 2026-09-17 to Option C** (Q6–Q14). Every bar is a Segment. How many Segments a row has is the only difference between a plain row and a segmented one. No question is open.
+**Rewritten 2026-09-17 to Option C** (Q6–Q14). Every bar is a Segment. How many Segments a row has is the only difference between a plain row and a segmented one. **Two questions are open: Q15 (B4) and Q16 (B2).** A build that reaches one stops and asks.
 
 ---
 
@@ -37,12 +37,12 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 - **The `segments` array replaces the list** (Q12). `update(id, { segments })` sets which Segments exist and their order. Each element replaces its Segment's values. Elements match by `id` only; the positional id match retires.
 - **An authored Segment** stores `id`, `start`, `end`, `name?` and `props` inside its Entry's `segments` array.
 - **A plain row's Segment is backed by the Entry** (Q10, Q14). A plain spanning Entry stores `segments: []`. `entry.segments` answers one live Segment. Its id is minted in a store index, never stored. It reads and writes the Entry's own record, so `updateSegment(plainId, { hours: 8 })` lands as a `store: 'entries'` row. This is backing, not a fallthrough: the plain Segment has no values of its own.
-- **An Entry's dates have one source at a time** (Q1, Q2, Q4, Q9). A row with no authored Segments keeps the dates it named (ADR 0012). A row with authored Segments rolls `start`/`end` up from them with `min`/`max`. Clearing the Segments clears the dates. A caller that wants a plain bar from a segmented row writes two calls in one transaction (Q11(e)). `envelopeOfSegments`, `reconcileEnvelope`, `fitSegmentsToEnvelope` and `widenSegmentsToEnvelope` retire into the Rollup.
+- **An Entry's dates have one source at a time** (Q1, Q2, Q4, Q9). A row that does not derive keeps the dates it named (ADR 0012). A row that derives — it has children or authored Segments — rolls `start`/`end` up over both with `min`/`max`. Clearing the Segments clears the dates, unless children remain to give it dates. A caller that wants a plain bar from a segmented row writes two calls in one transaction (Q11(e)). `envelopeOfSegments`, `reconcileEnvelope`, `fitSegmentsToEnvelope` and `widenSegmentsToEnvelope` retire into the Rollup.
 - **A row's cell may roll up its Segments** (Q8). One input: Segments and children, unioned. No precedence, no source knob. `distribute` onto Segments is not ruled.
 - **`name` is optional** on `EntryInput`, `StoredEntry`, `Entry`, `SegmentInput`, `StoredSegment`, `Segment`.
 - **One `EntryVariant`, one new key** (Q11(a)). `when` picks rows. `whenSegment` picks bars and takes one `Segment`. Both present is AND. A variant with `whenSegment` cannot set `items`.
 - **Bar gestures ask the bar; cell edits ask the cell** (Q11(b)). `move`/`resize`/`select` take a `Segment`. `interactions.edit` stays `(entry, field)`, the grid cell rule.
-- **A bar prints one Field** from its Segment, through that Field's `formatValue(value, ctx, owner)`, where `owner` is the `Entry` or `Segment` the value came from. Default `name`.
+- **A bar prints one Field** from its Segment, through that Field's `formatValue(value, ctx, owner)`, where `owner` is the `Entry` or `Segment` the value came from: the Entry in a grid cell, the Segment on a bar — a plain bar's Segment too, which reads the Entry's record. Default `name`.
 - **An `EditExtender` returns `DatasetEdits`** (Q11(c)): `{ entries?: EntryEdits; segments?: SegmentEdits }`.
 - **A bar that stands for several Segments gets all of them** (Q11(d)). `BarRendererContext` is `{ entry, segments, item, label? }`, and `segments` is never empty.
 
@@ -61,7 +61,7 @@ Publish the invocation an author writes. Read each line aloud before you change 
 | Total bar values onto the row | `{ key: 'hours', type: 'number', rollUp: 'sum' }` | `rollUp` reads Segments and children, unioned (Q8) |
 | Patch one bar | `dataset.entries.updateSegment('d2', { color: 'grey' })` | new. On a plain bar it writes the Entry |
 | Add one bar | `dataset.entries.addSegment('req-1', { start, end, hours: 8 })` | new; returns the live `Segment`. On a plain row the minted id drops, and the row starts rolling up its dates |
-| Remove bars | `dataset.entries.removeSegments(['d1', 'd2'])` | unchanged name. A plain row's id un-dates the row |
+| Remove bars | `dataset.entries.removeSegments(['d1', 'd2'])` | unchanged name. A plain row's id un-dates the row; a derived row's id waits for Q16 |
 | Patch many bars, one undo | `dataset.transaction(() => { for (const id of ids) dataset.entries.updateSegment(id, { worker: 'Ali' }); })` | no change to `transaction()` |
 | Set a row's bars | `dataset.entries.update('req-1', { segments: [{ id: 'd1', start, end, hours: 8 }, { start, end }] })` | replaces the list and each Segment's values; matches by `id`; no positional match (Q12) |
 | Move a segmented row | drag the row, or `moveEntryTo` | moves every Segment; the row's own `start`/`end` are not written (ADR 0013) |
@@ -91,7 +91,7 @@ Publish the invocation an author writes. Read each line aloud before you change 
 - `StoredEntry.segments` holds authored Segments only. A plain spanning Entry stores `segments: []`, and `toInput()` emits no `segments` with no filter and no flag.
 - The store keeps **one minted `SegmentId` per plain spanning Entry** in an index (`data/entry-store.ts`, beside `#entryIdBySegmentId` at `:523`). Core mints it when an Entry becomes plain and spanning. Core drops it when the Entry stops spanning or gains authored Segments. It is not data: no `StoredEntry` field, no ChangeSet row, no `toInput()` key (J-plan-1).
 - **The live plain Segment is backed by the Entry.** `read`, `start`, `end` and `name` answer the Entry's own values. `updateSegment` on it lands as `store: 'entries'` rows on the Entry. So the minted id never reaches a ChangeSet row.
-- `entryIdOfSegment`, `entryIdsOfSegments` and `segmentIdsOfEntries` answer the minted id (`entry-store.ts:493`). Selection, `removeSegments`, keyboard select, grid-row click and `reveal` (`gantt-shell.ts:2101`) keep working.
+- `entryIdOfSegment`, `entryIdsOfSegments` and `segmentIdsOfEntries` answer the minted id (`entry-store.ts:463`). Selection, `removeSegments`, keyboard select, grid-row click and `reveal` (`gantt-shell.ts:2101`) keep working.
 - **A summary parent is a plain row.** Its dates roll up from children, and it answers one minted Segment. `summary()` is a variant over that Segment.
 - **`addSegment` on a plain row makes it authored.** The minted id drops, and the new Segment's id names the bar. The row starts deriving `start`/`end`, and its authored dates drop — ADR 0013's rule for an Entry that starts rolling up. The Selection follows J-plan-2.
 - **Stable across a date edit and an undo.** A drag on a plain bar writes the Entry's `start`/`end`, never `segments`. S3 measured this.
@@ -130,7 +130,7 @@ Publish the invocation an author writes. Read each line aloud before you change 
 |---|---|---|
 | **I2** no module state | live `Segment` cache, variant resolution | cache lives on the store; the two-Gantt isolation test gains a `whenSegment` rule |
 | **I5** hot path allocates nothing | `whenSegment` walk, `segment.read()` on hover | walk runs in the layout pass and the frame carries the winner; `applyState` perf test unchanged |
-| **I8** `Item.id` deterministic | plain bar keeps index 0; authored Segments keep array index | layout snapshot test gains a segmented row |
+| **I8** `Item.id` deterministic | plain bar keeps index 0; authored Segments keep array index. `Item.id` is frame identity: after a reorder the Item ids follow the new index, and the Segment ids stay | layout snapshot test gains a segmented row |
 | **I14** one resolution for chrome and gesture | handles per bar, `canGesture(item)` asks every Segment the bar stands for | `e2e/write-refusal.spec.ts` gains a locked Segment beside a free one |
 
 ---
@@ -171,9 +171,9 @@ B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7  →  B8
 | Build | Job | Lands after | Gate |
 |---|---|---|---|
 | **B1** Segment data | `StoredSegment`/`Segment` pair, `entry()`, `name?` everywhere, Segment props at ingest, `toSegment` reads data, `toInput()` copies | — | ingest tests; copy test creates new Segment ids; grid shows empty name cell |
-| **B2** The plain bar | `segments: []` stored for plain, minted id in the index, live plain Segment backed by the Entry, Rollup writes a parent's dates without minting, draft, Selection drop rule, `layout/` read check. **`EmptySegmentsError` retires (Q1).** | B1 | S3's assertions as real tests; a plain Segment's `read` answers the Entry's value; a summary parent answers one Segment; every `segments` reader in the table re-read once |
+| **B2** The plain bar | `segments: []` stored for plain, minted id in the index, live plain Segment backed by the Entry, Rollup writes a parent's dates without minting, draft, Selection drop rule, `layout/` read check. **`EmptySegmentsError` retires (Q1).** | B1 | S3's assertions as real tests; a plain Segment's `read` answers the Entry's value; a summary parent answers one Segment; `update(id, { segments: [] })` alone is legal and un-dates; every `segments` reader in the table re-read once |
 | **B3** The Rollup reads Segments | Rollup input is children ∪ Segments; the four envelope paths retire; `#hasChildren` → `#derives`; a derived `start`/`end` write refuses; a row drag and `moveEntryTo` move each Segment; the `segments` array replaces by `id` and the positional match retires (Q12) | B2 | `rollUp: 'sum'` totals day `hours` onto the row; Segments + child union test; `start`/`end` go through the same code as children (no key check); row-date write throws `DerivedFieldNotWritableError`; the two-call plain-bar transaction is one undo; a reorder keeps every id |
-| **B4** Segment writes | `updateSegment`, `addSegment`, `store: 'segments'` rows, per-Segment apply/replay/undo, plain writes land as `store: 'entries'` rows, `DatasetEdits` + `mergeDatasetEdits`, the double-answer refusal | B3 | S1's assertions as real tests; `addSegment` refuses a duplicate id like `add`; ten updates in one transaction are one undo; an extender's `segments` cascade undoes with the user's edit |
+| **B4** Segment writes | `updateSegment`, `addSegment`, `store: 'segments'` rows, per-Segment apply/replay/undo, plain writes land as `store: 'entries'` rows, `DatasetEdits` + `mergeDatasetEdits`, the two double-answer refusals, the row shape of structural writes (Q15) | B3 | S1's assertions as real tests; `addSegment` refuses a duplicate id like `add`; ten updates in one transaction are one undo; an extender's `segments` cascade undoes with the user's edit; `updateSegment` on a plain bar writes `store: 'entries'` rows and no row names the minted id; each refusal has a test |
 | **B5** Variants per bar | `EntryVariant.whenSegment` (field match or `(segment) => boolean`), `items?: never` beside it, frame carries the winner per bar, `resolveBarRenderer(item)`, `BarRendererContext.segments`, `DoubleVariantClaim` names the Segment, `UnknownFieldMatch` for `whenSegment` | B4 | every shipped rule claims the same bars as before (snapshot); `whenSegment: { hours: 8 }` claims exactly those bars; a bar over several Segments is never claimed by `whenSegment`; `{ whenSegment, items }` does not compile |
 | **B6** Capabilities per bar | `CapabilityRule(segment)`, `can()` asks every Segment the bar stands for (one refusal refuses), `canGesture(item)` at every caller, handles per bar (S2's rule), grid-row click selects only bars that allow select, bar drags stop asking `interactions.edit` | B5 | `e2e/write-refusal.spec.ts` locked Segment; a11y and keyboard paths ask the same `can`; `edit` still gates the cell editor |
 | **B7** Labels | `BarLabels` long form, `EntryVariant.barLabels`, label resolved in layout from the Segment through `formatValue(value, ctx, owner)`, a11y label from printed text or dates, empty-label geometry test, day/week/year zoom test | B5 | the two pinned tests; a plain bar still prints `entry.name` |
@@ -197,7 +197,7 @@ Reversible. Each is a **J** in the log when a build takes it.
 
 - **J-plan-1.** The plain bar's id lives in a store index, never in a record or a ChangeSet row. A write through it lands on the Entry.
 - **J-plan-2.** `segmentIdsDroppedBy` goes. The Selection keeps an id while the store resolves it.
-- **J-plan-3.** `update(id, { segments })` is the structural door and writes one `segments` row. `addSegment`/`removeSegments` write one structural row each. A value write through `updateSegment` is one `store: 'segments'` row.
+- **J-plan-3.** `update(id, { segments })` is the structural door and writes one `segments` row. A value write through `updateSegment` is one `store: 'segments'` row. **The rows `addSegment`, `removeSegments`, a drag commit and `moveEntryTo` write wait for Q15.**
 - **J-plan-4.** `moveEntryTo` returns `{ start, end }` for a plain row. For a segmented row it moves each Segment and never writes the row, as a parent drag does (ADR 0013).
 - **J-plan-5.** A variant's `barLabels` merges over the Gantt's key by key: `{ field }` alone keeps the Gantt's placement.
 - **J-plan-6.** The live `Segment` exposes `read(key)`, `toInput()` and `entry()`, and no `props` (Q7).

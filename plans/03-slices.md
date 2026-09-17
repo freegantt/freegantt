@@ -314,7 +314,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Scope**
 
-- **R1 · #421** — a Segment is a bar, and every bar is a Segment (a plain row has one, backed by the Entry). A Segment has its own optional `name`, its own `props` from the one `fields` registry, a variant key `whenSegment` and gesture rules that take one `Segment`, and Segment writes on `dataset.entries` (`updateSegment`/`addSegment`/`removeSegments`). A row's cells, `start`/`end` included, roll up over its Segments and children through the normal Aggregators. `Entry.name` becomes optional too. A bar names the field it prints (`barLabels.field`). **Plan: `plans/segment-is-a-bar/`.**
+- **R1 · #421** — a Segment is a bar, and every bar is a Segment (a plain row has one, backed by the Entry). A Segment has its own optional `name`, its own declared values from the one `fields` registry (read with `segment.read(key)`), a variant key `whenSegment` and gesture rules that take one `Segment`, and Segment writes on `dataset.entries` (`updateSegment`/`addSegment`/`removeSegments`). A row's cells, `start`/`end` included, roll up over its Segments and children through the normal Aggregators. `Entry.name` becomes optional too. A bar names the field it prints (`barLabels.field`). **Plan: `plans/segment-is-a-bar/`.**
 - **R2 · #404** — non-working-time shading ships as a first-party plugin, not a harness demo.
 - **R3 · #408** — a gesture creates a `Segment`. Open on its own merits: `EntryEdit.segments` replaces the whole array. R1's `dataset.entries.addSegment(entryId, input)` is the additive door the create path uses.
 
