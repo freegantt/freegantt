@@ -4,19 +4,19 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-17. Two questions wait. Do not re-open a ruled one.**
+**Status, 2026-09-17. No question waits on the author. Q6 made the plan's API table, B3–B6 and the #421 Writes section stale — rewrite them to Option C before B1. Do not re-open a ruled one.**
 
 | | Question | Status |
 |---|---|---|
 | Q1 | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless |
 | Q2 | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays |
-| Q3 | does `addSegment` ship beside `updateSegment`? | **Ruled** — yes, in B3 |
-| Q4 | does `updateSegment` write the Entry's envelope row? | **Ruled** — yes, the min/max over its Segments |
-| Q5 | can an `EditExtender` propose a one-Segment edit? | **Ruled** — yes, and `SegmentEdits` is its own collection |
-| Q6 | is there one write door, or two? | **OPEN, recommendation made** — Option C, one door. The author has not ruled it. No build settles it |
+| Q3 | does `addSegment` ship beside `updateSegment`? | **Superseded by Q6.** The job survives (add one piece without rebuilding the array); the door is the one collection's `add` |
+| Q4 | does `updateSegment` write the Entry's envelope row? | **Ruled** — yes, the min/max over its Segments. Q9 makes that write the Rollup |
+| Q5 | can an `EditExtender` propose a one-Segment edit? | **Superseded by Q6.** The job survives (a per-piece cascade row, undone per piece); there is one Edits collection, keyed by one id |
+| Q6 | is there one write door, or two? | **Ruled 2026-09-17: Option C, one door.** The public name for the piece is still open |
 | Q7 | does an Entry read across to its Segments, or a Segment to its Entry? | **Ruled** — `read(key)` never falls through. Navigation (`segment.entry()`) ships. J-plan-6 is reversed |
 | Q8 | can an Aggregator run over Segments? | **Ruled** — yes, onto the row's cell, never onto a bar. Segments and children union, no knob |
-| Q9 | is the envelope the Rollup over Segments? | **OPEN** — proposed with Q8. It changes a Q4 naming rule |
+| Q9 | is the envelope the Rollup over Segments? | **Ruled 2026-09-17: yes.** `start`/`end` roll up from Segments to the row through the normal Aggregators (`min`, `max`). The four hand-written paths retire |
 | J1–J3 | the three spike findings | Ruled, from `SPIKE-FINDINGS.md` |
 
 **Three entries record a call that was reversed.** Q1's first ruling was wrong, and Q5's first shape was wrong. Q7 reverses the plan's hard rule 3 and J-plan-6. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -169,7 +169,7 @@ measured at `d87cbdd` — but it starts from the table, which this check found a
 
 **This is what `envelopeOfSegments` already computes** (`src/time/instant.ts:56-68`): it walks the spans, keeps the lowest `start` and the highest `end`, and every write path calls it. So `updateSegment('d2', { end })` writes an Entry-level envelope row, and the value is that min/max over the row's Segments after the edit. B3 adds no new maths. It carries the existing envelope pass onto the new per-Segment write path.
 
-**Q8 removed this paragraph's reason, and Q9 is open.** "No Aggregator ever runs over Segments" is no longer true. Until Q9 is ruled, B3 keeps the word "envelope". The original text follows.
+**Retired by Q8 and Q9.** An Aggregator runs over Segments, and the envelope **is** the Rollup with `min`/`max`. The original text follows as the record.
 
 **A naming trap, and B3 must not step in it.** The behaviour is a min/max fold, but **it is not the Rollup**. In this codebase the Rollup is the pass over an Entry's *children* (ADR 0013), and #421 states that no Aggregator ever runs over Segments. Same arithmetic, different pass, different inputs. Call this one the **envelope**, as `envelopeOfSegments` and `reconcileEnvelope` already do. One word covering both passes is the #7 *"chart"* failure a second time.
 
@@ -238,7 +238,7 @@ A `SegmentId` is a complete address on its own. Two Segments never share one, on
 
 ## Q6 — is there one write door, or two?
 
-**Raised 2026-09-16, out of Q5's correction. B3. OPEN — the grill ran on 2026-09-16 and made a recommendation: Option C. The author has not ruled it. Read "The grill" below the original question.**
+**Raised 2026-09-16, out of Q5's correction. B3. RULED: Option C, one door.** The author took C in the 2026-09-16 grill, and said so plainly on 2026-09-17. Read "The grill" below the original question.
 
 Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `EntryId`, and `SegmentEdits` keyed by `SegmentId`. The public surface has the matching pair, `entries.update(id, edit)` and `entries.updateSegment(segmentId, edit)`.
 
@@ -252,9 +252,9 @@ Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `En
 
 **Do not settle this inside a build.** It changes the plugin-author surface, so it is an API decision, not an implementation one.
 
-### The grill, 2026-09-16 — recommendation: Option C
+### The grill, 2026-09-16 — Option C, ruled
 
-**Status: recommended, not ruled.** The author asked if the Q8 rollup works with C, and it does. The author has not said "take C". Rule it before B3.
+**Status: ruled.** The author took C in the grill, and confirmed it on 2026-09-17. **Still open inside C:** the public name for the piece.
 
 **The finding.** One id space already exists. `entryIdOfSegment`, `segmentIdsOfEntries` and the Selection answer for a plain bar and an authored Segment from one id. Core treats every bar as one addressable thing. The consumer gets two of everything:
 
@@ -339,7 +339,7 @@ The worst part is the optional. Every seam under #421 receives `segment?: Segmen
 
 ## Q9 — is the envelope the Rollup over Segments?
 
-**Raised 2026-09-16, in the Q6 grill, as the consequence of Q8. OPEN.** The author's own Q4 words were "the row should be rolled up using min for start and max for end".
+**Raised 2026-09-16, in the Q6 grill, as the consequence of Q8. RULED 2026-09-17: yes.** In the author's words: "envelope will take a normal aggregator for roll up of segments to row." The author's Q4 words agreed: "the row should be rolled up using min for start and max for end".
 
 **The proposal.** The envelope is an Aggregator already: `min` on `start` and `max` on `end`. Both names are registered (`AggregatorName`, `model/field.ts:13`). Core writes that Aggregator by hand in four places:
 - `envelopeOfSegments` (`time/instant.ts`)
@@ -351,4 +351,4 @@ ADR 0013 says only the Rollup writes a rolling-up row's cell. Today `reconcileEn
 
 **What a ruling changes.** Q4's naming-trap paragraph retires. The #421 "Terms" line ("Do not write rollup for this pass") retires. ADR 0013 may need a revision note, because #421 says ADR 0013 does not change.
 
-**Until ruled:** keep the word "envelope" and keep the four paths.
+**The ruling.** A row's `start` and `end` roll up from its Segments through the normal Aggregators, `min` and `max`. There is no separate envelope pass. The four hand-written paths above retire into the Rollup. "Envelope" stays a plain word for the result, never the name of a pass. Q4's naming-trap paragraph and the #421 "Terms" line retire. ADR 0013 gains a revision note, through a new ADR (ADR 0006's rule): the Rollup's input is a row's children and its Segments.
