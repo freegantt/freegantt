@@ -6,7 +6,7 @@ import type {
   GanttEventHandler,
   GanttEventMap,
   GridWidth,
-  Interactions,
+  Capabilities,
   ResolvedTheme,
   Theme,
   ViewportGestures,
@@ -142,7 +142,7 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  and may answer "no opinion" (#256). Both sit over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
-  interactions?: Interactions;
+  capabilities?: Capabilities;
   /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
    *  decides — which is `'tick'` for every shipped preset. */
@@ -310,7 +310,7 @@ export class Gantt<TProps = unknown> {
         'locale',
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
-        'interactions',
+        'capabilities',
         'snap',
         'viewportGestures',
         'gridColumns',
@@ -799,22 +799,22 @@ export class Gantt<TProps = unknown> {
 
   /** Live (S3, D-S3-9): re-resolves immediately, so a stricter rule hides a handle or refuses a
    *  gesture without waiting for the next pointer move. */
-  get interactions(): Interactions {
-    return this.#shell.interactions;
+  get capabilities(): Capabilities {
+    return this.#shell.capabilities;
   }
 
-  set interactions(next: Interactions) {
-    this.#shell.interactions = next;
+  set capabilities(next: Capabilities) {
+    this.#shell.capabilities = next;
   }
 
   /** D-S5-35. Call: `gantt.setCapabilityRule('resize', false)`. It writes the rule for one gesture
-   *  and leaves the rules for the others exactly as they are. `gantt.interactions = { resize: false }`
+   *  and leaves the rules for the others exactly as they are. `gantt.capabilities = { resize: false }`
    *  drops them instead. A gesture rule is a boolean, or a predicate the resolver runs per entry —
    *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. The `edit` rule is
    *  the one that takes a cell (#256): `gantt.setCapabilityRule('edit', (entry, field) => (field ===
    *  'end' ? false : undefined))`, where `undefined` leaves that cell to the rules below. It re-resolves at
    *  once, so a stricter rule hides a handle without waiting for the next pointer move. */
-  setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void {
+  setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void {
     this.#shell.setCapabilityRule(capability, rule);
   }
 
@@ -823,7 +823,7 @@ export class Gantt<TProps = unknown> {
    *  not `setCapabilityRule('resize', true)`: `true` is a rule of its own, and it would also make a
    *  rolled-up parent and a milestone resizable. Clearing a gesture that carries no rule does
    *  nothing. */
-  clearCapabilityRule(capability: keyof Interactions): void {
+  clearCapabilityRule(capability: keyof Capabilities): void {
     this.#shell.clearCapabilityRule(capability);
   }
 

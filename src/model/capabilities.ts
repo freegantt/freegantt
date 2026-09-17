@@ -2,26 +2,26 @@
 // these; this file only declares them. They live here for the reason `write-verdict.ts` does: the
 // same vocabulary is read at two levels, and one of those levels is a `layout/` type.
 //
-// ADR 0018: a variant carries `can?: Interactions`, and `layout/variants.ts` declares that member.
+// ADR 0018: a variant carries `capabilities?: Capabilities`, and `layout/variants.ts` declares that member.
 // `layout/` may import `model/` and nothing above it (plans/01 §1), so the vocabulary moved down to
-// the leaf both levels can name. Nothing else changed: `Interactions` is still the consumer's own
-// `GanttOptions.interactions`, and `view/capability.ts` is still the one file that resolves it.
+// the leaf both levels can name. Nothing else changed: `Capabilities` is still the consumer's own
+// `GanttOptions.capabilities`, and `view/capability.ts` is still the one file that resolves it.
 
 import type { Entry } from './entry.js';
 import type { FieldKey } from './field-key.js';
 
 /** A boolean pins every entry the same way; a predicate varies the answer per entry
- *  (`interactions: { resize: (entry) => entry.read('locked') !== true }`).
+ *  (`capabilities: { resize: (entry) => entry.read('locked') !== true }`).
  *
  *  **`undefined` means "no opinion about this entry"** (ADR 0018, `J13`). The next answer down then
- *  decides — a variant's `can` falls to the library rule, and the consumer's own `interactions`
+ *  decides — a variant's own `capabilities` falls to the library rule, and the consumer's own `capabilities`
  *  falls to the variant's `can`. Without it, `can: { resize: (entry) => !entry.hasChildren }` would
  *  read "not on a parent" and also say **yes** to every other row, over the rule below it. That is
  *  the bug `WriteRule` already answers this way for (#256). */
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
 /** #256: the write rule takes the cell, because a write names one. Call:
- *  `interactions: { edit: (entry, field) => (entry.id === 'fixed' && field === 'end' ? false : undefined) }`.
+ *  `capabilities: { edit: (entry, field) => (entry.id === 'fixed' && field === 'end' ? false : undefined) }`.
  *
  *  `undefined` means "no opinion about this cell". The rules in `view/capability.ts` then answer it,
  *  and a roll-up parent's derived cell stays refused. A predicate names one cell out of every
@@ -41,9 +41,9 @@ export type GestureCapability = 'move' | 'resize' | 'select';
 /** Live (S3/S5, D-S3-9). `linkCreate` stays off this type until S7 (I11: no unimplemented public
  *  key).
  *
- *  **Two levels read one type** (ADR 0018). `GanttOptions.interactions` is the consumer's own
+ *  **Two levels read one type** (ADR 0018). `GanttOptions.capabilities` is the consumer's own
  *  answer; `EntryVariant.can` is the variant's, one level under it. */
-export interface Interactions {
+export interface Capabilities {
   move?: CapabilityRule;
   resize?: CapabilityRule;
   select?: CapabilityRule;

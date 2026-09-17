@@ -369,7 +369,7 @@ gantt.setCapabilityRule('edit', (entry, field) =>
 // rather than naming a fixture row of its own.
 window.__fixedFinishEntryId = FIXED_FINISH_ENTRY;
 
-// #195, D-S5-35: the page writes the one rule it owns. Assigning `gantt.interactions` would
+// #195, D-S5-35: the page writes the one rule it owns. Assigning `gantt.capabilities` would
 // restate the whole capability config, and drop any other rule this page had set. Unchecking the box
 // clears the rule rather than setting `resize: true`, so a group row stays unresizable.
 lockResizeCheckbox.addEventListener('change', () => {

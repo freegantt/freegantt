@@ -145,7 +145,7 @@ undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 
 lockResize.addEventListener('change', () => {
-  gantt.interactions = lockResize.checked ? { resize: false } : {};
+  gantt.capabilities = lockResize.checked ? { resize: false } : {};
 });
 
 // `gantt.snap =`, never `gantt.preset = { ...gantt.preset, snap }`: the old spelling built a one-off

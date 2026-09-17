@@ -95,7 +95,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       name: 'leaf',
       items: () => [],
       paint: undefined,
-      can: undefined,
+      capabilities: undefined,
       css: undefined,
     }),
     lastPaintedBar: () => makeBar(),
