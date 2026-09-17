@@ -28,6 +28,8 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q16 | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
 | Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **OPEN, 2026-09-17 — the leading design idea.** Spike S4 decides it. S4 is planned and waits for the author's word. B1–B8 wait |
 | Q18 | is the rule Gantt-wide or per Entry, and does it need `tree`? | **Answered inside Q17's design, 2026-09-17** — both, through one key; `tree` is orthogonal and leaves the two-level call site. Not ruled: Q17 is not ruled |
+| Q19 | where does a claimed row name its own Entry, and where does the parent's Item suppression live? | **OPEN, 2026-09-17.** `entryIds[0]` means "the row's subject" at nine sites. Spike S4 writes two shapes and reads the call sites |
+| Q20 | can a row filter hide one bar on a shared row? | **OPEN, 2026-09-17.** It cannot today, and the design claimed it could. Spike S4 rules it: refuse, or a new item-level knob |
 | J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
 | J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
 
@@ -600,3 +602,46 @@ A claimed parent is **already** a summary in the grid: its cells roll up from it
 2. It collided inside its own code block: `{ key: 'type', type: 'text' }` uses the word as a Field key *and* as the Field's declared type.
 
 Both examples now use one Field the page already had, `showDaysOnRow`, so the dataset, the rule and the live write tell one story. The "any value the data already holds" call site is `{ team: 'framing' }`, which is the vocabulary `row-source.ts` and the variants docs already use. Both files gained a paragraph stating what a field match is and that it neither names nor picks a variant — `when` asks how a row looks, this key asks whether a parent gives its children rows.
+
+---
+
+## Review, 2026-09-17 — the child-Entry design, verified against the code
+
+**An agent review the author commissioned, checked line by line before it was acted on** (CLAUDE.md: a review's account of the code is a claim; open the file). Nine findings came in. Every one holds. Two more came out of the check.
+
+### Confirmed, no change needed
+
+1. **The Rollup claim holds.** One bottom-up pass on every commit. A child bar is a leaf; a claimed parent rolls up through ADR 0013's existing machinery. No new pass.
+2. **The envelope machinery is worth deleting.** `rollup.ts:139-159` — clamp, then widen, with a positional tie-break — exists only because a rolling-up parent may *also* own Segments. A child Entry can never be both, so the whole #212 R2 saga goes with it. Read that comment block once: it is the single best argument for this design.
+3. **Ids are stable across sessions.** Every bar's Item id becomes `itemId(entryId, 0)` (`ids.ts:39`, `item.ts:102`) — an authored `EntryId`. Option C's plain-bar id is a counter (`dataset-state.ts:271-278`).
+4. **`collapse.ts:18-21` and `entries-source.ts:40/48/69` are as the design describes.**
+
+### Confirmed, and the design was wrong
+
+5. **The multi-Entry row precedent is the `custom` source, not the `group` source.** `group-source.ts:40` gives every member its own row with `entryIds: [id]`; only the header is shared, and it holds `entryIds: []`. `CustomRow.entryIds` is a list and `resolveCustomSource` maps all of them onto one row (`custom-source.ts:14,20`). The mechanism is real, the citation was not. Fixed in the design and in the page's flow diagram.
+6. **"A row filter can hide one bar" does not follow, and nothing does it.** `filter.ts:8-10` reads one Entry per row and `applyFilter` keeps or drops whole rows (`:69-76`); Items are produced only after a row survives. The bullet is withdrawn and the question is **Q20**.
+
+### Confirmed as unruled seams — now Q19, and open points 12–15
+
+7. **The suppression and the rail are one seam, and the design ruled neither.** `produceItemsForRow(row, entryById, registry)` loops `row.entryIds` and resolves a variant per Entry (`produce-items.ts:29-45`). Nothing in that signature says the row claims its parent. So "core draws no Item for a claimed parent" and "a consumer variant may still paint a rail" need the same answer.
+
+   **One correction to the review.** It reads this as re-opening the coupling the design closed by refusing a variant key. It does not. That refusal was about *who owns the row list*, and a marker written by the row source and read by item production leaves the row source the sole owner. The seam is unruled — that part stands — but it is not the closed question coming back.
+
+8. **The Selection change is a build, not a delete.** 16 non-test files name `segmentIds`, plus `view/segment-selection.ts` as its own module, plus `Item.segmentId`, `frame-memory.ts:96-130`, `frame-layout.ts:142`, the `data-segment-id` stamps, `reveal` and the keyboard path. The "What each layer sees" table read like a tidy-up. It is an ADR 0010 revision and real work. Open point 15.
+9. **Migration needs its ADR sooner than open point 9 said.** Segments shipped in S4 and this library has never shipped to a user, so the clean read is to delete the `segments` Field key outright with no legacy path. One ADR settles it. Open point 15.
+
+### Two findings the check added
+
+10. **`entryIds[0]` is an unwritten convention at nine sites, and this design is what makes it load-bearing.** `render/dom/index.ts:963` states the concept in a comment — *"The Entry this row's cells describe (#185) — the row's subject, not the set it owns"* — and expresses it positionally. The other eight are `render/dom/index.ts:1039`, `gantt-shell.ts:1480`, `segment-selection.ts:170`, `roving-focus.ts:311`, `sort.ts:53-54`, `filter.ts:9` and `frame.ts:330`. An entries-source row holds exactly one id today, so `[0]` is unambiguous. A claimed row holds N+1, and all nine silently change meaning. This is bigger than finding 6, which is one of the nine.
+
+    It also suggests the shape that may dissolve finding 7: if `PlannedRow` **names** its subject and `entryIds` means only "the Entries whose Items this row draws", the claimed parent is simply not in the list, and no suppression logic exists anywhere. The rail then becomes the open question instead. Q19 writes both shapes rather than ruling one here.
+
+11. **Overlapping bars on one row have no vertical answer.** Lane packing is retired (#298): every Item on a Row draws at one shared band. Authored Segments rarely overlapped; two child Entries with overlapping dates are trivial to author. What is on top, and what does a hit test return? The question did not exist under Option C. Open point 14, spike question 6.
+
+### What the review changed
+
+- The design: two wrong claims corrected, four open points added (12–15), the spike rewritten.
+- The spike: **a 10,000-bar baseline on today's design before anything changes** (the author's instruction — a number with nothing to compare against answers nothing), a comparison run against it, Q19's two shapes written rather than chosen, and a standing question 14 — *is there a better API than the one this plan drew?* — logged as the code meets each call site. Estimate 2 h → 4 h.
+- The log: Q19 and Q20 opened.
+
+**The verdict stands.** On the measured evidence the child-Entry design is the stronger idea: stable ids, a bar that moves across rows with one write, an editor surface for bar data, and the deletion of the ugliest logic in the codebase. Findings 7 and 10 are the seams that decide whether it stays simple.

@@ -413,7 +413,7 @@ aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produ
 <text x="596" y="218" class="box-sub" font-size="10.5" fill="var(--ink)">row — so each bar keeps its own name, props,</text>
 <text x="596" y="234" class="box-sub" font-size="10.5" fill="var(--ink)">variant and capabilities. That is #421's title.</text>
 <rect x="24" y="272" width="1188" height="38" rx="7" fill="var(--bg)" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="5 4" />
-<text x="618" y="296" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">Unchanged: geometry, paint, hit tests and the reconciler never learn how many Entries a Row owns. A group row already owns several.</text>
+<text x="618" y="296" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">Unchanged: geometry, paint, hit tests and the reconciler never learn how many Entries a Row owns. A custom row already owns several.</text>
 </svg>
 <figcaption>
 The three bars take one path. They part at two points only, and one of the two already ships:

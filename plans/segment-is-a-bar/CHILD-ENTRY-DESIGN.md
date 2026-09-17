@@ -61,7 +61,7 @@ Only the optional `segment?` argument went away.
 
 **Core already draws several Entries on one Row.**
 
-- `CONTEXT.md`, *Row*: "one Row may carry the Items of many Entries". The `group` row source does this today.
+- `CONTEXT.md`, *Row*: "one Row may carry the Items of many Entries". **The `custom` row source does this today** — `CustomRow.entryIds` is a list, and `resolveCustomSource` maps every id onto one row (`custom-source.ts:14,20`). *Corrected 2026-09-17: this bullet used to cite the `group` source, which does not do it — `group-source.ts:40` gives every member its own row with `entryIds: [id]`, and only the header row is shared, with `entryIds: []`.*
 - `layout/rows/entries-source.ts:40` sets `entryIds: [entryId(entry.id)]`. The change is to put the children of a claimed parent into that list and to give them no row.
 - `layout/rows/collapse.ts:18-20` already drops the rows of a collapsed parent's descendants. The new rule is the same walk, and it keeps the children's ids on the parent's row.
 - `FrameLayoutView.entryIdsForRow` already answers every Entry a row owns, for hit tests and the grid-row click.
@@ -199,7 +199,7 @@ Three rows: `site-a` (rail, collapses through the chevron), `req-1` and `req-2` 
 ## What it adds
 
 - **A bar moves to another row with one write**, and keeps its id, its data and its place in the Selection. This is the main gesture of a shift roster.
-- **A row filter can hide one bar.** `RowSource.filter` is a predicate on an Entry, so the consumer's "hide filled" filter works per bar.
+- ~~**A row filter can hide one bar.**~~ **Withdrawn 2026-09-17: this does not follow, and no code does it.** `RowFilter` is a predicate on an Entry, but `filter.ts:8-10` reads one Entry per row (`entryIds[0]`) and `applyFilter` keeps or drops **whole rows** (`:69-76`). Items are produced only after a row survives, so nothing filters an Entry off a shared row today. Hiding one bar needs a new item-level knob. Q20 below.
 - **Bar data gets an editor.** A second Gantt, or the same Gantt with the rule off, shows the days as sub-rows with editable grid cells. Option C gives a Segment's values no editor.
 - **An id is stable across sessions.** Every bar id is an authored `EntryId`. Option C's plain bar id is a counter (`data/dataset-state.ts:274`).
 
@@ -228,6 +228,12 @@ Each is a question for the spike or for a grill after it. None is ruled.
 9. **Migration.** Segments shipped in S4. 59 non-test sites and 37 test files read `segments` (README table). ADR 0010 and ADR 0012's Segment clauses retire through a new ADR.
 10. **S7.** A link to a split piece of work names the parent or one child. The scheduling plugin rules that, not this work.
 11. **The name of the key.** Run the naming skill. Read the call site aloud.
+12. **Where the claimed parent's suppression lives, and where a rail could live** (Q19). `produceItemsForRow(row, entryById, registry)` loops `row.entryIds` and resolves a variant per Entry (`produce-items.ts:29-45`). Nothing in that signature says the row claims its parent, or which of its Entries is the parent. So "core draws no Item for a claimed parent" and "a consumer variant may still paint a rail" are the **same unruled seam**, and neither is expressible today.
+13. **`entryIds[0]` is an unwritten convention at nine sites**, and this design is what makes it load-bearing. `render/dom/index.ts:963` states the concept in a comment — "The Entry this row's cells describe (#185) — the row's subject, not the set it owns" — and expresses it positionally. The other eight: `render/dom/index.ts:1039`, `view/gantt-shell.ts:1480`, `view/segment-selection.ts:170`, `view/roving-focus.ts:311`, `layout/rows/sort.ts:53-54`, `layout/rows/filter.ts:9`, `layout/frame.ts:330`. Today an entries-source row holds exactly one id, so `[0]` is unambiguous. A claimed row holds N+1, and every one of those sites silently changes meaning. Q19 rules it.
+14. **Overlapping bars on one row have no vertical answer.** Lane packing is retired (#298, `CONTEXT.md`, *Row*): every Item on a Row draws at one shared band. Authored Segments rarely overlapped; two child Entries with overlapping dates are trivial to author. What draws on top, and what does a hit test return? This question did not exist under Option C.
+15. **Two ADRs, before B1–B8 are worth planning** (findings 8 and 9).
+    - **The Selection unit** revises ADR 0010, and it is a build, not a delete. 16 non-test files name `segmentIds`, plus `view/segment-selection.ts` as its own module: `FrameBar.segmentIds`, `Item.segmentId` (`item.ts:93-102`), `segmentIdsByItem`/`segmentIdsOfEntries` (`frame-memory.ts:96-130`), `segmentIdsForItem` (`frame-layout.ts:142`), the `data-segment-id` DOM stamps, `reveal`'s dual resolution, and the keyboard path.
+    - **The Segment retires with no legacy.** Segments shipped in S4 and this library has never shipped to a user (CLAUDE.md), so the clean read is to delete the `segments` Field key outright rather than carry a migration. One ADR settles it and retires ADR 0012's Segment clauses with it.
 
 ---
 
@@ -235,26 +241,62 @@ Each is a question for the spike or for a grill after it. None is ruled.
 
 **Wait for the author's word.** Probe code only. Delete it afterwards, as S1–S3 did. Write the findings into `SPIKE-FINDINGS.md` and a **J** in the log.
 
-**Questions.**
+**Measure the baseline before you write a line of the design.** Step 0 below is not optional and not a formality: a number taken after the change, with nothing to compare it against, answers nothing.
 
-1. Does a frame with 10,000 child Entries on claimed rows hold the I5 and S6 budgets? Measure frame build time, Rollup time on one child write, and hover.
-2. Do the README's user stories 1 to 5 and 10 to 12 work in the harness with **no change to any Segment code**?
-3. What breaks when a row owns a parent and its children? Check selection, the resize handle pair, keyboard order, `reveal` and the a11y labels.
-4. Does a per-Entry write switch one row live? `entries.update('req-1', { showDaysOnRow: false })` must open that row into sub-rows in one undo step, and leave every other row alone.
-5. Does a summary row above a claimed row hold? Three levels, `tree: true`: the grandparent keeps its rail, its chevron and a Rollup over every grandchild.
+### Questions
 
-**Method.**
+**Cost.**
 
+1. **The baseline.** What do 10,000 bars cost **today**, on the shipped Segment design? Frame build, Rollup on one write, hover, and the `applyState` hot path. Write the numbers down before anything changes.
+2. **The comparison.** What do the same 10,000 bars cost as child Entries on claimed rows? Same four measurements, same fixture shape, same machine, same run. Report the delta, not the absolute. The Q6 grill called this "the decisive objection" and nobody has measured it.
+3. Do both hold the I5 and S6 budgets?
+
+**The unruled seams** (each is an open point above, and each is a real seam, not a nit).
+
+4. **Q19 — where does the claimed row name its own Entry?** `entryIds[0]` means "the row's subject" at nine sites today (open point 13) and a claimed row breaks the convention. Write all three shapes and read the call sites:
+   - a) the subject stays `entryIds[0]` and `PlannedRow` gains a claimed marker that `produceItemsForRow` reads;
+   - b) `PlannedRow` names the subject in its own field, and `entryIds` becomes what it says — the Entries whose Items this row draws. The claimed parent is then simply not in the list, so **no suppression logic exists at all**;
+   - c) something else the code asks for while you write it.
+   Shape (b) looks like it dissolves the suppression, which makes the rail the question instead: with the parent out of `entryIds`, no variant resolves for it, so how does a consumer paint one? Do not rule this from the plan. Write it.
+5. **Q20 — can a filter hide one bar on a shared row?** `applyFilter` keeps or drops whole rows (`filter.ts:69-76`). Decide: refuse it and say so, or add an item-level knob. Name the cost of each.
+6. **Overlap.** Two children on one row with overlapping dates. Lane packing is retired, so both draw at one band. What is on top, and what does a hit test return? (Open point 14.)
+7. **Two Gantts, one Dataset, different rules** (I2). One draws the days as bars; the other shows them as rows with editable cells. This is the whole reason a core key on the Entry was refused, so the spike must show it working.
+
+**The behaviour.**
+
+8. Do the README's user stories 1 to 5 and 10 to 12 work in the harness with **no change to any Segment code**?
+9. What breaks when a row owns a parent and its children? Check selection, the resize handle pair, keyboard order, `reveal` and the a11y labels.
+10. Does a per-Entry write switch one row live? `entries.update('req-1', { showDaysOnRow: false })` must open that row into sub-rows in one undo step, leave every other row alone, and **undo back** to the claimed shape with the Selection intact.
+11. Does a summary row above a claimed row hold? Three levels, `tree: true`: the grandparent keeps its rail, its chevron and a Rollup over every grandchild.
+12. **An empty claimed parent.** The rule claims a parent with no children. It draws no bars, and core draws no Item for it. Is a blank row the right answer, or does the rule not apply?
+13. **Drag a bar to another row.** The design's headline win is one write (`update('d1', { parentId: 'req-2' })`). Does a vertical drag reach that write today, or is the gesture missing? Name what is missing; do not build it.
+
+**The shape.**
+
+14. **Is there a better API than the one this plan drew?** The plan is a proposal, and the spike is the first code to meet it. Write each call site down and read it aloud as you go. Log every place the code wanted a different shape — a different key, a different value, a different owner — even when the planned shape works. A spike that only confirms the plan has not looked.
+
+### Method
+
+0. **Baseline first.** Build the 10,000-bar fixture on the shipped Segment design — 200 rows of 50 Segments — and record question 1's four numbers. Commit nothing; write them into `SPIKE-FINDINGS.md` immediately.
 1. Add the key to `EntriesRowSource` and the fold to `resolveEntriesSource` — **both branches**, flat and tree — and clear `expandable` on a claimed parent.
-2. Suppress the claimed parent's own Item.
-3. Build a fixture: 200 parents with 50 children each.
+2. Answer Q19 by writing shapes (a) and (b), not by choosing one on paper.
+3. Build the matching 10,000-bar fixture as child Entries: 200 parents with 50 children each. Re-run the four measurements.
 4. Build one crew-lead row in the harness: per-bar text, colour, a locked bar, a row total. Mark the claimed parent with a consumer Field, and put a toggle on it.
 5. Build a second fixture three levels deep: one site, two crews, days under each crew.
-5. Run the existing perf tests and `pnpm verify:full`.
+6. Build a two-Gantt page on one Dataset, one with the rule and one without (question 7).
+7. Run the existing perf tests and `pnpm verify:full`.
 
-**Pass.** Question 1 holds the budgets. Question 2 needs no workaround in `harness/`. Question 3 finds no fault that needs a second type to fix.
+### Pass
 
-**Estimate.** About 2 hours.
+- Questions 1–3: the child-Entry frame holds the I5 and S6 budgets, **and** its delta against the baseline is one the author accepts.
+- Question 4: one of the three shapes reads well enough at its call sites that the author would ship it.
+- Question 8: no workaround in `harness/`. A workaround is an API gap, and it is the finding, not a detour (CLAUDE.md's stop rule).
+- Question 9: no fault that needs a second type to fix.
+- Questions 5, 6, 12, 13: each has a written answer. "We will decide later" is not one.
+
+**Two ADRs follow a pass**, before B1–B8 are worth planning: the Selection unit (revising ADR 0010) and the Segment's retirement with no legacy. Open point 15.
+
+**Estimate.** About 4 hours — the baseline, the second fixture, the two Q19 shapes and the two-Gantt page are new since the 2-hour figure.
 
 ---
 
