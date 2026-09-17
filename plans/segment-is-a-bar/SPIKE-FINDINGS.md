@@ -10,10 +10,12 @@ README's spike table keeps their one-line answers.
 
 ## S4 — a bar is a child Entry
 
-**What ran.** Branch `spike/421-s4-child-entry`, from `221770a`. Four commits: `7b0f138`, `d83d02c`,
-`5020e05`, `544be0f`. The probe is a real fold in `src/layout/rows/entries-source.ts` and
-`src/layout/rows/row-source.ts`, plus two throwaway tests, `test/pure/spike-s4-bench.test.ts` and
-`test/pure/spike-s4-q19.test.ts`. The questions, the method and the pass rule are in
+**What ran.** Branch `spike/421-s4-child-entry`, from `221770a`. Five commits: `7b0f138`, `d83d02c`,
+`5020e05`, `544be0f`, and `ca4de5a` for the follow-up measurement. The probe is a real fold in
+`src/layout/rows/entries-source.ts` and `src/layout/rows/row-source.ts`, the Rollup memo in
+`src/data/` (`entry-store.ts`, `rollup.ts`, `transaction.ts`, `build-commit-change-set.ts`), and
+three throwaway tests: `test/pure/spike-s4-bench.test.ts`, `spike-s4-q19.test.ts` and
+`spike-s4-phases.test.ts`. The questions, the method and the pass rule are in
 [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md).
 
 **Verdict: a partial pass.** The cost objection falls. The `entryIds[0]` seam has a winner. Three
@@ -21,11 +23,13 @@ questions were not reached, so the pass rule is not met in full.
 
 | Question | Answer |
 |---|---|
-| Q1–Q3 cost | **Pass on the numbers.** A frame builds cheaper as child Entries than as Segments |
+| Q1–Q3 cost | **Pass on the numbers.** A frame builds cheaper as child Entries than as Segments, and the two costs that grew halve once the Rollup stops re-deriving an index the store already holds |
 | Q4/Q19 the subject seam | **Shape (a) wins.** Shape (b) breaks nine call sites in silence |
 | Q7 two Gantts, one Dataset | **Pass**, in running code |
 | Q5, Q6, Q9, Q12, Q13 | Answered by reading the code. Each has a written answer |
 | Q8, Q10, Q11 | **Not reached.** A second pass of about 90 minutes closes them |
+
+**Six questions wait on the author**, and none of them is the cost.
 
 ---
 

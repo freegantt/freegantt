@@ -8,7 +8,7 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 >
 > A cold read found that ruled Option C keeps seven of the eight doubled doors the Q6 grill listed. **The leading design idea is now: a bar is a regular child Entry, and a row source rule draws a parent's children on its row.** Read [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md).
 >
-> It is a proposal, not a ruling. **S4 ran on 2026-09-17 and reported a partial pass** — read [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md). The cost objection falls. Q8, Q10 and Q11 are not reached, and five questions wait on the author. If S4 passes, this plan is rewritten. If S4 fails, this plan stands, with the six fixes at the end of that file.
+> It is a proposal, not a ruling. **S4 ran on 2026-09-17 and reported a partial pass** — read [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md). The cost objection falls. Q8, Q10 and Q11 are not reached, and six questions wait on the author. If S4 passes, this plan is rewritten. If S4 fails, this plan stands, with the six fixes at the end of that file.
 
 **Rewritten 2026-09-17 to Option C** (Q6–Q16). Every bar is a Segment. How many Segments a row has is the only difference between a plain row and a segmented one. Q1–Q16 are ruled. Q17 is open.
 
@@ -163,7 +163,7 @@ Mirror ADR 0017 exactly. Do not invent a third shape.
 | **S1** ChangeSet address | Today no row can name one Segment. A second apply path is small: one diff that reads `segment.read(field)`, one apply branch. `invertChangeSet` needs no change, so undo by id falls out. The branch keys on `store: 'segments'` | B4 |
 | **S2** handle pair | **Rule B already ships.** `projectAffordances` brackets the row and gates each edge. The gap is that `Capabilities.can` takes no Segment, and hover does not thread the hovered Item into edge resolution | B6 |
 | **S3** plain bar's id | The minted id is **stable across drag and undo with no ChangeSet row**. `removeSegments` un-dates with no code change | B2 |
-| **S4** a bar is a child Entry | **Ran 2026-09-17. A partial pass.** A frame builds 19% cheaper as child Entries, so the cost objection falls. Shape (a) wins the `entryIds[0]` seam. Q8, Q10 and Q11 are not reached, and five questions wait on the author ([`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md)) | decides whether B1–B8 run at all |
+| **S4** a bar is a child Entry | **Ran 2026-09-17. A partial pass.** A frame builds 20% cheaper as child Entries, and a write and a row resolution each halve once the Rollup stops re-deriving an index the store already memoizes — so the cost objection falls. Shape (a) wins the `entryIds[0]` seam. Q8, Q10 and Q11 are not reached, and six questions wait on the author ([`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md)) | decides whether B1–B8 run at all |
 
 ---
 
