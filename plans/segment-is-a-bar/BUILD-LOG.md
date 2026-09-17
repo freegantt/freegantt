@@ -599,16 +599,4 @@ A claimed parent is **already** a summary in the grid: its cells roll up from it
 1. A consumer Field called `type` reads as a stored classification, which core does not have (ADR 0013, `plans/01` §2.5). A reader cannot tell the example's invented Field from a core one.
 2. It collided inside its own code block: `{ key: 'type', type: 'text' }` uses the word as a Field key *and* as the Field's declared type.
 
-Both examples now use one Field the page already had, `showDaysOnRow`, so the dataset, the rule and the live write tell one story.
-
-### 5. Where the matched value comes from — and why the page does not write `props.showDaysOnRow`
-
-**The author, same session:** "So `showDaysOnRow` is a field the consumer passed in and we check if it's true? The docs could be a bit more clear on this being a prop. Maybe make it clear this comes from `props.showDaysOnRow`."
-
-**The first half is right, and the page now says it.** A new section, *Where `showDaysOnRow` comes from*, shows the declare / author / write / read cycle in four lines and states that core knows nothing about the key.
-
-**The address does not go on the call site, for a checkable reason.** A **declared** Field key is authored **flat**, never nested: `props` is the bag for keys a consumer has *not* declared, and naming one key in both places throws (`model/stored-entry.ts`, `EntryInput.props` — "A declared Field key belongs at the top level instead"). `EntryEdit` is the same by decision 11. So `props.showDaysOnRow` as an authoring shape is not the shape that works.
-
-**And matching on an undeclared key claims nothing.** A field match resolves through the Field registry (`variants.ts`: "A key no Field declares matches no row"). A reader who moved the key into `props` to follow the docs would get a rule that silently matches no parent.
-
-**What the page does say about `props`:** the stored value *does* live at `entry.props.showDaysOnRow` — the Field key is the address (ADR 0011) — and nothing reads it there, because `entry.read(key)` is the one value door. `CONTEXT.md` puts "property" under *Avoid* on **Field** for this reason: it names the storage detail rather than the declaration. The "any value the data already holds" call site is `{ team: 'framing' }`, which is the vocabulary `row-source.ts` and the variants docs already use. Both files gained a paragraph stating what a field match is and that it neither names nor picks a variant — `when` asks how a row looks, this key asks whether a parent gives its children rows.
+Both examples now use one Field the page already had, `showDaysOnRow`, so the dataset, the rule and the live write tell one story. The "any value the data already holds" call site is `{ team: 'framing' }`, which is the vocabulary `row-source.ts` and the variants docs already use. Both files gained a paragraph stating what a field match is and that it neither names nor picks a variant — `when` asks how a row looks, this key asks whether a parent gives its children rows.
