@@ -34,16 +34,25 @@ questions were not reached, so the pass rule is not met in full.
 Fixture: 10,000 bars both ways — 200 rows of 50 Segments, against 200 parents of 50 children. One
 machine, one run, three repeats, ±3 ms. Node microbenchmarks, because core is DOM-free.
 
-| Measurement | Segments (today) | Child Entries | Delta |
-|---|---|---|---|
-| Frame build (`computeFrame`, cold) | 137 ms | 111 ms | **−19%** |
-| Rollup on one write | 2.1 ms | 8.6 ms | +4.1×, still under 10 ms |
-| `resolveRows` alone | 0.10 ms | 6.9 ms | +69×, still under 10 ms |
-| Hover-shaped rebuild (a proxy) | 121 ms | 109 ms | −10% |
-| Items in the frame | 10,000 | **10,200** | +200 unsuppressed parent Items |
+| Measurement | Segments (today) | Child Entries, first fold | Child Entries, tuned | Delta now |
+|---|---|---|---|---|
+| Frame build (`computeFrame`, cold) | 142 ms | 111 ms | 113 ms | **−20%** |
+| Rollup on one write | 1.9 ms | 8.6 ms | **4.9 ms** | +2.6× |
+| `resolveRows` alone | 0.09 ms | 6.9 ms | **3.9 ms** | +43× |
+| Hover-shaped rebuild (a proxy) | 121 ms | 109 ms | 104 ms | −14% |
+| Items in the frame | 10,000 | 10,200 | 10,200 | +200 unsuppressed parent Items |
+
+**The tuned column is the second measurement pass, 2026-09-17** (commit `ca4de5a`). The section
+*The cost, and what cut it in half* below says what changed, and why the first numbers misled.
 
 **The Q6 grill called 10,000 child Entries "the decisive objection".** The frame builds faster than
 today at ten times the consumer brief's ceiling. The objection does not survive the measurement.
+
+**`resolveRows` was never 69× slower — it walks 51× more Entries.** The baseline walks **200**
+Entries; its 10,000 bars are `segments` array elements inside them, which `resolveRows` never
+visits. The child fixture walks **10,200**. Per Entry the tuned fold costs 0.38 µs against the
+baseline's 0.45 µs, so row resolution is now **cheaper per Entry** than today's path. The 51× is the
+design's premise, and no cache removes it.
 
 **Two honest limits on these numbers.**
 
@@ -56,6 +65,51 @@ today at ten times the consumer brief's ceiling. The objection does not survive 
 §12-style budgets defined numerically from the spike and enforced in CI" — is still unchecked. I5's
 shipped test (`render/dom/index.test.ts:1472`) is qualitative. Read against I5's words, the fold
 touches nothing on the hot path: it changes which Items exist, not how a hover diffs them.
+
+---
+
+## The cost, and what cut it in half
+
+**The first bench compared two different writes.** The baseline wrote `{ name }` against a Dataset
+that declared no `fields` at all; the child fixture wrote `hours`, declared `rollUp: 'sum'`. Both
+now declare and write `hours`. **The baseline stayed at ~2 ms, so the 4× was real** — the asymmetry
+was not the cause, and only a fixed bench could show that.
+
+**Where an 8.9 ms write goes**, measured in isolation at 10,200 entries:
+
+| Piece | Cost | Share |
+|---|---|---|
+| `checkHierarchyAnswers` over the effective tree | 2.3 ms | 26% |
+| `buildEffectiveEntries` — a full `Map` copy | 0.7 ms | 7% |
+| `childIdsByParent`, twice | 0.6 ms | 7% |
+| the diff, the apply, the signals, the live rows | ~5.3 ms | 60% |
+
+**The store already holds the index the Rollup rebuilt.** `EntryStore.#byParent` is a `computed()`:
+the committed children by parent, memoized per revision — the same `F6` guarantee
+`committedParents()` gives. `rollUpFields` re-derived that answer on every commit, and re-checked
+the effective tree on top of it. Three changes — publish it as `committedChildIds()`, carry it on
+`RollUpTree`, and skip both the re-check and both index builds when a commit **moves no row** (no
+adds, no removes, and no edit whose `proposedKeys` names `parentId`). **One write: 8.6 ms → 4.9 ms.**
+
+**The fold also taxed the flat path for everyone.** With no rule configured at all, the first cut
+still built the tree index, ran a claim pass and allocated a `Set` — today's shipped path went
+0.09 ms → 0.24 ms. An early return gives it back. Two more constant-factor fixes: `claims()` ran
+twice per Entry, and it ran on every Entry, including the 10,000 children that can never be claimed.
+A parent must have children, so a `Map` lookup answers that before the Field read. **Row resolution:
+6.9 ms → 3.9 ms**, and the field match's own share fell from 2.28 ms to 0.80 ms.
+
+`pnpm typecheck`, `pnpm lint`, `pnpm test:node` (885) and `pnpm test:dom` (1239) stay green, and no
+existing test changed behaviour. **This is still probe code on a spike branch.** It touches
+`src/data/` and `src/layout/`, which a spike does not ship. It shows the cost is addressable. It is
+not a pull request.
+
+**A measurement trap worth keeping.** Five repeats of `update(id, { hours: 9 })` report ~4.9 ms
+instead of ~8.9 ms, because runs 2–5 write the same value and the store exits early. The value must
+change on every repeat.
+
+**Still open:** about 60% of the write — the diff, the apply, the signal fan-out, the live-row cache
+— is unprofiled. `buildEffectiveEntries` still copies the whole `Map` per commit, where
+`effectiveEntriesFor` already sets a read-through precedent.
 
 ---
 
@@ -162,6 +216,10 @@ plus a ruling on whether that is default behaviour or a capability. Not built, b
    `SegmentSelection.step()`, or is that a smaller fix under either design?
 5. **The blank row.** Is a blank row right for an empty claimed parent, and for a row whose bars a
    filter all removed? Or does the rule stop applying when it would draw one?
+6. **Does a hierarchy source declare the keys it reads?** The Rollup's new fast path applies only to
+   core's own `storedParentSource`, because a plugin source is a function that may read any field,
+   and nothing on the seam says which. A source that named its keys would let every source skip the
+   re-check. That is a seam question, wider than #421.
 
 ---
 
@@ -189,9 +247,10 @@ git checkout spike/421-s4-child-entry
 pnpm install
 pnpm exec vitest run --project pure test/pure/spike-s4-bench.test.ts   # Q1-Q3, prints both fixtures
 pnpm exec vitest run --project pure test/pure/spike-s4-q19.test.ts     # Q4/Q19 shapes, and Q7
+pnpm exec vitest run --project pure test/pure/spike-s4-phases.test.ts  # where a write's cost goes
 ```
 
-**Regression signal on the branch:** `pnpm typecheck`, `pnpm lint`, `pnpm test:node` (884 passed, 878
-before the probe's own 6) and `pnpm test:dom` (1239 passed). **No pre-existing test broke.**
+**Regression signal on the branch:** `pnpm typecheck`, `pnpm lint`, `pnpm test:node` (885 passed)
+and `pnpm test:dom` (1239 passed). **No pre-existing test broke, before or after the tuning.**
 `pnpm verify:full` did not run on the spike branch, by the coordinator's call: probe code trips the
 format, lint and api-report gates, and that verdict answers nothing about this spike.
