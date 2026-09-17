@@ -1,5 +1,7 @@
 # A Segment is a bar — spike findings (#421)
 
+> **Measurements stand. Recommended shapes do not (2026-09-17).** Q6 and Q10 in `BUILD-LOG.md` replaced every two-door shape this file suggests: `FieldUpdated.segmentId`, `updateSegment`, a `segment?` parameter on `CapabilityRule`, and a separate envelope mirror (Q9). A Segment write is a `store: 'segments'` row. `can` takes a required `Segment`. Read this file for what the code did, and the plan README for what to build.
+
 Three throwaway probes, run once, then deleted. `git status` was clean before and after each one.
 Every code line cited here was open and read at spike time, not taken from the plan.
 

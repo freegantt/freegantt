@@ -4,22 +4,27 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-17. No question waits on the author. Q6 made the plan's API table, B3–B6 and the #421 Writes section stale — rewrite them to Option C before B1. Do not re-open a ruled one.**
+**Status, 2026-09-17. One question waits (Q11). The plan README and #421 are rewritten to Option C. Do not re-open a ruled one.**
+
+**Read this table, not the old bodies.** An entry marked *Superseded* keeps its text as the record. Its job may survive. Its shape does not.
 
 | | Question | Status |
 |---|---|---|
-| Q1 | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless |
-| Q2 | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays |
-| Q3 | does `addSegment` ship beside `updateSegment`? | **Superseded by Q6.** The job survives (add one piece without rebuilding the array); the door is the one collection's `add` |
-| Q4 | does `updateSegment` write the Entry's envelope row? | **Ruled** — yes, the min/max over its Segments. Q9 makes that write the Rollup |
-| Q5 | can an `EditExtender` propose a one-Segment edit? | **Superseded by Q6.** The job survives (a per-piece cascade row, undone per piece); there is one Edits collection, keyed by one id |
-| Q6 | is there one write door, or two? | **Ruled 2026-09-17: Option C, one door.** The public name for the piece is still open |
+| Q1 | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless. Q11(e) checks it against the parent write rule |
+| Q2 | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays. The door is now `dataset.segments.remove` |
+| Q3 | does `addSegment` ship beside `updateSegment`? | **Superseded by Q6/Q10.** The job survives as `dataset.segments.add(entryId, input)` |
+| Q4 | does `updateSegment` write the Entry's envelope row? | **Superseded in shape by Q6/Q9.** A Segment write re-runs the Rollup, which writes the row's `start`/`end` rows in the same transaction |
+| Q5 | can an `EditExtender` propose a one-Segment edit? | **Superseded in shape by Q6.** The job survives: a cascade writes per Segment, undone per Segment. The return shape is open, Q11(c) |
+| Q6 | is there one write door, or two? | **Ruled 2026-09-17: Option C, one door.** Q10 fixes its name and collections |
 | Q7 | does an Entry read across to its Segments, or a Segment to its Entry? | **Ruled** — `read(key)` never falls through. Navigation (`segment.entry()`) ships. J-plan-6 is reversed |
 | Q8 | can an Aggregator run over Segments? | **Ruled** — yes, onto the row's cell, never onto a bar. Segments and children union, no knob |
 | Q9 | is the envelope the Rollup over Segments? | **Ruled 2026-09-17: yes.** `start`/`end` roll up from Segments to the row through the normal Aggregators (`min`, `max`). The four hand-written paths retire |
-| J1–J3 | the three spike findings | Ruled, from `SPIKE-FINDINGS.md` |
+| Q10 | under C: the bar's name, where writes go, what backs a plain bar, a write to a segmented row's dates | **Ruled 2026-09-17** — `Segment`; `dataset.entries` + `dataset.segments`; the Entry backs a plain bar; the rolling-up parent's rule |
+| Q11 | the Option C details Q10 does not answer | **OPEN** — five items. A build that reaches one stops |
+| J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
+| J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
 
-**Three entries record a call that was reversed.** Q1's first ruling was wrong, and Q5's first shape was wrong. Q7 reverses the plan's hard rule 3 and J-plan-6. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
+**Entries that record a reversed call.** Q1's first ruling was wrong. Q5's first shape was wrong, and Q6 then replaced Q3, Q4 and Q5's shapes. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q9 retires Q4's naming trap. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
 
 ---
 
@@ -52,7 +57,7 @@ Today it throws `EmptySegmentsError` (`data/entry-reader.ts:607`): under ADR 001
 
 ## Q2 — what does removing the last authored Segment leave?
 
-**Raised 2026-09-16, in the plan. B2. RULED the same day: it un-dates the Entry, and the dateless row stays in the grid. Today's rule holds, unchanged.**
+**Raised 2026-09-16, in the plan. B2. RULED the same day: it un-dates the Entry, and the dateless row stays in the grid. Today's rule holds, unchanged.** Since Q6/Q10, `removeSegments` below reads as `dataset.segments.remove`. The ruling does not change.
 
 Today `removeSegments` on the last Segment un-dates the Entry (`CONTEXT.md:67`, ADR 0012's *last-segment-remove un-dates both dates*). Under #421 the dates are what make a bar, and the Segments are pieces of it.
 
@@ -67,6 +72,8 @@ Today `removeSegments` on the last Segment un-dates the Entry (`CONTEXT.md:67`, 
 ---
 
 ## Q3 — does `entries.addSegment(entryId, input)` ship beside `updateSegment`?
+
+**SUPERSEDED 2026-09-17 by Q6 and Q10.** `addSegment` does not ship. The job ships as `dataset.segments.add(entryId, input)`. The text below is the record.
 
 **Raised 2026-09-16, in the plan. B3. RULED the same day: yes, it ships in B3.** The first recommendation was "not in this issue", on scope alone. The author asked why, and the scope reason did not hold. It stands here as the record.
 
@@ -84,7 +91,7 @@ Today `removeSegments` on the last Segment un-dates the Entry (`CONTEXT.md:67`, 
 
 ## J1 — S1's ChangeSet address: no `segmentId` row today, and a second write path is real but small
 
-**Ruled 2026-09-16, from the S1 spike (`SPIKE-FINDINGS.md`).**
+**Ruled 2026-09-16, from the S1 spike (`SPIKE-FINDINGS.md`).** **Shape superseded 2026-09-17 by Q6:** there is no `FieldUpdated.segmentId`. A Segment write is a `store: 'segments'` row keyed by the Segment's own id. The measurement below stands: the apply path is small, and undo needs no change.
 
 Today's store cannot produce a `{ segmentId, field }` row at all: `FieldUpdated`
 (`model/change-set.ts:20-25`) has no `segmentId` key, and `applyFieldRow` (`entry-store.ts:72-84`)
@@ -163,6 +170,8 @@ measured at `d87cbdd` — but it starts from the table, which this check found a
 
 ## Q4 — does `updateSegment` still write the Entry's own `end` envelope row?
 
+**Shape superseded 2026-09-17 by Q6 and Q9.** `updateSegment` does not ship, and no envelope pass exists. The ruling's substance holds: a Segment write in `dataset.segments` re-runs the Rollup, which writes the row's `start`/`end` rows in the same transaction. The text below is the record.
+
 **Raised 2026-09-16, from the S1 spike. RULED the same day: yes, it writes the row. The Entry's span is the Segments' envelope — the lowest `start` and the highest `end`.**
 
 **The ruling, in the author's words:** "the row should be rolled up using min for start and max for end".
@@ -199,6 +208,8 @@ against ("The ChangeSet row names the `segmentId`, and undo replays it" — plur
 envelope mirror stays).
 
 ## Q5 — can an `EditExtender` propose a one-Segment edit?
+
+**SUPERSEDED 2026-09-17 by Q6.** The job holds: an `EditExtender` proposes a one-Segment edit, so undo reverses a cascade per Segment. The `SegmentEdit`/`SegmentEdits` shape below is not ruled under C — see Q11(c). The text below is the record.
 
 **Raised 2026-09-16, from the S1 spike, as "not settled". RULED the same day: yes, it must. The shape was then CORRECTED the same day — read the correction.**
 
@@ -254,7 +265,7 @@ Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `En
 
 ### The grill, 2026-09-16 — Option C, ruled
 
-**Status: ruled.** The author took C in the grill, and confirmed it on 2026-09-17. **Still open inside C:** the public name for the piece.
+**Status: ruled.** The author took C in the grill, and confirmed it on 2026-09-17. **Q10 changed four details of the sketch below:** the name is `Segment`, not `pieces`; there are two collections (`dataset.entries` for rows, `dataset.segments` for bars), not one; navigation is `segment.entry()`, not `row`; and the Edits shape is open (Q11). Read Q10 for the shape, and this section for the reasons.
 
 **The finding.** One id space already exists. `entryIdOfSegment`, `segmentIdsOfEntries` and the Selection answer for a plain bar and an authored Segment from one id. Core treats every bar as one addressable thing. The consumer gets two of everything:
 
@@ -354,3 +365,34 @@ ADR 0013 says only the Rollup writes a rolling-up row's cell. Today `reconcileEn
 **The ruling.** A row's `start` and `end` roll up from its Segments through the normal Aggregators, `min` and `max`. There is no separate envelope pass.
 
 **`min`/`max` over Segments are not special** (author, 2026-09-17). They are the same Aggregators, run by the same Rollup, that `start`/`end` use over children today. `start` and `end` are core Field declarations with `rollUp: 'min'` and `rollUp: 'max'`, in the same shape as a consumer's `hours` with `rollUp: 'sum'`. No code path checks for `start`/`end`, and no code path checks whether the input is a Segment or a child. A special case for either is a bug. The four hand-written paths above retire into the Rollup. "Envelope" stays a plain word for the result, never the name of a pass. Q4's naming-trap paragraph and the #421 "Terms" line retire. ADR 0013 gains a revision note, through a new ADR (ADR 0006's rule): the Rollup's input is a row's children and its Segments.
+
+---
+
+## Q10 — Option C's shape: name, collections, the plain bar, a row's dates
+
+**Raised 2026-09-17, while rewriting the plan to C. RULED the same day, four answers.**
+
+1. **The bar's public name is `Segment`.** The word widens: every bar is a Segment, and a plain row has exactly one. No new glossary term. ADR 0010 already makes the Segment the selection unit.
+2. **Two collections, one per concept.** `dataset.entries` holds rows: grid, hierarchy, row cells. `dataset.segments` holds bars: `get`, `add`, `update`, `remove`. This is one door per concept, not one door per kind of bar. `updateSegment`, `addSegment` and `removeSegments` do not ship.
+3. **A plain row's Segment is backed by the Entry.** The plain row stores `segments: []`. Its live Segment has a minted id and reads and writes the Entry's own record. A write through `dataset.segments` lands as `store: 'entries'` rows. The minted id stays out of every ChangeSet row (J-plan-1). This is not a read fallthrough (Q7): the plain Segment has no values of its own to fall through from.
+4. **A write to a segmented row's `start`/`end` follows the rolling-up parent's rule.** No new rule. Measured on 2026-09-17: core `start`/`end` already declare `rollUp: 'min'`/`'max'` (`src/data/fields/core-fields.ts:50-63`). ADR 0013 refuses `update()` on a rolling-up cell with `DerivedFieldNotWritableError` unless the Field declares `distribute` (amendment, 2026-09-11). A parent bar drag moves the descendants and does not write the parent. A segmented row takes both rules as they are: the write is refused, and a row drag moves its Segments.
+
+**What these retire.** `reconcileEnvelope`'s sole-Segment mirror (a row date write copied onto its one Segment) goes, because the write is now refused. `fitSegmentsToEnvelope` and `widenSegmentsToEnvelope` go, because the Rollup reads Segments and never writes them (Q9).
+
+**One consequence for B2.** A live plain row now answers its minted Segment in `entry.segments`. So `layout/frame-memory.ts` may keep reading `entry.segments`, and the `LayoutInput` port the first plan needed may be unnecessary. B2 checks whether that file reads the live or the stored Entry, and logs a J.
+
+---
+
+## Q11 — Option C details that Q10 does not answer
+
+**Raised 2026-09-17, while rewriting the plan to C. OPEN.** Each item names the build that reaches it. That build stops there and asks.
+
+**(a) The names of the two rule lists — B5.** The row list decides `items`. The bar list decides `paint`, `css`, `can` and `barLabels`, one Segment at a time. Two lists make "a bar rule that answers `items`" unrepresentable. Run the naming skill. Today `variants` is one list of `EntryVariant`.
+
+**(b) One signature for `WriteRule` and `formatValue` — B6 and B7.** Both serve a grid cell (a row) and a bar (a Segment). Hard rule 4 bars `(entry, segment?)`. Options to weigh: one argument typed `Entry | Segment`; two named keys on the rule (a row rule and a bar rule); or a context object that names its source. Do not ship an optional second argument.
+
+**(c) The `EditExtender` return shape — B4.** Q10 made two collections, so a cascade writes rows and bars. Options to weigh: one object with an `entries` map and a `segments` map (the working name `DatasetEdits` came from Q6's first pass); or one map keyed by a branded id union. #209's rule still binds: a plugin author writes exactly what the public doors take, keyed the way those doors key them.
+
+**(d) What a bar-list seam receives for an Item that draws no single Segment — B5.** `ignoreSegments`, `fixedWidthItem` and a `summary()` rail over a segmented row draw one Item that stands for several Segments, or none. `BarRendererContext.segment` is required under C. Decide what those Items get, without making `segment` optional again.
+
+**(e) Q1's plain-bar edit under the parent write rule — B3.** Q1 ruled that `entries.update(id, { segments: [], start, end })` leaves a plain bar. Q10 refuses a `start` write on a segmented row, and ADR 0013 refuses a mixed patch whole. Check whether the write resolver judges the row's rolling-up state before or after the patch. If before, Q1's call site throws, and the author rules which rule gives way.
