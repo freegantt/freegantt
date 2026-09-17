@@ -589,3 +589,14 @@ A claimed parent is **already** a summary in the grid: its cells roll up from it
 
 - `docs/08-a-bar-is-an-entry.md`: two new sections (`tree` is a separate question; a summary row above a claimed row), the scope section rewritten around the three call sites, and `tree: true` dropped from the two-level example.
 - `CHILD-ENTRY-DESIGN.md`: the same three answers, plus two spike questions (4 and 5), two spike steps, and amendments to open points 4, 5 and 6.
+
+### 4. The `type` example went, the same day
+
+**The author, reading the page:** "I don't understand what `childrenOnParentRow: { type: 'request' }` is. What does `type` request do here? Is this to define the variant?"
+
+**No — it is a field match, and the example taught the wrong thing twice.**
+
+1. A consumer Field called `type` reads as a stored classification, which core does not have (ADR 0013, `plans/01` §2.5). A reader cannot tell the example's invented Field from a core one.
+2. It collided inside its own code block: `{ key: 'type', type: 'text' }` uses the word as a Field key *and* as the Field's declared type.
+
+Both examples now use one Field the page already had, `showDaysOnRow`, so the dataset, the rule and the live write tell one story. The "any value the data already holds" call site is `{ team: 'framing' }`, which is the vocabulary `row-source.ts` and the variants docs already use. Both files gained a paragraph stating what a field match is and that it neither names nor picks a variant — `when` asks how a row looks, this key asks whether a parent gives its children rows.

@@ -17,12 +17,12 @@ The same design, with four diagrams of how a normal bar, a segment bar and a sum
 ```ts
 const dataset = new Dataset({
   fields: [
-    { key: 'type', type: 'text' },
+    { key: 'showDaysOnRow', type: 'boolean' },
     { key: 'hours', type: 'number', rollUp: 'sum' },
     { key: 'locked', type: 'boolean' },
   ],
   entries: [
-    { id: 'req-1', name: 'Framing crew', type: 'request' },              // the row
+    { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
     { id: 'd1', parentId: 'req-1', start, end, hours: 8 },                // a bar: a plain Entry
     { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
     { id: 'hold', start, end },                                           // a plain row, as today
@@ -31,7 +31,7 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', childrenOnParentRow: { type: 'request' } },
+  rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } },
 });
 ```
 
@@ -120,10 +120,14 @@ Every job uses a door that ships today.
 
 ```ts
 childrenOnParentRow: true                                       // every parent
-childrenOnParentRow: { type: 'request' }                        // the parents of one kind
+childrenOnParentRow: { team: 'framing' }                        // any value the data already holds
 childrenOnParentRow: { showDaysOnRow: true }                    // the parents the consumer marks
 childrenOnParentRow: (entry) => entry.read('ownRows') !== true  // every parent, minus the opened ones
 ```
+
+**A field match is a Field key and a value.** `{ showDaysOnRow: true }` claims the parents whose `showDaysOnRow` Field equals `true`; the comparison is that Field's own `equals` (`model/field.ts`), and a key no Field declares claims nothing (`variants.ts`). **It does not name or pick a variant.** `EntryVariant.when` writes the same shape for a different question — `when` asks how a row looks, this key asks whether a parent gives its children rows. A claimed parent's children resolve their own variants afterwards, which is the per-bar look #421 asks for.
+
+**Refused as an example: a consumer Field called `type`** (`{ type: 'request' }`, the first draft). It reads as a stored classification, which core does not have (ADR 0013), and it collides with `Field.type` in the same `fields` block — `{ key: 'type', type: 'text' }`. A consumer may still declare such a Field; the docs must not teach one.
 
 **Per Entry, the marker is a consumer Field, and core stores no classification** (`plans/01` §2.5):
 
