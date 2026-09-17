@@ -462,6 +462,13 @@ The author took every recommendation. Each one was measured against the code and
 - Merging one Segment's values is `updateSegment`'s job. `update` sets the list; `updateSegment` patches one Segment. The two doors do not overlap.
 - Internal writers (a drag commit, `moveEntryTo`) send full elements with ids, so they keep every Segment's data.
 
+**Confirmed by the author, 2026-09-17, after a survey.** The author asked how comparable libraries do this and how our Entry does it.
+- **Our Entry.** `update` patches keys; each named key's value is written whole by `writeField` (`data/fields/field-access.ts:330-342`), so an array value replaces and never merges. Only the `props` bag merges, per key. The positional match is the one place an element is matched rather than replaced. The store has no array operators: `add`, `update` and `remove` each take one Entry.
+- **Comparable Gantt libraries** (surveyed; names stay out of this file by the vendor-name rule). One stores a split piece as an ordinary child task drawn on the parent's row, so there is no nested array. Two keep a `segments` array or a joined segment source and edit pieces through split/merge commands. None of the three documents an element-level merge on an array write.
+- **General data APIs.** JSON Merge Patch (RFC 7396) replaces arrays whole. Document stores replace an array on a field write and offer separate add/remove operators.
+- **The pattern.** An array write replaces it. One-item changes get their own doors. Here those doors are `updateSegment`, `addSegment` and `removeSegments`.
+- **Refused: an element with a known `id` keeps the values it does not name.** That makes one array value merge while every other array value replaces. `updateSegment` is the merge door.
+
 ---
 
 ## Q13 — `updateSegment`, or `dataset.segments.update`?
