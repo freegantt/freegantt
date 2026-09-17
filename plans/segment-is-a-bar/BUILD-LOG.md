@@ -4,34 +4,39 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-17. Q17 waits, and it holds B1.** The plan README and #421 state Q1–Q16. Do not re-open a ruled one alone. Q17 re-opens Q6 as a whole, on the author's word.
+**Status, 2026-09-17. Q17 is RULED: a bar is a regular child Entry.** The Segment retires, and with it Option C. **Q1–Q16 are void as shapes** — each one ruled a detail of a type this library will not ship. Their text stays as the record of what was refused and why. The build order is C1–C7 in [`README.md`](README.md); B1–B8 do not exist.
 
-**Read this table, not the old bodies.** An entry marked *Superseded* keeps its text as the record. Its job may survive. Its shape does not.
+**Read this table, not the old bodies.** An entry marked *Void* or *Superseded* keeps its text as the record. Its job may survive. Its shape does not.
 
 | | Question | Status |
 |---|---|---|
-| Q1 | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless. Q11(e): a plain bar from a segmented row is two calls in one transaction |
-| Q2 | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays |
-| Q3 | does `addSegment` ship beside `updateSegment`? | **Ruled yes; Q13 confirms the name** after Q10 briefly moved it to `dataset.segments.add` |
-| Q4 | does `updateSegment` write the Entry's envelope row? | **Superseded in mechanism by Q8/Q9.** A Segment write re-runs the Rollup, which writes the row's `start`/`end` rows in the same transaction |
-| Q5 | can an `EditExtender` propose a one-Segment edit? | **Ruled yes.** `SegmentEdit`/`SegmentEdits` keep their names; Q11(c) puts them inside `DatasetEdits` |
-| Q6 | is there one write door, or two? | **Ruled 2026-09-17: Option C.** Every bar is a Segment; Q10–Q14 fix the shape |
-| Q7 | does an Entry read across to its Segments, or a Segment to its Entry? | **Ruled** — `read(key)` never falls through. Navigation (`segment.entry()`) ships. J-plan-6 is reversed |
-| Q8 | can an Aggregator run over Segments? | **Ruled** — yes, onto the row's cell, never onto a bar. Segments and children union, no knob |
-| Q9 | is the envelope the Rollup over Segments? | **Ruled 2026-09-17: yes.** `start`/`end` roll up from Segments to the row through the normal Aggregators (`min`, `max`). The four hand-written paths retire |
-| Q10 | under C: the bar's name, where writes go, what backs a plain bar, a write to a segmented row's dates | **Ruled 2026-09-17** — `Segment`; the Entry backs a plain bar; the rolling-up parent's rule. **Answer 2 (`dataset.segments`) is superseded by Q13** |
-| Q11 | the Option C details Q10 does not answer | **Ruled 2026-09-17** — (a) one `EntryVariant` + `whenSegment`; (b) `edit` stays the cell rule, `formatValue(value, ctx, owner)`; (c) `DatasetEdits`; (d) `BarRendererContext.segments`; (e) derivation read before the patch, `#derives` |
-| Q12 | how does `update(id, { segments })` treat the array? | **Ruled 2026-09-17** — replaces the list; each element replaces its Segment; match by `id` only; positional match retires |
-| Q13 | `updateSegment`, or `dataset.segments.update`? | **Ruled 2026-09-17** — `entries.updateSegment` / `addSegment` / `removeSegments`. No second collection |
-| Q14 | should every spanning row store a Segment? | **Ruled 2026-09-17: no.** Q10's storage stays. Every bar is still a Segment to the consumer |
-| Q15 | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **Ruled 2026-09-17** — one row per Segment added, removed or changed; only `update(id, { segments })` writes a whole-array row, and the refusal applies to that call alone |
-| Q16 | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
-| Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **OPEN, 2026-09-17 — the leading design idea.** Spike S4 decides it. S4 is planned and waits for the author's word. B1–B8 wait |
-| Q18 | is the rule Gantt-wide or per Entry, and does it need `tree`? | **Answered inside Q17's design, 2026-09-17** — both, through one key; `tree` is orthogonal and leaves the two-level call site. Not ruled: Q17 is not ruled |
-| Q19 | where does a claimed row name its own Entry, and where does the parent's Item suppression live? | **OPEN, 2026-09-17.** `entryIds[0]` means "the row's subject" at nine sites. Spike S4 writes two shapes and reads the call sites |
-| Q20 | can a row filter hide one bar on a shared row? | **OPEN, 2026-09-17.** It cannot today, and the design claimed it could. Spike S4 rules it: refuse, or a new item-level knob |
+| Q1 *(void)* | does `update(id, { segments: [] })` make an Entry plain? | **Ruled**, then corrected — it leaves the row dateless. Q11(e): a plain bar from a segmented row is two calls in one transaction |
+| Q2 *(void)* | what does removing the last authored Segment leave? | **Ruled** — it un-dates the Entry, and the row stays |
+| Q3 *(void)* | does `addSegment` ship beside `updateSegment`? | **Ruled yes; Q13 confirms the name** after Q10 briefly moved it to `dataset.segments.add` |
+| Q4 *(void)* | does `updateSegment` write the Entry's envelope row? | **Superseded in mechanism by Q8/Q9.** A Segment write re-runs the Rollup, which writes the row's `start`/`end` rows in the same transaction |
+| Q5 *(void)* | can an `EditExtender` propose a one-Segment edit? | **Ruled yes.** `SegmentEdit`/`SegmentEdits` keep their names; Q11(c) puts them inside `DatasetEdits` |
+| Q6 *(void)* | is there one write door, or two? | **Ruled 2026-09-17: Option C.** Every bar is a Segment; Q10–Q14 fix the shape |
+| Q7 *(void)* | does an Entry read across to its Segments, or a Segment to its Entry? | **Ruled** — `read(key)` never falls through. Navigation (`segment.entry()`) ships. J-plan-6 is reversed |
+| Q8 *(void)* | can an Aggregator run over Segments? | **Ruled** — yes, onto the row's cell, never onto a bar. Segments and children union, no knob |
+| Q9 *(void)* | is the envelope the Rollup over Segments? | **Ruled 2026-09-17: yes.** `start`/`end` roll up from Segments to the row through the normal Aggregators (`min`, `max`). The four hand-written paths retire |
+| Q10 *(void)* | under C: the bar's name, where writes go, what backs a plain bar, a write to a segmented row's dates | **Ruled 2026-09-17** — `Segment`; the Entry backs a plain bar; the rolling-up parent's rule. **Answer 2 (`dataset.segments`) is superseded by Q13** |
+| Q11 *(void)* | the Option C details Q10 does not answer | **Ruled 2026-09-17** — (a) one `EntryVariant` + `whenSegment`; (b) `edit` stays the cell rule, `formatValue(value, ctx, owner)`; (c) `DatasetEdits`; (d) `BarRendererContext.segments`; (e) derivation read before the patch, `#derives` |
+| Q12 *(void)* | how does `update(id, { segments })` treat the array? | **Ruled 2026-09-17** — replaces the list; each element replaces its Segment; match by `id` only; positional match retires |
+| Q13 *(void)* | `updateSegment`, or `dataset.segments.update`? | **Ruled 2026-09-17** — `entries.updateSegment` / `addSegment` / `removeSegments`. No second collection |
+| Q14 *(void)* | should every spanning row store a Segment? | **Ruled 2026-09-17: no.** Q10's storage stays. Every bar is still a Segment to the consumer |
+| Q15 *(void)* | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **Ruled 2026-09-17** — one row per Segment added, removed or changed; only `update(id, { segments })` writes a whole-array row, and the refusal applies to that call alone |
+| Q16 *(void)* | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
+| Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **RULED 2026-09-17: yes.** Spike S4 measured the cost objection away. The Segment retires, Option C is void, and Q1–Q16 go with it |
+| Q18 | is the rule Gantt-wide or per Entry, and does it need `tree`? | **RULED with Q17, 2026-09-17** — both, through one key; `tree` is orthogonal and leaves the two-level call site |
+| Q19 | where does a claimed row name its own Entry, and where does the parent's Item suppression live? | **RULED 2026-09-17: shape (a).** `entryIds[0]` stays the subject; `PlannedRow` carries the claimed marker. Shape (b) was written and breaks ten call sites with no compile error. C2 builds the rail seam; C3 fixes the ten sites |
+| Q20 | can a row filter hide one bar on a shared row? | **RULED 2026-09-17 by the author: it does not need to.** A filter hides a parent, and its segments go with it, because they sit on the parent's row. `applyFilter` already does exactly this, so nothing ships and no item-level knob exists |
+| Q21 | does the entries row source take the Field registry, so `childrenAsSegments` matches with typed `equals` and reports an unknown key? | **RULED 2026-09-17 by the author: yes, thread it.** C1 passes `fieldContext` into the entries-source pass, as `sort` already receives it, so a misspelt key reports once through `reportUnknownFieldMatch` instead of drawing a blank screen in silence. C1 rewrites `row-source.ts`'s own statement of D-S4-19/D-S4-21 |
+| Q22 | does core ship a `boolean` Field type? | **RULED 2026-09-17 by the author: yes.** It lands in C1 with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are its first consumer. Today `{ type: 'boolean' }` throws `UnknownFieldTypeError` (`data/fields/field-registry.ts:70`) |
+| Q23 | does a hierarchy source declare the Field keys it reads? | **OPEN, 2026-09-17.** C4's fast path applies only to core's own `storedParentSource`: a plugin source is a function that may read any field, and nothing on the seam says which. Wider than #421 |
 | J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
 | J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
+| Q24 | what is the key called? | **RULED 2026-09-17 by the author: `childrenAsSegments`.** It frees the word *Segment* from the type that retires in C6. `README.md` holds the reasoning, the rejected names, and the one cost — the word means two things between C1 and C6 |
+| J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
 
@@ -562,7 +567,7 @@ The author took every recommendation. Each one was measured against the code and
 
 ### 1. Both, through one key
 
-`childrenOnParentRow` runs **once per parent Entry** in the layout pass, so its scope is whatever the rule asks. Gantt-wide is `true`. Per Entry is a field match on a consumer Field. Default-on with an opt-out is a predicate, because a field match is equality (`layout/items/variants.ts`) and a Field declares no default value.
+`childrenAsSegments` runs **once per parent Entry** in the layout pass, so its scope is whatever the rule asks. Gantt-wide is `true`. Per Entry is a field match on a consumer Field. Default-on with an opt-out is a predicate, because a field match is equality (`layout/items/variants.ts`) and a Field declares no default value.
 
 The first draft of the page buried this in one paragraph under a Gantt-wide example, and the author read the design as Gantt-wide only. **The design did not change. The page did.** The API table now carries the per-Entry call site and the live toggle beside the Gantt-wide one.
 
@@ -594,7 +599,7 @@ A claimed parent is **already** a summary in the grid: its cells roll up from it
 
 ### 4. The `type` example went, the same day
 
-**The author, reading the page:** "I don't understand what `childrenOnParentRow: { type: 'request' }` is. What does `type` request do here? Is this to define the variant?"
+**The author, reading the page:** "I don't understand what `childrenAsSegments: { type: 'request' }` is. What does `type` request do here? Is this to define the variant?"
 
 **No — it is a field match, and the example taught the wrong thing twice.**
 
@@ -645,3 +650,63 @@ Both examples now use one Field the page already had, `showDaysOnRow`, so the da
 - The log: Q19 and Q20 opened.
 
 **The verdict stands.** On the measured evidence the child-Entry design is the stronger idea: stable ids, a bar that moves across rows with one write, an editor surface for bar data, and the deletion of the ugliest logic in the codebase. Findings 7 and 10 are the seams that decide whether it stays simple.
+
+---
+
+## Q17 RULED, 2026-09-17 — a bar is a child Entry
+
+**The author ruled it after spike S4 reported.** The design file is now the design of record, and this entry says what changed with it.
+
+**What the measurement settled.** The Q6 grill called 10,000 child Entries "the decisive objection", and nobody had measured it. S4 measured a baseline on the shipped Segment design first, then the same 10,000 bars as child Entries: the frame builds **20% cheaper**, and the two costs that grew — one write, one row resolution — each **halve** when the Rollup stops re-deriving an index `EntryStore` already memoizes. The objection does not survive the number. Read `SPIKE-FINDINGS.md` for the table and for the two honest limits on it.
+
+**What that makes void.** Option C, its builds B1–B8, and Q1–Q16 with them. Each of those sixteen rulings settled a detail of the `Segment` type, and the type does not ship. The bodies stay as the record of what was refused and why.
+
+**What is ruled with it.** Q18 (the rule is Gantt-wide and per Entry through one key; `tree` is orthogonal), Q19 (shape (a)), Q20 (a filter cannot hide one bar, and this work does not add a knob), and the nine `J-plan-*` calls in `README.md`.
+
+**What is now open, and holds work.** Q21 (does the entries row source take the Field registry?) holds C1. Q22 (a `boolean` Field type) holds the examples in the docs. Q23 (does a hierarchy source declare its keys?) is wider than #421.
+
+**What moved out of #421.** Two jobs this design makes possible, each its own issue: a vertical drag that moves a bar to another row, and a filter that hides one bar on a shared row.
+
+**Three spike questions were not reached** — Q8 (the user stories in the harness), Q10 (the live per-Entry switch through one undo step) and Q11 (a summary row above a claimed row, three levels). They are not re-spiked. C1 and C3 land them as real tests, which is where they belonged: a probe cannot prove a harness story.
+
+---
+
+## Q20–Q24 RULED, 2026-09-17 — the author's answers, in one sitting
+
+Five questions went to the author with the Q17 ruling. Four are closed. Q23 stays open and blocks nothing.
+
+### Q24 — the key is `childrenAsSegments`
+
+**The author's words.** "childrenAsSegments or childrenAsRowSegments I think."
+
+**`childrenAsSegments`, without the `Row`.** The key already sits on `rowSource`, so `Row` in the name repeats its own context. The call site reads: *"row source: entries, children as segments, where show-days-on-row is true."*
+
+**It discriminates, which `childrenAsBars` did not.** An unclaimed parent's children draw a **bar on a row of their own**. They never draw a **segment of another row's bar**. The word carries "a piece of something bigger", which is the whole distinction.
+
+**The cost, stated plainly.** The `Segment` **type** retires in C6, so between C1 and C6 the word names two things — the retiring type and the new key. That is the fault class #7 named, when "chart" meant both the public `Gantt` and an internal `view/` class and stalled a review. It is bounded here, and C1 bounds it: `CONTEXT.md`'s *Segment* entry is rewritten on the day the key lands, not in C7, so one entry tells one story with a build number on it. After C6 the word has one meaning and no type behind it: **a child Entry drawn as one piece of its parent's row.**
+
+### Q22 — core ships a `boolean` Field type
+
+Ruled yes. It lands in **C1**, not in the docs build, because the rule's own examples are its first consumer: `{ key: 'showDaysOnRow', type: 'boolean' }` is how a consumer marks the parents the rule claims. Today that throws `UnknownFieldTypeError` (`data/fields/field-registry.ts:70`), because `FieldTypeName` (`model/field.ts:14`) ships `text`, `number`, `percent`, `date` and `duration` only. C1 gives it ingest, `formatValue`, `parseValue`, `compare` and `equals`, the same shape every other type has.
+
+### Q21 — the entries row source takes the Field registry
+
+Ruled yes: thread `fieldContext` into the entries-source pass. **The reason is the silent failure.** `childrenAsSegments: { showDaysOnRoww: true }` claims no parent, draws no segment, and says nothing — a blank screen with no error, which is the fault class #197 closed. With the registry threaded, the match uses each Field's own `equals` and an undeclared key reports once through `reportUnknownFieldMatch`, exactly as a variant's `when` already does.
+
+**What it changes.** `row-source.ts`'s header says the row-source types are "Pure data: no pixels, no Dataset, no Field registry (D-S4-19, D-S4-21)." `RowPassInput` already carries `fieldContext` for `sort`, so the wire exists and the statement is already narrower than it reads. C1 rewrites that comment to say what is true: the row-source **types** stay pure, and the **pass** receives the Field context the same way sorting does.
+
+### Q20 — a filter hides a parent, and its segments go with it
+
+**The author's words.** "for hiding if a parent hides the children should hide."
+
+**That is what the code already does, and it is the right answer.** `applyFilter` (`layout/rows/filter.ts:57-78`) keeps or drops whole rows, and its read gate is the row's subject (`:9`) — the claimed parent. A claimed parent's segments have no rows of their own, so dropping the parent's row drops every segment on it. Nothing ships, and no item-level knob exists.
+
+**The consequence C7 states in the consumer docs.** A filter predicate on a claimed row is never asked about a child. So a filter cannot keep some of a row's segments and drop others. Hiding the parent is the whole answer. This is J-plan-F, rewritten from its first form ("refused; its own issue") — the first form treated a working behaviour as a gap.
+
+### Q19's neighbour — the vertical drag is #425
+
+The author confirmed the split. A bar moves between rows with one write today (`dataset.entries.update('d1', { parentId: 'req-2' })`). The **gesture** is missing: `interaction/entry-gestures.ts:300` drives hover visuals only, and nothing in `interaction/` reads the hovered row at commit. #425 carries the row-target step in the commit path, and the ruling on whether it is default behaviour or a capability.
+
+### The Segment's retirement
+
+The author confirmed it: the child-Entry design replaces the Segment, with no compatibility path and no legacy key. J-plan-G stands.
