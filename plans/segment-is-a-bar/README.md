@@ -10,10 +10,10 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 
 1. **The issue decides. This plan orders.** When the two disagree, the issue wins, and you log a **Q**.
 2. **No stored classification.** Nothing on a public type says "hidden", "authored", "plain" or names a variant. `plans/01` §2.5, ADR 0013, ADR 0018.
-3. **Nothing reads across.** A Segment never reads its Entry's data. An Entry never reads its Segments' data. No fallthrough in `read()`, in a label, in a rule.
+3. **A `read(key)` never falls through** (Q7, ruled 2026-09-16). `segment.read('hours')` answers that Segment's own value, or nothing. It never answers the Entry's. The same holds in a label and in a rule. **Navigation is not a read:** `segment.entry()` names the row, and `entry.segments` lists the pieces. **A derived cell is a write, not a read:** the Rollup and the envelope write the row's own cell, and the row reads that cell.
 4. **Text never decides whether a bar shows.** An empty label leaves geometry, fill, hit target, hover, selection and handles unchanged. One test pins this (B6).
-5. **Zoom never touches a Segment.** No folding, no Aggregator over Segments, no read of the visible range. A test pins the same printed value at day, week and year zoom (B6).
-6. **One key, one meaning.** One `fields` list. `Field.column`, `rollUp`, `compute` and `distribute` are Entry-only. A Segment-only key shows an empty grid cell, and that is correct.
+5. **Zoom never touches a Segment.** No folding, no read of the visible range. **An Aggregator never writes onto a bar** (Q8). A test pins the same printed value at day, week and year zoom (B6).
+6. **One key, one meaning.** One `fields` list. `Field.column` and `distribute` are Entry-only. **`rollUp` may read Segments** (Q8): an Aggregator writes a row's cell from its Segments and its children, unioned, with no precedence and no source knob. A key with no `rollUp` shows an empty grid cell, as it does over children today.
 7. **Every write is one transaction, one ChangeSet.** `updateSegment` names the Segment on the row. A whole-array `segments` diff does not meet the issue for a value write.
 8. **The hot path allocates nothing (I5).** A live `Segment` has one identity per id for the life of the store, as `LiveEntries` does. The Item-phase variant walk runs in the layout pass, never per pointer move.
 9. **All date arithmetic goes through `time/`.** A Segment moves and resizes through the bound `TimeScale`.
@@ -29,7 +29,8 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 
 - A **Segment** stores `id`, `start`, `end`, `name?` and `props`. It is a stored/live pair like `Entry` (ADR 0017): `StoredSegment` holds values, `Segment` answers `read(key)`.
 - A **plain Entry** (dates, no authored Segments) stores `segments: []`. `entry.segments` is `[]`. Its bar is still selectable through one minted `SegmentId` that lives in a store index, not in a record (§ The plain bar).
-- **An Entry's dates have one source at a time** (ruled 2026-09-16, Q1/Q2/Q4). With no Segments, the Entry keeps the dates it named, read straight (ADR 0012). With Segments, its span **is** their envelope — the lowest `start` and the highest `end`, which `envelopeOfSegments` already computes (`time/instant.ts:56-68`). So clearing the Segments clears the dates, through either door, and a caller that wants a plain bar names the dates in the same edit: `update(id, { segments: [], start, end })`. Call this pass the **envelope**, never the Rollup — the Rollup runs over children (ADR 0013), and no Aggregator ever runs over Segments.
+- **An Entry's dates have one source at a time** (ruled 2026-09-16, Q1/Q2/Q4). With no Segments, the Entry keeps the dates it named, read straight (ADR 0012). With Segments, its span **is** their envelope — the lowest `start` and the highest `end`, which `envelopeOfSegments` already computes (`time/instant.ts:56-68`). So clearing the Segments clears the dates, through either door, and a caller that wants a plain bar names the dates in the same edit: `update(id, { segments: [], start, end })`. Call this pass the **envelope** for now. **Q9 is open:** the envelope is `min` on `start` and `max` on `end`, so it may become the Rollup over Segments (Q8) and retire four hand-written code paths. Until Q9 is ruled, keep the two words apart.
+- **A row's cell may aggregate its Segments** (Q8, ruled 2026-09-16). A Field with `rollUp` writes the row's cell over the row's Segments and its children, unioned. An Aggregator never writes a bar's value, so zoom never changes a total.
 - **`name` is optional** on `EntryInput`, `StoredEntry`, `Entry`, `SegmentInput`, `StoredSegment`, `Segment`.
 - **A variant resolves in two phases.** Row phase decides `items`. Item phase decides `paint`, `css`, `can`, `barLabels` for each Item that draws an authored Segment.
 - **`can` and the resize handles resolve per Item.** Chrome and gesture read one answer (I14).
@@ -42,10 +43,14 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 
 Publish the invocation an author writes. Read each line aloud before you change a name.
 
+> **Q6 can rewrite this table. Read the log before B3.** The recommendation is Option C: one door, one id, one live type. If the author rules C, `updateSegment`, `addSegment`, `removeSegments`, `whenSegment`, `SegmentEdits`, `FieldUpdated.segmentId` and every `(entry, segment?)` pair below do not ship. Each seam then takes one object. Do not build these rows until Q6 is ruled.
+
 | Job | Call site | New or changed |
 |---|---|---|
 | Author a Segment with data | `{ id: 'd1', start, end, hours: 8, color: 'red' }` inside `segments` | `SegmentInput` gains `name?` and flat declared keys, nested `props` also legal |
 | Read a Segment's value | `segment.read('hours')` | live `Segment.read(key)` |
+| Name the row a Segment sits on | `segment.entry().name` | new; navigation, never a value fallthrough (Q7, J-plan-6 reversed) |
+| Total Segment values onto the row | `{ key: 'hours', type: 'number', rollUp: 'sum' }` | `rollUp` reads the row's Segments and children, unioned (Q8) |
 | Write one Segment | `dataset.entries.updateSegment('d2', { color: 'grey' })` | new; sibling of `removeSegments` |
 | Add one Segment | `dataset.entries.addSegment('req-1', { start, end, hours: 8 })` | new; returns the live `Segment`. Singular like `updateSegment`; many go through `transaction()` |
 | Write many Segments, one undo | `dataset.transaction(() => { for (id of ids) entries.updateSegment(id, { worker: 'Ali' }); })` | no change to `transaction()` |
@@ -183,7 +188,7 @@ Reversible. Each is a **J** in the log when a build takes it.
 - **J-plan-3.** A `segments` row stays for **structural** writes (which Segments exist, in what order). A `segmentId` row is a **value** write on one Segment. Two questions, two rows.
 - **J-plan-4.** `moveEntryTo` returns `{ start, end }` for a plain Entry. D-S5-50's reason (an envelope write overwrites a plugin's `end`) does not apply when there is no Segment to move.
 - **J-plan-5.** A variant's `barLabels` merges over the Gantt's key by key: `{ field }` alone keeps the Gantt's placement.
-- **J-plan-6.** The live `Segment` exposes `read(key)` and `toInput()`, no `props`, no `entry()`. A navigation door would invite a read across.
+- **J-plan-6. REVERSED 2026-09-16 (Q7).** ~~The live `Segment` exposes `read(key)` and `toInput()`, no `props`, no `entry()`. A navigation door would invite a read across.~~ The live `Segment` exposes `read(key)`, `toInput()` and `entry()`, and no `props`. The read rule (hard rule 3) already stops a fallthrough. Without `entry()`, a consumer who wants the row's name in a bar tooltip builds a `SegmentId → EntryId` map that the store already holds (`entryIdOfSegment`) — the stop rule's smell.
 - **J-plan-8.** `addSegment` ships in B3 (Q3, ruled 2026-09-16). It appends through `toSegment`, writes one structural `segments` row, and returns the live `Segment`. The positional `update(id, { segments })` stays the door for reorder and replace.
 - **J-plan-7.** Internal `Capabilities.can(capability, entry, segment, edge?)` takes `segment: Segment | undefined` as a required positional, so no caller can forget it. Run the naming skill on the object alternative before B5 and log the choice.
 
