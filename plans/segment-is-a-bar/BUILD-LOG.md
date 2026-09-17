@@ -4,7 +4,7 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-17. No question waits. The plan README and #421 state Q1–Q16. Do not re-open a ruled one.**
+**Status, 2026-09-17. Q17 waits, and it holds B1.** The plan README and #421 state Q1–Q16. Do not re-open a ruled one alone. Q17 re-opens Q6 as a whole, on the author's word.
 
 **Read this table, not the old bodies.** An entry marked *Superseded* keeps its text as the record. Its job may survive. Its shape does not.
 
@@ -26,6 +26,7 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q14 | should every spanning row store a Segment? | **Ruled 2026-09-17: no.** Q10's storage stays. Every bar is still a Segment to the consumer |
 | Q15 | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **Ruled 2026-09-17** — one row per Segment added, removed or changed; only `update(id, { segments })` writes a whole-array row, and the refusal applies to that call alone |
 | Q16 | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
+| Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **OPEN, 2026-09-17 — the leading design idea.** Spike S4 decides it. S4 is planned and waits for the author's word. B1–B8 wait |
 | J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
 | J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
 
@@ -524,3 +525,26 @@ The author took every recommendation. Each one was measured against the code and
 **The gap.** A summary parent is a plain row with one minted Segment. `removeSegments([thatId])` "un-dates the row" by the plain-bar rule. But the parent's `start`/`end` are derived cells, and only the Rollup writes them (ADR 0013). Measured: today `#removeSegmentsFrom` skips the date clear when `#hasChildren` is true (`data/entry-store.ts:721-728`), so the call does nothing to the dates, in silence.
 
 **Recommendation.** Refuse it with `DerivedFieldNotWritableError` on `start`, the same refusal `update(parentId, { start: undefined })` gives. A silent no-op is the fault class #197 closed. A consumer who wants the parent dateless removes or un-dates its children.
+
+---
+
+## Q17 — is a bar a regular child Entry, drawn on its parent's row?
+
+**Raised 2026-09-17 by a cold-read review the author asked for. OPEN. The author took it as the leading design idea the same day, to be spiked. Spike S4 has not run and waits for the author's word.**
+
+**The design is in [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md). This entry is the record of why it re-opens Q6.**
+
+**The finding.** The Q6 grill listed eight doubled doors and chose Option C to remove them. Q10–Q13 brought seven back: `read` twice, `update`/`updateSegment`, `add`/`addSegment`, `remove`/`removeSegments`, `when`/`whenSegment`, `EntryEdits`/`SegmentEdits`, and `store: 'entries'`/`store: 'segments'`. Only the optional `segment?` argument went away. The issue title lists a name, props, a variant and capabilities, and an Entry already has all four.
+
+**This is Option B from the Q6 grill, with its three costs re-read.**
+1. *Perf was "the decisive objection".* No one measured it. S4 measures it first.
+2. *"The grid and the timeline must share one row list, driven by the same variant decision."* The rule goes on the row source, which already owns the row list. No variant decides it.
+3. *"The default inverts."* One row source key states it.
+
+**What the grill did not know.** Core already draws several Entries on one Row: the `group` row source does it, and `FrameLayoutView.entryIdsForRow` answers every Entry a row owns. `layout/rows/entries-source.ts:40` writes a one-element `entryIds` list, and the change is to fold a claimed parent's children into it.
+
+**The author's words, 2026-09-17.** "I like the render split option and think we should be able to define this per entry. or per row. or maybe doing the same when pattern that variants use." The design answers all three with one key: the rule takes the `when` pattern; per-Entry control is a consumer Field the rule matches; per-row is per-Entry, because a `RowId` equals the `EntryId` for the entries source. The author then confirmed the meaning of "child": what was a Segment is a regular Entry with `parentId` set, and nothing on the child marks it.
+
+**Not ruled.** The eleven open points in the design file, the name of the key among them.
+
+**If S4 fails,** Option C stands. The same review found six gaps in it, listed at the end of the design file. Each becomes a Q then.

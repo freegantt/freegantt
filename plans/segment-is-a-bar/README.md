@@ -4,7 +4,13 @@
 
 Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A line number is a hint. Open the file.**
 
-**Rewritten 2026-09-17 to Option C** (Q6–Q16). Every bar is a Segment. How many Segments a row has is the only difference between a plain row and a segmented one. No question is open.
+> ## On hold, 2026-09-17 — Q17 is open. Do not start B1.
+>
+> A cold read found that ruled Option C keeps seven of the eight doubled doors the Q6 grill listed. **The leading design idea is now: a bar is a regular child Entry, and a row source rule draws a parent's children on its row.** Read [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md).
+>
+> It is a proposal, not a ruling. Spike S4 decides it, and **S4 waits for the author's word.** If S4 passes, this plan is rewritten. If S4 fails, this plan stands, with the six fixes at the end of that file.
+
+**Rewritten 2026-09-17 to Option C** (Q6–Q16). Every bar is a Segment. How many Segments a row has is the only difference between a plain row and a segmented one. Q1–Q16 are ruled. Q17 is open.
 
 ---
 
@@ -148,7 +154,7 @@ Mirror ADR 0017 exactly. Do not invent a third shape.
 
 ---
 
-## Spikes — run 2026-09-16, all three answered
+## Spikes — S1 to S3 ran 2026-09-16 and are answered; S4 is planned
 
 **Read [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md) once before B1.** The rulings are J1, J2 and J3 in the log. The measurements stand. Where a spike recommended a shape, Q6–Q13 replaced the shape and kept the measurement.
 
@@ -157,6 +163,7 @@ Mirror ADR 0017 exactly. Do not invent a third shape.
 | **S1** ChangeSet address | Today no row can name one Segment. A second apply path is small: one diff that reads `segment.read(field)`, one apply branch. `invertChangeSet` needs no change, so undo by id falls out. The branch keys on `store: 'segments'` | B4 |
 | **S2** handle pair | **Rule B already ships.** `projectAffordances` brackets the row and gates each edge. The gap is that `Capabilities.can` takes no Segment, and hover does not thread the hovered Item into edge resolution | B6 |
 | **S3** plain bar's id | The minted id is **stable across drag and undo with no ChangeSet row**. `removeSegments` un-dates with no code change | B2 |
+| **S4** a bar is a child Entry | **Planned, not run. Waits for the author's word** (Q17). Questions, method and pass rule are in [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md) | decides whether B1–B8 run at all |
 
 ---
 
