@@ -31,9 +31,11 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } },
+  rowSource: { source: 'entries', childrenOnParentRow: { type: 'request' } },
 });
 ```
+
+Two rows come out: `req-1` with `d1` and `d2` as bars, and `hold`. The call names no `tree`, because nothing nests here. `tree` is orthogonal to the rule — see *The rule's scope* below.
 
 `childrenOnParentRow` is a placeholder. Run the naming skill before it ships. It says whose row, which `childrenOnRow` did not. Rejected so far: `childrenAsBars` (an unclaimed parent's children draw bars too, on their own rows — the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow` ("Split" is under *Avoid* in `CONTEXT.md`).
 
@@ -75,7 +77,10 @@ Every job uses a door that ships today.
 | Job | Call site | New? |
 |---|---|---|
 | Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
-| Draw a parent's children on its row | `rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } }` | **the one new key** |
+| Draw every parent's children on its row | `rowSource: { source: 'entries', childrenOnParentRow: true }` | **the one new key** |
+| Draw one parent's children on its row | `rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } }` | the same key |
+| Open one row into sub-rows, live | `dataset.entries.update('req-1', { showDaysOnRow: false })` | no |
+| Put a summary row above a claimed row | `rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }` | the same key |
 | Read a bar's value | `entry.read('hours')` | no |
 | Name the row a bar sits on | `entry.parent()` | no |
 | List a row's bars | the parent's children | no |
@@ -95,7 +100,7 @@ Every job uses a door that ships today.
 
 ## The rule: where it lives, and what it takes
 
-**The value is the `when` pattern.** `childrenOnParentRow` takes a `VariantRule` (`layout/items/variants.ts`): a field match or `(entry) => boolean`. An author learns one match syntax.
+**The value is the `when` pattern.** `childrenOnParentRow` takes `true`, or a `VariantRule` (`layout/items/variants.ts`): a field match or `(entry) => boolean`. An author learns one match syntax. `true` is the shorthand for the common case; the rule is the expert form.
 
 **The rule matches the parent.** A claimed parent gives its children no rows and draws them on its own row.
 
@@ -107,17 +112,74 @@ Every job uses a door that ships today.
 - **Two Gantts may differ** (I2). The row source is per Gantt. A stored key on the Entry forces both to agree.
 - **It is live.** `gantt.rowSource = { … }` switches the view, as every config key must.
 
-**Per-Entry control comes free, and core stores no classification** (`plans/01` §2.5). The consumer declares a Field of their own and matches it:
+---
+
+## The rule's scope: Gantt-wide, and per Entry
+
+**One key does both.** The rule runs once per parent Entry in the layout pass, so what it scopes is whatever it asks:
+
+```ts
+childrenOnParentRow: true                                       // every parent
+childrenOnParentRow: { type: 'request' }                        // the parents of one kind
+childrenOnParentRow: { showDaysOnRow: true }                    // the parents the consumer marks
+childrenOnParentRow: (entry) => entry.read('ownRows') !== true  // every parent, minus the opened ones
+```
+
+**Per Entry, the marker is a consumer Field, and core stores no classification** (`plans/01` §2.5):
 
 ```ts
 fields: [{ key: 'showDaysOnRow', type: 'boolean' }]
-rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
-dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows, undoable
+rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } }
+dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows
 ```
+
+That write is one transaction, one `ChangeSet` row, one undo step. A grid checkbox drives it with no new API.
+
+**Default on with a per-Entry opt-out is a predicate**, not a field match: a match is equality (`variants.ts`), and a Field declares no default value. `(entry) => entry.read('ownRows') !== true` is the whole opt-out.
 
 **Per-row control is per-Entry control.** For the entries source a `RowId` equals the `EntryId` (`CONTEXT.md`, *Row*). Group and custom rows have no parent Entry, so the rule does not apply to them.
 
-**Refused: a core key on the Entry** (`{ id: 'req-1', render: … }`). Core would read a stored classification, and two Gantts could not differ. The field-match form costs the author one line and keeps both rules.
+**Refused: a core key on the Entry** (`{ id: 'req-1', childrenOnParentRow: true }`). Core would read a stored classification, and two Gantts could not differ (I2) — one draws the days as bars, the other shows them as editable rows. The consumer Field costs the author one line and keeps both rules.
+
+---
+
+## `tree` is orthogonal to the rule
+
+`tree` decides whether an **unclaimed** parent's children nest under it. The rule decides whether a **claimed** parent's children become rows at all. Neither reads the other.
+
+| `tree` | `childrenOnParentRow` | Rows |
+|---|---|---|
+| `false` (default) | none | every Entry, flat, `grid` (`entries-source.ts:48-50`) |
+| `false` | claims `req-1` | `req-1` with two bars; `d1`/`d2` get no rows. Still a flat `grid` |
+| `true` | none | `d1`/`d2` nest at `depth + 1`, chevron, `treegrid` |
+| `true` | claims `req-1` | `req-1` holds the bars; an unclaimed parent still nests |
+
+**Consequence for the build.** `resolveEntriesSource` returns early in the flat branch today (`entries-source.ts:48`) and never builds the parent index. The fold needs `entryTreeIndex` in both branches. `nestsRows` (`row-source.ts:107`) keeps reading `tree` alone, so a claimed flat source stays a `grid` and no row carries `aria-level` it cannot justify.
+
+**A claimed parent is never expandable**, in either mode. Tree mode sets `expandable: children.length > 0` (`entries-source.ts:69`); a claimed parent's children have no rows, so the fold must clear it. Open point 6 below.
+
+---
+
+## A summary row above a claimed row
+
+**This composes, and no stage learns a new case.** The rule claims the parents that carry bars. Their own parent is unclaimed, so it keeps its row, wears `summary()` and rolls up as today:
+
+```ts
+entries: [
+  { id: 'site-a', name: 'Site A' },                                        // a summary row
+  { id: 'req-1', parentId: 'site-a', name: 'Framing crew', showDaysOnRow: true },
+  { id: 'req-2', parentId: 'site-a', name: 'Roofing crew', showDaysOnRow: true },
+  { id: 'd1', parentId: 'req-1', start, end, hours: 8 },
+  { id: 'd2', parentId: 'req-1', start, end, hours: 4 },
+]
+rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
+```
+
+Three rows: `site-a` (rail, collapses through the chevron), `req-1` and `req-2` (each carrying its days as bars). The Rollup is one bottom-up pass over the whole tree, so `site-a`'s `hours` totals every day under both crews. No pass asks whether it draws its children's bars.
+
+**A claimed row is already a summary in the grid.** Its cells roll up from its children (ADR 0013) — `req-1` reads 12 h. The design suppresses the claimed parent's own bar `Item` only, so the rail does not paint over the children it stands for. A consumer variant may still paint a rail behind them.
+
+**What this does not express:** `site-a` carrying bars of its own *and* child rows. That is the mixed-children point (open point 5).
 
 ---
 
@@ -154,9 +216,9 @@ Each is a question for the spike or for a grill after it. None is ruled.
 1. **Performance.** The Q6 grill called 10,000 child Entries "the decisive objection", and no one measured it. The consumer brief tops out near 4,000 bars. S4 measures this first.
 2. **The parent's own bar.** A parent wears `summary()` by default, which would paint over its children. Proposed: core's default for a parent whose children sit on its row is no Item of its own. A consumer variant may still paint a rail.
 3. **The Selection unit.** ADR 0010 makes the Segment the unit. Under this design the unit is the Entry. A new ADR revises ADR 0010. A grid-row click selects every Entry the row owns, through `entryIdsForRow`, as it does for a group row.
-4. **A child on the row that has children of its own.** Options: refuse it, draw the grandchildren on the same row, or give them rows under the host row.
-5. **Mixed children.** The rule matches the parent, so it takes all of that parent's children. A parent with days on its row and sub-tasks below cannot be expressed. The brief has no such case. If one appears, the key gains a long form that also matches the child.
-6. **The row is expandable or not.** Proposed: a claimed parent is not expandable. The consumer opens it by changing the rule or the value it matches.
+4. **A child on the row that has children of its own.** Options: refuse it, draw the grandchildren on the same row, or give them rows under the claimed parent's row. `childrenOnParentRow: true` on a tree three levels deep meets this at once, which is why a deeper dataset names its level with a match. Rule this before the `true` shorthand ships.
+5. **Mixed children.** The rule matches the parent, so it takes all of that parent's children. A parent with days on its row and sub-tasks below cannot be expressed. A summary row **above** a claimed row does work, and is written up above — this is the other direction. The brief has no such case. If one appears, the key gains a long form that also matches the child.
+6. **The row is expandable or not.** Proposed: a claimed parent is not expandable, in flat and in tree mode. The consumer opens it by writing the Field the rule matches. An unclaimed parent above it keeps its chevron.
 7. **A plain row that gains a child loses its authored dates** (ADR 0013, unchanged). The first bar does not survive as a bar. This is the rule every parent already obeys, so it is not a new one. State it in the consumer docs.
 8. **Copy a row with its bars.** `toInput()` copies one Entry. A subtree copy needs its own door. A hierarchy needs that door with or without this design.
 9. **Migration.** Segments shipped in S4. 59 non-test sites and 37 test files read `segments` (README table). ADR 0010 and ADR 0012's Segment clauses retire through a new ADR.
@@ -174,13 +236,16 @@ Each is a question for the spike or for a grill after it. None is ruled.
 1. Does a frame with 10,000 child Entries on claimed rows hold the I5 and S6 budgets? Measure frame build time, Rollup time on one child write, and hover.
 2. Do the README's user stories 1 to 5 and 10 to 12 work in the harness with **no change to any Segment code**?
 3. What breaks when a row owns a parent and its children? Check selection, the resize handle pair, keyboard order, `reveal` and the a11y labels.
+4. Does a per-Entry write switch one row live? `entries.update('req-1', { showDaysOnRow: false })` must open that row into sub-rows in one undo step, and leave every other row alone.
+5. Does a summary row above a claimed row hold? Three levels, `tree: true`: the grandparent keeps its rail, its chevron and a Rollup over every grandchild.
 
 **Method.**
 
-1. Add the key to `EntriesRowSource` and the fold to `resolveEntriesSource`.
+1. Add the key to `EntriesRowSource` and the fold to `resolveEntriesSource` — **both branches**, flat and tree — and clear `expandable` on a claimed parent.
 2. Suppress the claimed parent's own Item.
 3. Build a fixture: 200 parents with 50 children each.
-4. Build one crew-lead row in the harness: per-bar text, colour, a locked bar, a row total.
+4. Build one crew-lead row in the harness: per-bar text, colour, a locked bar, a row total. Mark the claimed parent with a consumer Field, and put a toggle on it.
+5. Build a second fixture three levels deep: one site, two crews, days under each crew.
 5. Run the existing perf tests and `pnpm verify:full`.
 
 **Pass.** Question 1 holds the budgets. Question 2 needs no workaround in `harness/`. Question 3 finds no fault that needs a second type to fix.

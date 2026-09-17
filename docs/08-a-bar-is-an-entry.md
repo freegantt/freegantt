@@ -124,7 +124,9 @@ one is stored on the Entry:
 1. **Does it have children?** That decides derivation and the default look today
    ([ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md)).
 2. **Does a rule on the row source claim its parent?** That decides whether it gets a row of its own,
-   or draws on its parent's row. This is the one new question.
+   or draws on its parent's row. This is the one new question. The rule reads **one parent Entry at a
+   time**, so the same key answers "every parent", "the parents this Field marks" and "this one
+   parent, right now".
 
 What #421 calls a Segment becomes a regular Entry with `parentId` set. Nothing on the child marks it.
 
@@ -238,14 +240,20 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', tree: true, childrenOnParentRow: { type: 'request' } },
+  rowSource: { source: 'entries', childrenOnParentRow: { type: 'request' } },
 });
 ```
+
+This dataset is two levels deep and draws two rows: `req-1`, carrying `d1` and `d2` as bars, and
+`hold`. It names no `tree`, because no row nests under another one here. `tree` is a separate
+question, and the next section answers it.
 
 | Job | Call site | New? |
 | --- | --- | --- |
 | Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
-| Draw a parent's children on its row | `rowSource: { …, childrenOnParentRow: { type: 'request' } }` | **the one new key** |
+| Draw every parent's children on its row | `rowSource: { …, childrenOnParentRow: true }` | **the one new key** |
+| Draw one parent's children on its row | `rowSource: { …, childrenOnParentRow: { showDaysOnRow: true } }`, and mark that parent | the same key |
+| Open one row into sub-rows, live | `dataset.entries.update('req-1', { showDaysOnRow: false })` | no |
 | Read a bar's value | `entry.read('hours')` | no |
 | Name the row a bar sits on | `entry.parent()` | no |
 | List a row's bars | `entry.children()` | no |
@@ -260,36 +268,96 @@ new Gantt({
 | Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
 | Show the same bars as sub-rows | change the rule, or the value it matches | no |
 
-### What the one new key takes
+### Set it for the whole Gantt, or for one Entry
 
-`childrenOnParentRow` takes a `VariantRule` (`src/layout/items/variants.ts`) — the same `when`
-pattern a variant takes. A field match, or a predicate:
+**One key answers both.** `childrenOnParentRow` takes `true` for every parent, or a `VariantRule`
+(`src/layout/items/variants.ts`) — the same `when` pattern a variant takes. The rule runs once per
+parent Entry in the layout pass, so the scope of the setting is whatever the rule says:
 
 ```ts
-childrenOnParentRow: { type: 'request' }                        // a field match
-childrenOnParentRow: (entry) => entry.children().length > 3     // a predicate
+childrenOnParentRow: true                                      // every parent
+childrenOnParentRow: { type: 'request' }                       // the parents of one kind
+childrenOnParentRow: { showDaysOnRow: true }                   // the parents the consumer marks
+childrenOnParentRow: (entry) => entry.children().length > 3    // whatever a predicate can ask
 ```
 
-**It matches the parent.** A claimed parent gives its children no rows and draws them on its own row.
+The common case is the shorthand and the long form is the expert one, as every other config key on
+this library reads. `true` fits a dataset two levels deep, where every parent carries bars. Name the
+level with a match or a predicate when the dataset is deeper.
 
-**It lives on the row source.** `resolveRows()` (`src/layout/rows/resolve-rows.ts:71`) already owns
-the row list and takes the entries, the row source and `collapsed` — no variant reaches it. Putting
-the rule on a variant would give the row list two owners. The key exists only on `EntriesRowSource`,
-so it is unrepresentable beside `{ source: 'group' }`, and it is live like every other config key:
-`gantt.rowSource = { … }` switches the view.
-
-**Per-Entry control comes free, and core stores no classification** (`plans/01` §2.5). The consumer
-declares a Field of their own and matches it:
+**Per Entry, the consumer declares one Field and the rule matches it.** Core stores no classification
+(`plans/01` §2.5), so the marker is the consumer's own Field, not a core key:
 
 ```ts
 fields: [{ key: 'showDaysOnRow', type: 'boolean' }]
-rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
+rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } }
 
-dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows, undoable
+dataset.entries.update('req-1', { showDaysOnRow: true });    // this row draws its children as bars
+dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows
+```
+
+That write is an ordinary field write: one transaction, one `ChangeSet`, one undo step, and the
+frame rebuilds from it like any other edit. A checkbox in a grid column drives it with no new API.
+
+**Default on, one Entry off** is a predicate, because a field match is equality and a Field carries no
+default value:
+
+```ts
+childrenOnParentRow: (entry) => entry.read('ownRows') !== true
 ```
 
 **Per-row control is per-Entry control.** For the entries source a `RowId` equals the `EntryId`
 ([`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), *Row*).
+
+**Refused: a core key on the Entry** (`{ id: 'req-1', childrenOnParentRow: true }`). Core would read a
+stored classification, and two Gantts on one Dataset could no longer disagree (I2) — the roster view
+draws the days as bars, the planner view shows them as rows. The consumer Field above costs one
+line and keeps both rules.
+
+### `tree` is a separate question
+
+`tree` says whether an **unclaimed** parent's children nest under it. The new rule says whether a
+**claimed** parent's children become rows at all. Neither reads the other, and the fold runs in both
+the flat and the tree branch of `resolveEntriesSource`:
+
+| `tree` | `childrenOnParentRow` | What a reader sees |
+| --- | --- | --- |
+| `false` (default) | none | every Entry is a row, flat — today's `grid` |
+| `false` | claims `req-1` | `req-1` is a row with two bars; `d1`/`d2` have no rows. Still a flat `grid` |
+| `true` | none | `d1`/`d2` nest under `req-1` as sub-rows, with a chevron — today's `treegrid` |
+| `true` | claims `req-1` | `req-1` holds the bars; a parent the rule does **not** claim still nests |
+
+So the two-level roster names no `tree`, and gets no tree chrome for rows that do not nest. A dataset
+with a grouping level above the claimed parents names it, and the next section is that case.
+
+### A summary row above, claimed rows below
+
+**A claimed row is an ordinary row, so an ordinary parent may sit above it.** The rule claims the
+parents that carry bars; their own parent is unclaimed, keeps its row, wears core's `summary()` and
+rolls up as it always has:
+
+```ts
+entries: [
+  { id: 'site-a', name: 'Site A' },                                      // a summary row
+  { id: 'req-1', parentId: 'site-a', name: 'Framing crew', showDaysOnRow: true },
+  { id: 'req-2', parentId: 'site-a', name: 'Roofing crew', showDaysOnRow: true },
+  { id: 'd1', parentId: 'req-1', start, end, hours: 8 },                 // a bar on req-1's row
+  { id: 'd2', parentId: 'req-1', start, end, hours: 4 },
+]
+
+rowSource: { source: 'entries', tree: true, childrenOnParentRow: { showDaysOnRow: true } }
+```
+
+Three rows: `site-a` with a summary rail over everything below it, then `req-1` and `req-2`, each
+carrying its own days as bars. `site-a` collapses and expands through the chevron, as a parent of
+rows does today. The Rollup runs over the whole tree in one bottom-up pass, so `site-a`'s `hours`
+cell totals every day under both crews. No stage of the pass asks whether a row carries bars of its
+own children.
+
+**A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
+children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
+suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
+stands for. A consumer variant may still paint a rail behind them.
 
 :::caution The name is not ruled
 `childrenOnParentRow` is this page's recommendation, not a decision. Read the call site aloud:
@@ -510,8 +578,8 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | **Performance** | The decisive objection, and nobody has measured it. A 10,000-child-Entry frame must hold the I5 and S6 budgets. Spike S4 measures it first |
 | **A parent's own bar** | A claimed parent wears `summary()` today, which would paint over its children. Proposed: core draws no Item for it. A consumer variant may still paint a rail |
 | **The Selection unit** | [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md) makes the Segment the unit. A new ADR must revise it |
-| **Mixed children** | The rule matches the parent, so it claims all of that parent's children. A parent with days on its row *and* sub-tasks below cannot be expressed |
-| **A claimed child with children of its own** | Unruled: refuse it, draw the grandchildren on the same row, or give them rows below |
+| **Mixed children** | The rule matches the parent, so it claims all of that parent's children. A parent with days on its row *and* sub-tasks below cannot be expressed. The escape hatch, unruled: a long form that also matches the child |
+| **A claimed child with children of its own** | Unruled: refuse it, draw the grandchildren on the same row, or give them rows below. `childrenOnParentRow: true` on a tree three levels deep walks into this, which is why a deeper dataset names its level with a match |
 | **Migration** | Segments shipped in S4. 59 non-test sites and 37 test files read `segments` |
 | **Copying a row with its bars** | `toInput()` copies one Entry. A subtree copy needs its own door — with or without this design |
 

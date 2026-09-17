@@ -27,6 +27,7 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q15 | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **Ruled 2026-09-17** — one row per Segment added, removed or changed; only `update(id, { segments })` writes a whole-array row, and the refusal applies to that call alone |
 | Q16 | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
 | Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **OPEN, 2026-09-17 — the leading design idea.** Spike S4 decides it. S4 is planned and waits for the author's word. B1–B8 wait |
+| Q18 | is the rule Gantt-wide or per Entry, and does it need `tree`? | **Answered inside Q17's design, 2026-09-17** — both, through one key; `tree` is orthogonal and leaves the two-level call site. Not ruled: Q17 is not ruled |
 | J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
 | J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
 
@@ -548,3 +549,43 @@ The author took every recommendation. Each one was measured against the code and
 **Not ruled.** The eleven open points in the design file, the name of the key among them.
 
 **If S4 fails,** Option C stands. The same review found six gaps in it, listed at the end of the design file. Each becomes a Q then.
+
+---
+
+## Q18 — is the rule Gantt-wide or per Entry, and does it need `tree`?
+
+**Raised 2026-09-17 by the author, reading `docs/08-a-bar-is-an-entry.md`. Answered inside the Q17 design the same day. It is not ruled, because Q17 is not ruled — S4 decides both together.**
+
+**The author's words.** (The glossary word is not "pack" — lane packing is retired, `CONTEXT.md`, *Row*.) "You can only define a row pack globally. You should be able to do it globally but also per entry… so a parent can be a summary grouped view that has children which are many segments on one row. Also we use tree somewhere and I don't think we need that."
+
+### 1. Both, through one key
+
+`childrenOnParentRow` runs **once per parent Entry** in the layout pass, so its scope is whatever the rule asks. Gantt-wide is `true`. Per Entry is a field match on a consumer Field. Default-on with an opt-out is a predicate, because a field match is equality (`layout/items/variants.ts`) and a Field declares no default value.
+
+The first draft of the page buried this in one paragraph under a Gantt-wide example, and the author read the design as Gantt-wide only. **The design did not change. The page did.** The API table now carries the per-Entry call site and the live toggle beside the Gantt-wide one.
+
+**Per Entry stays a consumer Field.** A core key on the Entry is refused for two reasons that both still hold: core would read a stored classification (`plans/01` §2.5), and two Gantts on one Dataset could no longer disagree (I2).
+
+### 2. A summary row above a claimed row already composes
+
+The rule claims the parents that carry bars. Their own parent is unclaimed, keeps its row, wears `summary()` and rolls up over the whole subtree in the one bottom-up pass. Three levels: `site-a` → `req-1`/`req-2` (each carrying its days) → the days. No stage of the layout pass learns a new case.
+
+A claimed parent is **already** a summary in the grid: its cells roll up from its children (ADR 0013). The design suppresses its own bar `Item` alone, so `summary()`'s rail does not paint over the children it stands for.
+
+**The other direction does not work**, and stays open point 5: one row carrying bars of its own *and* child rows below.
+
+### 3. `tree` is orthogonal, and the two-level call site drops it
+
+`tree` decides whether an **unclaimed** parent's children nest. The rule decides whether a **claimed** parent's children become rows at all. Neither reads the other.
+
+- The two-level roster names no `tree`. Nothing nests, `nestsRows` stays `false` (`row-source.ts:107`), and the grid pane stays a `grid` — no row carries an `aria-level` it cannot justify.
+- The three-level case names `tree: true`, and it earns it: `req-1` must sit under `site-a`.
+
+**One build consequence.** `resolveEntriesSource` returns early in the flat branch (`entries-source.ts:48-50`) and never builds the parent index, so the fold needs `entryTreeIndex` in both branches. The tree branch also sets `expandable: children.length > 0` (`:69`), which a claimed parent must clear.
+
+**`tree` itself stays.** It is a shipped key with its own job, and the three-level case needs it. What went is `tree: true` in the examples that never nested a row.
+
+### What changed
+
+- `docs/08-a-bar-is-an-entry.md`: two new sections (`tree` is a separate question; a summary row above a claimed row), the scope section rewritten around the three call sites, and `tree: true` dropped from the two-level example.
+- `CHILD-ENTRY-DESIGN.md`: the same three answers, plus two spike questions (4 and 5), two spike steps, and amendments to open points 4, 5 and 6.
