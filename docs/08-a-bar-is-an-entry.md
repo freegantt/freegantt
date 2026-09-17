@@ -163,11 +163,11 @@ aria-label="Three bands comparing authored Entries with the rows and bars they d
 <text x="30" y="192" class="band-title" font-size="13" fill="var(--ink)">2 — A segment bar</text>
 <text x="176" y="192" class="box-sub" font-size="11.5" fill="var(--muted)">a child Entry, drawn on its parent's row</text>
 <rect x="30" y="204" width="470" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
-<text x="44" y="229" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', type: 'request' }</text>
+<text x="44" y="229" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', showDaysOnRow: true }</text>
 <text x="44" y="247" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd1', parentId: 'req-1', hours: 8, start, end }</text>
 <text x="44" y="265" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd2', parentId: 'req-1', hours: 4, start, end }</text>
 <rect x="44" y="280" width="442" height="34" rx="5" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3" />
-<text x="56" y="301" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { … childrenOnParentRow: { type: 'request' } }</text>
+<text x="56" y="301" class="mono" font-size="10.5" fill="var(--ink)">rowSource: { … childrenOnParentRow: { showDaysOnRow: true } }</text>
 <line x1="508" y1="266" x2="566" y2="266" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#fga1)" color="var(--ink)" />
 <rect x="575" y="204" width="575" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
 <line x1="705" y1="204" x2="705" y2="328" stroke="var(--border)" stroke-width="1" />
@@ -186,7 +186,7 @@ aria-label="Three bands comparing authored Entries with the rows and bars they d
 <text x="30" y="364" class="band-title" font-size="13" fill="var(--ink)">3 — A summary bar</text>
 <text x="183" y="364" class="box-sub" font-size="11.5" fill="var(--muted)">the same three Entries, with the rule off</text>
 <rect x="30" y="376" width="470" height="124" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
-<text x="44" y="401" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', type: 'request' }</text>
+<text x="44" y="401" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'req-1', showDaysOnRow: true }</text>
 <text x="44" y="419" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd1', parentId: 'req-1', hours: 8, start, end }</text>
 <text x="44" y="437" class="mono" font-size="11.5" fill="var(--ink)">{ id: 'd2', parentId: 'req-1', hours: 4, start, end }</text>
 <rect x="44" y="452" width="442" height="34" rx="5" fill="var(--core-bg)" stroke="var(--core)" stroke-width="1" stroke-dasharray="4 3" />
@@ -226,12 +226,12 @@ Every job below already ships, except one row.
 ```ts
 const dataset = new Dataset({
   fields: [
-    { key: 'type', type: 'text' },
+    { key: 'showDaysOnRow', type: 'boolean' },
     { key: 'hours', type: 'number', rollUp: 'sum' },
     { key: 'locked', type: 'boolean' },
   ],
   entries: [
-    { id: 'req-1', name: 'Framing crew', type: 'request' },              // the row
+    { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
     { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
     { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
     { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
@@ -240,7 +240,7 @@ const dataset = new Dataset({
 
 new Gantt({
   dataset,
-  rowSource: { source: 'entries', childrenOnParentRow: { type: 'request' } },
+  rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } },
 });
 ```
 
@@ -276,7 +276,7 @@ parent Entry in the layout pass, so the scope of the setting is whatever the rul
 
 ```ts
 childrenOnParentRow: true                                      // every parent
-childrenOnParentRow: { type: 'request' }                       // the parents of one kind
+childrenOnParentRow: { team: 'framing' }                       // any value the data already holds
 childrenOnParentRow: { showDaysOnRow: true }                   // the parents the consumer marks
 childrenOnParentRow: (entry) => entry.children().length > 3    // whatever a predicate can ask
 ```
@@ -284,6 +284,20 @@ childrenOnParentRow: (entry) => entry.children().length > 3    // whatever a pre
 The common case is the shorthand and the long form is the expert one, as every other config key on
 this library reads. `true` fits a dataset two levels deep, where every parent carries bars. Name the
 level with a match or a predicate when the dataset is deeper.
+
+**A field match names a Field and a value, and nothing else.** `{ showDaysOnRow: true }` claims every
+parent whose `showDaysOnRow` Field **equals** `true`. `{ team: 'framing' }` claims every parent whose
+`team` Field equals `'framing'`. The key is a Field key the `Dataset` declares — a core one, or the
+consumer's own — and the comparison is that Field's own `equals`
+([ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)). A key no Field declares claims
+nothing, so a typo is quiet rather than fatal. A match is equality, never "has a value": ask that
+with a predicate.
+
+**It does not name a variant, and it does not pick one.** `variants` writes the same shape in its
+`when`, so an author learns one match syntax — but the two answer different questions. `when` asks
+*how does this row look*; `childrenOnParentRow` asks *does this parent give its children rows*. A
+claimed parent's children each still resolve their own variant afterwards, and that is the per-bar
+name, look and capability #421 asks for.
 
 **Per Entry, the consumer declares one Field and the rule matches it.** Core stores no classification
 (`plans/01` §2.5), so the marker is the consumer's own Field, not a core key:
@@ -361,7 +375,8 @@ stands for. A consumer variant may still paint a rail behind them.
 
 :::caution The name is not ruled
 `childrenOnParentRow` is this page's recommendation, not a decision. Read the call site aloud:
-"children on parent row, where type is request." It says whose row, which `childrenOnRow` does not.
+"children on parent row, where show days on row is true." It says whose row, which `childrenOnRow`
+does not.
 Rejected so far: `childrenAsBars` (an unclaimed parent's children draw bars too, on their own rows —
 the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow`
 ("Split" is under *Avoid* in `CONTEXT.md`). Run the naming skill before it ships.
