@@ -4,7 +4,7 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-16. One question waits. Do not re-open a ruled one.**
+**Status, 2026-09-17. Two questions wait. Do not re-open a ruled one.**
 
 | | Question | Status |
 |---|---|---|
@@ -13,10 +13,13 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q3 | does `addSegment` ship beside `updateSegment`? | **Ruled** — yes, in B3 |
 | Q4 | does `updateSegment` write the Entry's envelope row? | **Ruled** — yes, the min/max over its Segments |
 | Q5 | can an `EditExtender` propose a one-Segment edit? | **Ruled** — yes, and `SegmentEdits` is its own collection |
-| Q6 | is there one write door, or two? | **OPEN** — reserved for a grill. No build settles it |
+| Q6 | is there one write door, or two? | **OPEN, recommendation made** — Option C, one door. The author has not ruled it. No build settles it |
+| Q7 | does an Entry read across to its Segments, or a Segment to its Entry? | **Ruled** — `read(key)` never falls through. Navigation (`segment.entry()`) ships. J-plan-6 is reversed |
+| Q8 | can an Aggregator run over Segments? | **Ruled** — yes, onto the row's cell, never onto a bar. Segments and children union, no knob |
+| Q9 | is the envelope the Rollup over Segments? | **OPEN** — proposed with Q8. It changes a Q4 naming rule |
 | J1–J3 | the three spike findings | Ruled, from `SPIKE-FINDINGS.md` |
 
-**Two entries record a call that was reversed.** Q1's first ruling was wrong, and Q5's first shape was wrong. Both keep the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
+**Three entries record a call that was reversed.** Q1's first ruling was wrong, and Q5's first shape was wrong. Q7 reverses the plan's hard rule 3 and J-plan-6. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
 
 ---
 
@@ -166,6 +169,8 @@ measured at `d87cbdd` — but it starts from the table, which this check found a
 
 **This is what `envelopeOfSegments` already computes** (`src/time/instant.ts:56-68`): it walks the spans, keeps the lowest `start` and the highest `end`, and every write path calls it. So `updateSegment('d2', { end })` writes an Entry-level envelope row, and the value is that min/max over the row's Segments after the edit. B3 adds no new maths. It carries the existing envelope pass onto the new per-Segment write path.
 
+**Q8 removed this paragraph's reason, and Q9 is open.** "No Aggregator ever runs over Segments" is no longer true. Until Q9 is ruled, B3 keeps the word "envelope". The original text follows.
+
 **A naming trap, and B3 must not step in it.** The behaviour is a min/max fold, but **it is not the Rollup**. In this codebase the Rollup is the pass over an Entry's *children* (ADR 0013), and #421 states that no Aggregator ever runs over Segments. Same arithmetic, different pass, different inputs. Call this one the **envelope**, as `envelopeOfSegments` and `reconcileEnvelope` already do. One word covering both passes is the #7 *"chart"* failure a second time.
 
 ---
@@ -233,7 +238,7 @@ A `SegmentId` is a complete address on its own. Two Segments never share one, on
 
 ## Q6 — is there one write door, or two?
 
-**Raised 2026-09-16, out of Q5's correction. B3. OPEN — the author reserved this for a grill session.**
+**Raised 2026-09-16, out of Q5's correction. B3. OPEN — the grill ran on 2026-09-16 and made a recommendation: Option C. The author has not ruled it. Read "The grill" below the original question.**
 
 Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `EntryId`, and `SegmentEdits` keyed by `SegmentId`. The public surface has the matching pair, `entries.update(id, edit)` and `entries.updateSegment(segmentId, edit)`.
 
@@ -246,3 +251,104 @@ Q5 leaves an `EditExtender` returning two collections: `EntryEdits` keyed by `En
 - Whatever wins must keep the per-Segment ChangeSet row (Q5) and the envelope recompute (Q4).
 
 **Do not settle this inside a build.** It changes the plugin-author surface, so it is an API decision, not an implementation one.
+
+### The grill, 2026-09-16 — recommendation: Option C
+
+**Status: recommended, not ruled.** The author asked if the Q8 rollup works with C, and it does. The author has not said "take C". Rule it before B3.
+
+**The finding.** One id space already exists. `entryIdOfSegment`, `segmentIdsOfEntries` and the Selection answer for a plain bar and an authored Segment from one id. Core treats every bar as one addressable thing. The consumer gets two of everything:
+
+| Job | Entry door | Segment door |
+|---|---|---|
+| read a value | `entry.read(k)` | `segment.read(k)` |
+| write a value | `entries.update(id, e)` | `entries.updateSegment(id, e)` |
+| add one | `entries.add(i)` | `entries.addSegment(eid, i)` |
+| remove | `entries.remove(ids)` | `entries.removeSegments(ids)` |
+| match | `when` | `whenSegment` |
+| gate | `(entry)` | `(entry, segment?)` |
+| propose an edit | `EntryEdits` | `SegmentEdits` |
+| address a row | `{ id, field }` | `{ id, segmentId, field }` |
+
+The worst part is the optional. Every seam under #421 receives `segment?: Segment | undefined`. That optional is the consumer tracking "a Segment or a bar" in the type system, at every seam.
+
+**Core already knows the answer, and hands out the question.** The issue states the rule: an Item reads the Segment it draws, and an Item that draws no authored Segment reads its Entry. Core runs that rule once, in the layout pass. Then it hands the consumer a pair, and the consumer runs the rule again. That is re-derivation at the seam.
+
+**Option C — one door, two backings.** The consumer's unit is the dated piece.
+- One id. Every bar has one, plain or authored.
+- One live type. It answers `id`, `start`, `end`, `name?`, `read(key)`, `row` (the owning Entry, for grid and hierarchy questions) and `toInput()`.
+- One collection: `get`, `add`, `update`, `remove`. `updateSegment`, `addSegment` and `removeSegments` never ship.
+- `entry.pieces` is never empty for a spanning row. A plain row answers one. A segmented row answers many.
+- Every seam takes one object, not a pair: `when(piece)`, `can(piece, cap)`, `paint({ piece, item })`, `formatValue(v, ctx, piece)`.
+- Two phases, two rule lists. The row phase decides `items`. The bar phase decides `paint`, `css`, `can` and `barLabels`. Today one `EntryVariant` holds `items` (row only) beside `whenSegment` (bar only), so an illegal combination is representable. Two lists make it unrepresentable.
+- Storage keeps the `segments` array. "Segment" becomes a storage word that the consumer never types.
+- Q5 and Q6 dissolve. One id space gives one ChangeSet row shape `{ id, field, from, to }`. No `segmentId`, no second apply path, no second Edits collection, no `segmentIdsDroppedBy`.
+
+**Option B — a piece is a child Entry. Live alternative, not taken.** Core already owns the child index, depth, the descendant walk and the Rollup. Whether children draw as sub-rows or as bars on the parent's row becomes a variant decision.
+- B deletes: `StoredSegment`/`Segment`, `SegmentId`, `SegmentInput`, `SegmentNotFoundError`, `EmptySegmentsError`, `SegmentsOutOfSyncError`, the minted plain-bar id, the `LayoutInput` port, and the envelope/Rollup split.
+- B costs: (1) perf — 10,000 day pieces become 10,000 Entries in the hierarchy, the row list and the Rollup. This is the decisive objection. (2) The grid and the timeline must share one row list, driven by the same variant decision. (3) The default inverts: children draw as their own rows, so the crew-lead story needs a variant.
+- B's strongest argument was the rollup hole. Q8 closes that hole under C, so C wins more clearly.
+
+**Naming is not solved.** `bars` names the picture, but a variant can draw zero or two bars for one piece (`ignoreSegments`, `fixedWidthItem`). `spans` collides with `TimeSpan`. `pieces` is a placeholder. Run the naming skill before C lands.
+
+---
+
+## Q7 — does an Entry read across to its Segments, or a Segment to its Entry?
+
+**Raised 2026-09-16, in the Q6 grill. RULED the same day. Reverses the plan's hard rule 3 ("Nothing reads across") and J-plan-6.**
+
+**Where the old rule came from.** Nowhere. A grep of the whole repo finds "reads across" only in this folder's README and in the #421 text. No ADR, no `plans/01`, no `CONTEXT.md` states it. The design already broke it: an Entry's `start`/`end` is its Segments' envelope (`data/entry-reader.ts:222`).
+
+**The ruling.** Keep the narrow rule. Drop the rest.
+
+| What the broad rule forbade | Keep it? |
+|---|---|
+| `read()` falling through from Segment to Entry | **Yes.** This is the whole point |
+| An Entry aggregating its Segments into its own cell | No — Q8 |
+| An Entry listing its Segments (`entry.segments`) | No — it ships |
+| A Segment naming its row (`segment.entry()`) | No — it ships; J-plan-6 reversed |
+
+- **A `read(key)` never falls through.** `segment.read('hours')` answers that Segment's value or nothing. A consumer who reads a bar's hours never wonders which object answered.
+- **Navigation is not a read.** Without `segment.entry()`, a consumer who wants the row's name in a bar tooltip builds a `SegmentId → EntryId` map. The store holds that map (`entryIdOfSegment`, `data/entry-store.ts:463`). That is the stop rule's smell.
+- **A Rollup is a write, not a fallthrough.** The row's cell is stored on the row. `entry.read('hours')` reads the row's own cell.
+
+---
+
+## Q8 — can an Aggregator run over Segments?
+
+**Raised 2026-09-16, in the Q6 grill. RULED the same day: yes, onto the row's cell. Reverses the #421 text "No Aggregator ever runs over Segments".**
+
+**Why the old rule existed.** The #421 text said: "No Aggregator ever runs over Segments, at any zoom (see 'Zoom never changes a Segment')." The reason was zoom folding: fold 365 day pieces into one bar at year zoom and sum the hours. That value depends on the view, so it stays forbidden. The rule also killed a rollup onto the row's cell, which depends only on the data. That was collateral damage.
+
+**The ruling.**
+- **An Aggregator writes a row's cell. It never writes a bar's value.** A Field with `rollUp` may read Segments. An `hours` key stored on day Segments totals onto the request row.
+- **A row aggregates over its Segments and its children together.** One input, unioned. No precedence rule.
+- **No source knob** — not per Field, not per Entry, not a global default. The author first asked for a knob ("Entry, Segment or child", on the Entry or global). No use case was found where the two sources disagree and both are right. If a real consumer needs one later, it goes on the **Field**, because where a value comes from is a property of the value. A per-Entry flag is stored classification (`plans/01` §2.5). A global default plus a per-Entry override is two knobs for one job (`plans/02`).
+- A key with no `rollUp` shows an empty grid cell, as a key with no `rollUp` over children does today.
+- **`distribute` onto Segments is not ruled and does not ship here.** Example: `hours: 40` on a row with five pieces could write 8 onto each. Rule it later.
+
+**Why the union is safe.**
+1. `min`/`max` are always right over the union. A row's span covers everything drawn under it. Only `sum` and `count` can disagree.
+2. "Both sources" is rare after B2. B2 stops the Rollup minting a Segment for a derived parent (`data/rollup.ts:180`). After that, a row holds both only when a consumer authored both.
+3. A disagreement is a modelling problem. The candidate case is planned vs assigned: a request row holds 40h planned in pieces, and each of two worker children holds 40h assigned. Union gives 120h. But that is two meanings on one key, and #421 already rules it: two meanings need two keys (`plannedHours`, `assignedHours`). A knob would let one key keep two meanings and hide the bug.
+
+**The union does not double count.** Three pieces of 8h plus a child row holding 16h is 40h. The child's 16h already rolled up from the child's own pieces.
+
+**What this changes.** The #421 "Out of scope" line "A parent showing the total of its children's Segment data" is void: a parent sums its children's cells, and those cells rolled up from the children's Segments.
+
+---
+
+## Q9 — is the envelope the Rollup over Segments?
+
+**Raised 2026-09-16, in the Q6 grill, as the consequence of Q8. OPEN.** The author's own Q4 words were "the row should be rolled up using min for start and max for end".
+
+**The proposal.** The envelope is an Aggregator already: `min` on `start` and `max` on `end`. Both names are registered (`AggregatorName`, `model/field.ts:13`). Core writes that Aggregator by hand in four places:
+- `envelopeOfSegments` (`time/instant.ts`)
+- `reconcileEnvelope` (`data/entry-reader.ts:320-360`)
+- `fitSegmentsToEnvelope` (`data/rollup.ts`)
+- `widenSegmentsToEnvelope` (`data/rollup.ts:164-197`)
+
+ADR 0013 says only the Rollup writes a rolling-up row's cell. Today `reconcileEnvelope` writes `start`/`end` on a segmented row beside that rule. If the Rollup takes Segments as input (Q8), `start`/`end` come back inside it. The envelope becomes a declaration, not a code path.
+
+**What a ruling changes.** Q4's naming-trap paragraph retires. The #421 "Terms" line ("Do not write rollup for this pass") retires. ADR 0013 may need a revision note, because #421 says ADR 0013 does not change.
+
+**Until ruled:** keep the word "envelope" and keep the four paths.
