@@ -301,57 +301,6 @@ with a predicate.
 claimed parent's children each still resolve their own variant afterwards, and that is the per-bar
 name, look and capability #421 asks for.
 
-### Where `showDaysOnRow` comes from
-
-**It is the consumer's value, and core knows nothing about it.** The consumer declares it on the
-`Dataset` and authors it flat on the Entry, beside `name`:
-
-```ts
-fields: [{ key: 'showDaysOnRow', type: 'boolean' }]          // declare it once
-entries: [{ id: 'req-1', name: 'Framing crew', showDaysOnRow: true }]   // author it flat
-dataset.entries.update('req-1', { showDaysOnRow: false });   // write it later
-dataset.entries.get('req-1')?.read('showDaysOnRow');         // read it — the one value door
-```
-
-A declared Field key sits at the **top level**, never nested. `props` is the bag for the keys a
-consumer has **not** declared — passenger data, carried at ingest and invisible to `update()`. Naming
-one key in both places throws (`src/model/stored-entry.ts`, `EntryInput.props`).
-
-**Declaring it is what lets the rule see it at all.** The stored value does live in the Entry's
-`props` bag — that is the Field key's address (ADR 0011) — but nothing reads it there:
-`entry.read(key)` is the one value door, and a field match resolves through the Field registry. So a
-key that no Field declares claims **no** parent, in silence. The `fields` line is not decoration; it
-is the difference between a rule that works and a rule that quietly matches nothing.
-
-**Per Entry, the consumer declares one Field and the rule matches it.** Core stores no classification
-(`plans/01` §2.5), so the marker is the consumer's own Field, not a core key:
-
-```ts
-fields: [{ key: 'showDaysOnRow', type: 'boolean' }]
-rowSource: { source: 'entries', childrenOnParentRow: { showDaysOnRow: true } }
-
-dataset.entries.update('req-1', { showDaysOnRow: true });    // this row draws its children as bars
-dataset.entries.update('req-1', { showDaysOnRow: false });   // this row opens into sub-rows
-```
-
-That write is an ordinary field write: one transaction, one `ChangeSet`, one undo step, and the
-frame rebuilds from it like any other edit. A checkbox in a grid column drives it with no new API.
-
-**Default on, one Entry off** is a predicate, because a field match is equality and a Field carries no
-default value:
-
-```ts
-childrenOnParentRow: (entry) => entry.read('ownRows') !== true
-```
-
-**Per-row control is per-Entry control.** For the entries source a `RowId` equals the `EntryId`
-([`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), *Row*).
-
-**Refused: a core key on the Entry** (`{ id: 'req-1', childrenOnParentRow: true }`). Core would read a
-stored classification, and two Gantts on one Dataset could no longer disagree (I2) — the roster view
-draws the days as bars, the planner view shows them as rows. The consumer Field above costs one
-line and keeps both rules.
-
 ### `tree` is a separate question
 
 `tree` says whether an **unclaimed** parent's children nest under it. The new rule says whether a
