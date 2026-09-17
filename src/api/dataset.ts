@@ -242,7 +242,7 @@ export class Dataset<TProps = unknown> {
    *  Field the Dataset already declares and adds none, so an unknown key throws `UnknownFieldError`.
    *  `true` and `false` still alias `'anywhere'` and `'never'`.
    *
-   *  Which Entry a value is writable *on* is `gantt.interactions.edit`, per row. This key states
+   *  Which Entry a value is writable *on* is `gantt.capabilities.edit`, per row. This key states
    *  which values are writable at all. */
   setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void {
     this.#state.fields.setEditable(key, editable);

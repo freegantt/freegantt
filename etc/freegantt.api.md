@@ -86,6 +86,17 @@ export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 
 export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
 
 // @public
+export interface Capabilities {
+    edit?: WriteRule;
+    // (undocumented)
+    move?: CapabilityRule;
+    // (undocumented)
+    resize?: CapabilityRule;
+    // (undocumented)
+    select?: CapabilityRule;
+}
+
+// @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
 // @public (undocumented)
@@ -796,7 +807,7 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 
 // @public
 export interface EntryVariant<TProps = Record<string, unknown>> {
-    can?: Interactions;
+    capabilities?: Capabilities;
     css?: string;
     items?: ItemProducer;
     name: string;
@@ -1073,8 +1084,10 @@ export class Gantt<TProps = unknown> {
     get canZoomIn(): boolean;
     // (undocumented)
     get canZoomOut(): boolean;
+    get capabilities(): Capabilities;
+    set capabilities(next: Capabilities);
     checkResolvedTheme(): ResolvedTheme;
-    clearCapabilityRule(capability: keyof Interactions): void;
+    clearCapabilityRule(capability: keyof Capabilities): void;
     // (undocumented)
     collapse(id: RowId | string): void;
     // (undocumented)
@@ -1112,8 +1125,6 @@ export class Gantt<TProps = unknown> {
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
     installPlugin(plugin: ChromePlugin<TProps>): void;
-    get interactions(): Interactions;
-    set interactions(next: Interactions);
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -1144,7 +1155,7 @@ export class Gantt<TProps = unknown> {
     get selectedEntryIds(): readonly EntryId[];
     get selectedSegmentIds(): readonly SegmentId[];
     set selectedSegmentIds(ids: readonly (SegmentId | string)[]);
-    setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void;
+    setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void;
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
     set snap(next: SnapSetting | undefined);
@@ -1240,6 +1251,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     a11yLabel?: string;
     barLabels?: BarLabels;
     barRenderer?: BarRenderer;
+    capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
     dataset: Dataset<TProps>;
@@ -1249,7 +1261,6 @@ export interface GanttOptionsBase<TProps = unknown> {
     gridColumns?: readonly GridColumnInput[];
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
-    interactions?: Interactions;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
     plugins?: readonly ChromePlugin<TProps>[];
@@ -1413,17 +1424,6 @@ export function instant(value: Date | number | string): Instant;
 
 // @public
 export type InstantInput = Instant | Date | number | string;
-
-// @public
-export interface Interactions {
-    edit?: WriteRule;
-    // (undocumented)
-    move?: CapabilityRule;
-    // (undocumented)
-    resize?: CapabilityRule;
-    // (undocumented)
-    select?: CapabilityRule;
-}
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
@@ -1975,7 +1975,7 @@ export type ResolvedTheme = 'light' | 'dark';
 //
 // @public
 export interface ResolvedVariant extends DrawnVariant {
-    readonly can: Interactions | undefined;
+    readonly capabilities: Capabilities | undefined;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
 }

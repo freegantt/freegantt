@@ -47,7 +47,7 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 - **A row's cell may roll up its Segments** (Q8). One input: Segments and children, unioned. No precedence, no source knob. `distribute` onto Segments is not ruled.
 - **`name` is optional** on `EntryInput`, `StoredEntry`, `Entry`, `SegmentInput`, `StoredSegment`, `Segment`.
 - **One `EntryVariant`, one new key** (Q11(a)). `when` picks rows. `whenSegment` picks bars and takes one `Segment`. Both present is AND. A variant with `whenSegment` cannot set `items`.
-- **Bar gestures ask the bar; cell edits ask the cell** (Q11(b)). `move`/`resize`/`select` take a `Segment`. `interactions.edit` stays `(entry, field)`, the grid cell rule.
+- **Bar gestures ask the bar; cell edits ask the cell** (Q11(b)). `move`/`resize`/`select` take a `Segment`. `capabilities.edit` stays `(entry, field)`, the grid cell rule.
 - **A bar prints one Field** from its Segment, through that Field's `formatValue(value, ctx, owner)`, where `owner` is the `Entry` or `Segment` the value came from: the Entry in a grid cell, the Segment on a bar — a plain bar's Segment too, which reads the Entry's record. Default `name`.
 - **An `EditExtender` returns `DatasetEdits`** (Q11(c)): `{ entries?: EntryEdits; segments?: SegmentEdits }`.
 - **A bar that stands for several Segments gets all of them** (Q11(d)). `BarRendererContext` is `{ entry, segments, item, label? }`, and `segments` is never empty.
@@ -77,8 +77,8 @@ Publish the invocation an author writes. Read each line aloud before you change 
 | Match a bar by value | `{ name: 'fullDay', whenSegment: { hours: 8 }, css }` | new key on `EntryVariant` |
 | Match a bar by predicate | `{ name: 'overBooked', whenSegment: (segment) => (segment.read('hours') ?? 0) > 8, css }` | one argument |
 | Match a row and its bars | `{ name: 'crew', when: { team: 'framing' }, whenSegment: { hours: 4 }, css }` | AND |
-| Gate a gesture per bar | `interactions: { resize: (segment) => segment.read('locked') !== true }` | `CapabilityRule` takes the `Segment` |
-| Gate a grid cell write | `interactions: { edit: (entry, field) => … }` | unchanged. A bar drag no longer asks it (Q11(b)) |
+| Gate a gesture per bar | `capabilities: { resize: (segment) => segment.read('locked') !== true }` | `CapabilityRule` takes the `Segment` |
+| Gate a grid cell write | `capabilities: { edit: (entry, field) => … }` | unchanged. A bar drag no longer asks it (Q11(b)) |
 | Print a Field on every bar | `new Gantt({ barLabels: { field: 'hours', placement: 'inside' } })` | `BarLabels` gains the long form; the string shorthand stays |
 | Print a Field on one variant's bars | `bar({ barLabels: { field: 'hours' } })` | `EntryVariant.barLabels`; overrides `field`, `placement` or both (J-plan-5) |
 | Paint a bar | `paint: ({ entry, segments, item, label }) => …` | `BarRendererContext.segments`, never empty |
@@ -182,7 +182,7 @@ B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7  →  B8
 | **B3** The Rollup reads Segments | Rollup input is children ∪ Segments; the four envelope paths retire; `#hasChildren` → `#derives`; a derived `start`/`end` write refuses; the `segments` array replaces by `id` and the positional match retires (Q12) | B2 | `rollUp: 'sum'` totals day `hours` onto the row; Segments + child union test; `start`/`end` go through the same code as children (no key check); row-date write throws `DerivedFieldNotWritableError`; the two-call plain-bar transaction is one undo; a reorder keeps every id |
 | **B4** Segment writes | `updateSegment`, `addSegment`, `store: 'segments'` rows, per-Segment apply/replay/undo, plain writes land as `store: 'entries'` rows, `DatasetEdits` + `mergeDatasetEdits`, the two double-answer refusals; structural rows per Q15 — `addSegment` one added row, `removeSegments` one removed row per Segment, a drag commit and `moveEntryTo` one `start`/`end` value row per Segment, only `update(id, { segments })` a whole-array row | B3 | S1's assertions as real tests; `addSegment` beside `updateSegment` on a sibling in one transaction commits and undoes in one step; a row drag writes no whole-array row; `update(id, { segments })` beside a `store: 'segments'` row for the same Entry is refused; `addSegment` refuses a duplicate id like `add`; ten updates in one transaction are one undo; an extender's `segments` cascade undoes with the user's edit; `updateSegment` on a plain bar writes `store: 'entries'` rows and no row names the minted id; each refusal has a test |
 | **B5** Variants per bar | `EntryVariant.whenSegment` (field match or `(segment) => boolean`), `items?: never` beside it, frame carries the winner per bar, `resolveBarRenderer(item)`, `BarRendererContext.segments`, `DoubleVariantClaim` names the Segment, `UnknownFieldMatch` for `whenSegment` | B4 | every shipped rule claims the same bars as before (snapshot); `whenSegment: { hours: 8 }` claims exactly those bars; a bar over several Segments is never claimed by `whenSegment`; `{ whenSegment, items }` does not compile |
-| **B6** Capabilities per bar | `CapabilityRule(segment)`, `can()` asks every Segment the bar stands for (one refusal refuses), `canGesture(item)` at every caller, handles per bar (S2's rule), grid-row click selects only bars that allow select, bar drags stop asking `interactions.edit` | B5 | `e2e/write-refusal.spec.ts` locked Segment; a11y and keyboard paths ask the same `can`; `edit` still gates the cell editor |
+| **B6** Capabilities per bar | `CapabilityRule(segment)`, `can()` asks every Segment the bar stands for (one refusal refuses), `canGesture(item)` at every caller, handles per bar (S2's rule), grid-row click selects only bars that allow select, bar drags stop asking `capabilities.edit` | B5 | `e2e/write-refusal.spec.ts` locked Segment; a11y and keyboard paths ask the same `can`; `edit` still gates the cell editor |
 | **B7** Labels | `BarLabels` long form, `EntryVariant.barLabels`, label resolved in layout from the Segment through `formatValue(value, ctx, owner)`, a11y label from printed text or dates, empty-label geometry test, day/week/year zoom test | B5 | the two pinned tests; a plain bar still prints `entry.name` |
 | **B8** Harness, glossary, docs | one segmented row with per-bar text, colour, capabilities and a row total; one plain bar with no name; `CONTEXT.md` Segment/Item/Variant entries; the ADR that revises ADR 0012 (Q1) and ADR 0013 (Q9, Q11(e)); `docs/` consumer page; close #421 | B6, B7 | `harness/main.ts` reviewed; acceptance list in #421 all ticked |
 
@@ -219,7 +219,7 @@ Each story is one acceptance test. The consumer brief is `plans/handoff/2026-09-
 1. **A crew lead sees one bar per day.** A labour request spans two weeks. Each day is a Segment with `hours`, `worker` and `filled`. The row shows one bar per day, each with its own text and colour. A weekend gap draws nothing.
 2. **The row shows the total.** `hours` declares `rollUp: 'sum'`. The request row's grid cell reads the sum of its days. It reads the same number at every zoom.
 3. **A filled day looks different from an open one.** `{ name: 'filled', whenSegment: { filled: true }, css }`. No renderer, no side map. The rule claims exactly the filled bars.
-4. **A locked day cannot be resized, its neighbours can.** `interactions: { resize: (segment) => segment.read('locked') !== true }`. The locked bar shows no handle. The bar beside it shows both. Dragging the locked edge does nothing.
+4. **A locked day cannot be resized, its neighbours can.** `capabilities: { resize: (segment) => segment.read('locked') !== true }`. The locked bar shows no handle. The bar beside it shows both. Dragging the locked edge does nothing.
 5. **A dispatcher assigns one worker to ten days in one step.** Ten `dataset.entries.updateSegment(id, { worker: 'Ali' })` calls inside one `transaction`. One ChangeSet, ten `store: 'segments'` rows. One undo clears all ten.
 6. **A planner copies a request.** `dataset.entries.add({ ...entry.toInput(), id: 'copy' })`. The copy has every day's data and fresh Segment ids. Nothing throws.
 7. **A booking with no title is still a bar.** `{ id: 'hold', start, end }`. The grid's name cell is empty. The bar draws, hovers, selects and resizes like any other. A screen reader hears the dates.
@@ -236,7 +236,7 @@ Each story is one acceptance test. The consumer brief is `plans/handoff/2026-09-
 
 | Area | Files |
 |---|---|
-| model | `model/stored-entry.ts`, `model/segment.ts` (new), `model/change-set.ts`, `model/interactions.ts`, `model/field.ts:149-169,230`, `model/plugin.ts:32`, `model/dataset.ts:51-69` |
+| model | `model/stored-entry.ts`, `model/segment.ts` (new), `model/change-set.ts`, `model/capabilities.ts`, `model/field.ts:149-169,230`, `model/plugin.ts:32`, `model/dataset.ts:51-69` |
 | data | `data/entry-reader.ts`, `data/entry-store.ts`, `data/rollup.ts`, `data/write-rule.ts`, `data/edit-extension.ts`, `data/live-entry.ts`, `data/live-segment.ts` (new), `data/change-set.ts`, `data/replay.ts`, `data/dataset-state.ts:201-264,298`, `data/fields/core-fields.ts` |
 | time | `time/instant.ts` (`envelopeOfSegments` retires) |
 | layout | `layout/items/variants.ts:49-111,382-530`, `layout/items/item.ts:93-110,180`, `layout/items/produce-items.ts`, `layout/frame.ts:136-156,271,353`, `layout/frame-memory.ts:110-160`, `layout/gesture-draft.ts`, `layout/renderer.ts:29-38,94` |

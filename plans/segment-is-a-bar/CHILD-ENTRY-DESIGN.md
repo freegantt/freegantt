@@ -90,7 +90,7 @@ Every job uses a door that ships today.
 | Remove a bar | `dataset.entries.remove('d1')` | no. `remove` takes one id today (`model/dataset.ts:65`); several bars are several calls in one `transaction` |
 | Move a bar to another row | `dataset.entries.update('d1', { parentId: 'req-2' })` | no. Option C cannot do this and keep the id |
 | Match a bar | `{ name: 'fullDay', when: { hours: 8 }, css }` | no |
-| Gate a gesture per bar | `interactions: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Gate a gesture per bar | `capabilities: { resize: (entry) => entry.read('locked') !== true }` | no |
 | Format a value | `formatValue: (value, ctx, entry) => …` | no |
 | Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |
 | Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
@@ -125,7 +125,7 @@ childrenOnParentRow: { showDaysOnRow: true }                    // the parents t
 childrenOnParentRow: (entry) => entry.read('ownRows') !== true  // every parent, minus the opened ones
 ```
 
-**A field match is a Field key and a value.** `{ showDaysOnRow: true }` claims the parents whose `showDaysOnRow` Field equals `true`; the comparison is that Field's own `equals` (`model/field.ts`), and a key no Field declares claims nothing (`variants.ts`). **It does not name or pick a variant.** `EntryVariant.when` writes the same shape for a different question — `when` asks how a row looks, this key asks whether a parent gives its children rows. A claimed parent's children resolve their own variants afterwards, which is the per-bar look #421 asks for.
+**A field match is a Field key and a value.** `{ showDaysOnRow: true }` claims the parents whose `showDaysOnRow` Field equals `true`; the comparison is that Field's own `equals` (`model/field.ts`), and a key no Field declares claims nothing (`variants.ts`) — reporting once per rule and key through `reportUnknownFieldMatch`, the sink `J59` already built, so a typo here is as loud as a typo in a variant's `when`. **It does not name or pick a variant.** `EntryVariant.when` writes the same shape for a different question — `when` asks how a row looks, this key asks whether a parent gives its children rows. A claimed parent's children resolve their own variants afterwards, which is the per-bar look #421 asks for.
 
 **Refused as an example: a consumer Field called `type`** (`{ type: 'request' }`, the first draft). It reads as a stored classification, which core does not have (ADR 0013), and it collides with `Field.type` in the same `fields` block — `{ key: 'type', type: 'text' }`. A consumer may still declare such a Field; the docs must not teach one.
 

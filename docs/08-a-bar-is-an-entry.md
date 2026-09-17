@@ -265,10 +265,19 @@ question, and the next section answers it.
 | Remove a bar | `dataset.entries.remove('d1')` | no — several bars are several calls in one `transaction` |
 | Move a bar to another row | `dataset.entries.update('d1', { parentId: 'req-2' })` | no |
 | Give a bar its own look | `variants: [{ name: 'fullDay', when: { hours: 8 }, paint, css }]` | no |
-| Gate a gesture per bar | `interactions: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Gate a gesture for every bar | `capabilities: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Gate a gesture for one look's bars | `variants: [{ name: 'fullDay', when: { hours: 8 }, can: { resize: false } }]` | no |
 | Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |
 | Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
 | Show the same bars as sub-rows | change the rule, or the value it matches | no |
+
+**Two doors gate a gesture, and they do not compete.** A bar's capability resolves down one chain:
+the consumer's own `capabilities`, then the resolved Variant's `capabilities`, then the library rule
+([`plans/02`](../plans/02-public-api.md) §4.1, [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)).
+Both doors take the same `Capabilities` shape, and a predicate at either level answers `undefined`
+for "no opinion", which falls to the next level. Write `can` when the rule belongs to the look — a
+milestone never resizes, wherever it is drawn. Write `capabilities` when the rule belongs to this
+Gantt — a read-only board resizes nothing, whatever a row looks like.
 
 ### Set it for the whole Gantt, or for one Entry
 
@@ -292,8 +301,11 @@ parent whose `showDaysOnRow` Field **equals** `true`. `{ team: 'framing' }` clai
 `team` Field equals `'framing'`. The key is a Field key the `Dataset` declares — a core one, or the
 consumer's own — and the comparison is that Field's own `equals`
 ([ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)). A key no Field declares claims
-nothing, so a typo is quiet rather than fatal. A match is equality, never "has a value": ask that
-with a predicate.
+nothing, and the miss reports once per rule and key on the `error` event
+(`code: 'unknown-variant-field'`, `severity: 'warning'`, with a `console.warn` fallback when nothing
+subscribes) — the frame keeps drawing, and the typo is loud rather than silent (`J59`,
+`view/gantt-shell.ts`). The new key reports through that same sink. A match is equality, never "has
+a value": ask that with a predicate.
 
 **It does not name a variant, and it does not pick one.** `variants` writes the same shape in its
 `when`, so an author learns one match syntax — but the two answer different questions. `when` asks

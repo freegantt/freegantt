@@ -7,18 +7,18 @@
 // So `canWrite` is the primitive here, and a gesture asks it about the values it sets.
 //
 // Before this, "may this value change" had three answers at three units. `Field.editable` answered
-// per Field. `Interactions.edit` answered per Entry. The cell editor kept a third rule per cell. No
+// per Field. `Capabilities.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
 import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
-import type { CapabilityRule, GestureCapability, Interactions, WriteRule } from '../model/index.js';
+import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
 
 // ADR 0018: the four vocabulary types moved down to `model/`, so `EntryVariant.can` (a `layout/`
-// type) can name the same `Interactions` a consumer writes. This file still owns the resolution,
+// type) can name the same `Capabilities` a consumer writes. This file still owns the resolution,
 // and it republishes the names a plugin author reads off this seam.
-export type { CapabilityRule, GestureCapability, Interactions, WriteRule };
+export type { CapabilityRule, GestureCapability, Capabilities, WriteRule };
 
 /** Why a write is refused, when the refusal is worth words. A refusal that carries no reason is
  *  already visible: no handle paints, and no editor opens. The cell editor stays silent for it
@@ -30,7 +30,7 @@ export type WriteRefusalReason = FieldWriteRefusalReason;
 /** May this cell's value change, and if not, is the refusal worth explaining? */
 export type WriteVerdict = FieldWriteVerdict;
 
-export interface Capabilities {
+export interface ResolvedCapabilities {
   /** `edge` narrows a `'resize'` question to one handle (#142). With no edge, `'resize'` asks
    *  whether *either* handle may resize. Every other capability ignores it. */
   can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
@@ -48,7 +48,7 @@ export interface Capabilities {
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
  *  Field lookup joined a list that already read badly at the call site. */
 export interface CapabilityInputs {
-  interactions?: Interactions | undefined;
+  capabilities?: Capabilities | undefined;
   /** From the bound `Dataset` — `dataset.field`. The library write rule reads the Field's own
    *  `rollUp` and `editable`. */
   fieldFor: (key: FieldKey) => Field | undefined;
@@ -57,9 +57,9 @@ export interface CapabilityInputs {
    *  variant and reads its `can` in one step, and this file never learns a variant's name. That is
    *  what keeps `plans/01` §2.5 — no `if (variant === …)` in core — true here by construction.
    *
-   *  It sits one level below the consumer's own `interactions`, and one level above the library
+   *  It sits one level below the consumer's own `capabilities`, and one level above the library
    *  rules. */
-  variantInteractionsFor?: ((entry: Entry) => Interactions | undefined) | undefined;
+  variantCapabilitiesFor?: ((entry: Entry) => Capabilities | undefined) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -72,7 +72,7 @@ const NOTHING_MOVES: readonly Entry[] = Object.freeze([]);
  *  Two kinds of cell have none. An undeclared key names no Field. A `compute` Field computes
  *  on read and owns no home by declaration (ADR 0011); `duration` is the shipped one.
  *
- *  This check used to sit below the consumer rule. `interactions: { edit: true }` reads like "turn
+ *  This check used to sit below the consumer rule. `capabilities: { edit: true }` reads like "turn
  *  editing on", and it opened the Duration cell. The editor then took a typed value, and the write
  *  went nowhere. */
 function hasSomewhereToWrite(field: Field | undefined): field is Field {
@@ -142,27 +142,27 @@ function askWriteRule(rule: WriteRule | undefined, entry: Entry, field: FieldKey
   return typeof rule === 'function' ? rule(entry, field) : rule;
 }
 
-/** Precedence, stated once, here. The consumer's own `interactions` wins over the variant's own
+/** Precedence, stated once, here. The consumer's own `capabilities` wins over the variant's own
  *  `can`. That wins over the library rules above. One ladder serves a gesture and a
  *  write alike.
  *
  *  A gesture is the conjunction of two questions, and neither substitutes for the other.
- *  `interactions` and a variant's `can` answer *whether the gesture is offered*. `canWrite` answers
+ *  `capabilities` and a variant's own `capabilities` answer *whether the gesture is offered*. `canWrite` answers
  *  *whether the values it sets may change*.
  *
- *  So `interactions: { resize: true }` opens the handle on a variant the library would have closed. It
+ *  So `capabilities: { resize: true }` opens the handle on a variant the library would have closed. It
  *  still cannot write a Field the consumer declared `editable: false`. To open that, open the Field,
- *  or answer `interactions.edit` for the cell. One home for "may this value change" is the whole
+ *  or answer `capabilities.edit` for the cell. One home for "may this value change" is the whole
  *  point (#256). */
-export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
-  const { interactions, fieldFor, variantInteractionsFor } = inputs;
+export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilities {
+  const { capabilities, fieldFor, variantCapabilitiesFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
-    const consumerAnswer = askWriteRule(interactions?.edit, entry, field);
+    const consumerAnswer = askWriteRule(capabilities?.edit, entry, field);
     if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
-    const variantAnswer = askWriteRule(variantInteractionsFor?.(entry)?.edit, entry, field);
+    const variantAnswer = askWriteRule(variantCapabilitiesFor?.(entry)?.edit, entry, field);
     if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
     return libraryWriteRule(entry.hasChildren, declared);
   };
@@ -205,9 +205,9 @@ export function resolveCapabilities(inputs: CapabilityInputs): Capabilities {
     entry.hasChildren ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
 
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
-    const consumerAnswer = askCapabilityRule(interactions?.[capability], entry);
+    const consumerAnswer = askCapabilityRule(capabilities?.[capability], entry);
     if (consumerAnswer !== undefined) return consumerAnswer;
-    const variantAnswer = askCapabilityRule(variantInteractionsFor?.(entry)?.[capability], entry);
+    const variantAnswer = askCapabilityRule(variantCapabilitiesFor?.(entry)?.[capability], entry);
     if (variantAnswer !== undefined) return variantAnswer;
     return gestureIsOffered();
   };

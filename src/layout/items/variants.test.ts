@@ -268,17 +268,22 @@ describe('what a variant answers about itself', () => {
     );
   });
 
-  it('answers the `paint` and `can` of the rule that claimed the row, and nothing for core’s floor', () => {
+  it('answers the `paint` and `capabilities` of the rule that claimed the row, and nothing for core’s floor', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const paint = (): undefined => undefined;
-    const can = { resize: false };
+    const capabilities = { resize: false };
 
-    registry.addPluginVariant({ name: 'buffer', when: (entry) => entry.id === 'claimed', paint, can });
+    registry.addPluginVariant({
+      name: 'buffer',
+      when: (entry) => entry.id === 'claimed',
+      paint,
+      capabilities,
+    });
 
     expect(registry.resolveFor(spanEntry('claimed')).paint).toBe(paint);
-    expect(registry.resolveFor(spanEntry('claimed')).can).toBe(can);
+    expect(registry.resolveFor(spanEntry('claimed')).capabilities).toBe(capabilities);
     expect(registry.resolveFor(spanEntry('other')).paint).toBeUndefined();
-    expect(registry.resolveFor(spanEntry('other')).can).toBeUndefined();
+    expect(registry.resolveFor(spanEntry('other')).capabilities).toBeUndefined();
   });
 
   it('answers its own `css`, and `undefined` for a rule with none (F1)', () => {
@@ -383,10 +388,10 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
 
   it('diamond() ships not resizable, so a resize cannot turn its point into a bar; an override opts back in', () => {
     const shipped = diamond();
-    expect(shipped.can).toEqual({ resize: false });
+    expect(shipped.capabilities).toEqual({ resize: false });
 
-    const opted = diamond({ can: { resize: true } });
-    expect(opted.can).toEqual({ resize: true });
+    const opted = diamond({ capabilities: { resize: true } });
+    expect(opted.capabilities).toEqual({ resize: true });
   });
 
   it('diamond() is not seeded into a fresh registry — no row wears it until installed', () => {
