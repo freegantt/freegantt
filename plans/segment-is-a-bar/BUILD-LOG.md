@@ -4,7 +4,7 @@
 
 Write the entry the moment it comes up, not at the end. Check that one does not already exist before you open a second.
 
-**Status, 2026-09-17. Two questions wait: Q15 and Q16, raised by a cold-read audit. The plan README and #421 state Q1–Q14. Do not re-open a ruled one.**
+**Status, 2026-09-17. No question waits. The plan README and #421 state Q1–Q16. Do not re-open a ruled one.**
 
 **Read this table, not the old bodies.** An entry marked *Superseded* keeps its text as the record. Its job may survive. Its shape does not.
 
@@ -24,8 +24,8 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q12 | how does `update(id, { segments })` treat the array? | **Ruled 2026-09-17** — replaces the list; each element replaces its Segment; match by `id` only; positional match retires |
 | Q13 | `updateSegment`, or `dataset.segments.update`? | **Ruled 2026-09-17** — `entries.updateSegment` / `addSegment` / `removeSegments`. No second collection |
 | Q14 | should every spanning row store a Segment? | **Ruled 2026-09-17: no.** Q10's storage stays. Every bar is still a Segment to the consumer |
-| Q15 | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **OPEN** — B4. Recommendation below |
-| Q16 | what does `removeSegments` do to a derived row's minted id? | **OPEN** — B2. Recommendation below |
+| Q15 | which ChangeSet rows do structural Segment writes make, and how do they sit beside value rows? | **Ruled 2026-09-17** — one row per Segment added, removed or changed; only `update(id, { segments })` writes a whole-array row, and the refusal applies to that call alone |
+| Q16 | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
 | J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
 | J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
 
@@ -503,7 +503,7 @@ The author took every recommendation. Each one was measured against the code and
 
 ## Q15 — which ChangeSet rows do structural Segment writes make?
 
-**Raised 2026-09-17 by a cold-read audit of the plan. B4. OPEN.**
+**Raised 2026-09-17 by a cold-read audit of the plan. B4. RULED the same day: the author took the recommendation below as written.**
 
 **The gap.** J-plan-3 says `addSegment` and `removeSegments` each write one structural `segments` row, and a drag commit and `moveEntryTo` send whole `segments` arrays. Q5's undo argument says a whole-array row can restore the array over the per-Segment rows beside it. The refusal "a `segments` array and a `SegmentEdit` for a Segment inside it, in one transaction" was written for an explicit array write. Read literally, it also refuses `addSegment('req-1', …)` beside `updateSegment('d2', …)` on a sibling in one transaction, and a drag beside an extender cascade. Story 10 and story 5 would then collide.
 
@@ -519,7 +519,7 @@ The author took every recommendation. Each one was measured against the code and
 
 ## Q16 — what does `removeSegments` do to a derived row's minted id?
 
-**Raised 2026-09-17 by a cold-read audit of the plan. B2. OPEN.**
+**Raised 2026-09-17 by a cold-read audit of the plan. B2. RULED the same day: the author took the recommendation below as written.**
 
 **The gap.** A summary parent is a plain row with one minted Segment. `removeSegments([thatId])` "un-dates the row" by the plain-bar rule. But the parent's `start`/`end` are derived cells, and only the Rollup writes them (ADR 0013). Measured: today `#removeSegmentsFrom` skips the date clear when `#hasChildren` is true (`data/entry-store.ts:721-728`), so the call does nothing to the dates, in silence.
 
