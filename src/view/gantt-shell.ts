@@ -580,7 +580,7 @@ export class GanttShell {
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
-   *  once `#treeCollapse`/`#segmentSelection`/`#columnChrome` exist, since its ports read all three. */
+   *  once `#treeCollapse`/`#entrySelection`/`#columnChrome` exist, since its ports read all three. */
   #rovingFocus!: RovingFocus;
   /** S5.11, D-S5-26: the one polite live region for this Gantt (`view/live-region.ts`'s own file
    *  header). Constructed and attached alongside `#rovingFocus`, once `#container` exists. */

@@ -115,7 +115,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-splitter-width` | `4px` | `pixel-property.ts` |
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired, S1.12 — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
-| `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. An Item that carries its own `box` (ADR 0022) skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
+| `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` (ADR 0022) skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one (#139) |
@@ -287,7 +287,7 @@ gap, not a rename.
 | `.fg-tick` | One tick label inside a band. |
 | `.fg-tick-line` | Vertical grid line in the timeline body. One per finest-band tick. |
 | `.fg-row-band` | Timeline copy of a grid row's zebra, hover, and selection paint. |
-| `.fg-bar` | One Item. Every look wears this class, diamonds included. |
+| `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
 | `.fg-bar-label` | The bar's own text child. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |

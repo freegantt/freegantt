@@ -76,7 +76,7 @@ export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: b
 export interface DrawnVariant {
   /** The `data-variant` a consumer styles, and the word a command's `when` reads. */
   readonly name: string;
-  /** What it draws — its own `bars`, or `followSegments` bound at registration (ADR 0023). */
+  /** What it draws — its own `bars`, or `unclaimedSpan` bound at registration (ADR 0023). */
   readonly bars: BarProducer;
 }
 

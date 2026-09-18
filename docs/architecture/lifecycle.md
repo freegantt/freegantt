@@ -714,12 +714,12 @@ a row source, then asks one registry what each Entry draws:
 
 1. **resolveRows** turns the configured `rowSource` (entries, group, custom) into an ordered list
    of rows, each stamped with a sequential index (`resolve-rows.ts`).
-2. **produceItemsForRow** turns each row's entries into `Item`s. An Entry carries no stored
+2. **produceBarsForRow** turns each row's entries into `Bar`s. An Entry carries no stored
    classification, so nothing dispatches on a type tag. The variant registry resolves one variant
-   per Entry, and that variant's own producer builds the Items (`items/produce-items.ts`,
+   per Entry, and that variant's own producer builds the Bars (`items/produce-items.ts`,
    `items/variants.ts`). The walk runs newest-first — the consumer's rules, then a plugin's, then
    core's two — and stops at the first `when` that answers yes. Core's `leaf` carries no `when`, so
-   every row resolves. A variant with no producer of its own draws one Item over the Entry's whole
+   every row resolves. A variant with no producer of its own draws one Bar over the Entry's whole
    span.
 3. **Cull** then trims to the visible window, and **header/date-line** emission closes the pass.
 

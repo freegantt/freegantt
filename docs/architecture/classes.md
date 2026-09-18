@@ -111,16 +111,16 @@ emits header ticks and date-line decorations.
 - **overflowCount** — Counts rows already emitted past the window bottom and stops after
   `verticalRows` of them.
 
-#### produceItemsForRow() — function
+#### produceBarsForRow() — function
 
 *`layout/items/produce-items.ts`*
 
-Per-row item production. An Entry carries no stored classification, so nothing dispatches on a type
+Per-row bar production. An Entry carries no stored classification, so nothing dispatches on a type
 tag: the variant registry resolves one variant per Entry, and that variant's own producer builds the
-Items (ADR 0018). Header rows produce none.
+Bars (ADR 0018). Header rows produce none.
 
-- **resolveItems(entry, registry)** — One resolution, one producer call, so no losing candidate's
-  Items are ever built and thrown away. A variant with no producer of its own draws one Item over
+- **resolveBars(entry, registry)** — One resolution, one producer call, so no losing candidate's
+  Bars are ever built and thrown away. A variant with no producer of its own draws one Bar over
   the Entry's whole span, so this never answers "nothing" for a variant the registry knows.
 - **VariantRegistry.resolveFor(entry)** — Walks newest-first: the consumer's rules, then a
   plugin's, then core's two. It stops at the first `when` that answers yes. Core's `leaf` carries
@@ -582,7 +582,7 @@ container.fg-container <span class="c">role=group; not the scroller</span>
 │   │   └─ div.fg-band <span class="c">keyed by index</span>
 │   │       └─ div.fg-tick <span class="c">keyed by index within the band</span>
 │   ├─ div.fg-bars
-│   │   └─ div.fg-bar <span class="c">keyed by ItemId</span>
+│   │   └─ div.fg-bar <span class="c">keyed by BarId</span>
 │   ├─ div.fg-content-sizer <span class="c">1×1px, translated to content extent − 1px</span>
 │   └─ div.fg-date-line <span class="c">today + authored lines, keyed by date-line id</span>
 </div>
