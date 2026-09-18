@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_MIN_BAR_WIDTH_PX } from './frame.js';
+import { mergeBarLabels } from './renderer.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import { createVariantRegistry } from './items/variants.js';
@@ -557,6 +558,36 @@ describe('computeFrame', () => {
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
+  });
+
+  it('a variant naming only placement never drops the Gantt field, through a real registry and a real merge (#421 C5)', () => {
+    const entry = entryDouble({
+      id: 'crew-day',
+      start: sampleEntries[0]!.start!,
+      end: sampleEntries[0]!.end!,
+      props: { hours: 6 },
+    });
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addConsumerVariant({ name: 'outside-only', when: () => true, barLabels: { placement: 'outside' } });
+
+    // `view/bar-labels.ts` runs this same call — `registry.resolveFor(entry).barLabels` merged over
+    // the Gantt's own `barLabels` — before it ever reaches `formatValue`; asserting it here proves
+    // the merge a real variant produces, not a literal `BarLabels` object.
+    const merged = mergeBarLabels({ field: 'hours' }, own.resolveFor(entry).barLabels);
+    expect(merged).toEqual({ field: 'hours', placement: 'outside' });
+
+    const frame = computeFrame({
+      entries: [entry],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: own,
+      barLabelFor: (e) => String(e.read(merged.field)),
+    });
+    expect(frame.bars[0]?.label).toBe('6');
   });
 
   // Retired (ADR 0026, #421): 'carries the segmentId its Bar had, for a Segment bar, and none for a
