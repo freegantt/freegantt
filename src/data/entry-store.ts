@@ -160,6 +160,10 @@ export class EntryStore implements EntryStoreContract {
    *  again inside the same revision, so the same bad answer must not be raised twice for it. */
   #reportedRefusals = { revision: -1, messages: new Set<string>() };
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
+  /** `#byParent`, ids only and with the root key (`undefined`) dropped — the same shape
+   *  `childIdsByParent` derives on demand, memoized here instead so a caller with nothing to prove
+   *  wrong (a commit that touched no row) can read it rather than re-derive it (#421 C4). */
+  #childIds: () => ReadonlyMap<EntryId, readonly EntryId[]>;
   /** Ancestor count per committed row, cached beside `#byParent` for the same reason `hasChildren`
    *  is: `entry.depth` is a property, and a walk inside a getter breaks ADR 0017's rule 4. */
   #depthById: () => ReadonlyMap<EntryId, number>;
@@ -244,6 +248,17 @@ export class EntryStore implements EntryStoreContract {
       }
       return byParent;
     });
+    this.#childIds = computed(() => {
+      const childIds = new Map<EntryId, readonly EntryId[]>();
+      for (const [parentId, children] of this.#byParent()) {
+        if (parentId === undefined) continue;
+        childIds.set(
+          parentId,
+          children.map((child) => child.id),
+        );
+      }
+      return childIds;
+    });
     this.#depthById = computed(() => {
       const byParent = this.#byParent();
       const depthById = new Map<EntryId, number>();
@@ -265,6 +280,13 @@ export class EntryStore implements EntryStoreContract {
    *  and every live row read one index rather than three walks that happen to agree (`F6`). */
   committedParents(): ParentIndex {
     return this.#hierarchy().parents;
+  }
+
+  /** Each committed parent's children, by id, in dataset order. Memoized per revision beside
+   *  `committedParents` — the Rollup reads this instead of re-deriving `childIdsByParent` when a
+   *  commit moves no row (#421 C4). An id with no children of its own has no key here. */
+  committedChildIds(): ReadonlyMap<EntryId, readonly EntryId[]> {
+    return this.#childIds();
   }
 
   /** Raises every answer core refused, once (ADR 0020, `F5`).

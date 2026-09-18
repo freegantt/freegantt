@@ -45,6 +45,8 @@ export interface TransactionalEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
+  /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */
+  committedChildIds(): ReadonlyMap<EntryId, readonly EntryId[]>;
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
@@ -158,7 +160,11 @@ export function applyConstructionRollUp(data: TransactionData): void {
     data.fields,
     data.fieldAccess,
     () => data.mintSegmentId(),
-    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
+    {
+      committedParents: data.entries.committedParents(),
+      committedChildIds: data.entries.committedChildIds(),
+      source: data.hierarchySource,
+    },
   );
   writeConstructionUpdates(data, updated);
 
