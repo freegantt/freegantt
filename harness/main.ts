@@ -128,16 +128,12 @@ function refreshMutationButtons(): void {
   removeBtn.disabled = none;
 }
 
-// ADR 0010: the Selection holds Segments, not Entries. The readout names both — the Entries the
-// picked Segments belong to, and how many Segments are picked — so the page shows the unit the
-// ADR introduced instead of hiding it behind the Entries alone.
+// ADR 0010, ADR 0025, #421: the Selection holds Entries. A former Segment is its own child Entry
+// now, so the readout names the Entries alone — there is no separate Segment count left to show.
 function renderSelection(): void {
   const entryIds = gantt.selectedEntryIds;
-  const segmentCount = gantt.selectedSegmentIds.length;
   selectionReadout.textContent =
-    entryIds.length === 0
-      ? 'No selection'
-      : `Selected: ${entryIds.join(', ')} · ${segmentCount} segment${segmentCount === 1 ? '' : 's'}`;
+    entryIds.length === 0 ? 'No selection' : `Selected: ${entryIds.join(', ')}`;
 }
 
 function syncSelectionUi(): void {
@@ -485,13 +481,11 @@ timeShadingToggle.addEventListener('change', () => {
 //
 // Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
 // 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
-// `ctx.target.segmentIds` for a bar and removes only that Segment, keeping the Entry dateless
-// rather than gone (ADR 0012); every other target reads `ctx.target.entryIds` and removes the whole
-// record (`src/view/core-commands.ts` states the dispatch rule).
+// `ctx.target.entryIds` and removes every one of those records (`src/view/core-commands.ts` states
+// the dispatch rule).
 //
 // What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
-// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record, so
-// picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
+// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
 function entryContextActions() {

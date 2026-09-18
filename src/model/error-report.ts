@@ -96,7 +96,6 @@ export type BuiltInReportCode =
   | 'no-date-value'
   | 'time-of-day'
   | 'unsaved-value'
-  | 'segmented-entry'
   | 'unreadable-value'
   | 'refused-write';
 

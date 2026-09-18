@@ -45,7 +45,6 @@ export interface ContextMenuOptions {
 function commandTargetOf(target: DomTarget, actedOn: ActedOn): CommandTarget {
   return {
     kind: target.kind,
-    segmentIds: actedOn.segmentIds,
     entryIds: actedOn.entryIds,
     ...(target.field !== undefined ? { field: target.field } : {}),
   };
@@ -54,8 +53,8 @@ function commandTargetOf(target: DomTarget, actedOn: ActedOn): CommandTarget {
 /** What the node the user right-clicked stands for, as the pair `resolveActedOn` compares. A node
  *  outside every Entry — the splitter, a header cell, the empty timeline — stands for nothing. */
 function clickedActedOn(target: DomTarget | undefined): ActedOn {
-  if (target === undefined) return { segmentIds: [], entryIds: [] };
-  return { segmentIds: target.segmentIds, entryIds: target.entryIds };
+  if (target === undefined) return { entryIds: [] };
+  return { entryIds: target.entryIds };
 }
 
 /** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
@@ -115,17 +114,16 @@ export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
         // the command layer.
         const clicked = clickedActedOn(target);
         const actedOn = resolveActedOn(clicked, {
-          segmentIds: ctx.gantt.selectedSegmentIds,
           entryIds: ctx.gantt.selectedEntryIds,
         });
         // Inferred from standard right-click behaviour, not stated on #199: a right-click outside
         // the Selection replaces the Selection with what you clicked, before the menu opens.
-        // Without it the command acts on Segments the user cannot see highlighted. A consumer that
+        // Without it the command acts on Entries the user cannot see highlighted. A consumer that
         // cancels `beforeSelectionChange` keeps its Selection; the command still acts on what the
         // user clicked, because that is what the menu offered. The click can land inside the
         // Selection, or the Selection can land inside the click (#212). Either way `actedOn` is
         // already the current Selection, so this assignment is a no-op and widens nothing.
-        if (clicked.segmentIds.length > 0) ctx.gantt.selectedSegmentIds = actedOn.segmentIds;
+        if (clicked.entryIds.length > 0) ctx.gantt.selectedEntryIds = actedOn.entryIds;
         const commandCtx: CommandContext = {
           dataset: ctx.dataset,
           gantt: ctx.gantt,
