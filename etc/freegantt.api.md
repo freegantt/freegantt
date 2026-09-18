@@ -91,7 +91,6 @@ export type BarLabels = BarLabelPolicy | BarLabelSpec;
 // @public
 export interface BarLabelSpec {
     field?: FieldKey;
-    // (undocumented)
     placement?: BarLabelPolicy;
 }
 

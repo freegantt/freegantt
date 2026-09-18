@@ -1,6 +1,6 @@
 ---
 status: accepted — ruled 2026-09-18 by the coordinator, out of
-[#421](https://github.com/Pawel-IT/FreeGantt/issues/421). Built in C7 of
+[#421](https://github.com/Pawel-IT/FreeGantt/issues/421). Built in C7b of
 `plans/segment-is-a-bar/README.md`. Working material: `plans/segment-is-a-bar/BUILD-LOG.md`.
 decided: an Entry spans iff both `start` and `end` are present (`spansTime`,
 `src/model/stored-entry.ts:56`), and a spanning Entry draws one Bar, on the row its `parentId`
