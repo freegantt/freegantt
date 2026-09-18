@@ -88,6 +88,15 @@ describe('childrenAsSegments (#421 C1)', () => {
     expect(rows[0]?.claimed).toBe(true);
   });
 
+  it("flat mode drops a claimed parent's whole subtree, not only its direct children (#421 F1)", () => {
+    const rows = resolveEntriesSource(entryDoubles([row('p'), row('c1', 'p'), row('g', 'c1'), row('q')]), {
+      source: 'entries',
+      childrenAsSegments: (entry) => entry.id === entryId('p'),
+    });
+    expect(rows.map((r) => r.id)).toEqual([rowId('p'), rowId('q')]);
+    expect(rows.find((r) => r.id === rowId('p'))?.entryIds).toEqual([entryId('p'), entryId('c1')]);
+  });
+
   it('a claimed flat source stays a grid: a claimed parent is never expandable', () => {
     const rows = resolveEntriesSource(entryDoubles([row('p'), row('c1', 'p')]), {
       source: 'entries',
