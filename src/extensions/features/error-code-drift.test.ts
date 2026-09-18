@@ -37,7 +37,6 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'no-date-value': true,
   'time-of-day': true,
   'unsaved-value': true,
-  'segmented-entry': true,
   'unreadable-value': true,
   'refused-write': true,
 };
