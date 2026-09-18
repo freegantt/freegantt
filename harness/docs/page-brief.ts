@@ -7,6 +7,7 @@ import type { HarnessPageId } from '../harness-nav.js';
 
 const PUBLIC_API = '../plans/02-public-api.md';
 const PLUGIN_GUIDE = '../docs/06-plugin-authoring.md';
+const BAR_IS_AN_ENTRY = '../docs/08-a-bar-is-an-entry.md';
 
 /** One doorway into the spec. `label` is what a reader clicks; `href` is where it lands. */
 interface SpecLink {
@@ -76,15 +77,20 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
   hierarchy: {
     demonstrates:
       'A tree of entries groups, sorts, and filters its rows. Grid columns resize and reorder by ' +
-      'drag, and a beforeEntryEdit veto swaps in a different editor for one column.',
+      'drag, and a beforeEntryEdit veto swaps in a different editor for one column. "Framing crew" ' +
+      'claims its three children as day bars on its own row — each with its own text, look and ' +
+      'capabilities, and a row total rolled up from them — and one Field write opens it back into ' +
+      'sub-rows.',
     config: [
       "gantt.rowSource = { source: 'entries', tree: true }",
       "gantt.gridColumns = ['name', 'start', 'end']",
       "gantt.on('beforeEntryEdit', (event) => …)",
+      "rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } }",
     ],
     specLinks: [
       { label: 'plans/02 §4.2 — Fields and grid columns', href: `${PUBLIC_API}#42-fields-and-grid-columns` },
       { label: '§4.3 — Row sources, collapse, and tree', href: `${PUBLIC_API}#43-row-sources-collapse-and-tree` },
+      { label: 'docs/08 — A bar is an Entry', href: BAR_IS_AN_ENTRY },
     ],
   },
   'timeline-navigation': {
