@@ -85,6 +85,11 @@ export type BuiltInReportCode =
   // names a variant; `childrenAsSegments` is not one, so it gets its own code. Reported once per
   // rule and key, and never thrown, for the same reason `unknown-variant-field` is not thrown.
   | 'unknown-row-source-field'
+  // #421 F2: `barLabels.field` (on the Gantt, or on an `EntryVariant`) names a Field key no Field
+  // declares. Both are live and reassignable, and the lookup runs inside `render()`'s own rAF
+  // callback, where a throw reaches no consumer. The bar prints no label; reported once per field
+  // key, never thrown, and never per bar per frame.
+  | 'unknown-bar-label-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.

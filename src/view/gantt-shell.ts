@@ -125,6 +125,8 @@ import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
+import type { ResolveBarLabelPorts } from './bar-labels.js';
+
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
@@ -493,6 +495,10 @@ export class GanttShell {
    *  `#registrations`'s own `fieldFor`. It is handed to `computeFrame` on every `render()` — the
    *  same "built once, read every frame" shape `variants` already takes. */
   #entryRulePorts!: EntryRulePorts;
+  /** What `resolveBarLabelText` reads outside itself (#421 F2) — the Field registry, paired with
+   *  this Gantt's own unknown-field report. Built once, right beside `#entryRulePorts`, and handed
+   *  to `#labelFor` on every `render()`, the same "built once, read every frame" shape. */
+  #barLabelPorts!: ResolveBarLabelPorts;
   /** ADR 0022 §5: the second stylesheet a Gantt writes, one node for its own installed variants'
    *  `css`. Built right after `#registrations`, and refreshed on every edge that changes what a
    *  variant registers — construction, `gantt.variants = […]`, a plugin install or dispose. */
@@ -687,6 +693,10 @@ export class GanttShell {
     this.#entryRulePorts = {
       fieldFor: (key) => this.#options.dataset.field(key),
       reportUnknownKey: this.#reportUnknownRowSourceField(),
+    };
+    this.#barLabelPorts = {
+      lookup: { get: (key) => this.#options.dataset.field(key) },
+      reportUnknownField: this.#reportUnknownBarLabelField(),
     };
     // ADR 0022 §5: right after the registry it reads, and after `ensureBaseStyles` (above). A
     // variant's own rule must land after the base sheet. Only then can it cancel `.fg-bar`'s
@@ -1363,7 +1373,7 @@ export class GanttShell {
       entry,
       this.#frameSettings.barLabels,
       this.variantFor(entry).barLabels,
-      { get: (key) => this.#options.dataset.field(key) },
+      this.#barLabelPorts,
       this.#columnBind(),
     );
   }
@@ -1801,6 +1811,28 @@ export class GanttShell {
         `It claims no row. Declare the field on the Dataset, or correct the key.`;
       this.#raiseError(
         { code: 'unknown-row-source-field', message, severity: 'warning', by: 'core', field: key },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
+  /** Where an unknown bar-label Field is reported (#421 F2). `barLabels.field` — the Gantt's own,
+   *  or an `EntryVariant`'s — names a key no Field declares, once merged (`mergeBarLabels`). Both
+   *  are live, and `resolveBarLabelText` runs inside `render()`'s own rAF callback, where a throw
+   *  reaches no consumer, so it reports and carries on; the bar prints no label.
+   *
+   *  One report per field key, not one per bar per frame: this Set holds across every frame this
+   *  Gantt renders, the same shape `#reportUnknownRowSourceField` already holds for its own key. */
+  #reportUnknownBarLabelField(): (field: FieldKey) => void {
+    const reported = new Set<FieldKey>();
+    return (field) => {
+      if (reported.has(field)) return;
+      reported.add(field);
+      const message =
+        `'barLabels' names field '${field}', and no Field declares it. ` +
+        `No label prints for the bars it covers. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-bar-label-field', message, severity: 'warning', by: 'core', field },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };
