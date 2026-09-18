@@ -10,7 +10,7 @@
 //     mints the id it passes in, already branded, so there is nothing here for a plugin author to
 //     widen for.
 //   - the brand helpers `src/model/ids.ts` itself declares (`barId`, `entryIdOfBar`,
-//     `segmentIndexOfBar`, …) — these convert one already-branded id into another, so their input
+//     `partIndexOfBar`, …) — these convert one already-branded id into another, so their input
 //     was never a loose scalar to begin with.
 // A hit outside both is exactly F19's scalar half breaking again.
 
@@ -22,18 +22,12 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const API_REPORT = path.join(root, 'etc/freegantt.api.md');
 
-const BRAND_TYPES = ['EntryId', 'SegmentId', 'RowId', 'BarId'] as const;
+const BRAND_TYPES = ['EntryId', 'RowId', 'BarId'] as const;
 
 // `src/model/ids.ts`'s own exports — the only functions allowed to take one of `BRAND_TYPES` as a
 // bare (non-loosened) parameter, because each one converts an already-branded id, never a caller's
 // raw string (see the file banner above).
-const IDS_MODULE_HELPERS = new Set([
-  'barId',
-  'entryIdOfBar',
-  'segmentIndexOfBar',
-  'mintedSegmentId',
-  'changeSetId',
-]);
+const IDS_MODULE_HELPERS = new Set(['barId', 'entryIdOfBar', 'partIndexOfBar', 'changeSetId']);
 
 interface Hit {
   line: number;
@@ -64,7 +58,7 @@ function isAllowlisted(line: string): boolean {
 }
 
 describe('F19 stays machine-checked: no bare branded id on a scalar parameter (#305)', () => {
-  it('etc/freegantt.api.md names no caller-facing door taking EntryId/SegmentId/RowId/BarId alone', () => {
+  it('etc/freegantt.api.md names no caller-facing door taking EntryId/RowId/BarId alone', () => {
     const lines = fs.readFileSync(API_REPORT, 'utf8').split('\n');
     const hits: Hit[] = [];
     lines.forEach((line, index) => {
