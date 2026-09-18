@@ -172,6 +172,50 @@ describe('produceItemsForRow', () => {
     expect(filledItems[0]?.start).not.toBe(filledItems[0]?.end);
   });
 
+  it('passes `childrenAsSegments: true` only for a claimed row’s subject — nothing skips it (#421 C2, Q33)', () => {
+    const [p1, c1] = entryDoubles([
+      { id: 'p1', start: 0, end: 10 },
+      { id: 'c1', parentId: 'p1', start: 0, end: 10 },
+    ]);
+    const seen: Array<{ id: string; childrenAsSegments: boolean | undefined }> = [];
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addPluginVariant({
+      name: 'watch',
+      when: () => true,
+      items: (entry, variant, childrenAsSegments) => {
+        seen.push({ id: entry.id, childrenAsSegments });
+        return [wholeEntryItem(entry, variant)];
+      },
+    });
+
+    const claimedRow: PlannedRow = { ...planned([p1!.id, c1!.id]), claimed: true };
+    produceItemsForRow(claimedRow, entryByIdFor([p1!, c1!]), own);
+
+    // The subject (entryIds[0]) is asked with `true`; the child it claims is asked with `false`.
+    // Nothing is skipped — the producer runs, and answers, for both (Q33).
+    expect(seen).toEqual([
+      { id: 'p1', childrenAsSegments: true },
+      { id: 'c1', childrenAsSegments: false },
+    ]);
+  });
+
+  it('an unclaimed row never passes `childrenAsSegments: true`', () => {
+    const t1 = spanEntry('t1');
+    const seen: (boolean | undefined)[] = [];
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addPluginVariant({
+      name: 'watch',
+      when: () => true,
+      items: (entry, variant, childrenAsSegments) => {
+        seen.push(childrenAsSegments);
+        return [wholeEntryItem(entry, variant)];
+      },
+    });
+
+    produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
+    expect(seen).toEqual([false]);
+  });
+
   it('a header row (kind: header) produces no Items', () => {
     const t1 = spanEntry('t1');
     const header: PlannedRow = {

@@ -17,10 +17,18 @@ import type { Item, VariantItems } from './item.js';
  *  registration. So this never answers "nothing" for a variant the registry knows.
  *
  *  Passes the resolved variant's own name to its producer (ADR 0018: a variant states its name
- *  once), so a producer never has to invent or hardcode the name its own Items carry. */
-export function resolveItems(entry: Entry, registry: VariantItems): readonly Item[] {
+ *  once), so a producer never has to invent or hardcode the name its own Items carry.
+ *
+ *  Passes `childrenAsSegments` straight through to the producer (#421 C2, Q33) — nothing here
+ *  skips the Entry. A claimed row's subject still reaches its own variant's producer, so a
+ *  consumer's own `items` still runs and still wins (Q26). */
+export function resolveItems(
+  entry: Entry,
+  registry: VariantItems,
+  childrenAsSegments: boolean,
+): readonly Item[] {
   const variant = registry.resolveFor(entry);
-  return variant === undefined ? [] : variant.items(entry, variant.name);
+  return variant === undefined ? [] : variant.items(entry, variant.name, childrenAsSegments);
 }
 
 /** Call: `produceItemsForRow(planned, entryById, registry)`. The registry is required — one per
@@ -41,7 +49,10 @@ export function produceItemsForRow(
     // and the shipped producers may read `entry.start`/`entry.end` as always present (J2,
     // BUILD-LOG.md).
     if (!spansTime(entry)) continue;
-    items.push(...resolveItems(entry, registry));
+    // Nothing skips a claimed row's subject (Q33): the fact travels to the producer instead, so
+    // a consumer's own `items` still runs for it and still wins (Q26).
+    const childrenAsSegments = row.claimed === true && id === row.entryIds[0];
+    items.push(...resolveItems(entry, registry, childrenAsSegments));
   }
   return items;
 }
