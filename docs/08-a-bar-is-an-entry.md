@@ -1,17 +1,22 @@
 # A bar is an Entry
 
-**The ruled design, not yet the shipped one.** Question **Q17** on
-[issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421) was ruled on 2026-09-17, after spike
-**S4** measured the cost objection away. The build order is
+**Shipped.** Question **Q17** on [issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421) was
+ruled on 2026-09-17, after spike **S4** measured the cost objection away, and builds C1–C7 of
 [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md)
-(builds C1–C7), the design is
+landed it. The design is
 [`CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md),
 and every ruling is in
 [`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md).
-**What ships today is still the Segment**, described in [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md)
-and [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md). It retires in build C6.
+**`Segment` no longer exists.** A bar is an ordinary child `Entry`, described in
+[`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), [ADR 0025](./adr/0025-the-selection-holds-entries-not-segments.md)
+(the Selection holds `EntryId`) and [ADR 0026](./adr/0026-the-segment-retires.md) (the `Segment`
+type retires; `Item` becomes `Bar`). [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md)
+is superseded — its own body is not rewritten, and stays as a record of why the Selection once held
+`SegmentId`.
 
-*Every code claim below was measured at `eb97ea9`. A line number is a hint — open the file.*
+*Every code claim below was measured at `eb97ea9` and has not been re-verified against the shipped
+code below build C7 — read the claims about "becomes"/"will" as already true, and open the file for
+anything load-bearing.*
 
 <style>
   /* Tokens mirror `docs/architecture/diagram.md`. Kept local: that page's block also carries rules
@@ -361,13 +366,13 @@ suppresses is the parent's own bar, so `summary()`'s rail does not paint over th
 stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and reads the one fact the producer is handed (Q27):
 
 ```ts
-bars: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpan(entry, variant)] : []),
+bars: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [unclaimedSpan(entry, variant)] : []),
 ```
 
 `childrenAsSegments` is `true` for the one Entry whose children are this row's segments, and `false` for every other Entry on it. Core's own `summary()` reads the same fact and draws nothing, so its rail never paints over the bars it stands for.
 
 :::note One rename inside this page
-The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It becomes `Bar` when the Segment retires (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `wholeSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
+The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It becomes `Bar` when the Segment retires (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `unclaimedSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
 :::
 
 :::note Why the key says "segments"
@@ -460,7 +465,7 @@ own Bar so <code>summary()</code>'s rail does not paint over its children.
 | `resolveRows` | one row, `entryIds: ['t1']` | one row, `entryIds: ['req-1','d1','d2']`; children get none | one row each; children nest at `depth + 1` |
 | Row is expandable | no | no — the rule opens it, not a chevron | yes |
 | `resolveFor(entry)` | `bar()`, the last resort | per child: whatever rule claims it | `summary()` claims on `entry.hasChildren` |
-| `variant.bars(entry)` | one Bar over `[start, end)` | one Bar per child Entry; the parent itself produces none | one rail Bar (`wholeSpan`) |
+| `variant.bars(entry)` | one Bar over `[start, end)` | one Bar per child Entry; the parent itself produces none | one rail Bar (`unclaimedSpan`) |
 | Rollup writes | nothing | the parent's `hours`, `start`, `end` | the same three, identically |
 | `placeFrame` | one `FrameBar` | one `FrameBar` per Bar | one rail `FrameBar` |
 | Selection unit | the Entry | the Entry | the Entry |
