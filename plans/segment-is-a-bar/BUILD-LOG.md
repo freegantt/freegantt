@@ -36,8 +36,9 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | J1 *(void)* | S1's ChangeSet address | **Void with Q17** — a bar writes no Segment row. The measurement stands as a record; its subject does not |
 | J2–J3 *(void)* | S2 and S3 findings | **Void with Q17.** S1–S3's own text was removed from `SPIKE-FINDINGS.md` on the author's word, so the bodies below are the only record left |
 | Q24 | what is the key called? | **RULED 2026-09-17 by the author: `childrenAsSegments`.** It frees the word *Segment* from the type that retires in C6. `README.md` holds the reasoning, the rejected names, and the one cost — the word means two things between C1 and C6 |
-| Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **OPEN, 2026-09-17.** C6 must rename it, and no document gives the name or the overlap rule. Recommendation below. **C6 stops and asks if this is still open** |
-| Q26 | how does a claimed parent ask for a rail instead of a bar? | **OPEN, 2026-09-17.** C2 is told to build the seam and no document gives its shape. Recommendation below. **C2 stops and asks if this is still open** |
+| Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **RULED 2026-09-17 by the author: `measureDuration: 'children'`, and overlap has no rule of its own — the number is whatever the Aggregator says.** Core adds the children and never reads them for overlap. C6 renames the member |
+| Q26 | how does a claimed parent ask for a rail instead of a bar? | **RULED 2026-09-17 by the author: it draws no bar of its own, and core ships nothing else.** A consumer variant with an explicit `items` producer still wins, as it does today. No new key, no rail concept, no special case |
+| Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **OPEN, 2026-09-17.** Q26 said "an explicit `items` still wins". Core's shipped `summary()` **has** an explicit `items` (`variants.ts:322`) and claims on `entry.hasChildren`, which a claimed parent still has. Left alone, core's rail paints over the bars it stands for. Recommendation below. **C2 waits on it** |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -717,7 +718,7 @@ The author confirmed it: the child-Entry design replaces the Segment, with no co
 
 ## Q25 — the duration option's new name, and what overlapping children count as
 
-**Raised 2026-09-17 by a cold-read audit of the ruled plan. C6. OPEN — the author rules.**
+**Raised 2026-09-17 by a cold-read audit of the ruled plan. C6. RULED the same day: the author took the recommendation below, both halves.**
 
 **The gap.** `README.md` says C6 renames `measureDuration: 'segments'`, `#421` says it "keeps its job under a new name", and C6's gate says "renamed and re-stated". No document gives the name, and no document gives a candidate. Every other name in this plan was ruled with its rejected list beside it (Q24, Q13, Q11(b)). A C6 agent would invent a public API name with no ruling behind it.
 
@@ -732,13 +733,22 @@ The author confirmed it: the child-Entry design replaces the Segment, with no co
    Read the call: "measure duration: children". The `Dataset` has no Gantt, so it cannot see whether a Gantt draws those children as segments — `'segments'` would name a drawing decision on a surface that cannot observe one. `'children'` names the data. Rejected: `'segments'` (the word is now a *drawing* word, ruled in Q24, and a `Dataset` does not draw), `'sumOfChildren'` (says the mechanism, not the job), `'work'` and `'worked'` (they name one industry's use of the number, and core never does that).
 2. **Two overlapping children count twice.** A plain sum, unchanged from today's code. Two crews on one day is two days of work, which is what the number is for. A union is a different question and gets its own key if a consumer asks for one. `ADR 0017`'s revision note states the rule in one sentence, so no reader has to guess.
 
-**Cost if the author rules otherwise:** one union member's spelling in C6, and one sentence in ADR 0017. Nothing else depends on it.
+**The author's ruling, 2026-09-17.** *"measure duration segments would change to children. for the half nobody wrote down whatever the aggregator says."*
+
+**What that means in the code.** Core states **no** overlap policy, in either half of the answer.
+
+- **A consumer's own key already obeys it.** `hours` with `rollUp: 'sum'` is added by the `sum` Aggregator. Two children on the same day add to two, because addition is what `sum` means. A consumer who wants an overlapped hour counted once registers an Aggregator that does that, and names it. Core neither ships that Aggregator nor forbids it.
+- **Core's own `duration` does the same thing, by hand.** `duration` is the one core Field that computes (`model/field-key.ts:20-28`), and a `compute` Field may not declare `rollUp` (`model/field.ts:190`) — so there is no Aggregator name to point at here. `measureEntryDuration` adds the pieces in a loop (`data/fields/field-access.ts:219-221`) and never looks at where they sit. Under `'children'` it adds the children the same way. **That is the same rule, in the one place the union cannot express it**: add them, do not inspect them.
+
+**C6's work, stated.** The member becomes `'children'`. `measureEntryDuration` reads `access.storedChildrenOf(entry.id)` in place of `entry.segments`, so its first parameter stops being a `Pick<StoredEntry, 'start' | 'end' | 'segments'>` and it takes the access it already needs. ADR 0017's revision note states the new member and one sentence: **core adds the children and never reads them for overlap.**
+
+**Rejected names**, recorded so C6 does not re-open this: `'segments'` (the word is a *drawing* word after Q24, and a `Dataset` does not draw), `'sumOfChildren'` (says the mechanism, not the job), `'work'` and `'worked'` (they name one industry's use of the number, and core never does that).
 
 ---
 
 ## Q26 — how a claimed parent asks for a rail instead of a bar
 
-**Raised 2026-09-17 by a cold-read audit of the ruled plan. C2, ruled in C1. OPEN — the author rules.**
+**Raised 2026-09-17 by a cold-read audit of the ruled plan. C2. RULED the same day: the author took the recommendation below, and drew its limit.**
 
 **The gap.** C2's job says "the seam a consumer variant paints a rail through", and Q19 leaves that seam to C2. No document says what an author writes. Today a rail and a bar are two producers, not one shape with a flag: `ignoreSegments` returns one whole-span Item (`layout/items/item.ts:161-163`) and `followSegments` returns one Item per Segment (`:179-186`). C2 would invent the mechanism mid-plan.
 
@@ -758,4 +768,48 @@ new Gantt({
 
 **Two names C6 owes this seam**, and they belong to C6's rename sweep, not to a separate ruling: `ignoreSegments` becomes `wholeSpanItem` ("items: whole span item"), and the claimed parent's empty default is `noItems` ("items: no items"). `followSegments` retires with the type.
 
-**Cost if the author rules otherwise:** C2's shape and one gate line. C1 writes nothing for this.
+**The author's ruling, 2026-09-17.** *"if a bar has children with rowsegments it doesnt draw its own bar by default. I guess a user can do this in a varient if they choose to but we dont toouch this in core."*
+
+**So C2's job is one deletion and one test, and core gains nothing.**
+
+1. A claimed parent produces no Item of its own. That is the default, and it is the whole mechanism.
+2. A variant with an explicit `items` producer still wins, exactly as it does today — `variants.ts:463` reads `variant.items ?? followSegments`, and a claimed parent changes only what that `??` falls back to.
+3. **Core ships no rail.** No `rail` key, no rail variant, no rail helper, and no seam named after one. A consumer who wants a band behind the bars writes a variant and names the producer that already exists.
+
+**One rename this pulls into C6, and it is not a new door.** The producer a consumer names is `ignoreSegments` (`layout/items/item.ts:161-163`), exported from `api/index.ts:394`. Its name carries the retiring word, so C6's sweep renames it. **Recommendation, so C6 invents nothing: `wholeSpan`** — read the call, `items: wholeSpan`, "items: whole span". `followSegments` is deleted with the type; an unclaimed Entry's default is one Item over its whole span, and a claimed parent's default is none. Rejected: `wholeEntryItem` (taken, and it returns one Item rather than a producer's array), `oneBar` (says the count, not the span), `entireSpan` (a second word for `whole`, and `CONTEXT.md` keeps one).
+
+**What C2 proves.** A claimed row draws its children's bars and nothing else. The same row, with a variant that names the producer, draws the band behind them. Nothing in `src/**` mentions a rail.
+
+---
+
+## Q27 — a claimed parent draws no bar, and core's own `summary()` is the one that would
+
+**Raised 2026-09-17, while writing Q26's ruling into the plan. C2. OPEN — the author rules.**
+
+**The gap, and it is in Q26's own wording.** Q26 rules that a claimed parent draws no bar by default, and that a consumer who wants a band behind the bars names an `items` producer on a variant. Read that against the shipped code and it does not close:
+
+- `produceItemsForRow` walks **every** id on the row (`layout/items/produce-items.ts:38-46`). On a claimed row that list is `[parent, d1, d2]`, so the parent is asked for Items like any other Entry.
+- `summary()` claims on `entry.hasChildren` (`layout/items/variants.ts:321`). A claimed parent still has children — they moved onto its row, they did not stop existing.
+- `summary()` **states `items: ignoreSegments` explicitly** (`:322`), and its own doc comment says why it refuses the registry's default.
+
+So "an explicit `items` wins" hands the row to core's own rail, which then paints one band across the whole span, over the two bars it stands for. That is the exact thing C2 exists to prevent. The rule as written defeats itself on core's own variant, before a consumer writes anything.
+
+**An unclaimed parent is not in this question at all** (author, 2026-09-17). Every branch below reads the claimed marker first. A row with no marker — a Gantt with no rule, or a parent the rule does not match — takes the path it takes today: its children get their own rows, and it wears `summary()`'s rail over them. Hard rule 6 in `README.md` makes that a gate, and C2 pins it with a test in the same frame as a claimed row.
+
+**Where the suppression goes, and this part is not in doubt.** `produceItemsForRow` skips the row's subject when the row claims its children. It already takes the `PlannedRow`, and Q19 shape (a) puts the claimed marker there, so the fact is in hand and nothing new is threaded. The open half is the other one: **what lets a consumer put a band back, once core's own producer is not the way?**
+
+**Recommendation: the producer learns one fact, and decides for itself.**
+
+```ts
+// layout/items/item.ts — the producer seam, one fact wider
+export type ItemProducer = (entry: Entry, variant: string, claimsChildren: boolean) => readonly Item[];
+```
+
+- Core's `ignoreSegments` reads it and returns `[]` **when, and only when, the row claims**. An unclaimed parent passes `false`, so `summary()` draws the rail it draws today, unchanged.
+- A consumer's producer ignores the parameter and draws the band: `items: (entry, variant) => [wholeEntryItem(entry, variant)]`. That is the opt-in the author described, and core ships nothing for it.
+- It allocates nothing, so I5 holds. It adds no key, no variant, and no rail concept, so Q26's limit holds.
+- It is one parameter on a public type, on a library that has never shipped. A producer that ignores it is unchanged.
+
+**The two alternatives, and why they lose.** Skipping the parent inside `produceItemsForRow` with no way back is simpler, and it refuses the opt-in the author asked for. Telling core's variants apart from a consumer's would work and is a fault line core must never have — the whole registry rests on core's own fields and variants taking one code path.
+
+**Cost if the author rules otherwise:** C2's shape, one line in `item.ts`, and the C2 gate. C1 writes nothing for this.
