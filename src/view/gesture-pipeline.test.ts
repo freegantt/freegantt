@@ -232,7 +232,6 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   //     an ordinary resize gesture (`'resizes the start edge, clamped so it never crosses the end'`
   //     below). There is no sibling Segment left to leave untouched.
 
-
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
     const milestone: Entry = entry('m', 50, 50);
     const { deps } = withRoster([milestone], { canGesture: () => false });
@@ -1093,7 +1092,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 });
 
 describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
-  /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
+  /** A row that holds one date, no span (ADR 0012): it shows in the grid and draws no bar. */
   function startOnly(id: string, start: number): Entry {
     return entryDouble({ id, start });
   }
