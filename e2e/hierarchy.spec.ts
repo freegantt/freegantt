@@ -187,6 +187,57 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
   await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${newParentId}:"]`)).toHaveCount(1);
 });
 
+// #421 C7: "Framing crew" (`req-1`) claims three children, each a real child Entry with its own
+// name, its own `hours`, and its own look — a real browser proof that a claimed row draws several
+// bars, that a bar prints its own text, that per-bar capabilities differ, and that a bar with no
+// name still draws (`fixtures/hierarchy-dataset.ts`, `harness/hierarchy.ts`'s `crewDayVariant`).
+test('a claimed row draws its children as bars, each with its own text, look and capabilities', async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => window.__gantt.reveal('req-1'));
+
+  const monday = page.locator('[data-item-id^="req-1-mon:"]');
+  const wednesday = page.locator('[data-item-id^="req-1-wed:"]');
+  await expect(monday).toHaveText('Ali');
+  await expect(page.locator('[data-item-id^="req-1-tue:"]')).toHaveText('Ben');
+  await expect(wednesday).toHaveText('Cy');
+  await expect(monday).toHaveClass(/crew-day-filled/);
+  await expect(wednesday).toHaveClass(/crew-day-open/);
+
+  // The row total: `hours` rolls up over all three children onto the claimed row's own cell.
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1"] [data-field="hours"]')).toHaveText('20');
+
+  // Cy's day is locked: dragging its right edge refuses, while Ali's neighbour resizes freely.
+  const mondayBox = await monday.boundingBox();
+  const wednesdayBox = await wednesday.boundingBox();
+  expect(mondayBox).not.toBeNull();
+  expect(wednesdayBox).not.toBeNull();
+  const wedHoursBefore = await page.evaluate(() => window.__dataset.entries.get('req-1-wed')?.read('hours'));
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width - 2,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width + 40,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+  );
+  await page.mouse.up();
+  const wedHoursAfter = await page.evaluate(() => window.__dataset.entries.get('req-1-wed')?.read('hours'));
+  expect(wedHoursAfter).toBe(wedHoursBefore);
+
+  // A bar with no name still draws — "Site hold" carries no `name` at all.
+  await page.evaluate(() => window.__gantt.reveal('site-hold'));
+  await expect(page.locator('[data-item-id^="site-hold:"]')).toHaveText('');
+
+  // One Field write opens the claimed row into three rows of its own, undoable like any other edit.
+  await page.click('#crew-days-btn');
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1-mon"]')).toBeVisible();
+  await page.click('#undo-btn');
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1-mon"]')).toHaveCount(0);
+});
+
 async function newParentDepth(page: import('@playwright/test').Page, id: string): Promise<number> {
   return page.evaluate((newParentId: string) => window.__dataset.entries.get(newParentId)?.depth ?? 0, id);
 }

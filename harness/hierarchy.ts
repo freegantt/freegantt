@@ -8,11 +8,13 @@ import type {
   DatasetEventMap,
   Entry,
   EntryInput,
+  EntryVariant,
   GridColumnsChange,
   GridColumnInput,
   RowSource,
 } from 'freegantt';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
+import type { CrewDayProps } from '../fixtures/hierarchy-dataset.js';
 import { phaseHierarchy } from './plugins/phase-hierarchy.js';
 import type { PhaseProps } from './plugins/phase-hierarchy.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
@@ -40,8 +42,14 @@ const GRID_WITH_COST: readonly GridColumnInput[] = [
   'start',
   'end',
   { field: 'cost', header: 'Cost' },
+  { field: 'hours', header: 'Hours' },
 ];
-const GRID_WITHOUT_COST: readonly GridColumnInput[] = ['name', 'start', 'end'];
+const GRID_WITHOUT_COST: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'end',
+  { field: 'hours', header: 'Hours' },
+];
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
 const rowsModeSelect = document.querySelector<HTMLSelectElement>('#rows-mode')!;
@@ -56,6 +64,7 @@ const customEditorCheckbox = document.querySelector<HTMLInputElement>('#custom-e
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;
 const redoBtn = document.querySelector<HTMLButtonElement>('#redo-btn')!;
+const crewDaysBtn = document.querySelector<HTMLButtonElement>('#crew-days-btn')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-columns-readout')!;
@@ -63,17 +72,40 @@ const gridColumnsReadout = document.querySelector<HTMLParagraphElement>('#grid-c
 let costColumnVisible = true;
 let filterTeam: 'alpha' | 'beta' | null = null;
 const paneScroll = { x: new ScrollAxis(), y: new ScrollAxis() };
+
+// #421 C7: one variant for the crew-lead row's day bars. `hours` carries `rollUp: 'sum'`, so an
+// ancestor reads an aggregate for it too — `worker` does not roll up, so only a day itself ever
+// answers it, and that is the rule (`entry-rule.ts`, "a match is equality, never has a value" reads
+// the same way here: no ancestor's rollup can forge this one). `worker` prints on the bar; `filled`
+// picks the look, so an open day reads differently from a covered one at a glance.
+const crewDayVariant: EntryVariant<HierarchyProps> = {
+  name: 'crew-day',
+  when: (entry) => entry.read('worker') !== undefined,
+  paint: ({ entry }) => ({
+    class: {
+      'crew-day-filled': entry.read('filled') === true,
+      'crew-day-open': entry.read('filled') !== true,
+    },
+  }),
+  barLabels: { field: 'worker' },
+  css: `
+    .crew-day-filled { background: var(--fg-accent, #2f6feb); }
+    .crew-day-open { background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 6px, #e2e8f0 6px, #e2e8f0 12px); }
+  `,
+};
+
 const dataset = createDataset();
 const gantt = mountGantt(dataset);
 
 window.__dataset = dataset;
 window.__gantt = gantt;
 
-/** The page's own keys, plus the one the hierarchy plugin declares (ADR 0020). */
-type HierarchyProps = { cost: number } & PhaseProps;
+/** The page's own keys, the crew-lead row's own keys (#421 C7), plus the one the hierarchy plugin
+ *  declares (ADR 0020). */
+type HierarchyProps = { cost: number } & Partial<CrewDayProps> & PhaseProps;
 
 function createDataset(
-  entries: readonly EntryInput<{ cost: number }>[] = hierarchyEntryInputs,
+  entries: readonly EntryInput<HierarchyProps>[] = hierarchyEntryInputs,
 ): Dataset<HierarchyProps> {
   return new Dataset<HierarchyProps>({
     entries: structuredClone([...entries]),
@@ -95,6 +127,10 @@ function mountGantt(next: Dataset<HierarchyProps>): Gantt {
     range: 'fitDataset',
     scroll: paneScroll,
     plugins: [inlineEditing()],
+    variants: [crewDayVariant],
+    // A locked crew day withholds one capability from itself alone — every other bar on the page
+    // keeps the library default (#421 C7, box: "a bar's own capabilities differ from its siblings").
+    capabilities: { resize: (entry) => entry.read('locked') !== true },
   });
 }
 
@@ -117,10 +153,12 @@ function buildRowSource(): RowSource {
       ...shared,
     };
   }
+  // #421 C7: `req-1` claims its day children on every entries-sourced arrangement — flat or tree —
+  // the same rule either way, because claiming is orthogonal to nesting (README hard rule 5).
   if (rowsMode === 'flat') {
-    return { source: 'entries', tree: false, ...shared };
+    return { source: 'entries', tree: false, childrenAsSegments: { showDaysOnRow: true }, ...shared };
   }
-  return { source: 'entries', tree: true, ...shared };
+  return { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true }, ...shared };
 }
 
 function syncFilterSortControls(): void {
@@ -166,6 +204,7 @@ function onChange({ changeSet }: DatasetEventMap['change']): void {
   prependChangeSet(log, changeSet);
   renderSelection();
   refreshHistoryButtons();
+  syncCrewDaysLabel();
 }
 
 function bindDataset(): void {
@@ -264,3 +303,19 @@ undoBtn.addEventListener('click', () => {
 redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
 });
+
+// #421 C7: one Field write opens the claimed row into its own three rows, in one undo step, and the
+// same write closes it back. Nothing here decides the row shape directly — `showDaysOnRow` does, and
+// `childrenAsSegments` reads it (`buildRowSource`, above).
+function syncCrewDaysLabel(): void {
+  const claimed = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
+  crewDaysBtn.textContent = claimed ? 'Open Framing crew into sub-rows' : 'Claim Framing crew days';
+}
+
+crewDaysBtn.addEventListener('click', () => {
+  const claimed = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
+  attemptMutation(() => dataset.entries.update('req-1', { showDaysOnRow: !claimed }));
+  syncCrewDaysLabel();
+});
+
+syncCrewDaysLabel();
