@@ -410,8 +410,8 @@ function classesIn(block: string): Set<string> {
 
 const sheetDefinedClasses = classesIn(baseBlock);
 const variantDefinedClasses = new Set([
-  ...classesIn(extractCssLiteral(variants, 'SUMMARY_CSS', 'src/layout/items/variants.ts')),
-  ...classesIn(extractCssLiteral(variants, 'DIAMOND_CSS', 'src/layout/items/variants.ts')),
+  ...classesIn(extractCssLiteral(variants, 'SUMMARY_CSS', 'src/layout/bars/variants.ts')),
+  ...classesIn(extractCssLiteral(variants, 'DIAMOND_CSS', 'src/layout/bars/variants.ts')),
 ]);
 const definedClasses = new Set([...sheetDefinedClasses, ...variantDefinedClasses]);
 
