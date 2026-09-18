@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
-import { barId, rowId, segmentId } from '../../model/index.js';
-import type { Entry, EntryId, Instant } from '../../model/index.js';
+import { barId, rowId } from '../../model/index.js';
+import type { Entry, EntryId } from '../../model/index.js';
 import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { produceBarsForRow } from './produce-items.js';
-import { followSegments, wholeEntryBar } from './item.js';
+import { wholeEntryBar } from './item.js';
 import { createVariantRegistry } from './variants.js';
 
 describe('wholeEntryBar (review P3)', () => {
@@ -23,27 +23,20 @@ describe('wholeEntryBar (review P3)', () => {
     });
   });
 
-  it('carries no segmentId, because it draws the whole Entry and stands for no single Segment (#212)', () => {
-    const t1 = spanEntry('t1');
-    expect(wholeEntryBar(t1, 'leaf').segmentId).toBeUndefined();
-  });
+  // Retired (ADR 0026, #421): 'carries no segmentId, because it draws the whole Entry and stands
+  // for no single Segment' pinned `Bar.segmentId`, which no longer exists — a Bar never carried a
+  // second id to stand apart from. 'draws one Bar per Segment for a variant with no `bars` of its
+  // own' pinned `followSegments`, deleted with the several-Segment single Entry it walked; a core
+  // Entry now always draws exactly one Bar over its own span, so a variant with no `bars` of its own
+  // gets `unclaimedSpan` instead — the same one-Bar answer the merged test below already covers.
 
-  it('is what a variant with no `items` of its own draws when the Entry has no Segments (ADR 0023)', () => {
-    const t1 = spanEntry('t1', { segments: [] });
+  it('is what a variant with no `bars` of its own draws for an Entry (ADR 0023, ADR 0026)', () => {
+    const t1 = spanEntry('t1');
     const own = createVariantRegistry({ fieldFor: () => undefined });
     own.addPluginVariant({ name: 'buffer', when: () => true });
     expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
       wholeEntryBar(t1, 'buffer'),
     ]);
-  });
-
-  it('draws one Bar per Segment for a variant with no `bars` of its own (ADR 0023)', () => {
-    const t1 = spanEntry('t1');
-    const own = createVariantRegistry({ fieldFor: () => undefined });
-    own.addPluginVariant({ name: 'buffer', when: () => true });
-    expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual(
-      followSegments(t1, 'buffer'),
-    );
   });
 });
 
@@ -73,10 +66,6 @@ describe('a producer stamps the registration’s own name, not one it invents (A
   });
 });
 
-function asInstant(ms: number): Instant {
-  return ms as Instant;
-}
-
 function spanEntry(id: string, extras: Partial<EntryDoubleValues> = {}): Entry {
   return entryDouble({ id, start: 0, end: 10, ...extras });
 }
@@ -100,28 +89,18 @@ function entryByIdFor(entries: readonly Entry[]): ReadonlyMap<EntryId, Entry> {
 const registry = createVariantRegistry({ fieldFor: () => undefined });
 
 describe('produceBarsForRow', () => {
-  it('produces one Bar per Segment with ids t1:0, t1:1, t1:2', () => {
-    const t1 = spanEntry('t1', {
-      segments: [
-        { id: segmentId('t1-0'), start: asInstant(0), end: asInstant(2) },
-        { id: segmentId('t1-1'), start: asInstant(3), end: asInstant(5) },
-        { id: segmentId('t1-2'), start: asInstant(6), end: asInstant(8) },
-      ],
-    });
-    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
-    expect(items.map((item) => item.id)).toEqual([barId(t1.id, 0), barId(t1.id, 1), barId(t1.id, 2)]);
-    expect(items.map((item) => item.start)).toEqual([asInstant(0), asInstant(3), asInstant(6)]);
-    expect(items.map((item) => item.segmentId)).toEqual(t1.segments.map((segment) => segment.id));
-  });
+  // Retired (ADR 0026, #421): 'produces one Bar per Segment with ids t1:0, t1:1, t1:2' pinned a
+  // several-Segment single Entry, which no longer exists — a core Entry always draws exactly one
+  // Bar over its own span now. The surviving question, "what does an ordinary Entry draw," is the
+  // test below, rewritten off `t1.segments[0]` onto the Entry's own span.
 
-  it('produces t1:0 for an entry with its one default Segment (#212: an Entry never has none)', () => {
+  it('produces t1:0 for an ordinary Entry — always exactly one Bar (#421, ADR 0026)', () => {
     const t1 = spanEntry('t1');
     const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe(barId(t1.id, 0));
     expect(items[0]?.start).toBe(t1.start);
     expect(items[0]?.end).toBe(t1.end);
-    expect(items[0]?.segmentId).toBe(t1.segments[0]?.id);
   });
 
   it('draws the leaf variant for a childless Entry no rule claims (ADR 0013)', () => {
@@ -143,7 +122,7 @@ describe('produceBarsForRow', () => {
     expect(items[0]?.variant).toBe('summary');
   });
 
-  it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
+  it('an Entry with only a start date draws no bar (ADR 0012 Gate)', () => {
     const t1 = entryDouble({ id: 't1', start: 0 });
     expect(t1.end).toBeUndefined();
     const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
