@@ -32,14 +32,14 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q20 | can a row filter hide one bar on a shared row? | **RULED 2026-09-17 by the author: it does not need to.** A filter hides a parent, and its segments go with it, because they sit on the parent's row. `applyFilter` already does exactly this, so nothing ships and no item-level knob exists |
 | Q21 | does the entries row source take the Field registry, so `childrenAsSegments` matches with typed `equals` and reports an unknown key? | **RULED 2026-09-17 by the author: yes, thread it.** C1 passes `fieldContext` into the entries-source pass, as `sort` already receives it, so a misspelt key reports once through `reportUnknownFieldMatch` instead of drawing a blank screen in silence. C1 rewrites `row-source.ts`'s own statement of D-S4-19/D-S4-21 |
 | Q22 | does core ship a `boolean` Field type? | **RULED 2026-09-17 by the author: yes.** It lands in C1 with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are its first consumer. Today `{ type: 'boolean' }` throws `UnknownFieldTypeError` (`data/fields/field-registry.ts:70`) |
-| Q23 | does a hierarchy source declare the Field keys it reads? | **OPEN, 2026-09-17.** C4's fast path applies only to core's own `storedParentSource`: a plugin source is a function that may read any field, and nothing on the seam says which. Wider than #421 |
+| Q23 | does a hierarchy source declare the Field keys it reads? | **RULED 2026-09-17 by the author: decide it later, on its own evidence.** Split out as **#426**. C4 ships the fast path for core's own `storedParentSource` alone, gated on `tree.source === storedParentSource`; a consumer's own source keeps today's behaviour, which is correct and slower |
 | J1 *(void)* | S1's ChangeSet address | **Void with Q17** — a bar writes no Segment row. The measurement stands as a record; its subject does not |
 | J2–J3 *(void)* | S2 and S3 findings | **Void with Q17.** S1–S3's own text was removed from `SPIKE-FINDINGS.md` on the author's word, so the bodies below are the only record left |
 | Q24 | what is the key called? | **RULED 2026-09-17 by the author: `childrenAsSegments`.** It frees the word *Segment* from the type that retires in C6. `README.md` holds the reasoning, the rejected names, and the one cost — the word means two things between C1 and C6 |
 | Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **RULED 2026-09-17 by the author: `measureDuration: 'children'`, and overlap has no rule of its own — the number is whatever the Aggregator says.** Core adds the children and never reads them for overlap. C6 renames the member |
 | Q26 | how does a claimed parent ask for a rail instead of a bar? | **RULED 2026-09-17 by the author: it draws no bar of its own, and core ships nothing else.** A consumer variant with an explicit `items` producer still wins, as it does today. No new key, no rail concept, no special case |
 | Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **RULED 2026-09-17 by the author.** `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes **one** more fact, per Entry, carrying the key's own name: `childrenAsSegments`. Not two facts, and no `global` prefix — the two spellings of the key resolve in one place |
-| Q28 | is the layout unit a `Bar`, not an `Item`? | **OPEN, 2026-09-17, raised by the author.** *Item* is generic and already names three things in `src/**` — the timed shape a variant draws, `MenuItem` and `CellItem`. Downstream every one of them is a `FrameBar`. Recommendation below: rename, and in C6. **Wider than #421** |
+| Q28 | is the layout unit a `Bar`, not an `Item`? | **RULED 2026-09-17 by the author: yes, and in C6.** `Item` → `Bar`, `ItemId` → `BarId`, `ItemProducer` → `BarProducer`, and the rest of the table below. `MenuItem` and `CellItem` keep the generic word |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -677,7 +677,7 @@ Both examples now use one Field the page already had, `showDaysOnRow`, so the da
 
 ## Q20–Q24 RULED, 2026-09-17 — the author's answers, in one sitting
 
-Five questions went to the author with the Q17 ruling. Four are closed. Q23 stays open and blocks nothing.
+Five questions went to the author with the Q17 ruling. All five are closed — Q23 last, on 2026-09-17, by splitting it out as **#426** to be decided on its own evidence.
 
 ### Q24 — the key is `childrenAsSegments`
 
@@ -823,13 +823,13 @@ export type ItemProducer = (entry: Entry, variant: string, childrenAsSegments: b
 
 ```ts
 // A consumer who wants the band back — core ships nothing for this
-items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanItem(entry, variant)] : []),
+items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [ignoreSegments(entry, variant)] : []),  // `wholeSpan` after C6
 ```
 
 - Core's `ignoreSegments` reads it and returns `[]` **when, and only when, this Entry's children are its segments**. An unclaimed parent is passed `false`, so `summary()` draws the rail it draws today, unchanged.
 - It allocates nothing, so I5 holds. It adds no key, no variant, and no rail concept, so Q26's limit holds.
 - It is one parameter on a public type, on a library that has never shipped. A producer that ignores it is unchanged — TypeScript accepts a function that takes fewer parameters than its declared type, which `item.ts:57-59` already relies on.
-- **The type keeps today's names here, on purpose.** `Item`, `ItemProducer` and `wholeSpanItem` are what C2 writes. **Q28 is open** — if the author rules it, C6 renames all three to `Bar`, `BarProducer` and `wholeSpan`, and nothing about this ruling changes but the spelling.
+- **The type keeps today's names here, on purpose.** `Item`, `ItemProducer` and `ignoreSegments` are what C2 writes, because C2 lands before C6. **Q28 renames them in C6** — to `Bar`, `BarProducer` and `wholeSpan` — and nothing about this ruling changes but the spelling.
 
 **The two alternatives, and why they lose.** Skipping the parent inside `produceItemsForRow` with no way back is simpler, and it refuses the opt-in the author asked for. Telling core's variants apart from a consumer's would work and is a fault line core must never have — the whole registry rests on core's own fields and variants taking one code path.
 
@@ -839,7 +839,7 @@ items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanI
 
 ## Q28 — the layout unit is a `Bar`, and `ItemProducer` is a `BarProducer`
 
-**Raised 2026-09-17 by the author:** *"i think we should look at changing item producer to barproducer"*. C6. OPEN — the author rules.
+**Raised 2026-09-17 by the author:** *"i think we should look at changing item producer to barproducer"*. C6. **RULED the same day: the author took the recommendation below whole** — *"yes on 28 do it"*.
 
 **Looked at, and the finding is bigger than the producer.** `ItemProducer` is named after its return type, so the producer cannot be renamed alone. The question is whether `Item` is the right word, and measured against this codebase's own naming rule it is not:
 
@@ -848,7 +848,7 @@ items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanI
 - **A diamond is a bar here, and the code already says so.** `summary()`'s rail is `SUMMARY_BAR` and `variants.ts:232` calls it "a solid rail 10px high". `diamond()`'s glyph becomes a `FrameBar` with a fixed box. Core has one word for every painted span on the timeline, and that word is *bar*. `FixedBarBox` and `BarAnchor` sit on `Item` today, so the type already wears the word on two of its own fields.
 - **#421 makes the word load-bearing.** This work's whole sentence is "a bar is a child Entry". A reader who then meets `Item`, `itemId`, `produceItemsForRow` and `hoveredItemId` has to learn that the library's word for a bar is a different word.
 
-**Recommendation: rename, in C6, with `pk-rename-symbol`.**
+**RULED: rename, in C6, with `pk-rename-symbol`.**
 
 | Today | C6 |
 | --- | --- |
@@ -867,4 +867,4 @@ items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanI
 
 **Do not do this before C6.** C1–C5 read shipped code against shipped names, and a rename in the middle makes every one of their diffs unreadable.
 
-**If the author refuses the wide rename**, `ItemProducer` alone cannot become `BarProducer` — it would name a producer of `Item`s after a different word. Then both keep their names, and Q27's parameter lands on `ItemProducer`.
+**What C1–C5 write.** Today's names, every one of them: `Item`, `ItemProducer`, `ignoreSegments`. C6 renames them in one pass, and Q27's parameter moves with its type. A build that renames early makes its own diff unreadable, and this ruling does not change that.

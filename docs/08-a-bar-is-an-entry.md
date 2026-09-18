@@ -357,14 +357,18 @@ own children.
 
 **A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
 children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
-suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
-stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with an `items` producer of their own, and reads the one fact the producer is handed (Q27):
+suppresses is the parent's own bar, so `summary()`'s rail does not paint over the children it
+stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and reads the one fact the producer is handed (Q27):
 
 ```ts
-items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanItem(entry, variant)] : []),
+bars: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpan(entry, variant)] : []),
 ```
 
 `childrenAsSegments` is `true` for the one Entry whose children are this row's segments, and `false` for every other Entry on it. Core's own `summary()` reads the same fact and draws nothing, so its rail never paints over the bars it stands for.
+
+:::note One rename inside this page
+The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It becomes `Bar` when the Segment retires (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `wholeSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
+:::
 
 :::note Why the key says "segments"
 Read the call site aloud: "row source: entries, children as segments, where show-days-on-row is
@@ -386,7 +390,7 @@ of its parent's row.* Rejected: `childrenAsRowSegments`, `childrenOnParentRow`, 
 <svg
 viewBox="0 0 1240 330"
 role="img"
-aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produceItemsForRow, placeFrame, DomBackend sync, and fg-bar elements. Two callouts mark the only two stages where the three cases differ: the row source rule at resolveRows, and per-Entry variant resolution at produceItemsForRow. A band across the bottom states that the remaining stages are unchanged."
+aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produceBarsForRow, placeFrame, DomBackend sync, and fg-bar elements. Two callouts mark the only two stages where the three cases differ: the row source rule at resolveRows, and per-Entry variant resolution at produceBarsForRow. A band across the bottom states that the remaining stages are unchanged."
 >
 <defs>
 <marker id="fga2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -402,9 +406,9 @@ aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produ
 <text x="315" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/rows/resolve-rows.ts</text>
 <text x="315" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ PlannedRow[]</text>
 <rect x="428" y="46" width="178" height="66" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="2" />
-<text x="517" y="70" text-anchor="middle" class="box-name" font-size="12" fill="var(--ink)">produceItemsForRow()</text>
+<text x="517" y="70" text-anchor="middle" class="box-name" font-size="12" fill="var(--ink)">produceBarsForRow()</text>
 <text x="517" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/items/produce-items.ts</text>
-<text x="517" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ Item[]</text>
+<text x="517" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ Bar[]</text>
 <rect x="630" y="46" width="178" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
 <text x="719" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">placeFrame()</text>
 <text x="719" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/frame.ts — the TimeScale</text>
@@ -441,10 +445,10 @@ aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produ
 </svg>
 <figcaption>
 The three bars take one path. They part at two points only, and one of the two already ships:
-<code>produceItemsForRow</code> loops <code>row.entryIds</code> and calls
+<code>produceBarsForRow</code> loops <code>row.entryIds</code> and calls
 <code>registry.resolveFor(entry)</code> per Entry, so a shared row carries several variants today.
 The new work is the fold at <code>resolveEntriesSource</code>, plus suppressing a claimed parent's
-own Item so <code>summary()</code>'s rail does not paint over its children.
+own Bar so <code>summary()</code>'s rail does not paint over its children.
 </figcaption>
 </figure>
 </div>
@@ -456,9 +460,9 @@ own Item so <code>summary()</code>'s rail does not paint over its children.
 | `resolveRows` | one row, `entryIds: ['t1']` | one row, `entryIds: ['req-1','d1','d2']`; children get none | one row each; children nest at `depth + 1` |
 | Row is expandable | no | no — the rule opens it, not a chevron | yes |
 | `resolveFor(entry)` | `bar()`, the last resort | per child: whatever rule claims it | `summary()` claims on `entry.hasChildren` |
-| `variant.items(entry)` | one Item over `[start, end)` | one Item per child Entry; the parent itself produces none | one rail Item (`ignoreSegments`, renamed `wholeSpan` when the Segment retires) |
+| `variant.bars(entry)` | one Bar over `[start, end)` | one Bar per child Entry; the parent itself produces none | one rail Bar (`wholeSpan`) |
 | Rollup writes | nothing | the parent's `hours`, `start`, `end` | the same three, identically |
-| `placeFrame` | one `FrameBar` | one `FrameBar` per Item | one rail `FrameBar` |
+| `placeFrame` | one `FrameBar` | one `FrameBar` per Bar | one rail `FrameBar` |
 | Selection unit | the Entry | the Entry | the Entry |
 
 ## How a bar gets updated
@@ -578,9 +582,9 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | --- | --- |
 | `model/` | `Segment`, `StoredSegment`, `SegmentId`, `SegmentInput`, `SegmentEdit` and the four Segment errors are deleted. Nothing replaces them |
 | `data/` | `updateSegment`, `addSegment`, `removeSegments` and the `store: 'segments'` apply path go. The Rollup already gives a parent its children's values, and that is now also the envelope |
-| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a claimed parent draws no Item of its own. `followSegments` collapses into `wholeEntryItem` |
-| `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Item.segmentId` go. A bar keys on its `ItemId` and names its `EntryId`, as it did before Segments |
-| `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForItem`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
+| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a claimed parent draws no Bar of its own. `followSegments` collapses into `wholeEntryBar` |
+| `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Bar.segmentId` go. A bar keys on its `BarId` and names its `EntryId`, as it did before Segments |
+| `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForBar`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
 | `scheduling/` (S7) | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
 
 ## What it costs

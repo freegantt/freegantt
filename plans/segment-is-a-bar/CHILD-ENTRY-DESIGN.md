@@ -244,21 +244,24 @@ All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 
 1. **The Field-registry gap — RULED: thread it.** `childrenAsSegments`'s field match cannot reuse `layout/items/variants.ts`'s `compileRule` without a `fieldContext`, which `row-source.ts` says the entries source does not take (D-S4-19, D-S4-21). C1 threads it, so the match uses each Field's own `equals` and a key no Field declares reports once through `reportUnknownFieldMatch`. **Why it won:** a misspelt key would otherwise claim nothing and draw a blank screen, in silence — the fault class #197 closed. `RowPassInput` already carries `fieldContext` for `sort`, so the wire exists; what changes is what `row-source.ts` says about itself, and C1 rewrites that comment.
 2. **The `boolean` Field type — RULED: core ships it.** `FieldTypeName` (`model/field.ts:14`) ships `text`, `number`, `percent`, `date` and `duration` today, so `{ key: 'showDaysOnRow', type: 'boolean' }` throws `UnknownFieldTypeError` at `data/fields/field-registry.ts:70`. It lands in C1, with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are the first consumer of it.
-3. **Does a hierarchy source declare the keys it reads? — still open (Q23).** C4's fast path applies only to core's own `storedParentSource`, because a plugin source is a function that may read any field. A source that named its keys would let every source skip the re-check. Wider than #421, and it blocks nothing here.
+3. **Does a hierarchy source declare the keys it reads? — RULED: decide it later, as #426.** C4's fast path applies to core's own `storedParentSource` alone, gated on `tree.source === storedParentSource` (`data/hierarchy-source.ts:18`). A consumer's own source is a function that may read any field, so no commit can be proven not to move a row, and the re-check runs as it does today — correct, and slower. A source that named its keys would let every source skip it, and that question is wider than #421.
 
 ### Everything still open, in one list
 
-**Two questions are open on 2026-09-17. Neither blocks C1.**
+**Nothing is open on 2026-09-17. Every question this design raised is ruled.**
 
-| # | Question | Who waits on it |
+Two left the plan rather than closing inside it, and both are issues of their own:
+
+| # | Where it went | What #421 does meanwhile |
 | --- | --- | --- |
-| **Q23** | does a hierarchy source declare the Field keys it reads? | Nobody. C4's fast path ships without it |
-| **Q28** | is the layout unit a `Bar`, not an `Item`? | **C6.** *Item* already names three things in `src/**`, and everything downstream calls it a bar. Recommendation, no ruling |
+| **Q23** | **#426** — a custom hierarchy source declares the Field keys it reads | C4 ships the fast path for core's own source alone. A consumer's source keeps today's behaviour: correct, and slower |
+| — | **#425** — a vertical drag moves a bar to another row | The write ships in C1–C6. The gesture does not |
 
 Two more were raised on the same day and the author ruled both the same day. They are in `BUILD-LOG.md`:
 
 - **Q25** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. C6 does the rename.
 - **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own.
+- **Q28** — the layout unit is a `Bar`, not an `Item`. `Item` named three things in `src/**`, and everything downstream of it already said bar. C6 renames, with `pk-rename-symbol`.
 - **Q27** — the mechanism for both, because core's shipped `summary()` also names an `items` producer. `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes one more fact, **per Entry**, under the key's own name: `childrenAsSegments`. One fact, not two, and no `global` prefix.
 
 **No build invents an answer to an open question.** It stops and asks the author. That rule is why C1 can start today.
