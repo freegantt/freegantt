@@ -16,7 +16,7 @@ function shallowEqual<TGeom extends Record<string, unknown>>(a: TGeom, b: TGeom)
 export interface SyncKeyedSpec<TItem, TKey, TGeom extends Record<string, unknown>> {
   key(item: TItem, index: number): TKey;
   /** Called once per key, the first time it's seen; DOM attrs fixed for the node's lifetime (e.g. a
-   * bar's `dataset.itemId`) belong here, not in `patch`. */
+   * bar's `dataset.barId`) belong here, not in `patch`. */
   create(item: TItem, key: TKey): HTMLElement;
   toGeom(item: TItem): TGeom;
   /** Called only when `toGeom(item)` differs from the cached geometry — attr/class/style/text only. */

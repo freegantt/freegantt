@@ -18,9 +18,11 @@
         <div class="page-head">
           <h1>Generic demo</h1>
           <p>
-            A four-level fixture tree with grid columns. The strip on the chart is the surface a consumer
-            ships; everything under the torn rule drives the demo. The S4.11 acceptance playground with its
-            changeset log stays on <a href="./hierarchy.html">hierarchy.html</a>.
+            A four-level fixture tree with grid columns, and one row that draws several bars —
+            <code>entry-16</code> draws its three children as segments (ADR 0026: a bar is a child Entry). The
+            strip on the chart is the surface a consumer ships; everything under the torn rule drives the
+            demo. The S4.11 acceptance playground with its changeset log stays on
+            <a href="./hierarchy.html">hierarchy.html</a>.
           </p>
         </div>
 
@@ -47,7 +49,10 @@
           <div class="bench-grid">
             <div class="panel">
               <h3>Rows and columns</h3>
-              <p>Row source, filtering and column visibility.</p>
+              <p>
+                Row source, filtering and column visibility. <code>entry-16</code> (“Auth”) draws three bars
+                on one row — its three child Entries, drawn as segments by <code>childrenAsSegments</code>.
+              </p>
               <div class="control-row">
                 <button id="rows-source-btn" type="button">Group by team</button>
                 <button id="filter-team-btn" type="button">Filter team: off</button>
@@ -56,6 +61,12 @@
               <div class="control-row">
                 <button id="toggle-budget-btn" type="button">Hide Budget</button>
                 <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
+              </div>
+              <!-- #421: `entry-16` has three child Entries. Drawn as segments, they draw as three bars on the
+                   parent's own row; released, they are three ordinary rows. The button flips one
+                   config key, live. -->
+              <div class="control-row">
+                <button id="segment-row-btn" type="button">Draw entry-16's legs as segments</button>
               </div>
             </div>
 

@@ -61,7 +61,7 @@ flowchart TB
 
 There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic extension hook (D4; exact contract tracked in issue #12), which may add extra field writes to a proposed edit before it commits. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
-`interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `ItemId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
+`interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `BarId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
 
 `api/ --> INT` (S3, `plans/s3-direct-manipulation/README.md` §0): `interaction/` sits one layer *above* `view/` (`INT --> VIEW`, not the reverse), so nothing inside `view/` may import it to wire the default pointer-gesture attachments into `GanttShell` — and `extensions/`, the other layer that reaches both `view/` and `interaction/`, does not exist until S5. `api/gantt.ts` is the composition root that supplies `attachEntryGestures` to `GanttShell` by constructor injection (the shell itself takes it structurally-typed, with no import of its own), the same role it already plays wiring `view/`, `data/`, `model/`, `time/` and `layout/` together for a plain `new Gantt(...)`.
 
@@ -120,14 +120,14 @@ flowchart LR
   subgraph derived["DERIVED — recomputed, never persisted"]
     direction TB
     ROW["Row (a display track)"]
-    ITEM["Item (one drawn bar)"]
+    BAR["Bar (one drawn bar)"]
     GEO["Geometry (pixels)"]
   end
 
   authored -->|"row source config +<br/>layout pipeline"| derived
 ```
 
-`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display track. `Item` is one drawn bar on a row. **A row may carry many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
+`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display track. `Bar` is one drawn bar on a row. **A row may carry many bars, and one entry may produce bars on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
 
 ### 2.2 Entities
 
@@ -144,16 +144,20 @@ interface Duration { value: number; unit: TimeUnit }  // 'ms'|'m'|'h'|'d'|'w'|'M
 interface Entry<TProps extends object = Record<string, unknown>> {
   id: EntryId;
   parentId?: EntryId;           // hierarchy; roots have none
-  name: string;
-  /** Present iff the Entry holds at least one Segment (ADR 0012). Exclusive end — see §5. */
+  /** Optional (#421, ADR 0026) — a bar names the field it prints (`barLabels.field`) when absent. */
+  name?: string;
+  /** Present iff the Entry spans (`spansTime`, ADR 0012). Exclusive end — see §5. */
   start?: Instant;
   end?: Instant;
-  /** Interrupted work — renders as multiple bars on one row. Absent when dateless. */
-  segments?: readonly TimeSpan[];
   /** Consumer bag; always present. Declared keys are Fields (§2.6). */
   props: Readonly<Partial<TProps>>;
 }
 ```
+
+`segments` retired with the `Segment` type (ADR 0026, #421): interrupted work — several bars on one
+row — is now several child Entries, each with its own `start`/`end`, that a row source's
+`childrenAsSegments` rule folds onto their parent's row (§2.3). There is no second date field on
+`Entry` to carry it.
 
 `Dataset.entries` is a store view, not a bare array (S2.1, D-S2-2, `plans/s2-data-core`):
 `dataset.entries.update('t2', { … })` is the published call site, so `dataset.entries` is the
@@ -171,15 +175,19 @@ interface Row {
 }
 
 /** DERIVED. One drawn bar. Always traces back to an entry. */
-interface Item {
-  id: ItemId;                  // deterministic — see §2.4
+interface Bar {
+  id: BarId;                  // deterministic — see §2.4
   rowId: RowId;
   entryId: EntryId;
   variant: string;             // the Variant this Gantt resolved — stamped as data-variant (ADR 0018)
-  segmentIndex?: number;
   start: Instant; end: Instant;
 }
 ```
+
+`segmentIndex` retired with the `Segment` type (ADR 0026, #421): a segmented parent's children each draw their
+own ordinary Bar for their own child Entry, so `FrameBar.entryId` alone names which Entry a Bar
+belongs to — `partIndex` in `Bar.id`'s formula (§2.4) is frame identity within one Entry's own Bars,
+never a key into a store.
 
 `Dependency` (predecessor/successor link, with `type`/`lag`/`active`) and the per-entry pin flag formerly on `Entry.scheduling` are **not** defined here. Both are scheduling-plugin-owned data now, not `model/` — pulling scheduling out of the mandatory core layers means `model/` stays scheduling-agnostic, and a consumer with no scheduling plugin installed never sees either type. They're still authored, persisted data in the sense of §2.1's separation — just owned by the plugin's storage rather than core's — and their shape is described alongside the engine in §7 (exact contract tracked in issue #12).
 
@@ -190,11 +198,11 @@ erDiagram
   DATASET ||--o{ ENTRY : owns
   ENTRY ||--o{ ENTRY : "parentId (tree)"
 
-  ROW ||--o{ ITEM : contains
-  ITEM }o--|| ENTRY : "derived from"
+  ROW ||--o{ BAR : contains
+  BAR }o--|| ENTRY : "derived from"
 
   ENTRY {
-    Instant start "optional — dates iff Segments"
+    Instant start "optional — present iff the Entry spans"
     Instant end_exclusive "optional"
     json props "consumer-owned"
   }
@@ -207,7 +215,7 @@ erDiagram
 
 ### 2.3 Row sources — the flexibility mechanism
 
-The layout pipeline is `row resolution → item emission → geometry`. The **row source** is configuration:
+The layout pipeline is `row resolution → bar emission → geometry`. The **row source** is configuration:
 
 ```ts
 rowSource: { source: 'entries', tree: true }                        // classic Gantt (default)
@@ -215,17 +223,36 @@ rowSource: { source: 'group', groupBy: t => t.props.team }         // one row pe
 rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
-Item emission then places entries (or entry segments) onto rows, one shared band per row. Future workload/resource views are simply another row source — no new rendering or interaction code.
+Bar emission then places entries onto rows, one shared band per row — a `childrenAsSegments` row
+source (ADR 0026, #421) folds a segmented parent's children onto the parent's own row instead of
+giving each a row of its own, but every one of them is still an ordinary Entry drawing an ordinary
+Bar. A row that draws more than one Bar draws **Segments**, and that row is **segmented**: the word
+is a reading of what the reader sees, never a stored record (`CONTEXT.md`). A row source is one way a
+row gets there; a Variant's own `bars` producer answering with several Bars for one Entry is the
+other. Future workload/resource views are simply another row source — no new rendering or interaction
+code.
 
-Item emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `items` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
+Bar emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `bars` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule matches the rows. Every row resolves, because core's `leaf` carries no `when`.
 
 ```ts
-type ItemProducer = (entry: Entry) => readonly Item[];
+type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 ```
 
-### 2.4 Item identity is deterministic
+The third parameter is the one new seam `childrenAsSegments` adds (#421 C2, Q33): `true` when a row
+source has matched `entry` and moved its children onto its own row. Core's own producers read it —
+`wholeSpanUnlessSegments` draws nothing for a segmented parent, since its children already draw their own Bars
+on that row — but a producer may ignore it and always draw, the same as `wholeEntryBar` does.
 
-`Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
+### 2.4 Bar identity is deterministic
+
+`Bar.id = barId(entry, partIndex)` (`model/ids.ts` — `${entryId}:${partIndex ?? 0}`, extended if
+future sources add dimensions). `partIndex` retired the `Segment`-keyed `segmentIndex` (ADR 0026,
+#421): it distinguishes several Bars one `BarProducer` draws for the *same* Entry, and no record
+stands behind them — a reader reads those Bars as Segments (`CONTEXT.md`), and the index is frame
+identity, not a key into a store. A segmented parent's children need no index at all: they are
+already distinct Entries, and `entryId` tells their Bars apart. Regenerated every layout pass, so it **must** be stable across passes or node
+recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice
+S0.
 
 ### 2.5 Entry structure — children decide derivation and the default Variant
 
@@ -241,8 +268,8 @@ An Entry has children, or it does not. That structure answers derivation and the
 Rules:
 
 - **Derivation is structure.** An Entry derives when it has children. An empty phase is a bar until a child arrives. Losing the last child leaves a normal Entry with no dates. There is no stored classification, no `rollUpKinds`, and no `hierarchy.autoGroup`. Dates are optional (ADR 0012): a dateless parent is legal; the store does not mint a fake span. The Rollup is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
-- **The shape follows children, or a Variant rule.** A parent with children draws core's own `summary` Variant. A leaf draws a bar. Core also ships a `diamond` Variant, but no row wears it until a rule claims it. A plugin or a consumer that needs a shape that is not summary-or-bar-or-diamond declares a Variant whose `when` rule claims the rows (ADR 0018) — it stores no list of the ids it owns, so a row added later is claimed too. One object answers all four seams above. Every row resolves, because core's `leaf` carries no `when`.
-- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), unless the Item states a fixed painted box (`Item.box`), which `barSpan` honours ahead of the floor. `FrameBar.span` states `'exact'`, `'minimum'` or `'fixed'` for every bar. `render/` stamps it as `data-span` with the matching value (CONTEXT.md, `02` §4).
+- **The shape follows children, or a Variant rule.** A parent with children draws core's own `summary` Variant. A leaf draws a bar. Core also ships a `diamond` Variant, but no row wears it until a rule matches it. A plugin or a consumer that needs a shape that is not summary-or-bar-or-diamond declares a Variant whose `when` rule matches the rows (ADR 0018) — it stores no list of the ids it owns, so a row added later is claimed too. One object answers all four seams above. Every row resolves, because core's `leaf` carries no `when`.
+- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), unless the Bar states a fixed painted box (`Bar.box`), which `barSpan` honours ahead of the floor. `FrameBar.span` states `'exact'`, `'minimum'` or `'fixed'` for every bar. `render/` stamps it as `data-span` with the matching value (CONTEXT.md, `02` §4).
 - **Parent *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing. A parent Entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing parents is well-defined, because one is structure and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
@@ -307,7 +334,7 @@ interface FormatContext extends FieldContext {
 Rules:
 
 - **The key is the address.** `{ key: 'cost' }` is `entry.props.cost`. `{ key: 'start' }` is `entry.start`. `{ key: 'duration', compute }` has no stored home. There is no `source` object.
-- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end` through `time/`, I10) ship in the registry a consumer adds to. `parentId` and `segments` ship with no `column` defaults. There is no `kind` Field and no `props` Field. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data under `scheduling:progress` (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name. Duration returns `undefined` when a date is absent (ADR 0012). One unit: millisecond.
+- **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end` through `time/`, I10) ship in the registry a consumer adds to. `parentId` ships with no `column` defaults. There is no `kind` Field and no `props` Field. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data under `scheduling:progress` (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name. Duration returns `undefined` when a date is absent (ADR 0012). One unit: millisecond.
 - **A Grid column names a Field.** `Field.column` is optional defaults for the bare-key shorthand. A column object supplies presentation. Default `gridColumns` is `['name', 'start', 'end']` (ADR 0012). The date path is the grid: the date editor opens on a blank cell and writes one Field. Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`). A Field with no `column` still rolls up and still appears in the changeset. A bare key with no defaults throws `FieldColumnNotDefinedError`.
 - **Stored or computed follows the declaration.** A core key or a `props` key has a stored home, so its rolled-up parent value is stored — changeset, undo — exactly as the Span rollup already does for `start`/`end`. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A `compute` Field has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and is never stored. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate the store never holds declares a computed field; there is no flag to set.
 - **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business. The duration arm must not call `ctx.read(entry, 'duration')`.
@@ -385,11 +412,12 @@ interface GeometryFrame {
     depth: number; expandable: boolean; expanded: boolean;
     matched?: boolean;   // false when kept only because a descendant matched the filter
     cells: readonly string[];
-    /** Every Entry the row owns, and every Segment those Entries own, in the same order (#212,
-     *  ADR 0010, #230 R5). A row click selects the Segment set, and `render/dom` diffs it against
-     *  the Selection to decide the row's own paint. The frame states both, so the row paint never
-     *  reads a second Entry source. Both are empty for a header row, which stands for no Entry. */
-    entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[];
+    /** Every Entry the row owns, in the same order (#212, ADR 0010, ADR 0025, #230 R5). The `Segment`
+     *  type retired (#421): there is one id set to state now, not two. A row click selects this set, and
+     *  `render/dom` diffs it against the Selection to decide the row's own paint. The frame states
+     *  it, so the row paint never reads a second Entry source. Empty for a header row, which stands
+     *  for no Entry. */
+    entryIds: readonly EntryId[];
   }>;
   /** Total row count across the whole dataset (`entries.length`), not the windowed `rows.length` —
    *  feeds `aria-setsize` (S1.10, D-S1.10-5): virtualization without it announces "row 3" with no
@@ -398,17 +426,14 @@ interface GeometryFrame {
   contentHeight: number;       // across ALL rows, from the height index — always the full extent
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
-    id: ItemId; entryId: EntryId; rowId: RowId;
+    id: BarId; entryId: EntryId; rowId: RowId;
     variant: string;             // backends stamp it as data-variant — CSS with zero JS; not an Entry classification
-    /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
-     *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
-    segmentId?: SegmentId;
-    /** Every Segment this bar *stands for* — the Segments that select it and paint it (#230). One
-     *  Segment for a Segment bar; every Segment of the Entry for a whole-span bar. The frame states
-     *  it, so no reader derives it from an Entry source of its own; `FrameLayout.segmentIdsForItem`
-     *  answers the same fact for a lookup by id. */
-    segmentIds: readonly SegmentId[];
-    /** The entry's name — what a backend renders as the bar's label (#26). */
+    /** `segmentId`/`segmentIds` retired with the `Segment` type (ADR 0026, #421) — `entryId` above is the
+     *  whole answer to "which record does this bar draw" now, whether the bar sits on a row of its
+     *  own or on a segmented parent's row alongside its siblings. */
+    /** What a backend renders as the bar's label (#26, #421 C5) — `LayoutInput.barLabelFor`'s own
+     *  answer for this Bar's Entry, or `''` when the Entry has no name and no resolver names a
+     *  Field with a value: no label paints. */
     label: string;
     x: number; y: number; width: number; height: number;
     /** Static classification only (`conflict`, `cycle` — renamed from `hasConflict`/`inCycle` at
@@ -446,7 +471,7 @@ interface LayoutInput {
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none (D-S4-22). */
   collapsed?: readonly RowId[];
-  itemProducerRegistry: ItemProducerRegistry;
+  barProducerRegistry: BarProducerRegistry;
   fieldCompares?: readonly FieldCompare[];
 }
 
@@ -464,7 +489,7 @@ class FrameLayout {
 
 Rules that keep it honest:
 
-- **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Item.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
+- **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Bar.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
 - **No materialized hit-region array.** The bars array *is* the hit index; DOM backends get hit-testing from event delegation.
 - **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y", ready for row heights that vary in a future slice. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S6 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S4's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
 - **Grid and timeline consume the same `frame.rows`.** Both position rows absolutely from `top`/`height`; neither uses flow layout or computes a height. One vertical window, one scroll owner. This is the #1 defect source in split-pane Gantts and it is closed by construction (D8).
@@ -516,7 +541,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 - **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
 - **`data/` has two plugin seams, and each takes one occupant that composes.** The **extension hook** (D4, above) answers "what else does this edit write?", and a plugin claims it through `ctx.edits.setExtender`. The **hierarchy source** (ADR 0020) answers "which Entry is the parent of this one?", and a plugin claims it through `ctx.hierarchy.setSource`. Both start out occupied by core — the identity extender, and `(entry) => entry.parentId` — and installing wraps the current occupant rather than evicting it (D-S5-23). The source reads a `StoredEntry`, never the live `Entry`, because every live answer (`parent()`, `children()`, `depth`, `descendants()`) is built from it. Core inverts the answer into the child index, so one Entry can never have two parents; it refuses an unknown parent id and a chain that loops, reads that Entry as a root, and reports each once per revision. The Rollup walks the same source, so a plugin that changes the tree has changed the Rollup and there is no second knob that could let the two disagree.
-- **The envelope has one function, and now one owner on every write path** (#212, finding 4; closed by the 2026-09-06 fix-plan review, R2, findings B1 and its remainder): an Entry's `start`/`end` are meant to be the envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — and `time/`'s `envelopeOfSegments` is the one function that computes it. Every path that writes `start`/`end` now goes through it or a function built on it. Ingest, a plain `entries.update(id, { segments })`, and a drag/resize gesture call it directly. The Rollup (`data/rollup.ts`, `widenSegmentsToEnvelope`) restores the invariant on a rolling-up parent in two steps: every Segment first clamps into the parent's newly rolled-up `[start, end)` (a Segment the new span has moved past collapses to the nearest edge, rather than keeping a stretch the parent no longer covers), and then whichever Segment does not yet reach an edge exactly widens to it — the earliest-starting Segment supplies the new `start`, the latest-ending one the new `end`. One Segment plays both roles when the parent draws only one, which is why a several-Segment parent was the harder case: a rolled-up span can shrink past an interior Segment as easily as it can grow past every one, so widening only the two extremal Segments (with no clamp) is not enough on its own. Rejecting a several-Segment roll-up parent at ingest, or making the rolled-up value computed-on-read for that case only, were both considered and rejected: the first makes derivation and "how many Segments a consumer authors" interact for no reason a consumer could predict, and the second would split `start`/`end` between stored and computed depending on Segment count, which is exactly the kind of special case the seams below exist to avoid. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does, and now gets it, on one refusal rather than two answers for one input (D-S5-44; a caller-identity split — a computed translate for the extender's cascade, a refusal for `entries.update()` — was tried and rejected): `data/entry-reader.ts`'s `reconcileEnvelope` is the one function that decides a `ProposedEdit` against an Entry's Segments, and every caller reaches it. `toProposedEdit` calls it directly for `entries.update()`. An `EditExtender`'s cascade reaches it through `reconcileExtenderEdits`, called once per edit from both `build-commit-change-set.ts` at commit and, as `reconcileExtenderEditsForPreview`, from `view/gesture-pipeline.ts`'s drag preview — the preview's copy runs inside a rAF callback with nothing to catch a throw, so it drops a refused edit instead of throwing (that Entry paints no ghost for the frame) while the commit path still throws for real. A direct `start`/`end` write against a several-Segment Entry with no `segments` of its own is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) from every one of these callers alike, because a `ProposedEdit` is one shape with one meaning regardless of who wrote it. `data/entry-reader.ts`'s `moveEntryTo` is the escape a plugin author reaches for instead: it writes every Segment of an Entry translated rigidly to a new `start`, which is what the refused envelope-only write could not say. `envelopeOfSegments` itself lives in `time/`, not in `data/` or `layout/` (both call it): those two layers may not import each other (§1), and `time/` is the one layer both already reach through for zone-aware date arithmetic (I10) — this is a plain numeric min/max over two `Instant`s, not date arithmetic, but the placement still keeps every caller on one function instead of a copy in each layer.
+- **The envelope retired with the `Segment` type it used to compute (ADR 0026, Q39).** `start`/`end` used to be an Entry's envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — computed by `time/`'s `envelopeOfSegments` and reconciled on every write path through `data/entry-reader.ts`'s `reconcileEnvelope`. A Bar is one child Entry by default now, so there is no stored Segment left to take an envelope over: `start`/`end` are ordinary Fields, written and read the same as any other. On a rolling-up parent they are ordinary rolling-up Fields too, restored by the Rollup (`data/rollup.ts`) from the parent's children on every commit, the same as any other Field with a `rollUp` aggregator — no Segment-clamp-and-widen step survives, because there is nothing left to clamp or widen. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does — never writing a rolling-up parent's own cell — and gets it the same way any other rolling-up Field's cascade does: the Rollup pass overwrites a cascade's proposed value on a rolling-up parent's cell unconditionally and reports the drop once per commit (ADR 0013, decision 5; `rollup.test.ts` pins this for `start` under Q39), rather than the one-refusal-or-the-other split `SegmentsOutOfSyncError` and `reconcileExtenderEdits`/`reconcileExtenderEditsForPreview` used to enforce. `data/entry-reader.ts`'s `moveEntryTo(entry, start)` is still the write a plugin author reaches for to translate an Entry's own span rigidly — it no longer says anything about Segments, because an Entry never had more than the one span to translate. **One refusal of a cascade outlives the envelope, and is not the Rollup's overwrite:** an extender that proposes an end before its start still meets `InvertedSpanError`, which was never Segment-specific (#143). Core refuses it, drops the gesture, and reports `droppedReason: 'inverted-span'` at `severity: 'warning'` with `by` naming the plugin — a refusal of a proposal, never the `'error'` fault an extender's own throw earns ([ADR 0028](../docs/adr/0028-a-plugins-impossible-proposal-is-a-refusal.md)).
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
 ```ts
@@ -541,7 +566,7 @@ interface ChangeSet {
 }
 ```
 
-A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, element-wise on `segments`, per-key on `props` / the Field's `equals`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
+A field whose `from` equals `to` under its per-field comparator (`===` for primitives/`Instant`s, per-key on `props` / the Field's `equals`) is never recorded — an empty changeset commits nothing, emits no event, and pushes no history entry.
 
 - **Undo/redo**: the transaction is the atomic unit, and it records the **complete post-scheduling changeset — user edits and engine cascades together**. Undo that reverts only the user's edit while the cascade stays applied corrupts the dataset; this is the corruption class the design closes. Redo replays the recorded changeset (deterministic even if engine behavior changes between versions).
 - **Reactivity**: a thin internal `signal`/`computed`/`effect` façade in `data/`, backed by one small dependency, swappable in one file. Instance-scoped — **zero module-level singletons anywhere** (two Gantt instances on one page with independent state is a standing CI test).
@@ -698,7 +723,7 @@ flowchart TB
 
 `GanttShell` composes the split; `view/pane-layout.ts`'s `PaneLayout` holds it (S1.8): grid pane (columns over `frame.rows`) · splitter · timeline pane (header + bars + links + decorations). The timeline pane is the single native *vertical* scroller (D-D, D-S1.8-1) — the grid pane never becomes a second one. Horizontally the grid pane is its own independent native scroller when fixed-width columns overflow it, unsynced with the timeline's own time-axis horizontal scroll (D-S1.8-13, #126). Its row layer follows the timeline pane's scroll position by one `translateY(-frame.visible.y)` transform per frame instead of a second real scroller; both panes read `top` from the same `frame.rows`/`frame.bars`, so pixel identity between them (I9) is structural rather than a property either side maintains by hand. The grid starts as a single column (S1) and grows columns/editors in S4–S5 without structural change: `FrameRow.cells` carries one library-formatted string per configured column (§2.6), so adding a column adds a cell rather than a frame shape (#81).
 
-**`GanttShell` composes; it does not own the Selection (#230 R4).** `view/segment-selection.ts`'s `SegmentSelection` holds the selected Segment ids, the row-rank cache, and the pane rule that decides what a pointer hit would add to them (ADR 0010). The shell keeps the composition — it builds the class and passes it the ports it needs — but the six members that answer "what is selected" moved out, because a shell that changes for selection reasons changes for every reason. `interaction/entry-gestures.ts` asks `selectableSegmentsOf` rather than re-deriving the pane rule with a second switch on hit kind. `SegmentSelection` publishes `segmentIds` and `entryIds` on one object, and that object is structurally the `ActedOn` a Command already takes, so the gesture path and the Command path read one shape instead of two (#216 Q3).
+**`GanttShell` composes; it does not own the Selection (#230 R4).** `view/entry-selection.ts`'s `EntrySelection` (renamed from `SegmentSelection`, ADR 0025, #421) holds the selected Entry ids, the row-rank cache, and the pane rule that decides what a pointer hit would add to them. The shell keeps the composition — it builds the class and passes it the ports it needs — but the members that answer "what is selected" moved out, because a shell that changes for selection reasons changes for every reason. `interaction/entry-gestures.ts` asks `selectableEntriesOf` (renamed from `selectableSegmentsOf`) rather than re-deriving the pane rule with a second switch on hit kind. `EntrySelection` publishes `entryIds` — one set now that the `Segment` type has retired — and that shape is structurally the `ActedOn` a Command already takes, so the gesture path and the Command path read one shape (#216 Q3).
 
 ---
 
@@ -717,7 +742,7 @@ Invariants the data-gesture attachments own:
 - Keyboard is a first-class attachment, not an afterthought: arrow-key nudge by the preset's snap, through the same `session().nudge()` commit path as a pointer commit (D11, D-S3-23).
 - **Capabilities gate gestures and affordances from one resolution.** Before arming, every attachment asks the Gantt's capability resolver — `can('move' | 'resize' | 'select', entry)` — built from the `capabilities` config (`02` §4.1), over the resolved Variant's own `capabilities` (ADR 0018), over the library rule. ADR 0013 deleted `Entry.kind`, so no stored classification is left to build over, and a predicate at any level may answer `undefined` for "no opinion". The **same** resolution drives visual affordances (resize handles, grab cursor), so nothing is shown that can't be done and nothing hidden can be triggered — pointer or keyboard (invariant I14). `select` has no affordance; the refuse half still applies. `before*` events remain the *contextual* veto (this drop, this target, this moment); capabilities are the *static* answer.
 
-  **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. An Entry with children refuses `move` and `resize` when both of its dates roll up. No stored classification decides it (ADR 0013). The public `gantt.selectedSegmentIds` setter is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
+  **A gesture is two questions, not one (#256).** `can()` asks whether the gesture is *offered* for this Entry, and `canWrite(entry, field)` asks whether the values it writes *may change*. A gesture needs both: `move` writes `start` and `end`, so it needs both cells; `resize` writes the dragged edge's own Field; `select` writes nothing. A write names a cell — one Entry, one Field, which is the changeset's own shape — so the cell is where that answer lives, and it is the only place it lives. An Entry with children refuses `move` and `resize` when both of its dates roll up. No stored classification decides it (ADR 0013). The public `gantt.selectedEntryIds` setter (`selectedSegmentIds` retired in #421, ADR 0025) is not a controller and does not consult `can('select')` (`gantt.selectedIds` retired in #212, ADR 0010).
 
 Attachments talk to `data/` only through drafts and transactions (the shell's `commitEntryEdits`), and to the screen only through `InteractionState` — they import neither `render/` internals nor `scheduling/`. `view/` never imports `interaction/`; `api/gantt.ts` injects the attachments into `GanttShell`.
 
@@ -922,7 +947,7 @@ Rules:
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
 | I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |
-| I8 | `Item.id` deterministic across layout passes | layout snapshot test |
+| I8 | `Bar.id` deterministic across layout passes | layout snapshot test |
 | I9 | Grid and timeline share one row geometry | pixel-equality test on row tops |
 | I10 | No time math outside `time/`; no magic time constants | lint rule |
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |

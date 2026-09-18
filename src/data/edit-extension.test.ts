@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
-import { entryId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { StoredEntry, EntryEdit, EntryId, Instant } from '../model/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
@@ -14,7 +14,6 @@ function entry(id: string): StoredEntry {
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
     props: {},
   };
 }
@@ -140,9 +139,9 @@ describe('composing two extenders that write one Entry (#197)', () => {
   it('core derives every proposed key from the composed edit, so the props-addressed Field is recognized', () => {
     for (const { stored } of [composed(proposesCost, movesTarget), composed(movesTarget, proposesCost)]) {
       const keys = [...proposedKeysOf(stored.get(target))].sort();
-      // `segments` rides along because `toEditReading` pairs the lone Segment onto an envelope-only write
-      // and states what it added. That fold is #232's subject, not this law's.
-      expect(keys).toEqual(['cost', 'end', 'segments', 'start']);
+      // `start`/`end` are ordinary Fields now (ADR 0026 retired the Segment that used to pair with
+      // them), so the composed edit's proposed keys are exactly what the two extenders wrote.
+      expect(keys).toEqual(['cost', 'end', 'start']);
       expect(stored.get(target)?.props).toEqual({ cost: 500 });
     }
   });

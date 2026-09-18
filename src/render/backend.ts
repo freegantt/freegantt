@@ -1,33 +1,25 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type {
-  EntryId,
-  GeometryFrame,
-  ItemId,
-  ItemPreview,
-  ClientPoint,
-  RowId,
-  SegmentId,
-} from '../layout/index.js';
+import type { EntryId, GeometryFrame, BarId, BarPreview, ClientPoint, RowId } from '../layout/index.js';
 
 export interface InteractionState {
-  hoveredItemId?: ItemId;
+  hoveredBarId?: BarId;
   /** The row under the pointer, in whichever pane the pointer is in — the grid row it landed on, or
    *  the row that owns the hovered bar. A backend paints it on both the grid row and its timeline
    *  band, so one row reads as one row across the splitter. Undefined parks the paint. */
   hoveredRowId?: RowId;
-  /** The Selection itself (#212, ADR 0010): the Segment ids `Gantt.selectedSegmentIds` holds. A bar
-   *  paints selected when the Selection holds that bar's own Segment. A bar that draws an Entry's
-   *  whole span — a group, a milestone — paints selected when the Selection holds any Segment of that
-   *  Entry. Which bar drew which Segment is the frame's own answer, never a string built from an id. */
-  selectedSegmentIds?: readonly SegmentId[];
+  /** The Selection itself (#212, ADR 0010, ADR 0025): the Entry ids `Gantt.selectedEntryIds` holds.
+   *  A bar paints selected when the Selection holds that bar's own Entry. A bar that draws an Entry's
+   *  whole span — a group, a milestone — paints selected the same way. Which bar drew which Entry is
+   *  the frame's own answer, never a string built from an id. */
+  selectedEntryIds?: readonly EntryId[];
   /** The Entry the shared handle pair brackets (S3, D-S3-6/D-S3-8): the hovered bar's Entry, else
    *  the single selected one — and only when its `resize` capability resolved true. Undefined parks
    *  the handles. A resize acts on the Entry's envelope (#200), so the pair straddles every bar the
    *  Entry drew: the `start` handle on the earliest bar, the `end` handle on the latest. A backend
-   *  reads those bars off the frame it synced, the same way `selectedSegmentIds` paints. The pair
-   *  narrows to one bar when the Selection holds exactly one Segment of the Entry (#212). */
+   *  reads those bars off the frame it synced, the same way `selectedEntryIds` paints. The pair
+   *  narrows to one bar when the Entry the Selection holds draws exactly one bar (#212, ADR 0026). */
   resizableEntryId?: EntryId;
   /** #142: which of `resizableEntryId`'s two handles may resize, independently — a Field's own
    *  one edge can close while the other stays open — a Field's `editable`, or `capabilities.edit` (#256). A backend hides the closed edge's
@@ -35,15 +27,15 @@ export interface InteractionState {
   resizableEdges?: { start: boolean; end: boolean };
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
-  movableItemId?: ItemId;
-  /** S3.3, D-S3-18: an in-flight drag's per-item pixel offset, coalesced on the shell's own rAF.
+  movableBarId?: BarId;
+  /** S3.3, D-S3-18: an in-flight drag's per-bar pixel offset, coalesced on the shell's own rAF.
    *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
    *  transform the moment this clears. */
-  preview?: readonly ItemPreview[];
+  preview?: readonly BarPreview[];
   /** S3.5, D-S3-17: which bars a `beforeEntryMove`/`beforeEntryResize` handler's unsettled Promise is
    *  holding — painted `data-state~="pending"` (reduced opacity and a dotted outline). Undefined once
    *  it settles either way. */
-  pendingItemIds?: readonly ItemId[];
+  pendingBarIds?: readonly BarId[];
   /** S3.8, D-S3-15: content-x of the Cursor line during a pointer drag. Undefined parks the
    *  singleton. Never a frame decoration. */
   cursorX?: number;
@@ -60,12 +52,12 @@ export interface InteractionState {
 }
 
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit
- *  names the row, and the row is what owns Entries — a backend never invents an Item id for it. */
+ *  names the row, and the row is what owns Entries — a backend never invents a Bar id for it. */
 export type HitResult = BarHit | RowHit;
 
 export interface BarHit {
   kind: 'bar';
-  itemId: ItemId;
+  barId: BarId;
   /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
    *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
   edge?: 'start' | 'end';

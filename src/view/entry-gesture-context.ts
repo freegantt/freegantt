@@ -5,7 +5,7 @@
 // The sole declaration (C5): `interaction/` may import `view/` (the legal edge, plans/01 §1), so this
 // type lives here once instead of being mirrored on both sides of that edge.
 
-import type { Entry, EntryId, ItemId, RowId, SegmentId, ClientPoint } from '../model/index.js';
+import type { Entry, EntryId, BarId, RowId, ClientPoint } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
@@ -28,8 +28,7 @@ export interface DraftOptions {
  *
  *  A row hit names the row alone. Which Entries the row owns is `entriesForRow`'s answer, so
  *  `interaction/` never turns a row into an Entry by itself. */
-export type EntryHit =
-  { kind: 'bar'; itemId: ItemId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
+export type EntryHit = { kind: 'bar'; barId: BarId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
 
 /** One armed gesture (D-GH-1): `session()` resolves what moves once, at arm time, so
  *  `interaction/entry-gestures.ts`'s pointer machine holds this one object instead of separately
@@ -52,39 +51,23 @@ export interface EntryGestureSession {
   cancel(): void;
 }
 
-/** What `interaction/` asks the Selection (#230 R4). `view/segment-selection.ts`'s `SegmentSelection`
- *  answers all of it; `GanttShell` adds `segmentIdsOfEntries`, which is the Dataset's own projection.
+/** What `interaction/` asks the Selection (#230 R4). `view/entry-selection.ts`'s `EntrySelection`
+ *  answers all of it.
  *
- *  One member on `EntryGestureContext`, not eight, for the reason R3 gave `ContainerDomPorts`: a port
- *  bag whose members answer one collaborator's questions is that collaborator, spelled out. The names
- *  say `segmentIds`, not `segments`, because every one of them returns ids — the same word
- *  `DomTarget.segmentIds` and `FrameLayoutView.segmentIdsForItem` already use. */
+ *  One member on `EntryGestureContext`, not five, for the reason R3 gave `ContainerDomPorts`: a port
+ *  bag whose members answer one collaborator's questions is that collaborator, spelled out. */
 export interface SelectionForGestures {
-  /** The Selection itself — Segment ids. */
-  segmentIds(): readonly SegmentId[];
-  /** The Entries the Selection's Segments belong to, deduped, in row order (#212) — the reading a
-   *  row step and a nudge need, because both act on a whole record. */
+  /** The Selection itself — Entry ids (#421, ADR 0025). */
   entryIds(): readonly EntryId[];
   /** The cancelable `beforeSelectionChange` → apply → `selectionChange` sequence (D-S3-10). */
-  propose(next: readonly SegmentId[]): void;
-  /** The selectable entries in resolved row order — a keyboard row step walks this list (D-S4-32). */
+  propose(next: readonly EntryId[]): void;
+  /** The selectable entries in resolved row order — a keyboard row step and a shift-range both walk
+   *  this list (D-S4-32). */
   selectableEntriesInRowOrder(): readonly EntryId[];
-  /** Every selectable Segment in the order the panes draw it (#212, ADR 0010) — row by row, and
-   *  inside a row the order that row's Entries draw their own Segments. Shift-click ranges over
-   *  this list, because the Selection holds Segments and a range must name the same unit. */
-  selectableSegmentsInRowOrder(): readonly SegmentId[];
-  /** The Segments this hit would select (#212, ADR 0010, #230 R4) — a row names every selectable
-   *  Entry it owns; a bar names its own Segment when its Entry may be selected, else nothing.
+  /** The Entries this hit would select (#212, ADR 0010, ADR 0025, #230 R4) — a row names every
+   *  selectable Entry it owns; a bar names its own Entry when it may be selected, else nothing.
    *  `interaction/` asks this instead of re-deriving the pane rule from `hit.kind` itself. */
-  selectableSegmentsOf(hit: EntryHit): readonly SegmentId[];
-  /** Every Segment of these Entries, in the order given (#212, ADR 0010). A grid-row click, a
-   *  shift-range and a keyboard select all name Entries and select every Segment those Entries draw. */
-  segmentIdsOfEntries(ids: readonly EntryId[]): readonly SegmentId[];
-  /** Every Segment this bar stands for (#212, ADR 0010) — the pane picks the unit. A bar that drew
-   *  one Segment names that Segment alone. A bar that drew an Entry's whole span (a group, a
-   *  milestone) names every Segment of that Entry. It reads the same answer `DomTarget.segmentIds`
-   *  reads — `FrameLayoutView.segmentIdsForItem` — so the pointer path and this one cannot disagree. */
-  segmentIdsForItem(item: ItemId): readonly SegmentId[];
+  selectableEntriesOf(hit: EntryHit): readonly EntryId[];
 }
 
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
@@ -94,15 +77,15 @@ export interface SelectionForGestures {
 export interface EntryGestureContext {
   /** Content-surface hit test — `RenderBackend.hitTest`, already client-relative (S1 D-D). */
   hitTest(at: ClientPoint): EntryHit | undefined;
-  /** The entry under an item id, or undefined once segments exist and an id outlives its item. */
-  entryFor(itemId: ItemId): Entry | undefined;
+  /** The entry under a bar id, or undefined once a stale bar id outlives its frame. */
+  entryFor(barId: BarId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`.
    *  `edge` narrows a `'resize'` question to one handle (#142); every other capability ignores it. */
   can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
-  /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
-  setHovered(itemId: ItemId | undefined): void;
+  /** S3.2 (D-S3-6): the bar id under the pointer, or undefined on pointerleave. */
+  setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane
    *  reports no row of its own: over there a bar names the row, and the shell reads it off the frame
    *  rather than asking the pointer twice. */

@@ -137,7 +137,7 @@ ctx.variants.add({ name: 'buffer', when: (entry) => entry.read('slack') > 0, pai
 
 **Rejected without a full pass:** `Kind` (ADR 0013 retired it), `Preset` (`gantt.preset` owns it), `Class`, `Type`, and `Category` — the last one names a data classification, which is the one thing 0018 refuses to store.
 
-**The rename reaches the DOM.** `data-kind` becomes `data-variant`, and the `'look-claimed-twice'` report becomes `'variant-claimed-twice'`. `fg-bar-summary` keeps its name — it is a CSS class, and it comes from the `parent` variant's own `paint`.
+**The rename reaches the DOM.** `data-kind` becomes `data-variant`, and the `'look-claimed-twice'` report becomes `'variant-matched-twice'`. `fg-bar-summary` keeps its name — it is a CSS class, and it comes from the `parent` variant's own `paint`.
 
 ## Open
 

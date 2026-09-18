@@ -27,12 +27,12 @@ function mount(
   return { gantt, container };
 }
 
-/** Which variant each painted bar wears, by Item id. The rendered `data-variant` attribute is the
+/** Which variant each painted bar wears, by Bar id. The rendered `data-variant` attribute is the
  *  one public reading of a resolved variant. */
 function variantsOn(container: HTMLElement): Record<string, string> {
   const painted: Record<string, string> = {};
   for (const bar of Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'))) {
-    const id = bar.getAttribute('data-item-id');
+    const id = bar.getAttribute('data-bar-id');
     const variant = bar.getAttribute('data-variant');
     if (id !== null && variant !== null) painted[id] = variant;
   }

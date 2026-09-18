@@ -193,3 +193,43 @@ test('generic demo shows Budget column, deep tree indent, and grouped rows', asy
     )
     .not.toEqual(treeIds);
 });
+
+// #421: the generic demo's segmented row. `entry-16` has three child Entries, and
+// `childrenAsSegments` puts them on the parent's own row — the picture a Segment used to draw
+// before ADR 0026 retired it. The bench button opens the segments back into rows, and the same three Entries
+// become three ordinary rows. This pins both halves, because one config key moves between them.
+//
+// Counts bars only against the rows they sit on, never in total: the timeline culls a bar outside
+// the visible window, so "how many legs are drawn" answers a question about culling, not segmenting.
+test('a segmented row draws its children as bars, and opening the segments back into rows gives them rows', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const segmentedRow = page.locator('#gantt .fg-row[data-entry-id="entry-16"]');
+  const legRows = page.locator('#gantt .fg-row[data-entry-id^="entry-16-"]');
+  const legBars = page.locator('#gantt .fg-bar[data-bar-id^="entry-16-"]');
+  const parentBar = page.locator('#gantt .fg-bar[data-bar-id^="entry-16:"]');
+
+  // Segmented: the parent keeps one row, its three legs get none, and the parent draws no bar of its
+  // own — `wholeSpanUnlessSegments` returns nothing for a segmented row’s subject, so no rail paints over the legs.
+  await expect(segmentedRow).toHaveCount(1);
+  await expect(legRows).toHaveCount(0);
+  await expect(parentBar).toHaveCount(0);
+  expect(await legBars.count()).toBeGreaterThan(0);
+
+  // Every leg that is drawn sits on the parent's row, not on a row of its own.
+  const rowBox = (await segmentedRow.boundingBox())!;
+  for (const bar of await legBars.all()) {
+    const barBox = (await bar.boundingBox())!;
+    expect(barBox.y).toBeGreaterThanOrEqual(rowBox.y - 1);
+    expect(barBox.y + barBox.height).toBeLessThanOrEqual(rowBox.y + rowBox.height + 1);
+  }
+
+  // Released: the same three Entries become three ordinary rows, and the parent draws its own
+  // rolled-up bar again.
+  await page.locator('#segment-row-btn').click();
+  await expect(legRows).toHaveCount(3);
+  await expect(parentBar).toHaveCount(1);
+});

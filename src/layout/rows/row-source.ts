@@ -1,6 +1,10 @@
-// layout/ — row-source types. Pure data: no pixels, no Dataset, no Field registry (D-S4-19, D-S4-21).
+// layout/ — row-source types. Pure data: no pixels, no Dataset (D-S4-19, D-S4-21). A Field registry
+// reaches this file as a port only (`EntryRulePorts`, #421 C1) — `childrenAsSegments`'s match needs
+// each Field's own `equals`, the same way `fieldCompares`/`fieldContext` already carry a bound
+// answer in rather than importing the registry itself.
 
 import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
+import type { EntryRule, EntryRulePorts } from '../entry-rule.js';
 import type { FieldCompare } from '../column.js';
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
@@ -33,6 +37,14 @@ export interface EntriesRowSource extends RowSourceCommon {
   source: 'entries';
   /** Takes an explicit `undefined` for the reason `RowSourceCommon` states (#254). */
   tree?: boolean | undefined;
+  /** Matches a parent Entry: its children draw as bars on its own row instead of rows of their own
+   *  (#421). `true` matches every parent with at least one child; a `FieldMatch` or `EntryPredicate`
+   *  matches only the parents the rule answers yes for — the same `when` syntax a variant's `when`
+   *  takes (`EntryRule`, `layout/entry-rule.ts`). A parent this rule does not match is untouched:
+   *  it keeps its own row, gives each child a row, and rolls up exactly as it does today (README's
+   *  hard rule 6). Orthogonal to `tree` — `tree` nests a *non-segmented* parent's children; this
+   *  decides whether a *segmented* parent's children become rows at all (README's hard rule 5). */
+  childrenAsSegments?: EntryRule | true | undefined;
 }
 
 export interface GroupRowSource extends RowSourceCommon {
@@ -60,7 +72,7 @@ export interface CustomRowSource {
 
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
-export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: false });
+export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: true });
 
 /** `filterPolicyOf`'s default (#248 S4-2) — named here, beside the type it defaults, so
  *  `resolveRowSource` and `filterPolicyOf` share one literal instead of two. */
@@ -136,6 +148,14 @@ export interface PlannedRow {
   headerLabel?: string;
   /** `true` when this row's entry matched the active filter; `false` when kept only for descendants. */
   matched?: boolean;
+  /** `true` when `childrenAsSegments` matches this row's subject: its children draw on this row and
+   *  take no row of their own (#421). A real field, not `entryIds.length > 1` — that count says how
+   *  many Entries a row carries, and a custom source hands several with no subject among them
+   *  (`custom-source.ts`). This field says something the count cannot: `entryIds[0]` is the parent
+   *  the rule matched, and `produceBarsForRow` tells its producer to draw no bar of its own for it.
+   *  Absent on every row no rule matches, so the path a match never touches reads exactly as it does
+   *  today. */
+  childrenAsSegments?: boolean;
 }
 
 /** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
@@ -152,4 +172,9 @@ export interface RowPassInput {
   collapsed: ReadonlySet<string>;
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
+  /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
+   *  and the unknown-key sink. Absent when no caller wired a Field registry in (a pure `layout/`
+   *  test, say); `resolveEntriesSource` then treats an unset `childrenAsSegments` as non-segmented,
+   *  same as always, and a set one as unmatchable rather than throwing. */
+  entryRulePorts?: EntryRulePorts;
 }

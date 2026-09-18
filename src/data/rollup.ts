@@ -5,24 +5,17 @@
 // (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type {
-  StoredEntry,
-  EntryId,
-  FieldUpdated,
-  HierarchySource,
-  SegmentId,
-  TimeSpan,
-} from '../model/index.js';
-import { AggregatorFailedError, spansTime } from '../model/index.js';
+import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
+import { AggregatorFailedError } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
-import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
-import { checkHierarchyAnswers, parentIdFrom } from './hierarchy-source.js';
+import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import {
   createRollUpContext,
   editProposesField,
   entryAfterEdit,
+  proposedKeysOf,
   readField,
   readingChildrenFrom,
   readingHypotheticalRows,
@@ -48,6 +41,10 @@ export interface RollUpEditSets {
  *  can hold. */
 export interface RollUpTree {
   readonly committedParents: ParentIndex;
+  /** `EntryStore.committedChildIds()` — the committed tree's own child index, read back rather than
+   *  re-derived when a commit proves it cannot have moved a row (`committedTreeStillAnswers` below,
+   *  #421 C4). */
+  readonly committedChildIds: ReadonlyMap<EntryId, readonly EntryId[]>;
   readonly source: HierarchySource;
 }
 
@@ -137,71 +134,10 @@ function parentsToRecompute(
 }
 
 /**
- * The Rollup writes `start`/`end` straight onto a roll-up-kind parent, the way `field.rollUp: 'min'`
- * / `'max'` above does — that pass alone can leave the parent's own Segments behind, drawing the span
- * they had before this commit (#212 R2 fix-plan review, finding B1). The envelope is the earliest
- * `start` and the latest `end` among the Segments (ADR 0010), so restoring it happens in two steps.
- * First, every Segment clamps into the parent's new `[start, end)` — a Segment the new span has moved
- * past no longer belongs outside it, so it collapses to the nearest edge rather than keeping a stretch
- * the parent no longer covers. Second, whichever Segment still does not reach an edge exactly —
- * because every Segment already sat inside the new span, or clamping only shortened it — widens to
- * reach that edge: the Segment with the earliest `start` moves it to the parent's new `start`, the one
- * with the latest `end` moves it to the parent's new `end`. One Segment plays both roles when the
- * parent draws only one, which is why this reduces to the old sole-Segment pairing in that case. A tie
- * picks the first Segment in array order, the same determinism `entries.add`/`entries.update` already
- * use for a positional match. This is chosen over the two other candidates the #212 R2 fix-plan review
- * named: rejecting a several-Segment roll-up parent at ingest would make `rollUpKinds` and "how many
- * Segments a consumer authors" interact, for no reason a consumer could predict; making the rolled-up
- * value computed-on-read for this case only would split `start`/`end`'s `field source` (`plans/01` §6,
- * ADR 0005) between stored and computed depending on how many Segments a parent happens to draw, which
- * is exactly the kind of `if (kind === ...)`-shaped special case the seams exist to avoid. Widening
- * alone — moving only the two extremal Segments, with no clamp — was tried first and rejected here: a
- * rolled-up span can also *shrink* past an interior Segment (a child removed, or moved to a narrower
- * range), and widening only the Segment that used to be extremal leaves the one it displaced still
- * outside the new envelope, so the invariant this function exists to restore would fail again one
- * Segment over.
- */
-function widenSegmentsToEnvelope(
-  parent: StoredEntry,
-  registry: FieldRegistry,
-  access: FieldAccess,
-  parentId: EntryId,
-  mintSegmentId: () => SegmentId,
-  updated: FieldUpdated[],
-): StoredEntry {
-  const segmentsField = registry.get('segments');
-  if (!segmentsField) return parent;
-  // Not spanning — nothing to hold a Segment over (`spansTime`, ADR 0012). A dateless parent
-  // (every child dateless too) already stores `segments: []`; there is nothing to widen or mint.
-  if (!spansTime(parent)) return parent;
-
-  const target: TimeSpan = { start: parent.start, end: parent.end };
-
-  if (parent.segments.length === 0) {
-    // ADR 0013 (BUILD-LOG J3/J9): the Rollup can give a parent a real `start`/`end` from its
-    // children with no Segment of its own — ingest only fills one for an *authored* span (ADR
-    // 0012 retired that fill for everything else), and this parent never authored one. A bar with
-    // no Segment cannot be selected, so mint the one Segment ingest would have minted had this
-    // envelope been authored, over the derived span.
-    const minted = [{ id: mintSegmentId(), start: target.start, end: target.end }];
-    const from = readField(parent, segmentsField, access);
-    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: minted });
-    return writeOntoEntry(parent, segmentsField, minted);
-  }
-
-  const nextSegments = fitSegmentsToEnvelope(parent.segments, target);
-  if (nextSegments === parent.segments) return parent;
-
-  const from = readField(parent, segmentsField, access);
-  updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: nextSegments });
-  return writeOntoEntry(parent, segmentsField, nextSegments);
-}
-
-/**
  * A demoted Entry — a parent that just lost its last child — has nothing left to calculate from
- * (ADR 0013: "demotion leaves no dates"). It keeps its name and drops every rolling-up Field and its
- * Segments, the same "Aggregator says no value" clear the main loop runs, run here with no Aggregator
- * to ask because there are no children left to ask one.
+ * (ADR 0013: "demotion leaves no dates"). It keeps its name and drops every rolling-up Field, the
+ * same "Aggregator says no value" clear the main loop runs, run here with no Aggregator to ask
+ * because there are no children left to ask one.
  */
 function clearDerivedValues(
   parent: StoredEntry,
@@ -217,13 +153,6 @@ function clearDerivedValues(
     if (from === undefined) continue;
     updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
     effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
-  }
-
-  const segmentsField = registry.get('segments');
-  if (segmentsField && effectiveParent.segments.length > 0) {
-    const from = readField(effectiveParent, segmentsField, access);
-    updated.push({ store: 'entries', id: parentId, field: segmentsField.key, from, to: [] });
-    effectiveParent = writeOntoEntry(effectiveParent, segmentsField, []);
   }
 
   return effectiveParent;
@@ -261,6 +190,25 @@ function parentIdIn(parentById: ReadonlyMap<EntryId, EntryId>): HierarchySource 
   return (entry) => parentById.get(entry.id);
 }
 
+/** True when this commit's `added`, `removed` and `merged` edits leave every row's place in the
+ *  tree untouched: no Entry is added or removed, and no edit proposes `parentId`.
+ *
+ *  Only asked under core's own hierarchy source (`storedParentSource` reads `parentId` and nothing
+ *  else). A plugin's source is an arbitrary function that may read any field, so no commit can be
+ *  proven not to move a row under it — that source keeps today's re-check on every commit. Whether a
+ *  source could declare the keys it reads is #426, out of scope here. */
+function commitMovesNoRow(
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
+  merged: ProposedEdits,
+): boolean {
+  if (added.length > 0 || removed.length > 0) return false;
+  for (const edit of merged.values()) {
+    if (proposedKeysOf(edit).has('parentId')) return false;
+  }
+  return true;
+}
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
@@ -270,7 +218,6 @@ export function rollUpFields(
   pending: PendingRollUp | undefined,
   registry: FieldRegistry,
   storeAccess: FieldAccess,
-  mintSegmentId: () => SegmentId,
   tree: RollUpTree,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
@@ -299,13 +246,25 @@ export function rollUpFields(
   // second time to reach the same answer. Nothing is reported from either half: the effective tree
   // is one no commit has landed yet, and the store raises the committed one's refusals itself.
   const parentOfPrior = parentIdIn(tree.committedParents);
+  // The store's committed index already holds the right answer when this commit cannot have moved a
+  // row (#421 C4): `entries` and `committed` then share the same structure, so re-deriving either
+  // half below would only recompute what `tree` already carries.
+  const committedTreeStillAnswers =
+    pending !== undefined && tree.source === storedParentSource && commitMovesNoRow(added, removed, merged);
   const parentOfEffective =
-    pending === undefined ? parentOfPrior : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
+    pending === undefined || committedTreeStillAnswers
+      ? parentOfPrior
+      : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
   const touched =
     pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged, parentOfPrior);
 
-  const byParent = childIdsByParent(entries, parentOfEffective);
-  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed, parentOfPrior);
+  const byParent = committedTreeStillAnswers
+    ? tree.committedChildIds
+    : childIdsByParent(entries, parentOfEffective);
+  const priorByParent =
+    pending === undefined || committedTreeStillAnswers
+      ? byParent
+      : childIdsByParent(committed, parentOfPrior);
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective
@@ -388,14 +347,6 @@ export function rollUpFields(
       effectiveParent = writeOntoEntry(effectiveParent, field, value);
     }
 
-    effectiveParent = widenSegmentsToEnvelope(
-      effectiveParent,
-      registry,
-      access,
-      parentId,
-      mintSegmentId,
-      updated,
-    );
     computed.set(parentId, effectiveParent);
   }
 

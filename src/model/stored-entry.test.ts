@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, segmentId } from './ids.js';
+import { entryId } from './ids.js';
 import { spansTime } from './stored-entry.js';
 import type { StoredEntry } from './stored-entry.js';
 import type { Instant } from './time.js';
@@ -7,7 +7,7 @@ import type { Instant } from './time.js';
 const instant = (value: number): Instant => value as Instant;
 
 function entry(dates: { start?: Instant; end?: Instant }): StoredEntry {
-  return { id: entryId('e1'), name: 'Design', segments: [], props: {}, ...dates };
+  return { id: entryId('e1'), name: 'Design', props: {}, ...dates };
 }
 
 /** ADR 0012's span invariant, and the one place it is written (Q5). Before this, the rule was guard
@@ -57,10 +57,9 @@ describe('spansTime', () => {
       name: 'Build',
       start: instant(1),
       end: instant(2),
-      segments: [{ id: segmentId('s1'), start: instant(1), end: instant(2) }],
-      props: {},
+      props: { team: 'A' },
     };
     if (!spansTime(subject)) throw new Error('unreachable');
-    expect(subject.segments).toHaveLength(1);
+    expect(subject.props).toEqual({ team: 'A' });
   });
 });

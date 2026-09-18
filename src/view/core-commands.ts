@@ -26,9 +26,18 @@ export interface CoreCommandPorts {
   hasSelection(): boolean;
   keyboardPanEnabled(): boolean;
   nothingSelected(): boolean;
-  /** #212, ADR 0010: moves the Selection to the next or previous Segment of the row it sits on. */
-  selectNextSegment(): void;
-  selectPreviousSegment(): void;
+  /** #212, ADR 0010, ADR 0025: moves the Selection to the next or previous Entry of the row it
+   *  sits on. */
+  selectNextEntry(): void;
+  selectPreviousEntry(): void;
+  /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup
+   *  writes them, not the user (ADR 0013) — so a Delete on its bar passes over it and the row
+   *  stays, which is what `e2e/hierarchy.spec.ts` pins. A dateless Entry has nothing to clear and
+   *  answers `false` too. */
+  canClearDates(id: EntryId): boolean;
+  /** ADR 0012: clears both dates of the Entry a bar draws. One transaction, undoable as one press,
+   *  the same door a cell edit writes through. */
+  clearDates(id: EntryId): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -110,49 +119,51 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.clearSelection(),
   });
-  // #212, ADR 0010: the Selection holds Segments, so a row that draws several bars needs a keyboard
-  // way to move between them. Both step within one row and clamp at its ends, so neither ever leaves
+  // #212, ADR 0010, ADR 0025: a row that draws several bars needs a keyboard way to move the
+  // Selection between them. Both step within one row and clamp at its ends, so neither ever leaves
   // the row the user is on.
   register({
-    id: 'freegantt.selectNextSegment',
-    label: 'Select next segment',
+    id: 'freegantt.selectNextEntry',
+    label: 'Select next entry',
     when: () => ports.hasSelection(),
-    run: () => ports.selectNextSegment(),
+    run: () => ports.selectNextEntry(),
   });
   register({
-    id: 'freegantt.selectPreviousSegment',
-    label: 'Select previous segment',
+    id: 'freegantt.selectPreviousEntry',
+    label: 'Select previous entry',
     when: () => ports.hasSelection(),
-    run: () => ports.selectPreviousSegment(),
+    run: () => ports.selectPreviousEntry(),
   });
-  // #212, ADR 0010, ADR 0012: the right-click menu and the `Delete` key run this one command. A
-  // `'bar'` target names the one Segment the user picked, so it reads `segmentIds` and calls
-  // `removeSegments` — removing an Entry's last Segment now keeps the Entry dateless (ADR 0012), so
-  // this alone never deletes a row. Every other target (a grid row or cell) names the whole record,
-  // so it reads `entryIds` and calls `remove` — the row's own delete, not a bar's.
+  // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command, and
+  // every target kind names the Entries it acts on in `entryIds` — ADR 0025 retired the second id
+  // set a `'bar'` target used to carry.
+  //
+  // What the two target kinds *mean* stays apart, and ADR 0012 is where that is written: "Keyboard
+  // Delete on a bar un-dates both dates ... `entries.remove(id)` deletes the row ... Two intents."
+  // A bar is a drawing of a span, so deleting it clears the span and leaves the record; a grid row
+  // or cell names the record itself, so deleting it removes the record. ADR 0026 changed what a bar
+  // *is*, not which of the two doors a Delete opens — a segment bar un-dates the child Entry
+  // it draws, exactly as a Segment delete used to drop one drawn stretch.
+  //
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
   register({
     id: 'freegantt.deleteSelection',
     label: 'Delete',
-    when: (ctx) => {
-      const target = asCtx(ctx).target;
-      if (target === undefined) return false;
-      return target.kind === 'bar'
-        ? (target.segmentIds?.length ?? 0) > 0
-        : (target.entryIds?.length ?? 0) > 0;
-    },
+    when: (ctx) => (asCtx(ctx).target?.entryIds?.length ?? 0) > 0,
     run: (ctx) => {
       const target = asCtx(ctx).target;
       if (target === undefined) return;
       try {
-        if (target.kind === 'bar') {
-          const segmentIds = target.segmentIds;
-          if (segmentIds === undefined || segmentIds.length === 0) return;
-          asCtx(ctx).dataset?.entries.removeSegments(segmentIds);
-        } else {
-          for (const id of target.entryIds ?? []) asCtx(ctx).dataset?.entries.remove(id);
+        for (const id of target.entryIds ?? []) {
+          if (target.kind === 'bar') {
+            // A bar whose dates are derived has none of its own to clear (ADR 0013). The command
+            // passes over it rather than throwing `DerivedFieldNotWritableError` out of a keypress.
+            if (ports.canClearDates(id)) ports.clearDates(id);
+          } else {
+            asCtx(ctx).dataset?.entries.remove(id);
+          }
         }
       } catch (error) {
         if (!(error instanceof MutationCancelledError)) throw error;

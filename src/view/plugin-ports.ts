@@ -239,7 +239,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
      *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
      *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin
-     *  retyped `.fg-bar`, `.fg-row`, `data-item-id` and five more by hand. Nothing versioned them
+     *  retyped `.fg-bar`, `.fg-row`, `data-bar-id` and five more by hand. Nothing versioned them
      *  and nothing tested them. Renaming a class broke every plugin with a green build.
      *
      *  `targetUnder` returns `{ kind, element, entry?, field? }`. `kind` is `TargetKind`, the same
@@ -353,16 +353,16 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
    *  the plugin half of the `GanttOptions.variants` a consumer writes — one type, two doors, one
    *  shape. It replaced four registrations that each repeated the variant's name. */
   variants: {
-    /** Installs one variant on this Gantt. `when` says which rows wear it, `items` what shape it
+    /** Installs one variant on this Gantt. `when` says which rows wear it, `bars` what shape it
      *  draws, `paint` how it looks, and `can` what you can do to it. Omit `when` and the variant
-     *  answers for every row nothing newer claims.
+     *  answers for every row nothing newer matches.
      *
      *  **The newest rule wins** (`Q5`). This plugin's variant wins over core's own `parent`/`leaf`,
      *  and over any variant installed before it. The consumer's own `GanttOptions.variants` wins
      *  over every plugin's, whatever order the plugins installed in (D-S5-11). Setup order between
      *  two plugins comes from `requires` (D-S5-31) — there is no ordering knob here.
      *
-     *  Two plugins whose rules both answer yes for one row raise a `'variant-claimed-twice'` Error
+     *  Two plugins whose rules both answer yes for one row raise a `'variant-matched-twice'` Error
      *  report naming both, in every build. It is not behind `isDevMode()`: that flag resolves when
      *  this repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41).
      *  The library never arbitrates between plugins: the consumer chose which ones to install, so
@@ -440,7 +440,7 @@ export function buildPluginPorts(
     const entry = shell.entry(resolvedId);
     if (entry === undefined) return undefined;
     try {
-      return resolved.renderer({ entry, item: bar });
+      return resolved.renderer({ entry, bar });
     } catch (error) {
       // S5.12, D-S5-41: report first; the `console.error` behind it is the fallback for a consumer
       // with nothing subscribed to `error`. It left `isDevMode()` for the reason that guard's own

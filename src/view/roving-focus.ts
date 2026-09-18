@@ -9,13 +9,13 @@
 // names; the old file is a separate tidying call.
 //
 // Restore-by-key, not by node. A virtualized row's node comes and goes as the window scrolls; the
-// row it stands for does not. So this module remembers "row `r7`, column `budget`" or "bar for
-// item `e3:1`", not an `HTMLElement`. It re-resolves the element fresh after every frame, the same
+// row it stands for does not. So this module remembers "row `r7`, column `budget`" or "bar
+// `e3:1`", not an `HTMLElement`. It re-resolves the element fresh after every frame, the same
 // reason `ContainerDom` never keys off node identity either (I8). A row or bar that no longer
 // exists (filtered away, collapsed away) falls back to its nearest surviving neighbour.
 //
-// Focusing a bar picks it; focusing a grid row clears the pick (Q-A11Y-3). `SegmentSelection`
-// already answers "which Segments does this bar/row stand for" (`selectableSegmentsOf`) — this
+// Focusing a bar picks it; focusing a grid row clears the pick (Q-A11Y-3). `EntrySelection`
+// already answers "which Entries does this bar/row stand for" (`selectableEntriesOf`) — this
 // module only decides when to ask, never re-derives the answer.
 
 import {
@@ -27,8 +27,8 @@ import {
   ROW_LABEL_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset, segmentIdFromDataset } from '../model/index.js';
-import type { EntryId, FieldKey, ItemId, RowId, SegmentId } from '../model/index.js';
+import { entryIdOfBar, barIdFromDataset, rowIdFromDataset } from '../model/index.js';
+import type { EntryId, FieldKey, BarId, RowId } from '../model/index.js';
 import type { EntryHit } from './entry-gesture-context.js';
 import type { Panes } from './pane-layout.js';
 
@@ -45,7 +45,7 @@ export interface RovingFocusRow {
 /** `GanttShell`'s one seam back for this module (mirrors `TreeCollapseContext`'s shape). Every
  *  member is a closure or a snapshot read, so this module never holds a stale collaborator. */
 export interface RovingFocusPorts {
-  /** The current frame's rows, in row order — the same list `TreeCollapse` and `SegmentSelection`
+  /** The current frame's rows, in row order — the same list `TreeCollapse` and `EntrySelection`
    *  already read. */
   plannedRows(): readonly RovingFocusRow[];
   /** Grid columns, in paint order — index 0 is the row-label column. */
@@ -56,8 +56,8 @@ export interface RovingFocusPorts {
   rowsPerPage(): number;
   collapseRow(id: RowId): void;
   expandRow(id: RowId): void;
-  /** Q-A11Y-3: focusing a bar or a grid row proposes the Segments that focus stands for — the same
-   *  `SegmentSelection.selectableSegmentsOf` a pointer hit already asks. */
+  /** Q-A11Y-3: focusing a bar or a grid row proposes the Entries that focus stands for — the same
+   *  `EntrySelection.selectableEntriesOf` a pointer hit already asks. */
   selectOnFocus(hit: EntryHit): void;
   /** `ColumnChrome`'s own "which header cell is focused" — the same fact
    *  `Shift+ArrowLeft`/`Alt+ArrowLeft` already gate on (S5.7, D-S5-18). Keyboard-stepping into or
@@ -67,12 +67,9 @@ export interface RovingFocusPorts {
    *  row's node exists to focus the instant this call returns. `index` (not `id`): a caller already
    *  has it, off `plannedRows()`'s own order. */
   revealRow(index: number): void;
-  /** Scrolls the given Entry or Segment's own span into view (both axes) and renders
-   *  synchronously — the timeline pane's own row-reveal, plus the time axis. A focused bar passes
-   *  its own Segment's id, not the owning Entry's. An Entry's full span can run wider than the one
-   *  Segment the bar draws. Revealing the whole Entry would pan away from a Segment already on
-   *  screen. */
-  revealEntry(id: EntryId | SegmentId): void;
+  /** Scrolls the given Entry's own span into view (both axes) and renders synchronously — the
+   *  timeline pane's own row-reveal, plus the time axis. */
+  revealEntry(id: EntryId): void;
 }
 
 type GridFocus = { pane: 'header'; field: FieldKey } | { pane: 'row'; rowId: RowId; field?: FieldKey };
@@ -84,7 +81,7 @@ export class RovingFocus {
   readonly #panes: Panes;
   readonly #ports: RovingFocusPorts;
   #gridFocus: GridFocus | undefined;
-  #timelineFocus: ItemId | undefined;
+  #timelineFocus: BarId | undefined;
   // `interaction/entry-gestures.ts` already owns selection for a pointer gesture. A bar click, a
   // row click, and a drag that keeps a multi-select all decide selection on their own pointerup
   // (D-S3-19). The pointerdown that starts one of those also moves real focus as its default
@@ -349,7 +346,7 @@ export class RovingFocus {
     }
     this.#ports.setFocusedColumn(undefined);
     // A pointer gesture on this same row already proposed its own selection on pointerup
-    // (`interaction/entry-gestures.ts`, D-S3-19). A row click selects every Segment the row owns.
+    // (`interaction/entry-gestures.ts`, D-S3-19). A row click selects every Entry the row owns.
     // A drag that grabs an already-selected bar keeps that selection through the drag.
     // Re-proposing here from focus alone would narrow either one back down.
     if (fromPointer) return;
@@ -442,7 +439,7 @@ export class RovingFocus {
     if (bars.length === 0) return;
     const current = this.#timelineFocus;
     const currentIndex =
-      current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['itemId'] === current);
+      current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['barId'] === current);
 
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const target = this.#nearestBarInAdjacentRow(bars, currentIndex, event.key === 'ArrowDown' ? 1 : -1);
@@ -466,7 +463,7 @@ export class RovingFocus {
     if (event.key === ' ' && !event.shiftKey) {
       if (current === undefined) return;
       event.preventDefault();
-      this.#ports.selectOnFocus({ kind: 'bar', itemId: current });
+      this.#ports.selectOnFocus({ kind: 'bar', barId: current });
     }
   }
 
@@ -478,10 +475,10 @@ export class RovingFocus {
   }
 
   #rowIdOfBar(bar: HTMLElement): RowId | undefined {
-    const itemIdAttr = bar.dataset['itemId'];
-    const id = itemIdFromDataset(itemIdAttr);
+    const barIdAttr = bar.dataset['barId'];
+    const id = barIdFromDataset(barIdAttr);
     if (id === undefined) return undefined;
-    return this.#ports.rowIdForEntry(entryIdOfItem(id));
+    return this.#ports.rowIdForEntry(entryIdOfBar(id));
   }
 
   /** The nearest bar one row up or down from the current one, skipping rows that draw no bar at all
@@ -505,23 +502,22 @@ export class RovingFocus {
     return undefined;
   }
 
-  /** The reveal target for a focused bar: the Segment it draws, when it draws one. That keeps a
-   *  discontiguous Entry's other Segments from pulling the pan wider than the one bar on screen.
-   *  A bar with no Segment (a group, a milestone, a plugin's own kind) has only its Entry to name. */
-  #revealTargetOfBar(bar: HTMLElement): EntryId | SegmentId {
-    const id = itemIdFromDataset(bar.dataset['itemId'])!;
-    return segmentIdFromDataset(bar.dataset['segmentId']) ?? entryIdOfItem(id);
+  /** The reveal target for a focused bar: the Entry it draws (ADR 0026 — one Entry draws one bar
+   *  by default, so the bar's own Entry is always the answer now). */
+  #revealTargetOfBar(bar: HTMLElement): EntryId {
+    const id = barIdFromDataset(bar.dataset['barId'])!;
+    return entryIdOfBar(id);
   }
 
   #focusBar(bar: HTMLElement): void {
-    const id = itemIdFromDataset(bar.dataset['itemId']);
+    const id = barIdFromDataset(bar.dataset['barId']);
     if (id === undefined) return;
     this.#timelineFocus = id;
-    this.#ports.selectOnFocus({ kind: 'bar', itemId: id });
+    this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     this.#ports.revealEntry(this.#revealTargetOfBar(bar));
     this.#applyTimelineTabIndex();
     this.#barElements()
-      .find((candidate) => candidate.dataset['itemId'] === id)
+      .find((candidate) => candidate.dataset['barId'] === id)
       ?.focus();
   }
 
@@ -533,14 +529,14 @@ export class RovingFocus {
     const fromPointer = this.#focusFromPointer;
     this.#focusFromPointer = false;
     if (!(event.target instanceof HTMLElement)) return;
-    const id = itemIdFromDataset(event.target.dataset['itemId']);
+    const id = barIdFromDataset(event.target.dataset['barId']);
     if (id === undefined || id === this.#timelineFocus) return;
     this.#timelineFocus = id;
     // Same reasoning as `#handleGridFocusIn`: a pointer gesture on this bar already proposed its
     // own selection on pointerdown/pointerup. A drag that grabs an already-selected bar keeps the
     // whole selection through the drag (D-S3-19) — this must not narrow it back down.
     if (fromPointer) return;
-    this.#ports.selectOnFocus({ kind: 'bar', itemId: id });
+    this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     // `revealEntry` scrolls and renders synchronously (its own doc comment) — right for a keyboard
     // arrival, which can land on a bar off screen. A pointer arrival never needs it: the user just
     // clicked this bar, so it is already visible, and `entry-gestures.ts`'s own drag start runs in
@@ -560,10 +556,10 @@ export class RovingFocus {
   #applyTimelineTabIndex(bars = this.#barElements()): void {
     const hadRealFocus =
       this.focusedElement() !== undefined || document.activeElement === this.#panes.timeline;
-    let target = bars.find((bar) => bar.dataset['itemId'] === this.#timelineFocus);
+    let target = bars.find((bar) => bar.dataset['barId'] === this.#timelineFocus);
     if (target === undefined) {
       target = bars[0];
-      this.#timelineFocus = target === undefined ? undefined : itemIdFromDataset(target.dataset['itemId']);
+      this.#timelineFocus = target === undefined ? undefined : barIdFromDataset(target.dataset['barId']);
     }
     if (target !== undefined) {
       target.tabIndex = 0;

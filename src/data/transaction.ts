@@ -11,7 +11,6 @@ import type {
   EntryId,
   FieldUpdated,
   HierarchySource,
-  SegmentId,
   StoreRowUpdated,
 } from '../model/index.js';
 import {
@@ -45,13 +44,12 @@ export interface TransactionalEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
+  /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */
+  committedChildIds(): ReadonlyMap<EntryId, readonly EntryId[]>;
   beginTransaction(token: TxToken): void;
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingEdits(): ProposedEdits;
-  /** Which of `start`/`end`/`segments` the body itself named on each pending edit, before
-   *  reconciliation added or paired the rest (#232) — see `EntryStore.pendingAuthoredEnvelopeKeys`. */
-  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>>;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
@@ -76,10 +74,7 @@ export interface TransactionData {
    *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
    *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5).
    *
-   *  Reports each Entry's authored envelope keys alongside the reconciled `ProposedEdits`, because the
-   *  commit path needs to tell the hook's own `start`/`end`/`segments` write from one
-   *  `reconcileEnvelope` derived on the hook's behalf, and `ProposedEdit.proposedKeys` conflates the two
-   *  (#232). `DatasetState.extraEditsReadingFor` is this method's one implementation; the friend function
+   *  `DatasetState.extraEditsReadingFor` is this method's one implementation; the friend function
    *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
    *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
   extraEditsReadingFor(request: EditRequest): EditsReading;
@@ -115,9 +110,6 @@ export interface TransactionData {
    *  a plugin that changes the tree has changed the Rollup and the two can never disagree. */
   readonly hierarchySource: HierarchySource;
   bumpDatasetRevision(): void;
-  /** The commit path's real counter (ADR 0012) — see `CommitChangeSetInput.mintSegmentId`, the
-   *  structurally-narrower shape `buildCommitChangeSet` actually reads. */
-  mintSegmentId(): SegmentId;
 }
 
 /**
@@ -152,14 +144,11 @@ function writeConstructionUpdates(data: TransactionData, updated: readonly Field
  */
 export function applyConstructionRollUp(data: TransactionData): void {
   const byId = data.entries.committedById();
-  const { updated } = rollUpFields(
-    byId,
-    undefined,
-    data.fields,
-    data.fieldAccess,
-    () => data.mintSegmentId(),
-    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
-  );
+  const { updated } = rollUpFields(byId, undefined, data.fields, data.fieldAccess, {
+    committedParents: data.entries.committedParents(),
+    committedChildIds: data.entries.committedChildIds(),
+    source: data.hierarchySource,
+  });
   writeConstructionUpdates(data, updated);
 
   const dropped = updated.filter((row) => row.to === undefined);

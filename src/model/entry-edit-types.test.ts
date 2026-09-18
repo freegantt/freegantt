@@ -22,15 +22,8 @@ describe('EntryEdit — an edit removes exactly what a stored Entry may lack (AD
     expect(edit).toBeDefined();
   });
 
-  it('does not compile: { name: undefined } — name is required on every stored Entry', () => {
-    // @ts-expect-error — name is not removable; a stored Entry always holds one.
+  it('compiles: { name: undefined } — name is optional on a stored Entry (#421 C5)', () => {
     const edit: EntryEdit = { name: undefined };
-    expect(edit).toBeDefined();
-  });
-
-  it('does not compile: { segments: undefined } — segments is `[]`, never absent', () => {
-    // @ts-expect-error — segments is not removable; an un-dated Entry stores `[]`, not absent.
-    const edit: EntryEdit = { segments: undefined };
     expect(edit).toBeDefined();
   });
 

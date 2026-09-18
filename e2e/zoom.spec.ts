@@ -19,24 +19,24 @@ test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)'
   const paneBefore = await pane.boundingBox();
   if (!paneBefore) throw new Error('missing bounding box');
 
-  // A bar near the pane's own centre, identified by its stable `data-item-id` (not DOM position,
+  // A bar near the pane's own centre, identified by its stable `data-bar-id` (not DOM position,
   // which windowing can reshuffle once `zoomBy` changes what's horizontally visible) and not
   // `.first()`: the page now loads panned to the today line with only `todayLineMarginTicks`' worth
   // of margin (S1.13 follow-up), so horizontal culling can drop the dataset's first entries from
   // the DOM outright, or clip them against the pane's own left edge — an edge case this test isn't
   // about.
-  const itemId = await page.evaluate(
+  const barId = await page.evaluate(
     (viewportX) => {
       const atAnchor = Array.from(document.querySelectorAll<HTMLElement>('.fg-bar')).find((el) => {
         const rect = el.getBoundingClientRect();
         return viewportX >= rect.left && viewportX <= rect.right;
       });
-      return atAnchor?.dataset['itemId'] ?? null;
+      return atAnchor?.dataset['barId'] ?? null;
     },
     paneBefore.x + paneBefore.width / 2,
   );
-  if (!itemId) throw new Error('no bar under the pane centre');
-  const bar = page.locator(`.fg-bar[data-item-id="${itemId}"]`);
+  if (!barId) throw new Error('no bar under the pane centre');
+  const bar = page.locator(`.fg-bar[data-bar-id="${barId}"]`);
   const barBefore = await bar.boundingBox();
   if (!barBefore) throw new Error('missing bounding box');
 
@@ -71,15 +71,15 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 
-  const itemId = await bar.getAttribute('data-item-id');
-  expect(itemId).toBeTruthy();
+  const barId = await bar.getAttribute('data-bar-id');
+  expect(barId).toBeTruthy();
 
   // Tag the live DOM node so a remount (a fresh element replacing it) is detectable even though
-  // the replacement would carry the same data-item-id.
+  // the replacement would carry the same data-bar-id.
   await page.evaluate((id) => {
-    const node = document.querySelector<HTMLElement>(`.fg-bar[data-item-id="${id}"]`)!;
+    const node = document.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${id}"]`)!;
     node.dataset['e2eMarker'] = 'still-here';
-  }, itemId);
+  }, barId);
 
   // Scoped to the header (S1.12, D-S1.12-9): the grid pane's spacer now mirrors one empty
   // `.fg-band` per header band too, so an unscoped `.fg-band` count would double-count.
@@ -92,9 +92,9 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
   await expect(page.locator('.fg-header .fg-band')).toHaveCount(2);
 
   const marker = await page.evaluate((id) => {
-    const node = document.querySelector<HTMLElement>(`.fg-bar[data-item-id="${id}"]`);
+    const node = document.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${id}"]`);
     return node?.dataset['e2eMarker'];
-  }, itemId);
+  }, barId);
   expect(marker).toBe('still-here');
 });
 

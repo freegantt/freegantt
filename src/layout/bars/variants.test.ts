@@ -1,20 +1,20 @@
 // ADR 0018: a variant is a rule. This file is the rule's own suite — which rule wins, what a field
-// match compares, and what the diagnostic reports. `produce-items.test.ts` is next door and asks a
+// match compares, and what the diagnostic reports. `produce-bars.test.ts` is next door and asks a
 // different question: what the row pass draws once a variant has been resolved.
 
 import { describe, expect, it } from 'vitest';
-import { itemId, segmentId } from '../../model/index.js';
-import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';
+import { barId } from '../../model/index.js';
+import type { Entry, Field, FieldKey } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import { bar, createVariantRegistry, diamond, summary } from './variants.js';
-import type { DoubleVariantClaim, UnknownFieldMatch } from './variants.js';
+import type { DoubleVariantMatch, UnknownFieldMatch } from './variants.js';
 
 function spanEntry(id: string, props: Record<string, unknown> = {}): Entry {
   return entryDouble({ id, start: 0, end: 10, props });
 }
 
 describe('which rule wins', () => {
-  it('answers the leaf variant for a row nothing claims, and the parent variant for a row with children', () => {
+  it('answers the leaf variant for a row nothing matches, and the parent variant for a row with children', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -59,7 +59,7 @@ describe('which rule wins', () => {
     expect(registry.resolveFor(t1).name).toBe('mine');
   });
 
-  it('claims a row added after the rule was installed — the bug the id set caused', () => {
+  it('matches a row added after the rule was installed — the bug the id set caused', () => {
     const registry = createVariantRegistry(declaring({ key: 'buffer' }));
     registry.addPluginVariant({ name: 'buffer', when: { buffer: true } });
 
@@ -95,7 +95,7 @@ describe('which rule wins', () => {
     expect(registry.resolveFor(child!).paint).toBe(paint);
   });
 
-  it('claims every row, core’s summary included, when the rule says so out loud', () => {
+  it('matches every row, core’s summary included, when the rule says so out loud', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const [parent] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -110,14 +110,14 @@ describe('which rule wins', () => {
 
 /** A Dataset that declares these keys and nothing else. A field match reads the registry, so a
  *  suite that matches on a key must say the key is declared — `() => undefined` is the answer for a
- *  Dataset with no Fields at all, and no match ever claims a row under it. */
+ *  Dataset with no Fields at all, and no match ever matches a row under it. */
 function declaring(...fields: readonly Field[]): { fieldFor: (key: FieldKey) => Field | undefined } {
   const byKey = new Map<FieldKey, Field>(fields.map((field) => [field.key, field]));
   return { fieldFor: (key) => byKey.get(key) };
 }
 
 describe('what a field match compares (J6)', () => {
-  it('claims the row whose value equals the one beside the key', () => {
+  it('matches the row whose value equals the one beside the key', () => {
     const registry = createVariantRegistry(declaring({ key: 'milestone' }));
     registry.addPluginVariant({ name: 'milestone', when: { milestone: true } });
 
@@ -156,7 +156,7 @@ describe('what a field match compares (J6)', () => {
     expect(strict.resolveFor(spanEntry('a', { status: 'blocked' })).name).toBe('leaf');
   });
 
-  it('claims no row at all when no Field declares the key (F2)', () => {
+  it('matches no row at all when no Field declares the key (F2)', () => {
     // `entry.read` throws on a key no Field declares, and this runs on every row of every layout
     // pass. A typo — and the one rule a chrome plugin cannot declare for itself — answers no.
     const registry = createVariantRegistry(declaring({ key: 'milestone' }));
@@ -191,11 +191,11 @@ describe('what a field match compares (J6)', () => {
   });
 });
 
-describe('what the double-claim diagnostic reports (J36)', () => {
-  function collecting(): { registry: ReturnType<typeof createVariantRegistry>; seen: DoubleVariantClaim[] } {
-    const seen: DoubleVariantClaim[] = [];
+describe('what the double-match diagnostic reports (J36)', () => {
+  function collecting(): { registry: ReturnType<typeof createVariantRegistry>; seen: DoubleVariantMatch[] } {
+    const seen: DoubleVariantMatch[] = [];
     return {
-      registry: createVariantRegistry({ fieldFor: () => undefined, reportDoubleClaim: (c) => seen.push(c) }),
+      registry: createVariantRegistry({ fieldFor: () => undefined, reportDoubleMatch: (c) => seen.push(c) }),
       seen,
     };
   }
@@ -242,7 +242,7 @@ describe('what the double-claim diagnostic reports (J36)', () => {
 });
 
 describe('what a variant answers about itself', () => {
-  it('draws one whole-entry Item with no `items` of its own, and its own producer with one', () => {
+  it('draws one whole-entry Bar with no `bars` of its own, and its own producer with one', () => {
     const registry = createVariantRegistry(declaring({ key: 'plain' }, { key: 'twin' }));
     const t1 = spanEntry('t1');
 
@@ -250,9 +250,9 @@ describe('what a variant answers about itself', () => {
     registry.addPluginVariant({
       name: 'twin',
       when: { twin: true },
-      items: (entry) => [
+      bars: (entry) => [
         {
-          id: itemId(entry.id, 7),
+          id: barId(entry.id, 7),
           entryId: entry.id,
           variant: 'twin',
           label: entry.name,
@@ -262,26 +262,24 @@ describe('what a variant answers about itself', () => {
       ],
     });
 
-    expect(registry.resolveFor(spanEntry('a', { plain: true })).items(t1, 'plain')).toHaveLength(1);
-    expect(registry.resolveFor(spanEntry('b', { twin: true })).items(t1, 'twin')[0]?.id).toBe(
-      itemId(t1.id, 7),
-    );
+    expect(registry.resolveFor(spanEntry('a', { plain: true })).bars(t1, 'plain')).toHaveLength(1);
+    expect(registry.resolveFor(spanEntry('b', { twin: true })).bars(t1, 'twin')[0]?.id).toBe(barId(t1.id, 7));
   });
 
-  it('answers the `paint` and `capabilities` of the rule that claimed the row, and nothing for core’s floor', () => {
+  it('answers the `paint` and `capabilities` of the rule that matched the row, and nothing for core’s floor', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const paint = (): undefined => undefined;
     const capabilities = { resize: false };
 
     registry.addPluginVariant({
       name: 'buffer',
-      when: (entry) => entry.id === 'claimed',
+      when: (entry) => entry.id === 'segmented',
       paint,
       capabilities,
     });
 
-    expect(registry.resolveFor(spanEntry('claimed')).paint).toBe(paint);
-    expect(registry.resolveFor(spanEntry('claimed')).capabilities).toBe(capabilities);
+    expect(registry.resolveFor(spanEntry('segmented')).paint).toBe(paint);
+    expect(registry.resolveFor(spanEntry('segmented')).capabilities).toBe(capabilities);
     expect(registry.resolveFor(spanEntry('other')).paint).toBeUndefined();
     expect(registry.resolveFor(spanEntry('other')).capabilities).toBeUndefined();
   });
@@ -299,46 +297,45 @@ describe('what a variant answers about itself', () => {
 
   it('reads `paint` off the rule that won, never off another rule of the same name (F3)', () => {
     // Two rules share one name and split the rows between them. A lookup by name answered with the
-    // newest rule's paint whichever one claimed the row.
+    // newest rule's paint whichever one matched the row.
     const registry = createVariantRegistry(declaring({ key: 'a' }));
     const first = (): undefined => undefined;
     const second = (): undefined => undefined;
-    registry.addConsumerVariant({ name: 'x', when: { a: 1 }, paint: first, items: () => [] });
+    registry.addConsumerVariant({ name: 'x', when: { a: 1 }, paint: first, bars: () => [] });
     registry.addConsumerVariant({ name: 'x', when: { a: 2 }, paint: second });
 
     const one = registry.resolveFor(spanEntry('one', { a: 1 }));
     expect(one.name).toBe('x');
     expect(one.paint).toBe(first);
-    expect(one.items(spanEntry('one', { a: 1 }), 'x')).toEqual([]);
+    expect(one.bars(spanEntry('one', { a: 1 }), 'x')).toEqual([]);
     expect(registry.resolveFor(spanEntry('two', { a: 2 })).paint).toBe(second);
   });
 
   it('lets a plugin re-skin core’s own `leaf`, and disposal restores core’s producer', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
-    const shipped = registry.resolveFor(t1).items;
+    const shipped = registry.resolveFor(t1).bars;
 
-    const dispose = registry.addPluginVariant({ name: 'leaf', items: () => [] });
-    expect(registry.resolveFor(t1).items(t1, 'leaf')).toEqual([]);
+    const dispose = registry.addPluginVariant({ name: 'leaf', bars: () => [] });
+    expect(registry.resolveFor(t1).bars(t1, 'leaf')).toEqual([]);
 
     dispose();
-    expect(registry.resolveFor(t1).items).toBe(shipped);
+    expect(registry.resolveFor(t1).bars).toBe(shipped);
   });
 });
 
 describe('core’s three shipped factories (ADR 0022 §1)', () => {
-  it('bar() answers the floor: no `when`, and `followSegments` as its `items`', () => {
+  it('bar() answers the floor: no `when`, and draws one Bar over the entry’s whole span (ADR 0026)', () => {
     const variant = bar();
     expect(variant.name).toBe('leaf');
     expect(variant.when).toBeUndefined();
     expect(variant.css).toBeUndefined();
-    // followSegments, not the whole-entry default: a Segment on the row draws its own Item.
-    const [item] = variant.items!(spanEntry('t1'), 'leaf');
-    expect(item!.variant).toBe('leaf');
-    expect(item!.segmentId).toBeDefined();
+    const bars = variant.bars!(spanEntry('t1'), 'leaf');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.variant).toBe('leaf');
   });
 
-  it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Item explicitly (ADR 0023)', () => {
+  it('summary() matches a row by structure, carries the rail’s own class and css, and states one whole-entry Bar explicitly (ADR 0023)', () => {
     const variant = summary();
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -349,28 +346,34 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-summary': true } });
     expect(variant.css).toContain('.fg-bar-summary');
 
-    // A parent may author several Segments of its own (`src/data/rollup.ts`). `summary()` still
-    // draws one rail, because it states `ignoreSegments` explicitly rather than trusting the
-    // registry's data-following default to agree.
-    const busyParent = entryDouble({
-      id: 'p2',
-      start: 0,
-      end: 10,
-      segments: [
-        { id: segmentId('p2-0'), start: 0 as Instant, end: 4 as Instant },
-        { id: segmentId('p2-1'), start: 6 as Instant, end: 10 as Instant },
-      ],
-    });
-    expect(variant.items!(busyParent, 'summary')).toHaveLength(1);
+    // `summary()` states its own `bars` explicitly rather than trusting the registry's default to
+    // agree — one rail over the parent's own span, whatever its children draw (ADR 0023, ADR 0026).
+    expect(variant.bars!(parent!, 'summary')).toHaveLength(1);
   });
 
-  it('diamond() claims a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
+  it('summary()’s `childrenAsSegments` draws no Bar for a segmented row’s subject (#421 C2, Q27)', () => {
+    const variant = summary();
+    const segmentedParent = entryDouble({ id: 'p3', start: 0, end: 10 });
+    expect(variant.bars!(segmentedParent, 'summary', true)).toEqual([]);
+    // The parameter is optional (a two-argument producer an author already wrote keeps compiling,
+    // ADR 0018): omitted, it still draws the rail.
+    expect(variant.bars!(segmentedParent, 'summary')).toHaveLength(1);
+  });
+
+  it('bar()’s `childrenAsSegments` draws no Bar for a segmented row’s subject (#421 C2, Q27)', () => {
+    const variant = bar();
+    const segmentedParent = spanEntry('p4');
+    expect(variant.bars!(segmentedParent, 'leaf', true)).toEqual([]);
+    expect(variant.bars!(segmentedParent, 'leaf')).toHaveLength(1);
+  });
+
+  it('diamond() matches a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
     const variant = diamond();
     const point = entryDouble({ id: 'm', start: 5, end: 5 });
     expect((variant.when as (entry: Entry) => boolean)(point)).toBe(true);
     expect((variant.when as (entry: Entry) => boolean)(spanEntry('span'))).toBe(false);
-    const [item] = variant.items!(point, 'diamond');
-    expect(item!.box).toEqual({ widthPx: 13, anchor: 'center' });
+    const [bar] = variant.bars!(point, 'diamond');
+    expect(bar!.box).toEqual({ widthPx: 13, anchor: 'center' });
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-diamond': true } });
     expect(variant.css).toContain('.fg-bar-diamond');
   });
@@ -407,7 +410,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.when).toEqual({ checkpoint: true });
     expect(variant.paint).toBe(paint);
     // Everything `overrides` left untouched still answers core's default.
-    expect(variant.items).toBeDefined();
+    expect(variant.bars).toBeDefined();
     expect(variant.css).toContain('.fg-bar-diamond');
   });
 
@@ -421,7 +424,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(registry.resolveFor(child!).name).toBe('leaf');
   });
 
-  it('a when-less consumer variant still loses to `summary()` on a row it claims, even at a higher rank (J60)', () => {
+  it('a when-less consumer variant still loses to `summary()` on a row it matches, even at a higher rank (J60)', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addConsumerVariant({ name: 'floor', paint: () => ({}) });
     const [parent, child] = entryDoubles([
@@ -429,7 +432,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
       { id: 'c', start: 0, end: 10, parentId: 'p' },
     ]);
     expect(registry.resolveFor(parent!).name).toBe('summary');
-    // The child has no claiming rule, so the newest when-less registration wins there instead.
+    // The child has no matching rule, so the newest when-less registration wins there instead.
     expect(registry.resolveFor(child!).name).toBe('floor');
   });
 

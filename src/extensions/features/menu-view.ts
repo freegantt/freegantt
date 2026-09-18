@@ -73,7 +73,7 @@ export function resolveMenuEntries(
  *  reads it off `event.target.closest('.fg-menu-item')`. D-S5-10: an `ElementDescription` never
  *  carries event handlers. So a container-level listener plus a data attribute is the read path
  *  every interactive `ElementDescription` in this codebase already uses, `render/dom/index.ts`'s own
- *  `data-item-id` for example.
+ *  `data-bar-id` for example.
  *
  *  Every `ResolvedMenuEntry` reaching this function already has its final `label`. That is
  *  `resolveMenuEntries`'s job, not this one's. */

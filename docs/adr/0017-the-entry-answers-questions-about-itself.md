@@ -6,6 +6,8 @@ open: nothing this redesign answers. **`Q2`** — whether the renderer contexts 
 
 > **Superseded in two statements by [ADR 0024](0024-parentid-answers-the-stored-value-on-every-door.md)**, ruled and built 2026-09-13 (#331). *A live row answers one tree*'s table row `parentId` → `parent()` (below) and its sentence "`entry.read('parentId')` answers `parent()?.id`" no longer hold, and neither does *one row, one tree, whichever door you ask through*: `read('parentId')` now answers the stored value, like every other key, on every door. The tree kept its own by-key door — `hierarchyParentId`, a new core Field — rather than `parentId` continuing to answer two different questions depending which door asked. **Do not rewrite the body.** Everything else in this ADR stands, `read()` as the one by-key value door included.
 
+> **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item` below as `Bar`. **Do not rewrite the body.**
+
 # The Entry answers questions about itself
 
 **This is the first of four ADRs that give one row one object.** [0018](0018-a-variant-is-a-rule-not-an-id-list.md) makes the variant a rule. [0019](0019-one-plugin-one-install-site.md) gives a plugin one install site. [0020](0020-a-plugin-may-own-the-hierarchy.md) lets a plugin say what the tree is. This one comes first, because all three of the others read questions off the row.

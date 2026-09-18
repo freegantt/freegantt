@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // S4.11 (plans/s4-hierarchy-and-rows/s4.11-harness-and-gate.md §2): hierarchy.html exercises tree
-// collapse, live row-source re-resolution, segmented drag + undo, and tree keyboard.
+// collapse, live row-source re-resolution, and tree keyboard.
 
 async function gotoHierarchy(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/hierarchy.html');
@@ -27,60 +27,11 @@ async function gotoHierarchyShort(page: import('@playwright/test').Page): Promis
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
 }
 
-async function entryWithSegments(page: import('@playwright/test').Page): Promise<string> {
-  const id = await page.evaluate(() => {
-    const entry = window.__dataset.entries.all.find(
-      (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
-    );
-    return entry === undefined ? undefined : String(entry.id);
-  });
-  if (id === undefined) throw new Error('the dataset has no multi-segment entry');
-  return id;
-}
-
-function barsForEntry(page: import('@playwright/test').Page, entryId: string) {
-  return page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
-}
-
-/** The left edge of every bar the locator matches, in DOM order — what a rigid drag shifts by one
- *  and the same delta (#200). */
-async function barLefts(bars: import('@playwright/test').Locator): Promise<number[]> {
-  const count = await bars.count();
-  const lefts: number[] = [];
-  for (let index = 0; index < count; index++) {
-    const box = await bars.nth(index).boundingBox();
-    expect(box).not.toBeNull();
-    lefts.push(box!.x);
-  }
-  return lefts;
-}
-
-async function showSegmentedSpan(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const entry = window.__dataset.entries.all.find(
-      (candidate) => candidate.segments !== undefined && candidate.segments.length > 1,
-    );
-    if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
-    window.__gantt.zoomToSpan({ start: entry.start!, end: entry.end! });
-  });
-  const entryId = await entryWithSegments(page);
-  await expect(barsForEntry(page, entryId).nth(1)).toBeVisible();
-}
-
-async function dragBarBy(
-  page: import('@playwright/test').Page,
-  bar: import('@playwright/test').Locator,
-  dx: number,
-): Promise<void> {
-  const box = await bar.boundingBox();
-  expect(box).not.toBeNull();
-  const x = box!.x + Math.min(box!.width / 2, 20);
-  const y = box!.y + box!.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y, { steps: 8 });
-  await page.mouse.up();
-}
+// Retired (ADR 0026, #421): `entryWithSegments`, `barsForEntry`, `barLefts`, `showSegmentedSpan` and
+// `dragBarBy` supported five multi-bar drag/resize/select tests that stood here. A Segment no longer
+// exists — an Entry now always draws exactly one Bar, and this page registers no plugin variant that
+// draws several for one Entry, so "the handle pair narrows to the picked bar" and "a row click moves
+// every bar of the entry" have no scenario left to exercise on this page.
 
 async function rowIds(page: import('@playwright/test').Page): Promise<string[]> {
   return page
@@ -128,251 +79,6 @@ test('[S4-A3] switching row source changes the row set and keeps the scroll offs
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBe(before);
 });
 
-test('a segment drag moves one bar and Undo restores it', async ({ page }) => {
-  await gotoHierarchy(page);
-  await page.evaluate(() => {
-    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
-  });
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  const bar = bars.nth(1);
-  const sibling = bars.first();
-  await expect(bar).toBeVisible();
-  const before = await bar.boundingBox();
-  const siblingBefore = await sibling.boundingBox();
-  expect(before).not.toBeNull();
-  expect(siblingBefore).not.toBeNull();
-
-  // #211: a click names the bar the pointer landed on — that bar is the pick, and only a pick's own
-  // Segment moves on the drag that follows. The three Segments overlap at this zoom, so the click
-  // goes through the mouse directly — a locator `click()` refuses to act while a sibling bar of the
-  // same Entry sits over the target's own centre.
-  await page.mouse.click(before!.x + Math.min(before!.width / 2, 20), before!.y + before!.height / 2);
-  await dragBarBy(page, bar, 120);
-
-  await expect
-    .poll(async () => {
-      const after = await bar.boundingBox();
-      return after !== null && Math.abs(after.x - before!.x) > 8;
-    })
-    .toBe(true);
-
-  const siblingAfter = await sibling.boundingBox();
-  expect(siblingAfter).not.toBeNull();
-  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
-
-  await page.click('#undo-btn');
-
-  await expect
-    .poll(async () => {
-      const restored = await bar.boundingBox();
-      return restored !== null && Math.abs(restored.x - before!.x);
-    })
-    .toBeLessThan(2);
-});
-
-test('a press-and-drag with nothing selected picks up the grabbed bar alone (#211, D-S4-30)', async ({
-  page,
-}) => {
-  await gotoHierarchy(page);
-  await page.evaluate(() => {
-    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
-  });
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  const bar = bars.nth(1);
-  const sibling = bars.first();
-  await expect(bar).toBeVisible();
-  const before = await bar.boundingBox();
-  const siblingBefore = await sibling.boundingBox();
-  expect(before).not.toBeNull();
-  expect(siblingBefore).not.toBeNull();
-
-  // Nothing is selected here — no prior click. A press-then-drag on the middle bar still picks up
-  // only that Segment: the drag arms into the Selection with that bar as its pick before it previews
-  // anything, so it never falls back to moving every Segment of an empty or stale Selection.
-  await dragBarBy(page, bar, 120);
-
-  await expect
-    .poll(async () => {
-      const after = await bar.boundingBox();
-      return after !== null && Math.abs(after.x - before!.x) > 8;
-    })
-    .toBe(true);
-
-  const siblingAfter = await sibling.boundingBox();
-  expect(siblingAfter).not.toBeNull();
-  expect(Math.abs(siblingAfter!.x - siblingBefore!.x)).toBeLessThan(2);
-
-  expect(await page.evaluate(() => window.__gantt.selectedEntryIds)).toEqual([entryId]);
-});
-
-test('a row click paints and moves every bar of the entry, and one Undo restores them all', async ({
-  page,
-}) => {
-  await gotoHierarchy(page);
-  await page.evaluate(() => {
-    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
-  });
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  await expect(bars.nth(1)).toBeVisible();
-  expect(await bars.count()).toBe(3);
-  const before = await barLefts(bars);
-
-  // #211: a grid-row click selects the whole Entry with no pick — every Segment paints selected, so
-  // the drag that follows steps every Segment by the same delta (D-S3-19).
-  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
-  await row.locator('.fg-row-cell').first().click();
-  await dragBarBy(page, bars.nth(1), 120);
-
-  await expect
-    .poll(async () => {
-      const after = await barLefts(bars);
-      return after.every((x, index) => Math.abs(x - before[index]!) > 8);
-    })
-    .toBe(true);
-
-  const moved = await barLefts(bars);
-  const deltas = moved.map((x, index) => x - before[index]!);
-  expect(Math.max(...deltas) - Math.min(...deltas)).toBeLessThan(2);
-
-  await page.click('#undo-btn');
-
-  await expect
-    .poll(async () => {
-      const restored = await barLefts(bars);
-      return Math.max(...restored.map((x, index) => Math.abs(x - before[index]!)));
-    })
-    .toBeLessThan(2);
-});
-
-test('the handle pair brackets the whole entry and the start handle grows its first bar', async ({
-  page,
-}) => {
-  await gotoHierarchy(page);
-  await page.evaluate(() => {
-    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
-  });
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  const first = bars.first();
-  const last = bars.nth(2);
-  // #211: hovering the bar shows the handle pair with no pick recorded for the Entry, so the pair
-  // brackets the envelope — a click here would instead pick this one bar and narrow the pair to it
-  // alone (see the picked-bar unit coverage in render/dom/index.test.ts).
-  const hoverBox = (await last.boundingBox())!;
-  await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + hoverBox.height / 2);
-
-  // The entry is wider than the pane, so its earliest bar starts left of the pane's own edge. Pan
-  // right-to-left until that bar — and the start handle on it — sits inside the pane.
-  await timelinePane(page).evaluate((el) => {
-    el.scrollLeft -= 400;
-    el.dispatchEvent(new Event('scroll'));
-  });
-  await expect.poll(async () => (await bars.first().boundingBox())!.x).toBeGreaterThan(600);
-
-  const startHandle = page.locator('#gantt .fg-bar-handle[data-edge="start"]');
-  const endHandle = page.locator('#gantt .fg-bar-handle[data-edge="end"]');
-  await expect(startHandle).toBeVisible();
-  await expect(endHandle).toBeVisible();
-
-  // #211: with no pick, a resize acts on the Entry's envelope, so the pair straddles all three bars.
-  const firstBefore = (await first.boundingBox())!;
-  const lastBefore = (await last.boundingBox())!;
-  const startBox = (await startHandle.boundingBox())!;
-  const endBox = (await endHandle.boundingBox())!;
-  expect(Math.abs(startBox.x + startBox.width / 2 - firstBefore.x)).toBeLessThan(6);
-  expect(Math.abs(endBox.x + endBox.width / 2 - (lastBefore.x + lastBefore.width))).toBeLessThan(6);
-
-  // Drag the start handle back: it moves the earliest Segment's start, nothing else.
-  const grabX = startBox.x + startBox.width / 2;
-  const grabY = startBox.y + startBox.height / 2;
-  await page.mouse.move(grabX, grabY);
-  await page.mouse.down();
-  await page.mouse.move(grabX - 60, grabY, { steps: 8 });
-  await page.mouse.up();
-
-  await expect
-    .poll(async () => {
-      const firstAfter = await first.boundingBox();
-      return firstAfter !== null && firstAfter.width - firstBefore.width;
-    })
-    .toBeGreaterThan(8);
-
-  // Only the earliest Segment grew: the latest one sits exactly where it did.
-  const lastAfter = (await last.boundingBox())!;
-  expect(Math.abs(lastAfter.x - lastBefore.x)).toBeLessThan(2);
-  expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);
-});
-
-test('clicking a bar narrows the handle pair to it, and a resize writes only that Segment (#211)', async ({
-  page,
-}) => {
-  await gotoHierarchy(page);
-  await page.evaluate(() => {
-    window.__gantt.preset = { ...window.__gantt.preset, snap: 'none' };
-  });
-  await showSegmentedSpan(page);
-
-  const entryId = await entryWithSegments(page);
-  const bars = barsForEntry(page, entryId);
-  const first = bars.first();
-  const last = bars.nth(2);
-
-  // #211: a click names the bar the pointer landed on — that bar is the pick, and the handle pair
-  // narrows to it alone, never the envelope. The three Segments overlap at this zoom, so the click
-  // goes through the mouse directly — a locator `click()` refuses to act while a sibling bar of the
-  // same Entry sits over the target's own centre.
-  const firstBox = (await first.boundingBox())!;
-  await page.mouse.click(firstBox.x + Math.min(firstBox.width / 2, 20), firstBox.y + firstBox.height / 2);
-
-  const startHandle = page.locator('#gantt .fg-bar-handle[data-edge="start"]');
-  const endHandle = page.locator('#gantt .fg-bar-handle[data-edge="end"]');
-  await expect(startHandle).toBeVisible();
-  await expect(endHandle).toBeVisible();
-
-  const lastBefore = (await last.boundingBox())!;
-  await expect
-    .poll(async () => {
-      const box = await endHandle.boundingBox();
-      return box === null ? null : Math.abs(box.x + box.width / 2 - (lastBefore.x + lastBefore.width));
-    })
-    .toBeGreaterThan(6); // the end handle sits on the picked (first) bar, not the envelope's last bar
-
-  const startBox = (await startHandle.boundingBox())!;
-  const endBox = (await endHandle.boundingBox())!;
-  expect(Math.abs(startBox.x + startBox.width / 2 - firstBox.x)).toBeLessThan(6);
-  expect(Math.abs(endBox.x + endBox.width / 2 - (firstBox.x + firstBox.width))).toBeLessThan(6);
-
-  // Drag the end handle: it grows the picked (first) Segment, and the latest Segment stays put.
-  const grabX = endBox.x + endBox.width / 2;
-  const grabY = endBox.y + endBox.height / 2;
-  await page.mouse.move(grabX, grabY);
-  await page.mouse.down();
-  await page.mouse.move(grabX + 60, grabY, { steps: 8 });
-  await page.mouse.up();
-
-  await expect
-    .poll(async () => {
-      const firstAfter = await first.boundingBox();
-      return firstAfter !== null && firstAfter.width - firstBox.width;
-    })
-    .toBeGreaterThan(8);
-
-  const lastAfter = (await last.boundingBox())!;
-  expect(Math.abs(lastAfter.x - lastBefore.x)).toBeLessThan(2);
-  expect(Math.abs(lastAfter.width - lastBefore.width)).toBeLessThan(2);
-});
-
 // S5.11, D-S5-26: the container itself carries no tabindex any more — `view/roving-focus.ts` owns
 // one tab stop per pane instead. Expand/collapse is the grid pane's own row arrows now, so focus
 // goes on the parent's `.fg-rows` row, not `#gantt` (same pattern e2e/plugins.spec.ts uses).
@@ -407,18 +113,18 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the parent row'
   await expect(gridRow).toBeFocused();
 });
 
-test("Delete on a parent's last Segment keeps the parent and its child (ADR 0012 supersedes #212, fix plan R3)", async ({
+test("Delete on a parent's own bar keeps the parent and its child (ADR 0012 supersedes #212, fix plan R3)", async ({
   page,
 }) => {
   await gotoHierarchy(page);
 
-  // `task-alpha-1` draws one Segment (its whole span) and owns `deep-leaf` as a child (fixtures/
-  // hierarchy-dataset.ts). Deleting that Segment no longer removes the Entry (ADR 0012): the row
+  // `task-alpha-1` draws one Bar (its whole span) and owns `deep-leaf` as a child (fixtures/
+  // hierarchy-dataset.ts). Deleting that Bar no longer removes the Entry (ADR 0012): the row
   // stays, and never had a reason to reparent `deep-leaf` in the first place.
   const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(before).toBe('task-alpha-1');
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="task-alpha-1:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="task-alpha-1:"]').first();
   await bar.click();
   await page.keyboard.press('Delete');
 
@@ -478,7 +184,63 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
   await page.evaluate((id: string) => {
     window.__gantt.reveal(id);
   }, newParentId);
-  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${newParentId}:"]`)).toHaveCount(1);
+  await expect(page.locator(`#gantt .fg-bar-summary[data-bar-id^="${newParentId}:"]`)).toHaveCount(1);
+});
+
+// #421 C7: "Framing crew" (`req-1`) draws three children as segments, each a real child Entry with its own
+// name, its own `hours`, and its own look — a real browser proof that a segmented row draws several
+// bars, that a bar prints its own text, that per-bar capabilities differ, and that a bar with no
+// name still draws (`fixtures/hierarchy-dataset.ts`, `harness/hierarchy.ts`'s `crewDayVariant`).
+test('a segmented row draws its children as bars, each with its own text, look and capabilities', async ({
+  page,
+}) => {
+  await gotoHierarchy(page);
+  await page.evaluate(() => window.__gantt.reveal('req-1'));
+
+  const monday = page.locator('[data-bar-id^="req-1-mon:"]');
+  const wednesday = page.locator('[data-bar-id^="req-1-wed:"]');
+  await expect(monday).toHaveText('Ali');
+  await expect(page.locator('[data-bar-id^="req-1-tue:"]')).toHaveText('Ben');
+  await expect(wednesday).toHaveText('Cy');
+  await expect(monday).toHaveClass(/crew-day-filled/);
+  await expect(wednesday).toHaveClass(/crew-day-open/);
+
+  // The row total: `hours` rolls up over all three children onto the segmented row's own cell.
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1"] [data-field="hours"]')).toHaveText('20');
+
+  // Cy's day is locked: dragging its right edge refuses. `end` is the field a resize actually
+  // writes — `hours` is a stored prop no resize gesture here ever touches, so it would hold steady
+  // whether or not the capability gate did its job (#421 F3).
+  const wednesdayBox = await wednesday.boundingBox();
+  expect(wednesdayBox).not.toBeNull();
+  const wedEndBefore = await page.evaluate(() => Number(window.__dataset.entries.get('req-1-wed')!.end));
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width / 2,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+  );
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width - 2,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width + 40,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  const wedEndAfter = await page.evaluate(() => Number(window.__dataset.entries.get('req-1-wed')!.end));
+  expect(wedEndAfter).toBe(wedEndBefore);
+
+  // A bar with no name still draws — "Site hold" carries no `name` at all.
+  await page.evaluate(() => window.__gantt.reveal('site-hold'));
+  await expect(page.locator('[data-bar-id^="site-hold:"]')).toHaveText('');
+
+  // One Field write opens the segmented row into three rows of its own, undoable like any other edit.
+  await page.click('#crew-days-btn');
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1-mon"]')).toBeVisible();
+  await page.click('#undo-btn');
+  await expect(page.locator('#gantt .fg-row[data-entry-id="req-1-mon"]')).toHaveCount(0);
 });
 
 async function newParentDepth(page: import('@playwright/test').Page, id: string): Promise<number> {

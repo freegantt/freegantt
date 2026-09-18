@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
-import { changeSetId, entryId, segmentId } from '../model/index.js';
+import { changeSetId, entryId } from '../model/index.js';
 import type { StoredEntry, EntryId, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
 import { createFieldAccess, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
-
-function span(start: number, end: number): { start: Instant; end: Instant } {
-  return { start: start as Instant, end: end as Instant };
-}
 
 function entry(id: string, props?: Record<string, unknown>): StoredEntry {
   return {
@@ -16,7 +12,6 @@ function entry(id: string, props?: Record<string, unknown>): StoredEntry {
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
-    segments: [{ id: segmentId(`${id}-seg`), start: 0 as Instant, end: 1 as Instant }],
     props: props ?? {},
   };
 }
@@ -42,16 +37,6 @@ describe('FieldRegistry.valuesEqual', () => {
     const shared = { note: 'x' };
     expect(registry.valuesEqual('undeclared', shared, shared)).toBe(true);
     expect(registry.valuesEqual('undeclared', { note: 'x' }, { note: 'x' })).toBe(false);
-  });
-
-  it('compares segments element-wise on start/end', () => {
-    const a = [span(0, 1)];
-    const b = [span(0, 1)];
-    const c = [span(0, 2)];
-    expect(registry.valuesEqual('segments', a, b)).toBe(true);
-    expect(registry.valuesEqual('segments', a, c)).toBe(false);
-    expect(registry.valuesEqual('segments', undefined, undefined)).toBe(true);
-    expect(registry.valuesEqual('segments', a, undefined)).toBe(false);
   });
 
   it('falls back to Object.is for a declared Field without equals', () => {

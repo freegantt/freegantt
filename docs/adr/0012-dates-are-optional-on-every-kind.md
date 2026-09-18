@@ -6,6 +6,16 @@ open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The workin
 
 # Dates are optional on every kind
 
+> **Superseded in one clause by [ADR 0027](0027-a-spanning-entry-draws-a-bar.md)**, ruled
+> 2026-09-18 (#421). This ADR's decision line names a biconditional: *"an Entry spans iff both
+> `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans."* The first half
+> stands, unchanged. The second half named `Segment`, a type [ADR 0026](0026-the-segment-retires.md)
+> retired — ADR 0027 states what replaces it: a spanning Entry draws one Bar, on the row its
+> `parentId` names, unless a row source has claimed it. `EmptySegmentsError` and the *"never
+> empty"* Segment-count rule in this ADR's own §Consequences have no successor; there is nothing
+> left to count. The optional-dates decision itself — one date without the other is legal — stands
+> as written. **Do not rewrite the body.**
+
 > **One sentence here is retired.** The paragraph on the duration Field cites ADR 0014 *decision 13* for deleting `FieldContext.durationOf`. The author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](README.md#the-gap-at-0014)), so `durationOf` still ships and [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) is still open. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) closes both. **The guard this ADR asked for landed, and the decision stands.**
 
 **This ADR carries no open decision, and it lands second**, after [ADR 0016](0016-the-library-holds-no-save-format.md). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands. **There is no Document**, so this ADR writes no schema number.

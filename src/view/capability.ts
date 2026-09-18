@@ -98,12 +98,12 @@ function gestureIsOffered(): boolean {
  *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
  *  sets nothing.
  *
- *  A drag also writes `segments`, and this asks nothing about that Field. `segments` is not a second
- *  value the user aims at. It is where the same span is stored, and `draftForResize` recomputes the
- *  envelope from it (`layout/gesture-draft.ts`).
+ *  A leaf bar is one child Entry (ADR 0026). A drag writes that Entry's own `start`/`end` directly.
+ *  There is no separate envelope Field to keep in step with it, the way `segments` once needed
+ *  (`layout/gesture-draft.ts`'s `draftForResize`/`draftForMove`).
  *
- *  `data/` owns what may be written there. A direct envelope write on a multi-Segment Entry raises
- *  `SegmentsOutOfSyncError`, because an envelope alone names no Segment to move. */
+ *  `data/` owns what may be written there. A write past the dragged edge's fixed side is refused
+ *  before it reaches a changeset (D-S3-4). */
 function mayWriteTheDatesItSets(
   capability: GestureCapability,
   entry: Entry,

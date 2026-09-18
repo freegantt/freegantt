@@ -11,7 +11,7 @@ import type { Duration } from './time.js';
 import type { Instant } from './time.js';
 import type { EntryId } from './ids.js';
 import type { FieldKey, FieldValue } from './field-key.js';
-import type { EntryInput, Segment } from './stored-entry.js';
+import type { EntryInput } from './stored-entry.js';
 
 /**
  * One row, as it stands now.
@@ -27,12 +27,16 @@ import type { EntryInput, Segment } from './stored-entry.js';
  */
 export interface Entry<TProps = Record<string, unknown>> {
   readonly id: EntryId;
+  /** Always a string, `''` when no author gave this row a name — a booking with no title is still
+   *  a row (#421 C5), and a reader should never write `entry.name ?? ''` to say so. The input and
+   *  the stored record both stay sparse: `EntryInput.name` is optional, `StoredEntry.name` is
+   *  omitted when unset, and `entry.read('name')` still answers `undefined` for a caller who has to
+   *  tell "unnamed" from "named empty". This one accessor is what normalizes (#421 F8). */
   readonly name: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` iff it draws a bar. */
   readonly start?: Instant | undefined;
   /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012). */
   readonly end?: Instant | undefined;
-  readonly segments: readonly Segment[];
 
   /** The one by-key value door: a core key, a `props` key, or a `compute` Field. Every answer is
    *  live, and every answer is what its Field declares: a stored key answers the stored value,

@@ -7,24 +7,21 @@
 
 import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
-import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
+import { FrameMemory } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import { entryIdOfItem } from '../model/index.js';
-import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
-import type { Item } from './items/item.js';
+import type { ChangeSet, EntryId, BarId, RowId } from '../model/index.js';
+import type { Bar } from './bars/bar.js';
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
  *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
  *  `EntryStoreView` makes over `EntryStore`. */
 export interface FrameLayoutView {
-  itemsForEntry(id: EntryId): readonly Item[];
-  itemIdsForEntry(id: EntryId): readonly ItemId[];
+  barsForEntry(id: EntryId): readonly Bar[];
+  barIdsForEntry(id: EntryId): readonly BarId[];
   entryIdsForRow(id: RowId): readonly EntryId[];
-  segmentIdsForItem(id: ItemId): readonly SegmentId[];
-  segmentIdsForRow(id: RowId): readonly SegmentId[];
   readonly frameRevision: number;
 }
 
@@ -48,7 +45,7 @@ export class FrameLayout implements FrameLayoutView {
   /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
    * layout holds this number beside it, and drops the cache once the layout has planned another
    * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
-   * the same thing: a bar keeps its `data-item-id` while the Segment under it changes. */
+   * the same thing: a bar keeps its `data-bar-id` while what it draws can still change underneath. */
   get frameRevision(): number {
     return this.#frameRevision;
   }
@@ -60,6 +57,7 @@ export class FrameLayout implements FrameLayoutView {
       ...(input.rows !== undefined ? { rows: input.rows } : {}),
       ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
       ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
+      ...(input.entryRulePorts !== undefined ? { entryRulePorts: input.entryRulePorts } : {}),
     });
     this.#indexOpenRows(open);
     this.#plan = stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));
@@ -98,48 +96,28 @@ export class FrameLayout implements FrameLayoutView {
     return this.#entryIdsOfRow.get(id) ?? NO_ENTRY_IDS;
   }
 
-  /** Every Item this entry draws, in the order its row produced them (#185, #295) — the full Item,
-   * box included, not just its id. `reveal` needs a boxed Item's own painted width (`barSpan` takes
-   * the whole `Item`), and this is the one place that answer comes from: the row memory
+  /** Every Bar this entry draws, in the order its row produced them (#185, #295) — the full Bar,
+   * box included, not just its id. `reveal` needs a boxed Bar's own painted width (`barSpan` takes
+   * the whole `Bar`), and this is the one place that answer comes from: the row memory
    * `computeFrame` already built. Empty when collapse hid the row, or when the entry draws nothing.
    * Producing a row on demand costs a memoized pass (`rowMemory`), acceptable here because reveal
    * is a gesture, not the hot path. */
-  itemsForEntry(id: EntryId): readonly Item[] {
+  barsForEntry(id: EntryId): readonly Bar[] {
     const rowId = this.#rowOfEntry.get(id);
     if (rowId === undefined) return [];
-    const items: Item[] = [];
-    for (const item of this.#memory.rowMemory(rowId).items) {
-      if (item.entryId === id) items.push(item);
+    const bars: Bar[] = [];
+    for (const bar of this.#memory.rowMemory(rowId).bars) {
+      if (bar.entryId === id) bars.push(bar);
     }
-    return items;
+    return bars;
   }
 
-  /** Every Item this entry draws, by id, in the order its row produced them (#185). It answers from
-   * the producer output, never from the `${entryId}:${segmentIndex}` id convention, so a plugin
-   * Kind that draws several Items from an entry with no Segments gets the same true answer. Empty
-   * when collapse hid the row, or when the entry draws nothing. */
-  itemIdsForEntry(id: EntryId): readonly ItemId[] {
-    return this.itemsForEntry(id).map((item) => item.id);
-  }
-
-  /** Every Segment this Item stands for (#212, ADR 0010) — the one answer, which the pointer path
-   * and the gesture path both read. An Item that drew one Segment names it alone; an Item that drew
-   * the Entry's whole span names every Segment of that Entry. It answers from the row memory that
-   * produced the Items, the same way `itemIdsForEntry` does, so no caller reads a Segment out of the
-   * `${entryId}:${segmentIndex}` id convention or off a rendered node, and this layout applies no
-   * Entry rule of its own (#230 R1). Empty for an Item no current frame planned. */
-  segmentIdsForItem(id: ItemId): readonly SegmentId[] {
-    const rowId = this.#rowOfEntry.get(entryIdOfItem(id));
-    if (rowId === undefined) return NO_SEGMENT_IDS;
-    return this.#memory.rowMemory(rowId).segmentIdsByItem.get(id) ?? NO_SEGMENT_IDS;
-  }
-
-  /** Every Segment of every Entry this row owns, in row order (#199, #212) — what a click on a row
-   * or on one of its cells stands for. Unfiltered, exactly like `entryIdsForRow`: it states what the
-   * row holds, and a caller applies its own capability rule. Empty for a grouping header row, and
-   * for a `RowId` no current frame planned. */
-  segmentIdsForRow(id: RowId): readonly SegmentId[] {
-    return this.#memory.segmentIdsOfEntries(this.entryIdsForRow(id));
+  /** Every Bar this entry draws, by id, in the order its row produced them (#185). It answers from
+   * the producer output, never from the `${entryId}:${partIndex}` id convention, so a plugin Kind
+   * that draws several Bars from one Entry gets the same true answer. Empty when collapse hid the
+   * row, or when the entry draws nothing. */
+  barIdsForEntry(id: EntryId): readonly BarId[] {
+    return this.barsForEntry(id).map((bar) => bar.id);
   }
 
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */

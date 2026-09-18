@@ -80,7 +80,8 @@ export interface DatasetOptions<TProps = unknown> {
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** How core measures a duration (ADR 0017, Q6/J12). `'span'` is `end - start`, and it counts a gap
-   *  between two Segments; `'segments'` sums the Segments and counts no gap. Defaults to `'span'`.
+   *  between children; `'children'` sums the children's own durations and counts no gap. Defaults to
+   *  `'span'`.
    *  `entry.duration()`, `ctx.duration()` and the core `duration` Field all read it. It sits on the
    *  Dataset and not on a Field: two Fields on one Dataset must not disagree about what a duration
    *  is. */

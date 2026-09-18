@@ -23,7 +23,7 @@ export function popupDemo(): PopupDemoPlugin {
    *  S5.3, D-S5-8: a plugin's `view()` half is the only place `ctx.view` reaches page scope.
    *
    *  It keeps `ctx.view.dom` beside the `Popup`: finding an entry's bar is the library's job.
-   *  `ctx.view.dom.barFor(id)` replaces the raw `#gantt .fg-bar[data-item-id="…"]` selector the two
+   *  `ctx.view.dom.barFor(id)` replaces the raw `#gantt .fg-bar[data-bar-id="…"]` selector the two
    *  harness pages used to write for themselves (review H2, N1). */
   let view: { popup: Popup; dom: GanttDom } | undefined;
 

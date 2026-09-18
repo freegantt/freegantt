@@ -42,7 +42,6 @@ import type {
   PluginId,
   ProposedEdit,
   RowId,
-  SegmentId,
   ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
@@ -77,8 +76,8 @@ export interface DateLineInput {
  *  public write door now that `ProposedEdit` is branded and no longer assignable to `EntryEdit` (ADR
  *  0011, decision 22). Every declared `props` key flattens back onto the top level, the same shape a
  *  caller would have authored by hand; `__brand`/`proposedKeys` drop, and `entries.update()` derives
- *  its own `proposedKeys` fresh from the keys this produces — an `Instant` is a valid `InstantInput`
- *  and a `Segment` a valid `SegmentInput`, so re-normalizing an already-resolved edit is a no-op. */
+ *  its own `proposedKeys` fresh from the keys this produces — an `Instant` is a valid `InstantInput`,
+ *  so re-normalizing an already-resolved edit is a no-op. */
 function entryEditFromProposedEdit<TProps>(edit: ProposedEdit<TProps>): EntryEdit<TProps> {
   const { __brand: _brand, props, proposedKeys: _proposedKeys, ...envelope } = edit;
   return { ...envelope, ...props };
@@ -135,9 +134,9 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
-  /** Live (S3, D-S3-10; ADR 0010, #212). Segment ids, loose on the way in; assignment runs the same
-   *  cancelable sequence a click runs. Default `[]`. */
-  selectedSegmentIds?: readonly (SegmentId | string)[];
+  /** Live (S3, D-S3-10; ADR 0010, ADR 0025, #212, #421). Entry ids, loose on the way in;
+   *  assignment runs the same cancelable sequence a click runs. Default `[]`. */
+  selectedEntryIds?: readonly (EntryId | string)[];
   /** Live (S3, D-S3-9). A gesture rule is a boolean or a per-entry predicate; `edit` takes the cell
    *  and may answer "no opinion" (#256). Both sit over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
@@ -152,7 +151,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
@@ -332,7 +331,7 @@ export class Gantt<TProps = unknown> {
       // `#frames.flush()`. `this` is captured, not read, so `ctx.gantt` is real by the time any
       // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
       // `buildPluginContext` already carries).
-      ...(options.selectedSegmentIds !== undefined ? { selectedSegmentIds: options.selectedSegmentIds } : {}),
+      ...(options.selectedEntryIds !== undefined ? { selectedEntryIds: options.selectedEntryIds } : {}),
       // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
       ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
       // ADR 0019: the Dataset's own plugins ride along. Their `view` halves belong to every Gantt
@@ -763,31 +762,25 @@ export class Gantt<TProps = unknown> {
     this.#shell.zoomPresets = refs;
   }
 
-  /** The Selection itself (ADR 0010, #212) — which Segments a click, the keyboard, or an assignment
-   *  selected. The pane a click lands in picks the unit: the timeline selects the Segment under the
-   *  pointer, and the grid pane selects every Segment of every Entry the row owns. Loose in, branded
-   *  out — the same asymmetry `dataset.entries.get/update/remove` already ship. Live: assignment runs
-   *  the same cancelable `beforeSelectionChange` → `selectionChange` sequence a click runs. */
-  get selectedSegmentIds(): readonly SegmentId[] {
+  /** The Selection itself (ADR 0010, ADR 0025, #212, #421) — which Entries a click, the keyboard, or
+   *  an assignment selected. The pane a click lands in picks the unit: the timeline selects the
+   *  Entry the clicked bar draws, and the grid pane selects every Entry the row owns. Loose in,
+   *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. Live:
+   *  assignment runs the same cancelable `beforeSelectionChange` → `selectionChange` sequence a
+   *  click runs. */
+  get selectedEntryIds(): readonly EntryId[] {
     return this.#shell.selection;
   }
 
-  set selectedSegmentIds(ids: readonly (SegmentId | string)[]) {
+  set selectedEntryIds(ids: readonly (EntryId | string)[]) {
     this.#shell.selection = ids;
-  }
-
-  /** The Selection read as records rather than drawings (ADR 0010, #212) — the Entries the selected
-   *  Segments belong to, deduped, in row order. Read-only: assign `selectedSegmentIds` to change what
-   *  is selected, because a Segment is the unit the user actually points at. */
-  get selectedEntryIds(): readonly EntryId[] {
-    return this.#shell.selectedEntryIds;
   }
 
   /** The Selection as records — the bound dataset's `Entry` for each id in `selectedEntryIds`, in
    *  the same order. Re-reads the store on every access, so field edits show up without a selection
    *  change. An id that no longer exists in the store is skipped — for example after
    *  `dataset.entries.remove` left a stale id in the selection set. To change which entries are
-   *  selected, assign `selectedSegmentIds`; this getter is read-only. */
+   *  selected, assign `selectedEntryIds`; this getter is read-only. */
   get selectedEntries(): readonly Entry<TProps>[] {
     const entries: Entry<TProps>[] = [];
     for (const id of this.selectedEntryIds) {
@@ -888,11 +881,11 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Brings into view what this id draws (#295). An `EntryId` reveals every bar or marker that
-   *  Entry paints right now, as one rectangle; a `SegmentId` reveals the one bar that stands for
-   *  that Segment. A row that paints nothing at the named dates reveals those dates instead.
-   *  An id the Dataset reads as neither throws `RevealTargetNotFoundError` (ADR 0010, #227). A plain
-   *  `string` is legal. The Dataset resolves the reading; nothing reads the brand. */
-  reveal(id: EntryId | SegmentId | string): void {
+   *  Entry paints right now, as one rectangle. A row that paints nothing at the named dates reveals
+   *  those dates instead. An id the Dataset reads as neither throws `RevealTargetNotFoundError`
+   *  (ADR 0010, #227). A plain `string` is legal. The Dataset resolves the reading; nothing reads
+   *  the brand. */
+  reveal(id: EntryId | string): void {
     this.#shell.reveal(id);
   }
 

@@ -6,7 +6,7 @@
 import type { Entry } from './entry.js';
 import type { EntryEdit, EntryInput, StoredEntry } from './stored-entry.js';
 import type { Field, FieldKey } from './field.js';
-import type { EntryId, SegmentId } from './ids.js';
+import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
 /** The Dataset's own read view onto its entries (D-S2-2). Every row it hands back is a live `Entry`
@@ -30,19 +30,6 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
    *  A reader asking what a row is worth **now** wants `get(id)` and the live `Entry`. This door
    *  exists for the one caller that must not read now: a cascade computing a delta. */
   readonly storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>;
-  /** The Entry that draws `id`, or `undefined` when no Entry does (ADR 0010, #212). Call:
-   *  `dataset.entries.entryIdOfSegment(segmentId)`. */
-  entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
-  /** Every Entry named by at least one id in `ids`, deduped, in the order first named (ADR 0010,
-   *  #212). Call: `dataset.entries.entryIdsOfSegments(selection)`. */
-  entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
-  /** Every Segment id these Entries draw, deduped, each Entry named once in the order first named,
-   *  and each Entry's own Segments in Entry order (ADR 0010, #212, finding 10) — the pair to
-   *  `entryIdsOfSegments`, which dedupes the same way, and the published way to select an Entry:
-   *  `gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([id])`. An id no Entry currently
-   *  draws, or an Entry already named, contributes nothing. Call:
-   *  `dataset.entries.segmentIdsOfEntries(ids)`. */
-  segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
 }
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
@@ -63,10 +50,6 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
   add(input: EntryInput<TProps>): Entry<TProps>;
   update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
-  /** Removes Segments in one transaction, across several Entries when `ids` names several (ADR
-   *  0010, #212). An Entry that keeps a Segment gets its envelope recomputed; an Entry whose last
-   *  Segment this removes is removed with it, in the same transaction. */
-  removeSegments(ids: readonly (SegmentId | string)[]): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

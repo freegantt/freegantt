@@ -26,7 +26,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const styles = read('src/view/styles.ts');
-const variants = read('src/layout/items/variants.ts');
+const variants = read('src/layout/bars/variants.ts');
 const doc = read('docs/05-consumer-api.md');
 
 // ---------------------------------------------------------------------------------------------
@@ -410,8 +410,8 @@ function classesIn(block: string): Set<string> {
 
 const sheetDefinedClasses = classesIn(baseBlock);
 const variantDefinedClasses = new Set([
-  ...classesIn(extractCssLiteral(variants, 'SUMMARY_CSS', 'src/layout/items/variants.ts')),
-  ...classesIn(extractCssLiteral(variants, 'DIAMOND_CSS', 'src/layout/items/variants.ts')),
+  ...classesIn(extractCssLiteral(variants, 'SUMMARY_CSS', 'src/layout/bars/variants.ts')),
+  ...classesIn(extractCssLiteral(variants, 'DIAMOND_CSS', 'src/layout/bars/variants.ts')),
 ]);
 const definedClasses = new Set([...sheetDefinedClasses, ...variantDefinedClasses]);
 

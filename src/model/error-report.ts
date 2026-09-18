@@ -70,16 +70,26 @@ export type BuiltInReportCode =
   // `'plugin'` for any other answer.
   | 'unknown-parent'
   | 'hierarchy-cycle'
-  // Q10, ADR 0018: two rules from one source both claimed one Entry's variant. The newest paints,
+  // Q10, ADR 0018: two rules from one source both matched one Entry's variant. The newest paints,
   // the other is ignored, and this names both. Raised in every build, not behind `isDevMode()` —
   // that flag resolves when this repo builds `dist/`, so gating it would delete the line from every
   // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
   // the rule walk stops at the first yes and never looks for a second.
-  | 'variant-claimed-twice'
-  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule claims no
+  | 'variant-matched-twice'
+  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule matches no
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.
   | 'unknown-variant-field'
+  // Q29 (`plans/segment-is-a-bar/BUILD-LOG.md`): a row source's `childrenAsSegments` names a Field
+  // key no Field declares, so the rule matches no row. `unknown-variant-field`'s own rule always
+  // names a variant; `childrenAsSegments` is not one, so it gets its own code. Reported once per
+  // rule and key, and never thrown, for the same reason `unknown-variant-field` is not thrown.
+  | 'unknown-row-source-field'
+  // #421 F2: `barLabels.field` (on the Gantt, or on an `EntryVariant`) names a Field key no Field
+  // declares. Both are live and reassignable, and the lookup runs inside `render()`'s own rAF
+  // callback, where a throw reaches no consumer. The bar prints no label; reported once per field
+  // key, never thrown, and never per bar per frame.
+  | 'unknown-bar-label-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.
@@ -91,7 +101,6 @@ export type BuiltInReportCode =
   | 'no-date-value'
   | 'time-of-day'
   | 'unsaved-value'
-  | 'segmented-entry'
   | 'unreadable-value'
   | 'refused-write';
 
@@ -144,19 +153,34 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  to quote, only one of these.
  *
  *  `'data-changed'` — the rows the draft was measured from were replaced while a handler was still
- *  deciding. `'entry-gone'` — the entry the settle would write was removed. `'write-refused'` — the
- *  commit reached the store and the store said no. `'superseded'` — a new gesture armed before the
- *  handler decided. `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the
- *  handler decided.
+ *  deciding. `'entry-gone'` — the entry the settle would write was removed. `'superseded'` — a new
+ *  gesture armed before the handler decided. `'discarded'` — the user pressed Escape, or the Gantt
+ *  was destroyed, before the handler decided.
  *
  *  `severity` alone already tells "the user did this on purpose" (`'superseded'`, `'discarded'`,
- *  `severity: 'info'`) from "real work was lost" (the other three, `severity: 'warning'`) — see
- *  `buildGestureDroppedReport`. What `severity` cannot do is tell the three `'warning'` reasons apart
- *  from each other: `'data-changed'`, `'entry-gone'` and `'write-refused'` are three different
- *  failures a consumer may want to handle three different ways. `droppedReason` carries that,
- *  without matching on `message`'s English sentence (`ErrorReport.droppedReason`, branch review F2). */
+ *  `severity: 'info'`) from "real work was lost" (the other two, `severity: 'warning'`) — see
+ *  `buildGestureDroppedReport`. What `severity` cannot do is tell `'data-changed'` apart from
+ *  `'entry-gone'`: two different failures a consumer may want to handle two different ways.
+ *  `droppedReason` carries that, without matching on `message`'s English sentence
+ *  (`ErrorReport.droppedReason`, branch review F2).
+ *
+ *  `'inverted-span'` — an installed `EditExtender` cascaded an end that falls before its start.
+ *  Core refuses to store that and drops the gesture. The entry keeps its stored dates, so nothing
+ *  is lost but the gesture (#143, 2026-09-06: an inverted span is refused, never stored). This one
+ *  reports `by: <the plugin>` and carries the `InvertedSpanError` as `cause`; every other reason
+ *  reports `by: 'core'`.
+ *
+ *  A user gesture never raises it. `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge
+ *  at zero length, and `nudge()` runs the same draft, so neither a drag nor a key can invert a span.
+ *
+ *  ADR 0026 retired `'write-refused'`, which this used to carry, on the premise that the store only
+ *  ever refused an envelope-only cascade against a several-Segment Entry (D-S5-44). Branch review
+ *  F9 disproved it by running the case: `isEnvelopeRefusal` named two errors, and only
+ *  `SegmentsOutOfSyncError` died with the Segment. `InvertedSpanError` never was Segment-specific.
+ *  `'inverted-span'` replaces the retired name rather than restoring it, because the envelope the
+ *  old name described is gone and the condition it now reports is the one this name states. */
 export type GestureDroppedReason =
-  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
+  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'inverted-span';
 
 /** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
  *
@@ -179,20 +203,19 @@ export interface ErrorReport {
    *  consumer can show their own words without core's framing around them. */
   readonly reason?: string;
   /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and
-   *  `'entry-resize-dropped'` (#377). One of five closed reasons, never prose: a consumer reads this
+   *  `'entry-resize-dropped'` (#377). One of four closed reasons, never prose: a consumer reads this
    *  instead of matching `message`'s English sentence.
    *
    *  ```ts
    *  gantt.on('error', (report) => {
-   *    if (report.droppedReason === 'write-refused') retryFromLatest();
-   *    else if (report.droppedReason === 'entry-gone') return; // the entry is gone, nothing to retry
+   *    if (report.droppedReason === 'entry-gone') return; // the entry is gone, nothing to retry
    *    else if (report.droppedReason === 'data-changed') refreshDraftAndRetry();
    *  });
    *  ```
    *  `severity` alone already sorts `'superseded'`/`'discarded'` (`'info'`, the user's own doing) from
-   *  the other three (`'warning'`, real work lost) — see `GestureDroppedReason`'s own doc. What
-   *  `severity` cannot do is tell `'data-changed'` from `'entry-gone'` from `'write-refused'`, and
-   *  that is the distinction this field exists for. */
+   *  the other two (`'warning'`, real work lost) — see `GestureDroppedReason`'s own doc. What
+   *  `severity` cannot do is tell `'data-changed'` from `'entry-gone'`, and that is the distinction
+   *  this field exists for. */
   readonly droppedReason?: GestureDroppedReason;
   /** The entry the report is about, when it is about one. */
   readonly entryId?: EntryId;

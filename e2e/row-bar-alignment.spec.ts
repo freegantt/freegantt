@@ -26,7 +26,7 @@ test('every grid pane row lines up with its own bar in the timeline pane, centre
   // scroll, but the bar layer also culls on the horizontal viewport (S1.12's density floor,
   // D-S1.12-2/3, can make fitDataset's content wider than the pane, so a visible row can
   // legitimately have no bar in view at the current scroll position at some viewport widths).
-  // I9 only claims a row and its OWN entry's bar agree in y — not that every row has a bar.
+  // I9 only matches a row and its OWN entry's bar agree in y — not that every row has a bar.
   const pairs = await page.evaluate(() => {
     const rowTopByEntryId = new Map<string, { top: number; height: number }>();
     for (const row of Array.from(document.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'))) {
@@ -43,8 +43,8 @@ test('every grid pane row lines up with its own bar in the timeline pane, centre
       barHeight: number;
     }> = [];
     for (const bar of Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar'))) {
-      const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
-      const entryId = itemId?.split(':')[0];
+      const barId = bar.dataset['barId']; // "<entryId>:<segmentIndex>"
+      const entryId = barId?.split(':')[0];
       const row = entryId ? rowTopByEntryId.get(entryId) : undefined;
       if (entryId && row !== undefined) {
         const barBox = bar.getBoundingClientRect();

@@ -12,8 +12,8 @@ ruleTester.run('model-is-types-only', rule, {
   valid: [
     'export type EntryId = string & { readonly __brand: "EntryId" };',
     'export function entryId(value: string): EntryId { return value as EntryId; }',
-    'export function itemIdFromDataset(value: string | undefined): ItemId | undefined { return value === undefined ? undefined : (value as ItemId); }',
-    'export function entryIdOfItem(id: ItemId): EntryId { const sep = id.lastIndexOf(":"); return entryId(sep < 0 ? id : id.slice(0, sep)); }',
+    'export function barIdFromDataset(value: string | undefined): BarId | undefined { return value === undefined ? undefined : (value as BarId); }',
+    'export function entryIdOfBar(id: BarId): EntryId { const sep = id.lastIndexOf(":"); return entryId(sep < 0 ? id : id.slice(0, sep)); }',
     'import type { Entry } from "./entry.js";',
     'import { type Entry } from "./entry.js";',
     {

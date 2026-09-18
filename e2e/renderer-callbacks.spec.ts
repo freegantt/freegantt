@@ -12,7 +12,7 @@ test('barRenderer paints a milestone diamond and gridCellRenderer paints an over
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // ADR 0022: `diamond()` is core's own shipped glyph. The page's variant (still named `diamond`,
-  // not `milestone` — F10) claims the marked rows with a plain `diamond({ when: { milestone: true }
+  // not `milestone` — F10) matches the marked rows with a plain `diamond({ when: { milestone: true }
   // })`, and `diamond()`'s own `css` draws the glyph on `.fg-bar-diamond::before`. The purple fill
   // is an ordinary, unlayered `.fg-bar-diamond { --fg-bar-fill: … }` rule in `plugins.html`'s own
   // `<style>` block — no `paint` override, and nothing reads a paint back (F9).
@@ -34,7 +34,7 @@ test('barRenderer paints a milestone diamond and gridCellRenderer paints an over
   // remounted.
   const milestoneNodeId = await milestoneBar.evaluate((el) => {
     (el as HTMLElement & { __probe?: true }).__probe = true;
-    return el.getAttribute('data-item-id');
+    return el.getAttribute('data-bar-id');
   });
 
   await page.locator('#renderers-toggle').uncheck();
@@ -42,7 +42,7 @@ test('barRenderer paints a milestone diamond and gridCellRenderer paints an over
   await expect(page.locator('#gantt .fg-bar.fg-bar-diamond')).toHaveCount(0);
   await expect(page.locator('#gantt [data-field="cost"] .demo-over-budget')).toHaveCount(0);
 
-  const sameBar = page.locator(`#gantt .fg-bar[data-item-id="${milestoneNodeId}"]`);
+  const sameBar = page.locator(`#gantt .fg-bar[data-bar-id="${milestoneNodeId}"]`);
   await expect(sameBar).toHaveCount(1);
   const stillProbed = await sameBar.evaluate(
     (el) => (el as HTMLElement & { __probe?: true }).__probe === true,

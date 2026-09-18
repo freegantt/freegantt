@@ -1,7 +1,7 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from 'freegantt';
 import type { DatasetEventMap } from 'freegantt';
-import { demoEntryInputs, separateSegments } from '../fixtures/demo-dataset.js';
+import { demoEntryInputs, segmentChildrenOf } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -19,15 +19,19 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing'
 const LOCKABLE_ENTRY_ID = 'entry-15';
 const locks = lockEntries();
 
-// #241: the locked Entry draws three Segments on purpose. A cascade that wrote `{ start, end }`
-// would refuse here — an envelope names no Segment to move, so core has nothing to translate
-// (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44) — and the demo would teach the shape the
-// library rejects. So the page locks the hard case, and `lock-entries.ts` answers it with
-// `moveEntryTo`. All three bars ghost together when `entry-14` drags.
-const lockDemoEntryInputs = demoEntryInputs.map((entry) =>
+// #241, ADR 0026: the locked row draws three bars on purpose, and each of them is a child Entry the
+// row draws as a segment. That is the hard case for a cascade — three separate spans to translate, not one
+// envelope — and locking it is what makes the demo worth watching: all three bars ghost together
+// when `entry-14` drags, then the drop is refused.
+//
+// The three legs are what the lock holds, not their parent. A parent's dates roll up from its
+// children (ADR 0013), so they are not the parent's to write; `lock-entries.ts` cascades with
+// `moveEntryTo`, which writes the dates an Entry holds itself.
+const LOCKED_BAR_IDS = ['entry-15-a', 'entry-15-b', 'entry-15-c'] as const;
+const lockDemoEntryInputs = demoEntryInputs.flatMap((entry) =>
   entry.id === LOCKABLE_ENTRY_ID && entry.start !== undefined
-    ? { ...entry, segments: separateSegments(entry.start) }
-    : entry,
+    ? [{ ...entry, start: undefined, end: undefined }, ...segmentChildrenOf(LOCKABLE_ENTRY_ID, entry.start)]
+    : [entry],
 );
 
 const dataset = new Dataset({ entries: lockDemoEntryInputs, timeZone: 'UTC', plugins: [locks] });
@@ -36,6 +40,9 @@ const mobilization = now();
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
+  // What decides which parents draw their children as bars on their own row? This rule (#421). It
+  // names the one parent this page splits, so every other Entry keeps drawing its own single bar.
+  rowSource: { source: 'entries', childrenAsSegments: (entry) => entry.id === LOCKABLE_ENTRY_ID },
   todayLine: false,
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
@@ -119,7 +126,7 @@ holdDrop.addEventListener('change', () => {
 // it (#156) — which is what a plugin store buys over a `Set` on the page (D-S5-24).
 lockEntryCheckbox.addEventListener('change', () => {
   attemptMutation(() =>
-    lockEntryCheckbox.checked ? locks.lock(LOCKABLE_ENTRY_ID) : locks.unlock(LOCKABLE_ENTRY_ID),
+    LOCKED_BAR_IDS.forEach((id) => (lockEntryCheckbox.checked ? locks.lock(id) : locks.unlock(id))),
   );
 });
 

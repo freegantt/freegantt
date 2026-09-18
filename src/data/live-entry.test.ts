@@ -171,35 +171,55 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
   });
 
   // The Dataset says how core measures a duration (Q6/J12). A Gantt may not: duration is a Field,
-  // and the Rollup reads it before any Gantt exists.
+  // and the Rollup reads it before any Gantt exists. ADR 0026 retired the Segment `'segments'`
+  // measure; `'children'` is its replacement — it sums each direct child's own span instead.
   const withGap: DatasetStateOptions['entries'] = [
-    {
-      id: 'gapped',
-      name: 'Gapped',
-      start: 0,
-      end: 4 * MS.DAY,
-      segments: [
-        { start: 0, end: MS.DAY },
-        { start: 3 * MS.DAY, end: 4 * MS.DAY },
-      ],
-    },
+    { id: 'gapped', name: 'Gapped', start: 0, end: 4 * MS.DAY },
+    { id: 'c1', name: 'Child 1', parentId: 'gapped', start: 0, end: MS.DAY },
+    { id: 'c2', name: 'Child 2', parentId: 'gapped', start: 3 * MS.DAY, end: 4 * MS.DAY },
   ];
 
-  it("counts the gap under 'span' and skips it under 'segments'", () => {
+  it("counts the gap under 'span' and skips it under 'children'", () => {
     const span = datasetOf({ entries: withGap, measureDuration: 'span' });
-    const segments = datasetOf({ entries: withGap, measureDuration: 'segments' });
+    const children = datasetOf({ entries: withGap, measureDuration: 'children' });
 
     expect(rowOf(span, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
-    expect(rowOf(segments, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
+    expect(rowOf(children, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
   });
 
-  it('makes the two settings agree on one Segment with no gap', () => {
+  it('makes the two settings agree on one child with no gap', () => {
     const whole: DatasetStateOptions['entries'] = [
-      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY, segments: [{ start: 0, end: 2 * MS.DAY }] },
+      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY },
+      { id: 'only', name: 'Only child', parentId: 'whole', start: 0, end: 2 * MS.DAY },
     ];
     const span = datasetOf({ entries: whole, measureDuration: 'span' });
-    const segments = datasetOf({ entries: whole, measureDuration: 'segments' });
+    const children = datasetOf({ entries: whole, measureDuration: 'children' });
 
-    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(segments, 'whole').duration());
+    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(children, 'whole').duration());
+  });
+});
+
+// #421 F8: `entry.name` is the one accessor that normalizes. A consumer reads text and gets text,
+// so nothing downstream writes `entry.name ?? ''` — the branch review found four harness sites and
+// one in `extensions/features/tooltips.ts` doing exactly that. Storage and input stay sparse, and
+// the Field door still answers `undefined`, so "unnamed" is still a question anyone can ask.
+describe('an Entry with no name (#421 C5, F8)', () => {
+  const unnamed = () =>
+    rowOf(datasetOf({ entries: [{ id: 'u', start: '2026-01-01', end: '2026-01-02' }] }), 'u');
+
+  it("reads '' — never undefined, never the string 'undefined'", () => {
+    expect(unnamed().name).toBe('');
+  });
+
+  it("still answers undefined through read('name'), so 'unnamed' stays askable", () => {
+    expect(unnamed().read('name')).toBeUndefined();
+  });
+
+  it('stays sparse in toInput: a round-trip never invents a name', () => {
+    expect('name' in unnamed().toInput()).toBe(false);
+  });
+
+  it('reads back the authored name when there is one', () => {
+    expect(rowOf(datasetOf(), 'p').name).toBe('Parent');
   });
 });

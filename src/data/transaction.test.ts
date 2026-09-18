@@ -6,10 +6,8 @@ import {
   MutationCancelledError,
   MutationDuringExtensionHookError,
   MutationDuringNotificationError,
-  SegmentsOutOfSyncError,
   UnknownFieldError,
   entryId,
-  segmentId,
 } from '../model/index.js';
 import type { ChangeSet, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
@@ -120,7 +118,6 @@ describe('runTransaction', () => {
           name: 't9',
           start: 0 as never,
           end: 1 as never,
-          segments: [{ id: segmentId('t9-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
         state.entries.stageRemove(token, entryId('t9'));
@@ -148,7 +145,6 @@ describe('runTransaction', () => {
           name: 'reborn',
           start: 0 as never,
           end: 1 as never,
-          segments: [{ id: segmentId('t1-reborn-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
       },
@@ -220,7 +216,6 @@ describe('runTransaction', () => {
           name: 'child',
           start: 0 as never,
           end: 1 as never,
-          segments: [{ id: segmentId('child-seg'), start: 0 as never, end: 1 as never }],
           props: {},
         });
         sizeDuring = state.entries.size;
@@ -795,8 +790,15 @@ describe('runTransaction', () => {
 // #212 R2 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
 // `ProposedEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
 // onto `start`/`end`.
-describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-plan review)', () => {
-  it("pairs a plugin's direct start/end write onto the Entry's one Segment, the same as entries.update()", () => {
+//
+// Retired (ADR 0026, #421): the envelope invariant used to guard a several-Segment Entry — a plugin
+// (or `entries.update()`) writing `start` or `end` alone against one had to move every Segment in
+// step, or `SegmentsOutOfSyncError` refused the write. A Segment is an ordinary child Entry now, so
+// there is no several-Segment single Entry left to guard, and `SegmentsOutOfSyncError` is gone with
+// it. The two refusal tests this used to run are deleted; the three tests below keep their surviving
+// questions, rewritten against a plain one-span Entry with no `segments` array.
+describe('the EditExtender seam writes start/end the same as entries.update() (#212 R2 fix-plan review)', () => {
+  it("pairs a plugin's direct start/end write onto the Entry's own span, the same as entries.update()", () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-02' }],
       timeZone: 'UTC',
@@ -821,74 +823,6 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
     const entry = state.entries.get(entryId('t1'))!;
     expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
     expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
-    expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
-  });
-
-  it(
-    'refuses a plugin writing start alone against a several-Segment Entry, the same as ' +
-      'entries.update() (unified at D-S5-44; a computed answer was tried and rejected)',
-    () => {
-      const state = new DatasetState({
-        entries: [
-          {
-            id: 't1',
-            name: 't1',
-            start: '2026-01-01',
-            end: '2026-01-10',
-            segments: [
-              { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
-              { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
-            ],
-          },
-        ],
-        timeZone: 'UTC',
-        editExtender: (): EntryEdits =>
-          new Map<ReturnType<typeof entryId>, EntryEdit>([
-            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
-          ]),
-      });
-
-      expect(() =>
-        runTransaction(
-          state,
-          (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
-          'user',
-        ),
-      ).toThrow(SegmentsOutOfSyncError);
-    },
-  );
-
-  it('refuses a plugin writing both start and end against a several-Segment Entry, whatever duration they imply', () => {
-    const state = new DatasetState({
-      entries: [
-        {
-          id: 't1',
-          name: 't1',
-          start: '2026-01-01',
-          end: '2026-01-10',
-          segments: [
-            { id: 'sg1', start: '2026-01-01', end: '2026-01-05' },
-            { id: 'sg2', start: '2026-01-05', end: '2026-01-10' },
-          ],
-        },
-      ],
-      timeZone: 'UTC',
-      editExtender: (): EntryEdits =>
-        new Map<ReturnType<typeof entryId>, EntryEdit>([
-          [
-            entryId('t1'),
-            { start: toInstant('UTC', '2026-01-03'), end: toEndInstant('UTC', '2026-01-04', 'inclusive') },
-          ],
-        ]),
-    });
-
-    expect(() =>
-      runTransaction(
-        state,
-        (token) => state.entries.stageUpdate(token, entryId('t1'), edit({ name: 'a' })),
-        'user',
-      ),
-    ).toThrow(SegmentsOutOfSyncError);
   });
 
   it(
@@ -915,13 +849,6 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
             // reconciliation-target bug this test is about.
             start: toInstant('UTC', '2026-01-01'),
             end: toInstant('UTC', '2026-03-01'),
-            segments: [
-              {
-                id: segmentId('sg1'),
-                start: toInstant('UTC', '2026-01-01'),
-                end: toInstant('UTC', '2026-03-01'),
-              },
-            ],
             props: {},
           }),
         'user',
@@ -930,14 +857,10 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       // Before the fix, `byId` (committed, pre-transaction state) held nothing for `t1`, so the
       // extender's cascade reconciled against `undefined` and passed through unreconciled — and
       // separately, `addedEntitiesForFold` only overlaid hierarchy edits, so even a correctly
-      // reconciled cascade never reached the entity the changeset published. One Segment (rather than
-      // several) keeps this test about that reconciliation-target bug, not about the several-Segment
-      // envelope-only refusal a different pair of tests above covers.
+      // reconciled cascade never reached the entity the changeset published.
       const entry = state.entries.get(entryId('t1'))!;
       expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
-      expect(entry.segments).toHaveLength(1);
-      expect(entry.segments[0]!.start).toBe(toInstant('UTC', '2026-02-01'));
-      expect(entry.segments[0]!.end).toBe(entry.end);
+      expect(entry.end).toBe(toInstant('UTC', '2026-03-01'));
     },
   );
 
@@ -945,25 +868,17 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
     "hands the hook `entryAfterEdits`, which sees this transaction's own body rewrite, not just " +
       '`entries` — the pre-transaction snapshot the hook is no longer graded against alone (D-S5-45)',
     () => {
-      let sawSegmentCount: number | undefined;
+      let sawStartAtHookTime: unknown;
       const state = new DatasetState({
-        entries: [
-          {
-            id: 't1',
-            name: 't1',
-            start: '2026-01-01',
-            end: '2026-01-10',
-            segments: [{ id: 'sg1', start: '2026-01-01', end: '2026-01-10' }],
-          },
-        ],
+        entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-10' }],
         timeZone: 'UTC',
         editExtender: (request): EntryEdits => {
-          // The pre-transaction snapshot still shows one Segment — this is the split the hook must not
-          // be graded against (`entries.get` alone answers the wrong question here).
-          expect(request.entries.get(entryId('t1'))?.segments).toHaveLength(1);
+          // The pre-transaction snapshot still shows the original start — this is the rewrite the hook
+          // must not be graded against (`entries.get` alone answers the wrong question here).
+          expect(request.entries.get(entryId('t1'))?.start).toBe(toInstant('UTC', '2026-01-01'));
           // F19: a plain string, not `entryId('t1')` — `entryAfterEdits` is loose on this scalar id
           // (#305).
-          sawSegmentCount = request.entryAfterEdits('t1')?.segments.length;
+          sawStartAtHookTime = request.entryAfterEdits('t1')?.start;
           return new Map();
         },
       });
@@ -971,38 +886,16 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       runTransaction(
         state,
         (token) =>
-          state.entries.stageUpdate(
-            token,
-            entryId('t1'),
-            edit({
-              segments: [
-                {
-                  id: segmentId('sg1'),
-                  start: toInstant('UTC', '2026-01-01'),
-                  end: toInstant('UTC', '2026-01-04'),
-                },
-                {
-                  id: segmentId('sg2'),
-                  start: toInstant('UTC', '2026-01-04'),
-                  end: toInstant('UTC', '2026-01-07'),
-                },
-                {
-                  id: segmentId('sg3'),
-                  start: toInstant('UTC', '2026-01-07'),
-                  end: toInstant('UTC', '2026-01-10'),
-                },
-              ],
-            }),
-          ),
+          state.entries.stageUpdate(token, entryId('t1'), edit({ start: toInstant('UTC', '2026-01-04') })),
         'user',
       );
 
-      expect(sawSegmentCount).toBe(3);
+      expect(sawStartAtHookTime).toBe(toInstant('UTC', '2026-01-04'));
     },
   );
 
   it(
-    'a body-authored start and an EditExtender-cascaded end on a one-Segment Entry commit as one ' +
+    'a body-authored start and an EditExtender-cascaded end on the same Entry commit as one ' +
       'row per field, not two rows for the same field with two different `to` values (#232)',
     () => {
       const state = new DatasetState({
@@ -1030,7 +923,6 @@ describe('the EditExtender seam owes the envelope invariant too (#212 R2 fix-pla
       const entry = state.entries.get(entryId('t1'))!;
       expect(entry.start).toBe(toInstant('UTC', '2026-01-05'));
       expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
-      expect(entry.segments).toEqual([{ id: entry.segments[0]!.id, start: entry.start, end: entry.end }]);
     },
   );
 });

@@ -16,8 +16,8 @@ export function attachKeyboardEditing(container: HTMLElement, ctx: EntryGestureC
     const grabbed = ctx.selection.entryIds()[0];
     if (grabbed === undefined) return; // nothing picked — no bar to nudge
 
-    // #212: `Mod+Arrow` steps the Selection between the Segments of one row, and the keymap owns it
-    // (`freegantt.selectNextSegment`). A nudge never reads a chord the keymap already answered.
+    // #212: `Mod+Arrow` steps the Selection between the Entries of one row, and the keymap owns it
+    // (`freegantt.selectNextEntry`). A nudge never reads a chord the keymap already answered.
     if (e.ctrlKey || e.metaKey) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
 

@@ -93,7 +93,6 @@ describe('structure decides derivation (ADR 0013)', () => {
     expect(p1.name).toBe('p1');
     expect(p1.start).toBeUndefined();
     expect(p1.end).toBeUndefined();
-    expect(p1.segments).toEqual([]);
     expect(state.entries.get('p1')?.children() ?? []).toEqual([]);
   });
 

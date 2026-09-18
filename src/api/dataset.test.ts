@@ -50,16 +50,9 @@ describe('new Dataset()', () => {
     expect(first(chicago).start).toBe(utc('2026-09-01T05:00:00Z'));
   });
 
-  it('gives an entry authored without segments one Segment, with a minted id (#212)', () => {
-    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
-    expect(dataset.entries.get('t1')?.segments).toHaveLength(1);
-  });
-
-  it('mints Segment ids from a per-instance counter — two Datasets never collide (I2)', () => {
-    const one = new Dataset({ timeZone: 'UTC', entries: [oneEntry({ id: 't1' })] });
-    const two = new Dataset({ timeZone: 'UTC', entries: [oneEntry({ id: 't1' })] });
-    expect(one.entries.get('t1')?.segments[0]?.id).toBe(two.entries.get('t1')?.segments[0]?.id);
-  });
+  // Retired (ADR 0026, #421): 'gives an entry authored without segments one Segment, with a minted
+  // id' and 'mints Segment ids from a per-instance counter' pinned `Entry.segments` and its minted
+  // ids. The `Segment` type no longer exists — an Entry has no stored classification and no internal parts.
 
   // A `Date` input is exercised in time/input.test.ts instead: I10 bans `new Date()` outside time/,
   // and that is the layer that actually reads one.
@@ -108,24 +101,9 @@ describe('new Dataset()', () => {
     }
   });
 
-  it('reads segment spans by the same rules as the entry span', () => {
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [
-        oneEntry({
-          segments: [
-            { start: '2026-09-01', end: '2026-09-02' },
-            { start: '2026-09-05', end: '2026-09-08' },
-          ],
-        }),
-      ],
-    });
-    // A Segment carries an id (#212), which this test is not about — compare spans only.
-    expect(first(dataset).segments.map(({ start, end }) => ({ start, end }))).toEqual([
-      { start: utc('2026-09-01T00:00:00Z'), end: utc('2026-09-03T00:00:00Z') },
-      { start: utc('2026-09-05T00:00:00Z'), end: utc('2026-09-09T00:00:00Z') },
-    ]);
-  });
+  // Retired (ADR 0026, #421): 'reads segment spans by the same rules as the entry span' pinned a
+  // `segments:` entry input, which no longer exists — an Entry's span is its own `start`/`end`,
+  // already covered by "reads a date-only end as inclusive by default" above.
 
   it('carries optional fields through, and leaves absent ones absent', () => {
     const dataset = new Dataset({
@@ -136,8 +114,7 @@ describe('new Dataset()', () => {
     const entry = dataset.entries.storedValues.get(first(dataset).id)!;
     expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
-    // `segments` is always present (#212): every Entry stores at least one Segment.
-    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'props', 'segments', 'start', 'name'].sort());
+    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'props', 'start', 'name'].sort());
   });
 
   it('does not mutate the entries the consumer handed it', () => {
@@ -407,9 +384,7 @@ describe('Dataset fields (S4.1)', () => {
     const fields = fieldRowsOf(changes[0]!)
       .map((row) => row.field)
       .sort();
-    // `t1` draws one Segment, so a `start` write moves that Segment with the envelope and the
-    // changeset carries the row (#212). Still one transaction, still one changeset.
-    expect(fields).toEqual(['cost', 'segments', 'start']);
+    expect(fields).toEqual(['cost', 'start']);
     expect(changes[0]?.updated).toContainEqual(
       expect.objectContaining({ field: 'cost', from: 400, to: 500 }),
     );

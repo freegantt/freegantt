@@ -83,20 +83,20 @@ const PIXEL_PROPERTIES: readonly PixelPropertyRead[] = Object.freeze([
 export const DEFAULT_TODAY_LINE_MARGIN_TICKS = 2;
 
 /** What a changed setting invalidates. The two structural answers are supersets of the third: a
- *  `rebindFields` and an `invalidateItems` each end in the same repaint `'repaint'` asks for. No
+ *  `rebindFields` and an `invalidateBars` each end in the same repaint `'repaint'` asks for. No
  *  setting needs both structural answers, so one value per setting says everything. */
-export type FrameInvalidation = 'none' | 'repaint' | 'rebindFields' | 'invalidateItems';
+export type FrameInvalidation = 'none' | 'repaint' | 'rebindFields' | 'invalidateBars';
 
 /** The Frame settings' seams back into `GanttShell`. Every name here is the shell's own port
  *  vocabulary, unchanged: `ColumnChromePorts` already says `requestFrame` and `rebindFields`, and
- *  `GanttShellPorts` already says `invalidateItems`. One word per job across all three. */
+ *  `GanttShellPorts` already says `invalidateBars`. One word per job across all three. */
 export interface FrameSettingsPorts {
   /** Paint again. What the frame draws changed; which rows exist did not. */
   requestFrame(): void;
   /** Resolve this Gantt's Fields again. A column's own text is produced at this locale. */
   rebindFields(): void;
-  /** Drop the cached row plan. Which rows exist changed, so no cached Item survives it. */
-  invalidateItems(): void;
+  /** Drop the cached row plan. Which rows exist changed, so no cached Bar survives it. */
+  invalidateBars(): void;
   /** Read one `--fg-*` property off the Container, in px (`render/dom/pixel-property.ts`). Injected
    *  rather than imported, so this module stays DOM-free. */
   readPixelProperty(property: string, policy: PixelPropertyPolicy): number;
@@ -164,7 +164,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   dateLines: 'repaint',
   dateLineLabelPlacement: 'repaint',
   todayLineMarginTicks: 'none',
-  rowSource: 'invalidateItems',
+  rowSource: 'invalidateBars',
   barLabels: 'repaint',
   barRenderer: 'repaint',
   gridCellRenderer: 'repaint',
@@ -324,21 +324,21 @@ export class FrameSettings {
     return changed;
   }
 
-  /** Runs the table for the keys that changed. `rebindFields` and `invalidateItems` each finish with
+  /** Runs the table for the keys that changed. `rebindFields` and `invalidateBars` each finish with
    *  the repaint a plain `'repaint'` asks for, and each runs at most once per `set`. */
   #invalidate(changed: readonly FrameSettingKey[]): void {
     let repaint = false;
     let rebindFields = false;
-    let invalidateItems = false;
+    let invalidateBars = false;
     for (const key of changed) {
       const effect = INVALIDATION[key];
       if (effect === 'none') continue;
       if (effect === 'rebindFields') rebindFields = true;
-      if (effect === 'invalidateItems') invalidateItems = true;
+      if (effect === 'invalidateBars') invalidateBars = true;
       repaint = true;
     }
     if (rebindFields) this.#ports.rebindFields();
-    if (invalidateItems) this.#ports.invalidateItems();
+    if (invalidateBars) this.#ports.invalidateBars();
     if (repaint) this.#ports.requestFrame();
   }
 }

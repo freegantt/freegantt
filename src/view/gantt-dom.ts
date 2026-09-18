@@ -17,11 +17,11 @@
 // A layer's own rect left with it. `rowLayerBounds` sat here until #168 and now reads
 // `ctx.view.rowLayer.bounds` — the box belongs to the layer it describes.
 //
-// What this seam reads off a node, and what it asks for. A node states its own identity: which Item,
+// What this seam reads off a node, and what it asks for. A node states its own identity: which Bar,
 // which Row, which Field. Every *set* a target names is asked of the layout instead (#185, #199,
 // #212). A stamp is written for one frame, and a node outlives that frame. So a set read off a node
-// can describe the frame before this one. That is how a removed Segment made `targetUnder` name a
-// Segment the Dataset had dropped.
+// can describe the frame before this one. That is why `entryIds` always comes from the layout, never
+// from a node's own stamp.
 
 import {
   BAR_CLASS,
@@ -30,8 +30,8 @@ import {
   ENTRY_ID_KEY,
   FIELD_ATTRIBUTE,
   FIELD_KEY,
-  ITEM_ID_ATTRIBUTE,
-  ITEM_ID_KEY,
+  BAR_ID_ATTRIBUTE,
+  BAR_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
   ROW_ID_KEY,
@@ -39,8 +39,8 @@ import {
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryId, entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
-import type { Entry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
+import { entryId, entryIdOfBar, barIdFromDataset, rowIdFromDataset } from '../model/index.js';
+import type { Entry, EntryId, FieldKey, RowId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
 import type { FrameLayoutView } from '../layout/index.js';
@@ -66,16 +66,6 @@ export interface DomTarget {
   /** Every Entry this node stands for, in row order. Empty for a header cell, for the splitter, and
    *  for a grouping header row. Never `undefined`, so a reader counts it without a fallback. */
   entryIds: readonly EntryId[];
-  /** Every Segment this node stands for (#212, ADR 0010) — the pane picks the unit. A bar for one
-   *  Segment names that Segment alone. A bar for an Entry's whole span (a group, a milestone) names
-   *  every Segment of that Entry. A row, a cell and a name cell name every Segment of every Entry
-   *  the row owns, in row order. Empty for a header cell and the splitter. Never `undefined`, so a
-   *  reader counts it without a fallback — the same posture `entryIds` takes.
-   *
-   *  The layout answers, never the node's own `data-segment-id`. That stamp says which Segment a bar
-   *  draws right now, which is a different, narrower question. It also describes one frame, and a
-   *  bar node outlives a frame. */
-  segmentIds: readonly SegmentId[];
   field?: FieldKey;
 }
 
@@ -94,9 +84,9 @@ export interface GanttDom {
    *  stays over one bar resolves to the same frozen object every time, and allocates nothing. */
   targetUnder(node: Node): DomTarget | undefined;
   /** The first bar of `id` that the current frame has mounted. A popup or a tooltip anchors on it.
-   *  It asks the layout which Items the entry draws (#185). So an entry whose first Segment is
-   *  scrolled off still anchors on a Segment that is on screen. `undefined` when the entry has no
-   *  bar in the current frame at all. */
+   *  It asks the layout which Bars the entry draws (#185). So an entry whose first bar is scrolled
+   *  off still anchors on a later bar that is on screen. `undefined` when the entry has no bar in
+   *  the current frame at all. */
   barFor(id: EntryId | string): HTMLElement | undefined;
   /** The rendered grid cell for one entry and one Field. `undefined` when that row is not in the
    *  current frame, or the Gantt shows no column for `field`. It is also the one answer to "is my
@@ -152,11 +142,12 @@ export class ContainerDom implements GanttDom {
    *  stamps go stale together with the node. Virtualization recycles a row node under a new entry,
    *  and the stamps say so before this seam hands the cached object back.
    *
-   *  The frame stamp catches what the node's own stamps cannot (#212). A bar keeps its
-   *  `data-item-id` while the Segment under it changes. So a removed Segment leaves every node stamp
-   *  equal, and the cached Segment set dead. One number compare per event, and no allocation (I5). */
+   *  The frame stamp catches what the node's own stamps cannot (#212). A row keeps its
+   *  `data-row-id`/`data-entry-id` while the set of Entries it owns changes underneath. A child
+   *  added or removed leaves every node stamp equal, and the cached `entryIds` set stale. One number
+   *  compare per event, and no allocation (I5). */
   #memoElement: Element | undefined;
-  #memoItemId: string | undefined;
+  #memoBarId: string | undefined;
   #memoEntryId: string | undefined;
   #memoField: string | undefined;
   #memoFrameRevision: number | undefined;
@@ -174,23 +165,23 @@ export class ContainerDom implements GanttDom {
     if (!(node instanceof Element)) return undefined;
     const element = node.closest<HTMLElement>(TARGET_SELECTOR);
     if (element === null || !this.owns(element)) return undefined;
-    const itemIdAttr = element.dataset[ITEM_ID_KEY];
+    const barIdAttr = element.dataset[BAR_ID_KEY];
     const entryIdAttr = element.dataset[ENTRY_ID_KEY];
     const fieldAttr = element.dataset[FIELD_KEY];
     const frameRevision = this.#ports.layout.frameRevision;
     if (
       this.#memoTarget !== undefined &&
       this.#memoElement === element &&
-      this.#memoItemId === itemIdAttr &&
+      this.#memoBarId === barIdAttr &&
       this.#memoEntryId === entryIdAttr &&
       this.#memoField === fieldAttr &&
       this.#memoFrameRevision === frameRevision
     ) {
       return this.#memoTarget;
     }
-    const target = this.#resolve(element, itemIdAttr, fieldAttr);
+    const target = this.#resolve(element, barIdAttr, fieldAttr);
     this.#memoElement = element;
-    this.#memoItemId = itemIdAttr;
+    this.#memoBarId = barIdAttr;
     this.#memoEntryId = entryIdAttr;
     this.#memoField = fieldAttr;
     this.#memoFrameRevision = frameRevision;
@@ -199,9 +190,9 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId | string): HTMLElement | undefined {
-    for (const item of this.#ports.layout.itemIdsForEntry(entryId(id))) {
+    for (const barId of this.#ports.layout.barIdsForEntry(entryId(id))) {
       const bar = this.#ports.container.querySelector<HTMLElement>(
-        `.${BAR_CLASS}${attributeIs(ITEM_ID_ATTRIBUTE, item)}`,
+        `.${BAR_CLASS}${attributeIs(BAR_ID_ATTRIBUTE, barId)}`,
       );
       if (bar !== null) return bar;
     }
@@ -232,30 +223,26 @@ export class ContainerDom implements GanttDom {
 
   /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it
    *  would poison every later reader of the same node. */
-  #resolve(element: HTMLElement, itemIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
+  #resolve(element: HTMLElement, barIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
     if (element.classList.contains(BAR_CLASS)) {
-      const id = itemIdFromDataset(itemIdAttr);
-      const entry = id === undefined ? undefined : this.#ports.entryById(entryIdOfItem(id));
-      // A bar draws one Entry, so the subject and the set it stands for are the same one Entry.
-      // Which Segments: the layout answers (#212). The bar's own `data-segment-id` says which
-      // Segment it draws right now, which is a narrower fact and goes stale under a recycled node.
+      const id = barIdFromDataset(barIdAttr);
+      const entry = id === undefined ? undefined : this.#ports.entryById(entryIdOfBar(id));
+      // A bar draws one Entry (#421), so the subject and the set it stands for are the same one Entry.
       return freezeTarget({
         kind: 'bar',
         element,
         entryIds: entry === undefined ? NO_ENTRY_IDS : [entry.id],
-        segmentIds: id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForItem(id),
         ...entryPart(entry),
       });
     }
     if (element.classList.contains(SPLITTER_CLASS)) {
-      return freezeTarget({ kind: 'splitter', element, entryIds: NO_ENTRY_IDS, segmentIds: NO_SEGMENT_IDS });
+      return freezeTarget({ kind: 'splitter', element, entryIds: NO_ENTRY_IDS });
     }
     if (element.classList.contains(COLUMN_HEADER_CLASS)) {
       return freezeTarget({
         kind: 'header',
         element,
         entryIds: NO_ENTRY_IDS,
-        segmentIds: NO_SEGMENT_IDS,
         ...fieldPart(fieldAttr),
       });
     }
@@ -265,7 +252,6 @@ export class ContainerDom implements GanttDom {
         kind: 'row',
         element,
         entryIds: this.#entryIdsOfRow(rowId),
-        segmentIds: this.#segmentIdsOfRow(rowId),
         ...entryPart(this.#subjectOfRow(element)),
       });
     }
@@ -278,7 +264,6 @@ export class ContainerDom implements GanttDom {
       kind: 'gridCell',
       element,
       entryIds: this.#entryIdsOfRow(rowId),
-      segmentIds: this.#segmentIdsOfRow(rowId),
       ...entryPart(row === null ? undefined : this.#subjectOfRow(row)),
       ...fieldPart(fieldAttr),
     });
@@ -294,18 +279,10 @@ export class ContainerDom implements GanttDom {
   #entryIdsOfRow(id: RowId | undefined): readonly EntryId[] {
     return id === undefined ? NO_ENTRY_IDS : this.#ports.layout.entryIdsForRow(id);
   }
-
-  /** Every Segment this row stands for. The layout answers this one too, for the same reason. */
-  #segmentIdsOfRow(id: RowId | undefined): readonly SegmentId[] {
-    return id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForRow(id);
-  }
 }
 
 /** Shared and frozen, so a target that stands for no Entry allocates nothing (I5). */
 const NO_ENTRY_IDS: readonly EntryId[] = Object.freeze([]);
-
-/** Shared and frozen, so a target that stands for no Segment allocates nothing (I5). */
-const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
 
 /** One `[name="value"]` selector clause, with the value escaped for the quoted string it sits in.
  *  Both id lookups above are one `querySelector` over these, because the CSS engine already indexes

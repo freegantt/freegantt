@@ -54,7 +54,7 @@ export function checkHierarchyAnswers(
   entries: ReadonlyMap<EntryId, StoredEntry>,
   parentIdOf: HierarchySource,
 ): CheckedHierarchy {
-  const claimed = new Map<EntryId, EntryId>();
+  const parentOf = new Map<EntryId, EntryId>();
   const refused: ErrorReportInput[] = [];
   for (const entry of entries.values()) {
     const parentId = parentIdFrom(parentIdOf, entry);
@@ -70,10 +70,10 @@ export function checkHierarchyAnswers(
       );
       continue;
     }
-    claimed.set(entry.id, parentId);
+    parentOf.set(entry.id, parentId);
   }
-  breakCycles(entries, claimed, refused);
-  return { parents: claimed, refused };
+  breakCycles(entries, parentOf, refused);
+  return { parents: parentOf, refused };
 }
 
 /** One answer core refused, worded for whoever gave it (`F4`).
@@ -102,28 +102,28 @@ function refuse(entry: StoredEntry, answer: EntryId, code: ReportCode, says: str
  *  author, and a stack overflow answers no question. */
 function breakCycles(
   entries: ReadonlyMap<EntryId, StoredEntry>,
-  claimed: Map<EntryId, EntryId>,
+  parentOf: Map<EntryId, EntryId>,
   refused: ErrorReportInput[],
 ): void {
   const settled = new Set<EntryId>();
   const walking = new Set<EntryId>();
   const chain: EntryId[] = [];
 
-  for (const start of claimed.keys()) {
+  for (const start of parentOf.keys()) {
     if (settled.has(start)) continue;
     chain.length = 0;
     let current: EntryId | undefined = start;
     while (current !== undefined && !settled.has(current) && !walking.has(current)) {
       walking.add(current);
       chain.push(current);
-      current = claimed.get(current);
+      current = parentOf.get(current);
     }
     // `current` is still being walked, so this chain arrived back at an Entry it already passed.
     // The last Entry in the chain is the one whose answer closed the loop.
     if (current !== undefined && walking.has(current)) {
       const closingId = chain[chain.length - 1]!;
       const closing = entries.get(closingId);
-      claimed.delete(closingId);
+      parentOf.delete(closingId);
       if (closing !== undefined) {
         refused.push(
           refuse(

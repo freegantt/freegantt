@@ -15,7 +15,7 @@
 //
 // Colour carries meaning here. Vermilion marks time, amber warns, violet marks keyboard focus — each
 // hue states one meaning only. Selection breaks that rule on purpose: it reuses the bar's own blue,
-// so a chosen item reads as "this data, picked". Role marks the difference — fill paints data,
+// so a chosen bar reads as "this data, picked". Role marks the difference — fill paints data,
 // outline paints selection — not hue.
 //
 // The values are the `Gantt demo sandbox rebuild` design's Light and Graphite token sets (its
@@ -447,13 +447,13 @@ ${DARK_COLOR_TOKENS}
   outline: 2px solid var(--fg-focus-ring);
   outline-offset: -2px;
 }
-/* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (ItemPreview.extra) — a second
+/* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (BarPreview.extra) — a second
    bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, ${DEFAULT_GHOST_OPACITY}); pointer-events: none; }
-/* The caller's own grabbed bar (ItemPreview.extra: false). It comes after 'pending' and 'ghost' so
+/* The caller's own grabbed bar (BarPreview.extra: false). It comes after 'pending' and 'ghost' so
    its opacity wins: a bar the pointer is carrying reads solid, whatever else it also is. */
 .fg-bar[data-state~="dragging"] { box-shadow: var(--fg-drag-shadow); opacity: 1; }
-/* D-S3-6: movableItemId's cursor is a boolean attribute, not an inline style — cursor is not one of
+/* D-S3-6: movableBarId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
 /* D-S3-8: one shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather

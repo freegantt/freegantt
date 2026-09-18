@@ -4,7 +4,7 @@ slug: /
 
 # FreeGantt — Guardrails Overview
 
-**Status:** Design. No code yet — this folder specifies the enforcement system that `plans/04` §3–§4 calls for, in enough detail that implementing it is mechanical.
+**Status:** Shipped. This folder specifies the enforcement system that `plans/04` §3–§4 calls for, and every layer below runs: 14 custom rules in `eslint/rules/`, 15 guard suites in `test/guards/`, and the whole gate runs in CI on every change (`04-hooks-and-ci.md`).
 
 **What this folder is:** the answer to "how do we make the rules in `plans/00`–`04` and `CLAUDE.md` *deterministic* — machine-checked, failing loudly, on every change — instead of things a reviewer has to remember."
 
@@ -16,6 +16,10 @@ slug: /
 | `03-boundaries-and-config.md` | dependency-cruiser, tsconfig, `exports` map, Vitest projects, package checks |
 | `04-hooks-and-ci.md` | Git hooks, Claude Code hooks, the CI pipeline, guard-test meta-suite |
 | `05-consumer-api.md` | Index for app authors — links README, `plans/02`, glossary, export report, S4 surface |
+| `06-plugin-authoring.md` | Plugin authoring guide — the two-halves shape, every registration seam, disposal |
+| `07-row-source-updates.md` | How to change one `rowSource` setting and keep the rest |
+| `08-a-bar-is-an-entry.md` | ADR-adjacent record of #421: a Bar is one child Entry by default |
+| `edit-extension-flow.md` | The extension hook — flow and sample usage for `data/edit-extension.ts` |
 
 ---
 
@@ -32,7 +36,7 @@ slug: /
 ```mermaid
 flowchart TB
   L1["<b>L1 — Types</b><br/>tsconfig strict flags · branded Instant<br/>sealed exports map · typed event union"]
-  L2["<b>L2 — Static analysis</b><br/>ESLint flat config: 10 builtin-restriction configs<br/>+ 9 custom rules in a local plugin<br/>dependency-cruiser layer graph"]
+  L2["<b>L2 — Static analysis</b><br/>ESLint flat config: 10 builtin-restriction configs<br/>+ 14 custom rules in a local plugin<br/>dependency-cruiser layer graph"]
   L3["<b>L3 — Tests</b><br/>Vitest projects (pure=node, dom=happy-dom)<br/>property tests · golden fixtures · isolation · guard-tests"]
   L4["<b>L4 — Hooks</b><br/>Claude Code PostToolUse/PreToolUse (agent-time)<br/>git pre-commit / pre-push (human-time)"]
   L5["<b>L5 — CI</b><br/>the same commands, no escape hatches<br/>+ api-report diff · size-limit · e2e/axe"]
@@ -91,11 +95,11 @@ A diagnostic behind this flag is not a warning that appears in development. It i
 - Our tests run with `DEV === true`, so the gated branch is the only branch they exercise. The suite is green and proves nothing about what a consumer gets.
 - Nobody reports the absence. A consumer cannot miss a line they have never seen.
 
-This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'variant-claimed-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
+This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'variant-matched-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
 
 **What it is legitimately for:** making *our own* development stricter, at a cost we do not want to charge a consumer. `transaction.ts` deep-freezes a ChangeSet so our tests catch a mutation. `build-commit-change-set.ts` asserts an extension hook did not overwrite the body. Both would still be correct if they never ran anywhere else. The test is: *would a consumer want this?* If yes, it must not be gated.
 
-**The replacement, when the answer is yes:** raise it through `raiseError` at `severity: 'warning'`, in every build. When the real concern is cost rather than noise, remove the cost by not asking the question — `produce-items.ts` stops its claim scan at the first match when no report sink is wired, rather than gating the report.
+**The replacement, when the answer is yes:** raise it through `raiseError` at `severity: 'warning'`, in every build. When the real concern is cost rather than noise, remove the cost by not asking the question — `produce-bars.ts` stops its claim scan at the first match when no report sink is wired, rather than gating the report.
 
 ## 6. Implementation order
 

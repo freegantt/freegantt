@@ -134,13 +134,13 @@ checkRedTestFile(
 // #287, review finding F7: dependency-cruiser matches *resolved* paths, so `pathNot:
 // '^src/api/index\.ts$'` — the clause that lets the `freegantt` alias through — cannot tell that
 // alias from a hand-written relative path naming the same file. This fixture lands one file short
-// of that clause (an internal, `src/layout/items/variants.ts`, same shape as `render/ ->
+// of that clause (an internal, `src/layout/bars/variants.ts`, same shape as `render/ ->
 // data/transaction.js` above): it proves the cruiser rule still blocks a relative reach past the
 // index, not that it can tell the index path itself from the alias. That second claim is
 // `eslint.config.js`'s job (F7's ESLint check, right below) — it reads the specifier text.
 checkRedTestFile(
   'harness/__boundary_red_test__.ts',
-  "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path,\n// and this lands one file short of the one exception (src/api/index.ts) the cruiser rule states.\nimport '../src/layout/items/variants.js';\nexport {};\n",
+  "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path,\n// and this lands one file short of the one exception (src/api/index.ts) the cruiser rule states.\nimport '../src/layout/bars/variants.js';\nexport {};\n",
   'harness/ -> src/ boundary violation (an internal, one file short of the index exception, #287)',
 );
 

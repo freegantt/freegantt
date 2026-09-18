@@ -11,6 +11,8 @@ keeps*.
 open: nothing this record answers.
 ---
 
+> **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item` below as `Bar`. **Do not rewrite the body.**
+
 # A variant with no `items` key follows the data
 
 [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) shipped
@@ -141,7 +143,7 @@ already ship from (`src/layout/index.ts`, re-exported from `src/api/index.ts`). 
 ## Rejected
 
 **(a) Keep the whole-entry default and add a `variant-drops-segments` diagnostic.** Non-breaking,
-following the shape `variant-claimed-twice` and `unknown-variant-field` already set. Rejected because
+following the shape `variant-matched-twice` and `unknown-variant-field` already set. Rejected because
 the only cure it hands an author is: read the diagnostic, then write the producer that should have
 been the default. It reports the defect on every affected page, forever, instead of closing it once.
 

@@ -176,7 +176,7 @@ the message names the Dataset as the site to use instead
 ## Why a factory, not a name-keyed table (D-S5-2)
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
-object. FreeGantt has no registry that variants a plugin up by a string name.
+object. FreeGantt has no registry that looks a plugin up by a string name.
 A factory carries its own configuration as ordinary function arguments and
 closure state, so two installations of the same plugin with different
 settings need no second, parallel config path — the arguments already are
@@ -193,8 +193,8 @@ plugins claim the same key.
 | --- | --- | --- | --- |
 | `commands.register(command)` | `command.id` | Newest wins; falls back to the older one on dispose | `src/extensions/commands.test.ts` |
 | `interaction.registerKeybinding(binding)` | `binding.chord` | Newest-first resolution; falls back on dispose | `src/extensions/keymap.test.ts` |
-| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/items/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
-| `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: second plugin claiming whole bar point throws, naming both plugin ids" |
+| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/bars/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
+| `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
 | `fields.register(field)` | `field.key` | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
@@ -212,7 +212,7 @@ reserved, or `undefined` if that plugin never reserved one.
 
 Every `register*` and `fields.register*` call is legal only while that
 plugin's own half is running. The moment that half returns, the gate closes for
-that plugin (`src/extensions/plugin-ports.test.ts` names this
+that plugin (`src/view/plugin-ports.test.ts` names this
 "buildPluginPorts — D-S5-4 gate"; `src/extensions/install-dataset-plugins.ts`
 carries the matching "closes the gate the moment setup returns" test for the
 `data` half).

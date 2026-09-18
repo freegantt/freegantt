@@ -122,9 +122,9 @@ function refusalSentence(event: RefusalEvent, reason: string | undefined): strin
  *  what each member means. `buildGestureDroppedReport` reads no `RefusalNote` for any of them: this
  *  is never a consumer's own veto, so there are no words to quote.
  *
- *  The first three (`'data-changed'`, `'entry-gone'`, `'write-refused'`) only happen to a gesture a
- *  handler still holds. `'entry-gone'` and `'write-refused'` also happen on a plain mouseup that
- *  commits in its own tick, so their sentences below say what happened and never when (#341). */
+ *  `'data-changed'` and `'entry-gone'` only happen to a gesture a handler still holds. `'entry-gone'`
+ *  also happens on a plain mouseup that commits in its own tick, so its sentence below says what
+ *  happened and never when (#341). */
 export interface GestureDroppedReportInit {
   /** Which of the two gesture events dropped — mints this report's own code (#377): a dropped
    *  gesture is not a refusal, so it must never carry `refusal.code`, which
@@ -133,15 +133,18 @@ export interface GestureDroppedReportInit {
   readonly event: BeforeGestureEvent;
   readonly entryId: EntryId;
   readonly droppedReason: GestureDroppedReason;
+  /** The refusal core raised, for the one reason that has one to hand (`'inverted-span'`). It gives
+   *  a consumer the offending entry id and both instants without parsing `message`. */
+  readonly cause?: unknown;
 }
 
 /** One sentence per reason, quoting no handler — core is the one talking. */
 const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.freeze({
   'data-changed': 'the rows it was measured from changed while the handler was still deciding',
   'entry-gone': 'the entry it would have written was removed before the write',
-  'write-refused': 'the store refused the write it asked for',
   superseded: 'a new gesture took its place before the handler decided',
   discarded: 'the wait ended before the handler decided',
+  'inverted-span': 'an installed extender asked for an end before its start, which core never stores',
 });
 
 /** This report's own code, one per gesture kind (#377) — never a refusal's code, which names an
@@ -155,8 +158,8 @@ const GESTURE_DROPPED_CODE: Record<BeforeGestureEvent, BuiltInReportCode> = Obje
 /** The one builder for a gesture core dropped on its own, not a `before*` handler's `false`
  *  (#272, #273 fix). `by: 'core'` is the field that tells a consumer this was not their handler's
  *  veto — `buildRefusalReport`'s reports are always `by: 'consumer'`, and this is the reason the two
- *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the three
- *  reasons where real work was lost (`'data-changed'`, `'entry-gone'`, `'write-refused'`); `'info'`
+ *  builders sit apart instead of one taking an extra flag. `severity: 'warning'` for the two
+ *  reasons where real work was lost (`'data-changed'`, `'entry-gone'`); `'info'`
  *  for the two the user caused on purpose (`'superseded'`, `'discarded'`). `droppedReason` rides onto
  *  the report itself (#377), so a consumer reads it instead of matching `message`'s English sentence. */
 export function buildGestureDroppedReport(init: GestureDroppedReportInit): ErrorReportInput {
@@ -164,13 +167,19 @@ export function buildGestureDroppedReport(init: GestureDroppedReportInit): Error
   const noun = REFUSAL_NOUN[event];
   const severity: ErrorReportInput['severity'] =
     droppedReason === 'superseded' || droppedReason === 'discarded' ? 'info' : 'warning';
+  // `severity` says what it cost, `by` says who asked for it — two fields, two questions, and
+  // conflating them is the misreport this union already warns about above. An extender cascading an
+  // impossible span costs the gesture and nothing else, so it stays a `'warning'` like the rest; it
+  // is the plugin's own proposal, so `by` names the plugin, the way `buildCommitFaultReport` does.
+  const by: ErrorReportInput['by'] = droppedReason === 'inverted-span' ? 'plugin' : 'core';
   return {
     code: GESTURE_DROPPED_CODE[event],
     message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[droppedReason]}.`,
     severity,
-    by: 'core',
+    by,
     entryId,
     droppedReason,
+    ...(init.cause !== undefined ? { cause: init.cause } : {}),
   };
 }
 
@@ -194,7 +203,7 @@ export interface CommitFaultReportInit {
  *  the edit the user just made. A disposer that throws already reports at `'error'` on exactly that
  *  rule (`extensions/plugin-runtime.ts`).
  *
- *  The sentence claims nothing about the store. A `change` listener that throws *after* the rows
+ *  The sentence matches nothing about the store. A `change` listener that throws *after* the rows
  *  applied lands here too, and "Nothing was saved" would be a lie for that one — so this says the
  *  one thing true of every fault on this path: the bars show the stored data, whatever it now is. */
 export function buildCommitFaultReport(init: CommitFaultReportInit): ErrorReportInput {
