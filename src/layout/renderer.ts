@@ -28,7 +28,7 @@ export interface ResolvedBarLabel {
 
 export interface BarRendererContext {
   entry: Entry;
-  item: FrameBar;
+  bar: FrameBar;
   /** Absent when the consumer asked for no label (`barLabels: 'none'`) — so a renderer reads "this
    *  bar has a label, here is where it goes" or nothing, and "a label with nowhere to paint" stays
    *  unrepresentable. */
@@ -58,7 +58,7 @@ export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription 
 
 export interface TooltipRendererContext {
   entry: Entry;
-  item: FrameBar;
+  bar: FrameBar;
 }
 export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescription | undefined;
 

@@ -6,14 +6,14 @@ import type { Entry, EntryId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
-import { produceBarsForRow } from './items/produce-items.js';
-import { NO_VARIANTS } from './items/item.js';
-import type { Bar, VariantBars } from './items/item.js';
+import { produceBarsForRow } from './bars/produce-bars.js';
+import { NO_VARIANTS } from './bars/bar.js';
+import type { Bar, VariantBars } from './bars/bar.js';
 
 /** What this memory remembers about one row (#212, ADR 0010): the Bars its Entries produced,
  *  cached together under one key. */
 export interface RowMemory {
-  readonly items: readonly Bar[];
+  readonly bars: readonly Bar[];
 }
 
 export interface FrameMemoryBind {
@@ -31,7 +31,7 @@ export class FrameMemory {
   #produced = new Map<string, RowMemory>();
   /** The answer for a row no current frame planned. One per memory, not one per call, and not a
    * module-level constant — two Gantts must not share it (I2). */
-  readonly #noRow: RowMemory = { items: [] };
+  readonly #noRow: RowMemory = { bars: [] };
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
   #entryById = new Map<EntryId, Entry>();
@@ -87,8 +87,8 @@ export class FrameMemory {
     if (hit !== undefined) return hit;
     const row = this.#rowById.get(id);
     if (row === undefined) return this.#noRow;
-    const items = produceBarsForRow(row, this.#entryById, this.#registry);
-    const produced: RowMemory = { items };
+    const bars = produceBarsForRow(row, this.#entryById, this.#registry);
+    const produced: RowMemory = { bars };
     this.#produced.set(id, produced);
     return produced;
   }

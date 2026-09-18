@@ -190,9 +190,9 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId | string): HTMLElement | undefined {
-    for (const item of this.#ports.layout.barIdsForEntry(entryId(id))) {
+    for (const barId of this.#ports.layout.barIdsForEntry(entryId(id))) {
       const bar = this.#ports.container.querySelector<HTMLElement>(
-        `.${BAR_CLASS}${attributeIs(BAR_ID_ATTRIBUTE, item)}`,
+        `.${BAR_CLASS}${attributeIs(BAR_ID_ATTRIBUTE, barId)}`,
       );
       if (bar !== null) return bar;
     }

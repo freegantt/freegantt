@@ -15,7 +15,7 @@
 //
 // Colour carries meaning here. Vermilion marks time, amber warns, violet marks keyboard focus — each
 // hue states one meaning only. Selection breaks that rule on purpose: it reuses the bar's own blue,
-// so a chosen item reads as "this data, picked". Role marks the difference — fill paints data,
+// so a chosen bar reads as "this data, picked". Role marks the difference — fill paints data,
 // outline paints selection — not hue.
 //
 // The values are the `Gantt demo sandbox rebuild` design's Light and Graphite token sets (its

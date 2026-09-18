@@ -1,5 +1,5 @@
 // ADR 0018: a variant is a rule. This file is the rule's own suite — which rule wins, what a field
-// match compares, and what the diagnostic reports. `produce-items.test.ts` is next door and asks a
+// match compares, and what the diagnostic reports. `produce-bars.test.ts` is next door and asks a
 // different question: what the row pass draws once a variant has been resolved.
 
 import { describe, expect, it } from 'vitest';
@@ -330,9 +330,9 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.name).toBe('leaf');
     expect(variant.when).toBeUndefined();
     expect(variant.css).toBeUndefined();
-    const items = variant.bars!(spanEntry('t1'), 'leaf');
-    expect(items).toHaveLength(1);
-    expect(items[0]!.variant).toBe('leaf');
+    const bars = variant.bars!(spanEntry('t1'), 'leaf');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.variant).toBe('leaf');
   });
 
   it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Bar explicitly (ADR 0023)', () => {
@@ -372,8 +372,8 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     const point = entryDouble({ id: 'm', start: 5, end: 5 });
     expect((variant.when as (entry: Entry) => boolean)(point)).toBe(true);
     expect((variant.when as (entry: Entry) => boolean)(spanEntry('span'))).toBe(false);
-    const [item] = variant.bars!(point, 'diamond');
-    expect(item!.box).toEqual({ widthPx: 13, anchor: 'center' });
+    const [bar] = variant.bars!(point, 'diamond');
+    expect(bar!.box).toEqual({ widthPx: 13, anchor: 'center' });
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-diamond': true } });
     expect(variant.css).toContain('.fg-bar-diamond');
   });

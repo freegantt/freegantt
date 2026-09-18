@@ -5,7 +5,7 @@ import type { EntryId, BarId } from '../model/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
-const ITEM_A = barId(A);
+const BAR_A = barId(A);
 
 /** Both entries draw one bar each — the shape every core Entry has (ADR 0026). A test that needs an
  *  Entry drawing several bars (only a plugin variant can, #421) builds its own answer instead. */
@@ -16,14 +16,14 @@ function oneBarEach(id: EntryId): readonly BarId[] {
 describe('projectAffordances (D-S3-6)', () => {
   it('hover wins over selection, including a hover that resolves to no handles', () => {
     const result = projectAffordances({
-      hoveredBarId: ITEM_A,
+      hoveredBarId: BAR_A,
       soleSelectedEntryId: B,
       barIdsForEntry: oneBarEach,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
 
-    expect(result.hoveredBarId).toBe(ITEM_A);
-    expect(result.movableBarId).toBe(ITEM_A);
+    expect(result.hoveredBarId).toBe(BAR_A);
+    expect(result.movableBarId).toBe(BAR_A);
     // A is hovered but not resize-capable, and B is selected but not hovered — hover still wins.
     expect(result.resizableEntryId).toBeUndefined();
   });
@@ -56,12 +56,12 @@ describe('projectAffordances (D-S3-6)', () => {
 
   it('an incapable hover resolves movable/resizable to undefined', () => {
     const result = projectAffordances({
-      hoveredBarId: ITEM_A,
+      hoveredBarId: BAR_A,
       soleSelectedEntryId: undefined,
       barIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
-    expect(result.hoveredBarId).toBe(ITEM_A);
+    expect(result.hoveredBarId).toBe(BAR_A);
     expect(result.movableBarId).toBeUndefined();
     expect(result.resizableEntryId).toBeUndefined();
   });
@@ -136,7 +136,7 @@ describe('projectAffordances (D-S3-6)', () => {
 
     it('still shows the pair when only one edge answers true', () => {
       const result = projectAffordances({
-        hoveredBarId: ITEM_A,
+        hoveredBarId: BAR_A,
         soleSelectedEntryId: undefined,
         barIdsForEntry: oneBarEach,
         canGesture: (capability, id, edge) => capability === 'resize' && edge === 'end',

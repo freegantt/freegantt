@@ -193,7 +193,7 @@ plugins claim the same key.
 | --- | --- | --- | --- |
 | `commands.register(command)` | `command.id` | Newest wins; falls back to the older one on dispose | `src/extensions/commands.test.ts` |
 | `interaction.registerKeybinding(binding)` | `binding.chord` | Newest-first resolution; falls back on dispose | `src/extensions/keymap.test.ts` |
-| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/items/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
+| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/bars/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
 | `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |

@@ -37,10 +37,10 @@ function makeRow(id: RowId, fields: readonly string[]): HTMLElement {
   return row;
 }
 
-function makeBar(item: string): HTMLElement {
+function makeBar(barId: string): HTMLElement {
   const bar = makePane();
   bar.className = 'fg-bar';
-  bar.dataset['barId'] = item;
+  bar.dataset['barId'] = barId;
   bar.tabIndex = -1;
   return bar;
 }

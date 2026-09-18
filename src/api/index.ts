@@ -328,7 +328,7 @@ export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 export type { ElementDescription, TooltipColumn } from '../model/index.js';
 // S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
 // `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
-// `ResolvedColumn` ride along because the context types name them (`BarRendererContext.item`,
+// `ResolvedColumn` ride along because the context types name them (`BarRendererContext.bar`,
 // `GridCellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
 // importable, not just structurally inferred.
 export type {
@@ -393,7 +393,7 @@ export { unclaimedSpan } from '../layout/index.js';
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it
 // until an author installs it. `bar` and `summary` keep their plain names on purpose — the three read
-// as one family at a call site — see `bar()`'s own note in `layout/items/variants.ts` (F13).
+// as one family at a call site — see `bar()`'s own note in `layout/bars/variants.ts` (F13).
 export { bar, summary, diamond } from '../layout/index.js';
 // #265: shipped Grid-column cell renderers. `meter()` paints a percent as a
 // track. `image()` paints a stored URL as an img. Both take `()`, the

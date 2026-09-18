@@ -395,7 +395,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   const barLayerCache = new KeyedLayer<FrameBar, BarId, BarGeom>();
 
   // D-S3-6/D-S3-7: what the last applyState() call painted, so the next call touches only the bars
-  // whose token set actually changed — O(changed items), not O(bars) (I5, [S3-A3]).
+  // whose token set actually changed — O(changed bars), not O(bars) (I5, [S3-A3]).
   let paintedHovered: BarId | undefined;
   let paintedSelected: ReadonlySet<BarId> = new Set();
   /** The Entry the handle pair currently brackets (#200) — Entry-keyed, like the Selection it sits
@@ -411,13 +411,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let paintedMovable: BarId | undefined;
   /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
   let paintedPending: ReadonlySet<BarId> = new Set();
-  /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
+  /** S3.3, D-S3-18: bars this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<BarId> = new Set();
   /** S3.6, D-S3-18: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
    *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
    *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
-   *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
+   *  only the bars whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
   let paintedDragging: ReadonlySet<BarId> = new Set();
   let paintedGhost: ReadonlySet<BarId> = new Set();
   /** The Selection this backend last painted (#212, ADR 0010, ADR 0025) — Entry ids, the same list
@@ -466,12 +466,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     if (mounted === undefined || mounted.length === 0) return undefined;
     let start = mounted[0]!;
     let end = start;
-    for (const item of mounted) {
-      const geom = barGeomByBarId.get(item);
+    for (const barId of mounted) {
+      const geom = barGeomByBarId.get(barId);
       if (geom === undefined) continue;
-      if (geom.x < barGeomByBarId.get(start)!.x) start = item;
+      if (geom.x < barGeomByBarId.get(start)!.x) start = barId;
       const endGeom = barGeomByBarId.get(end)!;
-      if (geom.x + geom.width > endGeom.x + endGeom.width) end = item;
+      if (geom.x + geom.width > endGeom.x + endGeom.width) end = barId;
     }
     return { start, end };
   }
@@ -1113,7 +1113,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const resolved = entry === undefined ? undefined : resolveBarRenderer(entry);
         let content: ElementDescription | undefined;
         if (resolved !== undefined && entry !== undefined) {
-          const context: BarRendererContext = { entry, item: bar };
+          const context: BarRendererContext = { entry, bar };
           if (resolvedPlacement !== undefined) {
             context.label = { text: bar.label, placement: resolvedPlacement };
           }
@@ -1400,7 +1400,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedHoveredRow = nextHoveredRow;
 
       // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
-      // geometry `syncBars` already recorded — never a per-item computation of its own. #211: the
+      // geometry `syncBars` already recorded — never a per-bar computation of its own. #211: the
       // Selection can narrow with `resizableEntryId` unchanged (a click on the already-hovered bar),
       // so the repaint gate also has to catch a pair whose own bars moved, not only a changed Entry.
       // #142: it also has to catch `resizableEdges` flipping with the Entry unchanged — a live

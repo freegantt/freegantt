@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
-import { createVariantRegistry } from './items/variants.js';
-import { fixedWidthBar } from './items/item.js';
+import { createVariantRegistry } from './bars/variants.js';
+import { fixedWidthBar } from './bars/bar.js';
 import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
-import * as produceBars from './items/produce-items.js';
+import * as produceBars from './bars/produce-bars.js';
 import type { Entry } from '../model/index.js';
 import { entryDoubles } from './entry-double.js';
 import { changeSetId, entryId, barId, rowId } from '../model/index.js';
@@ -179,9 +179,9 @@ describe('FrameLayout', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [entry], variants: registry }));
 
-    const items = layout.barsForEntry(entry.id);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.box).toEqual({ widthPx: px, anchor: 'center' });
+    const bars = layout.barsForEntry(entry.id);
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.box).toEqual({ widthPx: px, anchor: 'center' });
   });
 
   // Retired (ADR 0026, #421): `segmentIdsForBar`/`segmentIdsForRow` named which Segment(s) a Bar

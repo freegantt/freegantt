@@ -479,7 +479,7 @@ export class GanttShell {
    *  so this holds only the half the timeline pane cannot answer. */
   #hoveredRowId: RowId | undefined;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
-   *  by item id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
+   *  by bar id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
    *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
    *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
@@ -932,7 +932,7 @@ export class GanttShell {
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
-      entryFor: (item) => this.#entryFor(item),
+      entryFor: (barId) => this.#entryFor(barId),
       can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
       // #230 R4: `interaction/` asks one collaborator, not four. `EntrySelection` answers all of it
       // (ADR 0025: a former Segment is an ordinary Entry, so there is no second projection to ask).
@@ -942,7 +942,7 @@ export class GanttShell {
         selectableEntriesInRowOrder: () => this.#entrySelection.selectableEntriesInRowOrder(),
         selectableEntriesOf: (hit) => this.#entrySelection.selectableEntriesOf(hit),
       },
-      setHovered: (item) => this.#setHovered(item),
+      setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
@@ -1328,7 +1328,7 @@ export class GanttShell {
   }
 
   /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3). One door answers
-   *  `items`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
+   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
    *  `plans/row-redesign/BUILD-LOG.md`). `render/` and `interaction/` read the same answer.
    *  `CommandContext.variant` and the two callers that want the name alone read `.name`.
    *
@@ -1964,8 +1964,8 @@ export class GanttShell {
     this.#backend.applyState(this.#interactionState);
   }
 
-  #entryFor(item: BarId): Entry | undefined {
-    return this.#options.dataset.entries.get(entryIdOfBar(item));
+  #entryFor(barId: BarId): Entry | undefined {
+    return this.#options.dataset.entries.get(entryIdOfBar(barId));
   }
 
   /** Review H3: `GridCellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
@@ -2196,18 +2196,18 @@ export class GanttShell {
    *  at all falls back to the entry's own span, so reveal never becomes a no-op. */
   #revealEntrySpan(ownerId: EntryId, start: Instant, end: Instant): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.barsForEntry(ownerId);
+    const bars = this.#layout.barsForEntry(ownerId);
     const scale = this.#viewport.timeScale;
     const minBarWidthPx = this.#frameSettings.minBarWidthPx;
     const { x, width } =
-      items.length > 0
-        ? unionSpan(items, scale, minBarWidthPx)
+      bars.length > 0
+        ? unionSpan(bars, scale, minBarWidthPx)
         : barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 
   /** Expands this entry's collapsed ancestors, and flushes the pending frame. Every caller does
-   *  this before it reads `FrameLayout` about the entry (#295). `itemsForEntry` answers from the
+   *  this before it reads `FrameLayout` about the entry (#295). `barsForEntry` answers from the
    *  post-collapse plan, so a row collapse hid answers empty until the frame catches up. Returns
    *  the row's index, or `-1` for a still-hidden row (a filter, not a collapse). */
   #expandAndFindRow(ownerId: EntryId): number {

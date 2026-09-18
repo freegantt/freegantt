@@ -22,8 +22,8 @@ import type { BarLabels, BarRenderer } from '../renderer.js';
 import type { EntryPredicate, EntryRule } from '../entry-rule.js';
 import { compileEntryRule } from '../entry-rule.js';
 export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
-import type { DrawnVariant, BarProducer, VariantBars } from './item.js';
-import { fixedWidthBar, unclaimedSpan } from './item.js';
+import type { DrawnVariant, BarProducer, VariantBars } from './bar.js';
+import { fixedWidthBar, unclaimedSpan } from './bar.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look

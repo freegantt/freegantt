@@ -346,7 +346,7 @@ stroke-width="1.5"
 layout/
 </text>
 <text x="320" y="354" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-frame.ts, items/, rows/, viewport/
+frame.ts, bars/, rows/, viewport/
 </text>
 <text x="320" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
 3,568 lines · 29 files · computeFrame(), row/item pipeline
@@ -1820,7 +1820,7 @@ stroke-width="1.5"
 computeFrame()
 </text>
 <text x="1060" y="602" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-layout/frame.ts + items/ + rows/
+layout/frame.ts + bars/ + rows/
 </text>
 <text x="1060" y="622" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
 resolveRows → produceItems → cull

@@ -12,7 +12,7 @@ import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { EntryRulePorts } from './entry-rule.js';
-import type { BarAnchor, Bar, VariantBars } from './items/item.js';
+import type { BarAnchor, Bar, VariantBars } from './bars/bar.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
 import type { RangeBand, RowStripe } from './decoration.js';
@@ -65,19 +65,19 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 export function barSpan(
   // The whole `Bar`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
   // `Pick` and silently drop a fixed box's width, which is exactly the bug this signature closes.
-  item: Bar,
+  bar: Bar,
   scale: TimeScale,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
 ): { x: number; width: number; span: BarSpanKind } {
-  const x = scale.xForInstant(item.start);
-  const end = scale.xForInstant(item.end);
-  if (item.box !== undefined) {
+  const x = scale.xForInstant(bar.start);
+  const end = scale.xForInstant(bar.end);
+  if (bar.box !== undefined) {
     // A fixed box skips the floor on purpose (ADR 0022 — `diamond()`'s own width is the design, not
     // a value to widen). Clamped once, here, so the returned `width` and `fixedBoxX`'s position both
     // read the same finite, non-negative value — a negative (#296) or non-finite (#297) `widthPx`
     // never reaches either.
-    const width = clampBoxWidth(item.box.widthPx);
-    return { x: fixedBoxX(x, end, item.box.anchor, width), width, span: 'fixed' };
+    const width = clampBoxWidth(bar.box.widthPx);
+    return { x: fixedBoxX(x, end, bar.box.anchor, width), width, span: 'fixed' };
   }
   const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
@@ -339,24 +339,24 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
   });
 }
 
-function partCountByEntry(items: readonly Bar[]): ReadonlyMap<EntryId, number> {
+function partCountByEntry(bars: readonly Bar[]): ReadonlyMap<EntryId, number> {
   const counts = new Map<EntryId, number>();
-  for (const item of items) counts.set(item.entryId, (counts.get(item.entryId) ?? 0) + 1);
+  for (const bar of bars) counts.set(bar.entryId, (counts.get(bar.entryId) ?? 0) + 1);
   return counts;
 }
 
 function barA11yLabel(
   label: string,
-  item: Bar,
+  bar: Bar,
   partCount: number,
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
-  const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item, locale)}`;
+  const span = `${formatDate(scale.timeZone, bar.start, locale)} – ${formatEndInclusive(scale.timeZone, bar, locale)}`;
   // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
   const prefix = label === '' ? '' : `${label}, `;
   if (partCount <= 1) return `${prefix}${span}`;
-  return `${prefix}part ${partIndexOfBar(item.id) + 1} of ${partCount}, ${span}`;
+  return `${prefix}part ${partIndexOfBar(bar.id) + 1} of ${partCount}, ${span}`;
 }
 
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
@@ -476,9 +476,9 @@ export function placeFrame(
     }
 
     const produced = mem.rowMemory(planned.id);
-    const items = produced.items;
+    const rowBars = produced.bars;
     const height = index.heightAt(rowIndex);
-    const parts = partCountByEntry(items);
+    const parts = partCountByEntry(rowBars);
     rows.push({
       id: planned.id,
       kind: planned.kind,
@@ -494,21 +494,21 @@ export function placeFrame(
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
     });
 
-    for (const item of items) {
-      const { x, width, span } = barSpan(item, scale, minBarWidthPx);
+    for (const producedBar of rowBars) {
+      const { x, width, span } = barSpan(producedBar, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       // #421 C5, Q36: the Bar's own `label` wins when a producer set one — the most specific
       // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
       // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.
-      const entry = entryById.get(item.entryId);
+      const entry = entryById.get(producedBar.entryId);
       const label =
-        item.label ??
+        producedBar.label ??
         (input.barLabelFor !== undefined && entry !== undefined ? input.barLabelFor(entry) : '');
       const bar: FrameBar = {
-        id: item.id,
-        entryId: item.entryId,
+        id: producedBar.id,
+        entryId: producedBar.entryId,
         rowId: planned.id,
-        variant: item.variant,
+        variant: producedBar.variant,
         label,
         x,
         // Every row is one lane (singleLane, D-S4-19): the bar centres in the row's own band.
@@ -517,7 +517,7 @@ export function placeFrame(
         height: barHeightPx,
         flags: {},
         span,
-        a11yLabel: barA11yLabel(label, item, parts.get(item.entryId) ?? 1, scale, locale),
+        a11yLabel: barA11yLabel(label, producedBar, parts.get(producedBar.entryId) ?? 1, scale, locale),
       };
       bars.push(bar);
     }

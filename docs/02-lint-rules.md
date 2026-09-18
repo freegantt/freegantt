@@ -109,7 +109,7 @@ these files were never created):**
 | Path | Seam |
 |---|---|
 | `src/scheduling/policy/default-policy.ts` | schedule semantics per kind |
-| `src/layout/items/produce-items.ts` | item production per kind |
+| `src/layout/bars/produce-bars.ts` | item production per kind |
 | `src/render/dom/renderer-registry.ts` | appearance per kind |
 | `src/interaction/capabilities.ts` | affordances per kind |
 
@@ -117,7 +117,7 @@ these files were never created):**
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
-**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/items/produce-items.ts` exists at the path this table names: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/bars/produce-bars.ts` exists at the path this table names: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
 
 ---
 

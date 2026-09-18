@@ -12,9 +12,9 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { barId, barIdFromDataset, rowIdFromDataset, entryIdOfBar } from '../model/index.js';
-export { wholeEntryBar, fixedWidthBar, unclaimedSpan } from './items/item.js';
-export type { BarAnchor, FixedBarBox, Bar, BarProducer, VariantBars } from './items/item.js';
-export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
+export { wholeEntryBar, fixedWidthBar, unclaimedSpan } from './bars/bar.js';
+export type { BarAnchor, FixedBarBox, Bar, BarProducer, VariantBars } from './bars/bar.js';
+export { createVariantRegistry, bar, summary, diamond } from './bars/variants.js';
 // #265: shipped Grid-column cell renderers. DOM-free description trees, same factory
 // shape as `diamond()` — `meter()`, `image()`.
 export { meter, image } from './column-renderers.js';
@@ -31,7 +31,7 @@ export type {
   VariantRegistry,
   VariantRegistryPorts,
   EntryRule,
-} from './items/variants.js';
+} from './bars/variants.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
 export type { FrameColumn, ResolvedColumn, FieldCompare, ColumnAlign } from './column.js';
@@ -90,7 +90,7 @@ export type {
   DecorationProvider,
   DecorationInput,
 } from './decoration.js';
-// Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
+// Re-exported so render/ (layout-only import per plans/01 §1) can type bar/row identity as
 // BarId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.

@@ -28,7 +28,7 @@ export interface InteractionState {
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
   movableBarId?: BarId;
-  /** S3.3, D-S3-18: an in-flight drag's per-item pixel offset, coalesced on the shell's own rAF.
+  /** S3.3, D-S3-18: an in-flight drag's per-bar pixel offset, coalesced on the shell's own rAF.
    *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
    *  transform the moment this clears. */
   preview?: readonly BarPreview[];

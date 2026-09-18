@@ -1,6 +1,6 @@
 // layout/ — what one row draws, as plain data (D-S4-19, D-S4-24, D-S4-25). One Bar is one bar.
 // This file holds the Bar vocabulary alone, so `variants.ts` may name `BarProducer` and
-// `produce-items.ts` may name both, with no import ring between the three.
+// `produce-bars.ts` may name both, with no import ring between the three.
 
 import { barId } from '../../model/index.js';
 import type { Entry, EntryId, Instant, BarId } from '../../model/index.js';
@@ -70,7 +70,7 @@ export interface Bar {
  *  already draw. A producer that ignores this parameter still draws — nothing skips it. */
 export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
-/** One row's variant, as the item pass reads it: which one won, and what it draws. `variants.ts`
+/** One row's variant, as the bar pass reads it: which one won, and what it draws. `variants.ts`
  *  widens it with how it looks and what you can do to it — those two name `BarRenderer`, and this
  *  file must not, or `layout/` grows an import ring through `renderer.ts`. */
 export interface DrawnVariant {
@@ -80,10 +80,10 @@ export interface DrawnVariant {
   readonly bars: BarProducer;
 }
 
-/** The one question item production asks about a variant: which one this row wears. The answer
+/** The one question bar production asks about a variant: which one this row wears. The answer
  *  carries what it draws. `VariantRegistry` (`variants.ts`) answers it, and its own face publishes
  *  the registration doors the frame pass never calls. So this narrower face is what
- *  `layout/frame.ts` and `produce-items.ts` name, and `layout/` keeps one direction of imports. */
+ *  `layout/frame.ts` and `produce-bars.ts` name, and `layout/` keeps one direction of imports. */
 export interface VariantBars {
   resolveFor(entry: Entry): DrawnVariant | undefined;
 }

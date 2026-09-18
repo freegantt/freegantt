@@ -782,7 +782,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   // plugin-author scenario this shell-level test never covered.
 
   it('reveal(entryId) expands a collapsed ancestor before reading its Bars, so it targets the real box (#295)', () => {
-    // `FrameLayout.itemsForEntry` answers from the post-collapse plan — a row collapse hid answers
+    // `FrameLayout.barsForEntry` answers from the post-collapse plan — a row collapse hid answers
     // empty until the ancestor chain opens and the frame catches up. Computing the span before that
     // expand-and-flush would silently fall back to the entry's raw span instead of its diamond box.
     FakeResizeObserver.instances = [];
@@ -1319,19 +1319,19 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
 // `interaction/entry-gestures.test.ts` already covers that the real attachment reports hover
 // correctly; this file's job is what the shell does with the report.
 describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
-  it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame, creates/removes no nodes, and writes O(changed items) data-state', () => {
+  it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame, creates/removes no nodes, and writes O(changed bars) data-state', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
       const container = document.createElement('div');
-      let hover: ((item: BarId | undefined) => void) | undefined;
+      let hover: ((barId: BarId | undefined) => void) | undefined;
       const shell = new GanttShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
         overscan: { verticalRows: 200 },
         wiring: {
           entryGestures: (_pane, _rowLayer, _container, ctx) => {
-            hover = (item) => ctx.setHovered(item);
+            hover = (barId) => ctx.setHovered(barId);
             return { detach() {} };
           },
         },
@@ -1352,7 +1352,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       // D-S3-20: each hover step touches only the bar(s) whose token set actually changed — never
       // every mounted bar. `setAttribute('data-state', ...)` is the one write `paintDataState` makes,
       // so counting it directly (rather than inferring it from mutations, which also covers
-      // `data-movable`/handle moves) is what tells O(changed items) apart from O(mounted bars).
+      // `data-movable`/handle moves) is what tells O(changed bars) apart from O(mounted bars).
       const setAttributeSpy = vi.spyOn(HTMLElement.prototype, 'setAttribute');
 
       for (const bar of bars) hover?.(bar.dataset['barId'] as BarId);
@@ -1386,14 +1386,14 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
       const container = document.createElement('div');
-      let hover: ((item: BarId | undefined) => void) | undefined;
+      let hover: ((barId: BarId | undefined) => void) | undefined;
       const shell = new GanttShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
         overscan: { verticalRows: 200 },
         wiring: {
           entryGestures: (_pane, _rowLayer, _container, ctx) => {
-            hover = (item) => ctx.setHovered(item);
+            hover = (barId) => ctx.setHovered(barId);
             return { detach() {} };
           },
         },
@@ -1426,14 +1426,14 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
   it('movableBarId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
-    let hover: ((item: BarId | undefined) => void) | undefined;
+    let hover: ((barId: BarId | undefined) => void) | undefined;
     const shell = new GanttShell({
       container,
       dataset,
       capabilities: { resize: false },
       wiring: {
         entryGestures: (_pane, _rowLayer, _container, ctx) => {
-          hover = (item) => ctx.setHovered(item);
+          hover = (barId) => ctx.setHovered(barId);
           return { detach() {} };
         },
       },

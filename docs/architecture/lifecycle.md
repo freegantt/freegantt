@@ -488,8 +488,8 @@ what a notification normally does — it asks for the next frame.
 resulting extents back into the viewport.
 
 *Derived from `view/gantt-shell.ts` `render()`, `view/frame-settings.ts`, `layout/frame.ts`,
-`layout/frame-layout.ts`, `layout/rows/*`, `layout/items/produce-items.ts`,
-`layout/items/variants.ts`, `render/dom/index.ts` `sync()`, `view/scroll-attachment.ts`.*
+`layout/frame-layout.ts`, `layout/rows/*`, `layout/bars/produce-bars.ts`,
+`layout/bars/variants.ts`, `render/dom/index.ts` `sync()`, `view/scroll-attachment.ts`.*
 
 <div class="fg-architecture-doc">
 <figure>
@@ -716,8 +716,8 @@ a row source, then asks one registry what each Entry draws:
    of rows, each stamped with a sequential index (`resolve-rows.ts`).
 2. **produceBarsForRow** turns each row's entries into `Bar`s. An Entry carries no stored
    classification, so nothing dispatches on a type tag. The variant registry resolves one variant
-   per Entry, and that variant's own producer builds the Bars (`items/produce-items.ts`,
-   `items/variants.ts`). The walk runs newest-first — the consumer's rules, then a plugin's, then
+   per Entry, and that variant's own producer builds the Bars (`bars/produce-bars.ts`,
+   `bars/variants.ts`). The walk runs newest-first — the consumer's rules, then a plugin's, then
    core's two — and stops at the first `when` that answers yes. Core's `leaf` carries no `when`, so
    every row resolves. A variant with no producer of its own draws one Bar over the Entry's whole
    span.

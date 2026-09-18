@@ -37,7 +37,7 @@ export interface PluginRegistrationPorts {
   /** Re-resolves every entry's capabilities, and re-derives the affordances off the current hover. */
   refreshCapabilities(): void;
   /** Rewrites this Gantt's own variant stylesheet from the registry's current installed set (ADR
-   *  0022 §5). A registered variant's `css` reaches the document on the same edge its `items` and
+   *  0022 §5). A registered variant's `css` reaches the document on the same edge its `bars` and
    *  `can` already do. */
   refreshVariantStyles(): void;
   /** `ColumnChrome.registerPluginColumn`. The one seam that keeps its own refresh — see

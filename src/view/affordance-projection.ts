@@ -1,5 +1,5 @@
 // view/ — pure affordance resolution (S3.2/S3.4, D-S3-6). `GanttShell#refreshAffordances` calls this
-// to decide which item ids get hover/move/resize paint before it writes `InteractionState` and calls
+// to decide which bar ids get hover/move/resize paint before it writes `InteractionState` and calls
 // `applyState` — no DOM, no shell, no `InteractionState` knowledge here, only the resolution rule.
 
 import { entryIdOfBar } from '../model/index.js';

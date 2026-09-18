@@ -84,7 +84,7 @@ export interface EntryGestureContext {
   can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
-  /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
+  /** S3.2 (D-S3-6): the bar id under the pointer, or undefined on pointerleave. */
   setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane
    *  reports no row of its own: over there a bar names the row, and the shell reads it off the frame

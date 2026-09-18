@@ -29,7 +29,7 @@ const VARIANT_STYLES_ATTR = 'data-freegantt-variant-styles';
 export interface VariantStyles {
   /** Rewrite the node's text from `variants.installedCss()`. Call after any registration change —
    *  construction, `gantt.variants = […]`, a plugin install or a plugin's disposal — the same edges
-   *  `PluginRegistrations` already refreshes items and capabilities on. An empty installed set
+   *  `PluginRegistrations` already refreshes bars and capabilities on. An empty installed set
    *  leaves the node present but empty, so a later `refresh()` has a stable node to rewrite. */
   refresh(): void;
   /** Removes the node from `doc.head`. Call once, from `GanttShell.destroy()`. */

@@ -1,5 +1,5 @@
 // layout/ — `compileEntryRule`'s own contract, pinned directly (#421 F7). Both callers
-// (`items/variants.ts`'s `when`, `rows/entries-source.ts`'s `childrenAsSegments`) exercise this only
+// (`bars/variants.ts`'s `when`, `rows/entries-source.ts`'s `childrenAsSegments`) exercise this only
 // incidentally, through a real Gantt render; this file pins the compiler's own two promises: a
 // missing key reports once per rule, and a known key's Field is read fresh on every row.
 

@@ -59,8 +59,8 @@ function makeContext(
 
   const ctx: EntryGestureContext = {
     hitTest: () => undefined,
-    entryFor: (item: BarId) => {
-      const id = entryIdOfBar(item);
+    entryFor: (barId: BarId) => {
+      const id = entryIdOfBar(barId);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
