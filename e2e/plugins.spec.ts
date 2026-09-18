@@ -137,12 +137,11 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
 // alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
 // extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
 //
-// #241: the locked Entry draws several Segments there, so this covers the cascade shape the library
-// refuses for an envelope-only write (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). Every bar
-// the Entry draws has to ghost, and by the same distance — that is what `moveEntryTo`'s rigid
-// translate promises and what a `{ start, end }` cascade cannot say. The count is read off the page,
-// never asserted as a number, so a fixture edit cannot make this test quietly weaker.
-test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the drop is refused', async ({
+// #241, ADR 0026: the locked row draws several bars there, and each one is a child Entry the row
+// claims (`childrenAsSegments`). Every bar on that row has to ghost, and by the same distance — that
+// is what `moveEntryTo`'s rigid translate promises, applied once per dated child. The count is read
+// off the page, never asserted as a number, so a fixture edit cannot make this test quietly weaker.
+test('every bar of a locked row ghosts alongside a dragged neighbour, and the drop is refused', async ({
   page,
 }) => {
   await page.goto('/editing.html');
@@ -151,10 +150,10 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
   await page.locator('#lock-entry').check();
 
   const dragged = page.locator('#gantt .fg-bar[data-item-id^="entry-14:"]').first();
-  const lockedBars = page.locator('#gantt .fg-bar[data-item-id^="entry-15:"]');
+  const lockedBars = page.locator('#gantt .fg-bar[data-item-id^="entry-15-"]');
   await expect(dragged).toBeVisible();
-  // More than one bar from one Entry is the whole point of the case; one bar would pass with the
-  // envelope-only cascade this test exists to rule out.
+  // More than one bar on one row is the whole point of the case: one bar would pass even if the
+  // cascade moved a single envelope, which is what this test exists to rule out.
   expect(await lockedBars.count()).toBeGreaterThan(1);
 
   const leftEdges = async (): Promise<number[]> => {
@@ -185,10 +184,12 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
 
   // The drop is refused, so every bar lands back where it started and the page logs the refusal.
   // A store-only commit repaints on the next frame (#161), so every post-commit read polls.
-  await expect(page.locator('#toast')).toContainText('entry-15 is locked');
+  // The plugin names the locked Entry it found in the changeset, and each bar on this row is its own
+  // Entry now (ADR 0026) — so the refusal names a leg, not the row's parent.
+  await expect(page.locator('#toast')).toContainText('entry-15-a is locked');
   await expect.poll(leftEdges).toEqual(lockedBefore);
   await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
-  await expect(page.locator('#log')).toContainText('entry-15 is locked');
+  await expect(page.locator('#log')).toContainText('entry-15-a is locked');
 });
 
 // #280: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()

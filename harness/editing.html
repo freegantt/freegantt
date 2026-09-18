@@ -108,11 +108,11 @@
       </p>
       <div id="page-brief"></div>
       <p id="lock-readout">
-        Check “Lock entry-15” and a Dataset plugin locks that entry (S5.10). Drag <code>entry-14</code>: the
-        locked bars ghost alongside it, because the plugin's extender wrote their dates too — and the drop is
-        refused. <code>entry-15</code> draws three bars from one Entry, which is the case the cascade has to
-        get right: it moves every Segment rigidly through <code>moveEntryTo</code>, because a start and an end
-        alone name no bar to move.
+        Check “Lock entry-15” and a Dataset plugin locks its three bars (S5.10). Drag <code>entry-14</code>:
+        the locked bars ghost alongside it, because the plugin's extender wrote their dates too — and the drop
+        is refused. <code>entry-15</code>'s row draws three bars, and each one is a child Entry the row claims
+        (<code>childrenAsSegments</code>). That is the case the cascade has to get right: it moves each bar
+        rigidly through <code>moveEntryTo</code>, one dated Entry at a time.
       </p>
       <div id="controls">
         <p id="selection-readout">Selection: (none)</p>
@@ -120,7 +120,7 @@
         <button id="redo-btn" type="button">Redo</button>
         <label><input id="lock-resize" type="checkbox" /> Disable resize</label>
         <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
-        <label><input id="lock-entry" type="checkbox" /> Lock entry-15, three bars (Dataset plugin)</label>
+        <label><input id="lock-entry" type="checkbox" /> Lock entry-15's three bars (Dataset plugin)</label>
         <label>
           Snap
           <select id="snap-unit">

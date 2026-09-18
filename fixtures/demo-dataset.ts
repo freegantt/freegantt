@@ -110,19 +110,23 @@ function workstreamOf(id: string): string | undefined {
   return undefined;
 }
 
-/** Three separate Segments across ten days from `start` — one Entry that draws three bars (ADR 0010,
- *  #212). They do not overlap, so the pointer can land on every one of them. A Segment drawn under
- *  another cannot be picked (#215). Exported because two demos need a several-Segment Entry: the
- *  tree page draws one, and `editing.ts` locks one, which is the case an envelope-only cascade
- *  refuses (#241). */
-export function separateSegments(start: InstantInput) {
+/** Three child Entries across ten days from `start`, for a parent whose row claims them — one row
+ *  that draws three bars (ADR 0026: a bar is a child Entry, and `childrenAsSegments` is what puts a
+ *  parent's children on the parent's own row). They do not overlap, so the pointer can land on every
+ *  one of them. A bar drawn under another cannot be picked (#215).
+ *
+ *  The parent keeps no dates of its own: three dated children roll its span up (ADR 0013). */
+export function claimedChildrenOf(parentId: string, start: InstantInput): EntryInput[] {
   const startMs = instant(start);
   const day = (count: number) => addMs(startMs, count * MS.DAY);
-  return [
-    { start: day(0), end: day(2) },
-    { start: day(3), end: day(5) },
-    { start: day(6), end: day(9) },
-  ];
+  const leg = (suffix: string, name: string, from: number, to: number): EntryInput => ({
+    id: `${parentId}-${suffix}`,
+    name,
+    parentId,
+    start: day(from),
+    end: day(to),
+  });
+  return [leg('a', 'Leg A', 0, 2), leg('b', 'Leg B', 3, 5), leg('c', 'Leg C', 6, 9)];
 }
 
 export const demoFieldOptions = {
