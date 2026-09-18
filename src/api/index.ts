@@ -152,12 +152,12 @@ export type {
   EntryResize,
   EntryFieldEdit,
 } from '../view/index.js';
-// S3, D-S3-9: `Gantt.interactions`'s own type and the per-gesture rule shape (`view/capability.ts`).
-// #256: `WriteRule` is the shape of `interactions.edit`, which answers one cell rather than one
+// S3, D-S3-9: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
+// #256: `WriteRule` is the shape of `capabilities.edit`, which answers one cell rather than one
 // entry, and `WriteVerdict` is what `ctx.interaction.canWrite` hands a plugin back.
 export type {
   CapabilityRule,
-  Interactions,
+  Capabilities,
   WriteRefusalReason,
   WriteRule,
   WriteVerdict,

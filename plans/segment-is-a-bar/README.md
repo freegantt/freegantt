@@ -1,39 +1,83 @@
-# A Segment is a bar — the build plan for #421
+# A bar is a child Entry — the build plan for #421
 
 [#421](https://github.com/Pawel-IT/FreeGantt/issues/421) is the spec. **This plan does not restate it.** Read the issue once, then this file, then work one build. Open questions and lone calls go in [`BUILD-LOG.md`](BUILD-LOG.md).
 
-Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A line number is a hint. Open the file.**
+**Ruled 2026-09-17: Q17 passes. A bar is a regular child Entry, and a row source rule draws a claimed parent's children on its row.** The design is [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md), the evidence is [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md), and the consumer page is [`docs/08-a-bar-is-an-entry.md`](../../docs/08-a-bar-is-an-entry.md). **The Segment retires.**
+
+**Option C is void.** Its build order B1–B8, its `Segment` stored/live pair, its write doors and its rulings Q1–Q16 describe a type this library will not ship. `BUILD-LOG.md` keeps that text as the record of what was refused and why. **Read the table at the top of the log, never an old body.**
+
+Line numbers below were measured at `496ed77`. **A line number is a hint. Open the file.**
+
+---
+
+## The rule, in one line
+
+**What #421 calls a Segment is an ordinary Entry whose `parentId` names its row.** Nothing on the child marks it. A rule on the row source says which parents draw their children on their own row. A parent the rule does not claim shows the same children as sub-rows, with no change to the data.
+
+```ts
+const dataset = new Dataset({
+  fields: [
+    { key: 'showDaysOnRow', type: 'boolean' },
+    { key: 'hours', type: 'number', rollUp: 'sum' },
+    { key: 'locked', type: 'boolean' },
+  ],
+  entries: [
+    { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
+    { id: 'd1', parentId: 'req-1', start, end, hours: 8 },                // a bar: a plain Entry
+    { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
+    { id: 'hold', start, end },                                           // a plain row, as today
+  ],
+});
+
+new Gantt({
+  dataset,
+  rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+  barLabels: { field: 'hours', placement: 'inside' },
+  capabilities: { resize: (entry) => entry.read('locked') !== true },
+});
+```
+
+Two rows: `req-1` carrying `d1` and `d2` as bars, and `hold`. Every job — read, write, add, remove, match, gate, format, cascade — uses the Entry door that ships today.
 
 ---
 
 ## Hard rules
 
 1. **The issue decides. This plan orders.** When the two disagree, the issue wins, and you log a **Q**.
-2. **No stored classification.** Nothing on a public type says "hidden", "authored", "plain" or names a variant. `plans/01` §2.5, ADR 0013, ADR 0018.
-3. **Nothing reads across.** A Segment never reads its Entry's data. An Entry never reads its Segments' data. No fallthrough in `read()`, in a label, in a rule.
-4. **Text never decides whether a bar shows.** An empty label leaves geometry, fill, hit target, hover, selection and handles unchanged. One test pins this (B6).
-5. **Zoom never touches a Segment.** No folding, no Aggregator over Segments, no read of the visible range. A test pins the same printed value at day, week and year zoom (B6).
-6. **One key, one meaning.** One `fields` list. `Field.column`, `rollUp`, `compute` and `distribute` are Entry-only. A Segment-only key shows an empty grid cell, and that is correct.
-7. **Every write is one transaction, one ChangeSet.** `updateSegment` names the Segment on the row. A whole-array `segments` diff does not meet the issue for a value write.
-8. **The hot path allocates nothing (I5).** A live `Segment` has one identity per id for the life of the store, as `LiveEntries` does. The Item-phase variant walk runs in the layout pass, never per pointer move.
-9. **All date arithmetic goes through `time/`.** A Segment moves and resizes through the bound `TimeScale`.
-10. **The harness never patches the library.** A cast, a side map or a re-derivation in `harness/` is an API gap. Stop, report, ask.
-11. **Rename with `pk-rename-symbol`, then `pnpm typecheck`.** B1 has one rename whose meaning inverts while typecheck stays green. Its build says so.
-12. **`pnpm verify:full` is the gate.** `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`. Report the verdict line.
-13. **Vendor Gantt names never appear here or in `src/`.** Scheduling vocabulary stays out of this work.
-14. **Tick each box when you finish it, not at the end.**
+2. **No second type.** A bar is an `Entry`. A build that adds a per-bar type, a per-bar id or a per-bar write door has left this design. Stop and log a **Q**.
+3. **No stored classification.** Nothing on a public type says "bar", "segment", "hidden" or names a variant. The claim is a rule on the row source, matched against the data the consumer already stores. `plans/01` §2.5, ADR 0013, ADR 0018.
+4. **The row source owns the row list.** The rule lives on `EntriesRowSource`, never on a variant and never on an Entry. Two Gantts on one Dataset may disagree (I2), and `gantt.rowSource = …` switches the view live.
+5. **`tree` is orthogonal.** `tree` decides whether an **unclaimed** parent's children nest. The rule decides whether a **claimed** parent's children become rows at all. Neither reads the other.
+6. **An unclaimed parent is untouched, and that is a gate, not an assumption.** A parent no rule claims keeps its own row, gives each child a row, wears `summary()`'s rail and rolls up exactly as it does today — whether the Gantt sets no rule at all, or sets one this parent does not match. The suppression reads the claimed marker on the row (Q19 shape (a)); a row with no marker takes the path it takes now. **C2 pins this with a test, and C7 keeps it: today's layout snapshots must not move.**
+7. **The rule matches the parent** with the same `when` pattern a variant uses: `true`, a field match, or `(entry) => boolean`. An author learns one match syntax.
+8. **The Rollup is unchanged in shape.** A claimed parent is an ordinary rolling-up parent: its cells, `start`/`end` included, roll up from its children through the normal Aggregators (ADR 0013). A claimed row is already a summary in the grid.
+9. **Text never decides whether a bar shows.** An empty label leaves geometry, fill, hit target, hover, selection and handles unchanged. One test pins this.
+10. **Zoom never changes a bar's span or its values.** No folding, no read of the visible range. A test pins the same printed value at day, week and year zoom.
+11. **A shared row resolves per Entry.** Capabilities, variants, labels, handles and hit tests answer for the Entry the Item carries, never for the row's subject. `entryIds[0]` means the row's subject and nothing else (Q19, shape (a)).
+
+    **Nine `entryIds[0]` reads, in seven files, and they are two different jobs.** Seven read a **row's** list — `render/dom/index.ts:964,1039`, `view/roving-focus.ts:311`, `layout/rows/sort.ts:53-54`, `layout/rows/filter.ts:9`, `layout/frame.ts:330` — and each one means "the row's subject". They change meaning when a row holds N+1 ids. Two read the **Selection's** own list — `view/gantt-shell.ts:1480`, `view/segment-selection.ts:170` — and mean "the first selected Entry". They change meaning when several bars of one row are selected. Both sets are C3's job.
+12. **Every write is one transaction, one ChangeSet.** A bar's value write is an ordinary `store: 'entries'` row keyed by the bar's `EntryId`. There is no second store.
+13. **The hot path allocates nothing (I5).** The claim rule runs in the layout pass, never per pointer move.
+14. **All date arithmetic goes through `time/`.** A bar moves and resizes through the bound `TimeScale`.
+15. **The harness never patches the library.** A cast, a side map or a re-derivation in `harness/` is an API gap. Stop, report, ask.
+16. **Rename with `pk-rename-symbol`, then `pnpm typecheck`.**
+17. **`pnpm verify:full` is the gate.** `pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log`. Report the verdict line.
+18. **Vendor Gantt names never appear here or in `src/`.** Scheduling vocabulary stays out of this work.
+19. **Tick each box when you finish it, not at the end.**
 
 ---
 
 ## What the end state is
 
-- A **Segment** stores `id`, `start`, `end`, `name?` and `props`. It is a stored/live pair like `Entry` (ADR 0017): `StoredSegment` holds values, `Segment` answers `read(key)`.
-- A **plain Entry** (dates, no authored Segments) stores `segments: []`. `entry.segments` is `[]`. Its bar is still selectable through one minted `SegmentId` that lives in a store index, not in a record (§ The plain bar).
-- **`name` is optional** on `EntryInput`, `StoredEntry`, `Entry`, `SegmentInput`, `StoredSegment`, `Segment`.
-- **A variant resolves in two phases.** Row phase decides `items`. Item phase decides `paint`, `css`, `can`, `barLabels` for each Item that draws an authored Segment.
-- **`can` and the resize handles resolve per Item.** Chrome and gesture read one answer (I14).
-- **A bar prints one Field**, from where its Item reads, through that Field's `formatValue`. Default `name`.
-- **`entries.updateSegment(id, edit)`** writes one Segment. The ChangeSet row is `{ store, id, segmentId, field, from, to }`. **`entries.addSegment(entryId, input)`** adds one and returns it. With `removeSegments`, a consumer can add, change and remove a Segment without rebuilding the array.
+- **A bar is an Entry.** It has an authored `EntryId`, a `parentId`, dates, an optional `name`, declared values, a variant and capabilities — because every Entry has all of those already.
+- **One new config key.** `EntriesRowSource.childrenAsSegments` takes `true`, a field match, or `(entry) => boolean`. It is the only new public surface this work adds.
+- **A claimed parent gives its children no rows** and carries their Items on its own row. It is never expandable, in flat or tree mode.
+- **A claimed parent draws no bar of its own**, so its rail does not paint over the children it stands for. A consumer variant may still paint one (C2 rules the seam).
+- **The Selection holds Entries.** `SegmentId`, `selectedSegmentIds`, `Item.segmentId`, `FrameBar.segmentIds` and `view/segment-selection.ts` retire. A new ADR revises ADR 0010.
+- **The Segment retires with no legacy.** `segments` leaves `EntryInput`, `StoredEntry` and `Entry`; `updateSegment`, `addSegment` and `removeSegments` leave `dataset.entries`; the four envelope paths and their four errors go. This library has never shipped to a user, so no migration path ships (CLAUDE.md).
+- **`Entry.name` is optional.** A missing name prints nothing, and the bar still draws.
+- **A bar names the Field it prints.** `barLabels: { field, placement }`, Gantt-wide and per variant, through that Field's `formatValue`.
+- **The Rollup stops re-deriving an index the store already holds.** `committedChildIds()` is published, `RollUpTree` carries it, and a commit that moves no row skips the hierarchy re-check.
 
 ---
 
@@ -41,61 +85,57 @@ Opened 2026-09-16 at `d87cbdd`. Every line number below was measured there. **A 
 
 Publish the invocation an author writes. Read each line aloud before you change a name.
 
-| Job | Call site | New or changed |
+| Job | Call site | New? |
 |---|---|---|
-| Author a Segment with data | `{ id: 'd1', start, end, hours: 8, color: 'red' }` inside `segments` | `SegmentInput` gains `name?` and flat declared keys, nested `props` also legal |
-| Read a Segment's value | `segment.read('hours')` | live `Segment.read(key)` |
-| Write one Segment | `dataset.entries.updateSegment('d2', { color: 'grey' })` | new; sibling of `removeSegments` |
-| Add one Segment | `dataset.entries.addSegment('req-1', { start, end, hours: 8 })` | new; returns the live `Segment`. Singular like `updateSegment`; many go through `transaction()` |
-| Write many Segments, one undo | `dataset.transaction(() => { for (id of ids) entries.updateSegment(id, { worker: 'Ali' }); })` | no change to `transaction()` |
-| Copy an Entry | `entries.add({ ...entry.toInput(), id: 'copy' })` | `toInput()` emits Segment `name`/`props`, no Segment ids, no `segments` key for a plain Entry |
-| Match a Segment by value | `{ name: 'fullDay', whenSegment: { hours: 8 }, css }` | new key on `EntryVariant` |
-| Match a Segment by predicate | `when: (entry, segment) => (segment?.read('hours') ?? 0) > 8` | `VariantPredicate` gains `segment?` |
-| Gate a gesture per Segment | `interactions: { resize: (entry, segment) => segment?.read('locked') !== true }` | `CapabilityRule` gains `segment?` |
-| Gate a write per Segment | `interactions: { edit: (entry, field, segment) => … }` | `WriteRule` gains `segment?` as third argument |
-| Print a Field on every bar | `new Gantt({ barLabels: { field: 'hours', placement: 'inside' } })` | `BarLabels` gains the long form; string shorthand stays |
-| Print a Field on one variant's bars | `bar({ barLabels: { field: 'hours' } })` | `EntryVariant.barLabels`, overrides field or placement or both |
-| Paint a Segment's bar | `paint: ({ entry, segment, item, label }) => …` | `BarRendererContext.segment?` |
-| Format a value on a bar | `formatValue(value, ctx, entry, segment)` | fourth argument, present when the Item draws a Segment |
-| Read the change | `{ store: 'entries', id, segmentId, field: 'color', from: 'red', to: 'grey' }` | `FieldUpdated.segmentId?` |
+| Author a bar with data | `{ id: 'd1', parentId: 'req-1', start, end, hours: 8 }` | no |
+| Draw every parent's children on its row | `rowSource: { source: 'entries', childrenAsSegments: true }` | **the one new key** |
+| Draw one parent's children on its row | `rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } }` | the same key |
+| Claim by predicate | `rowSource: { source: 'entries', childrenAsSegments: (entry) => entry.read('ownRows') !== true }` | the same key |
+| Open one row into sub-rows, live | `dataset.entries.update('req-1', { showDaysOnRow: false })` | no |
+| Put a summary row above a claimed row | `rowSource: { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true } }` | the same key |
+| Read a bar's value | `entry.read('hours')` | no |
+| Name the row a bar sits on | `entry.parent()` | no |
+| List a row's bars | the parent's children | no |
+| Total bar values onto the row | `{ key: 'hours', type: 'number', rollUp: 'sum' }` | no |
+| Patch one bar | `dataset.entries.update('d2', { hours: 6 })` | no |
+| Add one bar | `dataset.entries.add({ parentId: 'req-1', start, end, hours: 8 })` | no |
+| Remove a bar | `dataset.entries.remove('d1')` | no. Several bars are several calls in one `transaction` |
+| Move a bar to another row | `dataset.entries.update('d1', { parentId: 'req-2' })` | no (the write). The vertical **drag** does not reach it — see *Out of scope* |
+| Match a bar | `{ name: 'fullDay', when: { hours: 8 }, css }` | no |
+| Gate a gesture per bar | `capabilities: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Print a Field on every bar | `barLabels: { field: 'hours', placement: 'inside' }` | the long form is new; the string shorthand stays |
+| Print a Field on one variant's bars | `bar({ barLabels: { field: 'hours' } })` | `EntryVariant.barLabels` is new |
+| Format a value | `formatValue: (value, ctx, entry) => …` | no |
+| Paint a bar | `paint: ({ entry, item, label }) => …` | no. `BarRendererContext` loses nothing and gains nothing |
+| Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |
+| Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
+| Show the same bars as sub-rows | change the rule, or the value it matches | no |
+| Select a bar | `gantt.selectedEntryIds = ['d1']` | renamed from `selectedSegmentIds` |
 
-**Names that stay off the app-author surface:** `StoredSegment` (plugin surface: ChangeSet entity, `EditRequest`), the plain bar's minted id (visible only as a `SegmentId` in the Selection and in `removeSegments`), `resolveForSegment` (internal).
+**The name is ruled, 2026-09-17, by the author.** `childrenAsSegments` — read the call site aloud: "row source: entries, children as segments, where show-days-on-row is true." It says what the children *become*, and it discriminates, because an unclaimed parent's children draw a bar on a row of their own and never a segment of another row's bar. **`Row` is not in the name** because the key already sits on `rowSource`, and a name does not repeat its own context. Rejected: `childrenAsRowSegments` (that repetition), `childrenOnParentRow` (this plan's own placeholder — it says where, not what), `childrenAsBars` (an unclaimed parent's children draw bars too, so the word does not discriminate), `mergeChildRows` (names the mechanism, not the job), `splitRow` ("Split" is under *Avoid* in `CONTEXT.md`), `childrenOnRow` (does not say whose row).
 
-**Two rules in one `EntryVariant`:** `when` reads the Entry, `whenSegment` reads the Segment, both present is AND. `whenSegment` alone never claims a row and never answers `items`.
+**This is what frees the word *Segment*, and it costs one thing.** The `Segment` **type** retires in C6, and the word keeps one meaning with no type behind it: *a child Entry drawn as one piece of its parent's row*. Between C1 and C6 the word means two things at once — the retiring type and the new key. That is the fault class #7 named ("chart"), so it is not free, and it is bounded: C1 rewrites `CONTEXT.md`'s *Segment* entry on the day the key lands, naming the new meaning first and marking the type as retiring with its build number. A reader of one entry then sees one story with a date on it, instead of two live meanings.
 
 ---
 
-## The plain bar — how core knows a Segment is hidden
+## What the Segment costs today, and what retires
 
-**Answer: there is no hidden Segment record. There is a hidden id.**
+Measured at `d87cbdd` and re-checked at `496ed77`: **59 non-test sites and 37 test files** read `segments`.
 
-- `StoredEntry.segments` holds authored Segments only. A plain spanning Entry stores `segments: []`. So `entry.segments` is `[]` and `toInput()` emits no `segments` with no filter and no flag.
-- The store keeps **one minted `SegmentId` per plain spanning Entry** in an index (`data/entry-store.ts`, beside `#entryIdBySegmentId` at `:523`). Core mints it when an Entry becomes plain-and-spanning. Core drops it when the Entry stops spanning or gains authored Segments. It is not data: no `StoredEntry` field, no ChangeSet row, no `toInput()` key.
-- `entryIdOfSegment`, `entryIdsOfSegments` and `segmentIdsOfEntries` answer it (`entry-store.ts:493`). Selection, `removeSegments`, keyboard select, grid-row click and `reveal` (`gantt-shell.ts:2101`) already read those three doors, so they keep working.
-- **`addSegment` on a plain Entry makes it authored.** The plain bar's id drops, and the new Segment's id names the bar. The Selection follows J-plan-2.
-- **Stable across a date edit and an undo.** A `start`/`end` row leaves the id alone. A drag on a plain bar writes `start`/`end`, never `segments`. This is what "a drag keeps the Entry plain" means in code.
-- **`layout/` stops reading `entry.segments` for selection ids.** `frame-memory.ts:127,157` read `entry.segments` to answer "which Segments does this Item stand for". A plain Item now has none there. The frame asks the store's `segmentIdsOfEntries` through a `LayoutInput` port instead. `layout/` still never imports `data/`.
+| Area | What goes |
+|---|---|
+| model | `Segment`, `SegmentId`, `segmentId()`, `StoredEntry.segments`, `EntryInput.segments`, `Item.segmentId`, `FrameBar.segmentIds`, `FrameRow.segmentIds` |
+| errors | `SegmentNotFoundError`, `EmptySegmentsError`, `SegmentsOutOfSyncError`, `DuplicateSegmentIdError` |
+| data | `updateSegment`, `addSegment`, `removeSegments`, `entryIdOfSegment`, `entryIdsOfSegments`, `segmentIdsOfEntries`, `segmentIdsDroppedBy`, the positional id match, `#removeSegmentsFrom`, `toSegment`/`toSegments`, `reconcileEnvelope`, `reconcileExtenderEdits`' envelope clause |
+| rollup | `widenSegmentsToEnvelope`, `fitSegmentsToEnvelope`, and the clamp-then-widen block at `data/rollup.ts:139-159` — **the single best argument for this design: it exists only because a rolling-up parent may also own Segments, and a child Entry can never be both** |
+| time | `envelopeOfSegments` (`time/instant.ts:56-68`) |
+| layout | `followSegments`/`ignoreSegments` (`items/item.ts:180`), `segmentIdsByItem`/`segmentIdsOfEntries` (`frame-memory.ts:96-130`), `segmentIdsForItem` (`frame-layout.ts:142`), the `segments` branch of `gesture-draft.ts:112-125,264` |
+| view | `view/segment-selection.ts` as a module, `selectedSegmentIds`, `selectableSegmentsInRowOrder`, `reveal`'s dual resolution |
+| render | the `data-segment-id` stamps |
+| api/fields | `measureDuration: 'segments'` (`fields/field-access.ts:220`), the `segmented-entry` cell-editor reason |
+| docs | ADR 0010's unit, ADR 0012's "at least one Segment iff it spans", `plans/01` §§2.2/8, `plans/02` §§ on `segments`/`removeSegments`/`selectedSegmentIds`, `CONTEXT.md`'s *Segment* entry |
 
-**Every site that reads `segments`, and what it does after B2** (measured at `d87cbdd`; 59 non-test sites, 37 test files):
-
-| Site | Today | After |
-|---|---|---|
-| `data/entry-reader.ts:122-132` `toSegments` | fills one Segment for a spanning Entry | returns `[]` when none authored |
-| `data/entry-reader.ts:316-360` `reconcileEnvelope` | a sole Segment mirrors a `start`/`end` write | `segments: []` → dates write alone. One authored Segment keeps today's mirror. Two or more → `SegmentsOutOfSyncError` unchanged |
-| `data/entry-reader.ts:101` `toSegment` | builds `{ id, start, end }` | keeps `name` and `props` from `existing` when the input names neither |
-| `data/entry-reader.ts:444` `moveEntryTo` | returns a `segments` write | plain → `{ start, end }`; authored → `segments` with each Segment's data kept |
-| `data/rollup.ts:180-186` | mints a Segment for a derived parent, pushes a `segments` row | writes `start`/`end` only; the store mints the plain bar's id on apply |
-| `data/rollup.ts:192` `fitSegmentsToEnvelope` | fits all | fits authored only, data kept |
-| `data/entry-store.ts:720` `#removeSegmentsFrom` | removes by id, un-dates on last | also accepts the plain bar's id: un-dates the Entry. Last authored Segment: see `Q2` |
-| `data/change-set.ts:128` `segmentIdsDroppedBy` | diffs `segments` rows | deleted. The Selection drops an id when `entryIdOfSegment(id)` is `undefined` after a commit |
-| `data/live-entry.ts:163` `toInput` | emits `segments` with ids | authored only, `name` + `props`, no ids |
-| `data/fields/field-access.ts:220` `measureDuration: 'segments'` | sums Segments | sums authored Segments; a plain Entry answers its span |
-| `layout/gesture-draft.ts:112-125,264` | rewrites `segments` | plain → `start`/`end` draft; authored → `segments` draft, data kept |
-| `layout/items/item.ts:180` `followSegments` | one Item per Segment, else whole span | unchanged; plain Item has no `segmentId` |
-| `layout/frame-memory.ts:127,157` | reads `entry.segments` | reads the `LayoutInput` port |
-| `extensions/features/inline-editing.ts:89` | `segments.length <= 1` | unchanged in meaning; `[]` and `[one]` both pass |
-| `view/gantt-shell.ts:2103` `reveal` | finds the Segment on the owner | plain bar's id → reveal the Entry span |
-| `layout/entry-double.ts` (test-only) | builds an `Entry` | also builds live `Segment`s |
+**`measureDuration: 'segments'` becomes `measureDuration: 'children'`** (Q25, ruled by the author 2026-09-17). A row's worked duration is the sum of its children's spans, not its own envelope. **Overlap has no rule of its own: core adds the children, and never reads them for overlap** — whatever the Aggregator says. A consumer who wants an overlapped hour counted once registers their own Aggregator and names it.
 
 ---
 
@@ -103,35 +143,10 @@ Publish the invocation an author writes. Read each line aloud before you change 
 
 | Invariant | Where it bites | How the build proves it |
 |---|---|---|
-| **I2** no module state | live `Segment` cache, variant resolution | cache lives on the store; the two-Gantt isolation test gains a Segment variant |
-| **I5** hot path allocates nothing | Item-phase walk, `segment.read()` on hover | walk runs in the layout pass and the frame carries the winner; `applyState` perf test unchanged |
-| **I8** `Item.id` deterministic | plain bar keeps index 0; authored Segments keep array index | layout snapshot test gains a segmented row |
-| **I14** one resolution for chrome and gesture | handles per Item, `canGesture(item)` | `e2e/write-refusal.spec.ts` gains a locked Segment beside a free one |
-
----
-
-## The stored/live migration for `Segment`
-
-Mirror ADR 0017 exactly. Do not invent a third shape.
-
-1. `pk-rename-symbol` today's `Segment` → `StoredSegment`. **Typecheck stays green while the meaning inverts.** Then add `name?: string` and `props: Readonly<Partial<TProps>>`.
-2. Declare the new live `Segment` in `model/segment.ts`: `id`, `start`, `end`, `name?`, `read(key)`, `toInput()`. No `props` on the read surface, the same rule the row follows.
-3. Build it in `data/live-segment.ts` beside `LiveEntries`: one instance per `SegmentId`, identity stable for the store's life, reads through the store so an open transaction overlays it.
-4. `StoredEntry.segments: readonly StoredSegment[]`. `Entry.segments: readonly Segment[]`.
-5. **A read seam takes `Segment`:** variant rules, `CapabilityRule`, `WriteRule`, `BarRendererContext`, `formatValue`. **The edit pipeline carries `StoredSegment`:** `ProposedEdit.segments`, `EditRequest`, ChangeSet rows, `toSegment`.
-6. `SegmentInput` gains `name?` and props, read by the same `readProps` path `EntryInput` uses. Same warnings, same `DuplicatePropsKeyError`.
-
----
-
-## Spikes — throwaway, before B1
-
-Each spike is a probe test, run once, then **deleted**. Write the finding as a **J** entry with the numbers. The issue names the first two. The third is this plan's.
-
-**S1 — the ChangeSet address (about 1 hour).** A two-Segment Entry. `updateSegment('d2', { color: 'grey', end })`. Assert one transaction, rows `{ id, segmentId: 'd2', field: 'color' }` and `{ …, field: 'end' }` plus the Entry's `end` envelope row. `replay` of the undo ChangeSet restores the Segment by id, not by position. `beforeChange` and an `EditExtender` see the `segmentId`. **Risk:** `applyFieldRow` (`entry-store.ts:944`) writes whole Fields today; a per-Segment row needs a second apply path.
-
-**S2 — the handle pair (about 1 hour).** `projectAffordances` with a two-Segment Entry, `can('resize')` false for one Segment. Decide between the two rules and record which: **(A)** the pair follows one Item; **(B)** the pair keeps bracketing the selection envelope (#200), and each handle is gated by the Item it lands on. **Recommendation: B**, expressed as `resizeHandles: { start?: ItemId; end?: ItemId }` replacing `resizableEntryId` + `resizableEdges`. A handle that is absent is not painted; nothing else says "no handle".
-
-**S3 — the plain bar's id (about 2 hours).** Put the minted id in a store index and `segments: []` on a plain Entry. Then: select the bar, drag it, undo, assert the Selection still holds the same id. `removeSegments([thatId])` un-dates. The Rollup gives a childless-until-now parent dates and the id appears. **Risk:** 59 non-test `segments` readers and one `layout/` port. If the id cannot stay stable across undo without a ChangeSet row, stop and file a **Q** — the fallback is a stored record filtered on read, which the issue calls out as the thing to avoid.
+| **I2** no module state | the claim rule runs per Gantt | two Gantts on one Dataset, one claiming and one not, in one test (spike Q7 proved it in probe code) |
+| **I5** hot path allocates nothing | the claim pass, per-Entry capability resolution | the claim runs in the layout pass; `applyState` perf test unchanged. **A browser measurement is still owed** — the spike's hover number is a Node proxy |
+| **I8** `Item.id` deterministic | every bar's Item id becomes `itemId(entryId, 0)` — an authored id, stable across sessions | layout snapshot test gains a claimed row |
+| **I14** one resolution for chrome and gesture | handles per bar on a shared row | `e2e/write-refusal.spec.ts` gains a locked child beside a free one |
 
 ---
 
@@ -139,23 +154,25 @@ Each spike is a probe test, run once, then **deleted**. Write the finding as a *
 
 Each build lands as one change with `verify:full PASS`. Change the order only with a stated reason.
 
+**Before C6, the word *segment* names two things in `src/**`, and only one of them is this work.** Every `Segment` type, `segmentId`, `segmentIds`, `selectedSegmentIds`, `data-segment-id` and `view/segment-selection.ts` symbol is the **retiring type**. None of them is the `childrenAsSegments` key. Builds C1–C5 read them as the type and leave them alone. C6 deletes them.
+
 ```
-S1 S2 S3  →  B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7
+C1  →  C2  →  C3  →  C4  →  C5  →  C6  →  C7
 ```
 
 | Build | Job | Lands after | Gate |
 |---|---|---|---|
-| **B1** Segment data | `StoredSegment`/`Segment` pair, `name?` everywhere, Segment props at ingest, `toSegment` keeps data, `toInput()` copies | spikes | ingest tests; copy test creates new Segment ids; grid shows empty name cell |
-| **B2** The plain bar | `segments: []` for plain, minted id in the index, Rollup writes dates, reconcile, draft, `moveEntryTo`, `removeSegments`, Selection drop rule, `LayoutInput` port | B1 | S3's assertions as real tests; every `segments` reader in the table above re-read once |
-| **B3** One write per Segment | `updateSegment`, `addSegment`, `FieldUpdated.segmentId`, per-Segment apply/replay, undo, `EditExtender` sees the address, `WriteRule` third argument, `transaction` batching test | B2 | S1's assertions as real tests; `addSegment` refuses a duplicate id like `add` does, and appends a structural `segments` row (J-plan-3) |
-| **B4** Variants per Item | `whenSegment`, predicate `(entry, segment)`, two-phase resolve, frame carries the winner per bar, `resolveBarRenderer(item)`, `BarRendererContext.segment`, `DoubleVariantClaim` names the Segment, `UnknownFieldMatch` for `whenSegment` | B3 | every shipped rule claims the same Items as before (snapshot); `whenSegment: { hours: 8 }` claims exactly those Items |
-| **B5** Capabilities per Item | `CapabilityRule(entry, segment)`, `can()` takes the Segment, `canGesture(item)` at every caller, handles per Item (S2's rule), grid-row click selects only Items that allow select | B4 | `e2e/write-refusal.spec.ts` locked Segment; a11y and keyboard paths ask the same `can` |
-| **B6** Labels | `BarLabels` long form, `EntryVariant.barLabels`, label resolved in layout from the Item's source through `formatValue(…, segment)`, a11y label from printed text or dates, empty-label geometry test, day/week/year zoom test | B4 | the two pinned tests; a plain bar still prints `entry.name` |
-| **B7** Harness, glossary, docs | one segmented row with per-Segment text, colour and capabilities; one plain bar with no name; `CONTEXT.md` Segment/Item entries; `docs/` consumer page; close #421 | B5, B6 | `harness/main.ts` reviewed; acceptance list in #421 all ticked |
+| **C1** The rule | `childrenAsSegments` on `EntriesRowSource` and `ResolvedEntriesRowSource`; the fold in `resolveEntriesSource` in **both** branches; `entryTreeIndex` in the flat branch; `expandable` cleared on a claimed parent; the claimed marker on `PlannedRow` (Q19 shape (a)); an early return so an unset rule costs nothing. **Plus, both ruled by the author:** a `boolean` Field type (Q22), and `fieldContext` threaded into the entries-source pass so the match uses each Field's own `equals` and an unknown key reports through `reportUnknownFieldMatch` (Q21). `CONTEXT.md`'s *Segment* entry is rewritten in this build, not in C7 | — | rows for the two-level and three-level fixtures; `nestsRows` still reads `tree` alone; a claimed flat source stays a `grid`; the live switch through `gantt.rowSource`; two Gantts disagree (I2); the unset-rule path measures as it does today; `childrenAsSegments: true` on a three-level tree gives rows to the roots alone (J-plan-I); `{ key: 'showDaysOnRow', type: 'boolean' }` ingests, formats, sorts and compares; a misspelt key in the rule reports once and claims nothing; a filter that drops a claimed parent drops its segments with it (J-plan-F); **an unclaimed parent is unchanged** — a Gantt with no rule, and a Gantt whose rule this parent does not match, both produce the row list they produce today, and no existing row snapshot moves |
+| **C2** The claimed parent's own bar | `produceItemsForRow` skips the row's subject when the row claims, and `ItemProducer` takes one more parameter — `childrenAsSegments`, per Entry, `row.claimed && entry.id === row.entryIds[0]` (Q27). `ignoreSegments` returns `[]` when it is `true`, so core's own `summary()` paints no rail over the bars it stands for. **Core ships no rail otherwise**: no key, no concept, no helper | C1 | a claimed row draws exactly its children's bars and nothing else, `summary()` resolved for the parent included; a consumer producer still draws a band behind them; an empty claimed parent draws a blank row; **an unclaimed parent still wears `summary()`'s rail over its children's own rows, in the same Gantt, in the same frame** |
+| **C3** A shared row resolves per Entry | audit and fix the nine `entryIds[0]` sites (seven read a row's list, two read the Selection's); capabilities, resize handles, hover, keyboard order, `reveal`, a11y labels and the grid-row click answer per Item, not per subject | C2 | a locked child refuses resize while its sibling keeps both handles (I14); keyboard order walks the bars in draw order; a grid-row click selects every bar the row owns; `reveal` finds a child bar |
+| **C4** The Rollup fast path | publish `EntryStore.committedChildIds()`; carry it on `RollUpTree`; skip `checkHierarchyAnswers` and both index builds when a commit moves no row (`rollup.ts:303-308`). **Core's own source only**, gated on `tree.source === storedParentSource` (`data/hierarchy-source.ts:18`) — a consumer's own source may read any field, so no commit can be proven not to move a row, and it keeps today's re-check. Whether a source declares its keys is **#426** (Q23) | C1 | the spike's bench as a real test; a commit that **does** move a row still re-checks; **a consumer's own hierarchy source re-checks every commit, and a test says so**; no behaviour change in any existing test |
+| **C5** Name and label | `Entry.name` optional on `EntryInput`/`StoredEntry`/`Entry`; `BarLabels` long form `{ field, placement }`; `EntryVariant.barLabels` merging key by key over the Gantt's; the label read from the Entry's Field through `formatValue` | C3 | the empty-label geometry test; the day/week/year zoom test; a bar with no name draws and prints nothing; the grid's name cell is empty |
+| **C6** The Segment retires; the Selection holds Entries | the two ADRs first, then the deletions in the table above; `selectedSegmentIds` → `selectedEntryIds`; `view/segment-selection.ts` → `view/entry-selection.ts`; `measureDuration: 'segments'` → `'children'` and `measureEntryDuration` reads `storedChildrenOf` in place of `entry.segments` (Q25); `ignoreSegments` → `wholeSpan` and `followSegments` deleted (Q26); **the `Item` → `Bar` rename (Q28)** — `Item`→`Bar`, `ItemId`→`BarId`, `itemId()`→`barId()`, `ItemProducer`→`BarProducer`, `VariantItems`→`VariantBars`, `EntryVariant.items`→`.bars`, `produceItemsForRow`→`produceBarsForRow`, `wholeEntryItem`→`wholeEntryBar`, `fixedWidthItem`→`fixedWidthBar`, and every `*ItemId` local; `MenuItem` and `CellItem` are untouched; `itemId(entry, segmentIndex = 0)` (`model/ids.ts:39`) loses the word `segment` from its second parameter in the same pass | C5 | every deleted door has no caller; `pnpm verify:full PASS`; the 37 Segment test files are deleted or rewritten against Entries; no `segments` key remains in `src/**`; **no `Item` symbol remains in `layout/`, `view/`, `render/` or `interaction/`**, and `plans/01` §2.4, **I8**, `plans/02`, `CONTEXT.md` and ADRs 0003, 0010, 0017, 0018, 0022 and 0023 say `Bar` |
+| **C7** Harness, glossary, docs | one crew-lead row of day bars with per-bar text, colour, capabilities and a row total; a toggle that opens it into sub-rows; a plain bar with no name; `CONTEXT.md`; `docs/08` promoted from proposal to shipped; `docs/05-consumer-api.md`; `plans/01`, `plans/02`, `plans/03` updated; close #421 | C6 | `harness/main.ts` reviewed against the stop rule; every acceptance box in #421 ticked |
 
-**Why this order.** B2 before B3: a hidden id has no record, so `updateSegment` on it is impossible by construction, not by a check. B4 before B5: `can` per Item reads the Item-phase winner. B6 after B4: a per-variant label reads the same winner.
+**Why this order.** C1 before C2: nothing can suppress a parent's bar until a row claims one. C3 before C5: a label resolved per bar needs per-Entry resolution first. C4 stands alone and may land any time after C1 — it is the measured half of the cost. C6 last of the code builds: the Segment must not retire while any build still needs a shipped comparison.
 
-**Wide mechanical changes.** B1's `name?` touches every `entry.name` read. Let `pnpm typecheck` list them. Do not add `?? ''` at a read site that should print nothing; add it only where a `string` is required by a DOM API.
+**What C6 will break.** Expect wide test breakage, the same shape the spike measured on a narrower change. Do it after an ADR, not before.
 
 ---
 
@@ -163,14 +180,15 @@ S1 S2 S3  →  B1  →  B2  →  B3  →  B4  →  B5  →  B6  →  B7
 
 Reversible. Each is a **J** in the log when a build takes it.
 
-- **J-plan-1.** The plain bar's id lives in a store index, never in a record or a ChangeSet row.
-- **J-plan-2.** `segmentIdsDroppedBy` goes. The Selection keeps an id while the store resolves it.
-- **J-plan-3.** A `segments` row stays for **structural** writes (which Segments exist, in what order). A `segmentId` row is a **value** write on one Segment. Two questions, two rows.
-- **J-plan-4.** `moveEntryTo` returns `{ start, end }` for a plain Entry. D-S5-50's reason (an envelope write overwrites a plugin's `end`) does not apply when there is no Segment to move.
-- **J-plan-5.** A variant's `barLabels` merges over the Gantt's key by key: `{ field }` alone keeps the Gantt's placement.
-- **J-plan-6.** The live `Segment` exposes `read(key)` and `toInput()`, no `props`, no `entry()`. A navigation door would invite a read across.
-- **J-plan-8.** `addSegment` ships in B3 (Q3, ruled 2026-09-16). It appends through `toSegment`, writes one structural `segments` row, and returns the live `Segment`. The positional `update(id, { segments })` stays the door for reorder and replace.
-- **J-plan-7.** Internal `Capabilities.can(capability, entry, segment, edge?)` takes `segment: Segment | undefined` as a required positional, so no caller can forget it. Run the naming skill on the object alternative before B5 and log the choice.
+- **J-plan-A.** The claim is a rule on `EntriesRowSource`, evaluated per parent Entry in the layout pass. It takes `true`, a `FieldMatch`, or a predicate — the `when` pattern, one match syntax.
+- **J-plan-B.** Q19 **shape (a)**: `entryIds[0]` stays the row's subject, and `PlannedRow` carries a marker that says the row claims its children. Shape (b) was written and it breaks nine call sites with no compile error (`SPIKE-FINDINGS.md`).
+- **J-plan-C.** A claimed parent is never expandable, in flat or in tree mode. The consumer opens it by writing the Field the rule matches.
+- **J-plan-D.** An empty claimed parent keeps its row and draws nothing. A blank row is what a dateless row already draws.
+- **J-plan-E.** Overlapping bars on one row draw at the shared band, and the later id in `row.entryIds` paints on top — the children's dataset order, not date order. `hitTest` already answers the topmost element, so no new code. Lane packing stays retired (#298).
+- **J-plan-F.** **A filter hides a parent, and its segments go with it** (Q20, ruled by the author 2026-09-17). `applyFilter` keeps or drops whole rows and tests the row's subject — the claimed parent — so a claimed parent's segments are hidden by the same act that hides their row. Nothing else is needed, and no item-level knob ships. **The consequence to state in the docs:** a filter predicate on a claimed row is never asked about a child, so a filter cannot keep some of a row's segments and drop others. Hiding the parent is the whole answer.
+- **J-plan-G.** The Segment retires with no migration path and no legacy key. This library has never shipped to a user.
+- **J-plan-H.** A bar's Item id is `itemId(entryId, 0)` — an authored id, stable across sessions.
+- **J-plan-I.** **A claim is a collapse, one level deeper.** A claimed parent draws its **direct** children as bars, and the whole subtree below the claimed parent loses its rows. A direct child that has children of its own draws one bar whose span rolls up over them, exactly as a collapsed parent's bar does today (`layout/rows/collapse.ts:18-20`). So `childrenAsSegments: true` on a three-level tree gives rows to the roots alone. No new mechanism, and no case where an Entry's row disappears without a bar standing for it.
 
 ---
 
@@ -178,15 +196,20 @@ Reversible. Each is a **J** in the log when a build takes it.
 
 Each story is one acceptance test. The consumer brief is `plans/handoff/2026-09-15-crm-filament-labor.md` §3.
 
-1. **A crew lead sees one bar per day.** A labour request spans two weeks. Each day is a Segment with `hours`, `worker` and `filled`. The row shows one bar per day, each with its own text and colour. A weekend gap draws nothing.
-2. **A filled day looks different from an open one.** `{ name: 'filled', whenSegment: { filled: true }, css }`. No renderer, no side map. The rule claims exactly the filled Items.
-3. **A locked day cannot be resized, its neighbours can.** `interactions: { resize: (entry, segment) => segment?.read('locked') !== true }`. The locked bar shows no handle. The bar beside it shows both. Dragging the locked edge does nothing.
-4. **A dispatcher assigns one worker to ten days in one step.** Ten `updateSegment` calls inside one `transaction`. One ChangeSet, ten rows each naming its `segmentId`. One undo clears all ten.
-5. **A planner copies a request.** `entries.add({ ...entry.toInput(), id: 'copy' })`. The copy has every day's data and fresh Segment ids. Nothing throws.
+1. **A crew lead sees one bar per day.** A labour request's days are child Entries with `hours`, `worker` and `filled`. The rule claims the request, so the row shows one bar per day, each with its own text and colour. A weekend gap draws nothing, because no child covers it.
+2. **The row shows the total.** `hours` declares `rollUp: 'sum'`. The request row's grid cell reads the sum of its days, at every zoom.
+3. **A filled day looks different from an open one.** `{ name: 'filled', when: { filled: true }, css }`. The ordinary variant rule claims exactly the filled bars.
+4. **A locked day cannot be resized, its neighbours can.** `capabilities: { resize: (entry) => entry.read('locked') !== true }`. The locked bar shows no handle. The bar beside it shows both.
+5. **A dispatcher assigns one worker to ten days in one step.** Ten `dataset.entries.update(id, { worker: 'Ali' })` calls inside one `transaction`. One ChangeSet, ten rows, one undo.
 6. **A booking with no title is still a bar.** `{ id: 'hold', start, end }`. The grid's name cell is empty. The bar draws, hovers, selects and resizes like any other. A screen reader hears the dates.
-7. **A bar prints hours, not its name.** `bar({ barLabels: { field: 'hours' } })`. The bar reads `8 h` through the Field's `formatValue`, the same text the grid would show. At year zoom it is a sliver and still reads `8 h` on hover.
-8. **A lead adds a day to a request.** `entries.addSegment('req-1', { start, end, hours: 8 })`. One new bar appears on the row. The other bars keep their ids, so the Selection is unchanged. Undo removes the bar and its data.
-9. **A drag keeps the data.** The lead drags a day one column right. The bar moves. Its `worker`, `hours` and `filled` are unchanged. Undo moves it back and the Selection still holds it.
+7. **A bar prints hours, not its name.** `bar({ barLabels: { field: 'hours' } })`. The bar reads `8 h` through the Field's `formatValue`, the same text the grid shows.
+8. **A lead adds a day to a request.** `dataset.entries.add({ parentId: 'req-1', start, end, hours: 8 })`. One new bar appears, the other bars keep their ids, the row total grows by 8, and undo reverses all of it.
+9. **A drag keeps the data.** The lead drags a day one column right. Its `worker`, `hours` and `filled` are unchanged. Undo moves it back with the Selection intact.
+10. **A request moves as a whole.** The lead drags the request row. Every day moves. `entries.update('req-1', { start })` is refused with `DerivedFieldNotWritableError`, because the row's dates roll up (ADR 0013).
+11. **The same days open into editable rows.** `dataset.entries.update('req-1', { showDaysOnRow: false })` — one write, one undo step. The days become sub-rows with editable grid cells, every other row unchanged, and undo restores the claimed shape with the Selection intact.
+12. **A site summarises two crews.** Three levels, `tree: true`: `site-a` keeps its rail and its chevron, `req-1` and `req-2` each carry their days, and `site-a`'s `hours` totals every day under both crews.
+13. **Two Gantts disagree.** One Gantt claims the requests and draws day bars. A second Gantt on the same Dataset shows the days as rows. Neither changes the data (I2).
+14. **A day moves to another crew.** `dataset.entries.update('d1', { parentId: 'req-2' })`. The bar keeps its id, its data and its place in the Selection. Both row totals change in one undo step.
 
 ---
 
@@ -194,9 +217,25 @@ Each story is one acceptance test. The consumer brief is `plans/handoff/2026-09-
 
 | Area | Files |
 |---|---|
-| model | `model/stored-entry.ts`, `model/segment.ts` (new), `model/change-set.ts`, `model/interactions.ts`, `model/field.ts:230`, `model/dataset.ts:64-69` |
-| data | `data/entry-reader.ts`, `data/entry-store.ts`, `data/rollup.ts`, `data/live-entry.ts`, `data/live-segment.ts` (new), `data/change-set.ts`, `data/replay.ts`, `data/dataset-state.ts:298` |
-| layout | `layout/items/variants.ts:82-111,444-530`, `layout/items/item.ts:93-110,180`, `layout/items/produce-items.ts`, `layout/frame.ts:136-156,271,353`, `layout/frame-memory.ts:110-160`, `layout/gesture-draft.ts`, `layout/renderer.ts:29-36,94` |
-| view | `view/gantt-shell.ts:716,875,900,929,1352,1838`, `view/affordance-projection.ts`, `view/capability.ts:36,216`, `view/segment-selection.ts:121-140` |
-| render | `render/dom/index.ts:201-260` (label and handle paint) |
-| consumer | `harness/main.ts`, `fixtures/demo-dataset.ts`, `CONTEXT.md:67-73,212-214`, `e2e/selection.spec.ts`, `e2e/write-refusal.spec.ts` |
+| layout (C1, C2, C3) | `layout/rows/entries-source.ts`, `layout/rows/row-source.ts`, `layout/rows/resolve-rows.ts`, `layout/rows/collapse.ts`, `layout/rows/filter.ts`, `layout/rows/sort.ts`, `layout/items/produce-items.ts`, `layout/items/item.ts`, `layout/frame.ts`, `layout/frame-memory.ts`, `layout/frame-layout.ts` |
+| data (C4, C6) | `data/entry-store.ts`, `data/rollup.ts`, `data/entry-reader.ts`, `data/live-entry.ts`, `data/change-set.ts`, `data/build-commit-change-set.ts`, `data/transaction.ts`, `data/fields/field-access.ts` |
+| model (C5, C6) | `model/stored-entry.ts`, `model/entry.ts`, `model/errors.ts`, `model/ids.ts`, `model/dataset.ts` |
+| time (C6) | `time/instant.ts` (`envelopeOfSegments` retires) |
+| view (C3, C6) | `view/gantt-shell.ts`, `view/segment-selection.ts` (renamed), `view/capability.ts`, `view/affordance-projection.ts`, `view/roving-focus.ts` |
+| render (C3, C5, C6) | `render/dom/index.ts` (label, handle, paint lookup, the `data-*` stamps) |
+| api (C1, C6) | `api/gantt.ts` (`rowSource`, `selectedEntryIds`), `api/index.ts` (the retired exports) |
+| consumer (C7) | `harness/main.ts`, `fixtures/demo-dataset.ts`, `fixtures/planner-dataset.ts`, `CONTEXT.md`, `docs/05-consumer-api.md`, `docs/07-row-source-updates.md`, `docs/08-a-bar-is-an-entry.md`, `e2e/selection.spec.ts`, `e2e/write-refusal.spec.ts` |
+
+---
+
+## Out of scope
+
+Each is real work this design makes possible. None of it ships inside #421.
+
+- **A vertical drag that moves a bar to another row — #425.** The *write* ships today (`update('d1', { parentId: 'req-2' })`). The gesture does not: `interaction/entry-gestures.ts:300` drives hover visuals only, and nothing in `interaction/` reads the hovered row at commit. What is missing is a row-target step in the commit path, plus a ruling on whether it is default behaviour or a capability.
+- **Mixed children** — one row carrying bars of its own *and* child rows below. The rule matches the parent, so it takes all of that parent's children. The brief has no such case.
+- **A claimed parent's child that has children of its own.** Ruled by C1 — see J-plan-I. It is not out of scope; it is settled, and it needed no new mechanism.
+- **A subtree copy.** `toInput()` copies one Entry. A hierarchy needs that door with or without this design.
+- **A row that paints one value per tick:** #423.
+- **Stacked bars** — two bars that cover the same time on one row, with the pointer hitting only the top one: #215. J-plan-E states what happens today.
+- **Links to a split piece of work.** The scheduling plugin rules it, not this work (S7).

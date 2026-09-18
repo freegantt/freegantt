@@ -1638,7 +1638,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const shell = new GanttShell({
       container,
       dataset,
-      interactions: { resize: false },
+      capabilities: { resize: false },
       wiring: {
         entryGestures: (_pane, _rowLayer, _container, ctx) => {
           hover = (item) => ctx.setHovered(item);
@@ -1777,7 +1777,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         resolve: () => [{ id: 'packed', entryIds: owned.map((entry) => String(entry.id)) }],
       },
       // The middle Entry refuses `select`, so the row keeps the other two (I14: one resolution).
-      interactions: { select: (entry) => entry.id !== owned[1]!.id },
+      capabilities: { select: (entry) => entry.id !== owned[1]!.id },
       wiring: {
         entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
           ctx = gestureCtx;

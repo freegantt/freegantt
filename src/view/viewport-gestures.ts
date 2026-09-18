@@ -1,8 +1,8 @@
 // view/ — the live switch for read-only viewport gestures (S3.7, D-S3-14). These are not
-// Capabilities: a Capability is per-entry (`interactions.move`), and a wheel zoom has no entry.
+// Capabilities: a Capability is per-entry (`capabilities.move`), and a wheel zoom has no entry.
 // One object, one job. A boolean is the shorthand; the long form pins each gesture.
 
-/** Per-gesture pins. An omitted key stays on — same "default on" reading `interactions: {}` uses
+/** Per-gesture pins. An omitted key stays on — same "default on" reading `capabilities: {}` uses
  *  for data gestures, without a per-entry predicate because there is no entry. */
 export interface ViewportGestureFlags {
   /** ctrl/⌘+wheel anchored zoom. Default on. */

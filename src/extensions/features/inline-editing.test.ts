@@ -310,7 +310,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('interactions.edit: false refuses every cell', () => {
+  it('capabilities.edit: false refuses every cell', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset<Meta>({ entries: structuredClone([...ENTRIES]), timeZone: 'UTC' });
@@ -318,7 +318,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
       container,
       dataset,
       gridColumns: ['name'],
-      interactions: { edit: false },
+      capabilities: { edit: false },
       plugins: [inlineEditing()],
     });
     dblclick(cellFor(container, 'e1', 'name'));

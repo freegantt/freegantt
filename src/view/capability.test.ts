@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCapabilities } from './capability.js';
-import type { CapabilityInputs, Interactions } from './capability.js';
+import type { CapabilityInputs, Capabilities } from './capability.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import type { EntryDoubleValues } from '../layout/entry-double.js';
@@ -34,12 +34,12 @@ function rollUpParent(): Entry {
  *  path; a test marks the one variant it cares about and reads the mark straight back. */
 const markedVariant = (entry: Entry): string => (entry.read('variant') as string | undefined) ?? 'leaf';
 
-/** What one variant's own `can` contributes — the shape `CapabilityInputs.variantInteractionsFor`
+/** What one variant's own `capabilities` contributes — the shape `CapabilityInputs.variantCapabilitiesFor`
  *  takes. Every other row answers "no opinion". */
 const variantAllows =
-  (variant: string, can: Interactions) =>
-  (entry: Entry): Interactions | undefined =>
-    markedVariant(entry) === variant ? can : undefined;
+  (variant: string, capabilities: Capabilities) =>
+  (entry: Entry): Capabilities | undefined =>
+    markedVariant(entry) === variant ? capabilities : undefined;
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
  *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId`/`segments`
@@ -101,21 +101,21 @@ describe('resolveCapabilities — gestures', () => {
   });
 
   it('a boolean rule overrides every entry uniformly', () => {
-    const caps = capabilities({ interactions: { resize: false } });
+    const caps = capabilities({ capabilities: { resize: false } });
     expect(caps.can('resize', entry())).toBe(false);
     expect(caps.can('move', entry())).toBe(true);
   });
 
   it('a predicate rule is evaluated per entry (U4)', () => {
-    const caps = capabilities({ interactions: { resize: (e) => !e.hasChildren } });
+    const caps = capabilities({ capabilities: { resize: (e) => !e.hasChildren } });
     expect(caps.can('resize', rollUpParent())).toBe(false);
     expect(caps.can('resize', entry())).toBe(true);
   });
 
-  it('re-resolves live: a fresh call with new interactions sees the new rule', () => {
+  it('re-resolves live: a fresh call with new capabilities sees the new rule', () => {
     let caps = capabilities();
     expect(caps.can('select', entry())).toBe(true);
-    caps = capabilities({ interactions: { select: false } });
+    caps = capabilities({ capabilities: { select: false } });
     expect(caps.can('select', entry())).toBe(false);
   });
 
@@ -171,13 +171,13 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(entry(), 'nothing-declares-this').ok).toBe(false);
   });
 
-  // Structure, not policy: `interactions: { edit: true }` reads like "turn editing on", and it used
+  // Structure, not policy: `capabilities: { edit: true }` reads like "turn editing on", and it used
   // to open the Duration cell — the editor took a typed value and the write went nowhere.
   it('lets no rule at all open a cell with nowhere to write', () => {
     for (const inputs of [
-      { interactions: { edit: true } },
+      { capabilities: { edit: true } },
       { registeredDefaultsFor: () => ({ edit: true }) },
-      { interactions: { edit: () => true } },
+      { capabilities: { edit: () => true } },
     ]) {
       const caps = capabilities(inputs);
       expect(caps.canWrite(entry(), 'duration').ok).toBe(false);
@@ -232,21 +232,21 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
     expect(bothLocked.can('resize', entry())).toBe(false);
   });
 
-  it('an explicit interactions.resize offers the handle and still cannot write the locked Field', () => {
-    const caps = capabilities({ interactions: { resize: true } }, lockedEnd);
+  it('an explicit capabilities.resize offers the handle and still cannot write the locked Field', () => {
+    const caps = capabilities({ capabilities: { resize: true } }, lockedEnd);
     expect(caps.can('resize', entry(), 'end')).toBe(false);
     expect(caps.can('resize', entry(), 'start')).toBe(true);
   });
 
-  it('interactions.edit is the one override that opens a locked Field', () => {
-    const caps = capabilities({ interactions: { edit: true } }, lockedEnd);
+  it('capabilities.edit is the one override that opens a locked Field', () => {
+    const caps = capabilities({ capabilities: { edit: true } }, lockedEnd);
     expect(caps.canWrite(entry(), 'end').ok).toBe(true);
     expect(caps.can('resize', entry(), 'end')).toBe(true);
     expect(caps.can('move', entry())).toBe(true);
   });
 
-  it('interactions.edit opens a roll-up parent cell it would otherwise refuse', () => {
-    const caps = capabilities({ interactions: { edit: true } });
+  it('capabilities.edit opens a roll-up parent cell it would otherwise refuse', () => {
+    const caps = capabilities({ capabilities: { edit: true } });
     const parent = family({})[0]!;
     expect(caps.canWrite(parent, 'start').ok).toBe(true);
     // ADR 0013: the parent's own cell is open, and its move still does not write it. What a parent
@@ -255,10 +255,10 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
   });
 });
 
-describe('interactions.edit answers the cell, not the entry (#256)', () => {
+describe('capabilities.edit answers the cell, not the entry (#256)', () => {
   it('answers undefined for a cell it has no opinion about, and the library rules decide it', () => {
     const caps = capabilities(
-      { interactions: { edit: (_entry, field) => (field === 'name' ? false : undefined) } },
+      { capabilities: { edit: (_entry, field) => (field === 'name' ? false : undefined) } },
       lockedEnd,
     );
     // The rule speaks for `name` and for nothing else, so every other cell keeps the answer it had.
@@ -273,11 +273,11 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
 
   it('a predicate sees both the entry and the field', () => {
     const seen: Array<[string, FieldKey]> = [];
-    const edit: Interactions['edit'] = (e, field) => {
+    const edit: Capabilities['edit'] = (e, field) => {
       seen.push([String(e.id), field]);
       return field !== 'end';
     };
-    const caps = capabilities({ interactions: { edit } });
+    const caps = capabilities({ capabilities: { edit } });
     const e = entry();
     expect(caps.canWrite(e, 'start').ok).toBe(true);
     expect(caps.canWrite(e, 'end').ok).toBe(false);
@@ -291,7 +291,7 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
     const locked = entryId('locked');
     // The exact shape `harness/main.ts` writes: name the one cell, say nothing about the rest.
     const caps = capabilities({
-      interactions: { edit: (e, field) => (e.id === locked && field === 'end' ? false : undefined) },
+      capabilities: { edit: (e, field) => (e.id === locked && field === 'end' ? false : undefined) },
     });
     expect(caps.can('resize', entry({ id: locked }), 'end')).toBe(false);
     expect(caps.can('resize', entry({ id: locked }), 'start')).toBe(true);
@@ -299,7 +299,7 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
   });
 
   it('a boolean false closes every cell, and closes move and resize with them', () => {
-    const caps = capabilities({ interactions: { edit: false } });
+    const caps = capabilities({ capabilities: { edit: false } });
     expect(caps.canWrite(entry(), 'name').ok).toBe(false);
     expect(caps.can('move', entry())).toBe(false);
     expect(caps.can('resize', entry(), 'start')).toBe(false);
@@ -307,54 +307,54 @@ describe('interactions.edit answers the cell, not the entry (#256)', () => {
   });
 });
 
-describe("a variant's own `can` (ADR 0018)", () => {
+describe("a variant's own `capabilities` (ADR 0018)", () => {
   it('a variant default answers a row the library rule would otherwise resolve', () => {
-    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { resize: false }) });
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { resize: false }) });
     expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(false);
     expect(caps.can('move', entry({ props: { variant: 'buffer' } }))).toBe(true);
   });
 
-  it("the consumer's own interactions still wins over a variant default", () => {
+  it("the consumer's own capabilities still wins over a variant default", () => {
     const caps = capabilities({
-      interactions: { resize: true },
-      variantInteractionsFor: variantAllows('buffer', { resize: false }),
+      capabilities: { resize: true },
+      variantCapabilitiesFor: variantAllows('buffer', { resize: false }),
     });
     expect(caps.can('resize', entry({ props: { variant: 'buffer' } }))).toBe(true);
   });
 
   it('a variant default still loses to the library rule for an unrelated row', () => {
-    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { resize: false }) });
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { resize: false }) });
     expect(caps.can('resize', rollUpParent())).toBe(false);
   });
 
   it('a row whose variant states nothing falls straight through to the library rule', () => {
-    const caps = capabilities({ variantInteractionsFor: () => undefined });
+    const caps = capabilities({ variantCapabilitiesFor: () => undefined });
     expect(caps.can('resize', entry())).toBe(true);
   });
 
   it('a variant edit default closes every cell of that row, and the gestures with it', () => {
-    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { edit: false }) });
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { edit: false }) });
     expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'start').ok).toBe(false);
     expect(caps.can('resize', entry({ props: { variant: 'buffer' } }), 'start')).toBe(false);
     expect(caps.canWrite(entry(), 'start').ok).toBe(true);
   });
 
-  it('a variant edit default loses to the consumer\u2019s own interactions.edit', () => {
+  it('a variant edit default loses to the consumer\u2019s own capabilities.edit', () => {
     const caps = capabilities({
-      interactions: { edit: true },
-      variantInteractionsFor: variantAllows('buffer', { edit: false }),
+      capabilities: { edit: true },
+      variantCapabilitiesFor: variantAllows('buffer', { edit: false }),
     });
     expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'start').ok).toBe(true);
   });
 
   it('a variant edit default opens a Field the library would have refused', () => {
-    const caps = capabilities({ variantInteractionsFor: variantAllows('buffer', { edit: true }) }, lockedEnd);
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { edit: true }) }, lockedEnd);
     expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'end').ok).toBe(true);
   });
 
   it('a variant `can` predicate that answers undefined falls through to the library rule', () => {
     const caps = capabilities({
-      variantInteractionsFor: variantAllows('buffer', {
+      variantCapabilitiesFor: variantAllows('buffer', {
         resize: (row) => (row.hasChildren ? false : undefined),
       }),
     });
@@ -364,7 +364,7 @@ describe("a variant's own `can` (ADR 0018)", () => {
 
   it('a variant `can` predicate that answers false refuses, and the library rule never runs', () => {
     const caps = capabilities({
-      variantInteractionsFor: variantAllows('buffer', {
+      variantCapabilitiesFor: variantAllows('buffer', {
         resize: (row) => (row.hasChildren ? undefined : false),
       }),
     });

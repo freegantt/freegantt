@@ -16,7 +16,7 @@ import type {
   ElementDescription,
   Field,
   FieldKey,
-  Interactions,
+  Capabilities,
   PluginId,
 } from '../../model/index.js';
 import type { BarRenderer } from '../renderer.js';
@@ -32,12 +32,12 @@ import { fixedWidthItem, ignoreSegments, followSegments } from './item.js';
  *  gap `GanttOptionsBase.barRenderer` and `EntryVariant.paint` already carry, not one this type
  *  introduces. A `ResolvedVariant<TProps>` would add a type parameter nothing inside actually reads,
  *  which is a lie generic (CLAUDE.md). Typing `paint`/`can` over `TProps` needs `BarRenderer` and
- *  `Interactions` to become generic first — a wider surface change, owed separately. */
+ *  `Capabilities` to become generic first — a wider surface change, owed separately. */
 export interface ResolvedVariant extends DrawnVariant {
   /** How it looks, or `undefined` for the library's own bar. */
   readonly paint: BarRenderer | undefined;
   /** What you can do to it, or `undefined` for no opinion at this level. */
-  readonly can: Interactions | undefined;
+  readonly capabilities: Capabilities | undefined;
   /** The rules this look needs, as CSS text, or `undefined` for none (ADR 0022 §5). The same string
    *  the variant's own `css` carried at registration — copied here so every seam answers `items` /
    *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
@@ -94,9 +94,9 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
    *  decorates the library's own bar and keeps its label (`J34`). */
   paint?: BarRenderer;
-  /** What you can do to it. One level under the consumer's own `interactions`, one level over the
+  /** What you can do to it. One level under the consumer's own `capabilities`, one level over the
    *  library rule. Answer `undefined` from a predicate for "no opinion" (`J13`). */
-  can?: Interactions;
+  capabilities?: Capabilities;
   /** The rules this look needs, as CSS text — verbatim, no scoping done for you. A variant owns
    *  `items`, `paint` and `can` already; this is the fifth answer, the rules behind the class
    *  `paint` names (ADR 0022 §5, Q6). `view/` wraps every installed variant's `css` once in
@@ -351,7 +351,7 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
     when: (entry: Entry) => entry.start !== undefined && entry.start === entry.end,
     items: fixedWidthItem(DIAMOND_WIDTH_PX),
     paint: () => DIAMOND_BAR,
-    can: { resize: false },
+    capabilities: { resize: false },
     css: DIAMOND_CSS,
     ...overrides,
   };
@@ -462,7 +462,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         name: variant.name,
         items: variant.items ?? followSegments,
         paint: variant.paint,
-        can: variant.can,
+        capabilities: variant.capabilities,
         css: variant.css,
       },
       claim:

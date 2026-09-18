@@ -34,7 +34,7 @@ declare global {
 // #142 shipped the core-Field override, and #256 gave it its first call site. This page declares
 // End read-only for the whole Dataset, which is the blunt, document-level lock. It can, because it
 // demonstrates mutation and undo/redo rather than drag-resize. `main.ts` shows the other half: the
-// same answer narrowed to one row through `interactions.edit`.
+// same answer narrowed to one row through `capabilities.edit`.
 //
 // `editable` is a Field declaration, code this page already holds — nothing carries it anywhere.
 // All three states sit below, and two doors read them (ADR 0015). End is `'api'`: the Move buttons
