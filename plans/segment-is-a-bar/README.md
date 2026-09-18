@@ -175,6 +175,27 @@ C1  →  C2  →  C3  →  C4  →  C5  →  C6  →  C7  →  C8
 
 **Why C8 is last, and why it is a subagent.** It reads the finished diff, so it cannot run until the diff is finished. A fresh reader is the point: an agent that wrote a document cannot see the claim it left behind, because it remembers what it meant. **It reports and does not rewrite** — a reviewer who edits turns a disagreement into a silent choice.
 
+**How C6 runs — three waves, not one dispatch (coordinator, 2026-09-18).** The cell holds five jobs
+over the same files, and one agent doing them together produces a diff nobody can review. Order is
+forced by what each wave reads:
+
+1. **C6a — the two ADRs, and nothing else.** The Selection's unit, and the Segment's retirement. They
+   record decisions the author already made (Q17, Q25, Q26, Q28, Q32), so this wave writes them down
+   and changes no code. The cell says "the two ADRs first" and means it: the deletions cite them.
+2. **C6b — `Item` → `Bar` (Q28), on its own commit.** Ten symbols through `pk-rename-symbol`, plus
+   `itemId(entry, segmentIndex = 0)` losing `segment` from its second parameter. `MenuItem` and
+   `CellItem` are untouched. It is mechanical and wide, so it must not share a commit with a
+   behaviour change — a reviewer reading a mixed diff cannot tell a rename from a rewrite.
+3. **C6c — the Segment retires.** The deletions, `selectedSegmentIds` → `selectedEntryIds`,
+   `view/segment-selection.ts` → `view/entry-selection.ts`, the `measureDuration` stopgap and its
+   fallback, `ignoreSegments` → `wholeSpan`, `followSegments` deleted, and the spec and ADR updates.
+
+**One question C6c must ask the author before it renames, not after.** `ignoreSegments` → `wholeSpan`
+was ruled by Q26 *before* C2 shipped. After C2 that producer returns `[]` for a claimed subject, so a
+name promising "the whole span" now describes what it does in one case and not the other. **Read the
+call site aloud against the behaviour it has today, not the behaviour Q26 saw.** Use the naming skill.
+If `wholeSpan` still wins, say why in the commit; if it does not, escalate rather than renaming twice.
+
 **What C6 will break.** Expect wide test breakage, the same shape the spike measured on a narrower change. Do it after an ADR, not before.
 
 ---
