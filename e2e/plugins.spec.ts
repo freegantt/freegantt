@@ -172,11 +172,14 @@ test('every bar of a locked row ghosts alongside a dragged neighbour, and the dr
   });
 
   // The preview is rAF-coalesced, so poll rather than read once: every locked bar moves, because the
-  // plugin's extender wrote the whole Entry's Segments into the same draft. The 8px floor clears
-  // sub-pixel rounding on a bar that has not moved at all; the drag itself is 120px.
+  // plugin's extender cascades a `moveEntryTo` edit for every locked child Entry (ADR 0026 — this row
+  // draws several bars because it has several children, not because one Entry draws several
+  // Segments) into the same draft. The 8px floor clears sub-pixel rounding on a bar that has not
+  // moved at all; the drag itself is 120px.
   await expect.poll(async () => (await leftEdges()).every((x, i) => x > lockedBefore[i]! + 8)).toBe(true);
-  // Rigid, not stretched: one shared offset for every Segment, so the gaps between the bars survive
-  // the ghost. `moveEntryTo` promises this; an envelope write could not even name the Segments.
+  // Rigid, not stretched: one shared offset for every locked child Entry, so the gaps between the
+  // bars survive the ghost. `moveEntryTo` promises this per Entry; a single envelope write over the
+  // parent could not even name which child moved.
   const offsets = (await leftEdges()).map((x, i) => Math.round(x - lockedBefore[i]!));
   expect(new Set(offsets).size).toBe(1);
 

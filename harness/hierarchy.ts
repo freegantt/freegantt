@@ -14,7 +14,7 @@ import type {
   RowSource,
 } from 'freegantt';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
-import type { CrewDayProps } from '../fixtures/hierarchy-dataset.js';
+import type { HierarchyEntryProps } from '../fixtures/hierarchy-dataset.js';
 import { phaseHierarchy } from './plugins/phase-hierarchy.js';
 import type { PhaseProps } from './plugins/phase-hierarchy.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
@@ -100,9 +100,10 @@ const gantt = mountGantt(dataset);
 window.__dataset = dataset;
 window.__gantt = gantt;
 
-/** The page's own keys, the crew-lead row's own keys (#421 C7), plus the one the hierarchy plugin
- *  declares (ADR 0020). */
-type HierarchyProps = { cost: number } & Partial<CrewDayProps> & PhaseProps;
+/** The fixture's own published `HierarchyEntryProps` (`cost`, `team`, plus the crew-lead row's own
+ *  keys, #421 C7) — imported, never hand-copied, so this page cannot drift from the fixture it reads
+ *  (J41) — plus the one the hierarchy plugin declares (ADR 0020). */
+type HierarchyProps = HierarchyEntryProps & PhaseProps;
 
 function createDataset(
   entries: readonly EntryInput<HierarchyProps>[] = hierarchyEntryInputs,

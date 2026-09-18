@@ -40,6 +40,9 @@ The filter survives, because you never touched it. The getter returns the source
 `filterPolicy` and `tree` come back filled in even when you never set them. That resolved value
 assigns straight back into the setter.
 
+The same pattern carries `childrenAsSegments` unchanged: `ResolvedEntriesRowSource` extends
+`EntriesRowSource`, so a spread that changes `sort` or `filter` leaves it exactly as it was.
+
 ## Turn one setting off
 
 Pass `undefined` for the key. The other settings stay:

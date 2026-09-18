@@ -319,7 +319,7 @@ These left the coordinator's handoff when that file was deleted on 2026-09-18. E
 
 ## The acceptance boxes no build has covered yet — read this before C7
 
-**Checked 2026-09-18 against #421's own Acceptance list, box by box.** C1–C6 cover most of the 21.
+**Checked 2026-09-18 against #421's own Acceptance list, box by box.** C1–C6 cover most of the 30.
 These five are **not** covered by any test that exists, and C7's gate is "every acceptance box in
 #421 ticked". C7 must build them or say plainly why not.
 
@@ -343,7 +343,7 @@ These five are **not** covered by any test that exists, and C7's gate is "every 
 5. **A test pins that a bar's printed value and its row total read the same at day, week and year
    zoom.** C5 pinned labels across zoom; the **row total** across zoom is not pinned.
 
-Box 211 is already satisfied and recorded: C3 read all nine `entryIds[0]` sites once each and wrote a
+Box 17 is already satisfied and recorded: C3 read all nine `entryIds[0]` sites once each and wrote a
 verdict per site into `999f599`'s commit message. Note the box's own line numbers are stale — C3
 re-derived them, which is the right move.
 

@@ -4,7 +4,7 @@ slug: /
 
 # FreeGantt — Guardrails Overview
 
-**Status:** Design. No code yet — this folder specifies the enforcement system that `plans/04` §3–§4 calls for, in enough detail that implementing it is mechanical.
+**Status:** Shipped. This folder specifies the enforcement system that `plans/04` §3–§4 calls for, and every layer below runs: 14 custom rules in `eslint/rules/`, 15 guard suites in `test/guards/`, and the whole gate runs in CI on every change (`04-hooks-and-ci.md`).
 
 **What this folder is:** the answer to "how do we make the rules in `plans/00`–`04` and `CLAUDE.md` *deterministic* — machine-checked, failing loudly, on every change — instead of things a reviewer has to remember."
 
@@ -16,6 +16,10 @@ slug: /
 | `03-boundaries-and-config.md` | dependency-cruiser, tsconfig, `exports` map, Vitest projects, package checks |
 | `04-hooks-and-ci.md` | Git hooks, Claude Code hooks, the CI pipeline, guard-test meta-suite |
 | `05-consumer-api.md` | Index for app authors — links README, `plans/02`, glossary, export report, S4 surface |
+| `06-plugin-authoring.md` | Plugin authoring guide — the two-halves shape, every registration seam, disposal |
+| `07-row-source-updates.md` | How to change one `rowSource` setting and keep the rest |
+| `08-a-bar-is-an-entry.md` | ADR-adjacent record of #421: a Bar is one child Entry by default |
+| `edit-extension-flow.md` | The extension hook — flow and sample usage for `data/edit-extension.ts` |
 
 ---
 
@@ -32,7 +36,7 @@ slug: /
 ```mermaid
 flowchart TB
   L1["<b>L1 — Types</b><br/>tsconfig strict flags · branded Instant<br/>sealed exports map · typed event union"]
-  L2["<b>L2 — Static analysis</b><br/>ESLint flat config: 10 builtin-restriction configs<br/>+ 9 custom rules in a local plugin<br/>dependency-cruiser layer graph"]
+  L2["<b>L2 — Static analysis</b><br/>ESLint flat config: 10 builtin-restriction configs<br/>+ 14 custom rules in a local plugin<br/>dependency-cruiser layer graph"]
   L3["<b>L3 — Tests</b><br/>Vitest projects (pure=node, dom=happy-dom)<br/>property tests · golden fixtures · isolation · guard-tests"]
   L4["<b>L4 — Hooks</b><br/>Claude Code PostToolUse/PreToolUse (agent-time)<br/>git pre-commit / pre-push (human-time)"]
   L5["<b>L5 — CI</b><br/>the same commands, no escape hatches<br/>+ api-report diff · size-limit · e2e/axe"]

@@ -91,8 +91,8 @@ gantt.panToToday();
 
 // A test seam only (`hierarchy.ts` writes the same two globals): it hands an e2e test the public
 // `Gantt` and `Dataset`, nothing else. `Window.__dataset` is a bare `Dataset` — every e2e read of it
-// (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so
-// no cast is needed to bridge two harness pages' differently-fielded instances.
+// (`start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so no cast is
+// needed to bridge two harness pages' differently-fielded instances.
 window.__dataset = dataset;
 window.__gantt = gantt;
 
