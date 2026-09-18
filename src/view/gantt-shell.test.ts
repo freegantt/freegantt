@@ -6,18 +6,18 @@ import {
   FrameLayout,
   ScrollAxis,
   TimeScaleModel,
-  fixedWidthItem,
+  fixedWidthBar,
 } from '../layout/index.js';
 import {
   entryId,
   rowId,
-  itemId,
+  barId,
   mintedSegmentId,
   segmentId,
   RevealTargetNotFoundError,
   ContainerNotFoundError,
 } from '../model/index.js';
-import type { EntryId, Field, Instant, ItemId, SegmentId, StoredEntry } from '../model/index.js';
+import type { EntryId, Field, Instant, BarId, SegmentId, StoredEntry } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -120,7 +120,7 @@ function translateX(node: HTMLElement): number {
 }
 
 /** The `data-state` tokens one bar carries right now — `''` when it carries none. */
-function stateOf(container: HTMLElement, item: ItemId): string {
+function stateOf(container: HTMLElement, item: BarId): string {
   return container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state') ?? '';
 }
 
@@ -780,7 +780,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         dataset: fakeDataset([marker]),
         scroll: { x: scrollX },
         scale,
-        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+        variants: [{ name: 'diamond', when: () => true, bars: fixedWidthBar(boxWidthPx) }],
       });
       const viewportWidth = 50;
       FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
@@ -799,7 +799,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(entryId) unions every Segment Item’s own painted extent, not the entry’s raw envelope (#295)', () => {
+  it('reveal(entryId) unions every Segment Bar’s own painted extent, not the entry’s raw envelope (#295)', () => {
     // Two zero-width Segments, each floored to `DEFAULT_MIN_BAR_WIDTH_PX` and centred on its own
     // instant (`barSpan`) — the union of those two painted boxes reaches `minBarWidthPx / 2` past
     // each Segment's own instant, which the entry's raw `start`/`end` alone would not reach.
@@ -810,7 +810,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const container = document.createElement('div');
       const scrollX = new ScrollAxis();
       const pxPerMs = 0.01;
-      // t1 sits far enough into the range that its own floored Item never goes negative — this test
+      // t1 sits far enough into the range that its own floored Bar never goes negative — this test
       // means to exercise the right-edge reveal branch alone, not the left-edge one.
       const t1 = instant('2026-09-01T00:02:00Z');
       const t2 = instant('2026-09-01T00:10:00Z');
@@ -849,7 +849,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(entryId) expands a collapsed ancestor before reading its Items, so it targets the real box (#295)', () => {
+  it('reveal(entryId) expands a collapsed ancestor before reading its Bars, so it targets the real box (#295)', () => {
     // `FrameLayout.itemsForEntry` answers from the post-collapse plan — a row collapse hid answers
     // empty until the ancestor chain opens and the frame catches up. Computing the span before that
     // expand-and-flush would silently fall back to the entry's raw span instead of its diamond box.
@@ -888,7 +888,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         scale,
         rowSource: { source: 'entries', tree: true },
         collapsed: [rowId('p')],
-        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+        variants: [{ name: 'diamond', when: () => true, bars: fixedWidthBar(boxWidthPx) }],
       });
       const viewportWidth = 50;
       FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
@@ -933,7 +933,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         dataset: fakeDataset([marker]),
         scroll: { x: scrollX },
         scale,
-        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+        variants: [{ name: 'diamond', when: () => true, bars: fixedWidthBar(boxWidthPx) }],
       });
       const viewportWidth = 50;
       FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
@@ -941,7 +941,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       shell.reveal(entryId('marker'));
       shell.render(); // paints the frame the reveal's own scroll asked for
 
-      const bar = container.querySelector<HTMLElement>(`[data-item-id="${itemId(entryId('marker'))}"]`)!;
+      const bar = container.querySelector<HTMLElement>(`[data-item-id="${barId(entryId('marker'))}"]`)!;
       expect(pxWidth(bar)).toBe(boxWidthPx);
       expect(scrollX.state.position).toBe(translateX(bar) + pxWidth(bar) - viewportWidth);
 
@@ -952,8 +952,8 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   });
 
   it('reveal(segmentId) targets the one bar that stands for that Segment, at its painted box (#295)', () => {
-    // A `diamond()` row draws one boxed Item over the whole span, and that one bar stands for every
-    // Segment of the Entry (`segmentIdsForItem`). So naming a Segment reveals that bar at its box
+    // A `diamond()` row draws one boxed Bar over the whole span, and that one bar stands for every
+    // Segment of the Entry (`segmentIdsForBar`). So naming a Segment reveals that bar at its box
     // width — not the Segment's own zero-width span floored to `minBarWidthPx`.
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
@@ -982,7 +982,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         dataset: fakeDataset([marker]),
         scroll: { x: scrollX },
         scale,
-        variants: [{ name: 'diamond', when: () => true, items: fixedWidthItem(boxWidthPx) }],
+        variants: [{ name: 'diamond', when: () => true, bars: fixedWidthBar(boxWidthPx) }],
       });
       const viewportWidth = 50;
       FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
@@ -1001,7 +1001,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   });
 
   it('reveal(segmentId) uses that Segment’s own dates when no bar draws it, never a sibling bar (#295)', () => {
-    // A variant may draw fewer Items than the Entry has Segments. `RovingFocus` names a Segment to
+    // A variant may draw fewer Bars than the Entry has Segments. `RovingFocus` names a Segment to
     // hold the pan on the bar that has focus, so widening to a sibling would show the wrong bar.
     // Here only the first Segment draws, and the second one's own dates are the target.
     FakeResizeObserver.instances = [];
@@ -1036,12 +1036,12 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
           {
             name: 'first-piece-only',
             when: () => true,
-            items: (entry, variant) => {
+            bars: (entry, variant) => {
               const drawn = entry.segments?.[0];
               if (drawn === undefined) return [];
               return [
                 {
-                  id: itemId(entry.id),
+                  id: barId(entry.id),
                   entryId: entry.id,
                   variant,
                   label: entry.name ?? '',
@@ -1512,7 +1512,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
       const container = document.createElement('div');
-      let hover: ((item: ItemId | undefined) => void) | undefined;
+      let hover: ((item: BarId | undefined) => void) | undefined;
       const shell = new GanttShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
@@ -1543,7 +1543,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       // `data-movable`/handle moves) is what tells O(changed items) apart from O(mounted bars).
       const setAttributeSpy = vi.spyOn(HTMLElement.prototype, 'setAttribute');
 
-      for (const bar of bars) hover?.(bar.dataset['itemId'] as ItemId);
+      for (const bar of bars) hover?.(bar.dataset['itemId'] as BarId);
       hover?.(undefined);
 
       observer.disconnect();
@@ -1574,7 +1574,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
       const container = document.createElement('div');
-      let hover: ((item: ItemId | undefined) => void) | undefined;
+      let hover: ((item: BarId | undefined) => void) | undefined;
       const shell = new GanttShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
@@ -1595,7 +1595,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
       const plannedRowsSpy = vi.spyOn(FrameLayout.prototype, 'plannedRows');
 
-      for (const bar of bars) hover?.(bar.dataset['itemId'] as ItemId);
+      for (const bar of bars) hover?.(bar.dataset['itemId'] as BarId);
       hover?.(undefined);
 
       expect(plannedRowsSpy).not.toHaveBeenCalled();
@@ -1631,10 +1631,10 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('movableItemId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
+  it('movableBarId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
-    let hover: ((item: ItemId | undefined) => void) | undefined;
+    let hover: ((item: BarId | undefined) => void) | undefined;
     const shell = new GanttShell({
       container,
       dataset,
@@ -1648,7 +1648,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    hover?.(bar.dataset['itemId'] as ItemId);
+    hover?.(bar.dataset['itemId'] as BarId);
 
     expect(bar.hasAttribute('data-movable')).toBe(true);
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
@@ -1700,8 +1700,8 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       },
     });
 
-    const first = itemId(segmented.id, 0);
-    const second = itemId(segmented.id, 1);
+    const first = barId(segmented.id, 0);
+    const second = barId(segmented.id, 1);
     propose?.([segmentId('seg-2')]);
 
     // The pointer named one bar, so the Selection holds that one Segment and the paint runs that far

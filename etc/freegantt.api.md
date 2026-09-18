@@ -41,6 +41,22 @@ export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'be
 // @public
 export function attemptMutation(body: () => void): boolean;
 
+// @public (undocumented)
+export interface Bar {
+    readonly box?: FixedBarBox;
+    // (undocumented)
+    end: Instant;
+    // (undocumented)
+    entryId: EntryId;
+    // (undocumented)
+    id: BarId;
+    label?: string;
+    segmentId?: SegmentId;
+    // (undocumented)
+    start: Instant;
+    variant: string;
+}
+
 // @public
 export function bar(overrides?: Partial<EntryVariant>): EntryVariant;
 
@@ -54,6 +70,17 @@ export interface BarFlags {
     // (undocumented)
     cycle?: boolean;
 }
+
+// @public (undocumented)
+export type BarId = string & {
+    readonly __brand: 'BarId';
+};
+
+// @public
+export function barId(entry: EntryId, segmentIndex?: number): BarId;
+
+// @public
+export function barIdFromDataset(value: string | undefined): BarId | undefined;
 
 // @public
 export type BarLabelPlacement = 'inside' | 'outside';
@@ -70,6 +97,9 @@ export interface BarLabelSpec {
     // (undocumented)
     placement?: BarLabelPolicy;
 }
+
+// @public
+export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
 // @public
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
@@ -757,7 +787,7 @@ export function entryId(value: string): EntryId;
 export function entryIdFromDataset(value: string | undefined): EntryId | undefined;
 
 // @public
-export function entryIdOfItem(id: ItemId): EntryId;
+export function entryIdOfBar(id: BarId): EntryId;
 
 // @public
 export interface EntryInput<TProps = Record<string, unknown>> {
@@ -824,9 +854,9 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 // @public
 export interface EntryVariant<TProps = Record<string, unknown>> {
     barLabels?: BarLabels;
+    bars?: BarProducer;
     capabilities?: Capabilities;
     css?: string;
-    items?: ItemProducer;
     name: string;
     paint?: BarRenderer;
     when?: EntryRule<TProps>;
@@ -989,10 +1019,10 @@ export interface FixedBarBox {
 }
 
 // @public
-export function fixedWidthItem(px: number, anchor?: BarAnchor): ItemProducer;
+export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
 
 // @public
-export function followSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Item[];
+export function followSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1022,7 +1052,7 @@ export interface FrameBar {
     // (undocumented)
     height: number;
     // (undocumented)
-    id: ItemId;
+    id: BarId;
     label: string;
     // (undocumented)
     rowId: RowId;
@@ -1405,7 +1435,7 @@ export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: Hi
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover;
 
 // @public
-export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Item[];
+export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
 
 // @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
@@ -1504,36 +1534,6 @@ export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean;
 
 // @public
 export function isTimeUnit(value: string): value is TimeUnit;
-
-// @public (undocumented)
-export interface Item {
-    readonly box?: FixedBarBox;
-    // (undocumented)
-    end: Instant;
-    // (undocumented)
-    entryId: EntryId;
-    // (undocumented)
-    id: ItemId;
-    label?: string;
-    segmentId?: SegmentId;
-    // (undocumented)
-    start: Instant;
-    variant: string;
-}
-
-// @public (undocumented)
-export type ItemId = string & {
-    readonly __brand: 'ItemId';
-};
-
-// @public
-export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
-
-// @public
-export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
-
-// @public
-export type ItemProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Item[];
 
 // @public (undocumented)
 export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;
@@ -2090,7 +2090,7 @@ export type SegmentId = string & {
 };
 
 // @public
-export function segmentIndexOfItem(id: ItemId): number;
+export function segmentIndexOfBar(id: BarId): number;
 
 // @public
 export interface SegmentInput extends TimeSpanInput {
@@ -2423,7 +2423,7 @@ export interface ViewPresetHeader extends TickStep {
 export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
-export function wholeEntryItem(entry: Entry, variant: string): Item;
+export function wholeEntryBar(entry: Entry, variant: string): Bar;
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //

@@ -1,16 +1,16 @@
-export type { EntryId, SegmentId, RowId, ItemId, ChangeSetId } from './ids.js';
+export type { EntryId, SegmentId, RowId, BarId, ChangeSetId } from './ids.js';
 export {
   entryId,
   segmentId,
   mintedSegmentId,
   rowId,
-  itemId,
-  itemIdFromDataset,
+  barId,
+  barIdFromDataset,
   rowIdFromDataset,
   entryIdFromDataset,
   segmentIdFromDataset,
-  entryIdOfItem,
-  segmentIndexOfItem,
+  entryIdOfBar,
+  segmentIndexOfBar,
   changeSetId,
 } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration, DurationMeasure, PlainParts } from './time.js';

@@ -4,6 +4,8 @@ decided: core exports its looks as `EntryVariant` factories — `bar()`, `summar
 open: nothing this record answers. A fourth shipped look (a chevron, a flag, a hatched buffer, a hollow bar) is deliberately not here.
 ---
 
+> **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item`/`ItemProducer` below as `Bar`/`BarProducer`. **Do not rewrite the body.**
+
 # Core ships variants, and a variant answers about itself
 
 [ADR 0021](0021-the-consumers-stylesheet-wins.md) is its pair: that one lets a consumer's CSS win, this one gives them something worth writing CSS against. Neither is sufficient alone — the checkpoint defect needed both.

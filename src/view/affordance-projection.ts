@@ -2,12 +2,12 @@
 // to decide which item ids get hover/move/resize paint before it writes `InteractionState` and calls
 // `applyState` — no DOM, no shell, no `InteractionState` knowledge here, only the resolution rule.
 
-import { entryIdOfItem } from '../model/index.js';
-import type { EntryId, ItemId } from '../model/index.js';
+import { entryIdOfBar } from '../model/index.js';
+import type { EntryId, BarId } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
 
 export interface AffordanceInputs {
-  hoveredItemId: ItemId | undefined;
+  hoveredBarId: BarId | undefined;
   /** The one Entry the Selection names, when it names exactly one (#212, ADR 0010, review finding 7).
    *  `undefined` when the Selection is empty or spans more than one Entry — either way the
    *  sole-selection fallback below has nothing to fall back to. The handle pair brackets an Entry
@@ -17,15 +17,15 @@ export interface AffordanceInputs {
    *  `undefined`. Exactly one means the user named one bar, and that is when the sole-selection
    *  fallback shows its handles (#212). */
   selectedSegmentCountOfSoleEntry: number;
-  /** Every Item one entry draws in the current frame (`FrameLayout.itemIdsForEntry`). The fallback
-   *  asks it instead of building an Item id out of an entry id. */
-  itemIdsForEntry: (id: EntryId) => readonly ItemId[];
+  /** Every Bar one entry draws in the current frame (`FrameLayout.barIdsForEntry`). The fallback
+   *  asks it instead of building a Bar id out of an entry id. */
+  barIdsForEntry: (id: EntryId) => readonly BarId[];
   canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean;
 }
 
 export interface AffordanceIds {
-  hoveredItemId?: ItemId;
-  movableItemId?: ItemId;
+  hoveredBarId?: BarId;
+  movableBarId?: BarId;
   /** The Entry the handle pair brackets (#200) — the pair sits on that Entry's envelope, so the two
    *  handles can land on two different bars. Which bars those are is the backend's own reading of
    *  the frame it synced, the same way the Selection paints (#185). */
@@ -41,23 +41,23 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredItemId, soleSelectedEntryId, selectedSegmentCountOfSoleEntry, itemIdsForEntry, canGesture } =
+  const { hoveredBarId, soleSelectedEntryId, selectedSegmentCountOfSoleEntry, barIdsForEntry, canGesture } =
     inputs;
-  const hoveredEntryId = hoveredItemId !== undefined ? entryIdOfItem(hoveredItemId) : undefined;
+  const hoveredEntryId = hoveredBarId !== undefined ? entryIdOfBar(hoveredBarId) : undefined;
 
   const out: AffordanceIds = {};
-  if (hoveredItemId !== undefined) out.hoveredItemId = hoveredItemId;
+  if (hoveredBarId !== undefined) out.hoveredBarId = hoveredBarId;
 
-  if (hoveredItemId !== undefined && hoveredEntryId !== undefined && canGesture('move', hoveredEntryId)) {
-    out.movableItemId = hoveredItemId;
+  if (hoveredBarId !== undefined && hoveredEntryId !== undefined && canGesture('move', hoveredEntryId)) {
+    out.movableBarId = hoveredBarId;
   }
 
   const resizable = resolveResizableEntry({
-    hoveredItemId,
+    hoveredBarId,
     hoveredEntryId,
     soleSelectedEntryId,
     selectedSegmentCountOfSoleEntry,
-    itemIdsForEntry,
+    barIdsForEntry,
     canGesture,
   });
   if (resizable !== undefined) {
@@ -84,22 +84,22 @@ function resolveEdges(
  *  segmented Entry selected from the grid pane has every Segment in the Selection, so it gets no
  *  handles until the pointer visits one bar. */
 function resolveResizableEntry(inputs: {
-  hoveredItemId: ItemId | undefined;
+  hoveredBarId: BarId | undefined;
   hoveredEntryId: EntryId | undefined;
   soleSelectedEntryId: EntryId | undefined;
   selectedSegmentCountOfSoleEntry: number;
-  itemIdsForEntry: (id: EntryId) => readonly ItemId[];
+  barIdsForEntry: (id: EntryId) => readonly BarId[];
   canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean;
 }): { entryId: EntryId; edges: { start: boolean; end: boolean } } | undefined {
   const {
-    hoveredItemId,
+    hoveredBarId,
     hoveredEntryId,
     soleSelectedEntryId,
     selectedSegmentCountOfSoleEntry,
-    itemIdsForEntry,
+    barIdsForEntry,
     canGesture,
   } = inputs;
-  if (hoveredItemId !== undefined) {
+  if (hoveredBarId !== undefined) {
     if (hoveredEntryId === undefined) return undefined;
     const edges = resolveEdges(hoveredEntryId, canGesture);
     return edges === undefined ? undefined : { entryId: hoveredEntryId, edges };
@@ -108,7 +108,7 @@ function resolveResizableEntry(inputs: {
   const edges = resolveEdges(soleSelectedEntryId, canGesture);
   if (edges === undefined) return undefined;
   if (selectedSegmentCountOfSoleEntry === 1) return { entryId: soleSelectedEntryId, edges };
-  return itemIdsForEntry(soleSelectedEntryId).length === 1
+  return barIdsForEntry(soleSelectedEntryId).length === 1
     ? { entryId: soleSelectedEntryId, edges }
     : undefined;
 }

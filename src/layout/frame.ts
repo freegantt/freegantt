@@ -2,7 +2,7 @@
 
 import type {
   RowId,
-  ItemId,
+  BarId,
   EntryId,
   Entry,
   Instant,
@@ -11,7 +11,7 @@ import type {
   FieldContext,
   SegmentId,
 } from '../model/index.js';
-import { segmentIndexOfItem } from '../model/index.js';
+import { segmentIndexOfBar } from '../model/index.js';
 import type { Tick, TimeScale, ViewPreset } from '../time/index.js';
 import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
@@ -22,7 +22,7 @@ import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { EntryRulePorts } from './entry-rule.js';
-import type { BarAnchor, Item, VariantItems } from './items/item.js';
+import type { BarAnchor, Bar, VariantBars } from './items/item.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
 import type { RangeBand, RowStripe } from './decoration.js';
@@ -39,7 +39,7 @@ export const DEFAULT_TICK_BOX_FLOOR_PX = 9;
  *  narrower than this is both invisible and too thin to grab back by its resize handle, which sits
  *  on an 8px hit box straddling each edge (`.fg-bar-handle`, `view/styles.ts`) — 12px leaves the two
  *  handles a 4px gap instead of overlapping. ADR 0013 removed a second, larger floor this once maxed
- *  against for a diamond. ADR 0022's `diamond()` takes its own fixed-box path instead (`Item.box`),
+ *  against for a diamond. ADR 0022's `diamond()` takes its own fixed-box path instead (`Bar.box`),
  *  so this floor still has nothing to `max` against. */
 export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
 
@@ -51,31 +51,31 @@ export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
 export const DEFAULT_BAR_HEIGHT_PX = 18;
 
 /** What `barSpan` did to a bar's painted `[x, x + width)` extent (F12) — `'exact'` for the entry's
- *  own span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for an Item
+ *  own span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for a Bar
  *  that carries its own `box` (ADR 0022). Named once so `barSpan`'s return type and `FrameBar.span`
  *  read one type instead of repeating the union. */
 export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 
-/** An Item's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
+/** A Bar's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart.
- * Both callers hand it a real `Item`, `box` included (#295): a boxed Item — `diamond()`'s glyph is
+ * Both callers hand it a real `Bar`, `box` included (#295): a boxed Bar — `diamond()`'s glyph is
  * the shipped case — has no span-and-floor width at all, so a caller that built its own literal
- * with `box` left off would silently paint that Item's real width and reveal a different one.
+ * with `box` left off would silently paint that Bar's real width and reveal a different one.
  *
  * A zero-length span (`start === end` — ADR 0012) still floors at `minBarWidthPx`, centred on its
  * own instant, the same as any other painted span too narrow to grab — unless a `diamond()` Variant
  * (ADR 0022) claims the row and gives it a fixed box instead.
  *
- * An Item that carries `box` (ADR 0022) skips the span-and-floor path entirely: its width is the
+ * A Bar that carries `box` (ADR 0022) skips the span-and-floor path entirely: its width is the
  * box's own `widthPx`, positioned by its own `anchor`. `'center'` reads the box's edges off the
  * same midpoint the floor above centres on, so the two rules never disagree — they answer the same
- * question only when `start === end`. This is not "centred on the Item's start": a fixed-width box
+ * question only when `start === end`. This is not "centred on the Bar's start": a fixed-width box
  * on a real span would land in two different places depending on which sentence a reader followed,
  * so both rules read the span's midpoint. */
 export function barSpan(
-  // The whole `Item`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
+  // The whole `Bar`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
   // `Pick` and silently drop a fixed box's width, which is exactly the bug this signature closes.
-  item: Item,
+  item: Bar,
   scale: TimeScale,
   minBarWidthPx: number = DEFAULT_MIN_BAR_WIDTH_PX,
 ): { x: number; width: number; span: BarSpanKind } {
@@ -135,12 +135,12 @@ export interface LinkFlags {
 }
 
 export interface FrameBar {
-  id: ItemId;
+  id: BarId;
   entryId: EntryId;
   rowId: RowId;
   /** The variant this bar draws as (ADR 0018) — the `data-variant` `render/` stamps. */
   variant: string;
-  /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Item
+  /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Bar
    *  that produced it. Absent for a bar that draws the Entry's whole span (a parent, or a plugin's
    *  own variant) — that bar draws no single Segment. */
   segmentId?: SegmentId;
@@ -150,11 +150,11 @@ export interface FrameBar {
    *  Entry, because any of them selects it, so this holds them all and `segmentId` is absent.
    *
    *  The frame states the fact, and a reader never derives it from an Entry of its own: the set and
-   *  the Items it describes come from one cached record of one Entry snapshot, so they cannot fall
-   *  out of step. `FrameLayout.segmentIdsForItem` answers the same fact for a lookup by id. */
+   *  the Bars it describes come from one cached record of one Entry snapshot, so they cannot fall
+   *  out of step. `FrameLayout.segmentIdsForBar` answers the same fact for a lookup by id. */
   segmentIds: readonly SegmentId[];
   /** What a backend renders as the bar's label (#26) — `LayoutInput.barLabelFor`'s own answer for
-   *  this Item's Entry, or the Item's own `label` when no resolver is bound. `''` when the Entry has
+   *  this Bar's Entry, or the Bar's own `label` when no resolver is bound. `''` when the Entry has
    *  no name and no resolver names a Field with a value: no label paints, and a `barRenderer` sees
    *  no `ctx.label` either (#421 C5). */
   label: string;
@@ -164,7 +164,7 @@ export interface FrameBar {
   height: number;
   flags: BarFlags;
   /** What `barSpan` did to this bar's painted `[x, x + width)` extent: `'exact'` for the entry's own
-   *  span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for an Item that
+   *  span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for a Bar that
    *  carries its own `box` (ADR 0022). One value, because a bar is never both floored and fixed —
    *  `data-span` is one attribute slot, so the type mirrors the DOM it feeds.
    *
@@ -311,7 +311,7 @@ export interface LayoutInput {
   /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
   collapsed?: readonly string[];
   /** Per-Gantt variant registry (D-S4-24, ADR 0018). The shell passes one per Gantt (I2). */
-  variants: VariantItems;
+  variants: VariantBars;
   /** Every declared Field's stored-value read and compare, bound at this Gantt's locale (D-S4-13). */
   fieldCompares?: readonly FieldCompare[];
   /** Dataset commit generation. FrameMemory keys row-production invalidation on this (A2). */
@@ -329,9 +329,9 @@ export interface LayoutInput {
   /** What one bar's label prints (#421 C5). `view/` builds this from the Gantt's own `barLabels`
    *  Field, merged with the row's own variant (`mergeBarLabels`) and read through `formatValue` —
    *  the same door a Grid cell reads through (D-S4-13). Read fresh every `placeFrame` call, never
-   *  cached on the Item: a live `gantt.barLabels` reassignment repaints (`frame-settings.ts`'s own
+   *  cached on the Bar: a live `gantt.barLabels` reassignment repaints (`frame-settings.ts`'s own
    *  `INVALIDATION` table), and this is what makes that repaint show the new text. Omitted → falls
-   *  back to the Item's own `label` — `layout/`'s own tests, which build no `view/`, keep working
+   *  back to the Bar's own `label` — `layout/`'s own tests, which build no `view/`, keep working
    *  with no resolver bound. */
   barLabelFor?: (entry: Entry) => string;
 }
@@ -362,7 +362,7 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
   });
 }
 
-function segmentCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, number> {
+function segmentCountByEntry(items: readonly Bar[]): ReadonlyMap<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const item of items) counts.set(item.entryId, (counts.get(item.entryId) ?? 0) + 1);
   return counts;
@@ -370,7 +370,7 @@ function segmentCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, numbe
 
 function barA11yLabel(
   label: string,
-  item: Item,
+  item: Bar,
   partCount: number,
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
@@ -379,7 +379,7 @@ function barA11yLabel(
   // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
   const prefix = label === '' ? '' : `${label}, `;
   if (partCount <= 1) return `${prefix}${span}`;
-  return `${prefix}part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
+  return `${prefix}part ${segmentIndexOfBar(item.id) + 1} of ${partCount}, ${span}`;
 }
 
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
@@ -523,7 +523,7 @@ export function placeFrame(
     for (const item of items) {
       const { x, width, span } = barSpan(item, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
-      // #421 C5, Q36: the Item's own `label` wins when a producer set one — the most specific
+      // #421 C5, Q36: the Bar's own `label` wins when a producer set one — the most specific
       // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
       // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.
       const entry = entryById.get(item.entryId);
@@ -544,9 +544,9 @@ export function placeFrame(
         flags: {},
         span,
         a11yLabel: barA11yLabel(label, item, parts.get(item.entryId) ?? 1, scale, locale),
-        // A reference copy of the set the memory already resolved beside this Item — no allocation
+        // A reference copy of the set the memory already resolved beside this Bar — no allocation
         // per frame (I5), and no second Entry source for a reader to disagree with (#230).
-        segmentIds: produced.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,
+        segmentIds: produced.segmentIdsByBar.get(item.id) ?? NO_SEGMENT_IDS,
       };
       if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
       bars.push(bar);

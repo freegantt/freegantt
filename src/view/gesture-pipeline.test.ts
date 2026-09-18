@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { EntryNotFoundError, entryId, itemId, segmentId } from '../model/index.js';
+import { EntryNotFoundError, entryId, barId, segmentId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -195,7 +195,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
     expect(preview).toHaveLength(2);
     expect(preview.map((p) => p.dx)).toEqual([40, 40]);
 
@@ -239,7 +239,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
     expect(preview.map((p) => p.dx)).toEqual([40, 40]);
 
     await session.commit(40);
@@ -278,10 +278,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     // Both bars preview — but only the selected one (Segment 1) carries a dx; Segment 0 stays put.
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
     expect(preview).toEqual([
-      { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
-      { itemId: itemId(segmented.id, 1), dx: 40, dWidth: 0, extra: false },
+      { barId: barId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
+      { barId: barId(segmented.id, 1), dx: 40, dWidth: 0, extra: false },
     ]);
 
     await session.commit(40);
@@ -382,7 +382,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(applied).toEqual([]); // rAF-coalesced, not applied synchronously
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number; dWidth: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number; dWidth: number }[];
     expect(preview).toHaveLength(1);
     expect(preview[0]?.dx).toBe(50);
     expect(preview[0]?.dWidth).toBe(0);
@@ -651,8 +651,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const paints: { preview: unknown; pending: unknown }[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
-        applyGestureState: (preview, pendingItemIds) => {
-          paints.push({ preview, pending: pendingItemIds });
+        applyGestureState: (preview, pendingBarIds) => {
+          paints.push({ preview, pending: pendingBarIds });
         },
       });
       const pipeline = new GesturePipeline(deps);
@@ -660,7 +660,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       const commitPromise = session.commit(50);
       expect(paints).toHaveLength(1);
-      expect(paints[0]?.pending).toEqual([itemId(entryId('a'))]);
+      expect(paints[0]?.pending).toEqual([barId(entryId('a'))]);
       const preview = paints[0]?.preview as readonly { dx: number }[];
       expect(preview[0]?.dx).toBe(50);
 
@@ -959,10 +959,10 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       expect(requests).toHaveLength(1);
-      const preview = applied.at(-1) as readonly { itemId: string; dx: number; extra: boolean }[];
+      const preview = applied.at(-1) as readonly { barId: string; dx: number; extra: boolean }[];
       expect(preview).toHaveLength(2);
-      const dragging = preview.find((p) => p.itemId === itemId(a.id))!;
-      const ghost = preview.find((p) => p.itemId === itemId(x.id))!;
+      const dragging = preview.find((p) => p.barId === barId(a.id))!;
+      const ghost = preview.find((p) => p.barId === barId(x.id))!;
       expect(dragging.extra).toBe(false);
       expect(ghost.extra).toBe(true);
       expect(ghost.dx).toBe(50); // x0 300 -> x1 350
@@ -1017,9 +1017,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       session.preview(50);
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
+      const preview = applied.at(-1) as readonly { barId: string; extra: boolean }[];
       expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the refused cascade
-      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the frame still paints the drag
+      expect(preview.some((p) => p.barId === barId(a.id))).toBe(true); // the frame still paints the drag
 
       await expect(session.commit(50)).resolves.toBe(false);
       expect(commitEntryEdits).toHaveBeenCalledTimes(1);
@@ -1054,9 +1054,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       session.preview(50);
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
+      const preview = applied.at(-1) as readonly { barId: string; extra: boolean }[];
       expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the fault
-      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the drag itself still paints
+      expect(preview.some((p) => p.barId === barId(a.id))).toBe(true); // the drag itself still paints
 
       expect(reported).toHaveLength(1);
       expect(reported[0]).toMatchObject({
@@ -1103,7 +1103,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     it('a sync true result commits without painting pending', async () => {
       const paints: unknown[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
-        applyGestureState: (_preview, pendingItemIds) => paints.push(pendingItemIds),
+        applyGestureState: (_preview, pendingBarIds) => paints.push(pendingBarIds),
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(entryId('a'), { kind: 'move' })!;
@@ -1353,11 +1353,11 @@ describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
     pipeline.session(entryId('phase'), { kind: 'move' })!.preview(50);
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    const preview = applied[0] as readonly { itemId: string; dx: number; extra: boolean }[];
+    const preview = applied[0] as readonly { barId: string; dx: number; extra: boolean }[];
     // The parent's own bar is the caller's gesture, not an extender's ghost, so `extra` stays false.
-    expect(preview.map((item) => [item.itemId, item.dx, item.extra])).toEqual([
-      [itemId(entryId('phase')), 50, false],
-      [itemId(entryId('child')), 50, false],
+    expect(preview.map((item) => [item.barId, item.dx, item.extra])).toEqual([
+      [barId(entryId('phase')), 50, false],
+      [barId(entryId('child')), 50, false],
     ]);
   });
 });

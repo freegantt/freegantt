@@ -27,8 +27,8 @@ import {
   ROW_LABEL_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryIdOfItem, itemIdFromDataset, rowIdFromDataset, segmentIdFromDataset } from '../model/index.js';
-import type { EntryId, FieldKey, ItemId, RowId, SegmentId } from '../model/index.js';
+import { entryIdOfBar, barIdFromDataset, rowIdFromDataset, segmentIdFromDataset } from '../model/index.js';
+import type { EntryId, FieldKey, BarId, RowId, SegmentId } from '../model/index.js';
 import type { EntryHit } from './entry-gesture-context.js';
 import type { Panes } from './pane-layout.js';
 
@@ -84,7 +84,7 @@ export class RovingFocus {
   readonly #panes: Panes;
   readonly #ports: RovingFocusPorts;
   #gridFocus: GridFocus | undefined;
-  #timelineFocus: ItemId | undefined;
+  #timelineFocus: BarId | undefined;
   // `interaction/entry-gestures.ts` already owns selection for a pointer gesture. A bar click, a
   // row click, and a drag that keeps a multi-select all decide selection on their own pointerup
   // (D-S3-19). The pointerdown that starts one of those also moves real focus as its default
@@ -466,7 +466,7 @@ export class RovingFocus {
     if (event.key === ' ' && !event.shiftKey) {
       if (current === undefined) return;
       event.preventDefault();
-      this.#ports.selectOnFocus({ kind: 'bar', itemId: current });
+      this.#ports.selectOnFocus({ kind: 'bar', barId: current });
     }
   }
 
@@ -479,9 +479,9 @@ export class RovingFocus {
 
   #rowIdOfBar(bar: HTMLElement): RowId | undefined {
     const itemIdAttr = bar.dataset['itemId'];
-    const id = itemIdFromDataset(itemIdAttr);
+    const id = barIdFromDataset(itemIdAttr);
     if (id === undefined) return undefined;
-    return this.#ports.rowIdForEntry(entryIdOfItem(id));
+    return this.#ports.rowIdForEntry(entryIdOfBar(id));
   }
 
   /** The nearest bar one row up or down from the current one, skipping rows that draw no bar at all
@@ -509,15 +509,15 @@ export class RovingFocus {
    *  discontiguous Entry's other Segments from pulling the pan wider than the one bar on screen.
    *  A bar with no Segment (a group, a milestone, a plugin's own kind) has only its Entry to name. */
   #revealTargetOfBar(bar: HTMLElement): EntryId | SegmentId {
-    const id = itemIdFromDataset(bar.dataset['itemId'])!;
-    return segmentIdFromDataset(bar.dataset['segmentId']) ?? entryIdOfItem(id);
+    const id = barIdFromDataset(bar.dataset['itemId'])!;
+    return segmentIdFromDataset(bar.dataset['segmentId']) ?? entryIdOfBar(id);
   }
 
   #focusBar(bar: HTMLElement): void {
-    const id = itemIdFromDataset(bar.dataset['itemId']);
+    const id = barIdFromDataset(bar.dataset['itemId']);
     if (id === undefined) return;
     this.#timelineFocus = id;
-    this.#ports.selectOnFocus({ kind: 'bar', itemId: id });
+    this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     this.#ports.revealEntry(this.#revealTargetOfBar(bar));
     this.#applyTimelineTabIndex();
     this.#barElements()
@@ -533,14 +533,14 @@ export class RovingFocus {
     const fromPointer = this.#focusFromPointer;
     this.#focusFromPointer = false;
     if (!(event.target instanceof HTMLElement)) return;
-    const id = itemIdFromDataset(event.target.dataset['itemId']);
+    const id = barIdFromDataset(event.target.dataset['itemId']);
     if (id === undefined || id === this.#timelineFocus) return;
     this.#timelineFocus = id;
     // Same reasoning as `#handleGridFocusIn`: a pointer gesture on this bar already proposed its
     // own selection on pointerdown/pointerup. A drag that grabs an already-selected bar keeps the
     // whole selection through the drag (D-S3-19) — this must not narrow it back down.
     if (fromPointer) return;
-    this.#ports.selectOnFocus({ kind: 'bar', itemId: id });
+    this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     // `revealEntry` scrolls and renders synchronously (its own doc comment) — right for a keyboard
     // arrival, which can land on a bar off screen. A pointer arrival never needs it: the user just
     // clicked this bar, so it is already visible, and `entry-gestures.ts`'s own drag start runs in
@@ -563,7 +563,7 @@ export class RovingFocus {
     let target = bars.find((bar) => bar.dataset['itemId'] === this.#timelineFocus);
     if (target === undefined) {
       target = bars[0];
-      this.#timelineFocus = target === undefined ? undefined : itemIdFromDataset(target.dataset['itemId']);
+      this.#timelineFocus = target === undefined ? undefined : barIdFromDataset(target.dataset['itemId']);
     }
     if (target !== undefined) {
       target.tabIndex = 0;

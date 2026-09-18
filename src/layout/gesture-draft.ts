@@ -8,13 +8,13 @@ import type {
   Entry,
   EntryId,
   Instant,
-  ItemId,
+  BarId,
   SegmentId,
   ProposedEdit,
   ProposedEdits,
   TimeUnit,
 } from '../model/index.js';
-import { itemId, spansTime } from '../model/index.js';
+import { barId, spansTime } from '../model/index.js';
 import {
   addMs,
   diffMs,
@@ -236,8 +236,8 @@ function resizeEdit(
  *  and width delta per affected item, read off the bound `TimeScale` against each entry's committed
  *  span. `extra` marks an entry the extension hook added rather than the caller's own selection
  *  (S3.6 — always `false` until the extender is wired in). */
-export interface ItemPreview {
-  itemId: ItemId;
+export interface BarPreview {
+  barId: BarId;
   dx: number;
   dWidth: number;
   extra: boolean;
@@ -253,10 +253,10 @@ export interface PreviewOffsetsInput {
   scale: TimeScale;
 }
 
-export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview[] {
+export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[] {
   const { proposed, extra, entries, scale } = input;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const out: ItemPreview[] = [];
+  const out: BarPreview[] = [];
 
   function pushOffset(id: EntryId, edit: ProposedEdit, isExtra: boolean): void {
     const original = byId.get(id);
@@ -270,7 +270,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
         const x1 = scale.xForInstant(to.start);
         const width0 = scale.xForInstant(from.end) - x0;
         const width1 = scale.xForInstant(to.end) - x1;
-        out.push({ itemId: itemId(id, index), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
+        out.push({ barId: barId(id, index), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
       }
       return;
     }
@@ -283,7 +283,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly ItemPreview
     const x1 = scale.xForInstant(edit.start);
     const width0 = scale.xForInstant(original.end) - x0;
     const width1 = scale.xForInstant(edit.end) - x1;
-    out.push({ itemId: itemId(id), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
+    out.push({ barId: barId(id), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
   }
 
   for (const [id, edit] of proposed) pushOffset(id, edit, false);

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
-import { entryId, entryIdOfItem, segmentId } from '../model/index.js';
-import type { Entry, EntryId, Instant, ItemId, SegmentId } from '../model/index.js';
+import { entryId, entryIdOfBar, segmentId } from '../model/index.js';
+import type { Entry, EntryId, Instant, BarId, SegmentId } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 
 const A = entryId('a');
@@ -66,8 +66,8 @@ function makeContext(
 
   const ctx: EntryGestureContext = {
     hitTest: () => undefined,
-    entryFor: (item: ItemId) => {
-      const id = entryIdOfItem(item);
+    entryFor: (item: BarId) => {
+      const id = entryIdOfBar(item);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: (capability, entry) => (capability === 'select' ? !incapableRows.includes(entry.id) : true),
@@ -82,7 +82,7 @@ function makeContext(
       // hit), so `selectableSegmentsOf` never runs — it exists only to satisfy the interface.
       selectableSegmentsOf: () => [],
       segmentIdsOfEntries: (ids) => ids.map(segmentOf),
-      segmentIdsForItem: (item) => [segmentOf(entryIdOfItem(item))],
+      segmentIdsForBar: (item) => [segmentOf(entryIdOfBar(item))],
       segmentIds: () => selection,
       entryIds: () => ORDER.filter((id) => selection.includes(segmentOf(id))),
       propose: (next) => {

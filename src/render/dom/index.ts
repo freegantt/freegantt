@@ -16,8 +16,8 @@ import type {
   FrameHeaderTick,
   FrameRow,
   GeometryFrame,
-  ItemId,
-  ItemPreview,
+  BarId,
+  BarPreview,
   RaiseError,
   ResolvedRenderer,
   RowId,
@@ -28,8 +28,8 @@ import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
-  entryIdOfItem,
-  itemIdFromDataset,
+  entryIdOfBar,
+  barIdFromDataset,
   rowIdFromDataset,
 } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
@@ -52,7 +52,7 @@ import {
   DEFAULT_BAR_LABEL_GAP_PX,
   ENTRY_ID_KEY,
   FIELD_KEY,
-  ITEM_ID_KEY,
+  BAR_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
   ROW_ID_KEY,
@@ -397,12 +397,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // One cell layer per row id, same nested pattern as bandTickLayers above.
   const rowCellLayers = new NestedKeyedLayers<RowId, CellItem, string, CellGeom>();
   const headerCellLayer = new KeyedLayer<CellItem, string, HeaderCellGeom>();
-  const barLayerCache = new KeyedLayer<FrameBar, ItemId, BarGeom>();
+  const barLayerCache = new KeyedLayer<FrameBar, BarId, BarGeom>();
 
   // D-S3-6/D-S3-7: what the last applyState() call painted, so the next call touches only the bars
   // whose token set actually changed — O(changed items), not O(bars) (I5, [S3-A3]).
-  let paintedHovered: ItemId | undefined;
-  let paintedSelected: ReadonlySet<ItemId> = new Set();
+  let paintedHovered: BarId | undefined;
+  let paintedSelected: ReadonlySet<BarId> = new Set();
   /** The Entry the handle pair currently brackets (#200) — Entry-keyed, like the Selection it sits
    *  beside, because the pair straddles every bar that Entry drew. */
   let paintedResizable: EntryId | undefined;
@@ -411,20 +411,20 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  repaints even when the bracketed Entry and its bars have not changed. */
   let paintedResizableEdges: { start: boolean; end: boolean } | undefined;
   /** The two bars `paintResizeHandles` last put the handles on. `hitTest` reads it, so a grab on a
-   *  handle names the bar under the pointer instead of an Item id built from an Entry id (#185). */
-  let paintedHandleBars: { start: ItemId; end: ItemId } | undefined;
-  let paintedMovable: ItemId | undefined;
+   *  handle names the bar under the pointer instead of a Bar id built from an Entry id (#185). */
+  let paintedHandleBars: { start: BarId; end: BarId } | undefined;
+  let paintedMovable: BarId | undefined;
   /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
-  let paintedPending: ReadonlySet<ItemId> = new Set();
+  let paintedPending: ReadonlySet<BarId> = new Set();
   /** S3.3, D-S3-18: items this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
-  let paintedPreview: ReadonlySet<ItemId> = new Set();
-  /** S3.6, D-S3-18: split of `paintedPreview` by `ItemPreview.extra` — `dragging` is the caller's own
+  let paintedPreview: ReadonlySet<BarId> = new Set();
+  /** S3.6, D-S3-18: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
    *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
    *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
    *  only the items whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
-  let paintedDragging: ReadonlySet<ItemId> = new Set();
-  let paintedGhost: ReadonlySet<ItemId> = new Set();
+  let paintedDragging: ReadonlySet<BarId> = new Set();
+  let paintedGhost: ReadonlySet<BarId> = new Set();
   /** The Selection this backend last painted (#212, ADR 0010) — Segment ids, the same list the shell
    *  wrote. `applyState` diffs against it, and both remount paths (`syncRows`, `syncBars`) restamp a
    *  freshly-created node from it. `paintedSelected` above is its bar-side reading, derived from
@@ -444,46 +444,46 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   const rowSegmentIds = new Map<RowId, readonly SegmentId[]>();
   // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
-  const barGeomByItemId = new Map<ItemId, HandleGeom>();
+  const barGeomByBarId = new Map<BarId, HandleGeom>();
   /** J1: each mounted bar's label width, measured once in `syncBars`'s own `toGeom` and read again,
    *  with no re-measurement, by `applyBarPreview`'s mid-drag flip check — "a label's text width does
    *  not change during a drag" is the fact this cache banks on. `undefined` means either no label
    *  (`barLabels: 'none'`, or a `barRenderer` owns this bar's content) or no 2d context to measure
    *  with; both read the same as "never flips to outside". */
-  const labelWidthByItemId = new Map<ItemId, number | undefined>();
+  const labelWidthByBarId = new Map<BarId, number | undefined>();
   /** J1: each mounted bar's last-committed label placement — what `restoreBarTransform` puts back on
    *  `data-label` once a resize preview that flipped it mid-drag clears without a commit. Written in
-   *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByItemId` keeps. */
-  const labelPlacementByItemId = new Map<ItemId, BarLabelPlacement | undefined>();
-  /** The mounted bars of each Entry (#185) — the Entry→Items relation, read straight off the frame
+   *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByBarId` keeps. */
+  const labelPlacementByBarId = new Map<BarId, BarLabelPlacement | undefined>();
+  /** The mounted bars of each Entry (#185) — the Entry→Bars relation, read straight off the frame
    *  `syncBars` synced. It is what turns the Entry-keyed Selection into the bars that paint, so no
-   *  paint step ever builds an Item id out of an Entry id. `syncBars` is the only writer. */
-  const itemIdsByEntryId = new Map<EntryId, ItemId[]>();
-  /** The mounted bars that paint for each Segment (#212, ADR 0010) — the Segment→Items relation the
+   *  paint step ever builds a Bar id out of an Entry id. `syncBars` is the only writer. */
+  const itemIdsByEntryId = new Map<EntryId, BarId[]>();
+  /** The mounted bars that paint for each Segment (#212, ADR 0010) — the Segment→Bars relation the
    *  Selection is keyed by. A bar that drew one Segment is filed under it. A bar that drew an Entry's
    *  whole span (a parent, or a plugin's own variant) is filed under every Segment of that Entry,
    *  because any of them selects it. `syncBars` is the only writer, so the selection diff never scans
    *  mounted bars. */
-  const itemIdsBySegmentId = new Map<SegmentId, ItemId[]>();
+  const itemIdsBySegmentId = new Map<SegmentId, BarId[]>();
   /** Which Segment each mounted bar drew, or nothing for a whole-span bar. The handle pair reads it
    *  to find the one bar a one-Segment Selection named. `syncBars` is the only writer. */
-  const segmentIdByItemId = new Map<ItemId, SegmentId>();
+  const segmentIdByBarId = new Map<BarId, SegmentId>();
 
   /** The two bars the handle pair sits on: the Entry's leftmost mounted bar and its rightmost one
    *  (#200). A resize acts on the Entry's envelope, so a segmented Entry hands its `start` handle to
    *  one bar and its `end` handle to another; an Entry that drew one bar names it twice, exactly as
    *  before. Undefined when the Entry has no mounted bar to hold either handle. */
-  function envelopeBarsOfEntry(id: EntryId | undefined): { start: ItemId; end: ItemId } | undefined {
+  function envelopeBarsOfEntry(id: EntryId | undefined): { start: BarId; end: BarId } | undefined {
     if (id === undefined) return undefined;
     const mounted = itemIdsByEntryId.get(id);
     if (mounted === undefined || mounted.length === 0) return undefined;
     let start = mounted[0]!;
     let end = start;
     for (const item of mounted) {
-      const geom = barGeomByItemId.get(item);
+      const geom = barGeomByBarId.get(item);
       if (geom === undefined) continue;
-      if (geom.x < barGeomByItemId.get(start)!.x) start = item;
-      const endGeom = barGeomByItemId.get(end)!;
+      if (geom.x < barGeomByBarId.get(start)!.x) start = item;
+      const endGeom = barGeomByBarId.get(end)!;
       if (geom.x + geom.width > endGeom.x + endGeom.width) end = item;
     }
     return { start, end };
@@ -493,21 +493,21 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  from (#211, #212). A Selection that holds exactly one Segment of this Entry gets both handles on
    *  that one bar, because a resize on it writes only that Segment's edge. Anything else — every
    *  Segment selected, or none — falls back to the envelope pair above. */
-  function resizeHandleBarsOfEntry(id: EntryId | undefined): { start: ItemId; end: ItemId } | undefined {
+  function resizeHandleBarsOfEntry(id: EntryId | undefined): { start: BarId; end: BarId } | undefined {
     if (id === undefined) return undefined;
     const selected = selectedBarsOfEntry(id);
     const sole = selected.length === 1 ? selected[0]! : undefined;
-    if (sole !== undefined && barGeomByItemId.has(sole)) return { start: sole, end: sole };
+    if (sole !== undefined && barGeomByBarId.has(sole)) return { start: sole, end: sole };
     return envelopeBarsOfEntry(id);
   }
 
   /** The mounted bars of this Entry whose own Segment the Selection holds (#212). A whole-span bar
    *  names no Segment, so it never appears here and the Entry falls back to its envelope. */
-  function selectedBarsOfEntry(id: EntryId): readonly ItemId[] {
+  function selectedBarsOfEntry(id: EntryId): readonly BarId[] {
     const mounted = itemIdsByEntryId.get(id);
     if (mounted === undefined) return [];
     return mounted.filter((item) => {
-      const segmentId = segmentIdByItemId.get(item);
+      const segmentId = segmentIdByBarId.get(item);
       return segmentId !== undefined && paintedSelectedSegmentIds.has(segmentId);
     });
   }
@@ -517,8 +517,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  on an already-hovered bar), so gating the repaint on Entry identity alone would leave the pair
    *  glued to its pre-pick bars while the draft it grabs has already moved. */
   function sameBars(
-    a: { start: ItemId; end: ItemId } | undefined,
-    b: { start: ItemId; end: ItemId } | undefined,
+    a: { start: BarId; end: BarId } | undefined,
+    b: { start: BarId; end: BarId } | undefined,
   ): boolean {
     if (a === undefined || b === undefined) return a === b;
     return a.start === b.start && a.end === b.end;
@@ -544,12 +544,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  (there is none left in this file, but a future one might arrive with `bars` alone) still shows
    *  a whole pair, matching the pre-#142 pair-only behaviour. */
   function paintResizeHandles(
-    bars: { start: ItemId; end: ItemId } | undefined,
+    bars: { start: BarId; end: BarId } | undefined,
     edges: { start: boolean; end: boolean } = { start: true, end: true },
   ): void {
     if (!startHandle || !endHandle) return;
-    const startGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.start);
-    const endGeom = bars === undefined ? undefined : barGeomByItemId.get(bars.end);
+    const startGeom = bars === undefined ? undefined : barGeomByBarId.get(bars.start);
+    const endGeom = bars === undefined ? undefined : barGeomByBarId.get(bars.end);
     const showStart = startGeom !== undefined && edges.start;
     const showEnd = endGeom !== undefined && edges.end;
     if (!showStart && !showEnd) {
@@ -703,24 +703,24 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
    *  bar returns to once the preview clears (S3.3, D-S3-18). */
-  function restoreBarTransform(id: ItemId): void {
+  function restoreBarTransform(id: BarId): void {
     const node = barLayerCache.node(id);
-    const geom = barGeomByItemId.get(id);
+    const geom = barGeomByBarId.get(id);
     if (!node || !geom) return;
     node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
     node.style.width = `${geom.width}px`;
     // J1: a resize preview that flipped the label mid-drag (see applyBarPreview) must not leave that
     // flip stamped once the preview clears without a commit — restore syncBars's own last answer.
-    const committed = labelPlacementByItemId.get(id);
+    const committed = labelPlacementByBarId.get(id);
     if (committed === undefined) delete node.dataset['label'];
     else node.dataset['label'] = committed;
   }
 
   /** Offsets one bar's transform/width by `preview`'s px delta, on top of its committed geometry —
    *  a hot-path write only (I5): no frame recompute, no node creation. */
-  function applyBarPreview(id: ItemId, preview: ItemPreview): void {
+  function applyBarPreview(id: BarId, preview: BarPreview): void {
     const node = barLayerCache.node(id);
-    const geom = barGeomByItemId.get(id);
+    const geom = barGeomByBarId.get(id);
     if (!node || !geom) return;
     const x = geom.x + preview.dx;
     const width = geom.width + preview.dWidth;
@@ -730,9 +730,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     // J1: a resize preview can cross the inside/outside fit line mid-drag. Reuse the label width
     // syncBars already measured — no canvas call on the hot path — and touch the dataset only on an
     // actual flip, the same diff-and-touch-only posture every other paintedX field in this file keeps.
-    const textWidth = labelWidthByItemId.get(id);
+    const textWidth = labelWidthByBarId.get(id);
     if (textWidth === undefined) return;
-    const entry = entryById(entryIdOfItem(id));
+    const entry = entryById(entryIdOfBar(id));
     const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
     const placement = resolveBarLabelPlacement(policy, textWidth, x, width, barLabelGapPx, contentWidthPx);
     if (placement === (node.dataset['label'] as BarLabelPlacement | undefined)) return;
@@ -740,9 +740,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     else node.dataset['label'] = placement;
   }
 
-  function paintPreview(previews: readonly ItemPreview[] | undefined): void {
-    const next = new Map<ItemId, ItemPreview>();
-    for (const preview of previews ?? []) next.set(preview.itemId, preview);
+  function paintPreview(previews: readonly BarPreview[] | undefined): void {
+    const next = new Map<BarId, BarPreview>();
+    for (const preview of previews ?? []) next.set(preview.barId, preview);
     paintedPreview.forEach((id) => {
       if (!next.has(id)) restoreBarTransform(id);
     });
@@ -751,10 +751,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
     // S3.6, D-S3-18: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
     // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
-    const nextDragging = new Set<ItemId>();
-    const nextGhost = new Set<ItemId>();
+    const nextDragging = new Set<BarId>();
+    const nextGhost = new Set<BarId>();
     next.forEach((preview, id) => (preview.extra ? nextGhost : nextDragging).add(id));
-    const changed = new Set<ItemId>();
+    const changed = new Set<BarId>();
     paintedDragging.forEach((id) => {
       if (!nextDragging.has(id)) changed.add(id);
     });
@@ -775,36 +775,36 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   }
 
   function paintDataState(
-    itemId: ItemId,
-    hovered: ItemId | undefined,
-    selected: ReadonlySet<ItemId>,
-    pending: ReadonlySet<ItemId>,
-    dragging: ReadonlySet<ItemId>,
-    ghost: ReadonlySet<ItemId>,
+    barId: BarId,
+    hovered: BarId | undefined,
+    selected: ReadonlySet<BarId>,
+    pending: ReadonlySet<BarId>,
+    dragging: ReadonlySet<BarId>,
+    ghost: ReadonlySet<BarId>,
   ): void {
-    const node = barLayerCache.node(itemId);
+    const node = barLayerCache.node(barId);
     if (!node) return;
     const tokens: string[] = [];
-    if (hovered === itemId) tokens.push('hovered');
-    if (selected.has(itemId)) tokens.push('selected');
-    if (pending.has(itemId)) tokens.push('pending');
-    if (dragging.has(itemId)) tokens.push('dragging');
-    if (ghost.has(itemId)) tokens.push('ghost');
+    if (hovered === barId) tokens.push('hovered');
+    if (selected.has(barId)) tokens.push('selected');
+    if (pending.has(barId)) tokens.push('pending');
+    if (dragging.has(barId)) tokens.push('dragging');
+    if (ghost.has(barId)) tokens.push('ghost');
     node.dataset['state'] = tokens.join(' ');
   }
 
   /** Adds the bars one Segment paints to `into` (#212) — its own bar, plus the whole-span bar of the
    *  Entry that owns it. A Segment the viewport culled adds nothing, and `syncBars`'s own restamp
    *  paints its bar when it comes back. */
-  function addBarsOfSegment(into: Set<ItemId>, segmentId: SegmentId): void {
+  function addBarsOfSegment(into: Set<BarId>, segmentId: SegmentId): void {
     const mounted = itemIdsBySegmentId.get(segmentId);
     if (mounted === undefined) return;
     for (const id of mounted) into.add(id);
   }
 
   /** The bars the whole Selection paints (#212) — every selected Segment read through the rule above. */
-  function paintedBarsOf(segmentIds: ReadonlySet<SegmentId>): Set<ItemId> {
-    const ids = new Set<ItemId>();
+  function paintedBarsOf(segmentIds: ReadonlySet<SegmentId>): Set<BarId> {
+    const ids = new Set<BarId>();
     segmentIds.forEach((segmentId) => addBarsOfSegment(ids, segmentId));
     return ids;
   }
@@ -1099,10 +1099,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   /** Files one bar under every Segment that paints it (#212, #230). The frame states which Segments
    *  a bar stands for, so this paint side reads `bar.segmentIds` and never asks an Entry of its own.
-   *  `segmentIdByItemId` records the other, narrower fact — the one Segment this bar drew — which
+   *  `segmentIdByBarId` records the other, narrower fact — the one Segment this bar drew — which
    *  the resize-handle pair reads. */
   function indexBarBySegment(bar: FrameBar): void {
-    if (bar.segmentId !== undefined) segmentIdByItemId.set(bar.id, bar.segmentId);
+    if (bar.segmentId !== undefined) segmentIdByBarId.set(bar.id, bar.segmentId);
     for (const segmentId of bar.segmentIds) {
       const mounted = itemIdsBySegmentId.get(segmentId);
       if (mounted === undefined) itemIdsBySegmentId.set(segmentId, [bar.id]);
@@ -1112,12 +1112,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
-    barGeomByItemId.clear();
+    barGeomByBarId.clear();
     itemIdsByEntryId.clear();
     itemIdsBySegmentId.clear();
-    segmentIdByItemId.clear();
+    segmentIdByBarId.clear();
     for (const bar of bars) {
-      barGeomByItemId.set(bar.id, { x: bar.x, y: bar.y, width: bar.width, height: bar.height });
+      barGeomByBarId.set(bar.id, { x: bar.x, y: bar.y, width: bar.width, height: bar.height });
       // #185: the frame states which Entry drew this bar, so the paint side never parses an id.
       const mounted = itemIdsByEntryId.get(bar.entryId);
       if (mounted === undefined) itemIdsByEntryId.set(bar.entryId, [bar.id]);
@@ -1133,7 +1133,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       create: (bar) => {
         const node = document.createElement('div');
         node.className = BAR_CLASS;
-        node.dataset[ITEM_ID_KEY] = bar.id;
+        node.dataset[BAR_ID_KEY] = bar.id;
         node.dataset[TESTID_KEY] = BAR_TESTID;
         node.setAttribute('role', 'img');
         // #185: virtualization can create this node well after the selection that ought to paint
@@ -1177,8 +1177,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // label placement is a frame fact for it, not a hot-path one.
         const ownsContent = content !== undefined && paintsItsOwnContent(content);
         const paintedPlacement = ownsContent ? undefined : resolvedPlacement;
-        labelWidthByItemId.set(bar.id, ownsContent ? undefined : textWidth);
-        labelPlacementByItemId.set(bar.id, paintedPlacement);
+        labelWidthByBarId.set(bar.id, ownsContent ? undefined : textWidth);
+        labelPlacementByBarId.set(bar.id, paintedPlacement);
         return {
           variant: bar.variant,
           label: bar.label,
@@ -1400,9 +1400,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // bar's node from the last sync().
       const nextSelectedSegmentIds = new Set(state.selectedSegmentIds ?? []);
       const nextSelected = paintedBarsOf(nextSelectedSegmentIds);
-      const nextHovered = state.hoveredItemId;
-      const nextPending = new Set(state.pendingItemIds ?? []);
-      const changed = new Set<ItemId>();
+      const nextHovered = state.hoveredBarId;
+      const nextPending = new Set(state.pendingBarIds ?? []);
+      const changed = new Set<BarId>();
       // #212: the selection diff runs over Segments, then touches that Segment's bars. It is
       // O(Segments whose selection flipped), never a scan of every mounted bar (I5).
       paintedSelectedSegmentIds.forEach((id) => {
@@ -1478,9 +1478,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         paintedResizableEdges = nextEdges;
       }
 
-      // D-S3-6: `cursor: grab` follows `movableItemId` via a boolean attribute, not an inline style
+      // D-S3-6: `cursor: grab` follows `movableBarId` via a boolean attribute, not an inline style
       // (`no-inline-style-outside-geometry`) — the base stylesheet owns the actual `cursor` rule.
-      const nextMovable = state.movableItemId;
+      const nextMovable = state.movableBarId;
       if (nextMovable !== paintedMovable) {
         if (paintedMovable !== undefined) barLayerCache.node(paintedMovable)?.removeAttribute('data-movable');
         if (nextMovable !== undefined) barLayerCache.node(nextMovable)?.setAttribute('data-movable', '');
@@ -1504,18 +1504,18 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (handle && paintedHandleBars !== undefined) {
         const edge = handle.dataset['edge'];
         if (edge === 'start' || edge === 'end') {
-          return { kind: 'bar', itemId: paintedHandleBars[edge], edge };
+          return { kind: 'bar', barId: paintedHandleBars[edge], edge };
         }
       }
       const bar = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_CLASS}`) : null;
       if (bar && barLayer.contains(bar)) {
-        const id = itemIdFromDataset(bar.dataset[ITEM_ID_KEY]);
-        return id ? { kind: 'bar', itemId: id } : null;
+        const id = barIdFromDataset(bar.dataset[BAR_ID_KEY]);
+        return id ? { kind: 'bar', barId: id } : null;
       }
       // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
       // through to the grid pane — a row click selects the same way a bar click does. The hit names
       // the row itself (#185): which Entries that row owns is the caller's question, and a row that
-      // owns several used to lose all but the first to a made-up Item id. A twisty click is not a
+      // owns several used to lose all but the first to a made-up Bar id. A twisty click is not a
       // row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
       // as a genuine grid miss (no clear).
       if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
@@ -1543,10 +1543,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       rowCellLayers.clear();
       headerCellLayer.clear();
       barLayerCache.clear();
-      barGeomByItemId.clear();
+      barGeomByBarId.clear();
       itemIdsByEntryId.clear();
       itemIdsBySegmentId.clear();
-      segmentIdByItemId.clear();
+      segmentIdByBarId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
       paintedPending = new Set();

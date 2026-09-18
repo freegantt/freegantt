@@ -278,11 +278,11 @@ export {
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
 export {
   entryId,
-  itemId,
-  itemIdFromDataset,
+  barId,
+  barIdFromDataset,
   entryIdFromDataset,
-  entryIdOfItem,
-  segmentIndexOfItem,
+  entryIdOfBar,
+  segmentIndexOfBar,
   changeSetId,
 } from '../model/index.js';
 export type { PluginId, Disposer, KeyChord } from '../model/index.js';
@@ -295,7 +295,7 @@ export type {
   Segment,
   SegmentId,
   RowId,
-  ItemId,
+  BarId,
   Instant,
   TimeUnit,
   TimeSpan,
@@ -373,10 +373,10 @@ export type {
   RangeBand,
   RowStripe,
 } from '../layout/index.js';
-// ADR 0018: `EntryVariant.items`'s own vocabulary — a plugin author naming `ItemProducer`
+// ADR 0018: `EntryVariant.bars`'s own vocabulary — a plugin author naming `BarProducer`
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
 // to structural inference.
-export type { Item, ItemProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
+export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
 // it. `EntryRule` is published beside it because an author cannot guess what `when` matches (J6);
 // `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
@@ -386,12 +386,12 @@ export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../lay
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
 // looks up again (F3, `plans/row-redesign/BUILD-LOG.md`).
 export type { ResolvedVariant } from '../layout/index.js';
-// Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
-// lines — and the Item id convention has one owner instead of one copy per plugin.
-export { wholeEntryItem } from '../layout/index.js';
+// Review P3: the common producer, so `(entry) => [wholeEntryBar(entry)]` replaces eight hand-written
+// lines — and the Bar id convention has one owner instead of one copy per plugin.
+export { wholeEntryBar } from '../layout/index.js';
 // ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
-// the shipped case. `barSpan` honours the Item's `box` ahead of the span-and-floor path.
-export { fixedWidthItem } from '../layout/index.js';
+// the shipped case. `barSpan` honours the Bar's `box` ahead of the span-and-floor path.
+export { fixedWidthBar } from '../layout/index.js';
 // ADR 0023: the symmetric pair behind `EntryVariant.items` — a variant with no `items` key gets
 // `followSegments`, and `summary()` states `ignoreSegments` explicitly. An author who wants either
 // shape on a variant of their own names it the same way: `items: ignoreSegments`.

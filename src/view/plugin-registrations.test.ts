@@ -28,7 +28,7 @@ function harness(): Harness {
     requestFrame: () => {
       counts.frames += 1;
     },
-    invalidateItems: () => {
+    invalidateBars: () => {
       counts.items += 1;
     },
     refreshCapabilities: () => {
@@ -74,7 +74,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
   });
 
   // ADR 0018 and ADR 0022 §5: one variant answers five questions, so one registration invalidates
-  // all three passes — the Items every row produces, every capability, and the frame — and rewrites
+  // all three passes — the Bars every row produces, every capability, and the frame — and rewrites
   // its own `css`, which reaches the document on this same edge.
   it('a variant re-produces every row, re-resolves every capability, rewrites its own css and repaints, on both edges', () => {
     const { registrations, counts } = harness();

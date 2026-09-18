@@ -11,9 +11,9 @@ export { pickDefined } from './pick-defined.js';
 // `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
-export { itemId, itemIdFromDataset, rowIdFromDataset, entryIdOfItem, segmentId } from '../model/index.js';
-export { wholeEntryItem, fixedWidthItem, ignoreSegments, followSegments } from './items/item.js';
-export type { BarAnchor, FixedBarBox, Item, ItemProducer, VariantItems } from './items/item.js';
+export { barId, barIdFromDataset, rowIdFromDataset, entryIdOfBar, segmentId } from '../model/index.js';
+export { wholeEntryBar, fixedWidthBar, ignoreSegments, followSegments } from './items/item.js';
+export type { BarAnchor, FixedBarBox, Bar, BarProducer, VariantBars } from './items/item.js';
 export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 // #265: shipped Grid-column cell renderers. DOM-free description trees, same factory
 // shape as `diamond()` — `meter()`, `image()`.
@@ -91,11 +91,11 @@ export type {
   DecorationInput,
 } from './decoration.js';
 // Re-exported so render/ (layout-only import per plans/01 §1) can type item/row identity as
-// ItemId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
+// BarId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.
 export type {
-  ItemId,
+  BarId,
   RowId,
   EntryId,
   SegmentId,
@@ -159,5 +159,5 @@ export { ZOOM_PRESETS, isTimeUnit } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';
 export { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
-export type { DraftInput, ItemPreview, PreviewOffsetsInput } from './gesture-draft.js';
+export type { DraftInput, BarPreview, PreviewOffsetsInput } from './gesture-draft.js';
 export type { SnapUnit } from '../time/index.js';

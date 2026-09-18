@@ -77,7 +77,7 @@ function paintOneGantt(
     gridHeader: paneLayout.panes.gridHeader,
     timeline: paneLayout.panes.timeline,
   });
-  // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
+  // The real `FrameLayout`, because `barFor` asks it which Bars an entry draws (#185).
   const layout = new FrameLayout();
   const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
   const paint = (): void => {
@@ -332,7 +332,7 @@ describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
   });
 
   it('a whole-Entry bar names every Segment of its Entry, because it draws no single one', () => {
-    // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
+    // A structural parent (ADR 0013: has children, not a stored kind) draws one Bar over the
     // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
     // and the Entry is its Segments.
     const [parent, child] = entryDoubles([

@@ -61,7 +61,7 @@ flowchart TB
 
 There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dependency on scheduling at all. Instead, `data/` calls the generic extension hook (D4; exact contract tracked in issue #12), which may add extra field writes to a proposed edit before it commits. `scheduling/` stays a directory in `src/`: it's where the first-party default scheduling plugin's pure engine lives, still DOM-free and still isolated from `render/`/`view/`/`interaction/`, but it is no longer a privileged layer every Gantt is wired to by default — a Gantt with no scheduling plugin installed never loads it.
 
-`interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `ItemId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
+`interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `BarId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
 
 `api/ --> INT` (S3, `plans/s3-direct-manipulation/README.md` §0): `interaction/` sits one layer *above* `view/` (`INT --> VIEW`, not the reverse), so nothing inside `view/` may import it to wire the default pointer-gesture attachments into `GanttShell` — and `extensions/`, the other layer that reaches both `view/` and `interaction/`, does not exist until S5. `api/gantt.ts` is the composition root that supplies `attachEntryGestures` to `GanttShell` by constructor injection (the shell itself takes it structurally-typed, with no import of its own), the same role it already plays wiring `view/`, `data/`, `model/`, `time/` and `layout/` together for a plain `new Gantt(...)`.
 
@@ -120,14 +120,14 @@ flowchart LR
   subgraph derived["DERIVED — recomputed, never persisted"]
     direction TB
     ROW["Row (a display track)"]
-    ITEM["Item (one drawn bar)"]
+    BAR["Bar (one drawn bar)"]
     GEO["Geometry (pixels)"]
   end
 
   authored -->|"row source config +<br/>layout pipeline"| derived
 ```
 
-`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display track. `Item` is one drawn bar on a row. **A row may carry many items, and one entry may produce items on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
+`Entry` is an authored, dated record that has no idea it will ever be drawn. `Row` is a horizontal display track. `Bar` is one drawn bar on a row. **A row may carry many bars, and one entry may produce bars on several rows.** Today's classic Gantt (one row per entry, one bar per row) is just the default configuration of that pipeline — not a structural assumption. This is what makes split bars, grouped views, and future workload views configuration rather than rewrites.
 
 ### 2.2 Entities
 
@@ -171,8 +171,8 @@ interface Row {
 }
 
 /** DERIVED. One drawn bar. Always traces back to an entry. */
-interface Item {
-  id: ItemId;                  // deterministic — see §2.4
+interface Bar {
+  id: BarId;                  // deterministic — see §2.4
   rowId: RowId;
   entryId: EntryId;
   variant: string;             // the Variant this Gantt resolved — stamped as data-variant (ADR 0018)
@@ -190,8 +190,8 @@ erDiagram
   DATASET ||--o{ ENTRY : owns
   ENTRY ||--o{ ENTRY : "parentId (tree)"
 
-  ROW ||--o{ ITEM : contains
-  ITEM }o--|| ENTRY : "derived from"
+  ROW ||--o{ BAR : contains
+  BAR }o--|| ENTRY : "derived from"
 
   ENTRY {
     Instant start "optional — dates iff Segments"
@@ -207,7 +207,7 @@ erDiagram
 
 ### 2.3 Row sources — the flexibility mechanism
 
-The layout pipeline is `row resolution → item emission → geometry`. The **row source** is configuration:
+The layout pipeline is `row resolution → bar emission → geometry`. The **row source** is configuration:
 
 ```ts
 rowSource: { source: 'entries', tree: true }                        // classic Gantt (default)
@@ -215,17 +215,17 @@ rowSource: { source: 'group', groupBy: t => t.props.team }         // one row pe
 rowSource: { source: 'custom', resolve: myRowResolver }           // consumer-defined rows entirely
 ```
 
-Item emission then places entries (or entry segments) onto rows, one shared band per row. Future workload/resource views are simply another row source — no new rendering or interaction code.
+Bar emission then places entries (or entry segments) onto rows, one shared band per row. Future workload/resource views are simply another row source — no new rendering or interaction code.
 
-Item emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `items` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
+Bar emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `bars` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
 
 ```ts
-type ItemProducer = (entry: Entry) => readonly Item[];
+type BarProducer = (entry: Entry) => readonly Bar[];
 ```
 
-### 2.4 Item identity is deterministic
+### 2.4 Bar identity is deterministic
 
-`Item.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
+`Bar.id = `${entryId}:${segmentIndex ?? 0}`` (extended if future sources add dimensions). Regenerated every layout pass, so it **must** be stable across passes or node recycling, CSS transitions, and in-flight drag state all break. Asserted by a layout test from slice S0.
 
 ### 2.5 Entry structure — children decide derivation and the default Variant
 
@@ -242,7 +242,7 @@ Rules:
 
 - **Derivation is structure.** An Entry derives when it has children. An empty phase is a bar until a child arrives. Losing the last child leaves a normal Entry with no dates. There is no stored classification, no `rollUpKinds`, and no `hierarchy.autoGroup`. Dates are optional (ADR 0012): a dateless parent is legal; the store does not mint a fake span. The Rollup is `data/`'s own commit step — it runs on every transaction and at construction, whether or not a scheduling plugin is installed, and nothing installable can occupy or displace it (D-S2-22, closes OQ7). `scheduling/`'s engine moves children and nothing else; it never reaches the rollup, because the rollup already ran by the time anyone reads the result (`02.6` below, `s2.3-mutation-api.md` §1.5).
 - **The shape follows children, or a Variant rule.** A parent with children draws core's own `summary` Variant. A leaf draws a bar. Core also ships a `diamond` Variant, but no row wears it until a rule claims it. A plugin or a consumer that needs a shape that is not summary-or-bar-or-diamond declares a Variant whose `when` rule claims the rows (ADR 0018) — it stores no list of the ids it owns, so a row added later is claimed too. One object answers all four seams above. Every row resolves, because core's `leaf` carries no `when`.
-- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), unless the Item states a fixed painted box (`Item.box`), which `barSpan` honours ahead of the floor. `FrameBar.span` states `'exact'`, `'minimum'` or `'fixed'` for every bar. `render/` stamps it as `data-span` with the matching value (CONTEXT.md, `02` §4).
+- **A painted-span floor is a lookup, not a classification check.** `layout/frame.ts`'s `barSpan` widens a bar's true `[x, x + width)` extent to a floor when it is too narrow to paint or to grab. Every bar floors at `minBarWidthPx` (`--fg-bar-min-width`, default `DEFAULT_MIN_BAR_WIDTH_PX`), unless the Bar states a fixed painted box (`Bar.box`), which `barSpan` honours ahead of the floor. `FrameBar.span` states `'exact'`, `'minimum'` or `'fixed'` for every bar. `render/` stamps it as `data-span` with the matching value (CONTEXT.md, `02` §4).
 - **Parent *entry* ≠ row *grouping*.** `rowSource: { source: 'group', groupBy }` is a view-side arrangement of any entries and persists nothing. A parent Entry is a model entity that persists, schedules, and syncs. They compose — a grouped view of a dataset containing parents is well-defined, because one is structure and the other is derived (principle 1).
 
 ### 2.6 Fields and grid columns — what a value **is**, and where a Gantt **shows** it
@@ -398,14 +398,14 @@ interface GeometryFrame {
   contentHeight: number;       // across ALL rows, from the height index — always the full extent
   contentWidth: number;        // full horizontal extent of the bound TimeScale's range — always the full extent
   bars: Array<{
-    id: ItemId; entryId: EntryId; rowId: RowId;
+    id: BarId; entryId: EntryId; rowId: RowId;
     variant: string;             // backends stamp it as data-variant — CSS with zero JS; not an Entry classification
-    /** The one Segment this bar *draws*, carried through from its Item (#212, ADR 0010). Absent on
+    /** The one Segment this bar *draws*, carried through from its Bar (#212, ADR 0010). Absent on
      *  a bar that drew its Entry's whole span — a group, a milestone, a plugin's own kind. */
     segmentId?: SegmentId;
     /** Every Segment this bar *stands for* — the Segments that select it and paint it (#230). One
      *  Segment for a Segment bar; every Segment of the Entry for a whole-span bar. The frame states
-     *  it, so no reader derives it from an Entry source of its own; `FrameLayout.segmentIdsForItem`
+     *  it, so no reader derives it from an Entry source of its own; `FrameLayout.segmentIdsForBar`
      *  answers the same fact for a lookup by id. */
     segmentIds: readonly SegmentId[];
     /** The entry's name — what a backend renders as the bar's label (#26). */
@@ -446,7 +446,7 @@ interface LayoutInput {
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none (D-S4-22). */
   collapsed?: readonly RowId[];
-  itemProducerRegistry: ItemProducerRegistry;
+  barProducerRegistry: BarProducerRegistry;
   fieldCompares?: readonly FieldCompare[];
 }
 
@@ -464,7 +464,7 @@ class FrameLayout {
 
 Rules that keep it honest:
 
-- **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Item.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
+- **No user render output in the frame.** Custom renderers are invoked by the DOM backend at sync time (see `02-public-api.md` §5), keyed by `Bar.id`. The frame stays pure geometry, snapshot-testable, backend-neutral.
 - **No materialized hit-region array.** The bars array *is* the hit index; DOM backends get hit-testing from event delegation.
 - **Row heights and virtualization:** a cumulative row-height index gives O(log n) "top of row i" and "row at offset y", ready for row heights that vary in a future slice. Slice S1 ships a simple prefix-sum implementation behind the index interface; the O(log n) structure replaces it in S6 **only if the measured spike says so** (D2). The index is O(log n) only when one instance survives across renders, so `layout/` owns that lifetime in `FrameLayout` rather than instructing callers to keep it: a doc comment telling `view/` to build one index, cache it by entry count and row height, and invalidate it itself is implementation knowledge pushed across the seam, and it put four bookkeeping fields in `GanttShell` until the 2026-08-25 review. S4's variable-height `invalidateFrom` calls land in `FrameLayout` for the same reason — beside the index, where `layout/`'s own tests reach them.
 - **Grid and timeline consume the same `frame.rows`.** Both position rows absolutely from `top`/`height`; neither uses flow layout or computes a height. One vertical window, one scroll owner. This is the #1 defect source in split-pane Gantts and it is closed by construction (D8).
@@ -922,7 +922,7 @@ Rules:
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
 | I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |
-| I8 | `Item.id` deterministic across layout passes | layout snapshot test |
+| I8 | `Bar.id` deterministic across layout passes | layout snapshot test |
 | I9 | Grid and timeline share one row geometry | pixel-equality test on row tops |
 | I10 | No time math outside `time/`; no magic time constants | lint rule |
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |

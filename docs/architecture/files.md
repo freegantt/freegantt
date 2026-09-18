@@ -12,7 +12,7 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `model/ids.ts` | `EntryId, SegmentId, RowId, ItemId, ChangeSetId` and their helpers | Branded string ids. `itemId(entry, seg)` is the deterministic `` `${entryId}:${segmentIndex}` `` rule — the one place that format is written. The `*FromDataset` helpers are the guarded way in from a DOM dataset attribute. |
+| `model/ids.ts` | `EntryId, SegmentId, RowId, BarId, ChangeSetId` and their helpers | Branded string ids. `barId(entry, seg)` is the deterministic `` `${entryId}:${segmentIndex}` `` rule — the one place that format is written. The `*FromDataset` helpers are the guarded way in from a DOM dataset attribute. |
 | `model/time.ts` | `Instant, TimeUnit, TimeSpan, Duration` | `Instant` is branded epoch-ms so a naked number cannot pass as a date. `TimeSpan` is half-open `[start, end)`. Also holds the *input twins* — `InstantInput`, `TimeSpanInput` and `DateOnlyEndRule`: what a consumer may write, as opposed to what the library stores. |
 | `model/entry.ts` | `Entry` | The authored record, and it answers questions about itself (ADR 0017): `read(key)`, `duration()`, `hasChildren`, `children()`, `parent()`, `descendants()`, `depth`, `toInput()`. It carries no stored classification — an Entry derives when it has children. `toInput()` gives the loose twin `entries.add()` takes, which is how a row is copied. |
 | `model/dataset.ts` | `Dataset` | The *structural* contract (`entries` + `timeZone`) that `api/dataset.ts`'s class implements. Lives here so `layout/` can bind against it without importing `view/` or `api/`. |
@@ -77,13 +77,13 @@ where they do something beyond re-export.
 | `data/fields/field-types.ts` | `text, number, percent, date, duration, currency(), SHIPPED_FIELD_TYPES` | The shipped Field types (D-S4-3): `text`, `number`, `percent`, `date`, `duration`, plus `currency()`. `currency({ code })` is a factory, not a seeded name. `percent` formats through `Intl.NumberFormat`'s own `'percent'` style, so a stored `35` divides by 100 first and locale spacing is right — a hand-rolled `${value}%` gets French and Arabic wrong. |
 | `data/index.ts` | barrel | Re-exports `DatasetState`, `DatasetStateOptions`, `HistoryOptions`, `EntryStore`; everything else internal. |
 
-### `layout/` — pure — headless geometry — rows, items, frame
+### `layout/` — pure — headless geometry — rows, bars, frame
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `layout/frame.ts` | `computeFrame(), GeometryFrame, LayoutInput, FrameRow/Item/Header*, Overscan, DEFAULT_OVERSCAN` | The full pure layout pass: resolves rows, produces items per row, culls to the visible window, and computes header ticks and date-line decorations. One call in → one `GeometryFrame` out. |
-| `layout/frame-layout.ts` | `FrameLayout` | The stateful wrapper that keeps a `RowHeightIndex` and per-row item memo alive across renders. One instance per Gantt. |
-| `layout/frame-memory.ts` | `FrameMemory` | Holds one layout pass's cross-render memory — the `RowHeightIndex` plus a `Map` of per-row item memos — so a later frame reuses geometry where the inputs did not change. |
+| `layout/frame.ts` | `computeFrame(), GeometryFrame, LayoutInput, FrameRow/Bar/Header*, Overscan, DEFAULT_OVERSCAN` | The full pure layout pass: resolves rows, produces bars per row, culls to the visible window, and computes header ticks and date-line decorations. One call in → one `GeometryFrame` out. |
+| `layout/frame-layout.ts` | `FrameLayout` | The stateful wrapper that keeps a `RowHeightIndex` and per-row bar memo alive across renders. One instance per Gantt. |
+| `layout/frame-memory.ts` | `FrameMemory` | Holds one layout pass's cross-render memory — the `RowHeightIndex` plus a `Map` of per-row bar memos — so a later frame reuses geometry where the inputs did not change. |
 | `layout/row-height-index.ts` | `RowHeightIndex, PrefixSumHeightIndex` | O(log n) prefix sums with binary search for `indexAtY`. Behind an interface so variable row heights can swap the implementation without touching `computeFrame`. |
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
 | `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees (#265). `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
@@ -96,7 +96,7 @@ where they do something beyond re-export.
 | `layout/entry-rule.ts` | `compileEntryRule(), EntryRule, EntryPredicate, FieldMatch, EntryRulePorts` | One match syntax for "which Entry does this rule claim?" — a variant's `when` and a row source's `childrenAsSegments` both compile through this, so `items/` and `rows/` never import each other over it (#421 C1). |
 | `layout/registration-table.ts` | `createRegistrationTable()` | Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf that `extensions/` may import. |
 | `layout/renderer.ts` | `BarRenderer, GridCellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
-| `layout/items/produce-items.ts` | `produceItemsForRow(), resolveItems()` | Turns a row's entries into Items. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Items (ADR 0018). A header row produces none. |
+| `layout/items/produce-items.ts` | `produceBarsForRow(), resolveBars()` | Turns a row's entries into Bars. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Bars (ADR 0018). A header row produces none. |
 | `layout/rows/resolve-rows.ts` | `resolveRows()` | Dispatches to the correct row source based on `source.source`, stamping each row with a sequential index. |
 | `layout/rows/row-source.ts` | `RowSource, EntriesRowSource, GroupRowSource, CustomRowSource, PlannedRow, etc.` | Pure data types defining the three row-source configs and their shared options (`filter`, `sort`, `filterPolicy`). |
 | `layout/rows/entries-source.ts` | `resolveEntriesSource()` | Flat mode maps each entry one-to-one; tree mode does a depth-first walk using `parentId`. |
@@ -110,8 +110,8 @@ where they do something beyond re-export.
 | `layout/viewport/time-scale-model.ts` | `TimeScaleModel, TimeScaleIntent, ScaleBinding, ScaleBindingHandle` | Shareable x-axis. Takes *intent* (preset, range) and resolves zone/span/zoom from the Gantts bound to it. Two Gantts sharing one instance are x-synced by construction. |
 | `layout/viewport/scroll-axis.ts` | `ScrollAxis, ScrollAxisState, ScrollAxes, ScrollAxisBinding, ScrollAxisBindingHandle, bindScrollAxis()` | Shareable one-direction scroll position (D-S6-1). Owns one shared position for one axis; each bound Gantt clamps it locally. A Gantt holds two, `{ x, y }`. |
 | `layout/viewport/viewport.ts` | `Viewport, ViewportOptions, ViewportHandle` | The fan-in: one bind, one handle, one reaction over both models plus this Gantt's own pane size, content size and overscan. |
-| `layout/items/item.ts` | `Item, ItemProducer, BarAnchor, FixedBarBox, DrawnVariant, VariantItems, entryItem(), wholeEntryItem(), fixedWidthItem()` | What one row draws, as plain data — one Item is one bar. Holds the Item vocabulary alone, so `variants.ts` may name `ItemProducer` and `produce-items.ts` may name both, with no import ring between the three. |
-| `layout/items/variants.ts` | `VariantRegistry, createVariantRegistry(), EntryRule, ResolvedVariant, EntryVariant, bar, summary, diamond` | The Variant rule, and the file where a row meets one (ADR 0018). One object answers five questions about a row's shape: which rows wear it (`when`), what shape it draws (`items`), how it looks (`paint`), what you can do to it (`can`), and the rules its look needs (`css`, ADR 0022 §5). |
+| `layout/items/item.ts` | `Bar, BarProducer, BarAnchor, FixedBarBox, DrawnVariant, VariantBars, entryBar(), wholeEntryBar(), fixedWidthBar()` | What one row draws, as plain data — one Bar is one bar. Holds the Bar vocabulary alone, so `variants.ts` may name `BarProducer` and `produce-items.ts` may name both, with no import ring between the three. |
+| `layout/items/variants.ts` | `VariantRegistry, createVariantRegistry(), EntryRule, ResolvedVariant, EntryVariant, bar, summary, diamond` | The Variant rule, and the file where a row meets one (ADR 0018). One object answers five questions about a row's shape: which rows wear it (`when`), what shape it draws (`bars`), how it looks (`paint`), what you can do to it (`can`), and the rules its look needs (`css`, ADR 0022 §5). |
 | `layout/entry-double.ts` | `entryDouble(), entryDoubles(), entryDoublesById(), entryValuesOf(), EntryDoubleValues` | **Test-only.** The live `Entry` a `layout/` test builds by hand (ADR 0017). It also proves the seam by construction: `layout/` satisfies the whole interface out of `model/` and `time/` alone, so the `layout-boundary` rule stays untouched. |
 | `layout/index.ts` | barrel | Public layout entry points; the re-export that reaches `model/` types. |
 
@@ -140,7 +140,7 @@ where they do something beyond re-export.
 | `view/gantt-shell.ts` | `GanttShell, GanttShellOptions` | The composition root. Constructs the `Viewport`, `FrameLayout`, `PaneLayout`, `RenderBackend`, `EventBus`, `FrameScheduler`, `GesturePipeline`, `PluginRuntime`, `TreeCollapse` and every attachment; exposes live-reconfigurable properties. |
 | `view/frame-settings.ts` | `FrameSettings, DEFAULT_ROW_HEIGHT` | Every live setting that says what the next frame draws, plus the table of what each change invalidates. |
 | `view/plugin-ports.ts` | `buildPluginPorts(), PluginContextParts` | Everything a `PluginContext` carries that `GanttShell` owns. Spread into the public context; `api/gantt.ts` adds only `dataset` and `gantt`. |
-| `view/plugin-registrations.ts` | `PluginRegistrations` | The five seams a plugin registers into — renderer, decoration, item producer, kind default, grid column — each with the refresh it owes. |
+| `view/plugin-registrations.ts` | `PluginRegistrations` | The five seams a plugin registers into — renderer, decoration, bar producer, kind default, grid column — each with the refresh it owes. |
 | `view/renderer-registry.ts` | `RendererRegistry` | Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over a plugin. |
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
 | `view/mount-layer.ts` | `MountLayer` | Where a plugin mounts and how it stays put. Overlay escapes the pane box; row layer travels with the rows. |

@@ -36,7 +36,7 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   FrameBar,
-  Item,
+  Bar,
   TimeScale,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
@@ -87,8 +87,8 @@ import {
   PluginNotInstalledError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
-  entryIdOfItem,
-  itemId,
+  entryIdOfBar,
+  barId,
   segmentId,
   spansTime,
 } from '../model/index.js';
@@ -99,7 +99,7 @@ import type {
   EntryId,
   FieldKey,
   GridColumnInput,
-  ItemId,
+  BarId,
   Instant,
   PluginId,
   RaiseError,
@@ -394,32 +394,32 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
   return el;
 }
 
-/** The union `[min x, max(x + width))` of every Item's own `barSpan` (#295). It is
- *  `GanttShell.reveal`'s target when an entry draws several Items — one bar per Segment. Revealing
+/** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295). It is
+ *  `GanttShell.reveal`'s target when an entry draws several Bars — one bar per Segment. Revealing
  *  the entry then shows every one of them, not only the first bar. Takes at least one
- *  Item: `#revealEntrySpan`, its one caller, checks `items.length > 0` first. A Segment names one
+ *  Bar: `#revealEntrySpan`, its one caller, checks `bars.length > 0` first. A Segment names one
  *  bar, so `#revealSegmentSpan` never unions — it would pan to a sibling. */
 function unionSpan(
-  items: readonly Item[],
+  bars: readonly Bar[],
   scale: TimeScale,
   minBarWidthPx: number,
 ): { x: number; width: number } {
   let minX = Number.POSITIVE_INFINITY;
   let maxEnd = Number.NEGATIVE_INFINITY;
-  for (const item of items) {
-    const { x, width } = barSpan(item, scale, minBarWidthPx);
+  for (const bar of bars) {
+    const { x, width } = barSpan(bar, scale, minBarWidthPx);
     minX = Math.min(minX, x);
     maxEnd = Math.max(maxEnd, x + width);
   }
   return { x: minX, width: maxEnd - minX };
 }
 
-/** A stand-in Item for `barSpan`, for the case where nothing paints the target (#295). A variant
- *  produced no Item, or no Item draws the named Segment. The dates it is handed become the target, so
+/** A stand-in Bar for `barSpan`, for the case where nothing paints the target (#295). A variant
+ *  produced no Bar, or no Bar draws the named Segment. The dates it is handed become the target, so
  *  reveal never becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers
  *  the geometry, and it carries no box, so it takes the ordinary span-and-floor path. */
-function fallbackSpanItem(ownerId: EntryId, start: Instant, end: Instant): Item {
-  return { id: itemId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
+function fallbackSpanBar(ownerId: EntryId, start: Instant, end: Instant): Bar {
+  return { id: barId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
 }
 
 export class GanttShell {
@@ -478,7 +478,7 @@ export class GanttShell {
   #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
-  #hoveredItemId: ItemId | undefined;
+  #hoveredBarId: BarId | undefined;
   /** The grid row under the pointer, reported by `EntryGestureContext.setHoveredRow` — undefined
    *  once the pointer leaves the grid pane. `#hoveredRow()` falls back to the hovered bar's own row,
    *  so this holds only the half the timeline pane cannot answer. */
@@ -488,12 +488,12 @@ export class GanttShell {
    *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
    *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
-  #lastBarById = new Map<ItemId, FrameBar>();
+  #lastBarById = new Map<BarId, FrameBar>();
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
   /** #170: the five seams a plugin registers into, each carrying the refresh it owes. Renderers,
-   *  decorations, Item producers, per-kind capability defaults and Grid columns. */
+   *  decorations, Bar producers, per-kind capability defaults and Grid columns. */
   #registrations!: PluginRegistrations;
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  paired with this Gantt's own unknown-key report (#421 C1). Built once, right beside
@@ -919,9 +919,9 @@ export class GanttShell {
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.locale,
-      applyGestureState: (preview, pendingItemIds, cursor) => {
+      applyGestureState: (preview, pendingBarIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
-        setOptional(this.#interactionState, 'pendingItemIds', pendingItemIds);
+        setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         this.#backend.applyState(this.#interactionState);
@@ -943,7 +943,7 @@ export class GanttShell {
         selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
         selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
         segmentIdsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
-        segmentIdsForItem: (item) => this.#layout.segmentIdsForItem(item),
+        segmentIdsForBar: (item) => this.#layout.segmentIdsForBar(item),
       },
       setHovered: (item) => this.#setHovered(item),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
@@ -1321,7 +1321,7 @@ export class GanttShell {
   }
 
   /** Live (ADR 0018): replaces the consumer's own variant list. Every row resolves its variant again,
-   *  every row produces its Items again, and every capability re-resolves — one registration changes
+   *  every row produces its Bars again, and every capability re-resolves — one registration changes
    *  all three. A plugin's variants are untouched, and they still lose to these. */
   set variants(next: readonly EntryVariant[]) {
     this.#installConsumerVariants(next);
@@ -1420,7 +1420,7 @@ export class GanttShell {
       entries: () => this.#options.dataset.entries,
       plannedRows: () => this.#layout.plannedRows(),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      segmentIdsForItem: (id) => this.#layout.segmentIdsForItem(id),
+      segmentIdsForBar: (id) => this.#layout.segmentIdsForBar(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
       confirm: (change, apply) =>
         this.#proposeChange('beforeSelectionChange', 'selectionChange', change, apply),
@@ -1659,7 +1659,7 @@ export class GanttShell {
     return {
       requestFrame: () => this.#frames.request(),
       rebindFields: () => this.#bindColumns(),
-      invalidateItems: () => this.#layout.invalidateFrom(0),
+      invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
     };
   }
@@ -1704,7 +1704,7 @@ export class GanttShell {
       registrations: this.#registrations,
       resolveTooltipRenderer: () =>
         this.#registrations.renderers.resolve('tooltip', this.#frameSettings.tooltipRenderer),
-      lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
+      lastPaintedBar: (id) => this.#lastBarById.get(barId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
@@ -1738,7 +1738,7 @@ export class GanttShell {
   #pluginRegistrationPorts(): PluginRegistrationPorts {
     return {
       requestFrame: () => this.#frames.request(),
-      invalidateItems: () => this.#layout.invalidateFrom(0),
+      invalidateBars: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
       refreshVariantStyles: () => this.#variantStyles.refresh(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
@@ -1889,9 +1889,9 @@ export class GanttShell {
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
 
-  #setHovered(next: ItemId | undefined): void {
-    if (this.#hoveredItemId === next) return;
-    this.#hoveredItemId = next;
+  #setHovered(next: BarId | undefined): void {
+    if (this.#hoveredBarId === next) return;
+    this.#hoveredBarId = next;
     this.#refreshAffordances();
   }
 
@@ -1906,33 +1906,33 @@ export class GanttShell {
    *  refresh, never per pointer move beyond that (I5). */
   #hoveredRow(): RowId | undefined {
     if (this.#hoveredRowId !== undefined) return this.#hoveredRowId;
-    if (this.#hoveredItemId === undefined) return undefined;
-    return this.#layout.rowIdForEntry(entryIdOfItem(this.#hoveredItemId));
+    if (this.#hoveredBarId === undefined) return undefined;
+    return this.#layout.rowIdForEntry(entryIdOfBar(this.#hoveredBarId));
   }
 
-  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
+  /** D-S3-6: resolves `hoveredBarId`/`movableBarId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
   #refreshAffordances(): void {
     const sole = this.#segmentSelection.soleEntry();
     const ids = projectAffordances({
-      hoveredItemId: this.#hoveredItemId,
+      hoveredBarId: this.#hoveredBarId,
       soleSelectedEntryId: sole?.id,
       selectedSegmentCountOfSoleEntry: sole?.segmentCount ?? 0,
-      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
+      barIdsForEntry: (id) => this.#layout.barIdsForEntry(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
-    setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
+    setOptional(this.#interactionState, 'hoveredBarId', ids.hoveredBarId);
     setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
-    setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
+    setOptional(this.#interactionState, 'movableBarId', ids.movableBarId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);
   }
 
-  #entryFor(item: ItemId): Entry | undefined {
-    return this.#options.dataset.entries.get(entryIdOfItem(item));
+  #entryFor(item: BarId): Entry | undefined {
+    return this.#options.dataset.entries.get(entryIdOfBar(item));
   }
 
   /** Review H3: `GridCellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
@@ -2121,19 +2121,19 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
-  /** An id that names an Entry reveals the union of every Item that Entry draws. An id that instead
-   *  names one of its Segments reveals the one Item that draws that Segment. When an id could be
+  /** An id that names an Entry reveals the union of every Bar that Entry draws. An id that instead
+   *  names one of its Segments reveals the one Bar that draws that Segment. When an id could be
    *  read either way, the Entry reading wins (ADR 0010, #212).
-   *  Both readings share one geometry path. It asks `FrameLayout` for the row's Items, and
-   *  `barSpan` for each Item's own x/width off the bound `TimeScale`. The box is included (#295),
+   *  Both readings share one geometry path. It asks `FrameLayout` for the row's Bars, and
+   *  `barSpan` for each Bar's own x/width off the bound `TimeScale`. The box is included (#295),
    *  so a `diamond()` row reveals its true glyph width. That is the same formula `computeFrame`
    *  paints bars from, so the two can never drift apart. It then hands the resulting `Rect` to
    *  `Viewport.reveal` (S1.9, D-S1.9-6). When nothing paints the named target, its own dates are
-   *  the target instead (`fallbackSpanItem`), so reveal never becomes a no-op.
+   *  the target instead (`fallbackSpanBar`), so reveal never becomes a no-op.
    *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
    *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
-   *  says which one the caller meant. A collapsed ancestor expands before any Item is read.
-   *  `FrameLayout` answers Items from the post-collapse plan, so a row collapse hid answers empty.
+   *  says which one the caller meant. A collapsed ancestor expands before any Bar is read.
+   *  `FrameLayout` answers Bars from the post-collapse plan, so a row collapse hid answers empty.
    *  A still-hidden row (filter) keeps the current y — it does not jump to 0.
    *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
    *  reading the brand. */
@@ -2165,33 +2165,33 @@ export class GanttShell {
     this.#viewport.reveal({ x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
-  /** Reveals the whole Entry: the union of the painted extents of every Item it draws (#295). An
-   *  ordinary bar draws one Item over the entry's own span, so this reduces to today's behaviour.
-   *  A `diamond()` row's fixed box is read the same way, box included. An entry that draws no Item
+  /** Reveals the whole Entry: the union of the painted extents of every Bar it draws (#295). An
+   *  ordinary bar draws one Bar over the entry's own span, so this reduces to today's behaviour.
+   *  A `diamond()` row's fixed box is read the same way, box included. An entry that draws no Bar
    *  at all falls back to the entry's own span, so reveal never becomes a no-op. */
   #revealEntrySpan(ownerId: EntryId, start: Instant, end: Instant): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.itemsForEntry(ownerId);
+    const items = this.#layout.barsForEntry(ownerId);
     const scale = this.#viewport.timeScale;
     const minBarWidthPx = this.#frameSettings.minBarWidthPx;
     const { x, width } =
       items.length > 0
         ? unionSpan(items, scale, minBarWidthPx)
-        : barSpan(fallbackSpanItem(ownerId, start, end), scale, minBarWidthPx);
+        : barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 
-  /** Reveals one Segment: the Item that draws it, box included (#295). A summary draws one bar over
+  /** Reveals one Segment: the Bar that draws it, box included (#295). A summary draws one bar over
    *  the whole span, and that one bar stands for every Segment — so it is the target here too.
-   *  When no Item draws this Segment at all, the Segment's own dates are the target. A sibling bar
+   *  When no Bar draws this Segment at all, the Segment's own dates are the target. A sibling bar
    *  never is: the caller named this Segment, and panning to another one would show the wrong
    *  Segment. That is the rule `RovingFocus` relies on — a split Entry's other Segments must not
    *  widen the pan past the bar that has focus. */
   #revealSegmentSpan(ownerId: EntryId, targetSegmentId: SegmentId, start: Instant, end: Instant): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.itemsForEntry(ownerId);
-    const target = items.find((item) => this.#layout.segmentIdsForItem(item.id).includes(targetSegmentId));
-    const drawn = target ?? fallbackSpanItem(ownerId, start, end);
+    const items = this.#layout.barsForEntry(ownerId);
+    const target = items.find((item) => this.#layout.segmentIdsForBar(item.id).includes(targetSegmentId));
+    const drawn = target ?? fallbackSpanBar(ownerId, start, end);
     const { x, width } = barSpan(drawn, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
@@ -2378,7 +2378,7 @@ export class GanttShell {
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
         entryRulePorts: this.#entryRulePorts,
-        // #421 C5: fresh every frame, never cached on the Item — `barLabels: 'repaint'`
+        // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
         // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
         barLabelFor: (entry) => this.#labelFor(entry),
       }),

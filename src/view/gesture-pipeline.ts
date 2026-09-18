@@ -6,21 +6,21 @@
 // "Host" is a retired word, D-S1.11-6/#64, for smuggling two concepts under one name.)
 
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
-import type { ItemPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
+import type { BarPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type {
   Entry,
   StoredEntry,
   EntryId,
   GestureDroppedReason,
   Instant,
-  ItemId,
+  BarId,
   ProposedEdit,
   RaiseError,
   Refusable,
   SegmentId,
   ProposedEdits,
 } from '../model/index.js';
-import { EntryNotFoundError, entryId, itemId, spansTime } from '../model/index.js';
+import { EntryNotFoundError, entryId, barId, spansTime } from '../model/index.js';
 import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import type { BeforeGestureEvent } from '../data/error-reporting.js';
@@ -101,13 +101,13 @@ export interface GesturePipelineDeps {
   /** S3.8, D-S3-15: locale for `cursorLabelForX` — the same value header ticks already use. */
   locale?(): Intl.LocalesArgument | undefined;
   /** D-S3-17/D-S3-18: one `InteractionState` write for the live or held preview and the pending-bar
-   *  ids. `undefined` preview parks bars on committed geometry; `undefined` pendingItemIds clears the
+   *  ids. `undefined` preview parks bars on committed geometry; `undefined` pendingBarIds clears the
    *  `pending` token. There is no arm lock (#272/#273 — `session()` supersedes a held gesture instead
    *  of refusing to arm over it; `#held` is a fingerprint, not a gate). `cursor` is the Cursor line
    *  (D-S3-15); `undefined` parks it. */
   applyGestureState(
-    preview: readonly ItemPreview[] | undefined,
-    pendingItemIds: readonly ItemId[] | undefined,
+    preview: readonly BarPreview[] | undefined,
+    pendingBarIds: readonly BarId[] | undefined,
     cursor?: { x: number; label: string },
   ): void;
 }
@@ -158,7 +158,7 @@ interface GestureRefusal {
  *  write, no report (whichever of those already ran when the hold ended owns that job). */
 interface HeldGesture {
   readonly generation: number;
-  readonly itemIds: readonly ItemId[];
+  readonly itemIds: readonly BarId[];
   readonly proposal: GestureProposal;
   readonly refusal: GestureRefusal;
   /** Part 3 (#273): the stored row each id in `proposal.paints` was measured from, snapshotted the
@@ -385,7 +385,7 @@ export class GesturePipeline {
       end: grabbedEdit.end,
     };
     const spans = [...proposal.writes].map(([id, edit]) => proposedDatesOf(id, edit));
-    const itemIds = [...proposal.paints.keys()].map((id) => itemId(id));
+    const itemIds = [...proposal.paints.keys()].map((id) => barId(id));
     // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
     // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
     // the `before*` payload alone (event-bus.ts's map already types `entryMove`/`entryResize`
@@ -427,7 +427,7 @@ export class GesturePipeline {
   #settle(
     result: boolean | Promise<boolean>,
     proposal: GestureProposal,
-    itemIds: readonly ItemId[],
+    itemIds: readonly BarId[],
     refusal: GestureRefusal,
     finish: () => boolean,
   ): Promise<boolean> {
@@ -557,7 +557,7 @@ export class GesturePipeline {
    *  immediate `applyGestureState`, not a rAF-cleared preview plus a separate pending write. Returns
    *  this hold's generation, so `#settle` can tell a stale settle from a live one when `result`
    *  finally resolves (#272, #273 — this no longer arm-locks `session()`; see `session()`). */
-  #awaitVeto(itemIds: readonly ItemId[], proposal: GestureProposal, refusal: GestureRefusal): number {
+  #awaitVeto(itemIds: readonly BarId[], proposal: GestureProposal, refusal: GestureRefusal): number {
     const generation = ++this.#generation;
     this.#held = {
       generation,
@@ -642,7 +642,7 @@ export class GesturePipeline {
   /** The extension hook sees `writes` and the bars follow `paints`. A parent bar's own translated
    *  envelope is paint and nothing else (ADR 0013): showing it to the hook would offer a plugin an
    *  edit the commit never makes. */
-  #computePreview(proposal: GestureProposal | undefined): readonly ItemPreview[] | undefined {
+  #computePreview(proposal: GestureProposal | undefined): readonly BarPreview[] | undefined {
     if (!proposal || proposal.paints.size === 0) return undefined;
     const draft = proposal.paints;
     const extra = this.#extraFor(proposal.writes);

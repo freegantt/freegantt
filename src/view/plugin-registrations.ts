@@ -4,7 +4,7 @@
 // (#155). What differs is which pass has to run again. That is the one thing a reader used to have
 // to reassemble from three files.
 //
-// ADR 0018 took three of those seams down to one. A claim, an Item producer and a per-look
+// ADR 0018 took three of those seams down to one. A claim, a Bar producer and a per-look
 // capability default were three registrations of one variant, and the variant's name was written at
 // every one. `registerVariant` is what replaced them.
 //
@@ -32,8 +32,8 @@ import { RendererRegistry } from './renderer-registry.js';
 export interface PluginRegistrationPorts {
   /** Queues one frame (B10, D-S2-15). */
   requestFrame(): void;
-  /** Drops the per-row Item cache, so every row produces its Items again on the next render. */
-  invalidateItems(): void;
+  /** Drops the per-row Bar cache, so every row produces its Bars again on the next render. */
+  invalidateBars(): void;
   /** Re-resolves every entry's capabilities, and re-derives the affordances off the current hover. */
   refreshCapabilities(): void;
   /** Rewrites this Gantt's own variant stylesheet from the registry's current installed set (ADR
@@ -115,14 +115,14 @@ export class PluginRegistrations implements PluginRegistrar {
   /** ADR 0018: one variant is one object. So one registration changes what a row wears, what it
    *  draws, how it looks, and what every gesture may do to it. It also changes what rules its look
    *  needs. Every pass those five answers feed therefore runs again, on both edges —
-   *  `refreshVariantStyles()` for the fifth, beside `invalidateItems()` for the rest. `FrameLayout`'s
-   *  per-row Item cache forgets a row on a dataset, row-count or metrics change only. A variant
-   *  registration is none of those, so every row produces its Items again. */
+   *  `refreshVariantStyles()` for the fifth, beside `invalidateBars()` for the rest. `FrameLayout`'s
+   *  per-row Bar cache forgets a row on a dataset, row-count or metrics change only. A variant
+   *  registration is none of those, so every row produces its Bars again. */
   registerVariant(variant: EntryVariant, pluginId: PluginId): Disposer {
     return this.#onBothEdges(
       () => this.variants.addPluginVariant(variant, pluginId),
       () => {
-        this.#ports.invalidateItems();
+        this.#ports.invalidateBars();
         this.#ports.refreshCapabilities();
         this.#ports.refreshVariantStyles();
         this.#ports.requestFrame();

@@ -5,6 +5,8 @@ amended 2026-09-17 (naming only, no decision changed): the key this ADR calls `c
 open: nothing. **The newest rule wins** (2026-09-11, author's ruling — `Q5`), so all three registration seams agree and core registers its own two variants first. **What sets the order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
 ---
 
+> **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item` below as `Bar`. **Do not rewrite the body.**
+
 # A variant is a rule, not an id list
 
 **Lands after [0017](0017-the-entry-answers-questions-about-itself.md).** A rule needs a row that answers questions.

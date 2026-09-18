@@ -35,7 +35,7 @@ function recordingPorts(pixels: Record<string, number> = {}): {
   const ports: FrameSettingsPorts = {
     requestFrame: () => calls.push('requestFrame'),
     rebindFields: () => calls.push('rebindFields'),
-    invalidateItems: () => calls.push('invalidateItems'),
+    invalidateBars: () => calls.push('invalidateBars'),
     readPixelProperty: (property: string, policy: PixelPropertyPolicy) => {
       reads.push(property);
       return pixels[property] ?? policy.fallback;
@@ -75,7 +75,7 @@ describe('FrameSettings — the invalidation table', () => {
     {
       setting: 'rowSource',
       patch: { rowSource: { source: 'entries', tree: true } },
-      expected: ['invalidateItems', 'requestFrame'],
+      expected: ['invalidateBars', 'requestFrame'],
     },
     { setting: 'todayLine', patch: { todayLine: false }, expected: ['requestFrame'] },
     { setting: 'dateLines', patch: { dateLines: [] }, expected: ['requestFrame'] },

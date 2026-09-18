@@ -1,6 +1,6 @@
 // layout/ — a variant is a rule, and this file is where a row meets one (ADR 0018). One object
 // answers five questions about a row's shape: which rows wear it (`when`), what shape it draws
-// (`items`), how it looks (`paint`), what you can do to it (`can`), and what rules its look needs
+// (`bars`), how it looks (`paint`), what you can do to it (`can`), and what rules its look needs
 // (`css`, ADR 0022 §5). Before this, each question was its own registration, and the variant's name
 // was repeated at every one.
 //
@@ -22,8 +22,8 @@ import type { BarLabels, BarRenderer } from '../renderer.js';
 import type { EntryPredicate, EntryRule } from '../entry-rule.js';
 import { compileEntryRule } from '../entry-rule.js';
 export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
-import type { DrawnVariant, ItemProducer, VariantItems } from './item.js';
-import { fixedWidthItem, ignoreSegments, followSegments } from './item.js';
+import type { DrawnVariant, BarProducer, VariantBars } from './item.js';
+import { fixedWidthBar, ignoreSegments, followSegments } from './item.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
@@ -41,7 +41,7 @@ export interface ResolvedVariant extends DrawnVariant {
   /** What you can do to it, or `undefined` for no opinion at this level. */
   readonly capabilities: Capabilities | undefined;
   /** The rules this look needs, as CSS text, or `undefined` for none (ADR 0022 §5). The same string
-   *  the variant's own `css` carried at registration — copied here so every seam answers `items` /
+   *  the variant's own `css` carried at registration — copied here so every seam answers `bars` /
    *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
   readonly css: string | undefined;
   /** What this variant's own bars print, and where — merged key by key over the Gantt's own
@@ -67,9 +67,9 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
    *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
   when?: EntryRule<TProps>;
-  /** What shape it draws. Default: one Item per Segment, or one over the whole span when the Entry
+  /** What shape it draws. Default: one Bar per Segment, or one over the whole span when the Entry
    *  has none (`followSegments`, ADR 0023). */
-  items?: ItemProducer;
+  bars?: BarProducer;
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
    *  decorates the library's own bar and keeps its label (`J34`). */
   paint?: BarRenderer;
@@ -77,7 +77,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  library rule. Answer `undefined` from a predicate for "no opinion" (`J13`). */
   capabilities?: Capabilities;
   /** The rules this look needs, as CSS text — verbatim, no scoping done for you. A variant owns
-   *  `items`, `paint` and `can` already; this is the fifth answer, the rules behind the class
+   *  `bars`, `paint` and `can` already; this is the fifth answer, the rules behind the class
    *  `paint` names (ADR 0022 §5, Q6). `view/` wraps every installed variant's `css` once in
    *  `@layer freegantt` and writes it after the base sheet, so a variant's own rule cancels
    *  `.fg-bar`'s background and state ring at equal specificity, and an unlayered consumer rule
@@ -158,7 +158,7 @@ interface VariantRegistration {
   readonly pluginId: PluginId | undefined;
 }
 
-export interface VariantRegistry extends VariantItems {
+export interface VariantRegistry extends VariantBars {
   /** The variant this row wears, as one object. Walks newest-first, over the consumer's rules, then
    *  every plugin's, then core's two, and stops at the first rule that answers yes (`Q5`). Every row
    *  resolves, because core's `leaf` carries no `when`.
@@ -250,12 +250,12 @@ const DIAMOND_BAR: ElementDescription = Object.freeze({
   class: Object.freeze({ 'fg-bar-diamond': true }),
 });
 
-/** `.fg-bar-diamond`'s own rules (ADR 0022 §5, Q6). The box `fixedWidthItem` sizes is the hit
+/** `.fg-bar-diamond`'s own rules (ADR 0022 §5, Q6). The box `fixedWidthBar` sizes is the hit
  *  target; the `::before` is the ink, turned 45° into the familiar diamond.
  *
  *  **Restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it follows
- *  whatever box the Item states. A literal `13px` here would leave a 20px hit box around a 13px
- *  glyph the moment an author writes `diamond({ items: fixedWidthItem(20) })` (Q3).
+ *  whatever box the Bar states. A literal `13px` here would leave a 20px hit box around a 13px
+ *  glyph the moment an author writes `diamond({ bars: fixedWidthBar(20) })` (Q3).
  *
  *  The box's own background and state ring are cancelled first, so the glyph — not a square bar
  *  sitting behind it — wears the hover ring and the selection outline. */
@@ -269,7 +269,7 @@ const DIAMOND_CSS = `
 `;
 
 /** `bar()` — core's plain look, and the shipped floor every unclaimed row wears. Carries
- *  `followSegments` — the same producer a variant with no `items` key gets from the registry.
+ *  `followSegments` — the same producer a variant with no `bars` key gets from the registry.
  *  `bar()`'s own shape and the default shape always agree (ADR 0023).
  *
  *  Carries no `css`. Its look **is** `.fg-bar`, the element class every look wears — diamonds
@@ -287,7 +287,7 @@ const DIAMOND_CSS = `
 export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: LEAF_VARIANT_NAME,
-    items: followSegments,
+    bars: followSegments,
     ...overrides,
   };
 }
@@ -296,7 +296,7 @@ export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  (`entry.hasChildren`), never on a stored word (ADR 0013's own rule, narrowed by ADR 0022, not
  *  spent): a consumer who wants the rail on a different rule passes their own `when`.
  *
- *  **States its own `items` explicitly.** A parent may author several Segments of its own
+ *  **States its own `bars` explicitly.** A parent may author several Segments of its own
  *  (`src/data/rollup.ts` refused to reject one at ingest). The data-following default is not
  *  automatically safe here. `ignoreSegments` is the shape a summary needs whatever its Segments
  *  do — one rail. It says so, rather than trusting the registry's default to agree (ADR 0023). */
@@ -304,7 +304,7 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
-    items: ignoreSegments,
+    bars: ignoreSegments,
     paint: () => SUMMARY_BAR,
     css: SUMMARY_CSS,
     ...overrides,
@@ -323,7 +323,7 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  `when: (entry) => entry.duration()?.value === 0`.
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
- *  factory's own default rule, or a consumer's own `{ items: fixedWidthItem(...) }`.
+ *  factory's own default rule, or a consumer's own `{ bars: fixedWidthBar(...) }`.
  *
  *  **What you can do to it: no resize.** A resize commits a real duration, and this factory's own
  *  `when` stops matching the moment `start !== end` — the row would turn into a bar under the
@@ -333,7 +333,7 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: DIAMOND_VARIANT_NAME,
     when: (entry: Entry) => entry.start !== undefined && entry.start === entry.end,
-    items: fixedWidthItem(DIAMOND_WIDTH_PX),
+    bars: fixedWidthBar(DIAMOND_WIDTH_PX),
     paint: () => DIAMOND_BAR,
     capabilities: { resize: false },
     css: DIAMOND_CSS,
@@ -402,7 +402,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       variant,
       resolved: {
         name: variant.name,
-        items: variant.items ?? followSegments,
+        bars: variant.bars ?? followSegments,
         paint: variant.paint,
         capabilities: variant.capabilities,
         css: variant.css,
