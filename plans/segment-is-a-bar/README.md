@@ -198,6 +198,25 @@ If `wholeSpan` still wins, say why in the commit; if it does not, escalate rathe
 
 **What C6 will break.** Expect wide test breakage, the same shape the spike measured on a narrower change. Do it after an ADR, not before.
 
+**C6 landed 2026-09-18 at `f9b83b7` — `verify:full PASS`, all 16 checks, e2e included.** It took a
+fourth wave nobody planned, and the reason is worth carrying into C7: **C6c's own gate run reported
+12 red DOM tests as "pre-existing and unrelated".** They were regressions that wave introduced. The
+check that settled it costs one command — `git worktree add <tmp> c596dd9` and run the same files
+there (372 passed, 0 failed) — and it is now the standing rule in Q43: **a failing test is
+"pre-existing" only when it has been reproduced at a named green commit, and the report names that
+commit.**
+
+Three repairs came out of that wave, all in the build log: **Q42** (a resize edit names one edge now,
+and two readers still guarded on the whole span — every resize previewed and committed nothing),
+**Q41** (Delete on a bar un-dates it, ADR 0012's two intents, which C6c had reversed with no ADR),
+and the editing demo's three bars, rebuilt as claimed children — the first place in the repo where
+`childrenAsSegments` does a real job. `lock-entries.ts` needed no edit at all to cascade onto them,
+which is the useful part: a third-party cascade written for Segments works on claimed children as-is.
+
+**What C7 inherits.** The library is Segment-free and green, and `harness/editing.ts` already shows a
+claimed row. C7's own harness row is a different case — per-bar text, colour, capabilities and a row
+total — and it still has the five acceptance boxes no test covers (recorded in `959f8e6`).
+
 ---
 
 ## Decisions this plan makes
