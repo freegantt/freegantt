@@ -93,6 +93,7 @@ where they do something beyond re-export.
 | `layout/decorations.ts` | `DecorationRunner` | Runs registered decoration providers into the frame's under-bar and over-bar layers. |
 | `layout/frame-row.ts` | `FrameRow` | The painted-row shape `computeFrame` emits and a cell renderer reads. |
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
+| `layout/entry-rule.ts` | `compileEntryRule(), EntryRule, EntryPredicate, FieldMatch, EntryRulePorts` | One match syntax for "which Entry does this rule claim?" — a variant's `when` and a row source's `childrenAsSegments` both compile through this, so `items/` and `rows/` never import each other over it (#421 C1). |
 | `layout/registration-table.ts` | `createRegistrationTable()` | Stack-per-key registration with a disposer that removes exactly its own entry. Named leaf that `extensions/` may import. |
 | `layout/renderer.ts` | `BarRenderer, GridCellRenderer, HeaderRenderer, TooltipRenderer` | Renderer callback vocabulary. Plugin and consumer options share these types. |
 | `layout/items/produce-items.ts` | `produceItemsForRow(), resolveItems()` | Turns a row's entries into Items. Nothing dispatches on a type tag: the variant registry answers what one Entry draws, and that variant's producer builds the Items (ADR 0018). A header row produces none. |

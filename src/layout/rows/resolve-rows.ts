@@ -18,6 +18,7 @@ import type {
   RowSource,
   UnindexedRow,
 } from './row-source.js';
+import type { EntryRulePorts } from '../entry-rule.js';
 import { DEFAULT_FILTER_POLICY, DEFAULT_ROW_SOURCE } from './row-source.js';
 
 export type { PlannedRow, RowFilter, RowPassInput, RowSort, FilterPolicy } from './row-source.js';
@@ -26,7 +27,8 @@ export { DEFAULT_ROW_SOURCE };
 type RowProducer = (input: RowPassInput) => UnindexedRow[];
 
 const PRODUCE_ROWS = {
-  entries: (input) => resolveEntriesSource(input.entries, input.source as EntriesRowSource),
+  entries: (input) =>
+    resolveEntriesSource(input.entries, input.source as EntriesRowSource, input.entryRulePorts),
   group: (input) => resolveGroupSource(input.entries, input.source as GroupRowSource),
   custom: (input) => resolveCustomSource(input.source as CustomRowSource, { entries: input.entries }),
 } as const satisfies Record<RowSource['source'], RowProducer>;
@@ -48,6 +50,7 @@ export function resolveOpenRows(input: {
   rows?: RowSource;
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
+  entryRulePorts?: EntryRulePorts;
 }): UnindexedRow[] {
   const pass: RowPassInput = {
     entries: input.entries,
@@ -55,6 +58,7 @@ export function resolveOpenRows(input: {
     collapsed: new Set(),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
     ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
+    ...(input.entryRulePorts !== undefined ? { entryRulePorts: input.entryRulePorts } : {}),
   };
   const built = produceRows(pass);
   const { source, entries, fieldCompares = [], fieldContext } = pass;
@@ -74,6 +78,7 @@ export function resolveRows(input: {
   collapsed?: readonly string[];
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
+  entryRulePorts?: EntryRulePorts;
 }): readonly PlannedRow[] {
   const open = resolveOpenRows(input);
   return stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));

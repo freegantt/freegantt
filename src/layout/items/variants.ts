@@ -9,7 +9,6 @@
 // this file does not spend.
 
 import type {
-  CoreFieldValues,
   Disposer,
   Entry,
   EntryId,
@@ -20,6 +19,9 @@ import type {
   PluginId,
 } from '../../model/index.js';
 import type { BarRenderer } from '../renderer.js';
+import type { EntryPredicate, EntryRule } from '../entry-rule.js';
+import { compileEntryRule } from '../entry-rule.js';
+export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
 import type { DrawnVariant, ItemProducer, VariantItems } from './item.js';
 import { fixedWidthItem, ignoreSegments, followSegments } from './item.js';
 
@@ -43,32 +45,6 @@ export interface ResolvedVariant extends DrawnVariant {
    *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
   readonly css: string | undefined;
 }
-
-/** A rule that reads the whole row. Call: `when: (entry) => entry.duration()?.value === 0`. It runs
- *  on the hover path, so keep it cheap: it answers a question and draws nothing. */
-export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
-
-/** Every named Field equals the value beside it, and several keys are AND (`J6`).
- *
- *  **A match is equality, never "has a value".** `{ 'demo:phaseId': true }` claims the rows whose
- *  `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with a predicate:
- *  `(entry) => entry.read('demo:phaseId') !== undefined`.
- *
- *  **A key no Field declares matches no row.** The match reads through the Field registry, so a
- *  typo claims nothing rather than taking the layout pass down. A plugin that matches on its own
- *  key declares that key from its `data` half (`ctx.fields.register`).
- *
- *  Each key reads through `entry.read(key)` and compares with that Field's own `equals`
- *  (`model/field.ts`), so `{ start: someInstant }` and `{ status: 'blocked' }` compare the way a
- *  Grid comparison does. With no `equals` declared, the comparison is `Object.is`. */
-export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValues> & {
-  [K in keyof TProps]?: TProps[K];
-} & { [key: string]: unknown };
-
-/** What `EntryVariant.when` takes: the field-match shorthand, or a predicate. Both ship (refuted
- *  item 7 in `plans/row-redesign/README.md`). The shorthand is what core can index — it names its
- *  keys — and the predicate answers everything the shorthand cannot. */
-export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | EntryPredicate<TProps>;
 
 /** One variant, as one object. A consumer installs it through `GanttOptions.variants`; a plugin
  *  installs the same shape through `ctx.variants.add(variant)`. One type, two doors.
@@ -368,48 +344,6 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  ends up in and a reader should not have to derive it from a comparator. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([bar(), summary()]);
 
-/** `when`, as one predicate. A field match reads each named key off the row and compares it with
- *  that Field's own `equals`. The Field is looked up per read rather than at registration: a Gantt
- *  may be rebound to another Dataset, and a match names one or two keys, so the lookup is a Map
- *  read per key per row. */
-function compileRule(
-  rule: EntryRule,
-  fieldFor: VariantRegistryPorts['fieldFor'],
-  reportUnknownKey: (key: FieldKey) => void,
-): EntryPredicate {
-  if (typeof rule === 'function') return rule;
-  const keys = Object.keys(rule);
-  const reported = new Set<FieldKey>();
-  const reportOnce = (key: FieldKey): void => {
-    if (reported.has(key)) return;
-    reported.add(key);
-    reportUnknownKey(key);
-  };
-  return (entry) => keys.every((key) => valueMatches(entry, key, rule[key], fieldFor, reportOnce));
-}
-
-function valueMatches(
-  entry: Entry,
-  key: FieldKey,
-  expected: unknown,
-  fieldFor: VariantRegistryPorts['fieldFor'],
-  reportUnknownKey: (key: FieldKey) => void,
-): boolean {
-  // The lookup comes first, and a key no Field declares answers no. `entry.read` throws on such a
-  // key, and this runs on every row of every layout pass, so reading first would take the frame
-  // down for a typo — or for the one rule a chrome plugin cannot help itself with, because it
-  // installs after the Dataset closes its Field gate. Claiming nothing is the answer; saying so is
-  // the report (`J59`).
-  const field = fieldFor(key);
-  if (field === undefined) {
-    reportUnknownKey(key);
-    return false;
-  }
-  const actual = entry.read(key);
-  // Called on the Field, never detached: a consumer's own `equals` may read `this`.
-  return field.equals !== undefined ? field.equals(actual, expected) : Object.is(actual, expected);
-}
-
 function claimantOf(registration: VariantRegistration): VariantClaimant {
   return claimant(registration.variant.name, registration.pluginId);
 }
@@ -468,9 +402,11 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       claim:
         variant.when === undefined
           ? undefined
-          : compileRule(variant.when, fieldFor, (key) =>
-              reportUnknownFieldMatch?.({ rule: claimant(variant.name, pluginId), key }),
-            ),
+          : compileEntryRule(variant.when, {
+              fieldFor,
+              reportUnknownKey: (key) =>
+                reportUnknownFieldMatch?.({ rule: claimant(variant.name, pluginId), key }),
+            }),
       rank,
       seq: nextSeq++,
       pluginId,
