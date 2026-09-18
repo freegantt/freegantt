@@ -20,7 +20,7 @@
 // What this seam reads off a node, and what it asks for. A node states its own identity: which Bar,
 // which Row, which Field. Every *set* a target names is asked of the layout instead (#185, #199,
 // #212). A stamp is written for one frame, and a node outlives that frame. So a set read off a node
-// can describe the frame before this one — that is why `entryIds` always comes from the layout, never
+// can describe the frame before this one. That is why `entryIds` always comes from the layout, never
 // from a node's own stamp.
 
 import {
@@ -143,7 +143,7 @@ export class ContainerDom implements GanttDom {
    *  and the stamps say so before this seam hands the cached object back.
    *
    *  The frame stamp catches what the node's own stamps cannot (#212). A row keeps its
-   *  `data-row-id`/`data-entry-id` while the set of Entries it owns changes underneath — a child
+   *  `data-row-id`/`data-entry-id` while the set of Entries it owns changes underneath. A child
    *  added or removed leaves every node stamp equal, and the cached `entryIds` set stale. One number
    *  compare per event, and no allocation (I5). */
   #memoElement: Element | undefined;
