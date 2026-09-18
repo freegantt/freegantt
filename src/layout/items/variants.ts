@@ -46,7 +46,7 @@ export interface ResolvedVariant extends DrawnVariant {
 
 /** A rule that reads the whole row. Call: `when: (entry) => entry.duration()?.value === 0`. It runs
  *  on the hover path, so keep it cheap: it answers a question and draws nothing. */
-export type VariantPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
+export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
 
 /** Every named Field equals the value beside it, and several keys are AND (`J6`).
  *
@@ -68,7 +68,7 @@ export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValu
 /** What `EntryVariant.when` takes: the field-match shorthand, or a predicate. Both ship (refuted
  *  item 7 in `plans/row-redesign/README.md`). The shorthand is what core can index — it names its
  *  keys — and the predicate answers everything the shorthand cannot. */
-export type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | VariantPredicate<TProps>;
+export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | EntryPredicate<TProps>;
 
 /** One variant, as one object. A consumer installs it through `GanttOptions.variants`; a plugin
  *  installs the same shape through `ctx.variants.add(variant)`. One type, two doors.
@@ -87,7 +87,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  claims** — core's own `leaf` is the shipped one, and omitting `when` is how a plugin re-skins
    *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
    *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
-  when?: VariantRule<TProps>;
+  when?: EntryRule<TProps>;
   /** What shape it draws. Default: one Item per Segment, or one over the whole span when the Entry
    *  has none (`followSegments`, ADR 0023). */
   items?: ItemProducer;
@@ -168,7 +168,7 @@ interface VariantRegistration {
   readonly resolved: ResolvedVariant;
   /** `variant.when`, compiled to one predicate. Absent on the last-resort variant, which claims
    *  nothing and therefore never collides with anything. */
-  readonly claim: VariantPredicate | undefined;
+  readonly claim: EntryPredicate | undefined;
   readonly rank: number;
   readonly seq: number;
   readonly pluginId: PluginId | undefined;
@@ -329,7 +329,7 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
 
 /** `diamond()` — a marker for a zero-duration span (`start === end`), not a core default.
  *  Its default `when` reads `start`/`end` directly rather than `entry.duration()`: this runs on the
- *  hover path (I5, `VariantPredicate`'s
+ *  hover path (I5, `EntryPredicate`'s
  *  own "keep it cheap"), and `entry.duration()` allocates a fresh `{ value, unit }` on every call
  *  (`measureEntryDuration`) — one object per row per resolve for what is otherwise a plain equality
  *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
@@ -373,10 +373,10 @@ const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([bar(), summary()])
  *  may be rebound to another Dataset, and a match names one or two keys, so the lookup is a Map
  *  read per key per row. */
 function compileRule(
-  rule: VariantRule,
+  rule: EntryRule,
   fieldFor: VariantRegistryPorts['fieldFor'],
   reportUnknownKey: (key: FieldKey) => void,
-): VariantPredicate {
+): EntryPredicate {
   if (typeof rule === 'function') return rule;
   const keys = Object.keys(rule);
   const reported = new Set<FieldKey>();

@@ -774,10 +774,16 @@ export class EntryNotFoundError extends FreeGanttError {
 }
 
 // @public
+export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
+
+// @public
 export interface EntryResize extends EntryGestureEvent {
     // (undocumented)
     readonly edge: 'start' | 'end';
 }
+
+// @public
+export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | EntryPredicate<TProps>;
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
@@ -812,7 +818,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
     items?: ItemProducer;
     name: string;
     paint?: BarRenderer;
-    when?: VariantRule<TProps>;
+    when?: EntryRule<TProps>;
 }
 
 // @public
@@ -2369,12 +2375,6 @@ export class UnsupportedUnitError extends FreeGanttError {
 
 // @public
 export type UpdatedRow = FieldUpdated | StoreRowUpdated;
-
-// @public
-export type VariantPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
-
-// @public
-export type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | VariantPredicate<TProps>;
 
 // @public
 export interface ViewportGestureFlags {
