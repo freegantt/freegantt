@@ -3,7 +3,7 @@ import { attachKeyboardNavigation } from './keyboard-navigation.js';
 import type { KeyboardNavigationContext } from './keyboard-navigation.js';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
-import { entryId, mintedSegmentId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { Instant, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
@@ -158,12 +158,10 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   const day = (n: number): Instant => Date.parse(`2026-09-0${n + 1}T00:00:00Z`) as Instant;
 
   function parityDataset(entries: readonly StoredEntry[]): GanttShellOptions['dataset'] {
-    let mintedSegmentCounter = 0;
     return {
       entries: new EntryStore(entries, {
         timeZone: zone,
         dateOnlyEnd: 'inclusive' as const,
-        mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
       }),
       timeZone: zone,
       datasetRevision: 0,
@@ -181,7 +179,6 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
       start: day(0),
       end: day(2),
       ...(opts.parentId !== undefined ? { parentId: entryId(opts.parentId) } : {}),
-      segments: [{ id: segmentId(`${id}-1`), start: day(0), end: day(2) }],
       props: {},
     };
   }
