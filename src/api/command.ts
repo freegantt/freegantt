@@ -128,7 +128,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  click replaces the Selection first (`plans/02` §4.6), so `entry` reads as "the clicked bar" on
    *  that one path — but a right-click *inside* a multi-bar Selection, and every keyboard path
    *  (`Shift+F10`, the Menu key, `Mod+Arrow`), never click at all: `entry` is whichever Entry the
-   *  Selection puts first, which can differ from what carries DOM focus on a claimed row.
+   *  Selection puts first, which can differ from what carries DOM focus on a segmented row.
    *  `undefined` when the Selection is empty. */
   entry?: Entry | undefined;
   /** The variant this Gantt resolved for `entry` (ADR 0018). `undefined` when the invocation names
@@ -143,7 +143,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
   variant?: string | undefined;
   /** The node the user acted on — DOM focus, not the Selection. A command that means "the row
    *  under the pointer/focus", rather than "the Selection's subject", reads this instead of
-   *  `entry`; the two can name different Entries on a claimed row. `CommandTarget.entryIds` names
+   *  `entry`; the two can name different Entries on a segmented row. `CommandTarget.entryIds` names
    *  every Entry the target row owns, focused one first. */
   target?: CommandTarget;
 }

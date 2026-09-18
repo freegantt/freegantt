@@ -187,11 +187,11 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
   await expect(page.locator(`#gantt .fg-bar-summary[data-bar-id^="${newParentId}:"]`)).toHaveCount(1);
 });
 
-// #421 C7: "Framing crew" (`req-1`) claims three children, each a real child Entry with its own
-// name, its own `hours`, and its own look — a real browser proof that a claimed row draws several
+// #421 C7: "Framing crew" (`req-1`) draws three children as segments, each a real child Entry with its own
+// name, its own `hours`, and its own look — a real browser proof that a segmented row draws several
 // bars, that a bar prints its own text, that per-bar capabilities differ, and that a bar with no
 // name still draws (`fixtures/hierarchy-dataset.ts`, `harness/hierarchy.ts`'s `crewDayVariant`).
-test('a claimed row draws its children as bars, each with its own text, look and capabilities', async ({
+test('a segmented row draws its children as bars, each with its own text, look and capabilities', async ({
   page,
 }) => {
   await gotoHierarchy(page);
@@ -205,7 +205,7 @@ test('a claimed row draws its children as bars, each with its own text, look and
   await expect(monday).toHaveClass(/crew-day-filled/);
   await expect(wednesday).toHaveClass(/crew-day-open/);
 
-  // The row total: `hours` rolls up over all three children onto the claimed row's own cell.
+  // The row total: `hours` rolls up over all three children onto the segmented row's own cell.
   await expect(page.locator('#gantt .fg-row[data-entry-id="req-1"] [data-field="hours"]')).toHaveText('20');
 
   // Cy's day is locked: dragging its right edge refuses. `end` is the field a resize actually
@@ -236,7 +236,7 @@ test('a claimed row draws its children as bars, each with its own text, look and
   await page.evaluate(() => window.__gantt.reveal('site-hold'));
   await expect(page.locator('[data-bar-id^="site-hold:"]')).toHaveText('');
 
-  // One Field write opens the claimed row into three rows of its own, undoable like any other edit.
+  // One Field write opens the segmented row into three rows of its own, undoable like any other edit.
   await page.click('#crew-days-btn');
   await expect(page.locator('#gantt .fg-row[data-entry-id="req-1-mon"]')).toBeVisible();
   await page.click('#undo-btn');

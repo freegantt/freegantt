@@ -46,7 +46,7 @@ describe('resolveEntriesSource', () => {
 });
 
 describe('childrenAsSegments (#421 C1)', () => {
-  it('true claims every parent: children take no row of their own, in flat mode', () => {
+  it('true matches every parent: children take no row of their own, in flat mode', () => {
     const rows = resolveEntriesSource(entryDoubles([row('p'), row('c1', 'p'), row('c2', 'p'), row('q')]), {
       source: 'entries',
       childrenAsSegments: true,
@@ -54,7 +54,7 @@ describe('childrenAsSegments (#421 C1)', () => {
     expect(rows.map((r) => r.id)).toEqual([rowId('p'), rowId('q')]);
     const parentRow = rows.find((r) => r.id === rowId('p'));
     expect(parentRow?.entryIds).toEqual([entryId('p'), entryId('c1'), entryId('c2')]);
-    expect(parentRow?.claimed).toBe(true);
+    expect(parentRow?.childrenAsSegments).toBe(true);
     expect(parentRow?.expandable).toBe(false);
   });
 
@@ -68,15 +68,15 @@ describe('childrenAsSegments (#421 C1)', () => {
     expect(rows.find((r) => r.id === rowId('p'))?.entryIds).toEqual([entryId('p'), entryId('c1')]);
   });
 
-  it('a field match claims only the parents the rule answers yes for; an unclaimed parent keeps its own row and its children keep theirs', () => {
+  it('a field match matches only the parents the rule answers yes for; an parent no rule matches keeps its own row and its children keep theirs', () => {
     const rows = resolveEntriesSource(
       entryDoubles([row('p1', undefined, 'a'), row('c1', 'p1'), row('p2', undefined, 'b'), row('c2', 'p2')]),
       { source: 'entries', childrenAsSegments: { team: 'a' } },
       declaring({ key: 'team' }),
     );
     expect(rows.map((r) => r.id)).toEqual([rowId('p1'), rowId('p2'), rowId('c2')]);
-    expect(rows.find((r) => r.id === rowId('p1'))?.claimed).toBe(true);
-    expect(rows.find((r) => r.id === rowId('p2'))?.claimed).toBeUndefined();
+    expect(rows.find((r) => r.id === rowId('p1'))?.childrenAsSegments).toBe(true);
+    expect(rows.find((r) => r.id === rowId('p2'))?.childrenAsSegments).toBeUndefined();
   });
 
   it('a predicate rule runs with no Field registry wired in', () => {
@@ -85,10 +85,10 @@ describe('childrenAsSegments (#421 C1)', () => {
       childrenAsSegments: (entry) => entry.id === entryId('p'),
     });
     expect(rows.map((r) => r.id)).toEqual([rowId('p')]);
-    expect(rows[0]?.claimed).toBe(true);
+    expect(rows[0]?.childrenAsSegments).toBe(true);
   });
 
-  it("flat mode drops a claimed parent's whole subtree, not only its direct children (#421 F1)", () => {
+  it("flat mode drops a segmented parent's whole subtree, not only its direct children (#421 F1)", () => {
     const rows = resolveEntriesSource(entryDoubles([row('p'), row('c1', 'p'), row('g', 'c1'), row('q')]), {
       source: 'entries',
       childrenAsSegments: (entry) => entry.id === entryId('p'),
@@ -97,7 +97,7 @@ describe('childrenAsSegments (#421 C1)', () => {
     expect(rows.find((r) => r.id === rowId('p'))?.entryIds).toEqual([entryId('p'), entryId('c1')]);
   });
 
-  it('a claimed flat source stays a grid: a claimed parent is never expandable', () => {
+  it('a segmented flat source stays a grid: a segmented parent is never expandable', () => {
     const rows = resolveEntriesSource(entryDoubles([row('p'), row('c1', 'p')]), {
       source: 'entries',
       childrenAsSegments: true,

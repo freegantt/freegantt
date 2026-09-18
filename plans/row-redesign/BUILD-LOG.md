@@ -857,7 +857,7 @@ variants with ordinary rules, so a literal "two rules answered yes" diagnostic w
 plugin variant that lands on a row with children — and on every consumer variant that overrides a
 plugin's. Both are the design working, not an authoring error.
 
-**The call.** `'variant-claimed-twice'` fires when **two rules from the same rank** both answer yes,
+**The call.** `'variant-matched-twice'` fires when **two rules from the same rank** both answer yes,
 and never for core's rank. That is exactly `Q5`'s stated case: two sibling plugins with no `requires`
 edge between them, whose order nothing decides. A consumer's rule over a plugin's, or anything over
 core's floor, is a deliberate override and stays silent.

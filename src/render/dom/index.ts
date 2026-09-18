@@ -1096,7 +1096,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         return node;
       },
       toGeom: (bar) => {
-        // The row, never `bar.variant`: which paint this bar wears is the rule that claimed this
+        // The row, never `bar.variant`: which paint this bar wears is the rule that matched this
         // row, and two rules may share one name (`F3`).
         const entry = entryById(bar.entryId);
         // J1: the library measures and places every bar's label first, before any renderer runs, so

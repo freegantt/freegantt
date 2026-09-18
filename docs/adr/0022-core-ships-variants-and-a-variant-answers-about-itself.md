@@ -166,7 +166,7 @@ ADR 0013's body stays as it was written (`docs/adr/README.md:5`). Its `status:` 
 
 ## Rejected
 
-**A priority number per plugin.** Ordering already has two mechanisms: `requires` resolves setup order, and rank resolves paint (`CORE_RANK` < `PLUGIN_RANK` < `CONSUMER_RANK`). A number would be a third competing with both, and numeric priority has a known end state — everybody picks a bigger number. The unordered case already has a stated answer: `'variant-claimed-twice'` names both rules when two of the same rank claim one row, because the library does not arbitrate between plugins the consumer chose to install. A plugin that must paint over another's says `requires`.
+**A priority number per plugin.** Ordering already has two mechanisms: `requires` resolves setup order, and rank resolves paint (`CORE_RANK` < `PLUGIN_RANK` < `CONSUMER_RANK`). A number would be a third competing with both, and numeric priority has a known end state — everybody picks a bigger number. The unordered case already has a stated answer: `'variant-matched-twice'` names both rules when two of the same rank claim one row, because the library does not arbitrate between plugins the consumer chose to install. A plugin that must paint over another's says `requires`.
 
 **A `variantTypes` registry.** Drafted, then dropped. The usual argument for a registered name over a function is that a name serializes into a document — and [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the save format, so there is no document. What remained was a name registry, a collision rule, a resolution-order question, and a lookup on the hover path, all buying what an exported factory does for free.
 

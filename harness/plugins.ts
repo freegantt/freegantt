@@ -178,7 +178,7 @@ overBudgetRowsToggle.addEventListener('change', () => {
 // S5.9, D-S5-21/D-S5-22, [S5-A3]: bufferKind() is written against the public surface alone
 // ('freegantt', harness/plugins/buffer-kind.ts) — no core edit, no private import. Review P2:
 // riskKind() is a second plugin that defines a second variant, and both install — two rules that
-// claim different rows never collide. contextMenu() installs alongside them so each
+// match different rows never collide. contextMenu() installs alongside them so each
 // plugin's own menu item is reachable by right-click. Installed from the start; the checkbox
 // removes all three live, one `uninstallPlugin` per plugin, the same verbs every other plugin
 // toggle on this page already uses (I8: no remount).

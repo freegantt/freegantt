@@ -257,10 +257,10 @@ in `gridColumns`.
 ### Row sources and collapse
 
 **`gantt.rowSource`** names the config that decides what rows this Gantt draws. Default:
-`{ source: 'entries', tree: false }`.
+`{ source: 'entries', tree: true }` — every Entry a row, nested under its `parentId`.
 
 ```ts
-// Entries as a tree (parentId)
+// Entries as a tree (parentId) — the default
 gantt.rowSource = { source: 'entries', tree: true };
 
 // One header row per groupBy value
@@ -350,7 +350,7 @@ and so on without remounting.
 ### Selection (S3)
 
 Selection is **Gantt state**, not **Dataset** state — two `Gantt` instances on one `Dataset` can
-hold different selections. The Selection holds Entry ids (ADR 0010, ADR 0025) — `Segment` retired in
+hold different selections. The Selection holds Entry ids (ADR 0010, ADR 0025) — the `Segment` type retired in
 #421, and with it `selectedSegmentIds`. The library exposes it two ways, and the suffix says which
 one you get: entry ids, or `Entry` records.
 
@@ -360,7 +360,7 @@ one you get: entry ids, or `Entry` records.
 | `gantt.selectedEntries`  | `readonly Entry[]`   | no                                 | The bound dataset's `Entry` records for those ids |
 
 A click in the grid pane selects every Entry the row owns — one for an ordinary row, several for a
-claimed row (`childrenAsSegments`). A click on a bar in the timeline selects only the Entry that bar
+segmented row (`childrenAsSegments`). A click on a bar in the timeline selects only the Entry that bar
 belongs to.
 
 Assign **`selectedEntryIds`** to **set** the selection (click parity: assignment runs

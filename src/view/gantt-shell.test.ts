@@ -971,7 +971,13 @@ describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => 
   it('makes the grid pane a grid for a flat row source and a treegrid for a tree one, sized by the whole row set', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset: fakeDataset(entries),
+      scale,
+      rowSource: { source: 'entries', tree: false },
+    });
     shell.render();
 
     const gridPane = container.querySelector<HTMLElement>('.fg-grid-pane')!;

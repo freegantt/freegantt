@@ -25,9 +25,9 @@ import type {
   ViewPreset,
   EntryVariant,
   ResolvedVariant,
-  VariantClaimant,
+  RegisteredVariant,
   VariantRegistry,
-  ReportDoubleClaim,
+  ReportDoubleMatch,
   ReportUnknownFieldMatch,
   ResolvedRenderer,
   BarLabels,
@@ -312,7 +312,7 @@ export interface GanttShellOptions {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
@@ -686,7 +686,7 @@ export class GanttShell {
       options.variantRegistry ??
         createVariantRegistry({
           fieldFor: (key) => this.#options.dataset.field(key),
-          reportDoubleClaim: this.#reportDoubleClaim(),
+          reportDoubleMatch: this.#reportDoubleMatch(),
           reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
         }),
     );
@@ -728,7 +728,7 @@ export class GanttShell {
         // `barRenderer` beats a plugin's whole-point `bar` renderer.
         //
         // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**
-        // (`J61`). A consumer who wants to paint a summary row writes a variant that claims it.
+        // (`J61`). A consumer who wants to paint a summary row writes a variant that matches it.
         // Their rule then beats core's by rank, which is what D-S5-11 asks for.
         resolveBarRenderer: (entry) => this.#paintFor(entry),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
@@ -1357,8 +1357,8 @@ export class GanttShell {
    *  has none. One ladder, and `resolveBarRenderer` is its only caller.
    *
    *  It reads the row, never the variant's name. Two registrations may share one name. A lookup by
-   *  name can then answer with the paint of a rule that did not claim this row (`F3`). No
-   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-claim
+   *  name can then answer with the paint of a rule that did not match this row (`F3`). No
+   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-match
    *  diagnostic is what names a plugin. */
   #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
     const paint = this.#registrations.variants.resolveFor(entry).paint;
@@ -1742,7 +1742,7 @@ export class GanttShell {
     };
   }
 
-  /** Where a `DoubleVariantClaim` is reported (Q10, ADR 0018). Two plugins' rules both claimed one
+  /** Where a `DoubleVariantMatch` is reported (Q10, ADR 0018). Two plugins' rules both matched one
    *  Entry. The newest paints and the older draws nothing. This names both, so the consumer sees
    *  which two plugins overlap. The library never arbitrates — the consumer chose the plugins.
    *
@@ -1753,28 +1753,28 @@ export class GanttShell {
    *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
    *  line from every consumer's build, and the warning would never fire for anybody. The
    *  `console.warn` fallback runs only when nothing is subscribed to `error`. */
-  #reportDoubleClaim(): ReportDoubleClaim {
+  #reportDoubleMatch(): ReportDoubleMatch {
     const reported = new Set<string>();
     return ({ entryId, painted, ignored }) => {
       const pair = `${painted.variant}|${ignored.variant}`;
       if (reported.has(pair)) return;
       reported.add(pair);
-      const by = (claimant: VariantClaimant): string =>
-        claimant.pluginId === undefined
-          ? `'${claimant.variant}'`
-          : `'${claimant.variant}' (${claimant.pluginId})`;
+      const by = (registration: RegisteredVariant): string =>
+        registration.pluginId === undefined
+          ? `'${registration.variant}'`
+          : `'${registration.variant}' (${registration.pluginId})`;
       const message =
         `Two variant rules both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
         `The newest registered rule paints; ${by(ignored)} draws nothing on the entries they share.`;
       this.#raiseError(
-        { code: 'variant-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        { code: 'variant-matched-twice', message, severity: 'warning', by: 'core', entryId },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };
   }
 
   /** Where an `UnknownFieldMatch` is reported (`J59`). A `when` names a key no Field declares, so
-   *  the rule claims no row — a typo, or a plugin key the Dataset never declared. The frame keeps
+   *  the rule matches no row — a typo, or a plugin key the Dataset never declared. The frame keeps
    *  drawing; this says what stopped matching.
    *
    *  One report per rule and key, not one per row. A rule that names a missing key names it on
@@ -1785,7 +1785,7 @@ export class GanttShell {
       const owner = rule.pluginId === undefined ? '' : ` (${rule.pluginId})`;
       const message =
         `The variant rule '${rule.variant}'${owner} matches on field '${key}', and no Field declares it. ` +
-        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+        `It matches no row. Declare the field on the Dataset, or correct the key.`;
       this.#raiseError(
         { code: 'unknown-variant-field', message, severity: 'warning', by: 'core', field: key },
         () => console.warn(`FreeGantt: ${message}`),
@@ -1794,7 +1794,7 @@ export class GanttShell {
   }
 
   /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
-   *  `childrenAsSegments` rule names a key no Field declares, so it claims no row — a typo, or a
+   *  `childrenAsSegments` rule names a key no Field declares, so it matches no row — a typo, or a
    *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
    *  several named rules, so it has no rule name to print. The message names the config key instead.
    *
@@ -1808,7 +1808,7 @@ export class GanttShell {
       reported.add(key);
       const message =
         `'childrenAsSegments' matches on field '${key}', and no Field declares it. ` +
-        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+        `It matches no row. Declare the field on the Dataset, or correct the key.`;
       this.#raiseError(
         { code: 'unknown-row-source-field', message, severity: 'warning', by: 'core', field: key },
         () => console.warn(`FreeGantt: ${message}`),

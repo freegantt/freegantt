@@ -28,7 +28,7 @@ describe('wholeEntryBar (review P3)', () => {
   // second id to stand apart from. 'draws one Bar per Segment for a variant with no `bars` of its
   // own' pinned `followSegments`, deleted with the several-Segment single Entry it walked; a core
   // Entry now always draws exactly one Bar over its own span, so a variant with no `bars` of its own
-  // gets `unclaimedSpan` instead — the same one-Bar answer the merged test below already covers.
+  // gets `wholeSpanUnlessSegments` instead — the same one-Bar answer the merged test below already covers.
 
   it('is what a variant with no `bars` of its own draws for an Entry (ADR 0023, ADR 0026)', () => {
     const t1 = spanEntry('t1');
@@ -103,7 +103,7 @@ describe('produceBarsForRow', () => {
     expect(bars[0]?.end).toBe(t1.end);
   });
 
-  it('draws the leaf variant for a childless Entry no rule claims (ADR 0013)', () => {
+  it('draws the leaf variant for a childless Entry no rule matches (ADR 0013)', () => {
     const t1 = spanEntry('t1');
     expect(() => produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
     const bars = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
@@ -112,7 +112,7 @@ describe('produceBarsForRow', () => {
     expect(bars[0]?.variant).toBe('leaf');
   });
 
-  it('draws the parent variant for an Entry with children no rule claims', () => {
+  it('draws the parent variant for an Entry with children no rule matches', () => {
     const [t1] = entryDoubles([
       { id: 't1', start: 0, end: 10 },
       { id: 'c1', parentId: 't1', start: 0, end: 10 },
@@ -152,7 +152,7 @@ describe('produceBarsForRow', () => {
     expect(filledBars[0]?.start).not.toBe(filledBars[0]?.end);
   });
 
-  it('passes `childrenAsSegments: true` only for a claimed row’s subject — nothing skips it (#421 C2, Q33)', () => {
+  it('passes `childrenAsSegments: true` only for a segmented row’s subject — nothing skips it (#421 C2, Q33)', () => {
     const [p1, c1] = entryDoubles([
       { id: 'p1', start: 0, end: 10 },
       { id: 'c1', parentId: 'p1', start: 0, end: 10 },
@@ -168,8 +168,8 @@ describe('produceBarsForRow', () => {
       },
     });
 
-    const claimedRow: PlannedRow = { ...planned([p1!.id, c1!.id]), claimed: true };
-    produceBarsForRow(claimedRow, entryByIdFor([p1!, c1!]), own);
+    const segmentedRow: PlannedRow = { ...planned([p1!.id, c1!.id]), childrenAsSegments: true };
+    produceBarsForRow(segmentedRow, entryByIdFor([p1!, c1!]), own);
 
     // The subject (entryIds[0]) is asked with `true`; the child it claims is asked with `false`.
     // Nothing is skipped — the producer runs, and answers, for both (Q33).
@@ -179,7 +179,7 @@ describe('produceBarsForRow', () => {
     ]);
   });
 
-  it('an unclaimed row never passes `childrenAsSegments: true`', () => {
+  it('an row no rule matches never passes `childrenAsSegments: true`', () => {
     const t1 = spanEntry('t1');
     const seen: (boolean | undefined)[] = [];
     const own = createVariantRegistry({ fieldFor: () => undefined });

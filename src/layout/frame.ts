@@ -54,7 +54,7 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
  *
  * A zero-length span (`start === end` — ADR 0012) still floors at `minBarWidthPx`, centred on its
  * own instant, the same as any other painted span too narrow to grab — unless a `diamond()` Variant
- * (ADR 0022) claims the row and gives it a fixed box instead.
+ * (ADR 0022) matches the row and gives it a fixed box instead.
  *
  * A Bar that carries `box` (ADR 0022) skips the span-and-floor path entirely: its width is the
  * box's own `widthPx`, positioned by its own `anchor`. `'center'` reads the box's edges off the
@@ -283,7 +283,7 @@ export interface LayoutInput {
   barHeightPx?: number;
   /** Visible Grid columns. Omitted or empty → no cells. The Gantt default `['name']` lives in view/. */
   columns?: readonly ResolvedColumn[];
-  /** Which rows to draw. Omitted → `{ source: 'entries', tree: false }` (S1's flat list). */
+  /** Which rows to draw. Omitted → `{ source: 'entries', tree: true }` (nested by parent). */
   rows?: RowSource;
   /** Collapsed `RowId`s. Omitted → none. A stale id matches nothing (D-S4-22). */
   collapsed?: readonly string[];
@@ -301,7 +301,7 @@ export interface LayoutInput {
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
-   *  claims nothing, same as `resolveRows`'s own default. */
+   *  matches nothing, same as `resolveRows`'s own default. */
   entryRulePorts?: EntryRulePorts;
   /** What one bar's label prints (#421 C5). `view/` builds this from the Gantt's own `barLabels`
    *  Field, merged with the row's own variant (`mergeBarLabels`) and read through `formatValue` —
@@ -339,6 +339,11 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
   });
 }
 
+/** How many Bars one Entry drew on this row — what "part 2 of 3" counts. Only a plugin's own
+ *  `BarProducer` ever answers more than one Bar for one Entry (`plans/01` §2.4, `barId`'s
+ *  `partIndex`); every shipped producer draws one Bar per Entry (ADR 0026), so on a core-only
+ *  Gantt every count here is 1 and no label says "part". A segmented row is no exception: its
+ *  children are distinct Entries, so each one counts its own single Bar. */
 function partCountByEntry(bars: readonly Bar[]): ReadonlyMap<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const bar of bars) counts.set(bar.entryId, (counts.get(bar.entryId) ?? 0) + 1);

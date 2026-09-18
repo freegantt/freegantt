@@ -12,7 +12,7 @@ test('barRenderer paints a milestone diamond and gridCellRenderer paints an over
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // ADR 0022: `diamond()` is core's own shipped glyph. The page's variant (still named `diamond`,
-  // not `milestone` — F10) claims the marked rows with a plain `diamond({ when: { milestone: true }
+  // not `milestone` — F10) matches the marked rows with a plain `diamond({ when: { milestone: true }
   // })`, and `diamond()`'s own `css` draws the glyph on `.fg-bar-diamond::before`. The purple fill
   // is an ordinary, unlayered `.fg-bar-diamond { --fg-bar-fill: … }` rule in `plugins.html`'s own
   // `<style>` block — no `paint` override, and nothing reads a paint back (F9).

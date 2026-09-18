@@ -18,7 +18,7 @@ identity of its own before that ADR gave it a stable id. Selecting the whole Ent
 [#421](https://github.com/Pawel-IT/FreeGantt/issues/421) removes the premise. **What 0010 called a
 Segment is now an ordinary child `Entry`, with its own authored `EntryId`, its own `parentId`, and no
 stored classification of its own** ([Q17](../../plans/segment-is-a-bar/BUILD-LOG.md), ruled
-2026-09-17). A row source rule says which claimed parent draws its children on its own row; the
+2026-09-17). A row source rule says which segmented parent draws its children on its own row; the
 children themselves are Entries the store already indexes, reads, writes and undoes through the one
 door every other Entry uses. `SegmentId` named a unit with no `EntryId` behind it. Once every piece a
 Gantt draws is an Entry, `SegmentId` names nothing a consumer authored, and a Selection keyed on it
@@ -29,7 +29,7 @@ site that assumes a row's drawn units and the Selection's held units are the sam
 (`SPIKE-FINDINGS.md`, Q9). Nine sites read `entryIds[0]` across seven files. Seven of them ask "the
 row's subject," and two ask "the first selected Entry" — `gantt-shell.ts:1480` and
 `segment-selection.ts:170`, `SegmentSelection.step()`. With several child Entries selected on one
-claimed row, `step()` read only the first of the nine and moved it, leaving the rest of the
+segmented row, `step()` read only the first of the nine and moved it, leaving the rest of the
 Selection's own members untouched by the same keyboard gesture that had just moved one of them. C3
 fixed the nine sites as one audit (`999f599`), and this ADR is why the fix reads "Entries," not
 "Segments," on the far side of it: the unit a keyboard command steps and the unit a Selection holds
@@ -44,7 +44,7 @@ Entries. `view/entry-selection.ts` replaces `view/segment-selection.ts`, holding
 hit adds to them.
 
 **The pane rule is unchanged in shape, narrowed in unit.** A click in the grid pane still selects
-every Entry the row owns — the row's subject and, on a claimed row, every child it draws as a bar.
+every Entry the row owns — the row's subject and, on a segmented row, every child it draws as a bar.
 A click on the timeline still selects the one Entry under the pointer. Ctrl-click and shift-range
 still collect Entries the same way they collected Segments. `targetUnder` still owns the question,
 and nothing downstream asks it twice.
@@ -71,7 +71,7 @@ a Segment removes the same way an Entry that was never drawn as one does.
 - **The hot path keeps its budget (I5).** The selection diff runs over Entries instead of Segments,
   and it stays O(what changed).
 - **A rolled-up Entry is not a special case.** 0010 needed one, because an Entry with no Segment of
-  its own could not be selected by clicking its bar — it drew none. A claimed parent draws no bar of
+  its own could not be selected by clicking its bar — it drew none. A segmented parent draws no bar of
   its own either ([Q26](../../plans/segment-is-a-bar/BUILD-LOG.md)), and it needs none: its row
   click still selects every child Entry the row shows, through the same pane rule that already reads
   a row's Entry list.

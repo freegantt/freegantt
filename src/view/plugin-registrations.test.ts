@@ -99,16 +99,18 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 });
 
 describe('PluginRegistrations — the tables it reads back', () => {
-  it('answers a variant’s own `capabilities`, and undefined for a row no rule claimed', () => {
+  it('answers a variant’s own `capabilities`, and undefined for a row no rule matched', () => {
     const { registrations } = harness();
     const capabilities = { move: false };
 
     registrations.registerVariant(
-      { name: 'buffer', when: (entry) => entry.id === 'claimed', capabilities },
+      { name: 'buffer', when: (entry) => entry.id === 'segmented', capabilities },
       PLUGIN,
     );
 
-    expect(registrations.variants.resolveFor(entryDouble({ id: 'claimed' })).capabilities).toBe(capabilities);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'segmented' })).capabilities).toBe(
+      capabilities,
+    );
     expect(registrations.variants.resolveFor(entryDouble({ id: 'other' })).capabilities).toBeUndefined();
   });
 

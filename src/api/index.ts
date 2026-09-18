@@ -388,7 +388,7 @@ export { fixedWidthBar } from '../layout/index.js';
 // ADR 0023, ADR 0026: `EntryVariant.bars`'s own default — a variant with no `bars` key gets this one
 // Bar producer, and `summary()` states it explicitly too, for the same reason `BarProducer` itself is
 // exported above (an author naming it directly on a variant of their own).
-export { unclaimedSpan } from '../layout/index.js';
+export { wholeSpanUnlessSegments } from '../layout/index.js';
 // ADR 0022 §1: core's three shipped looks, as factories over `EntryVariant` rather than private
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it

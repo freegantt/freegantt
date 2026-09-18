@@ -6,7 +6,7 @@
 // `time/`'s plain-time helpers).
 //
 // Retired (ADR 0026, #421): a `segmented` entry with three deliberately overlapping `segments` (the
-// #215/#217 covered-Segment repro) stood here. A Segment no longer exists — an Entry now always
+// #215/#217 covered-Segment repro) stood here. The `Segment` type no longer exists — an Entry now always
 // draws exactly one Bar, and this page registers no plugin variant that draws several for one Entry.
 
 import { currency } from 'freegantt';
@@ -75,7 +75,7 @@ export const hierarchyEntryInputs: EntryInput<HierarchyEntryProps>[] = [
     start: '2026-03-20',
     end: '2026-03-20',
   },
-  // #421 C7: a crew-lead row — `req-1` claims its three children, so they draw as day bars on its
+  // #421 C7: a crew-lead row — `req-1` draws its three children as segments, so they draw as day bars on its
   // own row instead of rows of their own (`childrenAsSegments`, ADR 0026). Each child names its own
   // worker and hours; the parent keeps no dates of its own — they roll up from its children (ADR
   // 0013). `req-1-wed` is `locked`, so the harness can show a capability withheld from one bar and
@@ -124,7 +124,7 @@ export const hierarchyFieldOptions = {
     },
     { key: 'team' as const },
     // #421 C7: the crew-lead row's own Fields. `showDaysOnRow` is the boolean `childrenAsSegments`
-    // matches on; `hours` rolls up onto the claimed row's grid cell the same way `cost` does above.
+    // matches on; `hours` rolls up onto the segmented row's grid cell the same way `cost` does above.
     { key: 'showDaysOnRow' as const, type: 'boolean' as const },
     { key: 'hours' as const, type: 'number' as const, rollUp: 'sum', column: { header: 'Hours' } },
     { key: 'worker' as const },

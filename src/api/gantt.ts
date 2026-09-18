@@ -151,7 +151,7 @@ export interface GanttOptionsBase<TProps = unknown> {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];

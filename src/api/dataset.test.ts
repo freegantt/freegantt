@@ -52,7 +52,7 @@ describe('new Dataset()', () => {
 
   // Retired (ADR 0026, #421): 'gives an entry authored without segments one Segment, with a minted
   // id' and 'mints Segment ids from a per-instance counter' pinned `Entry.segments` and its minted
-  // ids. A Segment no longer exists — an Entry has no stored classification and no internal parts.
+  // ids. The `Segment` type no longer exists — an Entry has no stored classification and no internal parts.
 
   // A `Date` input is exercised in time/input.test.ts instead: I10 bans `new Date()` outside time/,
   // and that is the layer that actually reads one.
