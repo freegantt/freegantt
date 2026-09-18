@@ -3435,6 +3435,72 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     container.remove();
   });
 
+  describe('childrenAsSegments on a real Gantt (#421 C1, item 1 — entryRulePorts reaches resolveRows)', () => {
+    function claimTree() {
+      return [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10', props: { phase: 'build' } },
+        { id: 'c1', name: 'C1', parentId: 'p1', start: '2026-01-01', end: '2026-01-05' },
+        { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-01-05', end: '2026-01-10' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10', props: { phase: 'plan' } },
+        { id: 'c3', name: 'C3', parentId: 'p2', start: '2026-01-01', end: '2026-01-10' },
+      ];
+    }
+
+    it('a field-match rule claims only the parent it matches: one row for it, none for its children, the other parent and its child untouched', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: { phase: 'build' } },
+      });
+
+      const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+        row.getAttribute('data-entry-id'),
+      );
+      // p1 is claimed (phase: build) — c1/c2 draw no row of their own. p2 does not match
+      // (phase: plan) — it and c3 keep their own rows, same as a Gantt with no rule at all.
+      expect(rowIds).toEqual(['p1', 'p2', 'c3']);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a misspelt key reports once as unknown-row-source-field, and claims nothing', async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const reports: ErrorReport[] = [];
+      const gantt = new Gantt({ container, dataset });
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+      // Assigned after the subscription, not passed to the constructor: `rowSource` in `GanttOptions`
+      // resolves during the constructor's own first paint, the same trap the `J59` test above names.
+      gantt.rowSource = { source: 'entries', childrenAsSegments: { phaes: 'build' } as never };
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      // One report for the key, however many frames run.
+      gantt.rowSource = { ...gantt.rowSource };
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+        row.getAttribute('data-entry-id'),
+      );
+      // Every entry keeps its own row: the rule claims nothing, not `unknown-variant-field`'s
+      // "typo'd key" case, but this rule's own code (Q29).
+      expect(rowIds).toEqual(['p1', 'c1', 'c2', 'p2', 'c3']);
+
+      const missing = reports.filter((report) => report.code === 'unknown-row-source-field');
+      expect(missing).toHaveLength(1);
+      expect(missing[0]?.field).toBe('phaes');
+      expect(missing[0]?.message).toContain('childrenAsSegments');
+
+      gantt.destroy();
+      container.remove();
+    });
+  });
+
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
   // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
   // write, and the rule reads it back.

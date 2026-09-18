@@ -30,6 +30,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'hierarchy-cycle': true,
   'variant-claimed-twice': true,
   'unknown-variant-field': true,
+  'unknown-row-source-field': true,
   'derived-value': true,
   'derived-values-dropped': true,
   'no-parse-value': true,

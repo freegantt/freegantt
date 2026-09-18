@@ -357,6 +357,26 @@ describe('shipped Field types resolve by name with no local fieldTypes', () => {
     expect(field.formatValue!(twelveDays, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('12 d');
   });
 
+  it("{ key: 'showDaysOnRow', type: 'boolean' } ingests, formats, and opens a checkbox with no parseValue (Q22)", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'showDaysOnRow', type: 'boolean' }] });
+    const field = registry.get('showDaysOnRow')!;
+    expect(field.type).toBe('boolean');
+    expect(field.inputType).toBe('checkbox');
+    expect(field.formatValue!(true, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('true');
+    expect(field.formatValue!(false, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('false');
+    expect(field).not.toHaveProperty('parseValue');
+    expect(field.rollUp).toBeUndefined();
+  });
+
+  it('type: boolean sorts false before true, and an absent reading sorts last either way', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'showDaysOnRow', type: 'boolean' }] });
+    const field = registry.get('showDaysOnRow')!;
+    expect(field.compare!(false, true)).toBeLessThan(0);
+    expect(field.compare!(true, false)).toBeGreaterThan(0);
+    expect(field.compare!(true, undefined)).toBeLessThan(0);
+    expect(field.compare!(undefined, true)).toBeGreaterThan(0);
+  });
+
   it('{ type: currency({ code: EUR }) } resolves, formats, parses, and does not keep an object on type', () => {
     const registry = new FieldRegistry({
       fields: [{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }],

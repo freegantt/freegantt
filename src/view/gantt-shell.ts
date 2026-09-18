@@ -39,6 +39,7 @@ import type {
   Item,
   TimeScale,
 } from '../layout/index.js';
+import type { EntryRulePorts } from '../layout/entry-rule.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -493,6 +494,11 @@ export class GanttShell {
   /** #170: the five seams a plugin registers into, each carrying the refresh it owes. Renderers,
    *  decorations, Item producers, per-kind capability defaults and Grid columns. */
   #registrations!: PluginRegistrations;
+  /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
+   *  paired with this Gantt's own unknown-key report (#421 C1). Built once, right beside
+   *  `#registrations`'s own `fieldFor`. It is handed to `computeFrame` on every `render()` — the
+   *  same "built once, read every frame" shape `variants` already takes. */
+  #entryRulePorts!: EntryRulePorts;
   /** ADR 0022 §5: the second stylesheet a Gantt writes, one node for its own installed variants'
    *  `css`. Built right after `#registrations`, and refreshed on every edge that changes what a
    *  variant registers — construction, `gantt.variants = […]`, a plugin install or dispose. */
@@ -684,6 +690,10 @@ export class GanttShell {
           reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
         }),
     );
+    this.#entryRulePorts = {
+      fieldFor: (key) => this.#options.dataset.field(key),
+      reportUnknownKey: this.#reportUnknownRowSourceField(),
+    };
     // ADR 0022 §5: right after the registry it reads, and after `ensureBaseStyles` (above). A
     // variant's own rule must land after the base sheet. Only then can it cancel `.fg-bar`'s
     // background and state ring at equal specificity. Starts empty; `#installConsumerVariants` fills it.
@@ -1770,6 +1780,29 @@ export class GanttShell {
     };
   }
 
+  /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
+   *  `childrenAsSegments` rule names a key no Field declares, so it claims no row — a typo, or a
+   *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
+   *  several named rules, so it has no rule name to print. The message names the config key instead.
+   *
+   *  `compileEntryRule`'s own dedupe holds for one row pass; this Set holds across every frame this
+   *  Gantt renders. `resolveEntriesSource` recompiles the rule on every `render()`, and row-source
+   *  config rarely changes, but a stale key must not spam a report per frame. */
+  #reportUnknownRowSourceField(): (key: FieldKey) => void {
+    const reported = new Set<FieldKey>();
+    return (key) => {
+      if (reported.has(key)) return;
+      reported.add(key);
+      const message =
+        `'childrenAsSegments' matches on field '${key}', and no Field declares it. ` +
+        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-row-source-field', message, severity: 'warning', by: 'core', field: key },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
   /** S3.7's Page/Home/End/arrow pan (D-S3-14) binds here, alongside the eleven other core commands
    *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
@@ -2328,6 +2361,7 @@ export class GanttShell {
         variants: this.#registrations.variants,
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
+        entryRulePorts: this.#entryRulePorts,
       }),
     );
     // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are
