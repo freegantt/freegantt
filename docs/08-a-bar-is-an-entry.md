@@ -1,7 +1,7 @@
 # A bar is an Entry
 
 **Shipped.** Question **Q17** on [issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421) was
-ruled on 2026-09-17, after spike **S4** measured the cost objection away, and builds C1–C7 of
+ruled on 2026-09-17, after spike **S4** measured the cost objection away, and builds C1–C8 of
 [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md)
 landed it. The design is
 [`CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md),
@@ -13,10 +13,6 @@ and every ruling is in
 type retires; `Item` becomes `Bar`). [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md)
 is superseded — its own body is not rewritten, and stays as a record of why the Selection once held
 `SegmentId`.
-
-*Every code claim below was measured at `eb97ea9` and has not been re-verified against the shipped
-code below build C7 — read the claims about "becomes"/"will" as already true, and open the file for
-anything load-bearing.*
 
 <style>
   /* Tokens mirror `docs/architecture/diagram.md`. Kept local: that page's block also carries rules
@@ -288,8 +284,8 @@ Gantt — a read-only board resizes nothing, whatever a row looks like.
 
 ### Set it for the whole Gantt, or for one Entry
 
-**One key answers both.** `childrenAsSegments` takes `true` for every parent, or a `VariantRule`
-(`src/layout/items/variants.ts`) — the same `when` pattern a variant takes. The rule runs once per
+**One key answers both.** `childrenAsSegments` takes `true` for every parent, or an `EntryRule`
+(`src/layout/entry-rule.ts`) — the same `when` pattern a variant takes. The rule runs once per
 parent Entry in the layout pass, so the scope of the setting is whatever the rule says:
 
 ```ts
@@ -373,7 +369,7 @@ bars: (entry, variant) => [wholeEntryBar(entry, variant)],
 This producer always draws, claimed row or not — it is what a rail actually wants. `unclaimedSpan`, the parameter it ignores, is core's own answer of *when to suppress*; a consumer producer that wants its band to survive claiming skips that question and always paints, so it always sits behind the children's bars rather than disappearing the moment `childrenAsSegments` matches the row.
 
 :::note One rename inside this page
-The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It becomes `Bar` when the Segment retires (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `unclaimedSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
+The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It is `Bar`, now that the Segment has retired (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `unclaimedSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
 :::
 
 :::note Why the key says "segments"
@@ -382,7 +378,7 @@ true." The name says what the children *become*, and it discriminates — an unc
 children draw a bar on a row of their own, and never a segment of another row's bar. The key carries
 no `Row`, because it already sits on `rowSource` and a name does not repeat its own context.
 
-**The word is free because the type is going.** `Segment` stops being a stored type in build C6, and
+**The word is free because the type is gone.** `Segment` stopped being a stored type in build C6, and
 comes back in the glossary with one meaning and nothing behind it: *a child Entry drawn as one piece
 of its parent's row.* Rejected: `childrenAsRowSegments`, `childrenOnParentRow`, `childrenAsBars`
 (an unclaimed parent's children draw bars too), `mergeChildRows` (the mechanism, not the job) and
@@ -588,7 +584,7 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | --- | --- |
 | `model/` | `Segment`, `StoredSegment`, `SegmentId`, `SegmentInput`, `SegmentEdit` and the four Segment errors are deleted. Nothing replaces them |
 | `data/` | `updateSegment`, `addSegment`, `removeSegments` and the `store: 'segments'` apply path go. The Rollup already gives a parent its children's values, and that is now also the envelope |
-| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a claimed parent draws no Bar of its own. `followSegments` collapses into `wholeEntryBar` |
+| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a claimed parent draws no Bar of its own. `followSegments` is deleted; `ignoreSegments` becomes `unclaimedSpan` (ADR 0026, Q38) |
 | `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Bar.segmentId` go. A bar keys on its `BarId` and names its `EntryId`, as it did before Segments |
 | `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForBar`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
 | `scheduling/` (S7) | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
@@ -610,10 +606,10 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 
 | Document | What it holds |
 | --- | --- |
-| [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C7, the call sites, and the nine calls the plan makes |
+| [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C8, the call sites, and the nine calls the plan makes |
 | [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The ruled design, and what each former open point was ruled to be |
 | [`plans/segment-is-a-bar/SPIKE-FINDINGS.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/SPIKE-FINDINGS.md) | Spike S4 — the numbers, the two shapes written for the subject seam, and the limits on both |
-| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q24 — every ruling, and why Q17 voided Q1–Q16. Read the table at the top, not the older bodies below it |
+| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q44 — every ruling, and why Q17 voided Q1–Q16. Read the table at the top, not the older bodies below it |
 | [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
 | [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
 | [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |
