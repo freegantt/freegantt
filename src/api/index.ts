@@ -376,9 +376,11 @@ export type {
 // to structural inference.
 export type { Item, ItemProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
-// it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
-// `VariantPredicate` names its predicate arm alone.
-export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '../layout/index.js';
+// it. `EntryRule` is published beside it because an author cannot guess what `when` matches (J6);
+// `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
+// for one of the two keys that take them: `EntriesRowSource.childrenAsSegments` takes the same shape
+// (#421 Q30).
+export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
 // looks up again (F3, `plans/row-redesign/BUILD-LOG.md`).
 export type { ResolvedVariant } from '../layout/index.js';

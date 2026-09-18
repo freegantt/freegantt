@@ -27,10 +27,10 @@ export type {
   ResolvedVariant,
   UnknownFieldMatch,
   VariantClaimant,
-  VariantPredicate,
+  EntryPredicate,
   VariantRegistry,
   VariantRegistryPorts,
-  VariantRule,
+  EntryRule,
 } from './items/variants.js';
 export { createRegistrationTable } from './registration-table.js';
 export type { RegistrationTable } from './registration-table.js';
