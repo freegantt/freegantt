@@ -176,7 +176,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Position:** after S3, before S5. **Done, gate passing.** Tracker: [`plans/s4-hierarchy-and-rows/README.md`](./s4-hierarchy-and-rows/README.md); work splits into [`s4.1-field-registry.md`](./s4-hierarchy-and-rows/s4.1-field-registry.md)–[`s4.11-harness-and-gate.md`](./s4-hierarchy-and-rows/s4.11-harness-and-gate.md). That spec settled scope calls, closed ADR 0005's two open questions, and renamed `derivedSpanKinds` to `rollUpKinds` as the Rollup gate widened from spans to every rolling-up field.
 
-**Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights. **Lane packing retired by #298:** `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept — and `heightMode` — collapsed to nothing; every row now draws its items at one shared, fixed-height band.
+**Goal:** the Row ≠ Entry payoff (principle 1). Tree view with collapse/expand, grouped row sources, entry segments as multiple bars on one row, lane packing with variable row heights. **Lane packing retired by #298:** `singleLane` was the only row-packing behavior ever shipped, so the whole lane concept — and `heightMode` — collapsed to nothing; every row now draws its items at one shared, fixed-height band. **The Segment itself is retired by #421** (ADR 0026): "entry segments" above is historical goal text, kept as written; several bars on one row are now several child Entries a `childrenAsSegments` row source folds onto their parent's row.
 
 **Scope**
 

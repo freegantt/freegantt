@@ -93,7 +93,7 @@ flowchart LR
 Not in these slices, but the architecture names where each plugs in so none requires a core change:
 
 - **Working-time calendars & date constraints** — scheduling policy seam + time module (`01` §6, §7).
-- **Resources / assignments / workload views** — the Row/Item split and row-source config (`01` §4).
+- **Resources / assignments / workload views** — the Row/Bar split and row-source config (`01` §4).
 - **Sync adapter** (batched load/save against consumer endpoints) — consumes the changeset contract (`02` §6).
 - **Dense/aggregate rendering backend** (canvas) — behind the `RenderBackend` interface (`01` §8).
 - **Non-linear axis** (e.g., collapsing non-working time) — behind the `TimeScale` interface (`01` §6).

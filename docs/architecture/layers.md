@@ -116,12 +116,12 @@ listing its *only* legal targets. Anything not listed fails the build (invariant
 
 | Layer | May import | Note |
 | --- | --- | --- |
-| `model` | — nothing — | Leaf. Types plus `entryId`/`rowId`/`itemId` and `FreeGanttError`. |
+| `model` | — nothing — | Leaf. Types plus `entryId`/`rowId`/`barId` and `FreeGanttError`. |
 | `time` | `model` | Plus the one runtime dep `temporal-polyfill`, confined to `zone.ts`. |
 | `layout` | `time`, `model` | Where the shareable viewport models live — the only DOM-free layer both allowed `time/` and reachable from `view/`. |
 | `scheduling` | `time`, `model` | Stub. Never imported by `data/` statically — they meet at the extension hook. |
 | `data` | `time`, `model` | Fully built. Deliberately no `scheduling` edge: mutations resolve through the generic `EditExtender` hook (identity function when no plugin is installed). |
-| `render` | `layout` | Consumes `GeometryFrame` and nothing else from layout. Named leaf `data/dev-mode.ts` is also allowed. Reaches `ItemId`/`RowId` through `layout/index.ts`'s re-export, not `model/` directly. |
+| `render` | `layout` | Consumes `GeometryFrame` and nothing else from layout. Named leaf `data/dev-mode.ts` is also allowed. Reaches `BarId`/`RowId` through `layout/index.ts`'s re-export, not `model/` directly. |
 | `view` | `render`, `layout`, `data`, `model`, `extensions` | `data/` and `model` enter as type and dataset surfaces the shell orchestrates. `extensions/` is the plugin runtime the shell constructs; the Gantt's own event bus is `view/event-bus.ts`. Still no `time` edge — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`. |
 | `interaction` | `view`, `data`, `model` | Built. Drives the `EntryGestureContext` and `ColumnGestureContext` seams typed in `view/`; `model` enters as type-only params. Never reaches `time/`, `layout/` or `render/`, and never imports `scheduling/`. |
 | `extensions` | `api`, `model` | Dogfood gate: a built-in may import only what a third-party plugin can. Named leaves: `data/dev-mode.ts` and `layout/registration-table.ts`. Never imports `view/` — the shell constructs the runtime; the arrow is `view → extensions`. |

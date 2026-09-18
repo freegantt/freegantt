@@ -694,9 +694,9 @@ dependencies, no runtime beyond id/brand helpers. At S5 it also exports `PluginI
 `ErrorReport`, `ElementDescription` and command primitives alongside
 `Field`/`ChangeSet`. Every arrow below is a real `import` in `src/` today;
 the label on each box is exactly what that layer pulls across the boundary, type-only imports
-called out separately from the runtime calls (`entryId()`, `rowId()`, `itemId()`) that
+called out separately from the runtime calls (`entryId()`, `rowId()`, `barId()`) that
 actually execute outside `model/`. `render/` never imports `model/` at all — it's included to
-show how it still ends up typed in terms of `ItemId`/`RowId`, purely through `layout/`'s
+show how it still ends up typed in terms of `BarId`/`RowId`, purely through `layout/`'s
 re-export.
 
 <div class="fg-architecture-doc">
@@ -737,7 +737,7 @@ model/
 Entry, EntryInput, StoredEntry
 </text>
 <text x="620" y="79" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-EntryId / RowId / ItemId brands + entryId(), rowId(), itemId()
+EntryId / RowId / BarId brands + entryId(), rowId(), barId()
 </text>
 <text x="620" y="94" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
 Field, FieldKey, ChangeSet
@@ -798,10 +798,10 @@ layout/
 receives:
 </text>
 <text x="425" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryId/ItemId/RowId
+Entry, EntryId/BarId/RowId
 </text>
 <text x="425" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
-+ itemId(), rowId() — runtime calls
++ barId(), rowId() — runtime calls
 </text>
 <text x="425" y="320" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
 geometry, Field types
@@ -827,13 +827,13 @@ api/
 re-exports:
 </text>
 <text x="725" y="280" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryId, RowId, ItemId
+Entry, EntryId, RowId, BarId
 </text>
 <text x="725" y="296" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
 Field, FieldKey, ChangeSet
 </text>
 <text x="725" y="312" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
-+ entryId(), itemId() functions
++ entryId(), barId() functions
 </text>
 <text x="725" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 765 lines · the public surface allow-list
@@ -886,7 +886,7 @@ render/
 no model/ import
 </text>
 <text x="425" y="480" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-ItemId, RowId arrive only as types,
+BarId, RowId arrive only as types,
 </text>
 <text x="425" y="494" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
 re-exported through layout/index.ts
@@ -912,10 +912,10 @@ data/
 receives:
 </text>
 <text x="160" y="480" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--ink)">
-Entry, EntryId/ItemId/RowId
+Entry, EntryId/BarId/RowId
 </text>
 <text x="160" y="496" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--core)">
-+ entryId(), rowId(), itemId() — runtime
++ entryId(), rowId(), barId() — runtime
 </text>
 <text x="160" y="514" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
 Field, FieldKey, ChangeSet
@@ -946,7 +946,7 @@ color="var(--muted)"
 <figcaption>
 <code>layout/</code> is the only layer that both imports <code>model/</code> and calls its runtime
 helpers — everywhere else the crossing is types only. <code>data/</code> also calls
-<code>entryId()</code>/<code>rowId()</code>/<code>itemId()</code> at runtime for brand helpers. The
+<code>entryId()</code>/<code>rowId()</code>/<code>barId()</code> at runtime for brand helpers. The
 <code>api/index.ts</code> re-export list now includes <code>Field</code>, <code>FieldKey</code>,
 <code>FieldType</code> and <code>ChangeSet</code> alongside the original types, giving consumers the
 full vocabulary to declare fields and react to changesets.
@@ -1367,10 +1367,10 @@ stroke-width="1.5"
 model/ re-exports
 </text>
 <text x="735" y="100" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-entryId(), itemId()
+entryId(), barId()
 </text>
 <text x="735" y="114" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-Entry, EntryId, RowId, ItemId
+Entry, EntryId, RowId, BarId
 </text>
 <text x="735" y="128" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 Field, FieldKey, ChangeSet
@@ -1846,10 +1846,10 @@ stroke-width="1.5"
 model/
 </text>
 <text x="445" y="668" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-Entry · EntryId / RowId / ItemId · Field · ChangeSet · geometry · errors
+Entry · EntryId / RowId / BarId · Field · ChangeSet · geometry · errors
 </text>
 <text x="445" y="686" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-entryId() · rowId() · itemId() — zero deps: types + brand-id helpers only
+entryId() · rowId() · barId() — zero deps: types + brand-id helpers only
 </text>
 <!-- 1. api -> view : construct / destroy -->
 <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow4)" color="var(--ink)">
@@ -1931,7 +1931,7 @@ computeFrame(LayoutInput) → GeometryFrame
 <path d="M980,684 V700 H865 V660 H865" />
 </g>
 <text x="875" y="700" text-anchor="start" class="box-sub lbl" font-size="10" fill="var(--ink)">
-itemId() · rowId()
+barId() · rowId()
 </text>
 <!-- 10. view -> model : type-only -->
 <path

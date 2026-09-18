@@ -3614,7 +3614,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
       const barIds = bars.map((bar) => bar.dataset['barId']);
-      // p1 draws no bar of its own — `summary()` resolved for it and `ignoreSegments` answered `[]`
+      // p1 draws no bar of its own — `summary()` resolved for it and `unclaimedSpan` answered `[]`
       // (Q27). c1 and c2 draw their own bars, on p1's row.
       expect(barIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
