@@ -28,14 +28,16 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q16 *(void)* | what does `removeSegments` do to a derived row's minted id? | **Ruled 2026-09-17** — refused with `DerivedFieldNotWritableError` |
 | Q17 | is a bar a regular child Entry, drawn on its parent's row by a row source rule? | **RULED 2026-09-17: yes.** Spike S4 measured the cost objection away. The Segment retires, Option C is void, and Q1–Q16 go with it |
 | Q18 | is the rule Gantt-wide or per Entry, and does it need `tree`? | **RULED with Q17, 2026-09-17** — both, through one key; `tree` is orthogonal and leaves the two-level call site |
-| Q19 | where does a claimed row name its own Entry, and where does the parent's Item suppression live? | **RULED 2026-09-17: shape (a).** `entryIds[0]` stays the subject; `PlannedRow` carries the claimed marker. Shape (b) was written and breaks ten call sites with no compile error. C2 builds the rail seam; C3 fixes the ten sites |
+| Q19 | where does a claimed row name its own Entry, and where does the parent's Item suppression live? | **RULED 2026-09-17: shape (a).** `entryIds[0]` stays the subject; `PlannedRow` carries the claimed marker. Shape (b) was written and breaks nine call sites with no compile error. C2 builds the rail seam; C3 fixes the nine sites — seven read a row's list, two read the Selection's |
 | Q20 | can a row filter hide one bar on a shared row? | **RULED 2026-09-17 by the author: it does not need to.** A filter hides a parent, and its segments go with it, because they sit on the parent's row. `applyFilter` already does exactly this, so nothing ships and no item-level knob exists |
 | Q21 | does the entries row source take the Field registry, so `childrenAsSegments` matches with typed `equals` and reports an unknown key? | **RULED 2026-09-17 by the author: yes, thread it.** C1 passes `fieldContext` into the entries-source pass, as `sort` already receives it, so a misspelt key reports once through `reportUnknownFieldMatch` instead of drawing a blank screen in silence. C1 rewrites `row-source.ts`'s own statement of D-S4-19/D-S4-21 |
 | Q22 | does core ship a `boolean` Field type? | **RULED 2026-09-17 by the author: yes.** It lands in C1 with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are its first consumer. Today `{ type: 'boolean' }` throws `UnknownFieldTypeError` (`data/fields/field-registry.ts:70`) |
 | Q23 | does a hierarchy source declare the Field keys it reads? | **OPEN, 2026-09-17.** C4's fast path applies only to core's own `storedParentSource`: a plugin source is a function that may read any field, and nothing on the seam says which. Wider than #421 |
-| J1 | S1's ChangeSet address | Measurement stands. **Its `segmentId` shape is superseded by Q6** — the row is `store: 'segments'` |
-| J2–J3 | S2 and S3 findings | Ruled, from `SPIKE-FINDINGS.md` |
+| J1 *(void)* | S1's ChangeSet address | **Void with Q17** — a bar writes no Segment row. The measurement stands as a record; its subject does not |
+| J2–J3 *(void)* | S2 and S3 findings | **Void with Q17.** S1–S3's own text was removed from `SPIKE-FINDINGS.md` on the author's word, so the bodies below are the only record left |
 | Q24 | what is the key called? | **RULED 2026-09-17 by the author: `childrenAsSegments`.** It frees the word *Segment* from the type that retires in C6. `README.md` holds the reasoning, the rejected names, and the one cost — the word means two things between C1 and C6 |
+| Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **OPEN, 2026-09-17.** C6 must rename it, and no document gives the name or the overlap rule. Recommendation below. **C6 stops and asks if this is still open** |
+| Q26 | how does a claimed parent ask for a rail instead of a bar? | **OPEN, 2026-09-17.** C2 is told to build the seam and no document gives its shape. Recommendation below. **C2 stops and asks if this is still open** |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -105,7 +107,7 @@ Today `removeSegments` on the last Segment un-dates the Entry (`CONTEXT.md:67`, 
 
 ## J1 — S1's ChangeSet address: no `segmentId` row today, and a second write path is real but small
 
-**Ruled 2026-09-16, from the S1 spike (`SPIKE-FINDINGS.md`).** **Shape superseded 2026-09-17 by Q6:** there is no `FieldUpdated.segmentId`. A Segment write is a `store: 'segments'` row keyed by the Segment's own id. The measurement below stands: the apply path is small, and undo needs no change.
+**Ruled 2026-09-16, from the S1 spike. Void with Q17, 2026-09-17 — record only.** S1's own text is no longer in `SPIKE-FINDINGS.md`; the author had it removed, and this entry is what is left of it. **Shape superseded 2026-09-17 by Q6:** there is no `FieldUpdated.segmentId`. A Segment write is a `store: 'segments'` row keyed by the Segment's own id. The measurement below stands: the apply path is small, and undo needs no change.
 
 Today's store cannot produce a `{ segmentId, field }` row at all: `FieldUpdated`
 (`model/change-set.ts:20-25`) has no `segmentId` key, and `applyFieldRow` (`entry-store.ts:72-84`)
@@ -124,7 +126,7 @@ confirms the README's B3 sketch. It does not confirm the envelope-row detail —
 
 ## J2 — S2's handle pair: rule B is already the production shape; the gap is per-Item gating, not the bracket rule
 
-**Ruled 2026-09-16, from the S2 spike (`SPIKE-FINDINGS.md`).** **Finding stands; its build and shape moved 2026-09-17:** the work is now B6, and `Capabilities.can` takes the Segments a bar stands for (J-plan-7, Q11(d)), not a `segment?` parameter.
+**Ruled 2026-09-16, from the S2 spike. Void with Q17, 2026-09-17 — record only.** S2's own text is no longer in `SPIKE-FINDINGS.md`; the author had it removed, and this entry is what is left of it. The per-Item gating it found is real and survives as C3. **Its build and shape moved 2026-09-17:** the work is now B6, and `Capabilities.can` takes the Segments a bar stands for (J-plan-7, Q11(d)), not a `segment?` parameter.
 
 `projectAffordances`/`resolveResizableEntry` (`view/affordance-projection.ts`) already brackets the
 Entry's envelope and already gates each edge independently — confirmed with the real, exported, pure
@@ -145,7 +147,7 @@ one resolution, two readers, as today's `can()` doc comment already promises.
 
 ## J3 — S3's plain-bar id: stable across undo with no ChangeSet row, no blocking finding, and B2 is wide work
 
-**Ruled 2026-09-16, from the S3 spike (`SPIKE-FINDINGS.md`).**
+**Ruled 2026-09-16, from the S3 spike. Void with Q17, 2026-09-17 — record only.** S3's own text is no longer in `SPIKE-FINDINGS.md`; the author had it removed, and this entry is what is left of it. A bar id is an authored `EntryId` now, so the minted plain-bar id has no subject.
 
 A real (reverted) throwaway change — `toSegments` returns `[]` for an unauthored spanning Entry,
 `reconcileEnvelope`'s sole-Segment mirror only fires when a Segment already exists, and
@@ -538,7 +540,7 @@ The author took every recommendation. Each one was measured against the code and
 
 ## Q17 — is a bar a regular child Entry, drawn on its parent's row?
 
-**Raised 2026-09-17 by a cold-read review the author asked for. OPEN. The author took it as the leading design idea the same day, to be spiked. Spike S4 has not run and waits for the author's word.**
+**Raised 2026-09-17 by a cold-read review the author asked for. RULED the same day — read [Q17 RULED](#q17-ruled-2026-09-17--a-bar-is-a-child-entry) below, not this entry.** This entry is the record of the question as it stood before spike S4 ran. The words *OPEN*, *not ruled* and *if S4 fails* below are that record, and they are no longer live.
 
 **The design is in [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md). This entry is the record of why it re-opens Q6.**
 
@@ -553,9 +555,9 @@ The author took every recommendation. Each one was measured against the code and
 
 **The author's words, 2026-09-17.** "I like the render split option and think we should be able to define this per entry. or per row. or maybe doing the same when pattern that variants use." The design answers all three with one key: the rule takes the `when` pattern; per-Entry control is a consumer Field the rule matches; per-row is per-Entry, because a `RowId` equals the `EntryId` for the entries source. The author then confirmed the meaning of "child": what was a Segment is a regular Entry with `parentId` set, and nothing on the child marks it.
 
-**Not ruled.** The eleven open points in the design file, the name of the key among them.
+~~**Not ruled.** The eleven open points in the design file, the name of the key among them.~~ **Closed 2026-09-17.** All fifteen former open points are ruled in [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md), and the key is `childrenAsSegments` (Q24).
 
-**If S4 fails,** Option C stands. The same review found six gaps in it, listed at the end of the design file. Each becomes a Q then.
+~~**If S4 fails,** Option C stands. The same review found six gaps in it, listed at the end of the design file. Each becomes a Q then.~~ **S4 did not fail.** Option C is void, its six gaps have no subject, and the six-fix list was removed from the design file.
 
 ---
 
@@ -710,3 +712,50 @@ The author confirmed the split. A bar moves between rows with one write today (`
 ### The Segment's retirement
 
 The author confirmed it: the child-Entry design replaces the Segment, with no compatibility path and no legacy key. J-plan-G stands.
+
+---
+
+## Q25 — the duration option's new name, and what overlapping children count as
+
+**Raised 2026-09-17 by a cold-read audit of the ruled plan. C6. OPEN — the author rules.**
+
+**The gap.** `README.md` says C6 renames `measureDuration: 'segments'`, `#421` says it "keeps its job under a new name", and C6's gate says "renamed and re-stated". No document gives the name, and no document gives a candidate. Every other name in this plan was ruled with its rejected list beside it (Q24, Q13, Q11(b)). A C6 agent would invent a public API name with no ruling behind it.
+
+**The second half is worse, because it is silent.** `measureEntryDuration` sums the Segments today (`data/fields/field-access.ts:219-221`), and Segments of one Entry do not overlap. Children do — `J-plan-E` rules that two bars on one row draw at the shared band. A plain sum counts an overlapped hour twice. `README.md` says "the sum of its children's spans" and `#421` says the same; both are additive. The word *envelope* in the same sentence pulls a reader toward a union instead. Nobody states which.
+
+**Recommendation, both halves.**
+
+1. **The key stays `measureDuration`. The union member becomes `'children'`.**
+   ```ts
+   new Dataset({ entries, measureDuration: 'children' });  // the sum of this row's children's spans
+   ```
+   Read the call: "measure duration: children". The `Dataset` has no Gantt, so it cannot see whether a Gantt draws those children as segments — `'segments'` would name a drawing decision on a surface that cannot observe one. `'children'` names the data. Rejected: `'segments'` (the word is now a *drawing* word, ruled in Q24, and a `Dataset` does not draw), `'sumOfChildren'` (says the mechanism, not the job), `'work'` and `'worked'` (they name one industry's use of the number, and core never does that).
+2. **Two overlapping children count twice.** A plain sum, unchanged from today's code. Two crews on one day is two days of work, which is what the number is for. A union is a different question and gets its own key if a consumer asks for one. `ADR 0017`'s revision note states the rule in one sentence, so no reader has to guess.
+
+**Cost if the author rules otherwise:** one union member's spelling in C6, and one sentence in ADR 0017. Nothing else depends on it.
+
+---
+
+## Q26 — how a claimed parent asks for a rail instead of a bar
+
+**Raised 2026-09-17 by a cold-read audit of the ruled plan. C2, ruled in C1. OPEN — the author rules.**
+
+**The gap.** C2's job says "the seam a consumer variant paints a rail through", and Q19 leaves that seam to C2. No document says what an author writes. Today a rail and a bar are two producers, not one shape with a flag: `ignoreSegments` returns one whole-span Item (`layout/items/item.ts:161-163`) and `followSegments` returns one Item per Segment (`:179-186`). C2 would invent the mechanism mid-plan.
+
+**Recommendation: the claim changes the default producer, and nothing else.** A claimed parent's default `items` producer returns `[]`. A variant with an explicit `items` key still wins, so a rail is the producer that already exists:
+
+```ts
+new Gantt({
+  rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+  variants: [
+    // "This row claims its children, and I still want one band behind them."
+    { name: 'crewRail', when: (entry) => entry.read('showDaysOnRow') === true, items: wholeSpanItem },
+  ],
+});
+```
+
+**Why this shape.** No new key, no new type, and no second way to ask the same question. It keeps I14 — one resolution answers chrome and gesture — because the producer is the one the variant pass already resolves. It also gives C2 a one-line gate: a claimed row with no variant draws its children's bars alone; the same row with `items: wholeSpanItem` draws the band behind them.
+
+**Two names C6 owes this seam**, and they belong to C6's rename sweep, not to a separate ruling: `ignoreSegments` becomes `wholeSpanItem` ("items: whole span item"), and the claimed parent's empty default is `noItems` ("items: no items"). `followSegments` retires with the type.
+
+**Cost if the author rules otherwise:** C2's shape and one gate line. C1 writes nothing for this.
