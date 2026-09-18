@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch review — #421 "the Segment retires" (pass 2)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .seam { border-left: 4px solid #10b981; }
+  .leak { border-left: 4px solid #f59e0b; }
+  .deep  { border-left: 4px solid #6366f1; }
+  .card { box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<header class="bg-slate-900 text-slate-100">
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <p class="text-slate-400 text-sm uppercase tracking-widest">FreeGantt · branch review · 2026-09-18</p>
+    <h1 class="text-2xl font-bold mt-1">#421 — a bar is a child Entry: the Segment retires</h1>
+    <p class="mt-2 text-slate-300">Second review of branch <code class="text-sky-300">Pawel-IT/a-bar-is-a-child-entry-its-own-name-values-varia</code>.
+      Diff <code class="text-sky-300">2c150be…HEAD</code> (HEAD <code class="text-sky-300">72ddfc5</code>), 114 commits, 210 files, +7560/−9353.
+      The first review (12 findings F1–F12) and its fixes are already on this branch; this report re-verifies F1–F12 and adds new findings (<code class="text-sky-300">bpF*</code>).</p>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      <span class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">seam — clean boundary</span>
+      <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-300">leak — a seam holds but a word or fact leaks</span>
+      <span class="px-2 py-1 rounded bg-indigo-500/20 text-indigo-300">deep — module depth at stake</span>
+      <span class="px-2 py-1 rounded bg-red-500/20 text-red-300">major</span>
+      <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-300">hard spec/doc</span>
+      <span class="px-2 py-1 rounded bg-sky-500/20 text-sky-300">minor</span>
+      <span class="px-2 py-1 rounded bg-violet-500/20 text-violet-300">judgement · author's call</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-8 grid gap-8">
+
+  <!-- ============ Summary ============ -->
+  <section id="summary">
+    <div class="bg-white rounded card p-6">
+      <h2 class="text-lg font-bold">Summary</h2>
+      <p class="mt-2 text-sm leading-6">The branch ships what #421 asked for: the Segment type retires, <code>Item</code>→<code>Bar</code>,
+        and one row rule (<code>childrenAsSegments</code>) folds a claimed parent's children onto its own row. F1–F12 from the first
+        review are fixed and pinned — ten of twelve confirmed on re-verification. Three findings in this report are deliberate
+        surface renamed to meet the user's ask: the word <em>claim</em> now packs rows in core, and that is the headline finding.</p>
+      <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div class="bg-emerald-50 border border-emerald-200 rounded p-3"><p class="font-semibold text-emerald-800">3</p><p class="text-xs">unpinned test branches (Q32 fallback, I14 free half, equals <code>this</code>)</p></div>
+        <div class="bg-amber-50 border border-amber-200 rounded p-3"><p class="font-semibold text-amber-800">2</p><p class="text-xs">hard docs-vs-code drifts (<code>placement</code> vs <code>policy</code>; guard gaps)</p></div>
+        <div class="bg-red-50 border border-red-200 rounded p-3"><p class="font-semibold text-red-800">3</p><p class="text-xs">major word collisions (<code>claim</code> two senses; <code>unclaimedSpan</code>; producer param)</p></div>
+        <div class="bg-violet-50 border border-violet-200 rounded p-3"><p class="font-semibold text-violet-800">3</p><p class="text-xs">judgement calls (part axis, <code>resolveBarLabelPolicy</code>, empty-registry constant)</p></div>
+      </div>
+      <p class="mt-4 text-sm leading-6">The author should read <strong>bpF1</strong> (the word the user asked to be told about) first, then
+        <strong>bpF4/bpF5</strong> (the two hard spec gates that shipped unproven), then the rest. Everything else is drift the
+        author rules line by line.</p>
+    </div>
+  </section>
+
+  <!-- ============ Prior findings ============ -->
+  <section id="prior" class="bg-white rounded card p-6">
+    <h2 class="text-lg font-bold">F1–F12 from the first review — status on HEAD</h2>
+    <table class="w-full text-sm mt-3">
+      <thead class="text-left text-slate-500 border-b border-slate-200">
+        <tr><th class="py-2 pr-2">id</th><th class="py-2 pr-2">verdict</th><th class="py-2">pin / evidence</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="py-2 pr-2">F1</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2">flat branch folds the whole claimed subtree (BFS of descendants), <code>entries-source.test.ts:91</code>.</td></tr>
+        <tr><td class="py-2 pr-2">F2</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2">unknown <code>barLabels</code> field reports and renders <code>''</code>, never throws — <code>bar-labels.ts:43-47</code>, pinned twice (<code>bar-labels.test.ts:59</code>, <code>gantt.test.ts:3451</code>).</td></tr>
+        <tr><td class="py-2 pr-2">F3</td><td class="py-2 pr-2 text-amber-600 font-semibold">Half-fixed → bpF5</td><td class="py-2">refusal half pinned (<code>hierarchy.spec.ts:216-233</code>); the "free sibling keeps both handles" half is still unpinned and sits in no e2e → rolled into bpF5.</td></tr>
+        <tr><td class="py-2 pr-2">F4</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2">claimed row in the layout snapshot — <code>frame.test.ts.snap:3,16</code>; substance in <code>produce-bars.test.ts:155-190</code>.</td></tr>
+        <tr><td class="py-2 pr-2">F5</td><td class="py-2 pr-2 text-amber-600 font-semibold">Fixed; docs stale → bpF9</td><td class="py-2">surface now ships <code>policy</code>; <code>plans/02:375</code> and README still teach <code>placement</code> → bpF9.</td></tr>
+        <tr><td class="py-2 pr-2">F6</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2"><code>layout/items/</code>→<code>layout/bars/</code>; guards now cover dirs, filenames and <code>RowMemory.items</code> (<code>retired-words.test.ts:163-200</code>).</td></tr>
+        <tr><td class="py-2 pr-2">F7</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2"><code>'none'</code>→<code>''</code> and the unknown-field report path pinned (<code>bar-labels.test.ts:22-99</code>); report-once per rule and key (<code>entry-rule.test.ts:68-98</code>).</td></tr>
+        <tr><td class="py-2 pr-2">F8</td><td class="py-2 pr-2 text-violet-600 font-semibold">Open → bpF8</td><td class="py-2">harness writes <code>entry.name ?? ''</code> at four sites; no consumer-facing display-text read ships → bpF8.</td></tr>
+        <tr><td class="py-2 pr-2">F9</td><td class="py-2 pr-2 text-violet-600 font-semibold">Resolved by deliberation</td><td class="py-2">inverted-span-from-cascade is deliberately an error fault (Q39); pinned only via extender-throws→fault (<code>gesture-pipeline.test.ts:851</code>), no dedicated case. Author accepted.</td></tr>
+        <tr><td class="py-2 pr-2">F10</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed</td><td class="py-2">entries-source comment reworded to match code.</td></tr>
+        <tr><td class="py-2 pr-2">F11</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed + pinned</td><td class="py-2">two-arg <code>measureEntryDuration(entry, access)</code>, closure gone (<code>field-access.ts:211</code>).</td></tr>
+        <tr><td class="py-2 pr-2">F12</td><td class="py-2 pr-2 text-emerald-600 font-semibold">Fixed</td><td class="py-2"><code>entryIdsDroppedBy</code> inlined, gone from HEAD (<code>entry-selection.ts:104</code>).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ Word map ============ -->
+  <section id="wordmap" class="bg-white rounded card p-6">
+    <h2 class="text-lg font-bold">The word that names two jobs</h2>
+    <p class="mt-2 text-sm leading-6">The user asked: "if you find the word <em>claim</em> used for packing rows in core, let me know. I don't like that word."
+      Confirmed. On this branch <code>claim</code> names <strong>two different concepts inside <code>src/layout/</code></strong>, and they interleave in one file.</p>
+    <pre class="mermaid mt-4">
+flowchart LR
+  subgraph claim["the word 'claim'"]
+    V["sense 1 · VARIANT-SELECTION<br/>a variant's `when` claims a row<br/>variants.ts:110,153-155,354-364<br/>error-report.ts:97 · 'variant-claimed-twice'"]
+    P["sense 2 · ROW-PACKING (new on this branch)<br/>a parent claims its children<br/>row-source.ts:40-46 · PlannedRow.claimed :151-156<br/>entries-source.ts: compileClaim:44 claimedChildren :62-71<br/>bar.ts:67-69 (BarProducer doc) · unclaimedSpan :168-174<br/>produce-bars.ts:52-54"]
+    V --> interleave["one file, one symbol carries both — entries-source.ts<br/>(variant doc at :34 next to packing sites throughout)<br/>and unclaimedSpan (name from sense 1,<br/>doc + param from sense 2)"]
+    P --> interleave
+  end
+    </pre>
+    <p class="mt-3 text-sm leading-6 text-slate-600">A third, older sense predates the branch ("a plugin <em>claims</em> the edit hook", <code>api/dataset-plugin.ts:62-71</code>).
+      <code>CONTEXT.md</code> uses both layout senses (variant at <code>:40/:44</code>, packing at <code>:70/:215</code>) but defines neither word.</p>
+  </section>
+
+  <!-- ============ New findings ============ -->
+  <section id="findings">
+    <h2 class="text-lg font-bold mb-3">New findings</h2>
+    <div class="grid gap-4">
+
+      <!-- bpF1 -->
+      <article class="bg-white rounded card p-5 seam">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-red-600">bpF1</span><span class="text-sm font-normal text-slate-500">naming · major · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6"><code>claim</code> gains a <strong>row-packing sense</strong> in core — the exact word the user dislikes.</p>
+        <p class="mt-2 text-xs text-slate-600">Sites (packing sense, all <code>src/</code>): <code>layout/rows/row-source.ts:40-46</code> ("Claims a parent Entry") and <code>:151-156</code> (<code>PlannedRow.claimed?: boolean</code>); <code>layout/rows/entries-source.ts:2-3</code>, <code>:44</code> (<code>compileClaim</code>), <code>:59/:62/:71</code> (<code>claimedChildren</code>, <code>claimed: true</code>), <code>:88-111</code>, <code>:124-130</code>, <code>:149-165</code> (<code>claimedChildrenOf</code>); <code>layout/bars/bar.ts:67-69</code>, <code>:168-174</code>; <code>layout/bars/produce-bars.ts:23</code>, <code>:52-54</code>. Contrast sense 1 (variant selection, pre-existing): <code>layout/bars/variants.ts:110,153-155,354-364</code>; report code <code>'variant-claimed-twice'</code> (<code>model/error-report.ts:97</code>); <code>layout/entry-rule.ts:1-2,17,22</code>.</p>
+        <p class="mt-3 text-sm leading-6">One word, two meanings, one module. The variant sense read "a row's <code>when</code> has nothing else claiming it"; the packing sense read "this parent's children draw on its own row". A reader of <code>entries-source.ts</code> must hold both.</p>
+      </article>
+
+      <!-- bpF2 -->
+      <article class="bg-white rounded card p-5 leak">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-red-600">bpF2</span><span class="text-sm font-normal text-slate-500">naming · major · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6"><code>unclaimedSpan</code> ships a two-meaning identifier: its <strong>name</strong> is sense 1 ("nothing else claimed this row", see <code>variants.ts:279-280</code>), its <strong>doc and parameter</strong> are sense 2.</p>
+        <p class="mt-3 text-sm leading-6">The doc at <code>layout/bars/bar.ts:168-174</code> has to flag the collision in words: <em>"'Claimed' here means <code>childrenAsSegments</code> (#421 C2)"</em>. That banner comment is the smell — a symbol whose doc must disambiguate its own name reads two ways in one call.</p>
+        <p class="mt-2 text-xs text-slate-600">Two public types also share the word with different jobs: <code>VariantClaimant.claim</code> (variants.ts) and <code>PlannedRow.claimed</code> (row-source.ts:151). The Q26/Q27/Q33 design is fine; the vocabulary it chose is not.</p>
+      </article>
+
+      <!-- bpF3 -->
+      <article class="bg-white rounded card p-5 deep">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-red-600">bpF3</span><span class="text-sm font-normal text-slate-500">naming · major-ish · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">The public <code>BarProducer</code>'s third parameter <code>childrenAsSegments?: boolean</code> (<code>layout/bars/bar.ts:71</code>) is named for the <em>feature</em>, not for the <em>fact</em> the producer receives.</p>
+        <p class="mt-3 text-sm leading-6">The boolean is computed <code>row.claimed === true &amp;&amp; id === row.entryIds[0]</code> (<code>produce-bars.ts:54</code>) — the fact is "I am this row's claimed subject". So the very child the feature draws receives <code>false</code> (<code>produce-bars.test.ts:176-180</code>), and a differently-ordered custom row source silently flips the truth for every Entry (<code>entries-source.ts:57-58</code>, subject is positional). The name is plan-ruled (README C2) and is not wrong for the subject; it is wrong for the child, which is most of the call sites the feature creates.</p>
+      </article>
+
+      <!-- bpF4 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-amber-600">bpF4</span><span class="text-sm font-normal text-slate-500">coverage · hard spec · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">Q32's fallback — a childless leaf under <code>measureDuration: 'children'</code> must still measure its <em>own</em> span — ships <strong>unpinned</strong>, and the C6 gate explicitly demanded a test says so.</p>
+        <p class="mt-3 text-sm leading-6">Branch exists at <code>data/fields/field-access.ts:222-227</code> (<code>children.length === 0 → own span</code>). The only two <code>'children'</code> tests (<code>live-entry.test.ts:184</code>, <code>:196</code>) both use parents <em>with</em> children. The gate line it proves would currently pass with the fallback deleted. ~5 minutes to add.</p>
+        <p class="mt-2 text-xs text-slate-600">Spec: <code>plans/segment-is-a-bar/README.md</code> C6 gate ("a childless leaf under <code>measureDuration: 'children'</code> still measures its own span, and a test says so").</p>
+      </article>
+
+      <!-- bpF5 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-amber-600">bpF5</span><span class="text-sm font-normal text-slate-500">spec · hard · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">I14's e2e proof landed in the wrong file and half-empty. The README names <code>e2e/write-refusal.spec.ts</code> ("gains a locked child beside a free one"); that file's only diff is the <code>data-item-id</code>→<code>data-bar-id</code> selector rename (commit <code>9aaa6f6</code>).</p>
+        <p class="mt-3 text-sm leading-6">The refusal half is pinned instead in <code>e2e/hierarchy.spec.ts:216-233</code> (commit <code>68c5abb</code>), which reads <code>end</code> before/after. The complementary assertion — "its sibling keeps both handles" — is unpinned anywhere, and <code>68c5abb</code> says it was explicitly left out. A capability that refuses every resize would pass today's suite.</p>
+        <p class="mt-2 text-xs text-slate-600">Spec: README invariant I14 row; first review F3's second half.</p>
+      </article>
+
+      <!-- bpF6 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-sky-600">bpF6</span><span class="text-sm font-normal text-slate-500">coverage · minor · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">The harness's claimed-row demo is two levels only, so the three-level subtree fold (J-plan-I) never exercises a browser.</p>
+        <p class="mt-3 text-sm leading-6"><code>fixtures/demo-dataset.ts:71-74</code> maps <code>entry-16</code> → <code>a/b/c</code> and nothing claims a third level (no <code>entry-16-a</code> key in the parent map). J-plan-I is pinned only at the unit level (<code>entries-source.test.ts:61,91</code>). Also unpinned in e2e: claim + filter/sort interplay, and the claim button's group-mode disabled state (<code>harness/main.ts:231</code>) — the latter is API-pinned at <code>gantt.test.ts:3636</code>.</p>
+      </article>
+
+      <!-- bpF7 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-sky-600">bpF7</span><span class="text-sm font-normal text-slate-500">coverage · minor · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6"><code>Field.equals</code> must be "called on the Field, never detached" (<code>layout/entry-rule.ts:83</code>), and no test exercises the <code>this</code> binding — <code>entry-rule.test.ts:104-112</code> covers order and predicate paths with `equals` that ignores <code>this</code>.</p>
+      </article>
+
+      <!-- bpF8 -->
+      <article class="bg-white rounded card p-5 leak">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-violet-600">bpF8</span><span class="text-sm font-normal text-slate-500">API gap · author's call · open</span></h3>
+        <p class="mt-2 text-sm leading-6">First review's F8 is still open: the harness writes <code>entry.name ?? ''</code> at four sites (<code>harness/main.ts:126</code>, <code>harness/data.ts:150-151</code>, <code>harness/hierarchy.ts:228-229</code>).</p>
+        <p class="mt-3 text-sm leading-6">No consumer-facing display-text read ships (<code>stringifyPrimitive</code> stays internal). The stop rule says harness code must not compensate for a missing library door — the question is whether this is a real API gap a consumer would hit (yes: everyone with an optional <code>name</code> wants the "print nothing" read) or an acceptable render-path concern. Author rules.</p>
+      </article>
+
+      <!-- bpF9 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-amber-600">bpF9</span><span class="text-sm font-normal text-slate-500">docs · hard (C8) · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">The F5 rename (<code>placement</code>→<code>policy</code>) landed in code but left the docs teaching <code>placement</code> — and the built surface's own prose still says it.</p>
+        <ul class="mt-2 text-xs text-slate-600 list-disc pl-5 space-y-1">
+          <li><code>plans/02-public-api.md:375</code> — <code>{ field?: FieldKey; placement?: BarLabelPolicy }</code>.</li>
+          <li><code>plans/segment-is-a-bar/README.md:35</code> (call-site table), <code>:79</code> (end-state promise <code>barLabels: { field, placement }</code>), <code>:106</code> (C5 gate).</li>
+          <li>Reverse residue in built code prose: <code>view/bar-labels.ts:55</code> "the placement policy alone"; test titles <code>bar-labels.test.ts:22</code> ("merged placement of 'none'") and <code>:43</code>.</li>
+        </ul>
+        <p class="mt-3 text-sm leading-6"><code>placement</code> is not gone — <code>BarLabelPlacement</code> (<code>layout/renderer.ts:19</code>) is the resolved answer ('inside'/'outside'), distinct from the <code>policy</code> key. C8's rule says "no document describes a shape the diff does not build"; this is exactly that case.</p>
+      </article>
+
+      <!-- bpF10 -->
+      <article class="bg-white rounded card p-5">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-amber-600">bpF10</span><span class="text-sm font-normal text-slate-500">standards · guard gaps · Confirmed</span></h3>
+        <p class="mt-2 text-sm leading-6">Two retired-word residues the branch's own guard does not cover:</p>
+        <ul class="mt-2 text-xs text-slate-600 list-disc pl-5 space-y-1">
+          <li><code>src/api/gantt.ts:177</code> — the variant doc still teaches <code>items</code> as the shape key; the real key is <code>bars</code>. The guard's compound list (<code>test/guards/retired-words.test.ts</code>) has no bare <code>\bitems?\b</code>.</li>
+          <li><code>src/data/dev-mode.ts:43</code> — prose references the deleted <code>produce-items.ts</code>.</li>
+        </ul>
+        <p class="mt-3 text-sm leading-6">The C6 gate's own promise ("no <code>Item</code> symbol remains in <code>layout/</code>, <code>view/</code>, <code>render/</code>, <code>interaction/</code>") still holds. This is doc residue in <code>api/</code> and <code>data/</code>, not a surviving symbol. (<code>gantt.test.ts:262</code> still speaks of Segment as a live reveal target — deliberately unguarded; flagging it so the author decides.)</p>
+      </article>
+
+      <!-- bpF11 -->
+      <article class="bg-white rounded card p-5 deep">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-violet-600">bpF11</span><span class="text-sm font-normal text-slate-500">API · judgement · author's call</span></h3>
+        <p class="mt-2 text-sm leading-6"><code>partIndexOfBar</code> / <code>partCount</code> can only answer 0 on the shipped surface: #421 retires the "part" axis, and the only writer of a nonzero index is a plugin's own multi-bar <code>BarProducer</code> (<code>model/ids.ts:60</code>; the "part N of M" tooltip branch at <code>layout/frame.ts:359-361</code> is unreachable from the shipped producers).</p>
+        <p class="mt-3 text-sm leading-6">It is a documented plugin seam, so not dead code — but with the Segment gone, ask whether a public call core never answers nonzero earns its place, or whether the plugin-author surface should carry it instead.</p>
+      </article>
+
+      <!-- bpF12 -->
+      <article class="bg-white rounded card p-5 deep">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-violet-600">bpF12</span><span class="text-sm font-normal text-slate-500">simplicity · judgement</span></h3>
+        <p class="mt-2 text-sm leading-6"><code>resolveBarLabelPolicy</code> (<code>view/bar-labels.ts:58-63</code>) is a one-line projection of <code>mergeBarLabels(...).policy</code>, one caller (<code>gantt-shell.ts:722</code>); the deletion test passes. Defensible as the named no-Field door for <code>render/dom</code> (D-S4-13) — borderline Middle Man, not a fix candidate.</p>
+      </article>
+
+      <!-- bpF13 -->
+      <article class="bg-white rounded card p-5 deep">
+        <h3 class="font-bold flex items-center gap-2"><span class="text-violet-600">bpF13</span><span class="text-sm font-normal text-slate-500">simplicity · judgement</span></h3>
+        <p class="mt-2 text-sm leading-6">Two spellings of "empty Field registry": <code>NO_ENTRY_RULE_PORTS</code> frozen at <code>entries-source.ts:36-39</code> and the equivalent <code>fieldFor: () => undefined</code> convention at <code>variants.ts:191-198</code>. <code>entry-rule.ts</code> — the floor both import — could host one constant.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ Verified non-gaps ============ -->
+  <section id="verified" class="bg-white rounded card p-6 seam">
+    <h2 class="text-lg font-bold">Checked and clean (not gaps)</h2>
+    <ul class="mt-2 text-sm leading-6 list-disc pl-5 space-y-1 text-slate-700">
+      <li><code>data/</code> never meets the packing claim — zero <code>childrenAsSegments</code>/<code>claimed</code> in <code>src/data</code> (seam holds). The word <code>claimed</code> in <code>data/hierarchy-source.ts:57-73</code> is a different, pre-existing parent-assignment concept.</li>
+      <li>Hot path I5: the claim compiles and runs only in the layout pass (<code>entries-source.ts:44,88</code>); <code>interaction/</code> has zero reads. Browser measurement remains owed per plan — a plan item, not a code gap.</li>
+      <li>I2 two-Gantt independence pinned (<code>gantt.test.ts:3610</code>).</li>
+      <li>Harness stop rule: clean — <code>claimsItsChildren</code> is a legitimate consumer predicate; <code>claimedChildrenOf</code> is a fixture helper producing <code>EntryInput[]</code>.</li>
+      <li>The Bar vocabulary split across <code>bar.ts/produce-bars.ts/variants.ts/frame.ts/renderer.ts</code> is import-ring-forced (<code>renderer → frame → bar</code>), one question per file — good depth.</li>
+    </ul>
+  </section>
+
+  <!-- ============ How to read ============ -->
+  <section id="next" class="bg-white rounded card p-6">
+    <h2 class="text-lg font-bold">Next</h2>
+    <ol class="mt-2 text-sm leading-6 list-decimal pl-5 space-y-1">
+      <li>Author reads <strong>bpF1–bpF3</strong> (the word) and rules: rename the packing sense (hope: <code>claimed</code>/<code>compileClaim</code>/<code>unclaimedSpan</code>), or accept and record the two senses in <code>CONTEXT.md</code>.</li>
+      <li>Add the two hard proofs: the Q32 childless-leaf test (bpF4, ~5 min) and the I14 free-sibling half (bpF5).</li>
+      <li>Author rules bpF8 (F8's <code>?? ''</code> — live or harness-local) and bpF11 (part axis).</li>
+      <li>Doc sweep for bpF9/bpF10 (C8's own remit: <code>placement</code>→<code>policy</code>, <code>items</code>, <code>produce-items.ts</code>).</li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="max-w-5xl mx-auto px-6 pb-10 text-xs text-slate-500">
+  Pass 1: three parallel review sub-agents (naming+API, standards+spec, simplicity+architecture+coverage); key claims re-verified in the working tree before writing. A line number is a hint — open the file. Verdicts on HEAD <code>72ddfc5</code>.
+</footer>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { curve: 'basis' } });
+</script>
+</body>
+</html>
