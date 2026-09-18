@@ -423,7 +423,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   /** The Selection this backend last painted (#212, ADR 0010, ADR 0025) — Entry ids, the same list
    *  the shell wrote. `applyState` diffs against it, and both remount paths (`syncRows`, `syncBars`)
    *  restamp a freshly-created node from it. `paintedSelected` above is its bar-side reading, derived
-   *  from `itemIdsByEntryId` rather than authored. */
+   *  from `barIdsByEntryId` rather than authored. */
   let paintedSelectedEntryIds: ReadonlySet<EntryId> = new Set();
   /** What the last `applyState` call stamped `data-state~="selected"` on (D-S3-6/D-S3-7's own
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
@@ -454,7 +454,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  Selection and the resize-handle pair are keyed by. A bar draws one Entry (#421, ADR 0026), so
    *  filing it here is the whole of what used to be a Segment→Bars index. `syncBars` is the only
    *  writer, so the selection diff never scans mounted bars. */
-  const itemIdsByEntryId = new Map<EntryId, BarId[]>();
+  const barIdsByEntryId = new Map<EntryId, BarId[]>();
 
   /** The two bars the handle pair sits on: the Entry's leftmost mounted bar and its rightmost one
    *  (#200). A resize acts on the Entry's envelope, so an Entry a producer drew as several bars hands
@@ -462,7 +462,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  it twice (#212, ADR 0026). Undefined when the Entry has no mounted bar to hold either handle. */
   function envelopeBarsOfEntry(id: EntryId | undefined): { start: BarId; end: BarId } | undefined {
     if (id === undefined) return undefined;
-    const mounted = itemIdsByEntryId.get(id);
+    const mounted = barIdsByEntryId.get(id);
     if (mounted === undefined || mounted.length === 0) return undefined;
     let start = mounted[0]!;
     let end = start;
@@ -761,7 +761,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  Entry the viewport culled adds nothing, and `syncBars`'s own restamp paints its bar when it
    *  comes back. */
   function addBarsOfEntry(into: Set<BarId>, entryId: EntryId): void {
-    const mounted = itemIdsByEntryId.get(entryId);
+    const mounted = barIdsByEntryId.get(entryId);
     if (mounted === undefined) return;
     for (const id of mounted) into.add(id);
   }
@@ -1064,12 +1064,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
     barGeomByBarId.clear();
-    itemIdsByEntryId.clear();
+    barIdsByEntryId.clear();
     for (const bar of bars) {
       barGeomByBarId.set(bar.id, { x: bar.x, y: bar.y, width: bar.width, height: bar.height });
       // #185, #421: the frame states which Entry drew this bar, so the paint side never parses an id.
-      const mounted = itemIdsByEntryId.get(bar.entryId);
-      if (mounted === undefined) itemIdsByEntryId.set(bar.entryId, [bar.id]);
+      const mounted = barIdsByEntryId.get(bar.entryId);
+      if (mounted === undefined) barIdsByEntryId.set(bar.entryId, [bar.id]);
       else mounted.push(bar.id);
     }
     // #212: which bars the Selection paints, read off the index this sync just built. `create` below
@@ -1484,7 +1484,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       headerCellLayer.clear();
       barLayerCache.clear();
       barGeomByBarId.clear();
-      itemIdsByEntryId.clear();
+      barIdsByEntryId.clear();
       paintedHovered = undefined;
       paintedSelected = new Set();
       paintedPending = new Set();
