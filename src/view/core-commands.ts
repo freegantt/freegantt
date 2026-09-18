@@ -30,6 +30,14 @@ export interface CoreCommandPorts {
    *  sits on. */
   selectNextEntry(): void;
   selectPreviousEntry(): void;
+  /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup
+   *  writes them, not the user (ADR 0013) — so a Delete on its bar passes over it and the row
+   *  stays, which is what `e2e/hierarchy.spec.ts` pins. A dateless Entry has nothing to clear and
+   *  answers `false` too. */
+  canClearDates(id: EntryId): boolean;
+  /** ADR 0012: clears both dates of the Entry a bar draws. One transaction, undoable as one press,
+   *  the same door a cell edit writes through. */
+  clearDates(id: EntryId): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -126,9 +134,17 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.selectPreviousEntry(),
   });
-  // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command. Every
-  // target kind — a bar, a grid row, a cell — names the Entries it acts on in `entryIds`, and this
-  // removes each one (ADR 0025: a former Segment is an ordinary Entry, removed the same way).
+  // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command, and
+  // every target kind names the Entries it acts on in `entryIds` — ADR 0025 retired the second id
+  // set a `'bar'` target used to carry.
+  //
+  // What the two target kinds *mean* stays apart, and ADR 0012 is where that is written: "Keyboard
+  // Delete on a bar un-dates both dates ... `entries.remove(id)` deletes the row ... Two intents."
+  // A bar is a drawing of a span, so deleting it clears the span and leaves the record; a grid row
+  // or cell names the record itself, so deleting it removes the record. ADR 0026 changed what a bar
+  // *is*, not which of the two doors a Delete opens — a claimed child bar un-dates the child Entry
+  // it draws, exactly as a Segment delete used to drop one drawn stretch.
+  //
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
@@ -140,7 +156,15 @@ export function registerCoreCommands(
       const target = asCtx(ctx).target;
       if (target === undefined) return;
       try {
-        for (const id of target.entryIds ?? []) asCtx(ctx).dataset?.entries.remove(id);
+        for (const id of target.entryIds ?? []) {
+          if (target.kind === 'bar') {
+            // A bar whose dates are derived has none of its own to clear (ADR 0013). The command
+            // passes over it rather than throwing `DerivedFieldNotWritableError` out of a keypress.
+            if (ports.canClearDates(id)) ports.clearDates(id);
+          } else {
+            asCtx(ctx).dataset?.entries.remove(id);
+          }
+        }
       } catch (error) {
         if (!(error instanceof MutationCancelledError)) throw error;
       }

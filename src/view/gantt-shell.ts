@@ -1562,6 +1562,10 @@ export class GanttShell {
       nothingSelected: () => this.#entrySelection.entryIds.length === 0,
       selectNextEntry: () => this.#entrySelection.step(1),
       selectPreviousEntry: () => this.#entrySelection.step(-1),
+      canClearDates: (id) => this.#canClearDates(id),
+      clearDates: (id) => {
+        this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
+      },
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.x.panTo(0),
@@ -1806,6 +1810,20 @@ export class GanttShell {
    *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
    *  this shell no longer calls it. */
+  /** ADR 0012: a Delete on a bar un-dates the Entry that bar draws, so this asks whether those dates
+   *  are the Entry's own to clear. A rolling-up parent's are not — the Rollup writes them (ADR 0013)
+   *  — and an Entry holding no date has nothing to clear. Both answer `false`, and the Delete passes
+   *  over the bar instead of throwing out of a keypress. Only the dates the Entry actually holds are
+   *  asked about: a half-dated descendant clears the one it has. */
+  #canClearDates(id: EntryId): boolean {
+    const entry = this.#options.dataset.entries.get(id);
+    if (entry === undefined) return false;
+    if (entry.start === undefined && entry.end === undefined) return false;
+    const writable = (field: 'start' | 'end'): boolean =>
+      entry[field] === undefined || this.#capabilities.canWrite(entry, field).ok;
+    return writable('start') && writable('end');
+  }
+
   #registerCoreCommands(): void {
     registerCoreCommands(this.#commandRegistry, this.#coreCommandPorts());
 

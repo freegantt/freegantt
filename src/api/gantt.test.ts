@@ -4309,26 +4309,39 @@ describe('Gantt Delete key (ADR 0010, #212)', () => {
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
   };
 
-  it('Delete removes the selected child Entry, leaving its sibling standing', () => {
+  it("Delete un-dates the selected child Entry's bar, and its sibling stays drawn", () => {
+    // ADR 0012's two intents, carried through the Segment retirement: a Delete on a *bar* clears
+    // the span it draws and leaves the record; a Delete on a grid row or cell removes the record.
+    // A claimed child bar takes the first door, exactly as a Segment delete used to drop one drawn
+    // stretch and leave the Entry.
     const { container, gantt, dataset } = makeSegmentedGantt();
     gantt.selectedEntryIds = [entryId('split-a')];
 
     pressDelete(container);
 
-    expect(dataset.entries.get('split-a')).toBeUndefined();
-    expect(dataset.entries.get('split-b')).toBeDefined();
+    const cleared = dataset.entries.get('split-a');
+    expect(cleared).toBeDefined();
+    expect(cleared?.start).toBeUndefined();
+    expect(cleared?.end).toBeUndefined();
+    expect(dataset.entries.get('split-b')?.start).toBeDefined();
 
     gantt.destroy();
     container.remove();
   });
 
-  it('deleting a plain Entry removes the row, and one undo restores it (ADR 0012)', () => {
+  it("deleting a plain Entry's bar keeps the row dateless, and one undo restores it (ADR 0012)", () => {
+    // "`removeSegments` of the last Segment keeps the Entry and clears start and end" — ADR 0012.
+    // A plain Entry draws one bar, so this is that case with no Segment left in it: the row stays,
+    // dateless, and the whole clear undoes in one press.
     const { container, gantt, dataset } = makeSegmentedGantt();
     gantt.selectedEntryIds = [entryId('plain')];
 
     pressDelete(container);
 
-    expect(dataset.entries.get('plain')).toBeUndefined();
+    const cleared = dataset.entries.get('plain');
+    expect(cleared).toBeDefined();
+    expect(cleared?.start).toBeUndefined();
+    expect(cleared?.end).toBeUndefined();
 
     dataset.undo();
 
@@ -6466,7 +6479,10 @@ describe('the Selection follows the Dataset when a claimed row’s child goes aw
   it('never hands a dead EntryId to a mutation, so a second Delete is a no-op', () => {
     const { gantt, dataset } = ganttOverTwoChildren();
     gantt.selectedEntryIds = [entryId('s1')];
-    gantt.commands.run('freegantt.deleteSelection');
+    // A bar Delete un-dates (ADR 0012), so the id it acts on never dies. The grid-row door does
+    // remove the record, and that is the case this pins: the Selection has to let the id go rather
+    // than hand a dead one to the next command.
+    dataset.entries.remove('s1');
     expect(dataset.entries.get('s1')).toBeUndefined();
     expect(gantt.selectedEntryIds).toEqual([]);
     // Before #212 closed this, the Selection still held the removed id and this second run threw

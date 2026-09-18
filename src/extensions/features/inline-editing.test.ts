@@ -317,7 +317,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
     expect(notice.dataset['reason']).toBe('derived-value');
-    expect(notice.textContent).toContain('comes from the rows below it');
+    expect(notice.textContent).toContain('comes from its children');
     expect(notice.title).toBe(notice.textContent);
     expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
     gantt.destroy();
