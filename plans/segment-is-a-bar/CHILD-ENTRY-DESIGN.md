@@ -248,18 +248,18 @@ All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 
 ### Everything still open, in one list
 
-**Three questions are open on 2026-09-17. None of them blocks C1.**
+**Two questions are open on 2026-09-17. Neither blocks C1.**
 
 | # | Question | Who waits on it |
 | --- | --- | --- |
 | **Q23** | does a hierarchy source declare the Field keys it reads? | Nobody. C4's fast path ships without it |
-| **Q27** | a claimed parent draws no bar — so how does core's own `summary()` not draw one, and what lets a consumer put a band back? | **C2.** It has a recommendation in `BUILD-LOG.md` and no ruling |
 | **Q28** | is the layout unit a `Bar`, not an `Item`? | **C6.** *Item* already names three things in `src/**`, and everything downstream calls it a bar. Recommendation, no ruling |
 
 Two more were raised on the same day and the author ruled both the same day. They are in `BUILD-LOG.md`:
 
 - **Q25** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. C6 does the rename.
-- **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own. **Q27 holds the mechanism**, because core's shipped `summary()` also names an `items` producer.
+- **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own.
+- **Q27** — the mechanism for both, because core's shipped `summary()` also names an `items` producer. `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes one more fact, **per Entry**, under the key's own name: `childrenAsSegments`. One fact, not two, and no `global` prefix.
 
 **No build invents an answer to an open question.** It stops and asks the author. That rule is why C1 can start today.
 

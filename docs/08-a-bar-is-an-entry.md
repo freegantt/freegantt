@@ -358,7 +358,13 @@ own children.
 **A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
 children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
 suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
-stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with an `items` producer of their own. **How that producer says so is question Q27**, which build C2 holds — core's own `summary()` names an `items` producer too, and it must not paint over the bars it stands for.
+stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with an `items` producer of their own, and reads the one fact the producer is handed (Q27):
+
+```ts
+items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanItem(entry, variant)] : []),
+```
+
+`childrenAsSegments` is `true` for the one Entry whose children are this row's segments, and `false` for every other Entry on it. Core's own `summary()` reads the same fact and draws nothing, so its rail never paints over the bars it stands for.
 
 :::note Why the key says "segments"
 Read the call site aloud: "row source: entries, children as segments, where show-days-on-row is
