@@ -171,35 +171,30 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
   });
 
   // The Dataset says how core measures a duration (Q6/J12). A Gantt may not: duration is a Field,
-  // and the Rollup reads it before any Gantt exists.
+  // and the Rollup reads it before any Gantt exists. ADR 0026 retired the Segment `'segments'`
+  // measure; `'children'` is its replacement — it sums each direct child's own span instead.
   const withGap: DatasetStateOptions['entries'] = [
-    {
-      id: 'gapped',
-      name: 'Gapped',
-      start: 0,
-      end: 4 * MS.DAY,
-      segments: [
-        { start: 0, end: MS.DAY },
-        { start: 3 * MS.DAY, end: 4 * MS.DAY },
-      ],
-    },
+    { id: 'gapped', name: 'Gapped', start: 0, end: 4 * MS.DAY },
+    { id: 'c1', name: 'Child 1', parentId: 'gapped', start: 0, end: MS.DAY },
+    { id: 'c2', name: 'Child 2', parentId: 'gapped', start: 3 * MS.DAY, end: 4 * MS.DAY },
   ];
 
-  it("counts the gap under 'span' and skips it under 'segments'", () => {
+  it("counts the gap under 'span' and skips it under 'children'", () => {
     const span = datasetOf({ entries: withGap, measureDuration: 'span' });
-    const segments = datasetOf({ entries: withGap, measureDuration: 'segments' });
+    const children = datasetOf({ entries: withGap, measureDuration: 'children' });
 
     expect(rowOf(span, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
-    expect(rowOf(segments, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
+    expect(rowOf(children, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
   });
 
-  it('makes the two settings agree on one Segment with no gap', () => {
+  it('makes the two settings agree on one child with no gap', () => {
     const whole: DatasetStateOptions['entries'] = [
-      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY, segments: [{ start: 0, end: 2 * MS.DAY }] },
+      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY },
+      { id: 'only', name: 'Only child', parentId: 'whole', start: 0, end: 2 * MS.DAY },
     ];
     const span = datasetOf({ entries: whole, measureDuration: 'span' });
-    const segments = datasetOf({ entries: whole, measureDuration: 'segments' });
+    const children = datasetOf({ entries: whole, measureDuration: 'children' });
 
-    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(segments, 'whole').duration());
+    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(children, 'whole').duration());
   });
 });
