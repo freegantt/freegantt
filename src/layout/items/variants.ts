@@ -317,8 +317,8 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  (`measureEntryDuration`) — one object per row per resolve for what is otherwise a plain equality
  *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
  *  not ship a diamond" is narrowed by this factory, not spent), but it ignores
- *  `measureDuration: 'segments'` — a row with `start === end` and Segments that net to zero total
- *  time still claims here. An author whose rows need the Segments-aware zero passes their own
+ *  `measureDuration: 'children'` — a row with `start === end` and children that net to zero total
+ *  time still claims here. An author whose rows need the children-aware zero passes their own
  *  `when: (entry) => entry.duration()?.value === 0`.
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
