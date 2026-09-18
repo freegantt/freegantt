@@ -210,18 +210,19 @@ export function ambientFieldContext(access: FieldAccess): FieldContext {
  */
 export function measureEntryDuration(
   entry: Pick<StoredEntry, 'id' | 'start' | 'end'>,
-  measure: DurationMeasure,
-  storedChildrenOf: (id: EntryId) => readonly StoredEntry[],
+  access: Pick<FieldAccess, 'measureDuration' | 'storedChildrenOf'>,
 ): Duration | undefined {
   // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is plain
   // subtraction — an absent date yields `NaN`, never a throw — so this asks first.
   if (!spansTime(entry)) return undefined;
-  if (measure === 'span') return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
+  if (access.measureDuration === 'span') {
+    return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
+  }
   // `'children'` (ADR 0026 retired the Segment `measureDuration: 'segments'` named): sum each direct
   // child's own span. A gap between children goes uncounted, and a childless entry falls back to its
   // own span — the same number `'span'` above would give it. Nesting through grandchildren, and any
   // richer notion of "claimed" time, is #428's fix, not this one's.
-  const children = storedChildrenOf(entry.id);
+  const children = access.storedChildrenOf(entry.id);
   if (children.length === 0) return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
   let total = 0;
   for (const child of children) {
@@ -243,7 +244,7 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
       return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
     },
     duration(): Duration | undefined {
-      return measureEntryDuration(entry, access.measureDuration, (id) => access.storedChildrenOf(id));
+      return measureEntryDuration(entry, access);
     },
     children(): readonly StoredEntry[] {
       return access.storedChildrenOf(entry.id);
@@ -282,9 +283,7 @@ export function createRollUpContext(
       return out;
     },
     durations(): readonly (Duration | undefined)[] {
-      return children.map((child) =>
-        measureEntryDuration(child, access.measureDuration, (id) => access.storedChildrenOf(id)),
-      );
+      return children.map((child) => measureEntryDuration(child, access));
     },
   };
 }
