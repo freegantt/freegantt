@@ -41,6 +41,12 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
 
 export type DemoEntryProps = { cost?: number; team?: string; milestone?: boolean };
 
+/** The generic demo's claimed row (#421). Before ADR 0026 this Entry carried three Segments; a
+ *  Segment no longer exists, so the same picture now comes from three child Entries and one
+ *  `childrenAsSegments` rule. `main.ts` names this id, and its bench button turns the claim off to
+ *  show the other half — the same three Entries as three ordinary rows. */
+export const CLAIMED_PARENT_ID = 'entry-16';
+
 /** Nested work tree for the generic demo: Program → workstream → work → a few grandchildren. */
 const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
   program: ['entry-1', 'entry-5', 'entry-10', 'entry-14', 'entry-26', 'entry-33'],
@@ -62,6 +68,10 @@ const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
     'entry-24',
     'entry-25',
   ],
+  // #421: `entry-16` is the generic demo's claimed row. Its three children draw as bars on its own
+  // row, so it names them here like any other parent — claiming is a row-source rule, not a shape
+  // the tree stores (`main.ts` sets `childrenAsSegments`).
+  'entry-16': [`${CLAIMED_PARENT_ID}-a`, `${CLAIMED_PARENT_ID}-b`, `${CLAIMED_PARENT_ID}-c`],
   'entry-26': ['entry-27', 'entry-28', 'entry-29', 'entry-30', 'entry-31', 'entry-32'],
   'entry-33': [
     'entry-34',
@@ -110,23 +120,44 @@ function workstreamOf(id: string): string | undefined {
   return undefined;
 }
 
-/** Three child Entries across ten days from `start`, for a parent whose row claims them — one row
- *  that draws three bars (ADR 0026: a bar is a child Entry, and `childrenAsSegments` is what puts a
- *  parent's children on the parent's own row). They do not overlap, so the pointer can land on every
- *  one of them. A bar drawn under another cannot be picked (#215).
+/** Where each leg sits, as whole days from the parent's start. Legs never overlap, so the pointer
+ *  can land on every one of them — a bar drawn under another cannot be picked (#215). */
+const SPREAD_LEGS: readonly (readonly [from: number, to: number])[] = [
+  [0, 2],
+  [3, 5],
+  [6, 9],
+];
+
+/** Three legs packed into six days, for a page whose first screenful must show all three. The
+ *  timeline culls a bar outside the visible window, so a ten-day spread puts the second and third
+ *  leg off-screen on a page that opens near today (#421: the generic demo drew one leg of three
+ *  until these dates tightened). */
+export const COMPACT_LEGS: readonly (readonly [from: number, to: number])[] = [
+  [0, 1],
+  [2, 3],
+  [4, 5],
+];
+
+/** Three child Entries from `start`, for a parent whose row claims them — one row that draws three
+ *  bars (ADR 0026: a bar is a child Entry, and `childrenAsSegments` is what puts a parent's children
+ *  on the parent's own row).
  *
  *  The parent keeps no dates of its own: three dated children roll its span up (ADR 0013). */
-export function claimedChildrenOf(parentId: string, start: InstantInput): EntryInput[] {
+export function claimedChildrenOf(
+  parentId: string,
+  start: InstantInput,
+  legs: readonly (readonly [from: number, to: number])[] = SPREAD_LEGS,
+): EntryInput[] {
   const startMs = instant(start);
   const day = (count: number) => addMs(startMs, count * MS.DAY);
-  const leg = (suffix: string, name: string, from: number, to: number): EntryInput => ({
-    id: `${parentId}-${suffix}`,
-    name,
+  const names = ['Leg A', 'Leg B', 'Leg C'];
+  return legs.map(([from, to], i) => ({
+    id: `${parentId}-${'abc'[i]}`,
+    name: names[i] ?? `Leg ${i + 1}`,
     parentId,
     start: day(from),
     end: day(to),
-  });
-  return [leg('a', 'Leg A', 0, 2), leg('b', 'Leg B', 3, 5), leg('c', 'Leg C', 6, 9)];
+  }));
 }
 
 export const demoFieldOptions = {
@@ -186,13 +217,25 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     };
     if (id === MILESTONE_ENTRY_ID) props.milestone = true;
     const next: EntryInput<DemoEntryProps> = { id, name: entry.name };
-    if (entry.start !== undefined) next.start = entry.start;
-    if (entry.end !== undefined) next.end = entry.end;
+    // The claimed parent stores no dates — its three legs roll its span up (ADR 0013), the same way
+    // every other derived Entry in this tree gets its span.
+    const claimsItsChildren = id === CLAIMED_PARENT_ID;
+    if (entry.start !== undefined && !claimsItsChildren) next.start = entry.start;
+    if (entry.end !== undefined && !claimsItsChildren) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
-    // Retired (ADR 0026, #421): `entry-16` drew three Segments across its span here. A Segment no
-    // longer exists — an Entry now always draws exactly one Bar, and this page registers no plugin
-    // variant that draws several for one Entry, so `entry-16` is an ordinary single-bar leaf now.
     if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),
+  ...claimedLegs(),
 ];
+
+/** The three child Entries that `CLAIMED_PARENT_ID`'s row claims (ADR 0026, #421).
+ *
+ *  The parent stores no dates: `demoTreeEntryInputs` drops them above, and the Rollup gives it the
+ *  span of these three (ADR 0013). Each leg carries its own cost and team, because the parent is
+ *  derived now and nothing but the Rollup may write a rolling-up parent's cell. */
+function claimedLegs(): EntryInput<DemoEntryProps>[] {
+  const parent = demoEntryInputs.find((entry) => entry.id === CLAIMED_PARENT_ID);
+  const legs = claimedChildrenOf(CLAIMED_PARENT_ID, parent!.start!, COMPACT_LEGS);
+  return legs.map((leg, i) => ({ ...leg, props: { cost: (i + 1) * 250, team: 'edge' } }));
+}
