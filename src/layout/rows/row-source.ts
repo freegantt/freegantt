@@ -1,6 +1,10 @@
-// layout/ — row-source types. Pure data: no pixels, no Dataset, no Field registry (D-S4-19, D-S4-21).
+// layout/ — row-source types. Pure data: no pixels, no Dataset (D-S4-19, D-S4-21). A Field registry
+// reaches this file as a port only (`EntryRulePorts`, #421 C1) — `childrenAsSegments`'s match needs
+// each Field's own `equals`, the same way `fieldCompares`/`fieldContext` already carry a bound
+// answer in rather than importing the registry itself.
 
 import type { Entry, EntryId, FieldContext, FieldKey, RowId } from '../../model/index.js';
+import type { EntryRule, EntryRulePorts } from '../entry-rule.js';
 import type { FieldCompare } from '../column.js';
 
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
@@ -33,6 +37,14 @@ export interface EntriesRowSource extends RowSourceCommon {
   source: 'entries';
   /** Takes an explicit `undefined` for the reason `RowSourceCommon` states (#254). */
   tree?: boolean | undefined;
+  /** Claims a parent Entry: its children draw as bars on its own row instead of rows of their own
+   *  (#421). `true` claims every parent with at least one child; a `FieldMatch` or `EntryPredicate`
+   *  claims only the parents the rule answers yes for — the same `when` syntax a variant's `when`
+   *  takes (`EntryRule`, `layout/entry-rule.ts`). A parent this rule does not claim is untouched:
+   *  it keeps its own row, gives each child a row, and rolls up exactly as it does today (README's
+   *  hard rule 6). Orthogonal to `tree` — `tree` nests an *unclaimed* parent's children; this
+   *  decides whether a *claimed* parent's children become rows at all (README's hard rule 5). */
+  childrenAsSegments?: EntryRule | true | undefined;
 }
 
 export interface GroupRowSource extends RowSourceCommon {
@@ -136,6 +148,12 @@ export interface PlannedRow {
   headerLabel?: string;
   /** `true` when this row's entry matched the active filter; `false` when kept only for descendants. */
   matched?: boolean;
+  /** `true` when `childrenAsSegments` claims this row's subject: its children draw on this row and
+   *  take no row of their own (#421). A real field, not `entryIds.length > 1` — an empty claimed
+   *  parent still carries one `entryId` and is still claimed, which is the "draws a blank row" gate
+   *  (README's `J-plan-D`). Absent on every row no rule claims, so the path a claim never touches
+   *  reads exactly as it does today. */
+  claimed?: boolean;
 }
 
 /** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
@@ -152,4 +170,9 @@ export interface RowPassInput {
   collapsed: ReadonlySet<string>;
   fieldCompares?: readonly FieldCompare[];
   fieldContext?: FieldContext;
+  /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
+   *  and the unknown-key sink. Absent when no caller wired a Field registry in (a pure `layout/`
+   *  test, say); `resolveEntriesSource` then treats an unset `childrenAsSegments` as unclaimed,
+   *  same as always, and a set one as unmatchable rather than throwing. */
+  entryRulePorts?: EntryRulePorts;
 }

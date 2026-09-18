@@ -675,6 +675,7 @@ export interface EntityRemoved {
 
 // @public (undocumented)
 export interface EntriesRowSource extends RowSourceCommon {
+    childrenAsSegments?: EntryRule | true | undefined;
     // (undocumented)
     source: 'entries';
     tree?: boolean | undefined;
