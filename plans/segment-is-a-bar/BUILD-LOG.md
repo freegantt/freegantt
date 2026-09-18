@@ -38,7 +38,7 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q24 | what is the key called? | **RULED 2026-09-17 by the author: `childrenAsSegments`.** It frees the word *Segment* from the type that retires in C6. `README.md` holds the reasoning, the rejected names, and the one cost — the word means two things between C1 and C6 |
 | Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **RULED 2026-09-17 by the author: `measureDuration: 'children'`, and overlap has no rule of its own — the number is whatever the Aggregator says.** Core adds the children and never reads them for overlap. C6 renames the member |
 | Q26 | how does a claimed parent ask for a rail instead of a bar? | **RULED 2026-09-17 by the author: it draws no bar of its own, and core ships nothing else.** A consumer variant with an explicit `items` producer still wins, as it does today. No new key, no rail concept, no special case |
-| Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **OPEN, 2026-09-17.** Q26 said "an explicit `items` still wins". Core's shipped `summary()` **has** an explicit `items` (`variants.ts:322`) and claims on `entry.hasChildren`, which a claimed parent still has. Left alone, core's rail paints over the bars it stands for. Recommendation below. **C2 waits on it** |
+| Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **RULED 2026-09-17 by the author.** `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes **one** more fact, per Entry, carrying the key's own name: `childrenAsSegments`. Not two facts, and no `global` prefix — the two spellings of the key resolve in one place |
 | Q28 | is the layout unit a `Bar`, not an `Item`? | **OPEN, 2026-09-17, raised by the author.** *Item* is generic and already names three things in `src/**` — the timed shape a variant draws, `MenuItem` and `CellItem`. Downstream every one of them is a `FrameBar`. Recommendation below: rename, and in C6. **Wider than #421** |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
@@ -785,7 +785,7 @@ new Gantt({
 
 ## Q27 — a claimed parent draws no bar, and core's own `summary()` is the one that would
 
-**Raised 2026-09-17, while writing Q26's ruling into the plan. C2. OPEN — the author rules.**
+**Raised 2026-09-17, while writing Q26's ruling into the plan. C2. RULED the same day: the author took the recommendation below, and corrected its name.**
 
 **The gap, and it is in Q26's own wording.** Q26 rules that a claimed parent draws no bar by default, and that a consumer who wants a band behind the bars names an `items` producer on a variant. Read that against the shipped code and it does not close:
 
@@ -814,26 +814,26 @@ So "an explicit `items` wins" hands the row to core's own rail, which then paint
 
 **The name is the key's name** (the author, 2026-09-17: *"i don't think claims children is the name we decided on"* — correct, `claimsChildren` was a third word for a ruled concept). The key is `childrenAsSegments`, so the fact is `childrenAsSegments`. A rule and its resolved answer are one concept, and `CONTEXT.md` keeps one word per concept. Rejected: `claimsChildren` (invents a verb the API never uses), `isClaimed` (wrong subject — the parent claims, it is not claimed), `drawsChildrenAsSegments` (a second word for the ruled one).
 
-**Recommendation: the producer learns that one fact, and decides for itself.**
+**RULED: the producer learns that one fact, and decides for itself.**
 
 ```ts
 // layout/items/item.ts — the producer seam, one fact wider
-export type BarProducer = (entry: Entry, variant: string, childrenAsSegments: boolean) => readonly Bar[];
+export type ItemProducer = (entry: Entry, variant: string, childrenAsSegments: boolean) => readonly Item[];
 ```
 
 ```ts
 // A consumer who wants the band back — core ships nothing for this
-items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpan(entry, variant)] : []),
+items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpanItem(entry, variant)] : []),
 ```
 
 - Core's `ignoreSegments` reads it and returns `[]` **when, and only when, this Entry's children are its segments**. An unclaimed parent is passed `false`, so `summary()` draws the rail it draws today, unchanged.
 - It allocates nothing, so I5 holds. It adds no key, no variant, and no rail concept, so Q26's limit holds.
 - It is one parameter on a public type, on a library that has never shipped. A producer that ignores it is unchanged — TypeScript accepts a function that takes fewer parameters than its declared type, which `item.ts:57-59` already relies on.
-- The type is written `BarProducer` above because **Q28 renames `Item` to `Bar`**. If Q28 is refused, this is `ItemProducer` and `readonly Item[]`, and nothing else about the recommendation changes.
+- **The type keeps today's names here, on purpose.** `Item`, `ItemProducer` and `wholeSpanItem` are what C2 writes. **Q28 is open** — if the author rules it, C6 renames all three to `Bar`, `BarProducer` and `wholeSpan`, and nothing about this ruling changes but the spelling.
 
 **The two alternatives, and why they lose.** Skipping the parent inside `produceItemsForRow` with no way back is simpler, and it refuses the opt-in the author asked for. Telling core's variants apart from a consumer's would work and is a fault line core must never have — the whole registry rests on core's own fields and variants taking one code path.
 
-**Cost if the author rules otherwise:** C2's shape, one line in `item.ts`, and the C2 gate. C1 writes nothing for this.
+**What C2 builds, in two lines.** `produceItemsForRow` computes `row.claimed && entry.id === row.entryIds[0]` and passes it to `resolveItems`, and `ignoreSegments` returns `[]` when it is `true`. C1 writes nothing for this.
 
 ---
 
