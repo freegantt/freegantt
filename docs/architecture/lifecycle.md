@@ -11,7 +11,7 @@ below happens synchronously, in this order, before that constructor returns. Bey
 steps, the shell also builds the grid pane width, the container resize watch, the overlay and row
 mount layers, the frame settings, the column chrome, the plugin registrations and their stylesheet,
 the capability resolver, the gesture pipeline, the plugin runtime, the command registry, the keymap,
-the collapse state, the segment selection, the roving focus, the live region, and the splitter,
+the collapse state, the entry selection, the roving focus, the live region, and the splitter,
 row-twisty, keyboard and wheel navigation attachments.
 
 *Derived from `harness/main.ts`, `api/gantt.ts`, `view/gantt-shell.ts`,

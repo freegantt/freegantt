@@ -704,7 +704,7 @@ re-export.
 <svg
 viewBox="0 0 1240 600"
 role="img"
-aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, the EntryId/SegmentId/RowId/ItemId/ChangeSetId brands with helpers, Field, ChangeSet, geometry types and errors. time/ imports Instant/TimeSpan/Duration type-only. layout/ imports Entry and the id types, and calls itemId()/rowId() at runtime. api/ re-exports the model types plus entryId/itemId. view/ imports only the Entry type through GanttShell's structural DatasetLike interface. data/ imports model types plus entryId()/rowId()/itemId() runtime helpers. render/ imports nothing from model/ directly."
+aria-label="Diagram of what crosses the model/ module boundary: model/ exports Entry, the EntryId/RowId/BarId/ChangeSetId brands with helpers, Field, ChangeSet, geometry types and errors. time/ imports Instant/TimeSpan/Duration type-only. layout/ imports Entry and the id types, and calls barId()/rowId() at runtime. api/ re-exports the model types plus entryId/barId. view/ imports only the Entry type through GanttShell's structural DatasetLike interface. data/ imports model types plus entryId()/rowId()/barId() runtime helpers. render/ imports nothing from model/ directly."
 >
 <defs>
 <marker
