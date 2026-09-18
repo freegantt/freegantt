@@ -226,7 +226,7 @@ function mountWithPluginsAndDestroy(): void {
     dataset,
     plugins: [bufferKind(), riskKind(), timeShading([{ covers: daysOfWeek(6, 7) }]), popupDemo()],
   });
-  gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([dataset.entries.all[0]!.id]);
+  gantt.selectedEntryIds = [dataset.entries.all[0]!.id];
   gantt.destroy();
   container.remove();
 }
