@@ -15,8 +15,8 @@
 // reads this one object where it used to compose a literal from two separate reads — the #216 Q3
 // carry this plan hands off.
 //
-// #421, ADR 0025: the Selection holds `EntryId`, not `SegmentId` — a former Segment is an ordinary
-// child Entry now, so there is no second id space to project through.
+// #421, ADR 0025: the Selection holds `EntryId` alone. A former Segment is an ordinary child Entry
+// now, so there is no second id space to project through.
 
 import { entryIdsDroppedBy } from '../data/change-set.js';
 import { entryIdOfBar } from '../model/index.js';
