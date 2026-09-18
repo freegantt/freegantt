@@ -560,7 +560,7 @@ describe('computeFrame', () => {
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
   });
 
-  it('a variant naming only placement never drops the Gantt field, through a real registry and a real merge (#421 C5)', () => {
+  it('a variant naming only policy never drops the Gantt field, through a real registry and a real merge (#421 C5)', () => {
     const entry = entryDouble({
       id: 'crew-day',
       start: sampleEntries[0]!.start!,
@@ -568,13 +568,13 @@ describe('computeFrame', () => {
       props: { hours: 6 },
     });
     const own = createVariantRegistry({ fieldFor: () => undefined });
-    own.addConsumerVariant({ name: 'outside-only', when: () => true, barLabels: { placement: 'outside' } });
+    own.addConsumerVariant({ name: 'outside-only', when: () => true, barLabels: { policy: 'outside' } });
 
     // `view/bar-labels.ts` runs this same call — `registry.resolveFor(entry).barLabels` merged over
     // the Gantt's own `barLabels` — before it ever reaches `formatValue`; asserting it here proves
     // the merge a real variant produces, not a literal `BarLabels` object.
     const merged = mergeBarLabels({ field: 'hours' }, own.resolveFor(entry).barLabels);
-    expect(merged).toEqual({ field: 'hours', placement: 'outside' });
+    expect(merged).toEqual({ field: 'hours', policy: 'outside' });
 
     const frame = computeFrame({
       entries: [entry],
