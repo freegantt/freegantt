@@ -128,11 +128,11 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       // A raw `computeFrame` call binds no `view/` and so resolves no Field on its own (#421 C5) —
       // this test's own resolver stands in for the Gantt's default `barLabels`, the same plain
       // identity `view/bar-labels.ts` produces when nothing overrides it.
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
     });
     backend.sync(frame);
 
@@ -280,7 +280,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
-        columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+        columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
       }),
     );
 
@@ -334,7 +334,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
         { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
         { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
@@ -398,7 +398,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
       ],
     });
@@ -447,7 +447,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
       ],
     });
@@ -1628,7 +1628,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       rows: { source: 'entries', tree: true },
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -1704,7 +1704,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
-        barLabelFor: (entry) => entry.name ?? '',
+        barLabelFor: (entry) => entry.name,
       }),
     );
 
@@ -1923,7 +1923,7 @@ describe('render/dom backend', () => {
       barX: number,
       barWidth: number,
       contentWidthPx: number,
-      barLabelFor: (entry: Entry) => string = (entry) => entry.name ?? '',
+      barLabelFor: (entry: Entry) => string = (entry) => entry.name,
     ) {
       return computeFrame({
         entries: sampleEntries.slice(0, 1),
@@ -2014,7 +2014,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: markerRegistry,
-        barLabelFor: (entry) => entry.name ?? '',
+        barLabelFor: (entry) => entry.name,
       });
       backend.sync(frame);
 
@@ -2208,7 +2208,7 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -2246,7 +2246,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
       ],
     });
@@ -2284,7 +2284,7 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
     });
     backend.sync(frame);
 
@@ -2398,7 +2398,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
         { field: 'cost', header: 'Cost', align: 'end', format: () => '500' },
       ],
     });

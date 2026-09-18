@@ -198,3 +198,28 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
     expect(rowOf(span, 'whole').duration()).toEqual(rowOf(children, 'whole').duration());
   });
 });
+
+// #421 F8: `entry.name` is the one accessor that normalizes. A consumer reads text and gets text,
+// so nothing downstream writes `entry.name ?? ''` — the branch review found four harness sites and
+// one in `extensions/features/tooltips.ts` doing exactly that. Storage and input stay sparse, and
+// the Field door still answers `undefined`, so "unnamed" is still a question anyone can ask.
+describe('an Entry with no name (#421 C5, F8)', () => {
+  const unnamed = () =>
+    rowOf(datasetOf({ entries: [{ id: 'u', start: '2026-01-01', end: '2026-01-02' }] }), 'u');
+
+  it("reads '' — never undefined, never the string 'undefined'", () => {
+    expect(unnamed().name).toBe('');
+  });
+
+  it("still answers undefined through read('name'), so 'unnamed' stays askable", () => {
+    expect(unnamed().read('name')).toBeUndefined();
+  });
+
+  it('stays sparse in toInput: a round-trip never invents a name', () => {
+    expect('name' in unnamed().toInput()).toBe(false);
+  });
+
+  it('reads back the authored name when there is one', () => {
+    expect(rowOf(datasetOf(), 'p').name).toBe('Parent');
+  });
+});

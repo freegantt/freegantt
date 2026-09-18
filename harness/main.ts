@@ -125,8 +125,8 @@ function refreshNameInput(): void {
     nameInput.value = '';
     return;
   }
-  const firstName = entries[0]!.name ?? '';
-  nameInput.value = entries.every((entry) => (entry.name ?? '') === firstName) ? firstName : '';
+  const firstName = entries[0]!.name;
+  nameInput.value = entries.every((entry) => entry.name === firstName) ? firstName : '';
 }
 
 function refreshMutationButtons(): void {

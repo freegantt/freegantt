@@ -3715,7 +3715,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
                 id: barId(entry.id, 99),
                 entryId: entry.id,
                 variant,
-                label: entry.name ?? '',
+                label: entry.name,
                 start: entry.start!,
                 end: entry.end!,
               },
@@ -4102,7 +4102,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
                 id: barId(entry.id, 99),
                 entryId: entry.id,
                 variant,
-                label: entry.name ?? '',
+                label: entry.name,
                 start: entry.start!,
                 end: entry.end!,
               },
@@ -5631,7 +5631,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const barId = bar.dataset['barId'];
 
-    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name ?? '' };
+    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name };
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(container.querySelector(`[data-bar-id="${barId}"]`)).toBe(bar);

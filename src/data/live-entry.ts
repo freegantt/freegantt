@@ -63,8 +63,11 @@ class LiveEntry implements Entry {
     return current ?? this.#last;
   }
 
-  get name(): string | undefined {
-    return this.#stored()?.name;
+  get name(): string {
+    // The one normalization (#421 F8). Storage stays sparse — `#toJSON` below spreads `name` only
+    // when it is set, so a round-trip never invents one — and `read('name')` still answers
+    // `undefined`. A reader who only wants text gets text.
+    return this.#stored()?.name ?? '';
   }
 
   get start(): Instant | undefined {

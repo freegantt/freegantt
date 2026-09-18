@@ -255,7 +255,7 @@ describe('what a variant answers about itself', () => {
           id: barId(entry.id, 7),
           entryId: entry.id,
           variant: 'twin',
-          label: entry.name ?? '',
+          label: entry.name,
           start: entry.start!,
           end: entry.end!,
         },
