@@ -248,12 +248,13 @@ All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 
 ### Everything still open, in one list
 
-**Two questions are open on 2026-09-17. Neither blocks C1.**
+**Three questions are open on 2026-09-17. None of them blocks C1.**
 
 | # | Question | Who waits on it |
 | --- | --- | --- |
 | **Q23** | does a hierarchy source declare the Field keys it reads? | Nobody. C4's fast path ships without it |
 | **Q27** | a claimed parent draws no bar — so how does core's own `summary()` not draw one, and what lets a consumer put a band back? | **C2.** It has a recommendation in `BUILD-LOG.md` and no ruling |
+| **Q28** | is the layout unit a `Bar`, not an `Item`? | **C6.** *Item* already names three things in `src/**`, and everything downstream calls it a bar. Recommendation, no ruling |
 
 Two more were raised on the same day and the author ruled both the same day. They are in `BUILD-LOG.md`:
 
