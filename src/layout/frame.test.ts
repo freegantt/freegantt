@@ -470,6 +470,32 @@ describe('computeFrame', () => {
     expect(frame.bars).toMatchSnapshot();
   });
 
+  it('matches the golden snapshot for a claimed row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md)', () => {
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
+    const frame = computeFrame({
+      entries: [parent, child],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: (entry) => entry.name ?? '',
+      rows: { source: 'entries', childrenAsSegments: true },
+    });
+    // One row for both — the claimed child's id rides `entryIds[1]`, not a row of its own.
+    expect(frame.rows).toHaveLength(1);
+    expect(frame.rows[0]?.entryIds).toEqual([parent.id, child.id]);
+    expect(
+      frame.rows.map((row) => ({ id: row.id, depth: row.depth, entryIds: row.entryIds })),
+    ).toMatchSnapshot();
+    expect(frame.bars).toMatchSnapshot();
+  });
+
   it('I8 under scroll: the id set for the overlapping region is identical before and after a window move', () => {
     const before = computeFrame({
       entries: sampleEntries,
