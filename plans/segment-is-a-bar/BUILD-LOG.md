@@ -40,6 +40,11 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q26 | how does a claimed parent ask for a rail instead of a bar? | **RULED 2026-09-17 by the author: it draws no bar of its own, and core ships nothing else.** A consumer variant with an explicit `items` producer still wins, as it does today. No new key, no rail concept, no special case |
 | Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **RULED 2026-09-17 by the author.** `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes **one** more fact, per Entry, carrying the key's own name: `childrenAsSegments`. Not two facts, and no `global` prefix — the two spellings of the key resolve in one place |
 | Q28 | is the layout unit a `Bar`, not an `Item`? | **RULED 2026-09-17 by the author: yes, and in C6.** `Item` → `Bar`, `ItemId` → `BarId`, `ItemProducer` → `BarProducer`, and the rest of the table below. `MenuItem` and `CellItem` keep the generic word |
+| Q29 | can `reportUnknownFieldMatch` carry a rule that is not a variant? | **RULED 2026-09-18 by the author: no — a second report code.** `UnknownFieldMatch.rule` is a `VariantClaimant` (`{ variant, pluginId? }`), and `GanttShell`'s message hardcodes "The variant rule 'X'". `childrenAsSegments` is not a variant and has no name to put there. C1 adds `unknown-row-source-field` to `BuiltInReportCode`, with its own message naming the config key. **This also corrects Q21's stated reason:** `RowPassInput.fieldContext` is `{ timeZone }` alone (`model/field.ts:247` says so on purpose), so it never carried `equals`. C1 adds a `fieldFor: (key) => Field \| undefined` port — the shape `VariantRegistryPorts` already uses |
+| Q30 | is `VariantRule` still the right name once a row source key takes it? | **RULED 2026-09-18 by the author: no.** `childrenAsSegments?: boolean \| VariantRule` reads as "children as segments: a variant rule", and the key is not a variant. C1 renames `VariantRule` → `EntryRule` and `VariantPredicate` → `EntryPredicate` with `pk-rename-symbol`. `FieldMatch` is already neutral and keeps its name. One name per concept (#7) |
+| Q31 | does a `boolean` Field edit as a checkbox? | **RULED 2026-09-18 by the author: yes.** `FieldType.inputType` is `'text' \| 'number' \| 'email' \| 'tel' \| 'url'` today, and `extensions/features/inline-editing.ts:715` sets `input.type` then reads `.value` — so a `boolean` Field would edit as a text box where the user types "true". C1 adds `'checkbox'` to `inputType` and teaches the editor to read `.checked`. This is what makes the design's "a grid checkbox drives it" true |
+| Q32 | what is `measureDuration: 'segments'` called now, and is the rename enough? | **RULED 2026-09-18 by the author: `duration` should not be special at all — it is a Field and it aggregates through a named Aggregator, like everything else. Filed as #428.** The mechanism does not exist: `data/fields/field-registry.ts:230` refuses `rollUp` on a `compute` Field (ADR 0011), and `duration` is one. **Q25's rename is not enough on its own** — ingest mints one Segment over every spanning Entry, so a childless leaf under `'segments'` measures its own span today and would measure **0** under `'children'`. C6 ships the stopgap the author named limited and inconsistent: `'children'` sums the direct children's spans and falls back to the Entry's own `end - start` when it has no children. It is one level deep, it makes the word lie for a leaf, and nothing is built on top of it. #428 removes it |
+| Q33 | does `produceItemsForRow` skip a claimed parent's subject, or does the producer answer? | **The producer answers. Ruled by the coordinator, 2026-09-18, because Q26 already decided it.** C2's cell said both, and the two do not compose: a skip inside `produceItemsForRow` means a consumer's own `items` producer never runs for the claimed parent, which contradicts Q26's "a consumer variant with an explicit `items` producer still wins, as it does today". So `produceItemsForRow` does **not** skip. It passes the per-Entry `childrenAsSegments` fact to the producer (Q27's ruling), and core's own shipped producers return `[]` for it. A consumer producer that ignores the parameter still paints, which is what Q26 promised |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -868,3 +873,101 @@ items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [ignoreSegm
 **Do not do this before C6.** C1–C5 read shipped code against shipped names, and a rename in the middle makes every one of their diffs unreadable.
 
 **What C1–C5 write.** Today's names, every one of them: `Item`, `ItemProducer`, `ignoreSegments`. C6 renames them in one pass, and Q27's parameter moves with its type. A build that renames early makes its own diff unreadable, and this ruling does not change that.
+
+---
+
+## Q29 — can `reportUnknownFieldMatch` carry a rule that is not a variant?
+
+**Raised 2026-09-17 by the coordinator, verifying the plan against the code. C1. RULED 2026-09-18 by the author: no. C1 adds a second report code.**
+
+`UnknownFieldMatch.rule` is a `VariantClaimant` — `{ variant: string; pluginId?: PluginId }` (`layout/items/variants.ts:126,137`). `GanttShell.#reportUnknownFieldMatch` writes one sentence and hardcodes the noun: *"The variant rule 'X' matches on field 'k', and no Field declares it."*
+
+`childrenAsSegments` is a config key on a row source. It has no variant name, so it can supply nothing that reads correctly in that sentence.
+
+**The ruling.** C1 adds `unknown-row-source-field` to `BuiltInReportCode` (`model/error-report.ts:40`), with its own message naming the config key and telling the author to declare the Field. Two different jobs report differently. The alternative — reusing `unknown-variant-field` with `{ variant: 'childrenAsSegments' }` — was refused: the message would call a row-source key a variant rule, which is the fault class #7 named.
+
+`BuiltInReportCode` is checked against a `Record<BuiltInReportCode, true>` literal, so adding a code is a defined move and the two tables cannot drift (#333).
+
+**This entry also corrects Q21.** Q21's ruling said *"`RowPassInput` already carries `fieldContext` for `sort`, so the wire exists."* It does not. `FieldContext` is `{ readonly timeZone: string }`, and `model/field.ts:247` states the reason on purpose: *"It does not take the consumer's field map."* Sort reaches each Field's `compare` through a **separate** `fieldCompares: readonly FieldCompare[]` argument (`resolve-rows.ts:62`).
+
+So C1 adds a new port, `fieldFor: (key: FieldKey) => Field | undefined` — the shape `VariantRegistryPorts.fieldFor` already uses. **Q21's ruling stands; only its stated reason was wrong.** The work is still small, and the author's reason for threading it — a misspelt key must not draw a blank screen in silence — is untouched.
+
+---
+
+## Q30 — is `VariantRule` still the right name once a row source key takes it?
+
+**Raised 2026-09-17 by the coordinator. C1. RULED 2026-09-18 by the author: rename it.**
+
+`childrenAsSegments` takes the `when` pattern, so its type is the one `variants.ts` already publishes. Read the declaration aloud: *"children as segments: a variant rule."* The key is not a variant, and it does not pick one — Q24 and the design doc both say so twice.
+
+CLAUDE.md: a name covering more than one concept in the codebase is a bug, not a style nit. #7 is the cautionary example, and its fix was to retire the word, not to pick a synonym.
+
+**The ruling.** C1 renames, with `pk-rename-symbol`, then `pnpm typecheck`:
+
+| Today | After C1 |
+|---|---|
+| `VariantRule` | `EntryRule` |
+| `VariantPredicate` | `EntryPredicate` |
+| `FieldMatch` | unchanged — already neutral |
+
+Both are public (`api/index.ts:381`). This library has never shipped to a user, so no alias ships (CLAUDE.md). `EntryVariant.when` keeps its own name: `when` asks how a row looks, and the *type* it takes is now named for what it matches — an Entry — rather than for one of the two keys that take it.
+
+---
+
+## Q31 — does a `boolean` Field edit as a checkbox?
+
+**Raised 2026-09-17 by the coordinator. C1. RULED 2026-09-18 by the author: yes, C1 adds `'checkbox'`.**
+
+The design says a per-Entry claim is opened by writing the marker Field, and that *"a grid checkbox drives it with no new API"*. The second half is not true today.
+
+`FieldType.inputType` is `'text' | 'number' | 'email' | 'tel' | 'url'` (`model/field.ts:232`), and the built-in cell editor does `input.type = field.inputType ?? 'text'` and then reads `.value` (`extensions/features/inline-editing.ts:715`). A `boolean` Field under that path is a text box where the user types the word `true`.
+
+**The ruling.** C1 adds `'checkbox'` to `inputType` and teaches the editor to read `.checked` instead of `.value` for it. That is new public API, and it is the API the design already promised.
+
+**What this does not block.** User story 11 writes `dataset.entries.update('req-1', { showDaysOnRow: false })`, so the acceptance test never needs the checkbox. If C1 runs long, the checkbox is the piece that can move to C7 — the `boolean` type itself cannot, because the rule's own examples are its first consumer (Q22).
+
+---
+
+## Q32 — what is `measureDuration: 'segments'` called now, and is the rename enough?
+
+**Raised 2026-09-17 by the coordinator, checking Q25 against the code. C6. RULED 2026-09-18 by the author, and the real answer left this plan as #428.**
+
+**Q25 called it a rename. It is not one.** `measureEntryDuration` (`data/fields/field-access.ts:211-222`) sums `entry.segments`, and ingest mints one Segment over every spanning Entry's whole span. So **today a childless leaf under `'segments'` measures its own span.** Under `'children'` it has no children, and would measure `0` — a behaviour change for every leaf in every dataset naming the option.
+
+**The author's ruling: `duration` should not be special at all.** It is a Field, and it should aggregate through a named Aggregator like every other Field. `measureDuration` is a hand-written `sum` welded into one Field, reachable by no other Field, named by a key that appears nowhere else in the API.
+
+**That cannot be built here.** `data/fields/field-registry.ts:227-231` refuses `rollUp` on a `compute` Field (`ComputedFieldCannotBeWrittenError`, ADR 0011), and `duration` is a compute Field. The mechanism CLAUDE.md describes — *"a `compute` Field has no home, so its aggregate is computed on read and is never stored"* — does not exist. Building it needs rulings on when the fold runs, how deep it recurses, what it costs on the visible path, and whether every compute Field gains it.
+
+**Filed as #428**, with those decisions written out.
+
+**What C6 ships meanwhile, on the author's word:**
+
+> `measureDuration: 'children'` sums the Entry's direct children's spans, and falls back to the Entry's own `end - start` when it has no children.
+
+**The author called this limited and inconsistent, and it is.** Written down here so no reader mistakes it for a design:
+
+- **It is one level deep.** A parent of parents sums its direct children's *spans*, not their durations. The fold does not compose.
+- **The fallback makes the word lie.** A leaf under `'children'` measures no children.
+- **It is still special.** Still a Dataset policy key no other Field has, still a branch inside one function, still unreachable by any Field a consumer declares.
+
+**Nothing is built on top of it.** #428 removes it.
+
+---
+
+## Q33 — does `produceItemsForRow` skip a claimed parent's subject, or does the producer answer?
+
+**Raised and ruled 2026-09-18 by the coordinator, because Q26 had already decided it. C2.**
+
+C2's cell in `README.md` said two things:
+
+1. *"`produceItemsForRow` skips the row's subject when the row claims"*, and
+2. *"`ignoreSegments` returns `[]` when it is `true`"*.
+
+**They do not compose.** If `produceItemsForRow` skips the subject, no producer runs for it — so a consumer's own `items` producer never runs either. That contradicts Q26, which ruled that *"a consumer variant with an explicit `items` producer still wins, as it does today"*, and it contradicts the design's promise that a consumer may still paint a band behind the bars.
+
+**The ruling — the producer answers, and nothing skips.** `produceItemsForRow` passes the per-Entry `childrenAsSegments` fact to the producer, which is exactly Q27's ruling. Core's own shipped producers return `[]` for a claimed subject. A consumer producer that ignores the parameter still paints.
+
+This is a coordinator's call on a contradiction inside the plan, not a new decision: Q26 and Q27 both already point this way, and only C2's own summary said otherwise. Reverse it by reversing Q26.
+
+**One name falls out of it.** C6 renames `ignoreSegments` → `wholeSpan` (Q26). A producer named for "the whole span" that returns zero items for a claimed subject fails the naming test — read the call site aloud and it promises one bar. C6 picks the name against the behaviour it has after C2, not the behaviour it has today. Use the naming skill there.
+

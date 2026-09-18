@@ -100,7 +100,7 @@ Every job uses a door that ships today.
 
 ## The rule: where it lives, and what it takes
 
-**The value is the `when` pattern.** `childrenAsSegments` takes `true`, or a `VariantRule` (`layout/items/variants.ts`): a field match or `(entry) => boolean`. An author learns one match syntax. `true` is the shorthand for the common case; the rule is the expert form.
+**The value is the `when` pattern.** `childrenAsSegments` takes `true`, or an `EntryRule` (`layout/items/variants.ts`, called `VariantRule` until C1 renames it — Q30): a field match or `(entry) => boolean`. An author learns one match syntax. `true` is the shorthand for the common case; the rule is the expert form.
 
 **The rule matches the parent.** A claimed parent gives its children no rows and draws them on its own row.
 
@@ -242,24 +242,33 @@ Spike S4 ran on 2026-09-17 and reported a partial pass. The evidence is in [`SPI
 
 All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 
-1. **The Field-registry gap — RULED: thread it.** `childrenAsSegments`'s field match cannot reuse `layout/items/variants.ts`'s `compileRule` without a `fieldContext`, which `row-source.ts` says the entries source does not take (D-S4-19, D-S4-21). C1 threads it, so the match uses each Field's own `equals` and a key no Field declares reports once through `reportUnknownFieldMatch`. **Why it won:** a misspelt key would otherwise claim nothing and draw a blank screen, in silence — the fault class #197 closed. `RowPassInput` already carries `fieldContext` for `sort`, so the wire exists; what changes is what `row-source.ts` says about itself, and C1 rewrites that comment.
-2. **The `boolean` Field type — RULED: core ships it.** `FieldTypeName` (`model/field.ts:14`) ships `text`, `number`, `percent`, `date` and `duration` today, so `{ key: 'showDaysOnRow', type: 'boolean' }` throws `UnknownFieldTypeError` at `data/fields/field-registry.ts:70`. It lands in C1, with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are the first consumer of it.
+1. **The Field-registry gap — RULED: thread it.** `childrenAsSegments`'s field match cannot reuse `layout/items/variants.ts`'s `compileRule` without a `fieldContext`, which `row-source.ts` says the entries source does not take (D-S4-19, D-S4-21). C1 threads it, so the match uses each Field's own `equals` and a key no Field declares reports once through `reportUnknownFieldMatch`. **Why it won:** a misspelt key would otherwise claim nothing and draw a blank screen, in silence — the fault class #197 closed. **Corrected 2026-09-18 (Q29): the wire does not already exist.** `RowPassInput.fieldContext` is `{ timeZone }` alone, and `model/field.ts:247` says so on purpose — sort reaches each Field's `compare` through a separate `fieldCompares` argument. C1 adds a new `fieldFor: (key) => Field | undefined` port, the shape `VariantRegistryPorts` already uses. The ruling stands; only its stated reason was wrong. What also changes is what `row-source.ts` says about itself, and C1 rewrites that comment.
+2. **The `boolean` Field type — RULED: core ships it.** `FieldTypeName` (`model/field.ts:14`) ships `text`, `number`, `percent`, `date` and `duration` today, so `{ key: 'showDaysOnRow', type: 'boolean' }` throws `UnknownFieldTypeError` at `data/fields/field-registry.ts:70`. It lands in C1, with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are the first consumer of it. **It edits as a checkbox (Q31):** `'checkbox'` joins `FieldType.inputType`, and the cell editor reads `.checked`. Without that, a `boolean` Field would edit as a text box where the user types the word `true`, and this file's "a grid checkbox drives it with no new API" would be false.
 3. **Does a hierarchy source declare the keys it reads? — RULED: decide it later, as #426.** C4's fast path applies to core's own `storedParentSource` alone, gated on `tree.source === storedParentSource` (`data/hierarchy-source.ts:18`). A consumer's own source is a function that may read any field, so no commit can be proven not to move a row, and the re-check runs as it does today — correct, and slower. A source that named its keys would let every source skip it, and that question is wider than #421.
 
 ### Everything still open, in one list
 
-**Nothing is open on 2026-09-17. Every question this design raised is ruled.**
+**Nothing is open on 2026-09-18. Every question this design raised is ruled.**
+
+Five more were raised on 2026-09-17 by the coordinator, verifying this plan line by line against the code, and the author ruled four of them on 2026-09-18. They are in `BUILD-LOG.md`:
+
+- **Q29** — `reportUnknownFieldMatch` cannot carry a rule that is not a variant. C1 adds an `unknown-row-source-field` code, and Q21's stated reason is corrected: `fieldContext` never carried `equals`.
+- **Q30** — `VariantRule` becomes `EntryRule`, and `VariantPredicate` becomes `EntryPredicate`. A row-source key may not take a type named for variants (#7).
+- **Q31** — a `boolean` Field edits as a checkbox. `'checkbox'` joins `FieldType.inputType` in C1.
+- **Q32** — `duration` should not be special at all. Filed as **#428**; C6 ships a stopgap the author named limited and inconsistent.
+- **Q33** — nothing skips a claimed parent's subject; the producer answers. A coordinator's call on a contradiction inside C2's own cell, resolved the way Q26 and Q27 already pointed.
 
 Two left the plan rather than closing inside it, and both are issues of their own:
 
 | # | Where it went | What #421 does meanwhile |
 | --- | --- | --- |
 | **Q23** | **#426** — a custom hierarchy source declares the Field keys it reads | C4 ships the fast path for core's own source alone. A consumer's source keeps today's behaviour: correct, and slower |
+| **Q32** | **#428** — `duration` is a Field and aggregates through a named Aggregator; `measureDuration` retires | C6 renames `'segments'` to `'children'` and falls back to the Entry's own span when it has no children. Limited and inconsistent, by the author's own word |
 | — | **#425** — a vertical drag moves a bar to another row | The write ships in C1–C6. The gesture does not |
 
 Two more were raised on the same day and the author ruled both the same day. They are in `BUILD-LOG.md`:
 
-- **Q25** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. C6 does the rename.
+- **Q25, corrected by Q32** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. **It is not a rename.** Ingest mints one Segment over every spanning Entry, so a childless leaf measures its own span today and would measure `0` under `'children'`. C6 sums the direct children's spans and falls back to the Entry's own `end - start` when it has no children. The author called that stopgap limited and inconsistent, and **#428 removes it**: `duration` is a Field and should aggregate through a named Aggregator, which `data/fields/field-registry.ts:230` refuses on a `compute` Field today.
 - **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own.
 - **Q28** — the layout unit is a `Bar`, not an `Item`. `Item` named three things in `src/**`, and everything downstream of it already said bar. C6 renames, with `pk-rename-symbol`.
 - **Q27** — the mechanism for both, because core's shipped `summary()` also names an `items` producer. `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes one more fact, **per Entry**, under the key's own name: `childrenAsSegments`. One fact, not two, and no `global` prefix.
