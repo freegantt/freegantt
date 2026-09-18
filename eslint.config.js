@@ -277,7 +277,7 @@ export default tseslint.config(
     // an author wrote instead, which is the rule dependency-cruiser can't state: never a relative
     // path into src/, whatever position it appears in. Belt and braces with the cruiser rule, not a
     // replacement — the cruiser rule still catches an internal
-    // (`'../src/layout/items/variants.js'`) through a spelling this text match could miss.
+    // (`'../src/layout/bars/variants.js'`) through a spelling this text match could miss.
     //
     // Three positions, because #287 shipped with one covered and two not: a value import and a
     // type import (`import type { X } from '../src/...'`) are the same `ImportDeclaration` node, so
