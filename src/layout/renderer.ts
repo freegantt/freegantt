@@ -5,7 +5,7 @@
 // already re-exports ElementDescription, so `render/dom` (layout-only import) and `view/`/`api/`
 // (both allowed to import layout/) reach them through one seam.
 
-import type { Entry, PluginId } from '../model/index.js';
+import type { Entry, FieldKey, PluginId } from '../model/index.js';
 import type { ElementDescription } from '../model/index.js';
 import type { FrameBar, FrameRow } from './frame.js';
 import type { ResolvedColumn } from './column.js';
@@ -90,5 +90,47 @@ export interface ResolvedRenderer<TRenderer> {
  *  regardless of fit (ellipsised inside, or clipped at the pane edge outside — the same load-bearing
  *  fallback `'fitBar'`'s third clause takes). `'none'` paints no label at all, and a `barRenderer`
  *  sees no `ctx.label` either — one answer to "did the consumer ask for a label", for the library's
- *  own paint and for a renderer's alike. */
-export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
+ *  own paint and for a renderer's alike.
+ *
+ *  Named `Policy`, not `BarLabels`: this is one Gantt-wide or per-variant setting's placement half
+ *  (#421 C5). `BarLabels` below is the wider public type a consumer actually writes. */
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+
+/** The expert form of `barLabels`: which Field prints, and where it paints. Both keys are optional,
+ *  so `{ field: 'hours' }` alone keeps whichever placement policy is already in force, and
+ *  `{ placement: 'outside' }` alone keeps whichever Field is already in force (`mergeBarLabels`). */
+export interface BarLabelSpec {
+  /** The Field a bar's label reads — `formatValue` prints it, the same as a Grid cell (#421 C5).
+   *  Defaults to `'name'`. */
+  field?: FieldKey;
+  placement?: BarLabelPolicy;
+}
+
+/** What `gantt.barLabels` and `EntryVariant.barLabels` both take. The short form (`'fitBar'` etc.)
+ *  is the common case: placement only, `name` printed. `{ field, placement }` is the expert form,
+ *  for a bar that prints a different Field, or a variant that overrides only one of the two (#421
+ *  C5). */
+export type BarLabels = BarLabelPolicy | BarLabelSpec;
+
+const DEFAULT_BAR_LABEL_FIELD: FieldKey = 'name';
+const DEFAULT_BAR_LABEL_PLACEMENT: BarLabelPolicy = 'fitBar';
+
+/** One `BarLabels` value, filled out to both keys. The short form names placement alone and prints
+ *  `'name'`; the long form fills whichever key it omits from these same two defaults. */
+function normalizeBarLabels(labels: BarLabels): BarLabelSpec {
+  return typeof labels === 'string' ? { placement: labels } : labels;
+}
+
+/** Call: `mergeBarLabels(gantt.barLabels, variantFor(entry).barLabels)`. Merges key by key —
+ *  `override`'s own `field` wins when it names one, `override`'s own `placement` wins when it names
+ *  one, and `base`'s answer (or the library's default) carries whichever key `override` leaves
+ *  unnamed. So a variant that sets only `{ placement: 'outside' }` never drops the Gantt's own
+ *  `field` (#421 C5). Pure: reads nothing, keeps no state. */
+export function mergeBarLabels(base: BarLabels, override: BarLabels | undefined): Required<BarLabelSpec> {
+  const baseSpec = normalizeBarLabels(base);
+  const overrideSpec = override === undefined ? {} : normalizeBarLabels(override);
+  return {
+    field: overrideSpec.field ?? baseSpec.field ?? DEFAULT_BAR_LABEL_FIELD,
+    placement: overrideSpec.placement ?? baseSpec.placement ?? DEFAULT_BAR_LABEL_PLACEMENT,
+  };
+}

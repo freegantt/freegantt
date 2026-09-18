@@ -34,8 +34,10 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
   /** Hierarchy; roots have none. An Entry has no stored classification (ADR 0013): it derives when
    *  it has children, and `Entry.hasChildren` is what answers that. */
   parentId?: EntryId;
-  /** What this row is called. Core reads it for the Grid's default label and for nothing else. */
-  name: string;
+  /** What this row is called, or `undefined` when no author gave it one (#421 C5). Not a required
+   *  field: a row with no name still stores, still spans, still draws — core defaults nothing off
+   *  it beyond the Grid's `name` column and the default bar label reading the same Field. */
+  name?: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
    * Segment and draws a bar. */
   start?: Instant;
@@ -95,8 +97,11 @@ export interface EntryInput<TProps = Record<string, unknown>> {
   /** Hierarchy; roots have none. */
   parentId?: string | undefined;
   /** No stored classification (ADR 0013). An Entry derives when it has children — gaining one
-   *  promotes it, losing the last one demotes it, and nothing here says which. */
-  name: string;
+   *  promotes it, losing the last one demotes it, and nothing here says which.
+   *
+   *  Optional (#421 C5): a booking with no title is still a row. Omit it and the Grid's `name`
+   *  column, and the default bar label, both read an empty value. */
+  name?: string | undefined;
   /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
    * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment
    * and draws no bar otherwise. One date with no other is legal and stores as written. An unreadable
@@ -143,10 +148,10 @@ export type PropsEdit<TProps> = { [K in keyof TProps]?: TProps[K] | undefined };
  * (`props?: never` below is what makes `{ props: { owner: 'Sam' } }` fail to compile, the same brand
  * that keeps a `ProposedEdit` from masquerading as this type).
  *
- * An edit may remove exactly what a stored Entry may lack: `name` and `segments` are required on
- * `Entry`, so `{ name: undefined }` does not compile, while `{ parentId: undefined }` and (after ADR
- * 0012) `{ start: undefined }` do. Every declared consumer key is removable without exception, because
- * `props` is `Partial<TProps>` everywhere already. */
+ * An edit may remove exactly what a stored Entry may lack: `segments` is required on `Entry`, so
+ * `{ segments: undefined }` does not compile, while `{ parentId: undefined }`, `{ name: undefined }`
+ * (#421 C5) and (after ADR 0012) `{ start: undefined }` do. Every declared consumer key is removable
+ * without exception, because `props` is `Partial<TProps>` everywhere already. */
 // `Exclude<…, undefined>` on the non-removable arm is load-bearing. `EntryInput`'s optional keys
 // admit an explicit `undefined` so that `entries.add({ ...entry.toInput() })` compiles (ADR 0017),
 // and without this the widening would leak here and quietly make `segments` removable.

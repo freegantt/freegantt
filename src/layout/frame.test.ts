@@ -14,6 +14,8 @@ import {
   formatDate,
   formatEndInclusive,
   weekAndMonthPreset,
+  weekPreset,
+  yearPreset,
 } from '../time/index.js';
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
@@ -125,6 +127,8 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      // No producer sets `Item.label`; this stands in for `view/`'s default `barLabels` (#421 C5).
+      barLabelFor: (entry) => entry.name ?? '',
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
@@ -168,10 +172,64 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      barLabelFor: (entry) => entry.name ?? '',
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
     expect(frame.rows[0]?.gridCells).toEqual([]);
     expect(frame.columns).toEqual([]);
+  });
+
+  it('lays out a bar with no label the same as a labelled one (#421 C5)', () => {
+    // `barLabelFor: () => ''` is `view/`'s own answer once a merged policy names `'none'` or the
+    // Entry has no name — layout never treats an empty label as a special case, so geometry alone
+    // proves it: same x/y/width/height as the labelled frame just built above, label empty.
+    const named = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: (entry) => entry.name ?? '',
+    });
+    const unlabelled = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: () => '',
+    });
+    expect(unlabelled.bars[0]?.label).toBe('');
+    expect(unlabelled.bars.map((b) => ({ x: b.x, y: b.y, width: b.width, height: b.height }))).toEqual(
+      named.bars.map((b) => ({ x: b.x, y: b.y, width: b.width, height: b.height })),
+    );
+    // No leading ", " when the label is empty (`barA11yLabel`, #421 C5) — dates announce alone.
+    expect(unlabelled.bars[0]?.a11yLabel.startsWith(',')).toBe(false);
+    expect(unlabelled.bars[0]?.a11yLabel).not.toContain('undefined');
+  });
+
+  it('labels bars the same way across zoom levels — day, week, year (#421 C5)', () => {
+    for (const preset of [dayPreset, weekPreset, yearPreset]) {
+      const frame = computeFrame({
+        entries: sampleEntries,
+        scale,
+        preset,
+        visible,
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        variants: variantRegistry,
+        barLabelFor: (entry) => entry.name ?? '',
+      });
+      expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
+      expect(frame.bars[0]?.a11yLabel).not.toContain('undefined');
+    }
   });
 
   it('fills each cell from the Field formatValue bound on the column (S4.3 §3)', () => {
@@ -222,7 +280,7 @@ describe('computeFrame', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
+        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name ?? '' },
         { field: 'id', header: 'Id', align: 'start', format: (entry) => entry.id },
       ],
     });
@@ -406,6 +464,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      barLabelFor: (entry) => entry.name ?? '',
     });
     expect(frame.bars).toMatchSnapshot();
   });
@@ -489,6 +548,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      barLabelFor: (e) => e.name ?? '',
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
@@ -920,7 +980,7 @@ describe(
     const large: readonly Entry[] = entryDoubles(
       seededEntryInputs({ count: 5000 }).map((input) => ({
         id: input.id,
-        name: input.name,
+        ...(input.name !== undefined ? { name: input.name } : {}),
         start: instant(input.start as Date),
         end: instant(input.end as Date),
       })),

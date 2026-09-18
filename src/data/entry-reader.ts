@@ -222,10 +222,10 @@ export function toEntry(
   const envelope = segments.length > 0 ? envelopeOfSegments(segments) : dates;
   const entry: StoredEntry = {
     id,
-    name: input.name,
     segments,
     props: propsFromInput(input, registry, id),
   };
+  if (input.name !== undefined) entry.name = input.name;
   if (envelope.start !== undefined) entry.start = envelope.start;
   if (envelope.end !== undefined) entry.end = envelope.end;
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);

@@ -125,6 +125,7 @@ import type { EntryGestureContext } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
+import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
@@ -713,7 +714,10 @@ export class GanttShell {
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
-        readBarLabels: () => this.#frameSettings.barLabels,
+        // #421 C5: per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
+        // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
+        resolveBarLabelPolicy: (entry) =>
+          resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
         readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
         // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
         // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
@@ -1363,6 +1367,18 @@ export class GanttShell {
     const paint = this.#registrations.variants.resolveFor(entry).paint;
     if (paint !== undefined) return { renderer: paint };
     return this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer);
+  }
+
+  /** What one bar's label prints (#421 C5): the merged Field's own `formatValue`, read through the
+   *  same door a Grid cell reads through. `LayoutInput.barLabelFor`'s only caller. */
+  #labelFor(entry: Entry): string {
+    return resolveBarLabelText(
+      entry,
+      this.#frameSettings.barLabels,
+      this.variantFor(entry).barLabels,
+      { get: (key) => this.#options.dataset.field(key) },
+      this.#columnBind(),
+    );
   }
 
   get capabilities(): Capabilities {
@@ -2362,6 +2378,9 @@ export class GanttShell {
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
         entryRulePorts: this.#entryRulePorts,
+        // #421 C5: fresh every frame, never cached on the Item — `barLabels: 'repaint'`
+        // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
+        barLabelFor: (entry) => this.#labelFor(entry),
       }),
     );
     // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are

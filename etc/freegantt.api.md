@@ -59,7 +59,17 @@ export interface BarFlags {
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+
+// @public
+export type BarLabels = BarLabelPolicy | BarLabelSpec;
+
+// @public
+export interface BarLabelSpec {
+    field?: FieldKey;
+    // (undocumented)
+    placement?: BarLabelPolicy;
+}
 
 // @public
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
@@ -692,8 +702,7 @@ export interface Entry<TProps = Record<string, unknown>> {
     readonly hasChildren: boolean;
     // (undocumented)
     readonly id: EntryId;
-    // (undocumented)
-    readonly name: string;
+    readonly name?: string | undefined;
     // (undocumented)
     parent(): Entry<TProps> | undefined;
     read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
@@ -755,7 +764,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput | undefined;
     // (undocumented)
     id: string;
-    name: string;
+    name?: string | undefined;
     parentId?: string | undefined;
     props?: Partial<TProps>;
     segments?: readonly SegmentInput[] | undefined;
@@ -814,6 +823,7 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 
 // @public
 export interface EntryVariant<TProps = Record<string, unknown>> {
+    barLabels?: BarLabels;
     capabilities?: Capabilities;
     css?: string;
     items?: ItemProducer;
@@ -1504,8 +1514,7 @@ export interface Item {
     entryId: EntryId;
     // (undocumented)
     id: ItemId;
-    // (undocumented)
-    label: string;
+    label?: string;
     segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
@@ -1982,6 +1991,7 @@ export type ResolvedTheme = 'light' | 'dark';
 //
 // @public
 export interface ResolvedVariant extends DrawnVariant {
+    readonly barLabels: BarLabels | undefined;
     readonly capabilities: Capabilities | undefined;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
@@ -2151,7 +2161,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)
     id: EntryId;
-    name: string;
+    name?: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;
     segments: readonly Segment[];

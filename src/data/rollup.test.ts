@@ -458,7 +458,7 @@ describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#30
         { id: 'c', name: 'Child A', parentId: 'p' },
       ],
       fields: [
-        { key: 'nameLen', compute: (entry) => entry.name.length },
+        { key: 'nameLen', compute: (entry) => (entry.name ?? '').length },
         { key: 'tally', rollUp: 'sumNameLens' },
       ],
       aggregators: {

@@ -185,8 +185,8 @@ function bindGantt(): void {
   // even with the checkbox on, so the page can show both paths side by side.
   gantt.on('beforeEntryEdit', ({ entry, field }) => {
     if (!customEditorCheckbox.checked || field !== 'name') return;
-    const next = window.prompt(`Rename "${entry.name}"`, entry.name);
-    if (next !== null && next !== entry.name) {
+    const next = window.prompt(`Rename "${entry.name ?? ''}"`, entry.name ?? '');
+    if (next !== null && next !== (entry.name ?? '')) {
       attemptMutation(() => dataset.entries.update(entry.id, { name: next }));
     }
     return false;

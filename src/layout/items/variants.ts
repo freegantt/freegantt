@@ -18,7 +18,7 @@ import type {
   Capabilities,
   PluginId,
 } from '../../model/index.js';
-import type { BarRenderer } from '../renderer.js';
+import type { BarLabels, BarRenderer } from '../renderer.js';
 import type { EntryPredicate, EntryRule } from '../entry-rule.js';
 import { compileEntryRule } from '../entry-rule.js';
 export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
@@ -44,6 +44,9 @@ export interface ResolvedVariant extends DrawnVariant {
    *  the variant's own `css` carried at registration — copied here so every seam answers `items` /
    *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
   readonly css: string | undefined;
+  /** What this variant's own bars print, and where — merged key by key over the Gantt's own
+   *  `barLabels` (`mergeBarLabels`, #421 C5), or `undefined` for no opinion at this level. */
+  readonly barLabels: BarLabels | undefined;
 }
 
 /** One variant, as one object. A consumer installs it through `GanttOptions.variants`; a plugin
@@ -84,6 +87,11 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  `ElementDescription.style`'s own word, and `view/styles.ts`'s. Not `stylesheet` — a variant
    *  carries one fragment, and the library holds one sheet. */
   css?: string;
+  /** What this variant's own bars print, and where. Merges key by key over the Gantt's own
+   *  `barLabels` (#421 C5): `{ placement: 'outside' }` alone keeps the Gantt's own `field`,
+   *  and `{ field: 'hours' }` alone keeps the Gantt's own placement. Omit it for no opinion — every
+   *  bar this variant draws then prints exactly what the Gantt's own `barLabels` says. */
+  barLabels?: BarLabels;
 }
 
 /** Two rules from one source both claimed one Entry. The newest paints; the older one is reported
@@ -398,6 +406,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         paint: variant.paint,
         capabilities: variant.capabilities,
         css: variant.css,
+        barLabels: variant.barLabels,
       },
       claim:
         variant.when === undefined

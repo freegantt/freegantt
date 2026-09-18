@@ -27,7 +27,10 @@ import type { EntryInput, Segment } from './stored-entry.js';
  */
 export interface Entry<TProps = Record<string, unknown>> {
   readonly id: EntryId;
-  readonly name: string;
+  /** Omitted iff no author gave this row a name — a booking with no title is still a row (#421
+   *  C5). The Grid's `name` column reads it through `formatValue`, the same door every other Field
+   *  reads through; nothing else in core defaults it. */
+  readonly name?: string | undefined;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` iff it draws a bar. */
   readonly start?: Instant | undefined;
   /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012). */

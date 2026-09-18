@@ -344,6 +344,8 @@ export type {
   BarRenderer,
   BarRendererContext,
   BarLabels,
+  BarLabelPolicy,
+  BarLabelSpec,
   BarLabelPlacement,
   ResolvedBarLabel,
   GridCellRenderer,
