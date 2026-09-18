@@ -110,7 +110,7 @@ import type {
 } from '../model/index.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
-import type { Capabilities, GestureCapability, Interactions } from './capability.js';
+import type { Capabilities, GestureCapability, ResolvedCapabilities } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -304,7 +304,7 @@ export interface GanttShellOptions {
   todayLineMarginTicks?: number;
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
-  interactions?: Interactions;
+  capabilities?: Capabilities;
   /** Live (D-S3-24). What a drag snaps to on this Gantt, over the showing preset's own `snap`.
    *  Omitted, the preset decides. */
   snap?: SnapSetting;
@@ -457,9 +457,9 @@ export class GanttShell {
   /** The Selection (#212, ADR 0010, #230 R4): what is selected, and what a pointer hit would select.
    *  Built once, right after `#capabilities` in the constructor below. */
   #segmentSelection!: SegmentSelection;
-  /** S3.2, D-S3-9: resolved once, re-resolved only when `interactions` is reassigned — never per
+  /** S3.2, D-S3-9: resolved once, re-resolved only when `capabilities` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
-  #interactions: Interactions = {};
+  #capabilityRules: Capabilities = {};
   /** The consumer's own variants, and the disposers that retract them. Reassigning `variants`
    *  retracts the whole list and installs the new one (ADR 0018).
    *
@@ -473,7 +473,7 @@ export class GanttShell {
   #snap: SnapSetting | undefined;
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
-  #capabilities: Capabilities;
+  #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredItemId: ItemId | undefined;
@@ -862,7 +862,7 @@ export class GanttShell {
       commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
     });
     this.#teardown.add(() => this.#splitterAttachment.detach());
-    this.#interactions = options.interactions ?? {};
+    this.#capabilityRules = options.capabilities ?? {};
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
@@ -1355,32 +1355,32 @@ export class GanttShell {
     return this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer);
   }
 
-  get interactions(): Interactions {
-    return this.#interactions;
+  get capabilities(): Capabilities {
+    return this.#capabilityRules;
   }
 
   /** Live (S3, D-S3-9): re-resolves the capability table immediately. It then re-derives the two
    *  resolved affordance ids off the current hover and selection. A stricter rule takes effect
    *  without waiting for the next pointer move. */
-  set interactions(next: Interactions) {
-    this.#interactions = next;
+  set capabilities(next: Capabilities) {
+    this.#capabilityRules = next;
     this.#refreshCapabilities();
   }
 
   /** D-S5-35: writes one gesture's rule and leaves every other rule standing. It replaces the value
    *  it holds with a copy, so the object a consumer assigned is never mutated (`plans/02` §2). */
-  setCapabilityRule<K extends keyof Interactions>(capability: K, rule: NonNullable<Interactions[K]>): void {
-    this.#interactions = { ...this.#interactions, [capability]: rule };
+  setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void {
+    this.#capabilityRules = { ...this.#capabilityRules, [capability]: rule };
     this.#refreshCapabilities();
   }
 
-  /** D-S5-35: drops this Gantt's own rule for one gesture. A variant's own `can` and the library
+  /** D-S5-35: drops this Gantt's own rule for one gesture. A variant's own `capabilities` and the library
    *  table answer that gesture again. Clearing a gesture that carries no rule changes nothing. */
-  clearCapabilityRule(capability: keyof Interactions): void {
-    if (this.#interactions[capability] === undefined) return;
-    const next = { ...this.#interactions };
+  clearCapabilityRule(capability: keyof Capabilities): void {
+    if (this.#capabilityRules[capability] === undefined) return;
+    const next = { ...this.#capabilityRules };
     delete next[capability];
-    this.#interactions = next;
+    this.#capabilityRules = next;
     this.#refreshCapabilities();
   }
 
@@ -1407,16 +1407,16 @@ export class GanttShell {
   }
 
   /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
-   *  interactions` and `set variants` all re-derive from here, rather than repeating the call. */
-  #resolveCapabilities(): Capabilities {
+   *  capabilities` and `set variants` all re-derive from here, rather than repeating the call. */
+  #resolveCapabilities(): ResolvedCapabilities {
     return resolveCapabilities({
-      interactions: this.#interactions,
+      capabilities: this.#capabilityRules,
       fieldFor: (key) => this.#options.dataset.field(key),
-      variantInteractionsFor: (entry) => this.#registrations.variants.resolveFor(entry).can,
+      variantCapabilitiesFor: (entry) => this.#registrations.variants.resolveFor(entry).capabilities,
     });
   }
 
-  /** `set interactions` and a variant registration's register/dispose pair both change an input
+  /** `set capabilities` and a variant registration's register/dispose pair both change an input
    *  `#resolveCapabilities` reads. So both re-resolve the capability table and re-derive the
    *  affordance ids the same way (#154). This method writes that once, instead of three times. The
    *  constructor's own first resolve (above) runs before `#refreshAffordances` has anything to

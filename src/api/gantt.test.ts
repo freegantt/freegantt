@@ -2646,7 +2646,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     gantt.destroy();
   });
 
-  it("a variant's own `can` refuses resize for the rows it claims; disposal restores the library default", () => {
+  it("a variant's own `capabilities` refuses resize for the rows it claims; disposal restores the library default", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [sampleEntries[0]!.toInput()],
@@ -2662,7 +2662,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
             ctx.variants.add({
               name: 'buffer',
               when: (entry) => entry.id === sampleEntries[0]!.id,
-              can: { resize: false },
+              capabilities: { resize: false },
             });
             return () => {};
           },
@@ -2701,7 +2701,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       ctx.variants.add({
         name: 'buffer',
         when: (entry) => entry.id === sampleEntries[0]!.id,
-        can: { resize },
+        capabilities: { resize },
       });
       return () => {};
     },
@@ -2773,7 +2773,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     gantt.destroy();
   });
 
-  it("the consumer's own interactions still wins over a variant's own `can`", () => {
+  it("the consumer's own `capabilities` still wins over a variant's own `capabilities`", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [sampleEntries[0]!.toInput()],
@@ -2782,7 +2782,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     const gantt = new Gantt({
       container,
       dataset,
-      interactions: { resize: true },
+      capabilities: { resize: true },
       plugins: [
         {
           id: 'demo.bufferVariant',
@@ -2790,7 +2790,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
             ctx.variants.add({
               name: 'buffer',
               when: (entry) => entry.id === sampleEntries[0]!.id,
-              can: { resize: false },
+              capabilities: { resize: false },
             });
             return () => {};
           },
@@ -3994,11 +3994,11 @@ describe('Gantt Delete key (ADR 0010, #212)', () => {
     container.remove();
   });
 });
-describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5])', () => {
+describe('Gantt capabilities / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5])', () => {
   it('a resize-incapable entry renders no handle on hover ([S3-A5])', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, interactions: { resize: false } });
+    const gantt = new Gantt({ container, dataset, capabilities: { resize: false } });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -4049,7 +4049,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('gantt.selectedSegmentIds still accepts a select-incapable Entry — the setter does not consult can("select") (D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, interactions: { select: false } });
+    const gantt = new Gantt({ container, dataset, capabilities: { select: false } });
 
     gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries([sampleEntries[0]!.id]);
     expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
@@ -4060,7 +4060,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('a select-incapable bar refuses a pointer click', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, interactions: { select: false } });
+    const gantt = new Gantt({ container, dataset, capabilities: { select: false } });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const original = document.elementFromPoint.bind(document);
@@ -4074,7 +4074,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('reassigning interactions re-resolves the affordance ids without a new pointer move', () => {
+  it('reassigning capabilities re-resolves the affordance ids without a new pointer move', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
@@ -4086,24 +4086,24 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
     expect(bar.hasAttribute('data-movable')).toBe(true);
 
-    gantt.interactions = { move: false };
+    gantt.capabilities = { move: false };
     expect(bar.hasAttribute('data-movable')).toBe(false);
 
     document.elementFromPoint = original;
     gantt.destroy();
   });
 
-  // #195, D-S5-35: `gantt.interactions = { resize: false }` is the whole config, so a page that
+  // #195, D-S5-35: `gantt.capabilities = { resize: false }` is the whole config, so a page that
   // flips one gesture with it drops every other rule it holds. These six cover the two verbs that
   // write one gesture instead.
   it('setCapabilityRule writes one gesture and leaves every other rule standing (#195)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, interactions: { move: false, select: false } });
+    const gantt = new Gantt({ container, dataset, capabilities: { move: false, select: false } });
 
     gantt.setCapabilityRule('resize', false);
 
-    expect(gantt.interactions).toEqual({ move: false, select: false, resize: false });
+    expect(gantt.capabilities).toEqual({ move: false, select: false, resize: false });
 
     gantt.destroy();
   });
@@ -4112,12 +4112,12 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const assigned = { move: false };
-    const gantt = new Gantt({ container, dataset, interactions: assigned });
+    const gantt = new Gantt({ container, dataset, capabilities: assigned });
 
     gantt.setCapabilityRule('resize', false);
 
     expect(assigned).toEqual({ move: false });
-    expect(gantt.interactions).not.toBe(assigned);
+    expect(gantt.capabilities).not.toBe(assigned);
 
     gantt.destroy();
   });
@@ -4172,7 +4172,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     const gantt = new Gantt({
       container,
       dataset,
-      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', can: { resize: false } }],
+      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', capabilities: { resize: false } }],
     });
 
     const milestoneBar = container.querySelector<HTMLElement>('[data-variant="milestone"]')!;
@@ -4189,13 +4189,13 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
 
     gantt.clearCapabilityRule('resize');
     expect(container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!.hidden).toBe(true);
-    expect(gantt.interactions).toEqual({});
+    expect(gantt.capabilities).toEqual({});
 
     document.elementFromPoint = original;
     gantt.destroy();
   });
 
-  it('interactions.resize offers the gesture and still cannot write a derived date (#256)', () => {
+  it('capabilities.resize offers the gesture and still cannot write a derived date (#256)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       // A childless entry holds no dates and draws no bar at all (ADR 0012), so this gives 'g1' one
@@ -4211,7 +4211,7 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     // gesture writes may change — a roll-up parent's `start` and `end` come from its children, and
     // `canWrite` is the one place that answers so (#256). Before this, `true` opened the handles and
     // the drag committed a write the Rollup pass immediately took back.
-    const gantt = new Gantt({ container, dataset, interactions: { resize: true } });
+    const gantt = new Gantt({ container, dataset, capabilities: { resize: true } });
 
     const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -4229,14 +4229,14 @@ describe('Gantt interactions / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
   it('clearCapabilityRule leaves the other rules alone, and a gesture with no rule is a no-op (#195)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, interactions: { move: false, resize: false } });
+    const gantt = new Gantt({ container, dataset, capabilities: { move: false, resize: false } });
 
     gantt.clearCapabilityRule('resize');
-    expect(gantt.interactions).toEqual({ move: false });
+    expect(gantt.capabilities).toEqual({ move: false });
 
-    const before = gantt.interactions;
+    const before = gantt.capabilities;
     gantt.clearCapabilityRule('select');
-    expect(gantt.interactions).toBe(before);
+    expect(gantt.capabilities).toBe(before);
 
     gantt.destroy();
   });
@@ -4457,7 +4457,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     const gantt = new Gantt({
       container,
       dataset,
-      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', can: { resize: false } }],
+      variants: [{ name: 'milestone', when: (entry) => entry.id === 'm1', capabilities: { resize: false } }],
     });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
@@ -5377,7 +5377,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       ],
     });
 
-    expect(() => capturedCtx!.variants.add({ name: 'buffer', can: { resize: false } })).toThrow(
+    expect(() => capturedCtx!.variants.add({ name: 'buffer', capabilities: { resize: false } })).toThrow(
       RegistrationClosedError,
     );
     expect(() => capturedCtx!.view.registerGridColumn({ field: 'name' })).toThrow(RegistrationClosedError);

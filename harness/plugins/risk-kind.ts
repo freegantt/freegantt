@@ -22,7 +22,7 @@ export function riskKind() {
         // How does it look? Its own class. `bufferKind()` installs its own variant, and both stand.
         paint: () => ({ class: { 'demo-risk-bar': true } }),
         // What can you do to it? Move refuses — a risk band sits where the plan puts it.
-        can: { move: false },
+        capabilities: { move: false },
       });
 
       // What actions does it offer? One menu item, scoped to the rows this variant claimed.

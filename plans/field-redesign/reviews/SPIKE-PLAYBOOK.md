@@ -24,11 +24,9 @@
 
 Talk in ASD-STE100: active voice, short sentences, one meaning per word.
 
-## Model — do not use Sonnet
+## Model — the user picks it
 
-**Every `implementer` dispatch sets `model: cursor-grok-4.6-high`.** Not `inherit`. Not any Sonnet slug.
-
-The 0011 wave launched three `inherit` agents first. All three died in seconds on a Sonnet usage limit. The retry with `cursor-grok-4.6-high` did the work. Do not pay that round-trip again. If that model is unavailable, stop and tell the user. Do not fall back in silence. Do not skip the wave.
+**The user names the model for a dispatch. This file does not.** Ask if you need one and the user has not said. Never overrule a model the user asked for, and never quote a past wave at them.
 
 ## The split — one decision per branch
 
@@ -93,7 +91,7 @@ Run it from the repo root, so a `tsc` probe finds `node_modules/.bin/tsc`. Do no
 
 ### Subagents
 
-- Agent: `implementer`. Model: `cursor-grok-4.6-high` on every dispatch.
+- Agent: `implementer`. The user names the model.
 - Each dispatch names: goal, boundary, entry-point files, completion test, worktree path, commit message.
 - Start **one** context watcher in the same turn as the dispatches:
 

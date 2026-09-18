@@ -31,7 +31,7 @@ export function bufferKind() {
         paint: () => ({ class: { 'demo-buffer-bar': true } }),
         // What can you do to it? Move and select stay at the library default; resize refuses — a
         // buffer's length comes from the schedule around it, not a drag.
-        can: { resize: false },
+        capabilities: { resize: false },
         // What shape does it draw? Buffer rows carry no Segments, so the default already draws one
         // whole-entry Item (`followSegments`, ADR 0023) — nothing is written here.
       });

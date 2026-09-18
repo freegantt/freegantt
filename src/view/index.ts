@@ -26,7 +26,8 @@ export type { ResolvedTheme } from './theme.js';
 export type {
   CapabilityRule,
   GestureCapability,
-  Interactions,
+  Capabilities,
+  ResolvedCapabilities,
   WriteRefusalReason,
   WriteRule,
   WriteVerdict,

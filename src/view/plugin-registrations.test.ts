@@ -99,14 +99,17 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 });
 
 describe('PluginRegistrations — the tables it reads back', () => {
-  it('answers a variant’s own `can`, and undefined for a row no rule claimed', () => {
+  it('answers a variant’s own `capabilities`, and undefined for a row no rule claimed', () => {
     const { registrations } = harness();
-    const can = { move: false };
+    const capabilities = { move: false };
 
-    registrations.registerVariant({ name: 'buffer', when: (entry) => entry.id === 'claimed', can }, PLUGIN);
+    registrations.registerVariant(
+      { name: 'buffer', when: (entry) => entry.id === 'claimed', capabilities },
+      PLUGIN,
+    );
 
-    expect(registrations.variants.resolveFor(entryDouble({ id: 'claimed' })).can).toBe(can);
-    expect(registrations.variants.resolveFor(entryDouble({ id: 'other' })).can).toBeUndefined();
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'claimed' })).capabilities).toBe(capabilities);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'other' })).capabilities).toBeUndefined();
   });
 
   it('a second plugin on one variant name wins, and disposing it restores the first (#154)', () => {
@@ -114,15 +117,15 @@ describe('PluginRegistrations — the tables it reads back', () => {
     const first = { move: false };
     const second = { move: true };
 
-    registrations.registerVariant({ name: 'buffer', when: () => true, can: first }, PLUGIN);
+    registrations.registerVariant({ name: 'buffer', when: () => true, capabilities: first }, PLUGIN);
     const disposeSecond = registrations.registerVariant(
-      { name: 'buffer', when: () => true, can: second },
+      { name: 'buffer', when: () => true, capabilities: second },
       'demo.other',
     );
-    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).can).toBe(second);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).capabilities).toBe(second);
 
     disposeSecond();
-    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).can).toBe(first);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 't1' })).capabilities).toBe(first);
   });
 
   it('every decoration provider paints, in registration order — not only the newest', () => {
