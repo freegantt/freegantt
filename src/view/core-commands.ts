@@ -142,7 +142,7 @@ export function registerCoreCommands(
   // Delete on a bar un-dates both dates ... `entries.remove(id)` deletes the row ... Two intents."
   // A bar is a drawing of a span, so deleting it clears the span and leaves the record; a grid row
   // or cell names the record itself, so deleting it removes the record. ADR 0026 changed what a bar
-  // *is*, not which of the two doors a Delete opens — a claimed child bar un-dates the child Entry
+  // *is*, not which of the two doors a Delete opens — a segment bar un-dates the child Entry
   // it draws, exactly as a Segment delete used to drop one drawn stretch.
   //
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,

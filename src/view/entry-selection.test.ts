@@ -131,7 +131,7 @@ describe('EntrySelection.step (#212)', () => {
   });
 
   it('steps every selected Entry on a shared row, not only the first (#421 C3, spike Q9)', () => {
-    // A claimed row draws three child Entries as its own bars. Selecting the first and the last and
+    // A segmented row draws three child Entries as its own bars. Selecting the first and the last and
     // stepping forward used to read `entryIds[0]` alone, move that one Entry, and drop the rest of
     // the Selection — the spike's own finding.
     const e1 = entryId('e1');

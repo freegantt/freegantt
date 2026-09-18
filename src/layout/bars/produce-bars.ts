@@ -20,7 +20,7 @@ import type { Bar, VariantBars } from './bar.js';
  *  once), so a producer never has to invent or hardcode the name its own Bars carry.
  *
  *  Passes `childrenAsSegments` straight through to the producer (#421 C2, Q33) — nothing here
- *  skips the Entry. A claimed row's subject still reaches its own variant's producer, so a
+ *  skips the Entry. A segmented row's subject still reaches its own variant's producer, so a
  *  consumer's own `bars` still runs and still wins (Q26). */
 export function resolveBars(
   entry: Entry,
@@ -49,9 +49,9 @@ export function produceBarsForRow(
     // and the shipped producers may read `entry.start`/`entry.end` as always present (J2,
     // BUILD-LOG.md).
     if (!spansTime(entry)) continue;
-    // Nothing skips a claimed row's subject (Q33): the fact travels to the producer instead, so
+    // Nothing skips a segmented row's subject (Q33): the fact travels to the producer instead, so
     // a consumer's own `bars` still runs for it and still wins (Q26).
-    const childrenAsSegments = row.claimed === true && id === row.entryIds[0];
+    const childrenAsSegments = row.childrenAsSegments === true && id === row.entryIds[0];
     bars.push(...resolveBars(entry, registry, childrenAsSegments));
   }
   return bars;

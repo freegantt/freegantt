@@ -23,7 +23,7 @@ import type { EntryPredicate, EntryRule } from '../entry-rule.js';
 import { compileEntryRule } from '../entry-rule.js';
 export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
 import type { DrawnVariant, BarProducer, VariantBars } from './bar.js';
-import { fixedWidthBar, unclaimedSpan } from './bar.js';
+import { fixedWidthBar, wholeSpanUnlessSegments } from './bar.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
@@ -63,11 +63,11 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  a DOM identity, never a stored value. */
   name: string;
   /** Which rows wear it. Omit it to write a last resort, which answers for every row **no rule
-   *  claims** — core's own `leaf` is the shipped one, and omitting `when` is how a plugin re-skins
-   *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
-   *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
+   *  matches** — core's own `leaf` is the shipped one, and omitting `when` is how a plugin re-skins
+   *  it. A last resort never outranks a rule that states a match, core's own `summary` included, so
+   *  a variant that means "every row, whatever else matches it" says `when: () => true`. */
   when?: EntryRule<TProps>;
-  /** What shape it draws. Default: one Bar over the entry's whole span (`unclaimedSpan`, ADR 0023,
+  /** What shape it draws. Default: one Bar over the entry's whole span (`wholeSpanUnlessSegments`, ADR 0023,
    *  ADR 0026). */
   bars?: BarProducer;
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
@@ -94,36 +94,36 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
   barLabels?: BarLabels;
 }
 
-/** Two rules from one source both claimed one Entry. The newest paints; the older one is reported
+/** Two rules from one source both matched one Entry. The newest paints; the older one is reported
  *  and draws nothing. The library never arbitrates between plugins — the consumer chose which ones
  *  to install, so core names both sides and carries on. */
-export interface DoubleVariantClaim {
+export interface DoubleVariantMatch {
   entryId: EntryId;
   /** The rule that wins and paints. */
-  painted: VariantClaimant;
+  painted: RegisteredVariant;
   /** The rule that also answered yes, and draws nothing. */
-  ignored: VariantClaimant;
+  ignored: RegisteredVariant;
 }
 
-/** One side of a `DoubleVariantClaim`. `pluginId` is absent for a variant the consumer installed
+/** One side of a `DoubleVariantMatch`. `pluginId` is absent for a variant the consumer installed
  *  through `GanttOptions.variants`, or for one a test registered outside a plugin. */
-export interface VariantClaimant {
+export interface RegisteredVariant {
   variant: string;
   pluginId?: PluginId;
 }
 
-/** A `when` names a key no Field declares. The rule claims no row — the match answers no rather
+/** A `when` names a key no Field declares. The rule matches no row — the match answers no rather
  *  than taking the layout pass down — and this names the rule and the key, so the typo is visible
  *  instead of silent (`J59`). A plugin that means to match on its own key declares it from its
  *  `data` half. */
 export interface UnknownFieldMatch {
   /** The rule that names the key. */
-  rule: VariantClaimant;
+  rule: RegisteredVariant;
   key: FieldKey;
 }
 
 /** Where an `UnknownFieldMatch` goes — `GanttShell` supplies one, the same way it supplies
- *  `ReportDoubleClaim`. Which keys are declared is **live**: a Gantt rebound to another Dataset
+ *  `ReportDoubleMatch`. Which keys are declared is **live**: a Gantt rebound to another Dataset
  *  declares a different set, so this is asked at match time and never at registration.
  *
  *  One report per rule and key. The rule holds that set itself, so a rule that names a missing key
@@ -132,11 +132,11 @@ export interface UnknownFieldMatch {
  *  quiet; the first report already said the sentence. */
 export type ReportUnknownFieldMatch = (match: UnknownFieldMatch) => void;
 
-/** Where a `DoubleVariantClaim` goes. `GanttShell` supplies one — see its `#reportDoubleClaim`,
- *  which raises the `'variant-claimed-twice'` report and holds the one-per-pair rule. A registry
- *  built without one resolves a double claim silently to the newest rule, and never asks a second
+/** Where a `DoubleVariantMatch` goes. `GanttShell` supplies one — see its `#reportDoubleMatch`,
+ *  which raises the `'variant-matched-twice'` report and holds the one-per-pair rule. A registry
+ *  built without one resolves a double match silently to the newest rule, and never asks a second
  *  question. That keeps `layout/` clear of error plumbing, and it is what a test registry gets. */
-export type ReportDoubleClaim = (collision: DoubleVariantClaim) => void;
+export type ReportDoubleMatch = (collision: DoubleVariantMatch) => void;
 
 /** Who installed a rule, and therefore which rules it can lose to. The consumer's own `variants`
  *  win over every plugin's, and every plugin's win over core's two — the same ladder `plans/02` §4
@@ -150,9 +150,9 @@ interface VariantRegistration {
   /** What every seam reads once this registration wins. Built once here, so the walk allocates
    *  nothing and no seam looks a second answer up by name. */
   readonly resolved: ResolvedVariant;
-  /** `variant.when`, compiled to one predicate. Absent on the last-resort variant, which claims
+  /** `variant.when`, compiled to one predicate. Absent on the last-resort variant, which matches
    *  nothing and therefore never collides with anything. */
-  readonly claim: EntryPredicate | undefined;
+  readonly matches: EntryPredicate | undefined;
   readonly rank: number;
   readonly seq: number;
   readonly pluginId: PluginId | undefined;
@@ -193,7 +193,7 @@ export interface VariantRegistryPorts {
    *  either reads an undeclared key (which throws) or refuses a declared one. A registry built
    *  outside a Dataset says so with `() => undefined`: no key is declared. */
   fieldFor: (key: FieldKey) => Field | undefined;
-  reportDoubleClaim?: ReportDoubleClaim | undefined;
+  reportDoubleMatch?: ReportDoubleMatch | undefined;
   reportUnknownFieldMatch?: ReportUnknownFieldMatch | undefined;
 }
 
@@ -268,16 +268,16 @@ const DIAMOND_CSS = `
 .fg-bar-diamond[data-state~="selected"]::before { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
 `;
 
-/** `bar()` — core's plain look, and the shipped floor every unclaimed row wears. Carries
- *  `unclaimedSpan` — the same producer a variant with no `bars` key gets from the registry.
+/** `bar()` — core's plain look, and the shipped floor every row no rule matches wears. Carries
+ *  `wholeSpanUnlessSegments` — the same producer a variant with no `bars` key gets from the registry.
  *  `bar()`'s own shape and the default shape always agree (ADR 0023, ADR 0026).
  *
  *  Carries no `css`. Its look **is** `.fg-bar`, the element class every look wears — diamonds
  *  included — so that stays structure, in the always-shipped base sheet, not one look's own rule.
  *
  *  Every key on `overrides` wins, `name` included: `bar({ name: 'phase', when: myRule })` keeps
- *  `unclaimedSpan` and answers for the rows `myRule` claims instead of every row nothing else
- *  claimed.
+ *  `wholeSpanUnlessSegments` and answers for the rows `myRule` matches instead of every row nothing else
+ *  matched.
  *
  *  **`bar` and `summary` keep their plain names (F13).** `import { bar } from 'freegantt'` reads as
  *  a generic word at a package's top level, and a `*Variant` suffix would read further from a call
@@ -287,23 +287,23 @@ const DIAMOND_CSS = `
 export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: LEAF_VARIANT_NAME,
-    bars: unclaimedSpan,
+    bars: wholeSpanUnlessSegments,
     ...overrides,
   };
 }
 
-/** `summary()` — core's rail for a row with children. Claims on structure
+/** `summary()` — core's rail for a row with children. Matches on structure
  *  (`entry.hasChildren`), never on a stored word (ADR 0013's own rule, narrowed by ADR 0022, not
  *  spent): a consumer who wants the rail on a different rule passes their own `when`.
  *
- *  **States its own `bars` explicitly.** `unclaimedSpan` is the shape a summary needs whatever its
+ *  **States its own `bars` explicitly.** `wholeSpanUnlessSegments` is the shape a summary needs whatever its
  *  children do — one rail. It says so, rather than trusting the registry's default to agree (ADR
  *  0023, ADR 0026). */
 export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
-    bars: unclaimedSpan,
+    bars: wholeSpanUnlessSegments,
     paint: () => SUMMARY_BAR,
     css: SUMMARY_CSS,
     ...overrides,
@@ -318,7 +318,7 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
  *  not ship a diamond" is narrowed by this factory, not spent), but it ignores
  *  `measureDuration: 'children'` — a row with `start === end` and children that net to zero total
- *  time still claims here. An author whose rows need the children-aware zero passes their own
+ *  time still matches here. An author whose rows need the children-aware zero passes their own
  *  `when: (entry) => entry.duration()?.value === 0`.
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
@@ -342,50 +342,50 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
 
 /** Core's two, seeded from the factories every consumer reads (ADR 0022 §1). They register
  *  **first**, and at the lowest rank, because core is the floor every plugin and every consumer
- *  overrides. `bar()` carries no `when`, so it answers for every row no rule claims, and the floor
+ *  overrides. `bar()` carries no `when`, so it answers for every row no rule matches, and the floor
  *  is total.
  *
- *  **The order inside this list decides nothing** (`J60` supersedes `J37`). `statesAClaim` sorts
- *  every claiming rule ahead of every last resort, so `summary()` is asked before `bar()` whichever
+ *  **The order inside this list decides nothing** (`J60` supersedes `J37`). `hasMatchRule` sorts
+ *  every matching rule ahead of every last resort, so `summary()` is asked before `bar()` whichever
  *  way round they are written here. It reads floor-first anyway, because that is the order the walk
  *  ends up in and a reader should not have to derive it from a comparator. */
 const CORE_VARIANTS: readonly EntryVariant[] = Object.freeze([bar(), summary()]);
 
-function claimantOf(registration: VariantRegistration): VariantClaimant {
-  return claimant(registration.variant.name, registration.pluginId);
+function registeredVariantOf(registration: VariantRegistration): RegisteredVariant {
+  return registeredVariant(registration.variant.name, registration.pluginId);
 }
 
-function claimant(variant: string, pluginId: PluginId | undefined): VariantClaimant {
+function registeredVariant(variant: string, pluginId: PluginId | undefined): RegisteredVariant {
   return pluginId === undefined ? { variant } : { variant, pluginId };
 }
 
-/** Does this registration say which rows it claims? A `1` sorts before a `0`, so every rule that
- *  states a claim is asked before any last resort — core's own `leaf` included. */
-function statesAClaim(registration: VariantRegistration): number {
-  return registration.claim === undefined ? 0 : 1;
+/** Does this registration say which rows it matches? A `1` sorts before a `0`, so every rule that
+ *  states a match is asked before any last resort — core's own `leaf` included. */
+function hasMatchRule(registration: VariantRegistration): number {
+  return registration.matches === undefined ? 0 : 1;
 }
 
 /** Does this rule answer yes for this row? A last-resort variant carries no rule, so it answers
- *  yes for every row nothing claimed. */
-function answersYes(registration: VariantRegistration, entry: Entry): boolean {
-  return registration.claim === undefined || registration.claim(entry);
+ *  yes for every row nothing matched. */
+function matchesEntry(registration: VariantRegistration, entry: Entry): boolean {
+  return registration.matches === undefined || registration.matches(entry);
 }
 
-/** Is a second yes worth reporting? Two rules from one source that both claim one row are siblings
+/** Is a second yes worth reporting? Two rules from one source that both match one row are siblings
  *  with no order between them, and that is an authoring error worth naming (`Q5`). Everything else
  *  is a deliberate override: a consumer's rule over a plugin's, anything over core's floor, or the
- *  last-resort variant, which claims nothing at all. */
+ *  last-resort variant, which matches nothing at all. */
 function canCollide(painted: VariantRegistration, next: VariantRegistration): boolean {
-  return painted.claim !== undefined && painted.rank !== CORE_RANK && next.rank === painted.rank;
+  return painted.matches !== undefined && painted.rank !== CORE_RANK && next.rank === painted.rank;
 }
 
-/** Call: `createVariantRegistry({ fieldFor, reportDoubleClaim })` once in the Gantt constructor; a
+/** Call: `createVariantRegistry({ fieldFor, reportDoubleMatch })` once in the Gantt constructor; a
  *  registry outside a Dataset passes `fieldFor: () => undefined` and adds its own variants. Core's
  *  two are seeded here, so the registry is never empty and every row resolves. */
 export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegistry {
   const { fieldFor } = ports;
   /** A `const` copy, so the walk below narrows it once instead of on every pass. */
-  const report = ports.reportDoubleClaim;
+  const report = ports.reportDoubleMatch;
   const reportUnknownFieldMatch = ports.reportUnknownFieldMatch;
   let nextSeq = 0;
   const live: VariantRegistration[] = [];
@@ -401,19 +401,19 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       variant,
       resolved: {
         name: variant.name,
-        bars: variant.bars ?? unclaimedSpan,
+        bars: variant.bars ?? wholeSpanUnlessSegments,
         paint: variant.paint,
         capabilities: variant.capabilities,
         css: variant.css,
         barLabels: variant.barLabels,
       },
-      claim:
+      matches:
         variant.when === undefined
           ? undefined
           : compileEntryRule(variant.when, {
               fieldFor,
               reportUnknownKey: (key) =>
-                reportUnknownFieldMatch?.({ rule: claimant(variant.name, pluginId), key }),
+                reportUnknownFieldMatch?.({ rule: registeredVariant(variant.name, pluginId), key }),
             }),
       rank,
       seq: nextSeq++,
@@ -436,18 +436,18 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
   /** Newest first: the consumer's rules, then every plugin's, then core's `summary` — and after all
    *  of those, the floors, in the same order.
    *
-   *  **A rule with no `when` is a last resort, and a last resort never outranks a claim** (`P2-3`).
+   *  **A rule with no `when` is a last resort, and a last resort never outranks a match** (`P2-3`).
    *  Rank alone put a plugin's floor over core's `summary`, so `ctx.variants.add({ name: 'leaf',
    *  paint })` — the re-skin this file documents — answered for every row and every summary rail in
    *  the Gantt stopped drawing. Sorting the floors last makes that registration re-skin the floor
-   *  and leave every claim standing. */
+   *  and leave every match standing. */
   const walkOrder = (): readonly VariantRegistration[] =>
     (ordered ??= [...live].sort(
-      (a, b) => statesAClaim(b) - statesAClaim(a) || b.rank - a.rank || b.seq - a.seq,
+      (a, b) => hasMatchRule(b) - hasMatchRule(a) || b.rank - a.rank || b.seq - a.seq,
     ));
 
   for (const variant of CORE_VARIANTS) register(variant, CORE_RANK, undefined);
-  /** Core's `leaf`, as the answer for a row no rule claimed. Nothing can dispose it. */
+  /** Core's `leaf`, as the answer for a row no rule matched. Nothing can dispose it. */
   const coreFloor = live[0]!.resolved;
 
   return {
@@ -455,7 +455,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       let painted: VariantRegistration | undefined;
       for (const registration of walkOrder()) {
         if (painted !== undefined && !canCollide(painted, registration)) break;
-        if (!answersYes(registration, entry)) continue;
+        if (!matchesEntry(registration, entry)) continue;
         if (painted === undefined) {
           painted = registration;
           // Nothing is watching for a collision, so the first yes is the whole answer.
@@ -464,8 +464,8 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         }
         report?.({
           entryId: entry.id,
-          painted: claimantOf(painted),
-          ignored: claimantOf(registration),
+          painted: registeredVariantOf(painted),
+          ignored: registeredVariantOf(registration),
         });
         break;
       }

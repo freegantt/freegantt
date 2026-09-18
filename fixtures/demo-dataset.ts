@@ -41,11 +41,11 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
 
 export type DemoEntryProps = { cost?: number; team?: string; milestone?: boolean };
 
-/** The generic demo's claimed row (#421). Before ADR 0026 this Entry carried three Segments; a
- *  Segment no longer exists, so the same picture now comes from three child Entries and one
- *  `childrenAsSegments` rule. `main.ts` names this id, and its bench button turns the claim off to
+/** The generic demo's segmented row (#421). Before ADR 0026 this Entry stored three Segments; the
+ *  `Segment` type no longer exists, so the same picture now comes from three child Entries and one
+ *  `childrenAsSegments` rule. `main.ts` names this id, and its bench button turns the rule off to
  *  show the other half — the same three Entries as three ordinary rows. */
-export const CLAIMED_PARENT_ID = 'entry-16';
+export const SEGMENTED_PARENT_ID = 'entry-16';
 
 /** Nested work tree for the generic demo: Program → workstream → work → a few grandchildren. */
 const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
@@ -68,10 +68,10 @@ const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
     'entry-24',
     'entry-25',
   ],
-  // #421: `entry-16` is the generic demo's claimed row. Its three children draw as bars on its own
-  // row, so it names them here like any other parent — claiming is a row-source rule, not a shape
+  // #421: `entry-16` is the generic demo's segmented row. Its three children draw as bars on its own
+  // row, so it names them here like any other parent — drawing children as segments is a row-source rule, not a shape
   // the tree stores (`main.ts` sets `childrenAsSegments`).
-  'entry-16': [`${CLAIMED_PARENT_ID}-a`, `${CLAIMED_PARENT_ID}-b`, `${CLAIMED_PARENT_ID}-c`],
+  'entry-16': [`${SEGMENTED_PARENT_ID}-a`, `${SEGMENTED_PARENT_ID}-b`, `${SEGMENTED_PARENT_ID}-c`],
   'entry-26': ['entry-27', 'entry-28', 'entry-29', 'entry-30', 'entry-31', 'entry-32'],
   'entry-33': [
     'entry-34',
@@ -138,12 +138,12 @@ export const COMPACT_LEGS: readonly (readonly [from: number, to: number])[] = [
   [4, 5],
 ];
 
-/** Three child Entries from `start`, for a parent whose row claims them — one row that draws three
+/** Three child Entries from `start`, for a parent whose row draws them as segments — one row that draws three
  *  bars (ADR 0026: a bar is a child Entry, and `childrenAsSegments` is what puts a parent's children
  *  on the parent's own row).
  *
  *  The parent keeps no dates of its own: three dated children roll its span up (ADR 0013). */
-export function claimedChildrenOf(
+export function segmentChildrenOf(
   parentId: string,
   start: InstantInput,
   legs: readonly (readonly [from: number, to: number])[] = SPREAD_LEGS,
@@ -217,25 +217,25 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     };
     if (id === MILESTONE_ENTRY_ID) props.milestone = true;
     const next: EntryInput<DemoEntryProps> = { id, name: entry.name };
-    // The claimed parent stores no dates — its three legs roll its span up (ADR 0013), the same way
+    // The segmented parent stores no dates — its three legs roll its span up (ADR 0013), the same way
     // every other derived Entry in this tree gets its span.
-    const claimsItsChildren = id === CLAIMED_PARENT_ID;
-    if (entry.start !== undefined && !claimsItsChildren) next.start = entry.start;
-    if (entry.end !== undefined && !claimsItsChildren) next.end = entry.end;
+    const drawsChildrenAsSegments = id === SEGMENTED_PARENT_ID;
+    if (entry.start !== undefined && !drawsChildrenAsSegments) next.start = entry.start;
+    if (entry.end !== undefined && !drawsChildrenAsSegments) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
     if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),
-  ...claimedLegs(),
+  ...segmentLegs(),
 ];
 
-/** The three child Entries that `CLAIMED_PARENT_ID`'s row claims (ADR 0026, #421).
+/** The three child Entries that `SEGMENTED_PARENT_ID`'s row claims (ADR 0026, #421).
  *
  *  The parent stores no dates: `demoTreeEntryInputs` drops them above, and the Rollup gives it the
  *  span of these three (ADR 0013). Each leg carries its own cost and team, because the parent is
  *  derived now and nothing but the Rollup may write a rolling-up parent's cell. */
-function claimedLegs(): EntryInput<DemoEntryProps>[] {
-  const parent = demoEntryInputs.find((entry) => entry.id === CLAIMED_PARENT_ID);
-  const legs = claimedChildrenOf(CLAIMED_PARENT_ID, parent!.start!, COMPACT_LEGS);
+function segmentLegs(): EntryInput<DemoEntryProps>[] {
+  const parent = demoEntryInputs.find((entry) => entry.id === SEGMENTED_PARENT_ID);
+  const legs = segmentChildrenOf(SEGMENTED_PARENT_ID, parent!.start!, COMPACT_LEGS);
   return legs.map((leg, i) => ({ ...leg, props: { cost: (i + 1) * 250, team: 'edge' } }));
 }

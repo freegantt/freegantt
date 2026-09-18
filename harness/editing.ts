@@ -1,7 +1,7 @@
 import './harness-nav.ts';
 import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from 'freegantt';
 import type { DatasetEventMap } from 'freegantt';
-import { demoEntryInputs, claimedChildrenOf } from '../fixtures/demo-dataset.js';
+import { demoEntryInputs, segmentChildrenOf } from '../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -20,7 +20,7 @@ const LOCKABLE_ENTRY_ID = 'entry-15';
 const locks = lockEntries();
 
 // #241, ADR 0026: the locked row draws three bars on purpose, and each of them is a child Entry the
-// row claims. That is the hard case for a cascade — three separate spans to translate, not one
+// row draws as a segment. That is the hard case for a cascade — three separate spans to translate, not one
 // envelope — and locking it is what makes the demo worth watching: all three bars ghost together
 // when `entry-14` drags, then the drop is refused.
 //
@@ -30,7 +30,7 @@ const locks = lockEntries();
 const LOCKED_BAR_IDS = ['entry-15-a', 'entry-15-b', 'entry-15-c'] as const;
 const lockDemoEntryInputs = demoEntryInputs.flatMap((entry) =>
   entry.id === LOCKABLE_ENTRY_ID && entry.start !== undefined
-    ? [{ ...entry, start: undefined, end: undefined }, ...claimedChildrenOf(LOCKABLE_ENTRY_ID, entry.start)]
+    ? [{ ...entry, start: undefined, end: undefined }, ...segmentChildrenOf(LOCKABLE_ENTRY_ID, entry.start)]
     : [entry],
 );
 

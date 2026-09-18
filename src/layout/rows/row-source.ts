@@ -37,13 +37,13 @@ export interface EntriesRowSource extends RowSourceCommon {
   source: 'entries';
   /** Takes an explicit `undefined` for the reason `RowSourceCommon` states (#254). */
   tree?: boolean | undefined;
-  /** Claims a parent Entry: its children draw as bars on its own row instead of rows of their own
-   *  (#421). `true` claims every parent with at least one child; a `FieldMatch` or `EntryPredicate`
-   *  claims only the parents the rule answers yes for — the same `when` syntax a variant's `when`
-   *  takes (`EntryRule`, `layout/entry-rule.ts`). A parent this rule does not claim is untouched:
+  /** Matches a parent Entry: its children draw as bars on its own row instead of rows of their own
+   *  (#421). `true` matches every parent with at least one child; a `FieldMatch` or `EntryPredicate`
+   *  matches only the parents the rule answers yes for — the same `when` syntax a variant's `when`
+   *  takes (`EntryRule`, `layout/entry-rule.ts`). A parent this rule does not match is untouched:
    *  it keeps its own row, gives each child a row, and rolls up exactly as it does today (README's
-   *  hard rule 6). Orthogonal to `tree` — `tree` nests an *unclaimed* parent's children; this
-   *  decides whether a *claimed* parent's children become rows at all (README's hard rule 5). */
+   *  hard rule 6). Orthogonal to `tree` — `tree` nests a *non-segmented* parent's children; this
+   *  decides whether a *segmented* parent's children become rows at all (README's hard rule 5). */
   childrenAsSegments?: EntryRule | true | undefined;
 }
 
@@ -72,7 +72,7 @@ export interface CustomRowSource {
 
 export type RowSource = EntriesRowSource | GroupRowSource | CustomRowSource;
 
-export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: false });
+export const DEFAULT_ROW_SOURCE: EntriesRowSource = Object.freeze({ source: 'entries', tree: true });
 
 /** `filterPolicyOf`'s default (#248 S4-2) — named here, beside the type it defaults, so
  *  `resolveRowSource` and `filterPolicyOf` share one literal instead of two. */
@@ -148,12 +148,14 @@ export interface PlannedRow {
   headerLabel?: string;
   /** `true` when this row's entry matched the active filter; `false` when kept only for descendants. */
   matched?: boolean;
-  /** `true` when `childrenAsSegments` claims this row's subject: its children draw on this row and
-   *  take no row of their own (#421). A real field, not `entryIds.length > 1` — an empty claimed
-   *  parent still carries one `entryId` and is still claimed, which is the "draws a blank row" gate
-   *  (README's `J-plan-D`). Absent on every row no rule claims, so the path a claim never touches
-   *  reads exactly as it does today. */
-  claimed?: boolean;
+  /** `true` when `childrenAsSegments` matches this row's subject: its children draw on this row and
+   *  take no row of their own (#421). A real field, not `entryIds.length > 1` — that count says how
+   *  many Entries a row carries, and a custom source hands several with no subject among them
+   *  (`custom-source.ts`). This field says something the count cannot: `entryIds[0]` is the parent
+   *  the rule matched, and `produceBarsForRow` tells its producer to draw no bar of its own for it.
+   *  Absent on every row no rule matches, so the path a match never touches reads exactly as it does
+   *  today. */
+  childrenAsSegments?: boolean;
 }
 
 /** What a row source builds before `resolveRows` stamps the real `index` (St6) — `index` has one
@@ -172,7 +174,7 @@ export interface RowPassInput {
   fieldContext?: FieldContext;
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. Absent when no caller wired a Field registry in (a pure `layout/`
-   *  test, say); `resolveEntriesSource` then treats an unset `childrenAsSegments` as unclaimed,
+   *  test, say); `resolveEntriesSource` then treats an unset `childrenAsSegments` as non-segmented,
    *  same as always, and a set one as unmatchable rather than throwing. */
   entryRulePorts?: EntryRulePorts;
 }

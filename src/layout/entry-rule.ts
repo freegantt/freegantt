@@ -14,12 +14,12 @@ export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TPr
 
 /** Every named Field equals the value beside it, and several keys are AND (`J6`).
  *
- *  **A match is equality, never "has a value".** `{ 'demo:phaseId': true }` claims the rows whose
+ *  **A match is equality, never "has a value".** `{ 'demo:phaseId': true }` matches the rows whose
  *  `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with a predicate:
  *  `(entry) => entry.read('demo:phaseId') !== undefined`.
  *
  *  **A key no Field declares matches no row.** The match reads through the Field registry, so a
- *  typo claims nothing rather than taking the layout pass down. A plugin that matches on its own
+ *  typo matches nothing rather than taking the layout pass down. A plugin that matches on its own
  *  key declares that key from its `data` half (`ctx.fields.register`).
  *
  *  Each key reads through `entry.read(key)` and compares with that Field's own `equals`
@@ -72,7 +72,7 @@ function valueMatches(
   // The lookup comes first, and a key no Field declares answers no. `entry.read` throws on such a
   // key, and this runs on every row of every layout pass, so reading first would take the frame
   // down for a typo — or for the one rule a chrome plugin cannot help itself with, because it
-  // installs after the Dataset closes its Field gate. Claiming nothing is the answer; saying so is
+  // installs after the Dataset closes its Field gate. Matching nothing is the answer; saying so is
   // the report (`J59`).
   const field = fieldFor(key);
   if (field === undefined) {

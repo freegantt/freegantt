@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { EntryNotFoundError, entryId, barId } from '../model/index.js';
+import { EntryNotFoundError, InvertedSpanError, entryId, barId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -979,6 +979,60 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
         droppedReason: 'entry-gone',
       });
       expect(reported[0]?.message).toContain('was removed before the write');
+    });
+
+    // Branch review F9. An extender that cascades an end before its start proposed something core
+    // defines as impossible, and core declines it (#143). That is a refusal, not a fault: the
+    // gesture drops, the entry keeps its stored dates, and nothing broke. So it reports at
+    // `'warning'` beside `'data-changed'`, never at `'error'` beside a plugin falling over.
+    //
+    // `by` still names the plugin, because the plugin is who asked. Two fields, two questions —
+    // `severity` says what it cost, `by` says whose proposal it was.
+    it('[F9] an InvertedSpanError from an extender cascade drops the gesture, and does not fault', async () => {
+      const refused = new InvertedSpanError(
+        entryId('a'),
+        { start: 200 as Instant, end: 100 as Instant },
+        'extender',
+      );
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw refused;
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-dropped',
+        severity: 'warning',
+        by: 'plugin',
+        droppedReason: 'inverted-span',
+        entryId: entryId('a'),
+        cause: refused,
+      });
+      expect(reported[0]?.message).toContain('an end before its start');
+    });
+
+    // The other half of the line F9 drew, and the reason this pair sits together: an extender that
+    // *throws* is a bug nobody proposed, and it keeps the fault code and `'error'`. Loosening the
+    // branch above to catch every error would delete this distinction, and #258 and #332 both
+    // ruled that calling a plugin's bug a refusal is a misreport.
+    it('[F9] a bare Error from the same hook is still a fault, not a refusal', async () => {
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw new Error('the extender itself fell over');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported[0]).toMatchObject({ code: 'gesture-commit-failed', severity: 'error' });
+      expect(reported[0]?.droppedReason).toBeUndefined();
     });
 
     // #341: a resize reads as a resize. The noun comes from the event, through the one table

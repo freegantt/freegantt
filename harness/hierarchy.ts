@@ -154,8 +154,8 @@ function buildRowSource(): RowSource {
       ...shared,
     };
   }
-  // #421 C7: `req-1` claims its day children on every entries-sourced arrangement — flat or tree —
-  // the same rule either way, because claiming is orthogonal to nesting (README hard rule 5).
+  // #421 C7: `req-1` draws its day children as segments on every entries-sourced arrangement — flat or tree —
+  // the same rule either way, because a segment rule is orthogonal to nesting (README hard rule 5).
   if (rowsMode === 'flat') {
     return { source: 'entries', tree: false, childrenAsSegments: { showDaysOnRow: true }, ...shared };
   }
@@ -305,17 +305,19 @@ redoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.redo());
 });
 
-// #421 C7: one Field write opens the claimed row into its own three rows, in one undo step, and the
+// #421 C7: one Field write opens the segmented row into its own three rows, in one undo step, and the
 // same write closes it back. Nothing here decides the row shape directly — `showDaysOnRow` does, and
 // `childrenAsSegments` reads it (`buildRowSource`, above).
 function syncCrewDaysLabel(): void {
-  const claimed = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
-  crewDaysBtn.textContent = claimed ? 'Open Framing crew into sub-rows' : 'Claim Framing crew days';
+  const drawsSegments = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
+  crewDaysBtn.textContent = drawsSegments
+    ? 'Open Framing crew into sub-rows'
+    : 'Draw Framing crew days as segments';
 }
 
 crewDaysBtn.addEventListener('click', () => {
-  const claimed = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
-  attemptMutation(() => dataset.entries.update('req-1', { showDaysOnRow: !claimed }));
+  const drawsSegments = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
+  attemptMutation(() => dataset.entries.update('req-1', { showDaysOnRow: !drawsSegments }));
   syncCrewDaysLabel();
 });
 

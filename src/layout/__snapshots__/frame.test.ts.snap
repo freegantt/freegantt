@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`computeFrame > matches the golden snapshot for a claimed row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 1`] = `
+exports[`computeFrame > matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 1`] = `
 [
   {
     "depth": 0,
@@ -13,7 +13,7 @@ exports[`computeFrame > matches the golden snapshot for a claimed row — the ch
 ]
 `;
 
-exports[`computeFrame > matches the golden snapshot for a claimed row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 2`] = `
+exports[`computeFrame > matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 2`] = `
 [
   {
     "a11yLabel": "Stakeholder interviews, Sep 1, 2026 – Sep 3, 2026",

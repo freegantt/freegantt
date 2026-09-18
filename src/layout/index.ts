@@ -12,21 +12,21 @@ export { pickDefined } from './pick-defined.js';
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
 export { barId, barIdFromDataset, rowIdFromDataset, entryIdOfBar } from '../model/index.js';
-export { wholeEntryBar, fixedWidthBar, unclaimedSpan } from './bars/bar.js';
+export { wholeEntryBar, fixedWidthBar, wholeSpanUnlessSegments } from './bars/bar.js';
 export type { BarAnchor, FixedBarBox, Bar, BarProducer, VariantBars } from './bars/bar.js';
 export { createVariantRegistry, bar, summary, diamond } from './bars/variants.js';
 // #265: shipped Grid-column cell renderers. DOM-free description trees, same factory
 // shape as `diamond()` — `meter()`, `image()`.
 export { meter, image } from './column-renderers.js';
 export type {
-  DoubleVariantClaim,
+  DoubleVariantMatch,
   EntryVariant,
   FieldMatch,
-  ReportDoubleClaim,
+  ReportDoubleMatch,
   ReportUnknownFieldMatch,
   ResolvedVariant,
   UnknownFieldMatch,
-  VariantClaimant,
+  RegisteredVariant,
   EntryPredicate,
   VariantRegistry,
   VariantRegistryPorts,

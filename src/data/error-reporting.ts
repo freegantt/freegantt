@@ -133,6 +133,9 @@ export interface GestureDroppedReportInit {
   readonly event: BeforeGestureEvent;
   readonly entryId: EntryId;
   readonly droppedReason: GestureDroppedReason;
+  /** The refusal core raised, for the one reason that has one to hand (`'inverted-span'`). It gives
+   *  a consumer the offending entry id and both instants without parsing `message`. */
+  readonly cause?: unknown;
 }
 
 /** One sentence per reason, quoting no handler — core is the one talking. */
@@ -141,6 +144,7 @@ const GESTURE_DROPPED_SENTENCE: Record<GestureDroppedReason, string> = Object.fr
   'entry-gone': 'the entry it would have written was removed before the write',
   superseded: 'a new gesture took its place before the handler decided',
   discarded: 'the wait ended before the handler decided',
+  'inverted-span': 'an installed extender asked for an end before its start, which core never stores',
 });
 
 /** This report's own code, one per gesture kind (#377) — never a refusal's code, which names an
@@ -163,13 +167,19 @@ export function buildGestureDroppedReport(init: GestureDroppedReportInit): Error
   const noun = REFUSAL_NOUN[event];
   const severity: ErrorReportInput['severity'] =
     droppedReason === 'superseded' || droppedReason === 'discarded' ? 'info' : 'warning';
+  // `severity` says what it cost, `by` says who asked for it — two fields, two questions, and
+  // conflating them is the misreport this union already warns about above. An extender cascading an
+  // impossible span costs the gesture and nothing else, so it stays a `'warning'` like the rest; it
+  // is the plugin's own proposal, so `by` names the plugin, the way `buildCommitFaultReport` does.
+  const by: ErrorReportInput['by'] = droppedReason === 'inverted-span' ? 'plugin' : 'core';
   return {
     code: GESTURE_DROPPED_CODE[event],
     message: `Nothing was saved. This ${noun} was dropped: ${GESTURE_DROPPED_SENTENCE[droppedReason]}.`,
     severity,
-    by: 'core',
+    by,
     entryId,
     droppedReason,
+    ...(init.cause !== undefined ? { cause: init.cause } : {}),
   };
 }
 
@@ -193,7 +203,7 @@ export interface CommitFaultReportInit {
  *  the edit the user just made. A disposer that throws already reports at `'error'` on exactly that
  *  rule (`extensions/plugin-runtime.ts`).
  *
- *  The sentence claims nothing about the store. A `change` listener that throws *after* the rows
+ *  The sentence matches nothing about the store. A `change` listener that throws *after* the rows
  *  applied lands here too, and "Nothing was saved" would be a lie for that one — so this says the
  *  one thing true of every fault on this path: the bars show the stored data, whatever it now is. */
 export function buildCommitFaultReport(init: CommitFaultReportInit): ErrorReportInput {

@@ -66,7 +66,7 @@
 - [x] **`fg-bar-summary` keeps its name.** It is a CSS class. It moves to the `parent` variant's `paint`. `src/view/styles.ts` names it too.
 - [x] `data-kind` becomes `data-variant`. **The write site does not contain the string `data-kind`** — `src/render/dom/index.ts:1186` writes `node.dataset['kind']`. A grep for `data-kind` misses it. Change both.
 - [x] The literal `data-kind` sits in five `src/` files: `render/dom/index.ts`, `render/dom/index.test.ts`, `layout/items/produce-items.ts`, `model/entry.ts`, `api/gantt.test.ts`.
-- [x] `'look-claimed-twice'` becomes `'variant-claimed-twice'` (`src/view/gantt-shell.ts:1475`), in 3 files.
+- [x] `'look-claimed-twice'` becomes `'variant-matched-twice'` (`src/view/gantt-shell.ts:1475`), in 3 files.
 - [x] `claimedLookFor` renames (`src/layout/items/produce-items.ts`, 4 refs).
 
 **Plan the `fg-bar-summary` move and the `data-variant` rename together.** Seven e2e specs couple to this area — `data`, `parent-bar-drag`, `planner`, `plugins`, `row-hover`, `selection`, `theme` — plus `src/api/gantt.test.ts`. Most couple through `fg-bar-summary`, not the attribute. Move both in one step so those specs stay green.
@@ -101,7 +101,7 @@
 - [x] A variant's `can` predicate answering `undefined` falls through to the library rule; answering `false` refuses.
 - [x] A command's `when` reads `ctx.variant` and matches only the rows its own variant claimed.
 - [x] A variant with no `when` is last-resort, and every row resolves.
-- [x] Two rules that both answer yes raise `'variant-claimed-twice'` once, not per read.
+- [x] Two rules that both answer yes raise `'variant-matched-twice'` once, not per read.
 - [x] Two Gantts on one Dataset install different variants and do not interfere (I2).
 - [x] The pin path: `update(id, { milestone: true })` lands in a `ChangeSet`, undoes, and repaints.
 
@@ -211,7 +211,7 @@ answering `false` refuses.
 ### Group 4 — `src/api/gantt.test.ts`, the non-plugin half (about 10)
 
 `data-kind` → `data-variant` at lines ~2907, ~3009, ~3027, ~3593, ~3750, ~3788, and the
-`'look-claimed-twice'` code at ~3015 and ~3051 → `'variant-claimed-twice'`. The
+`'look-claimed-twice'` code at ~3015 and ~3051 → `'variant-matched-twice'`. The
 milestone/buffer/risk fixtures in this file build plugins with owned-id sets; rewrite them the
 Group 1 way. The `bar` renderer map at ~one site becomes a variant's `paint`.
 

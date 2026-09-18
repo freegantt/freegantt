@@ -70,18 +70,18 @@ export type BuiltInReportCode =
   // `'plugin'` for any other answer.
   | 'unknown-parent'
   | 'hierarchy-cycle'
-  // Q10, ADR 0018: two rules from one source both claimed one Entry's variant. The newest paints,
+  // Q10, ADR 0018: two rules from one source both matched one Entry's variant. The newest paints,
   // the other is ignored, and this names both. Raised in every build, not behind `isDevMode()` —
   // that flag resolves when this repo builds `dist/`, so gating it would delete the line from every
   // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
   // the rule walk stops at the first yes and never looks for a second.
-  | 'variant-claimed-twice'
-  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule claims no
+  | 'variant-matched-twice'
+  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule matches no
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.
   | 'unknown-variant-field'
   // Q29 (`plans/segment-is-a-bar/BUILD-LOG.md`): a row source's `childrenAsSegments` names a Field
-  // key no Field declares, so the rule claims no row. `unknown-variant-field`'s own rule always
+  // key no Field declares, so the rule matches no row. `unknown-variant-field`'s own rule always
   // names a variant; `childrenAsSegments` is not one, so it gets its own code. Reported once per
   // rule and key, and never thrown, for the same reason `unknown-variant-field` is not thrown.
   | 'unknown-row-source-field'
@@ -164,10 +164,23 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  `droppedReason` carries that, without matching on `message`'s English sentence
  *  (`ErrorReport.droppedReason`, branch review F2).
  *
- *  ADR 0026 retired a third `'warning'` reason this used to carry, `'write-refused'` — the store
- *  refusing a commit was always an envelope-only cascade against a several-Segment Entry (D-S5-44),
- *  and a Bar is one child Entry by default now, so nothing raises that refusal any more. */
-export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
+ *  `'inverted-span'` — an installed `EditExtender` cascaded an end that falls before its start.
+ *  Core refuses to store that and drops the gesture. The entry keeps its stored dates, so nothing
+ *  is lost but the gesture (#143, 2026-09-06: an inverted span is refused, never stored). This one
+ *  reports `by: <the plugin>` and carries the `InvertedSpanError` as `cause`; every other reason
+ *  reports `by: 'core'`.
+ *
+ *  A user gesture never raises it. `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge
+ *  at zero length, and `nudge()` runs the same draft, so neither a drag nor a key can invert a span.
+ *
+ *  ADR 0026 retired `'write-refused'`, which this used to carry, on the premise that the store only
+ *  ever refused an envelope-only cascade against a several-Segment Entry (D-S5-44). Branch review
+ *  F9 disproved it by running the case: `isEnvelopeRefusal` named two errors, and only
+ *  `SegmentsOutOfSyncError` died with the Segment. `InvertedSpanError` never was Segment-specific.
+ *  `'inverted-span'` replaces the retired name rather than restoring it, because the envelope the
+ *  old name described is gone and the condition it now reports is the one this name states. */
+export type GestureDroppedReason =
+  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'inverted-span';
 
 /** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
  *

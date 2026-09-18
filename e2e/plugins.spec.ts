@@ -138,7 +138,7 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
 // extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
 //
 // #241, ADR 0026: the locked row draws several bars there, and each one is a child Entry the row
-// claims (`childrenAsSegments`). Every bar on that row has to ghost, and by the same distance — that
+// draws as a segment (`childrenAsSegments`). Every bar on that row has to ghost, and by the same distance — that
 // is what `moveEntryTo`'s rigid translate promises, applied once per dated child. The count is read
 // off the page, never asserted as a number, so a fixture edit cannot make this test quietly weaker.
 test('every bar of a locked row ghosts alongside a dragged neighbour, and the drop is refused', async ({

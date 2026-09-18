@@ -25,7 +25,7 @@ import type {
   Refusable,
   ProposedEdits,
 } from '../model/index.js';
-import { EntryNotFoundError, entryId, barId, spansTime } from '../model/index.js';
+import { EntryNotFoundError, InvertedSpanError, entryId, barId, spansTime } from '../model/index.js';
 import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 import type { EditRequest } from '../data/edit-extension.js';
 import type { BeforeGestureEvent } from '../data/error-reporting.js';
@@ -484,19 +484,34 @@ export class GesturePipeline {
    *
    *  - The entry is gone. Another call removed it before the write (`inline-editing.ts`'s cell
    *    commit folds the same case, #137 F10). The user's own edit is moot now.
+   *  - An extender cascaded an end before its start. Core never stores that (#143), so the write is
+   *    refused and the gesture drops — `'inverted-span'`, a `'warning'`, `by` the plugin. The entry
+   *    keeps its stored dates. This is core declining a proposal, not core breaking.
    *  - Anything else is a fault, and `#reportCommitFault` says so. Calling a plugin's bug a refusal
    *    is the misreport #258 and #332 both ruled out, so the fault keeps its own code and severity.
    *
-   *  ADR 0026 retired the third outcome this used to report: an envelope-only cascade refused against
-   *  a several-Segment Entry (D-S5-44). A Bar is one child Entry by default now, so there is no
-   *  envelope left to refuse — `start`/`end` are ordinary Fields, and the extender's cascade reconciles
-   *  through `data/dataset-state.ts`'s `toEditsReading`, the same call the preview path makes. */
+   *  Why the inverted span is the refusal and not the fault: the extender computed a span core
+   *  defines as impossible, which is a proposal core answers. A bare `Error` out of the same hook is
+   *  the extender falling over, which is a bug nobody proposed. Branch review F9 ruled the line.
+   *
+   *  The user can never raise it here. `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged
+   *  edge at zero length, and `nudge()` drafts through the same call, so an `InvertedSpanError` on
+   *  this path always came from an extender's cascade — which is why `by` names the plugin.
+   *
+   *  ADR 0026 retired the outcome this used to report, `'write-refused'`, on the premise that the
+   *  store only refused an envelope-only cascade against a several-Segment Entry (D-S5-44). The
+   *  premise was half true: `isEnvelopeRefusal` named `SegmentsOutOfSyncError`, which died with the
+   *  Segment, and `InvertedSpanError`, which never was Segment-specific. */
   #finishCommit(finish: () => boolean, refusal: GestureRefusal): boolean {
     try {
       return finish();
     } catch (error) {
       if (error instanceof EntryNotFoundError) {
         this.#reportGestureDropped(refusal.entryId, refusal.event, 'entry-gone');
+        return false;
+      }
+      if (error instanceof InvertedSpanError) {
+        this.#reportGestureDropped(refusal.entryId, refusal.event, 'inverted-span', error);
         return false;
       }
       this.#reportCommitFault(refusal, error);
@@ -529,8 +544,16 @@ export class GesturePipeline {
     entryId: EntryId,
     event: BeforeGestureEvent,
     droppedReason: GestureDroppedReason,
+    cause?: unknown,
   ): void {
-    this.#deps.raiseError(buildGestureDroppedReport({ event, entryId, droppedReason }));
+    this.#deps.raiseError(
+      buildGestureDroppedReport({
+        event,
+        entryId,
+        droppedReason,
+        ...(cause !== undefined ? { cause } : {}),
+      }),
+    );
   }
 
   /** #341: the commit half of the fault `#reportExtenderFault` reports for the preview. The shape

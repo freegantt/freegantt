@@ -54,7 +54,7 @@ export interface Bar {
 }
 
 /** What shape one variant draws. `EntryVariant.bars` takes one. Omit it and the variant draws
- *  `unclaimedSpan`, the registry's own default (ADR 0023, ADR 0026) — one Bar over the entry's
+ *  `wholeSpanUnlessSegments`, the registry's own default (ADR 0023, ADR 0026) — one Bar over the entry's
  *  whole span. A former Segment is an ordinary child Entry now, so it draws its own Bar through its
  *  own row, never through this Entry's producer.
  *
@@ -64,9 +64,9 @@ export interface Bar {
  *  wrote keeps compiling: TypeScript accepts a function that takes fewer parameters than its
  *  declared type.
  *
- *  **Takes whether `childrenAsSegments` claims this Entry as a row's subject** (`true` for a claimed
+ *  **Takes whether `childrenAsSegments` matches this Entry as a row's subject** (`true` for a segmented
  *  parent's own bar, `false` otherwise; `EntriesRowSource.childrenAsSegments`, #421 C2). Core's own
- *  `unclaimedSpan` returns no Bar for it, so `summary()` paints no rail over the bars its children
+ *  `wholeSpanUnlessSegments` returns no Bar for it, so `summary()` paints no rail over the bars its children
  *  already draw. A producer that ignores this parameter still draws — nothing skips it. */
 export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
@@ -76,7 +76,7 @@ export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: b
 export interface DrawnVariant {
   /** The `data-variant` a consumer styles, and the word a command's `when` reads. */
   readonly name: string;
-  /** What it draws — its own `bars`, or `unclaimedSpan` bound at registration (ADR 0023). */
+  /** What it draws — its own `bars`, or `wholeSpanUnlessSegments` bound at registration (ADR 0023). */
   readonly bars: BarProducer;
 }
 
@@ -163,14 +163,18 @@ export function fixedWidthBar(px: number, anchor: BarAnchor = 'center'): BarProd
  *  Segment is an ordinary child Entry now, so there is no second, narrower shape left to choose
  *  between — one Entry always draws one Bar over its own span.
  *
- *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, bars: unclaimedSpan }]` —
+ *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, bars: wholeSpanUnlessSegments }]` —
  *  "the summary variant's bars: always one bar."
  *
- *  **"Claimed" here means `childrenAsSegments` (#421 C2).** Draws nothing for a row whose children
+ *  **"Segmented" here means `childrenAsSegments` (#421 C2).** Draws nothing for a row whose children
  *  `childrenAsSegments` already matched onto it (Q26/Q27/Q33): those children draw their own Bars
  *  through their own rows, so this producer's rail would paint a second bar over the same span. A
  *  consumer producer that ignores the parameter still draws — nothing else skips it. */
-export function unclaimedSpan(entry: Entry, variant: string, childrenAsSegments = false): readonly Bar[] {
+export function wholeSpanUnlessSegments(
+  entry: Entry,
+  variant: string,
+  childrenAsSegments = false,
+): readonly Bar[] {
   if (childrenAsSegments) return [];
   return [wholeEntryBar(entry, variant)];
 }

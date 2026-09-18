@@ -275,8 +275,8 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
     gantt.destroy();
   });
 
-  it('reveal(childId) reveals that one child’s own bar, not the claimed row’s envelope (ADR 0010, ADR 0025, #421)', () => {
-    // A parent claimed by three children: `split-a` sits on-screen, `split-b` sits off-screen at a
+  it('reveal(childId) reveals that one child’s own bar, not the segmented row’s envelope (ADR 0010, ADR 0025, #421)', () => {
+    // A parent segmented by three children: `split-a` sits on-screen, `split-b` sits off-screen at a
     // moderate distance, and `split-c` sits far off-screen and sets the row's own drawn extent.
     // Each reveal target below reads a different geometry, so each expects a different scroll.
     FakeResizeObserver.instances = [];
@@ -2283,7 +2283,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
-  it('lets a consumer’s own rule claim the summary row, which is how they paint it (J61)', () => {
+  it('lets a consumer’s own rule match the summary row, which is how they paint it (J61)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -2364,10 +2364,10 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
     // Date-only strings, not an Instant pair: under this Dataset's default `dateOnlyEnd:
     // 'inclusive'`, `start === end` here ingests as one calendar day, not a zero-duration point
-    // (`diamond()`'s own default `when` does not claim it — F20). Named for what it delivers,
+    // (`diamond()`'s own default `when` does not match it — F20). Named for what it delivers,
     // because this `describe` only ever asserts stylesheet text and never which row `diamond()`
     // claims — the neighbouring `pointDataset()` above, built from `instant(Date.UTC(...))`, is
-    // the one that actually claims a row.
+    // the one that actually matches a row.
     function oneDayDataset(): Dataset {
       return new Dataset({
         timeZone: 'UTC',
@@ -2467,7 +2467,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
-  it('the same match claims the row once a Field declares the key (F2)', () => {
+  it('the same match matches the row once a Field declares the key (F2)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [{ ...sampleEntries[0]!.toInput(), props: { 'demo:phaseId': true } }],
@@ -2659,7 +2659,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     gantt.destroy();
   });
 
-  it("a variant's own `capabilities` refuses resize for the rows it claims; disposal restores the library default", () => {
+  it("a variant's own `capabilities` refuses resize for the rows it matches; disposal restores the library default", () => {
     const container = document.createElement('div');
     const dataset = new Dataset({
       entries: [sampleEntries[0]!.toInput()],
@@ -2707,7 +2707,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   // `gantt.plugins = [...]`, because the unit registry never rebuilds a frame.
   //
   // Both stage two sibling plugins whose rules cover one row. That collision is what
-  // `'variant-claimed-twice'` names (`J36`), so a console warning here is the design speaking.
+  // `'variant-matched-twice'` names (`J36`), so a console warning here is the design speaking.
   const bufferVariant = (pluginId: string, resize: boolean) => ({
     id: pluginId,
     view(ctx: PluginContext) {
@@ -3350,7 +3350,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     container.remove();
   });
 
-  it('[Q10] two plugins claiming the same entry: the first claim paints, and the collision is reported', async () => {
+  it('[Q10] two plugins matching the same entry: the first match paints, and the collision is reported', async () => {
     const container = document.createElement('div');
     document.body.append(container);
     // The same Entry, marked for both plugins' rules. The `[review P2]` test above marks disjoint
@@ -3379,7 +3379,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
     // The library reports and continues; it never arbitrates between two plugins the consumer
     // chose to install. The report names both variants and both plugin ids.
-    const collision = reports.find((report) => report.code === 'variant-claimed-twice');
+    const collision = reports.find((report) => report.code === 'variant-matched-twice');
     expect(collision).toBeDefined();
     expect(collision?.severity).toBe('warning');
     expect(collision?.by).toBe('core');
@@ -3400,7 +3400,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   it('[Q10] one report per colliding pair, however many times a variant resolves', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    // Both rules claim both entries, and a variant resolves once per Entry per frame. A collision
+    // Both rules match both entries, and a variant resolves once per Entry per frame. A collision
     // reported per resolution would bury the consumer's console.
     const owned = [sampleEntries[0]!.id, sampleEntries[1]!.id];
     const dataset = markedDataset({ buffer: owned, risk: owned });
@@ -3412,7 +3412,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     gantt.plugins = [bufferKind(), riskKind()];
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    expect(reports.filter((report) => report.code === 'variant-claimed-twice')).toHaveLength(1);
+    expect(reports.filter((report) => report.code === 'variant-matched-twice')).toHaveLength(1);
 
     gantt.destroy();
     container.remove();
@@ -3421,7 +3421,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   it('[J59] reports a variant rule that matches on a key no Field declares', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    // A typo in a `when` claims no row, and it must not take the layout pass down. Silence was the
+    // A typo in a `when` matches no row, and it must not take the layout pass down. Silence was the
     // remaining half of `J59`: the rule stopped matching and nothing said why.
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
     const reports: ErrorReport[] = [];
@@ -3514,7 +3514,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   });
 
   describe('childrenAsSegments on a real Gantt (#421 C1, item 1 — entryRulePorts reaches resolveRows)', () => {
-    function claimTree() {
+    function segmentedTree() {
       return [
         { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10', props: { phase: 'build' } },
         { id: 'c1', name: 'C1', parentId: 'p1', start: '2026-01-01', end: '2026-01-05' },
@@ -3524,10 +3524,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       ];
     }
 
-    it('a field-match rule claims only the parent it matches: one row for it, none for its children, the other parent and its child untouched', () => {
+    it('a field-match rule matches only the parent it matches: one row for it, none for its children, the other parent and its child untouched', () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: segmentedTree() });
       const gantt = new Gantt({
         container,
         dataset,
@@ -3537,7 +3537,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
         row.getAttribute('data-entry-id'),
       );
-      // p1 is claimed (phase: build) — c1/c2 draw no row of their own. p2 does not match
+      // p1 is segmented (phase: build) — c1/c2 draw no row of their own. p2 does not match
       // (phase: plan) — it and c3 keep their own rows, same as a Gantt with no rule at all.
       expect(rowIds).toEqual(['p1', 'p2', 'c3']);
 
@@ -3545,10 +3545,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    it('a misspelt key reports once as unknown-row-source-field, and claims nothing', async () => {
+    it('a misspelt key reports once as unknown-row-source-field, and matches nothing', async () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: segmentedTree() });
       const reports: ErrorReport[] = [];
       const gantt = new Gantt({ container, dataset });
       gantt.on('error', (report) => {
@@ -3565,7 +3565,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
         row.getAttribute('data-entry-id'),
       );
-      // Every entry keeps its own row: the rule claims nothing, not `unknown-variant-field`'s
+      // Every entry keeps its own row: the rule matches nothing, not `unknown-variant-field`'s
       // "typo'd key" case, but this rule's own code (Q29).
       expect(rowIds).toEqual(['p1', 'c1', 'c2', 'p2', 'c3']);
 
@@ -3581,7 +3581,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     it('the rule switches live: clearing it gives every child its row back', async () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: segmentedTree() });
       const gantt = new Gantt({
         container,
         dataset,
@@ -3611,7 +3611,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const first = document.createElement('div');
       const second = document.createElement('div');
       document.body.append(first, second);
-      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: segmentedTree() });
       const folded = new Gantt({
         container: first,
         dataset,
@@ -3633,10 +3633,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       second.remove();
     });
 
-    it('a filter that drops a claimed parent drops its segments with it (J-plan-F)', () => {
+    it('a filter that drops a segmented parent drops its segments with it (J-plan-F)', () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: segmentedTree() });
       const gantt = new Gantt({
         container,
         dataset,
@@ -3659,8 +3659,8 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
   });
 
-  describe('a claimed row draws its children’s bars, not core’s own rail (#421 C2, Q26/Q27/Q33)', () => {
-    it('a claimed row draws exactly its children’s bars, summary() resolved for the parent included', () => {
+  describe('a segmented row draws its children’s bars, not core’s own rail (#421 C2, Q26/Q27/Q33)', () => {
+    it('a segmented row draws exactly its children’s bars, summary() resolved for the parent included', () => {
       const container = document.createElement('div');
       document.body.append(container);
       const dataset = new Dataset({
@@ -3679,7 +3679,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
       const barIds = bars.map((bar) => bar.dataset['barId']);
-      // p1 draws no bar of its own — `summary()` resolved for it and `unclaimedSpan` answered `[]`
+      // p1 draws no bar of its own — `summary()` resolved for it and `wholeSpanUnlessSegments` answered `[]`
       // (Q27). c1 and c2 draw their own bars, on p1's row.
       expect(barIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
@@ -3735,13 +3735,13 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    it('an empty claimed parent draws a blank row (J-plan-D: the row is dateless, not suppressed)', () => {
+    it('an empty segmented parent draws a blank row (J-plan-D: the row is dateless, not suppressed)', () => {
       const container = document.createElement('div');
       document.body.append(container);
       const dataset = new Dataset({
         timeZone: 'UTC',
         entries: [
-          // p1 has one child, so the rule claims it (Q34) — but neither carries a date, so p1's own
+          // p1 has one child, so the rule matches it (Q34) — but neither carries a date, so p1's own
           // rollup start/end stays undefined too. `spansTime` already skips every dateless entry
           // (ADR 0012), so this needs no new mechanism.
           { id: 'p1', name: 'P1' },
@@ -3764,7 +3764,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    it('an unclaimed parent still wears summary()’s rail over its children’s own rows, in the same frame', () => {
+    it('an parent no rule matches still wears summary()’s rail over its children’s own rows, in the same frame', () => {
       const container = document.createElement('div');
       document.body.append(container);
       const dataset = new Dataset({
@@ -3787,7 +3787,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
         row.getAttribute('data-entry-id'),
       );
-      // p1 is claimed and folds c1/c2 onto its own row; p2 does not match, so it and c3 keep the
+      // p1 is segmented and folds c1/c2 onto its own row; p2 does not match, so it and c3 keep the
       // rows a Gantt with no rule at all would give them.
       expect(rowIds).toEqual(['p1', 'p2', 'c3']);
 
@@ -3797,8 +3797,8 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const c3Bar = container.querySelector<HTMLElement>(
         `.fg-bar[data-bar-id="${barId(entryId('c3'), 0)}"]`,
       )!;
-      // p2 is unclaimed and still wears the rail (`summary()`, resolved on `entry.hasChildren`), in
-      // the same Gantt, in the same frame, as p1's claimed row drawing c1's and c2's own bars.
+      // p2 is not segmented and still wears the rail (`summary()`, resolved on `entry.hasChildren`), in
+      // the same Gantt, in the same frame, as p1's segmented row drawing c1's and c2's own bars.
       expect(p2Bar.dataset['variant']).toBe('summary');
       expect(c3Bar.dataset['variant']).toBe('leaf');
       const p1Bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).map(
@@ -3814,7 +3814,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   });
 
   describe('a shared row resolves per Entry, not per subject (#421 C3, spike Q9)', () => {
-    function claimedGantt(
+    function segmentedGantt(
       container: HTMLElement,
       extra: Partial<ConstructorParameters<typeof Gantt>[0]> = {},
     ) {
@@ -3847,7 +3847,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     it('a locked child refuses resize while its sibling keeps both handles (I14)', () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const { gantt } = claimedGantt(container);
+      const { gantt } = segmentedGantt(container);
       const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
       const original = document.elementFromPoint.bind(document);
 
@@ -3881,7 +3881,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     it('keyboard order walks the bars in draw order — the children’s dataset order (J-plan-E)', () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const { gantt } = claimedGantt(container);
+      const { gantt } = segmentedGantt(container);
 
       // Select c1's own bar, then step forward: draw order is c1, c2 — the children's dataset
       // order, never date order.
@@ -3900,10 +3900,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    it('a grid-row click selects every bar the claimed row owns', () => {
+    it('a grid-row click selects every bar the segmented row owns', () => {
       const container = document.createElement('div');
       document.body.append(container);
-      const { gantt } = claimedGantt(container);
+      const { gantt } = segmentedGantt(container);
       const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="p1"]')!;
       const original = document.elementFromPoint.bind(document);
       document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
@@ -3924,13 +3924,13 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       try {
         const container = document.createElement('div');
         const scroll = new ScrollAxis();
-        const { gantt } = claimedGantt(container, { fit: 'preset', preset: 'day', scroll: { x: scroll } });
+        const { gantt } = segmentedGantt(container, { fit: 'preset', preset: 'day', scroll: { x: scroll } });
         FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
 
         expect(scroll.state.position).toBe(0);
 
         // c2 sits months after c1 — off-screen at a 300px pane, day preset — and it draws only as a
-        // bar on p1's claimed row, never a row of its own.
+        // bar on p1's segmented row, never a row of its own.
         gantt.reveal(entryId('c2'));
 
         expect(scroll.state.position).toBeGreaterThan(0);
@@ -3941,7 +3941,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       }
     });
 
-    it('an unclaimed, one-Entry row behaves exactly as it does today', () => {
+    it('a non-segmented, one-Entry row behaves exactly as it does today', () => {
       const container = document.createElement('div');
       document.body.append(container);
       const dataset = new Dataset({ entries: [sampleEntries[0]!.toInput()], timeZone: 'UTC' });
@@ -3967,7 +3967,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   // #421 C7 (`959f8e6`, `plans/segment-is-a-bar/SPIKE-FINDINGS.md`): five acceptance boxes C1–C6
   // never pinned. Each `it` below names the box it closes.
   describe('the five acceptance boxes C1–C6 left uncovered (#421 C7, 959f8e6)', () => {
-    /** `req-1` claims `d1`/`d2` while `showDaysOnRow` reads `true` — the spike's own example
+    /** `req-1` draws `d1`/`d2` as segments while `showDaysOnRow` reads `true` — the spike's own example
      *  (`plans/segment-is-a-bar/README.md` "The rule, in one line"). */
     function crewRoster(): EntryInput<{ showDaysOnRow: boolean; hours: number }>[] {
       return [
@@ -4050,9 +4050,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    // Box: "A claimed row's cells roll up over its children, start/end included, on today's code
+    // Box: "A segmented row's cells roll up over its children, start/end included, on today's code
     // path. rollUp: 'sum' on hours totals the day bars onto the row."
-    it("rollUp: 'sum' totals the day bars onto a claimed row's grid cell", () => {
+    it("rollUp: 'sum' totals the day bars onto a segmented row's grid cell", () => {
       const container = document.createElement('div');
       document.body.append(container);
       const dataset = crewDataset();
@@ -4066,7 +4066,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const cell = container.querySelector<HTMLElement>(
         '.fg-row[data-entry-id="req-1"] [data-field="hours"]',
       )!;
-      // 8 + 4 = 12, read off the claimed row's own grid cell — the Rollup's answer, not a bar's.
+      // 8 + 4 = 12, read off the segmented row's own grid cell — the Rollup's answer, not a bar's.
       expect(cell.textContent).toBe('12');
       expect(dataset.entries.get('req-1')?.read('hours')).toBe(12);
 
@@ -4074,14 +4074,14 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       container.remove();
     });
 
-    // Box: "A write to a claimed row's start/end throws DerivedFieldNotWritableError. A row drag
-    // moves every bar." A claimed row is an ordinary rolling-up parent to the write door — data/
+    // Box: "A write to a segmented row's start/end throws DerivedFieldNotWritableError. A row drag
+    // moves every bar." A segmented row is an ordinary rolling-up parent to the write door — data/
     // carries no notion of "claimed" at all, so the refusal is proven the same way any rolling-up
-    // parent's is (`entry-store.mutation.test.ts`); this pins it against the exact shape a claimed
+    // parent's is (`entry-store.mutation.test.ts`); this pins it against the exact shape a segmented
     // row uses. The drag half needs a bar to grab: `req-1` draws none of its own (Q26), so a
     // consumer variant supplies the rail the way `harness/hierarchy.ts`'s own `summary()` case does
     // — the same shape the "consumer producer... still draws a band" test above already installs.
-    it("a write to a claimed row's start/end is refused, and dragging its rail bar moves every child (ADR 0013)", () => {
+    it("a write to a segmented row's start/end is refused, and dragging its rail bar moves every child (ADR 0013)", () => {
       expect(() => crewDataset().entries.update('req-1', { start: '2026-01-05' })).toThrow(
         DerivedFieldNotWritableError,
       );
@@ -4128,7 +4128,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
       const after = [entryId('d1'), entryId('d2')].map((id) => datesOf(dataset.entries.get(id)!));
       // Every child moved, and by one shared delta — the same translation ADR 0013 gives any
-      // rolling-up parent's drag; nothing about being a claimed row changes the mechanism.
+      // rolling-up parent's drag; nothing about being a segmented row changes the mechanism.
       const deltas = after.map((d, i) => Number(d.start) - Number(before[i]!.start));
       expect(deltas.every((delta) => delta > 0)).toBe(true);
       expect(new Set(deltas).size).toBe(1);
@@ -4423,8 +4423,8 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
 /** One plain Entry and one that draws two bars — the smallest dataset that tells "the Segment the
  *  pointer named" from "every Segment the row owns". Module-scoped: the Delete-key describe block
  *  below shares this fixture with the Segment-selection tests, rather than re-declaring it. */
-/** One plain Entry, and one parent Entry claimed by its own two children — the smallest dataset
- *  that tells "the bar the pointer named" from "every bar the claimed row owns" (ADR 0010, ADR
+/** One plain Entry, and one parent Entry segmented by its own two children — the smallest dataset
+ *  that tells "the bar the pointer named" from "every bar the segmented row owns" (ADR 0010, ADR
  *  0025, #421). Module-scoped: the Delete-key describe block below shares this fixture with the
  *  selection tests, rather than re-declaring it. */
 const SEGMENTED_ENTRIES = [
@@ -4449,7 +4449,7 @@ function makeSegmentedGantt(): { container: HTMLElement; gantt: Gantt; dataset: 
   };
 }
 
-describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)', () => {
+describe('Gantt selection over a segmented row’s bars (ADR 0010, ADR 0025, #421)', () => {
   /** Points `elementFromPoint` at one node, the way every other pointer test in this file does. */
   function clickTimelineOn(container: HTMLElement, node: HTMLElement): void {
     const original = document.elementFromPoint.bind(document);
@@ -4475,7 +4475,7 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
     container.remove();
   });
 
-  it('a grid-pane click selects every child Entry the claimed row owns', () => {
+  it('a grid-pane click selects every child Entry the segmented row owns', () => {
     const { container, gantt } = makeSegmentedGantt();
     const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="split"]')!;
     const original = document.elementFromPoint.bind(document);
@@ -4529,7 +4529,7 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
 
     shiftRangeFromPlainTo(container, 'split-a');
 
-    // The Selection holds Entry ids, so the range steps over the claimed row's own children.
+    // The Selection holds Entry ids, so the range steps over the segmented row's own children.
     // `split-b` draws after `split-a` on the same row, so the range stops before it.
     expect(gantt.selectedEntryIds).toContain(entryId('plain'));
     expect(gantt.selectedEntryIds).toContain(entryId('split-a'));
@@ -4552,7 +4552,7 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
     container.remove();
   });
 
-  it('Mod+Arrow steps the Selection between the bars of one claimed row', () => {
+  it('Mod+Arrow steps the Selection between the bars of one segmented row', () => {
     const { container, gantt } = makeSegmentedGantt();
     gantt.selectedEntryIds = [entryId('split-a')];
 
@@ -4596,7 +4596,7 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
   // presses the low-end clamp or a one-child row. This pins both commands directly, both clamps.
   it('freegantt.selectNextEntry/selectPreviousEntry step within a row and clamp at both ends', () => {
     const { container, gantt } = makeSegmentedGantt();
-    // The claimed row's own list is [split, split-a, split-b] (the claiming parent, then its
+    // The segmented row's own list is [split, split-a, split-b] (the segmented parent, then its
     // children in draw order) — `split` is the row's first steppable entry.
     gantt.selectedEntryIds = [entryId('split')];
 
@@ -4637,7 +4637,7 @@ describe('Gantt Delete key (ADR 0010, #212)', () => {
   it("Delete un-dates the selected child Entry's bar, and its sibling stays drawn", () => {
     // ADR 0012's two intents, carried through the Segment retirement: a Delete on a *bar* clears
     // the span it draws and leaves the record; a Delete on a grid row or cell removes the record.
-    // A claimed child bar takes the first door, exactly as a Segment delete used to drop one drawn
+    // A segment bar takes the first door, exactly as a Segment delete used to drop one drawn
     // stretch and leave the Entry.
     const { container, gantt, dataset } = makeSegmentedGantt();
     gantt.selectedEntryIds = [entryId('split-a')];
@@ -5202,7 +5202,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
       timeZone: 'UTC',
     });
     // ADR 0013: core ships no 'milestone' variant and refuses resize for no look by default — a
-    // plugin owns that pair of registrations for the ids it claims
+    // plugin owns that pair of registrations for the ids it matches
     // (`harness/plugins/milestone-kind.ts` is the real one; this inlines the smallest version of it).
     const gantt = new Gantt({
       container,
@@ -6754,7 +6754,7 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   });
 });
 
-describe('the Selection follows the Dataset when a claimed row’s child goes away (#212, ADR 0010, ADR 0025, #421)', () => {
+describe('the Selection follows the Dataset when a segmented row’s child goes away (#212, ADR 0010, ADR 0025, #421)', () => {
   function ganttOverTwoChildren(): { gantt: Gantt; dataset: Dataset } {
     const container = document.createElement('div');
     document.body.appendChild(container);

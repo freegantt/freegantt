@@ -38,7 +38,8 @@ frontmatter.
 | [0024](0024-parentid-answers-the-stored-value-on-every-door.md) | `parentId` answers the stored value on every door | accepted | `entry.read('parentId')` is always the stored value; `hierarchyParentId` answers the tree question |
 | [0025](0025-the-selection-holds-entries-not-segments.md) | The Selection holds Entries, not Segments | accepted | The Selection holds `EntryId` again, reversing 0010 |
 | [0026](0026-the-segment-retires.md) | The Segment retires | accepted | `Segment` is deleted as a type; a former Segment is an ordinary child `Entry` |
-| [0027](0027-a-spanning-entry-draws-a-bar.md) | A spanning Entry draws a Bar | accepted | A spanning Entry draws one Bar; a claimed parent draws no Bar of its own |
+| [0027](0027-a-spanning-entry-draws-a-bar.md) | A spanning Entry draws a Bar | accepted | A spanning Entry draws one Bar; a segmented parent draws no Bar of its own |
+| [0028](0028-a-plugins-impossible-proposal-is-a-refusal.md) | A plugin's impossible proposal is a refusal | accepted | An extender proposing an impossible value is refused at `warning` with `by` naming it; an extender that throws is a `'error'` fault |
 
 ## The gap at 0014
 

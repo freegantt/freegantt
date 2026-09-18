@@ -78,7 +78,7 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
     demonstrates:
       'A tree of entries groups, sorts, and filters its rows. Grid columns resize and reorder by ' +
       'drag, and a beforeEntryEdit veto swaps in a different editor for one column. "Framing crew" ' +
-      'claims its three children as day bars on its own row — each with its own text, look and ' +
+      'draws its three children as segments as day bars on its own row — each with its own text, look and ' +
       'capabilities, and a row total rolled up from them — and one Field write opens it back into ' +
       'sub-rows.',
     config: [

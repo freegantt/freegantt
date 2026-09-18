@@ -46,8 +46,8 @@ const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 /** A parent Entry and `count` children, every child spanning the parent's own dates — the
  *  `childrenAsSegments` shape one row's several bars now come from (ADR 0026, #421). Pass
  *  `rows: { source: 'entries', childrenAsSegments: true }` to `computeFrame` alongside this so the
- *  children draw as `count` bars on the parent's one claimed row, and the parent itself draws none. */
-function claimedRowOf(entry: Entry, count: number): readonly Entry[] {
+ *  children draw as `count` bars on the parent's one segmented row, and the parent itself draws none. */
+function rowWithSegments(entry: Entry, count: number): readonly Entry[] {
   return entryDoubles([
     entryValuesOf(entry),
     ...Array.from({ length: count }, (_, index) => ({
@@ -524,6 +524,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
+        rows: { source: 'entries', tree: false },
       }),
     );
 
@@ -1113,14 +1114,14 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('paints every mounted bar a claimed row draws, not only its first (#185, ADR 0026, #421)', () => {
+  it('paints every mounted bar a segmented row draws, not only its first (#185, ADR 0026, #421)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const claimed = claimedRowOf(sampleEntries[0]!, 3);
+    const segmented = rowWithSegments(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: claimed,
+      entries: segmented,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1153,7 +1154,7 @@ describe('render/dom backend', () => {
   // Retired (ADR 0026, #421): a structural parent's own bar used to carry the set of Segment ids
   // it drew (`FrameBar.segmentIds`), so a caller could select a Segment the live Dataset no longer
   // knew about and still paint the frame's own bar. There is no such bar left to test — a parent
-  // that claims its children draws no bar of its own (`resolveBars`, #421 C2), and an unclaimed
+  // that draws its children as segments draws no bar of its own (`resolveBars`, #421 C2), and a non-segmented
   // parent's bar answers only for its own id, never a descendant's. The three tests this comment
   // replaces (`a whole-span bar stands for the Segments the frame drew...`, `a bar that draws an
   // Entry whole paints when any Segment of that Entry is selected...`, `one selected bar paints
@@ -1164,9 +1165,9 @@ describe('render/dom backend', () => {
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const claimed = claimedRowOf(sampleEntries[0]!, 3);
+    const segmented = rowWithSegments(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: claimed,
+      entries: segmented,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1236,9 +1237,9 @@ describe('render/dom backend', () => {
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const claimed = claimedRowOf(sampleEntries[0]!, 3);
+    const segmented = rowWithSegments(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: claimed,
+      entries: segmented,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1651,13 +1652,13 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('[S4-A4] paints N bars on one row for N claimed children', () => {
+  it('[S4-A4] paints N bars on one row for N segment children', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
     const entry = sampleEntries[0]!;
     const frame = computeFrame({
-      entries: claimedRowOf(entry, 3),
+      entries: rowWithSegments(entry, 3),
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },

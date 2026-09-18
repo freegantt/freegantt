@@ -28,7 +28,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'rollup-corrected': true,
   'unknown-parent': true,
   'hierarchy-cycle': true,
-  'variant-claimed-twice': true,
+  'variant-matched-twice': true,
   'unknown-variant-field': true,
   'unknown-row-source-field': true,
   'unknown-bar-label-field': true,

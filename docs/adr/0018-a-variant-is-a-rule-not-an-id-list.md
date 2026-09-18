@@ -192,7 +192,7 @@ ctx.commands.register({
 
 ## Consequences
 
-**The word changes at every site, DOM included.** `data-kind` becomes `data-variant`, and the `'look-claimed-twice'` report becomes `'variant-claimed-twice'`. Both are published surface — `CONTEXT.md:517` documents the attribute, and `view/gantt-shell.ts:1475` raises the report — so the rename is part of the build, not a tidy-up after it. `fg-bar-summary` keeps its name: it is a CSS class, and it comes from the `parent` variant's own `paint`.
+**The word changes at every site, DOM included.** `data-kind` becomes `data-variant`, and the `'look-claimed-twice'` report becomes `'variant-matched-twice'`. Both are published surface — `CONTEXT.md:517` documents the attribute, and `view/gantt-shell.ts:1475` raises the report — so the rename is part of the build, not a tidy-up after it. `fg-bar-summary` keeps its name: it is a CSS class, and it comes from the `parent` variant's own `paint`.
 
 `registerLookClaim`, `registerItemProducer`, `registerLookDefaults` and `RendererByLook` all retire. `KindDefaults` retires with them. `CapabilityInputs` loses `lookOf` and `registeredDefaultsFor` (`view/capability.ts:113-115`).
 

@@ -62,10 +62,11 @@ someone measured it.
 **`Segment` retires as a type, with nothing standing in for it.** What it named — a drawn piece of
 one Entry's span, matched onto a row that is not its own — is now an ordinary child `Entry`, whose
 `parentId` names the row it draws on. A row source rule,
-`rowSource: { source: 'entries', childrenAsSegments: <when-pattern> }`, says which claimed parent
+`rowSource: { source: 'entries', childrenAsSegments: <when-pattern> }`, says which segmented parent
 draws its children as bars on its own row rather than giving each child a row of its own
-([Q17](../../plans/segment-is-a-bar/BUILD-LOG.md), ruled 2026-09-17). Nothing marks a claimed
-child — the claim is a fact about its parent's row, never a stored fact on the child (ADR 0013).
+([Q17](../../plans/segment-is-a-bar/BUILD-LOG.md), ruled 2026-09-17). Nothing marks such a
+child — that it draws as a Segment is a fact about its parent's row, never a stored fact on the
+child (ADR 0013).
 
 **Every door a Segment needed twice, an Entry already has once**, so the retirement deletes rather
 than replaces:
@@ -157,9 +158,13 @@ is not the first to reject it in favor of a real id.
 
 ## Consequences
 
-- **`plans/01` §2.4, §11's I8, `plans/02`, `CONTEXT.md`, and ADRs 0003, 0010, 0017, 0018, 0022 and
-  0023 say `Bar` where they said `Item`.** I8's own wording — "Item identity is deterministic" —
-  changes with it, and the layout snapshot test's name moves alongside.
+- **The live specs — `plans/01` §2.4, §11's I8, `plans/02` and `CONTEXT.md` — say `Bar` where they
+  said `Item`.** I8's own wording — "Item identity is deterministic" — changes with it, and the
+  layout snapshot test's name moves alongside. **An accepted ADR does not.** ADRs 0003, 0010, 0017,
+  0018, 0022 and 0023 keep their prose, for the reason the third bullet below gives: a record is
+  superseded, never rewritten. Only a live symbol one of them names moves — 0023's
+  `variant-claimed-twice` is now `variant-matched-twice`, because that string is a code identifier a
+  reader can still grep, not a sentence about what was decided.
 - **`CONTEXT.md`'s *Segment* entry keeps one meaning with no type behind it: a child Entry drawn as
   one piece of its parent's row.** The entry was rewritten once already, in C1, to carry both the
   retiring type and the new `childrenAsSegments` key as one bounded, dated overlap

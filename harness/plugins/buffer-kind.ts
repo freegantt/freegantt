@@ -24,7 +24,7 @@ export function bufferKind() {
       ctx.variants.add({
         name: BUFFER_VARIANT,
         // Which rows are mine? The ones the page marked as buffer. A field match is equality, so
-        // this claims the rows whose `buffer` value **is** `true` (J6).
+        // this matches the rows whose `buffer` value **is** `true` (J6).
         when: { buffer: true },
         // How does it look? A hatched fill, painted through the variant's own `paint` — no bespoke
         // paint path, and the library keeps painting the bar's label (J34).
@@ -32,11 +32,11 @@ export function bufferKind() {
         // What can you do to it? Move and select stay at the library default; resize refuses — a
         // buffer's length comes from the schedule around it, not a drag.
         capabilities: { resize: false },
-        // What shape does it draw? A buffer row is never a claimed parent, so the default already
-        // draws one whole-entry Bar (`unclaimedSpan`, ADR 0023) — nothing is written here.
+        // What shape does it draw? A buffer row is never a segmented parent, so the default already
+        // draws one whole-entry Bar (`wholeSpanUnlessSegments`, ADR 0023) — nothing is written here.
       });
 
-      // What actions does it offer? One menu item, scoped to the rows this variant claimed — every
+      // What actions does it offer? One menu item, scoped to the rows this variant matched — every
       // other entry's context menu is unaffected. `variant` is the answer the library already
       // resolved, so this command never restates the rule above.
       ctx.commands.register({

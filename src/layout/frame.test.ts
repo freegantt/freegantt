@@ -470,7 +470,7 @@ describe('computeFrame', () => {
     expect(frame.bars).toMatchSnapshot();
   });
 
-  it('matches the golden snapshot for a claimed row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md)', () => {
+  it('matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md)', () => {
     const [parent, child] = entryDoubles([
       entryValuesOf(sampleEntries[0]!),
       entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
@@ -487,7 +487,7 @@ describe('computeFrame', () => {
       barLabelFor: (entry) => entry.name,
       rows: { source: 'entries', childrenAsSegments: true },
     });
-    // One row for both — the claimed child's id rides `entryIds[1]`, not a row of its own.
+    // One row for both — the segment child's id rides `entryIds[1]`, not a row of its own.
     expect(frame.rows).toHaveLength(1);
     expect(frame.rows[0]?.entryIds).toEqual([parent.id, child.id]);
     expect(

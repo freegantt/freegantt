@@ -56,7 +56,7 @@ describe('compileEntryRule', () => {
     expect(reported).toEqual([]);
   });
 
-  it('a field-match rule claims the row whose value equals, and no other', () => {
+  it('a field-match rule matches the row whose value equals, and no other', () => {
     const fields = fieldRegistry([{ key: 'phase' }]);
     const a = fakeEntry('a', { phase: 'build' });
     const b = fakeEntry('b', { phase: 'plan' });
@@ -66,7 +66,7 @@ describe('compileEntryRule', () => {
     expect(predicate(b)).toBe(false);
   });
 
-  it('a key no Field declares claims no row, and reports once for that key', () => {
+  it('a key no Field declares matches no row, and reports once for that key', () => {
     const fields = fieldRegistry([{ key: 'phase' }]);
     const a = fakeEntry('a', { phase: 'build' });
     const b = fakeEntry('b', { phase: 'plan' });

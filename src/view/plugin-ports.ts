@@ -355,14 +355,14 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
   variants: {
     /** Installs one variant on this Gantt. `when` says which rows wear it, `bars` what shape it
      *  draws, `paint` how it looks, and `can` what you can do to it. Omit `when` and the variant
-     *  answers for every row nothing newer claims.
+     *  answers for every row nothing newer matches.
      *
      *  **The newest rule wins** (`Q5`). This plugin's variant wins over core's own `parent`/`leaf`,
      *  and over any variant installed before it. The consumer's own `GanttOptions.variants` wins
      *  over every plugin's, whatever order the plugins installed in (D-S5-11). Setup order between
      *  two plugins comes from `requires` (D-S5-31) — there is no ordering knob here.
      *
-     *  Two plugins whose rules both answer yes for one row raise a `'variant-claimed-twice'` Error
+     *  Two plugins whose rules both answer yes for one row raise a `'variant-matched-twice'` Error
      *  report naming both, in every build. It is not behind `isDevMode()`: that flag resolves when
      *  this repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41).
      *  The library never arbitrates between plugins: the consumer chose which ones to install, so
