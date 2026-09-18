@@ -66,7 +66,10 @@ Only the optional `segment?` argument went away.
 - `layout/rows/collapse.ts:18-20` already drops the rows of a collapsed parent's descendants. The new rule is the same walk, and it keeps the children's ids on the parent's row.
 - `FrameLayoutView.entryIdsForRow` already answers every Entry a row owns, for hit tests and the grid-row click.
 
-**Comparable libraries** (surveyed 2026-09-17; names stay out of this file by the vendor-name rule). One stores a piece as an ordinary child task and draws it on the parent's row, from a rule on the parent. Timeline and scheduler libraries keep bars as flat records with a key that names their row. Both give each bar a stable id, its own data and its own look with no second type. The nested-array libraries address a piece by index, or repeat the task's base class for the piece.
+**How other Gantt products represent a comparable piece is recorded in
+[ADR 0026](../../docs/adr/0026-the-segment-retires.md), named and sourced.** This file states the
+design and its own reasoning; the survey is evidence for a decision, not a spec, and an ADR is the
+checkable place for it (CLAUDE.md).
 
 ---
 

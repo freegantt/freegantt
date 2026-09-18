@@ -1,5 +1,12 @@
 # The Selection holds Segments, not Entries
 
+> **Superseded in full by [ADR 0025](0025-the-selection-holds-entries-not-segments.md)**, ruled
+> 2026-09-17 (#421). `Segment` retires as a type: what this ADR calls a Segment is now an ordinary
+> child `Entry`, with its own `EntryId`, so a `SegmentId` names nothing a consumer authored. The
+> Selection holds `EntryId` again. **Do not rewrite the body.** It stays as the record of why the
+> Selection moved to `SegmentId` in the first place, and that reasoning was sound for the type this
+> library shipped at the time.
+
 D-S3-10 fixed the Selection as a set of `EntryId`. Its premise was that "this Segment is selected but
 its siblings are not" means nothing. `CONTEXT.md` said the same thing from the other side: "A Segment
 is a unit of drawing only." **That premise is wrong, and this ADR reverses it. The Selection is a set
