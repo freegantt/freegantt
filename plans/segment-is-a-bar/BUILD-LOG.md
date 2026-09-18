@@ -39,6 +39,7 @@ Write the entry the moment it comes up, not at the end. Check that one does not 
 | Q25 | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **RULED 2026-09-17 by the author: `measureDuration: 'children'`, and overlap has no rule of its own — the number is whatever the Aggregator says.** Core adds the children and never reads them for overlap. C6 renames the member |
 | Q26 | how does a claimed parent ask for a rail instead of a bar? | **RULED 2026-09-17 by the author: it draws no bar of its own, and core ships nothing else.** A consumer variant with an explicit `items` producer still wins, as it does today. No new key, no rail concept, no special case |
 | Q27 | a claimed parent draws no bar — so how does core's own `summary()` not draw one? | **OPEN, 2026-09-17.** Q26 said "an explicit `items` still wins". Core's shipped `summary()` **has** an explicit `items` (`variants.ts:322`) and claims on `entry.hasChildren`, which a claimed parent still has. Left alone, core's rail paints over the bars it stands for. Recommendation below. **C2 waits on it** |
+| Q28 | is the layout unit a `Bar`, not an `Item`? | **OPEN, 2026-09-17, raised by the author.** *Item* is generic and already names three things in `src/**` — the timed shape a variant draws, `MenuItem` and `CellItem`. Downstream every one of them is a `FrameBar`. Recommendation below: rename, and in C6. **Wider than #421** |
 | J4 | S4 — a bar is a child Entry | **The ruling.** Cost measured, shape (a) chosen, nine open points closed as `J-plan-A`…`J-plan-I` in [`README.md`](README.md). Q8, Q10 and Q11 of the spike were not reached; C1 and C3 cover them as real tests, not probes |
 
 **Entries that record a reversed call.** Q1's first ruling was wrong, and Q11(e) corrected its plain-bar call site. Q5's first shape was wrong, and Q11(c) wraps its maps in `DatasetEdits`. Q9 replaced Q4's envelope pass, and Q4's naming trap with it. Q7 reverses the plan's first hard rule 3 and J-plan-6. Q8 reverses "no Aggregator over Segments". Q10 answer 2 (`dataset.segments`) was reversed by Q13, so Q3 stands. The Q6 grill's sketch was refined by Q10–Q13. Each keeps the rejected text, so a reader sees what was refused and why. Read the correction, never the first answer.
@@ -798,18 +799,72 @@ So "an explicit `items` wins" hands the row to core's own rail, which then paint
 
 **Where the suppression goes, and this part is not in doubt.** `produceItemsForRow` skips the row's subject when the row claims its children. It already takes the `PlannedRow`, and Q19 shape (a) puts the claimed marker there, so the fact is in hand and nothing new is threaded. The open half is the other one: **what lets a consumer put a band back, once core's own producer is not the way?**
 
-**Recommendation: the producer learns one fact, and decides for itself.**
+**Is it one fact or two? One** (the author asked, 2026-09-17).
+
+`childrenAsSegments` has two **spellings** — `true` claims every parent this Gantt draws, and a field match or a predicate claims some. Both spellings resolve in one place, `resolveEntriesSource`, into one claimed marker on the `PlannedRow`. A second flag beside it, Gantt-wide, would be a second source of truth for the same question, and hard rule 4 refuses that: the row source owns the row list. **So no name needs a `global` prefix, because there is no global fact to name.**
+
+**There is a real two-ness here, and it is sharper than Gantt-wide against per-Entry.** `produceItemsForRow` calls a producer once per id on the row (`produce-items.ts:38-46`), and on a claimed row that is `[req-1, d1, d2]`. Two different questions could be passed down:
+
+| The fact | `req-1` | `d1`, `d2` | Does it work? |
+| --- | --- | --- | --- |
+| **The row's:** "this row draws children as segments" | `true` | `true` | **No.** `d1`'s producer cannot tell itself apart from the parent, so a producer that suppresses on the flag draws nothing at all |
+| **The Entry's:** "**this Entry's** children are the segments of this row" | `true` | `false` | **Yes.** Each producer is asked about the Entry it was called for, which is the only Entry it can answer for |
+
+**So the fact is per Entry, and it reads `row.claimed && entry.id === row.entryIds[0]`** — the row's marker, narrowed to the row's subject. Q19 shape (a) already puts both halves in `produceItemsForRow`'s hand.
+
+**The name is the key's name** (the author, 2026-09-17: *"i don't think claims children is the name we decided on"* — correct, `claimsChildren` was a third word for a ruled concept). The key is `childrenAsSegments`, so the fact is `childrenAsSegments`. A rule and its resolved answer are one concept, and `CONTEXT.md` keeps one word per concept. Rejected: `claimsChildren` (invents a verb the API never uses), `isClaimed` (wrong subject — the parent claims, it is not claimed), `drawsChildrenAsSegments` (a second word for the ruled one).
+
+**Recommendation: the producer learns that one fact, and decides for itself.**
 
 ```ts
 // layout/items/item.ts — the producer seam, one fact wider
-export type ItemProducer = (entry: Entry, variant: string, claimsChildren: boolean) => readonly Item[];
+export type BarProducer = (entry: Entry, variant: string, childrenAsSegments: boolean) => readonly Bar[];
 ```
 
-- Core's `ignoreSegments` reads it and returns `[]` **when, and only when, the row claims**. An unclaimed parent passes `false`, so `summary()` draws the rail it draws today, unchanged.
-- A consumer's producer ignores the parameter and draws the band: `items: (entry, variant) => [wholeEntryItem(entry, variant)]`. That is the opt-in the author described, and core ships nothing for it.
+```ts
+// A consumer who wants the band back — core ships nothing for this
+items: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [wholeSpan(entry, variant)] : []),
+```
+
+- Core's `ignoreSegments` reads it and returns `[]` **when, and only when, this Entry's children are its segments**. An unclaimed parent is passed `false`, so `summary()` draws the rail it draws today, unchanged.
 - It allocates nothing, so I5 holds. It adds no key, no variant, and no rail concept, so Q26's limit holds.
-- It is one parameter on a public type, on a library that has never shipped. A producer that ignores it is unchanged.
+- It is one parameter on a public type, on a library that has never shipped. A producer that ignores it is unchanged — TypeScript accepts a function that takes fewer parameters than its declared type, which `item.ts:57-59` already relies on.
+- The type is written `BarProducer` above because **Q28 renames `Item` to `Bar`**. If Q28 is refused, this is `ItemProducer` and `readonly Item[]`, and nothing else about the recommendation changes.
 
 **The two alternatives, and why they lose.** Skipping the parent inside `produceItemsForRow` with no way back is simpler, and it refuses the opt-in the author asked for. Telling core's variants apart from a consumer's would work and is a fault line core must never have — the whole registry rests on core's own fields and variants taking one code path.
 
 **Cost if the author rules otherwise:** C2's shape, one line in `item.ts`, and the C2 gate. C1 writes nothing for this.
+
+---
+
+## Q28 — the layout unit is a `Bar`, and `ItemProducer` is a `BarProducer`
+
+**Raised 2026-09-17 by the author:** *"i think we should look at changing item producer to barproducer"*. C6. OPEN — the author rules.
+
+**Looked at, and the finding is bigger than the producer.** `ItemProducer` is named after its return type, so the producer cannot be renamed alone. The question is whether `Item` is the right word, and measured against this codebase's own naming rule it is not:
+
+- **The word already names three things in `src/**`.** `Item` is the timed shape a variant draws (`layout/items/item.ts:25`). `MenuItem` is a context-menu row (`extensions/features/menu-view.ts:9`), and it is public. `CellItem` is a grid cell in the renderer (`render/dom/index.ts:134`). That is fault class #7 exactly — the one "chart" caused, where a generic word covered two concepts, nothing said which, and it stalled review #4.
+- **Every consumer of an `Item` already calls it a bar.** `placeFrame` turns one into a `FrameBar`, whose own field comments say "the one Segment this **bar** draws" and "every Segment this **bar** stands for" (`layout/frame.ts:136-150`). `barSpan` places it, `BarRenderer` paints it, `barLabels` labels it, and `data-variant` stamps it. `Item` is the only name upstream of that, and it is the odd one.
+- **A diamond is a bar here, and the code already says so.** `summary()`'s rail is `SUMMARY_BAR` and `variants.ts:232` calls it "a solid rail 10px high". `diamond()`'s glyph becomes a `FrameBar` with a fixed box. Core has one word for every painted span on the timeline, and that word is *bar*. `FixedBarBox` and `BarAnchor` sit on `Item` today, so the type already wears the word on two of its own fields.
+- **#421 makes the word load-bearing.** This work's whole sentence is "a bar is a child Entry". A reader who then meets `Item`, `itemId`, `produceItemsForRow` and `hoveredItemId` has to learn that the library's word for a bar is a different word.
+
+**Recommendation: rename, in C6, with `pk-rename-symbol`.**
+
+| Today | C6 |
+| --- | --- |
+| `Item` | `Bar` |
+| `ItemId`, `itemId()`, `itemIdFromDataset` | `BarId`, `barId()`, `barIdFromDataset` |
+| `ItemProducer` | `BarProducer` |
+| `VariantItems`, `EntryVariant.items` | `VariantBars`, `EntryVariant.bars` |
+| `produceItemsForRow`, `resolveItems` | `produceBarsForRow`, `resolveBars` |
+| `wholeEntryItem`, `fixedWidthItem` | `wholeEntryBar`, `fixedWidthBar` |
+| `entryIdOfItem`, `hoveredItemId`, `movableItemId`, `grabbedItemId`, `barGeomByItemId` | the same, with `Item` → `Bar` |
+| `MenuItem`, `CellItem` | **unchanged.** They keep the generic word because it is generic in its place: a menu has items, a grid cell is one |
+
+**Why C6, and not its own issue.** C6 is already the rename build: `selectedSegmentIds` → `selectedEntryIds`, `segment-selection.ts` → `entry-selection.ts`, `ignoreSegments` → `wholeSpan`, and `itemId(entry, segmentIndex = 0)` losing the word *segment* from its second parameter. That last one is this same function. Renaming it twice, in two builds, spends two reviews on one symbol.
+
+**The cost, stated.** 39 files in `src/**` name `Item` or `ItemId`, in 635 lines. `pk-rename-symbol` does the code through the language service, and `pnpm typecheck` confirms it. Prose does not follow: `plans/01` §2.4 ("Item identity is deterministic"), §11's **I8** row, `plans/02`, `CONTEXT.md`, and six ADRs (0003, 0010, 0017, 0018, 0022, 0023) each name the word and are decided by hand. **I8's own wording changes**, so `plans/01` §11 and the layout snapshot test's name move together.
+
+**Do not do this before C6.** C1–C5 read shipped code against shipped names, and a rename in the middle makes every one of their diffs unreadable.
+
+**If the author refuses the wide rename**, `ItemProducer` alone cannot become `BarProducer` — it would name a producer of `Item`s after a different word. Then both keep their names, and Q27's parameter lands on `ItemProducer`.
