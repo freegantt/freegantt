@@ -756,7 +756,7 @@ describe('render/dom backend', () => {
   // never writes a second part — so there is no per-instance stamp left to restamp or drop, and no
   // "structural parent draws several Segment-bars, a leaf draws one" split to tell apart. The three
   // tests this comment replaces (`gives a Segment bar data-segment-id...`, `...restamps
-  // data-segment-id when a removed Segment renumbers the bars`, `...loses its data-segment-id`)
+  // the retired data-segment-id when a removed Segment renumbers the bars`, and `...loses it`)
   // pinned a reconciliation identity scheme that no longer exists.
 
   it('spans the today line the full row content height, not just the visible pane (header readability follow-up)', () => {
