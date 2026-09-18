@@ -210,7 +210,6 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
     dataset: TDataset;
     entry?: Entry | undefined;
     gantt: TGantt;
-    // (undocumented)
     target?: CommandTarget;
     variant?: string | undefined;
 }
