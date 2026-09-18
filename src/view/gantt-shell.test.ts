@@ -870,7 +870,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       shell.reveal(entryId('marker'));
       shell.render(); // paints the frame the reveal's own scroll asked for
 
-      const bar = container.querySelector<HTMLElement>(`[data-item-id="${barId(entryId('marker'))}"]`)!;
+      const bar = container.querySelector<HTMLElement>(`[data-bar-id="${barId(entryId('marker'))}"]`)!;
       expect(pxWidth(bar)).toBe(boxWidthPx);
       expect(scrollX.state.position).toBe(translateX(bar) + pxWidth(bar) - viewportWidth);
 
@@ -1355,7 +1355,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       // `data-movable`/handle moves) is what tells O(changed items) apart from O(mounted bars).
       const setAttributeSpy = vi.spyOn(HTMLElement.prototype, 'setAttribute');
 
-      for (const bar of bars) hover?.(bar.dataset['itemId'] as BarId);
+      for (const bar of bars) hover?.(bar.dataset['barId'] as BarId);
       hover?.(undefined);
 
       observer.disconnect();
@@ -1407,7 +1407,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
       const plannedRowsSpy = vi.spyOn(FrameLayout.prototype, 'plannedRows');
 
-      for (const bar of bars) hover?.(bar.dataset['itemId'] as BarId);
+      for (const bar of bars) hover?.(bar.dataset['barId'] as BarId);
       hover?.(undefined);
 
       expect(plannedRowsSpy).not.toHaveBeenCalled();
@@ -1440,7 +1440,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     });
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    hover?.(bar.dataset['itemId'] as BarId);
+    hover?.(bar.dataset['barId'] as BarId);
 
     expect(bar.hasAttribute('data-movable')).toBe(true);
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;

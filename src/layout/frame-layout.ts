@@ -45,7 +45,7 @@ export class FrameLayout implements FrameLayoutView {
   /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
    * layout holds this number beside it, and drops the cache once the layout has planned another
    * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
-   * the same thing: a bar keeps its `data-item-id` while what it draws can still change underneath. */
+   * the same thing: a bar keeps its `data-bar-id` while what it draws can still change underneath. */
   get frameRevision(): number {
     return this.#frameRevision;
   }

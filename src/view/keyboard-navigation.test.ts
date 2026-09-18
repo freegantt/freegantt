@@ -195,8 +195,8 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     return el?.getAttribute('data-row-id') ?? undefined;
   }
 
-  function itemIdOf(el: Element | null): string | undefined {
-    return el?.getAttribute('data-item-id') ?? undefined;
+  function barIdOf(el: Element | null): string | undefined {
+    return el?.getAttribute('data-bar-id') ?? undefined;
   }
 
   function arrow(key: string, extra: KeyboardEventInit = {}): KeyboardEvent {
@@ -325,11 +325,11 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     bar0!.focus();
 
     bar0!.dispatchEvent(arrow('ArrowDown'));
-    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar1!));
+    expect(barIdOf(document.activeElement)).toBe(barIdOf(bar1!));
 
     // A plain ArrowRight nudges the bar (D-GH-1) — it never moves focus, unlike a grid-pane row.
     document.activeElement!.dispatchEvent(arrow('ArrowRight'));
-    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar1!));
+    expect(barIdOf(document.activeElement)).toBe(barIdOf(bar1!));
 
     shell.destroy();
     container.remove();
@@ -345,10 +345,10 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     bar0.focus();
 
     document.activeElement!.dispatchEvent(arrow('End'));
-    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar0));
+    expect(barIdOf(document.activeElement)).toBe(barIdOf(bar0));
 
     document.activeElement!.dispatchEvent(arrow('Home'));
-    expect(itemIdOf(document.activeElement)).toBe(itemIdOf(bar0));
+    expect(barIdOf(document.activeElement)).toBe(barIdOf(bar0));
 
     shell.destroy();
     container.remove();

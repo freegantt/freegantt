@@ -27,8 +27,8 @@ export function barId(entry: EntryId, partIndex = 0): BarId {
   return `${entry}:${partIndex}` as BarId;
 }
 
-/** Call: `barIdFromDataset(bar.dataset['itemId'])` — the DOM→brand trust boundary for a `.fg-bar`
- *  node's `data-item-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
+/** Call: `barIdFromDataset(bar.dataset['barId'])` — the DOM→brand trust boundary for a `.fg-bar`
+ *  node's `data-bar-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
  *  `undefined` out, so a caller keeps its own "no bar hit" branch instead of taking one here. */
 export function barIdFromDataset(value: string | undefined): BarId | undefined {
   return value === undefined ? undefined : (value as BarId);

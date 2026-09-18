@@ -77,10 +77,10 @@ async function grabbableParentBar(page: Page): Promise<DragTarget> {
   for (let i = 0; i < count; i++) {
     const bar = bars.nth(i);
     const box = await bar.boundingBox();
-    const itemId = await bar.getAttribute('data-item-id');
-    if (!box || itemId === null) continue;
+    const barId = await bar.getAttribute('data-bar-id');
+    if (!box || barId === null) continue;
     // Item.id is `${entryId}:${segmentIndex}` (plans/01 §2.4).
-    const parentId = itemId.slice(0, itemId.lastIndexOf(':'));
+    const parentId = barId.slice(0, barId.lastIndexOf(':'));
 
     const grabX = Math.max(box.x, pane.x) + 8;
     const grabY = box.y + box.height / 2;
@@ -210,9 +210,9 @@ test('a dragged parent bar moves, and its sibling parents stay put (ADR 0013)', 
       const boxes: Record<string, [number, number]> = {};
       const bars = document.querySelectorAll<HTMLElement>('#gantt .fg-bar-summary');
       for (const element of Array.from(bars)) {
-        const itemId = element.dataset['itemId'] ?? '';
+        const barId = element.dataset['barId'] ?? '';
         const rect = element.getBoundingClientRect();
-        boxes[itemId.slice(0, itemId.lastIndexOf(':'))] = [Math.round(rect.left), Math.round(rect.right)];
+        boxes[barId.slice(0, barId.lastIndexOf(':'))] = [Math.round(rect.left), Math.round(rect.right)];
       }
       return boxes;
     });

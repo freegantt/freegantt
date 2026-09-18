@@ -32,7 +32,7 @@ function mount(
 function variantsOn(container: HTMLElement): Record<string, string> {
   const painted: Record<string, string> = {};
   for (const bar of Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'))) {
-    const id = bar.getAttribute('data-item-id');
+    const id = bar.getAttribute('data-bar-id');
     const variant = bar.getAttribute('data-variant');
     if (id !== null && variant !== null) painted[id] = variant;
   }

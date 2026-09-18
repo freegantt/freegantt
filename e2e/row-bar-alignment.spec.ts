@@ -43,8 +43,8 @@ test('every grid pane row lines up with its own bar in the timeline pane, centre
       barHeight: number;
     }> = [];
     for (const bar of Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar'))) {
-      const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
-      const entryId = itemId?.split(':')[0];
+      const barId = bar.dataset['barId']; // "<entryId>:<segmentIndex>"
+      const entryId = barId?.split(':')[0];
       const row = entryId ? rowTopByEntryId.get(entryId) : undefined;
       if (entryId && row !== undefined) {
         const barBox = bar.getBoundingClientRect();

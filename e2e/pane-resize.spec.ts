@@ -182,8 +182,8 @@ test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }
       barHeight: number;
     }> = [];
     for (const bar of Array.from(document.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'))) {
-      const itemId = bar.dataset['itemId']; // "<entryId>:<segmentIndex>"
-      const entryId = itemId?.split(':')[0];
+      const barId = bar.dataset['barId']; // "<entryId>:<segmentIndex>"
+      const entryId = barId?.split(':')[0];
       const row = entryId ? rowTopByEntryId.get(entryId) : undefined;
       if (entryId && row !== undefined) {
         const barBox = bar.getBoundingClientRect();

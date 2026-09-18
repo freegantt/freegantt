@@ -124,7 +124,7 @@ test("Delete on a parent's own bar keeps the parent and its child (ADR 0012 supe
   const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
   expect(before).toBe('task-alpha-1');
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="task-alpha-1:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="task-alpha-1:"]').first();
   await bar.click();
   await page.keyboard.press('Delete');
 
@@ -184,7 +184,7 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
   await page.evaluate((id: string) => {
     window.__gantt.reveal(id);
   }, newParentId);
-  await expect(page.locator(`#gantt .fg-bar-summary[data-item-id^="${newParentId}:"]`)).toHaveCount(1);
+  await expect(page.locator(`#gantt .fg-bar-summary[data-bar-id^="${newParentId}:"]`)).toHaveCount(1);
 });
 
 // #421 C7: "Framing crew" (`req-1`) claims three children, each a real child Entry with its own
@@ -197,10 +197,10 @@ test('a claimed row draws its children as bars, each with its own text, look and
   await gotoHierarchy(page);
   await page.evaluate(() => window.__gantt.reveal('req-1'));
 
-  const monday = page.locator('[data-item-id^="req-1-mon:"]');
-  const wednesday = page.locator('[data-item-id^="req-1-wed:"]');
+  const monday = page.locator('[data-bar-id^="req-1-mon:"]');
+  const wednesday = page.locator('[data-bar-id^="req-1-wed:"]');
   await expect(monday).toHaveText('Ali');
-  await expect(page.locator('[data-item-id^="req-1-tue:"]')).toHaveText('Ben');
+  await expect(page.locator('[data-bar-id^="req-1-tue:"]')).toHaveText('Ben');
   await expect(wednesday).toHaveText('Cy');
   await expect(monday).toHaveClass(/crew-day-filled/);
   await expect(wednesday).toHaveClass(/crew-day-open/);
@@ -229,7 +229,7 @@ test('a claimed row draws its children as bars, each with its own text, look and
 
   // A bar with no name still draws — "Site hold" carries no `name` at all.
   await page.evaluate(() => window.__gantt.reveal('site-hold'));
-  await expect(page.locator('[data-item-id^="site-hold:"]')).toHaveText('');
+  await expect(page.locator('[data-bar-id^="site-hold:"]')).toHaveText('');
 
   // One Field write opens the claimed row into three rows of its own, undoable like any other edit.
   await page.click('#crew-days-btn');
