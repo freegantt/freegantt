@@ -24,8 +24,10 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     hasSelection: vi.fn(() => true),
     keyboardPanEnabled: vi.fn(() => true),
     nothingSelected: vi.fn(() => true),
-    selectNextSegment: vi.fn(),
-    selectPreviousSegment: vi.fn(),
+    selectNextEntry: vi.fn(),
+    selectPreviousEntry: vi.fn(),
+    canClearDates: vi.fn(() => true),
+    clearDates: vi.fn(),
     pageDown: vi.fn(),
     pageUp: vi.fn(),
     panToStart: vi.fn(),
@@ -206,9 +208,7 @@ describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, 
     const ctx = {
       dataset: {} as CommandContext<unknown>['dataset'],
       gantt: {},
-      ...(field !== undefined
-        ? { target: { kind: 'header' as const, field, entryIds: [], segmentIds: [] } }
-        : {}),
+      ...(field !== undefined ? { target: { kind: 'header' as const, field, entryIds: [] } } : {}),
     } as CommandContext<unknown>;
     return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
   }
@@ -360,7 +360,7 @@ function makeHeaderCommandContext(field: string): {
   const ctx = {
     dataset: {} as CommandContext<unknown>['dataset'],
     gantt: {},
-    target: { kind: 'header' as const, field, entryIds: [], segmentIds: [] },
+    target: { kind: 'header' as const, field, entryIds: [] },
   } as CommandContext<unknown>;
   return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
 }

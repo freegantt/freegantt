@@ -70,6 +70,7 @@ interface Meta {
   budget?: number;
   quantity?: number;
   owner?: string;
+  showDaysOnRow?: boolean;
 }
 
 const ENTRIES: readonly EntryInput<Meta>[] = [
@@ -80,7 +81,7 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     parentId: 'root',
     start: '2026-01-01',
     end: '2026-01-05',
-    props: { cost: 100, budget: 500, quantity: 3 },
+    props: { cost: 100, budget: 500, quantity: 3, showDaysOnRow: false },
   },
   {
     id: 'e2',
@@ -88,18 +89,6 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     start: '2026-01-01T14:00:00Z', // not local midnight (issue #137 F11)
     end: '2026-01-02T14:00:00Z',
     props: { cost: 200, budget: 700 },
-  },
-  {
-    // Stores `segments`, so `start`/`end` are the envelope those segments span (#212).
-    id: 'e3',
-    name: 'Segmented Task',
-    start: '2026-01-01',
-    end: '2026-01-10',
-    segments: [
-      { start: '2026-01-01', end: '2026-01-04' },
-      { start: '2026-01-06', end: '2026-01-10' },
-    ],
-    props: { cost: 300, budget: 900 },
   },
 ];
 
@@ -113,6 +102,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'budget' }, // money, WITH parseValue — round-trips
   { field: 'quantity' }, // no `type`, `inputType: 'number'` only
   { field: 'owner' }, // editable: 'api' — the app writes it, the user never types it
+  { field: 'showDaysOnRow' }, // type: 'boolean' — opens a checkbox, not a text input (Q31)
 ];
 
 function makeGantt(
@@ -153,6 +143,7 @@ function makeGantt(
       { key: 'end', editable: false },
       // ADR 0015's middle state: `entries.update()` writes it, and this cell stays dead.
       { key: 'owner', editable: 'api', column: { header: 'Owner' } },
+      { key: 'showDaysOnRow', type: 'boolean', editable: true },
     ],
   });
   const gantt = new Gantt({
@@ -280,26 +271,18 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('a parentId or segments column keeps its cell dead, while entries.update() writes parentId', () => {
+  it('a parentId column keeps its cell dead, while entries.update() writes parentId', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const dataset = new Dataset<Meta>({ entries: structuredClone([...ENTRIES]), timeZone: 'UTC' });
     const gantt = new Gantt({
       container,
       dataset,
-      gridColumns: [
-        'name',
-        { field: 'parentId', header: 'Authored parent' },
-        { field: 'segments', header: 'Parts' },
-      ],
+      gridColumns: ['name', { field: 'parentId', header: 'Authored parent' }],
       plugins: [inlineEditing()],
     });
 
     dblclick(cellFor(container, 'e1', 'parentId'));
-    expect(container.querySelector('.fg-cell-editor')).toBeNull();
-    expect(refusal(container)).toBeNull();
-
-    dblclick(cellFor(container, 'e3', 'segments'));
     expect(container.querySelector('.fg-cell-editor')).toBeNull();
     expect(refusal(container)).toBeNull();
 
@@ -334,37 +317,21 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const notice = refusal(container)!;
     expect(notice).not.toBeNull();
     expect(notice.dataset['reason']).toBe('derived-value');
-    expect(notice.textContent).toContain('comes from the rows below it');
+    expect(notice.textContent).toContain('comes from its children');
     expect(notice.title).toBe(notice.textContent);
     expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
     gantt.destroy();
     container.remove();
   });
 
-  it('a segmented entry refuses its start cell instead of throwing on commit (#212)', () => {
-    const { container, gantt } = makeGantt();
-    dblclick(cellFor(container, 'e3', 'start'));
-    const notice = refusal(container)!;
-    expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('segmented-entry');
-    expect(notice.textContent).toContain('span the segments below');
-    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
-    gantt.destroy();
-    container.remove();
-  });
-
-  it('a segmented entry still edits a field that is not its envelope (#212)', () => {
-    const { container, gantt, dataset } = makeGantt();
-    dblclick(cellFor(container, 'e3', 'name'));
-    const el = input(container);
-    el.value = 'Renamed Segmented';
-    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-
-    expect(dataset.entries.get('e3')?.name).toBe('Renamed Segmented');
-    expect(refusal(container)).toBeNull();
-    gantt.destroy();
-    container.remove();
-  });
+  // Retired (ADR 0026, #421): 'a segmented entry refuses its start cell instead of throwing on
+  // commit' pinned the 'segmented-entry' refusal reason, and 'a segmented entry still edits a field
+  // that is not its envelope' pinned the flip side of the same guard — both gone with the several-
+  // Segment single Entry the guard existed to protect. Every Entry now writes start/end the same way
+  // ('committing a new date writes one transaction' below), so there is no envelope guard left to
+  // refuse a start edit, and no distinct "non-envelope field" case left to name — the plain name-edit
+  // path ('Enter commits one transaction and closes the editor') already covers editing a field that
+  // is not start/end.
 
   it('a money field with no parseValue refuses with a named reason (issue #137 F12, review SP1)', () => {
     const { container, gantt } = makeGantt();
@@ -407,6 +374,19 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'e1', 'quantity'));
     expect(input(container).type).toBe('number');
     expect(input(container).value).toBe('3');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a type: boolean cell opens a checkbox seeded from its stored value, and writes through .checked (Q31)', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'showDaysOnRow'));
+    const el = input(container);
+    expect(el.type).toBe('checkbox');
+    expect(el.checked).toBe(false); // seeded from e1's stored `false`
+    el.checked = true;
+    enter(el);
+    expect(dataset.entries.get('e1')!.read('showDaysOnRow')).toBe(true);
     gantt.destroy();
     container.remove();
   });
@@ -515,26 +495,11 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  it('a one-segment entry edits its start cell, and its lone segment moves too (#212)', () => {
-    // The guard above refuses an envelope write only when an entry draws several segments. One
-    // segment is the envelope's own drawing, so it moves with the envelope. `e1` authors no
-    // segments, so ingest filled one over `[start, end)`, and this proves that one still tracks.
-    const { container, gantt, dataset } = makeGantt();
-    const before = dataset.entries.get('e1')!.segments[0]!.id;
-    dblclick(cellFor(container, 'e1', 'start'));
-    const el = input(container);
-    el.value = '2026-01-02';
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const after = dataset.entries.get('e1')!;
-    expect(refusal(container)).toBeNull();
-    expect(after.segments).toHaveLength(1);
-    expect(after.segments[0]!.start).toBe(instant('2026-01-02T00:00:00Z'));
-    expect(after.segments[0]!.start).toBe(after.start);
-    expect(after.segments[0]!.id).toBe(before);
-    gantt.destroy();
-    container.remove();
-  });
+  // Retired (ADR 0026, #421): 'a one-segment entry edits its start cell, and its lone segment moves
+  // too' pinned an envelope guard that only let a start/end write through when the Entry's one
+  // Segment tracked it — the guard, the Segment, and `Entry.segments` are all gone, and 'committing a
+  // new date writes one transaction' above already proves the surviving question: editing `start`
+  // writes it straight to the Entry, no Segment involved.
 
   it('a non-midnight instant refuses the default date editor with a named reason (issue #137 F11)', () => {
     const { container, gantt } = makeGantt();
@@ -1477,7 +1442,6 @@ describe('CellEditing (S5.8, #169)', () => {
       'no-date-value',
       'time-of-day',
       'unsaved-value',
-      'segmented-entry',
     ];
 
     for (const reason of reasons) {

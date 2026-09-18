@@ -11,7 +11,7 @@ export type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValu
 import type { ElementDescription } from './render.js';
 
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | (string & {});
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
 
 /** How far a Field's value may change (ADR 0015). One key, two thresholds: the grid writes it only
  *  at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
@@ -170,11 +170,13 @@ export type Field<TValue = unknown> =
       /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
        *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
        *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
-       *  stored value is not itself a string (a `'number'` input's `.value` is still a string). Has no
-       *  effect on a `type: 'date'` Field — that never reaches the generic editor, routing through the
-       *  `dateInput` seam instead (D-S5-20). For a full widget swap, not just the native input type, veto
-       *  with `beforeEntryEdit` and mount your own control. */
-      inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+       *  stored value is not itself a string (a `'number'` input's `.value` is still a string).
+       *  `'checkbox'` (Q31) is the one exception: the editor reads and writes its `.checked` state
+       *  instead of `.value`, so a `boolean` Field takes no `parseValue`. Has no effect on a `type:
+       *  'date'` Field — that never reaches the generic editor, routing through the `dateInput` seam
+       *  instead (D-S5-20). For a full widget swap, not just the native input type, veto with
+       *  `beforeEntryEdit` and mount your own control. */
+      inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
       /** D-S5-17: `columnRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
        *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
        *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
@@ -229,7 +231,7 @@ export interface FieldType<TValue = unknown> {
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
   parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
-  inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+  inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
   column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
 }
 

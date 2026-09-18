@@ -37,7 +37,7 @@ interface Harness {
 /** A `GanttDom` over one plain element. It answers `owns` truthfully, which is the whole of what
  *  `onDomEvent`'s scoping needs, and resolves every owned node to one `'row'` target. */
 function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
-  const target: DomTarget = { kind: 'row', element: container, entryIds: [], segmentIds: [] };
+  const target: DomTarget = { kind: 'row', element: container, entryIds: [] };
   return {
     owns: (node) => container.contains(node),
     targetUnder: (node) => (container.contains(node) ? target : undefined),
@@ -60,7 +60,7 @@ function makeEntry(id: string): Entry {
 }
 
 function makeBar(): FrameBar {
-  return { id: 'item', x: 0, y: 0, width: 10, height: 4 } as unknown as FrameBar;
+  return { id: 'bar', x: 0, y: 0, width: 10, height: 4 } as unknown as FrameBar;
 }
 
 function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
@@ -93,10 +93,11 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     resolveTooltipRenderer: () => undefined,
     variantFor: (): ResolvedVariant => ({
       name: 'leaf',
-      items: () => [],
+      bars: () => [],
       paint: undefined,
       capabilities: undefined,
       css: undefined,
+      barLabels: undefined,
     }),
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),

@@ -1,7 +1,7 @@
 // harness/plugins/ — written as if by a third party: everything below comes from 'freegantt', the
 // package's own public entry, never a path inside 'freegantt/src' (review P2). This plugin is
 // `bufferKind()`'s peer. Two plugins each define their own variant, and both install: two rules that
-// claim different rows are neighbours rather than rivals.
+// match different rows are neighbours rather than rivals.
 
 import { definePlugin } from 'freegantt';
 import type { EntryEdit } from 'freegantt';
@@ -25,7 +25,7 @@ export function riskKind() {
         capabilities: { move: false },
       });
 
-      // What actions does it offer? One menu item, scoped to the rows this variant claimed.
+      // What actions does it offer? One menu item, scoped to the rows this variant matched.
       ctx.commands.register({
         id: 'demo.riskKind.markAccepted',
         label: 'Mark risk accepted',

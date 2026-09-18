@@ -47,7 +47,7 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 | B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, D4 |
 | B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) — S2.7 correction: the plan's original text named only `alien-signals`/`reactivity.ts`; the shipped rule confines both façades | `plans/04` §1 |
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
-| B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Item`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
+| B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Bar`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
 | B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | `01` §3 |
 | B11 | `no-restricted-imports` layer mirror | `no-restricted-imports` with per-directory `patterns` | Layer violations (fast editor feedback) | — | I1 (backstop for `03` §1) |
 
@@ -109,7 +109,7 @@ these files were never created):**
 | Path | Seam |
 |---|---|
 | `src/scheduling/policy/default-policy.ts` | schedule semantics per kind |
-| `src/layout/items/produce-items.ts` | item production per kind |
+| `src/layout/bars/produce-bars.ts` | item production per kind |
 | `src/render/dom/renderer-registry.ts` | appearance per kind |
 | `src/interaction/capabilities.ts` | affordances per kind |
 
@@ -117,7 +117,7 @@ these files were never created):**
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
-**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/items/produce-items.ts` exists at the path this table names: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/bars/produce-bars.ts` exists at the path this table names: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
 
 ---
 
@@ -182,7 +182,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
 
-**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `itemId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the ItemId readers `entryIdOfItem` and `segmentIndexOfItem` (D-S4-25), plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `barId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the BarId readers `entryIdOfBar` and `partIndexOfBar` (D-S4-25), plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 

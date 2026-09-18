@@ -252,6 +252,103 @@ plus a ruling on whether that is default behaviour or a capability. Not built, b
 
 ---
 
+## What a build takes from S4, and where the spike is wrong for its callers
+
+**Added 2026-09-18, when the coordinator read this spike back against the
+[`codebase-design`](../../.claude/skills/codebase-design/SKILL.md) skill before C1 was dispatched.**
+The probe is reference material. It is not a patch to apply.
+
+**The placement is right, and this is the reason.** The claim reads an **Entry**, not a row:
+`childrenAsSegments` takes an `EntryRule`. A post-pass beside `applyCollapse` is tempting, because a
+claim really is a collapse one level deeper (`J-plan-I`). It fails twice. Such a pass holds ids
+alone, so it must look every Entry back up. And the flat branch has no `parentRowId` to walk. Put a
+pass where its inputs live. The fold stays inside `resolveEntriesSource`.
+
+**Take these three, which the spike measured.** A build that ignores them costs 2.7× on row
+resolution:
+
+1. Early-return before the tree index, when the rule is unset **and** `tree !== true`.
+2. `childRowsOf.get(entry.id)` **before** the rule read. Only a parent can be claimed, and the rule
+   reads a Field.
+3. Ask the claim question once per Entry, not twice.
+
+**Leave these three, which are wrong for the callers:**
+
+| The spike does | A build does instead | Why |
+|---|---|---|
+| Restates the rule type as `ChildrenOnParentRowRule`, because `FieldMatch` looked too generic to import | Imports the real `EntryRule` | `EntryRule` carries a default type parameter, `FieldMatch` ends in `& { [key: string]: unknown }`, and `compileRule` is already non-generic. The spike's own comment names a blocker that does not exist |
+| Matches with `Object.is` per key, with no typed `equals` and no unknown-key report | Uses the one shared compiler, through a `fieldFor` port | Q21 and Q29 rule this. The spike had no port, which is the only reason it matched narrowly |
+| Would need a `fieldFor` **and** an unknown-key sink | **One** ports object, **one** new key on `RowPassInput`, **one** new optional parameter | Two flat keys put four field-ish keys on `RowPassInput` beside `fieldCompares` and `fieldContext`, and C2 and C6 would add more |
+| Builds two Sets — claimed parents, and claimed children | **One** `Map<EntryId, readonly Entry[]>` of claimed parent to its children | It answers "claimed?" with `.has`, hands the row its children from the same read, and the flat skip becomes "is *my* parent claimed?" |
+| Widens `entryIds` alone | Adds a real `claimed` field to the row | An **empty** claimed parent has one `entryId` and is still claimed. The marker cannot be derived |
+
+**Also rejected: `resolveEntriesSource(input: RowPassInput)`**, which the `RowProducer` type already
+declares. It is the smaller interface on paper. It loses twice: the producer must then narrow
+`RowSource` internally, instead of at the one call site that knows it
+(`resolve-rows.ts:29`); and it churns 20 positional test call sites in `entries-source.test.ts`,
+`filter.test.ts` and `sort.test.ts`. One optional ports parameter costs those tests nothing.
+
+**The spike's `src/data/` half shipped as C4** (`393d1bf`). Do not take it a second time.
+
+**The spike's key name is the old one.** It says `childrenOnParentRow`, which was this plan's
+placeholder. Q24 rules the key `childrenAsSegments` and rejects the placeholder by name: it says
+*where*, not *what*.
+
+---
+
+## Carried forward, for C6 and C7
+
+These left the coordinator's handoff when that file was deleted on 2026-09-18. Each one is owed.
+
+- **`measureEntryDuration` sums `entry.segments`** (`data/fields/field-access.ts:211-222`), and ingest
+  mints one Segment over every spanning Entry. So `'segments'` measures a childless leaf's **own**
+  span today. A plain rename to `'children'` makes every childless leaf measure `0`. This is why C6
+  ships a stopgap, and why **#428** exists.
+- **`FieldType.inputType` is spelled twice** — `model/field.ts:232` and again at `:177`. A build that
+  adds a value to one spelling and not the other typechecks and then fails at run time.
+- **C6 renames `ignoreSegments` → `wholeSpan` (Q26).** After C2 that producer returns `[]` for a
+  claimed subject, so a name promising "the whole span" fails the naming test. **Pick the name
+  against the behaviour it has after C2, not today's.** Use the naming skill.
+- **`CHILD-ENTRY-DESIGN.md` line ~69 carries a vendor survey with the names stripped out.** CLAUDE.md
+  allows such a survey in an **ADR**, with names and links, and not in a plan. Move it into C6's ADR
+  and delete the paragraph. Low priority.
+- **A browser measurement of the hot path is still owed.** This spike's hover number is a Node proxy.
+  No numeric I5 budget exists to hold it against — `plans/03-slices.md:265` is still unchecked.
+
+---
+
+## The acceptance boxes no build has covered yet — read this before C7
+
+**Checked 2026-09-18 against #421's own Acceptance list, box by box.** C1–C6 cover most of the 30.
+These five are **not** covered by any test that exists, and C7's gate is "every acceptance box in
+#421 ticked". C7 must build them or say plainly why not.
+
+1. **`dataset.entries.update('req-1', { showDaysOnRow: false })` opens one row into sub-rows, in one
+   undo step, and undoes back.** This is the **live per-Entry switch through a data write**, and it is
+   the spike's **Q10, which S4 never reached**. C1 pinned the live switch through `gantt.rowSource`,
+   which is a different door: this one writes the Field the rule matches on. It needs the re-fold and
+   the undo round trip, and Selection must survive both.
+2. **`rollUp: 'sum'` on `hours` totals the day bars onto the claimed row.** The spike declared the
+   unmodified Rollup does this, and C4 made it cheaper, but no test asserts the total on a *claimed*
+   row.
+3. **A write to a claimed row's `start`/`end` throws `DerivedFieldNotWritableError`, and a row drag
+   moves every bar.** The throw is ADR 0013's existing behaviour; what is unproven is that a claimed
+   row is an ordinary rolling-up parent to the write door. The row drag is the second half and is the
+   riskier one.
+4. **`dataset.entries.update('d1', { parentId: 'req-2' })` moves a bar to another row, keeping its id,
+   its data and its place in the Selection, in one undo step.** Spike **Q13** found that no *gesture*
+   reaches this — `interaction/` has no row-target resolution at commit — but the box asks only for
+   the **data** door, which is an ordinary field write. Prove the data door; do not build the gesture,
+   which #421 does not ask for.
+5. **A test pins that a bar's printed value and its row total read the same at day, week and year
+   zoom.** C5 pinned labels across zoom; the **row total** across zoom is not pinned.
+
+Box 17 is already satisfied and recorded: C3 read all nine `entryIds[0]` sites once each and wrote a
+verdict per site into `999f599`'s commit message. Note the box's own line numbers are stale — C3
+re-derived them, which is the right move.
+
+---
+
 ## How to re-run
 
 ```

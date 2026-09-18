@@ -8,8 +8,6 @@
 export interface ActedOn {
     // (undocumented)
     entryIds: readonly EntryId[];
-    // (undocumented)
-    segmentIds: readonly SegmentId[];
 }
 
 // @public (undocumented)
@@ -41,6 +39,21 @@ export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'be
 // @public
 export function attemptMutation(body: () => void): boolean;
 
+// @public (undocumented)
+export interface Bar {
+    readonly box?: FixedBarBox;
+    // (undocumented)
+    end: Instant;
+    // (undocumented)
+    entryId: EntryId;
+    // (undocumented)
+    id: BarId;
+    label?: string;
+    // (undocumented)
+    start: Instant;
+    variant: string;
+}
+
 // @public
 export function bar(overrides?: Partial<EntryVariant>): EntryVariant;
 
@@ -55,11 +68,34 @@ export interface BarFlags {
     cycle?: boolean;
 }
 
+// @public (undocumented)
+export type BarId = string & {
+    readonly __brand: 'BarId';
+};
+
+// @public
+export function barId(entry: EntryId, partIndex?: number): BarId;
+
+// @public
+export function barIdFromDataset(value: string | undefined): BarId | undefined;
+
 // @public
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabels = 'fitBar' | 'inside' | 'outside' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+
+// @public
+export type BarLabels = BarLabelPolicy | BarLabelSpec;
+
+// @public
+export interface BarLabelSpec {
+    field?: FieldKey;
+    policy?: BarLabelPolicy;
+}
+
+// @public
+export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
 // @public
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
@@ -67,9 +103,9 @@ export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | unde
 // @public (undocumented)
 export interface BarRendererContext {
     // (undocumented)
-    entry: Entry;
+    bar: FrameBar;
     // (undocumented)
-    item: FrameBar;
+    entry: Entry;
     label?: ResolvedBarLabel;
 }
 
@@ -77,13 +113,13 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
 
 // @public
 export interface Capabilities {
@@ -174,7 +210,6 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
     dataset: TDataset;
     entry?: Entry | undefined;
     gantt: TGantt;
-    // (undocumented)
     target?: CommandTarget;
     variant?: string | undefined;
 }
@@ -550,7 +585,6 @@ export interface DomTarget {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
-    segmentIds: readonly SegmentId[];
 }
 
 // @public
@@ -590,15 +624,6 @@ export class DuplicateRowIdError extends FreeGanttError {
     readonly rowId: string;
 }
 
-// @public
-export class DuplicateSegmentIdError extends FreeGanttError {
-    constructor(segmentId: SegmentId, operation: string);
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly segmentId: SegmentId;
-}
-
 // @public (undocumented)
 export interface Duration {
     // (undocumented)
@@ -608,7 +633,7 @@ export interface Duration {
 }
 
 // @public
-export type DurationMeasure = 'span' | 'segments';
+export type DurationMeasure = 'span' | 'children';
 
 // @public
 export type EditExtender = (request: EditRequest) => EntryEdits;
@@ -648,15 +673,6 @@ export class EmptyCoversError extends FreeGanttError {
     readonly operation: string;
 }
 
-// @public
-export class EmptySegmentsError extends FreeGanttError {
-    constructor(entryId: EntryId, operation: string);
-    // (undocumented)
-    readonly entryId: EntryId;
-    // (undocumented)
-    readonly operation: string;
-}
-
 // @public (undocumented)
 export interface EntityAdded {
     // (undocumented)
@@ -675,6 +691,7 @@ export interface EntityRemoved {
 
 // @public (undocumented)
 export interface EntriesRowSource extends RowSourceCommon {
+    childrenAsSegments?: EntryRule | true | undefined;
     // (undocumented)
     source: 'entries';
     tree?: boolean | undefined;
@@ -691,13 +708,10 @@ export interface Entry<TProps = Record<string, unknown>> {
     readonly hasChildren: boolean;
     // (undocumented)
     readonly id: EntryId;
-    // (undocumented)
     readonly name: string;
     // (undocumented)
     parent(): Entry<TProps> | undefined;
     read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
-    // (undocumented)
-    readonly segments: readonly Segment[];
     readonly start?: Instant | undefined;
     toInput(): EntryInput<TProps>;
 }
@@ -747,17 +761,16 @@ export function entryId(value: string): EntryId;
 export function entryIdFromDataset(value: string | undefined): EntryId | undefined;
 
 // @public
-export function entryIdOfItem(id: ItemId): EntryId;
+export function entryIdOfBar(id: BarId): EntryId;
 
 // @public
 export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput | undefined;
     // (undocumented)
     id: string;
-    name: string;
+    name?: string | undefined;
     parentId?: string | undefined;
     props?: Partial<TProps>;
-    segments?: readonly SegmentInput[] | undefined;
     start?: InstantInput | undefined;
 }
 
@@ -774,17 +787,22 @@ export class EntryNotFoundError extends FreeGanttError {
 }
 
 // @public
+export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
+
+// @public
 export interface EntryResize extends EntryGestureEvent {
     // (undocumented)
     readonly edge: 'start' | 'end';
 }
 
 // @public
+export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | EntryPredicate<TProps>;
+
+// @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
     add(input: EntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
-    removeSegments(ids: readonly (SegmentId | string)[]): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }
@@ -793,13 +811,10 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
 export interface EntryStoreView<TProps = Record<string, unknown>> {
     // (undocumented)
     readonly all: readonly Entry<TProps>[];
-    entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
-    entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
     // (undocumented)
     get(id: EntryId | string): Entry<TProps> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
-    segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
     // (undocumented)
     readonly size: number;
     readonly storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>;
@@ -807,12 +822,13 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 
 // @public
 export interface EntryVariant<TProps = Record<string, unknown>> {
+    barLabels?: BarLabels;
+    bars?: BarProducer;
     capabilities?: Capabilities;
     css?: string;
-    items?: ItemProducer;
     name: string;
     paint?: BarRenderer;
-    when?: VariantRule<TProps>;
+    when?: EntryRule<TProps>;
 }
 
 // @public
@@ -863,7 +879,7 @@ export type Field<TValue = unknown> = {
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
-    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
     column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
 } | {
     key: FieldKey;
@@ -934,14 +950,14 @@ export interface FieldType<TValue = unknown> {
     // (undocumented)
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     // (undocumented)
-    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
     // (undocumented)
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     rollUp?: AggregatorName;
 }
 
 // @public (undocumented)
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | (string & {});
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
 
 // @public (undocumented)
 export interface FieldUpdated {
@@ -972,10 +988,7 @@ export interface FixedBarBox {
 }
 
 // @public
-export function fixedWidthItem(px: number, anchor?: BarAnchor): ItemProducer;
-
-// @public
-export function followSegments(entry: Entry, variant: string): readonly Item[];
+export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1005,12 +1018,10 @@ export interface FrameBar {
     // (undocumented)
     height: number;
     // (undocumented)
-    id: ItemId;
+    id: BarId;
     label: string;
     // (undocumented)
     rowId: RowId;
-    segmentId?: SegmentId;
-    segmentIds: readonly SegmentId[];
     span: BarSpanKind;
     variant: string;
     // (undocumented)
@@ -1058,7 +1069,6 @@ export interface FrameRow {
     // (undocumented)
     kind: PlannedRowKind;
     matched?: boolean;
-    segmentIds: readonly SegmentId[];
     // (undocumented)
     top: number;
 }
@@ -1148,13 +1158,12 @@ export class Gantt<TProps = unknown> {
         end: InstantInput;
     });
     get resolvedTheme(): ResolvedTheme;
-    reveal(id: EntryId | SegmentId | string): void;
+    reveal(id: EntryId | string): void;
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry<TProps>[];
     get selectedEntryIds(): readonly EntryId[];
-    get selectedSegmentIds(): readonly SegmentId[];
-    set selectedSegmentIds(ids: readonly (SegmentId | string)[]);
+    set selectedEntryIds(ids: readonly (EntryId | string)[]);
     setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void;
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
@@ -1266,7 +1275,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollAxes;
-    selectedSegmentIds?: readonly (SegmentId | string)[];
+    selectedEntryIds?: readonly (EntryId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
     todayLine?: boolean | InstantInput;
@@ -1294,7 +1303,7 @@ export type GanttScaleOptions = {
 };
 
 // @public
-export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
+export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'inverted-span';
 
 // @public (undocumented)
 export type GridCellRenderer = (ctx: GridCellRendererContext) => ElementDescription | undefined;
@@ -1388,9 +1397,6 @@ export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: Hi
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover;
 
 // @public
-export function ignoreSegments(entry: Entry, variant: string): readonly Item[];
-
-// @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
     constructor(key: string, illegalKey: string, overridableKeys: readonly string[]);
     // (undocumented)
@@ -1471,13 +1477,11 @@ export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public
 export class InvertedSpanError extends FreeGanttError {
-    constructor(entryId: EntryId, span: TimeSpan, operation: string, segmentId?: SegmentId);
+    constructor(entryId: EntryId, span: TimeSpan, operation: string);
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
     readonly operation: string;
-    // (undocumented)
-    readonly segmentId?: SegmentId;
     // (undocumented)
     readonly span: TimeSpan;
 }
@@ -1487,37 +1491,6 @@ export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean;
 
 // @public
 export function isTimeUnit(value: string): value is TimeUnit;
-
-// @public (undocumented)
-export interface Item {
-    readonly box?: FixedBarBox;
-    // (undocumented)
-    end: Instant;
-    // (undocumented)
-    entryId: EntryId;
-    // (undocumented)
-    id: ItemId;
-    // (undocumented)
-    label: string;
-    segmentId?: SegmentId;
-    // (undocumented)
-    start: Instant;
-    variant: string;
-}
-
-// @public (undocumented)
-export type ItemId = string & {
-    readonly __brand: 'ItemId';
-};
-
-// @public
-export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
-
-// @public
-export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
-
-// @public
-export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
 
 // @public (undocumented)
 export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;
@@ -1651,6 +1624,9 @@ export class ParentCycleError extends FreeGanttError {
     // (undocumented)
     readonly entryId: EntryId;
 }
+
+// @public
+export function partIndexOfBar(id: BarId): number;
 
 // @public
 export interface PixelSpan {
@@ -1975,6 +1951,7 @@ export type ResolvedTheme = 'light' | 'dark';
 //
 // @public
 export interface ResolvedVariant extends DrawnVariant {
+    readonly barLabels: BarLabels | undefined;
     readonly capabilities: Capabilities | undefined;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
@@ -2062,51 +2039,11 @@ export interface ScrollAxisState {
 }
 
 // @public
-export interface Segment extends TimeSpan {
-    // (undocumented)
-    id: SegmentId;
-}
-
-// @public
-export type SegmentId = string & {
-    readonly __brand: 'SegmentId';
-};
-
-// @public
-export function segmentIndexOfItem(id: ItemId): number;
-
-// @public
-export interface SegmentInput extends TimeSpanInput {
-    // (undocumented)
-    id?: string;
-}
-
-// @public
-export class SegmentNotFoundError extends FreeGanttError {
-    constructor(segmentId: SegmentId, operation: string);
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly segmentId: SegmentId;
-}
-
-// @public
-export class SegmentsOutOfSyncError extends FreeGanttError {
-    constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting', operation: string);
-    // (undocumented)
-    readonly entryId: EntryId;
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly reason: 'ambiguous' | 'conflicting';
-}
-
-// @public
 export interface SelectionChange {
     // (undocumented)
-    readonly from: readonly SegmentId[];
+    readonly from: readonly EntryId[];
     // (undocumented)
-    readonly to: readonly SegmentId[];
+    readonly to: readonly EntryId[];
 }
 
 // @public
@@ -2144,10 +2081,9 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)
     id: EntryId;
-    name: string;
+    name?: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;
-    segments: readonly Segment[];
     start?: Instant;
 }
 
@@ -2290,9 +2226,9 @@ export type TooltipRenderer = (ctx: TooltipRendererContext) => ElementDescriptio
 // @public (undocumented)
 export interface TooltipRendererContext {
     // (undocumented)
-    entry: Entry;
+    bar: FrameBar;
     // (undocumented)
-    item: FrameBar;
+    entry: Entry;
 }
 
 // @public
@@ -2371,12 +2307,6 @@ export class UnsupportedUnitError extends FreeGanttError {
 export type UpdatedRow = FieldUpdated | StoreRowUpdated;
 
 // @public
-export type VariantPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
-
-// @public
-export type VariantRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | VariantPredicate<TProps>;
-
-// @public
 export interface ViewportGestureFlags {
     keyboardPan?: boolean;
     wheelPan?: boolean;
@@ -2412,7 +2342,10 @@ export interface ViewPresetHeader extends TickStep {
 export function watchAllErrors(feeds: readonly ErrorFeed[], handler: (report: ErrorReport) => void): Disposer;
 
 // @public
-export function wholeEntryItem(entry: Entry, variant: string): Item;
+export function wholeEntryBar(entry: Entry, variant: string): Bar;
+
+// @public
+export function wholeSpanUnlessSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts, RovingFocusRow } from './roving-focus.js';
-import { entryId, itemId, rowId } from '../model/index.js';
+import { entryId, barId, rowId } from '../model/index.js';
 import type { RowId } from '../model/index.js';
 
 // #275 item 2: `roving-focus.ts` had no sibling test file at all. Start where the work order says
@@ -37,10 +37,10 @@ function makeRow(id: RowId, fields: readonly string[]): HTMLElement {
   return row;
 }
 
-function makeBar(item: string): HTMLElement {
+function makeBar(barId: string): HTMLElement {
   const bar = makePane();
   bar.className = 'fg-bar';
-  bar.dataset['itemId'] = item;
+  bar.dataset['barId'] = barId;
   bar.tabIndex = -1;
   return bar;
 }
@@ -264,7 +264,7 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
 describe('RovingFocus — pointer-vs-keyboard focusin split (regression guard, timeline pane)', () => {
   it('a pointer-caused arrival does not re-propose selection or re-reveal — it already ran on pointerdown/up', () => {
     const harness = buildHarness();
-    const bar = makeBar(itemId(entryId('e1')));
+    const bar = makeBar(barId(entryId('e1')));
     harness.timeline.append(bar);
 
     bar.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
@@ -279,12 +279,12 @@ describe('RovingFocus — pointer-vs-keyboard focusin split (regression guard, t
 
   it('a keyboard-caused arrival (no preceding pointerdown) does propose selection and reveal', () => {
     const harness = buildHarness();
-    const bar = makeBar(itemId(entryId('e1')));
+    const bar = makeBar(barId(entryId('e1')));
     harness.timeline.append(bar);
 
     bar.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
 
-    expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'bar', itemId: itemId(entryId('e1')) });
+    expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'bar', barId: barId(entryId('e1')) });
     expect(harness.ports.revealEntry).toHaveBeenCalledWith(entryId('e1'));
 
     harness.roving.detach();

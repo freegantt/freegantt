@@ -24,7 +24,7 @@ import type {
   GridCellRenderer,
   HeaderRenderer,
 } from 'freegantt';
-import { demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import { SEGMENTED_PARENT_ID, demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
@@ -72,6 +72,11 @@ const dataset = new Dataset<DemoEntryProps>({
 // (#319 follow-up).
 const mobilization = addMs(now(), 7 * MS.DAY);
 
+/** The one parent this page draws with segments. A predicate, not a Field match, because the page
+ *  names a single id — `hierarchy.ts` shows the other half, where a written Field decides it and
+ *  undo carries it. */
+const drawsChildrenAsSegments = (entry: Entry): boolean => entry.id === SEGMENTED_PARENT_ID;
+
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
@@ -79,7 +84,10 @@ const gantt = new Gantt({
   // #157: the pane is as wide as its columns, and stays that way when the budget column comes and
   // goes below. The number this replaces was hand-tuned to one column set.
   gridWidth: 'fitColumns',
-  rowSource: { source: 'entries', tree: true },
+  // What decides which parents draw their children as bars on their own row? This rule (#421).
+  // `entry-16` draws its three legs on one row; every other Entry draws its own single bar. Before
+  // ADR 0026 this picture needed a Segment — a second id space that only the library understood.
+  rowSource: { source: 'entries', tree: true, childrenAsSegments: drawsChildrenAsSegments },
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
   // #318: the default (`'belowHeader'`) anchors below the header, which a scrolled-up row's
   // own bar can still reach — this page's own "Program" summary bar does, right where it lands.
@@ -91,8 +99,8 @@ gantt.panToToday();
 
 // A test seam only (`hierarchy.ts` writes the same two globals): it hands an e2e test the public
 // `Gantt` and `Dataset`, nothing else. `Window.__dataset` is a bare `Dataset` — every e2e read of it
-// (`segments`, `start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so
-// no cast is needed to bridge two harness pages' differently-fielded instances.
+// (`start`, `end`, `id`) sits on `Entry`, outside either page's own declared fields, so no cast is
+// needed to bridge two harness pages' differently-fielded instances.
 window.__dataset = dataset;
 window.__gantt = gantt;
 
@@ -110,6 +118,7 @@ const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const sortNameBtn = document.querySelector<HTMLButtonElement>('#sort-name-btn')!;
+const segmentRowBtn = document.querySelector<HTMLButtonElement>('#segment-row-btn')!;
 
 function refreshNameInput(): void {
   const entries = gantt.selectedEntries;
@@ -128,16 +137,11 @@ function refreshMutationButtons(): void {
   removeBtn.disabled = none;
 }
 
-// ADR 0010: the Selection holds Segments, not Entries. The readout names both — the Entries the
-// picked Segments belong to, and how many Segments are picked — so the page shows the unit the
-// ADR introduced instead of hiding it behind the Entries alone.
+// ADR 0010, ADR 0025, #421: the Selection holds Entries. A former Segment is its own child Entry
+// now, so the readout names the Entries alone — there is no separate Segment count left to show.
 function renderSelection(): void {
   const entryIds = gantt.selectedEntryIds;
-  const segmentCount = gantt.selectedSegmentIds.length;
-  selectionReadout.textContent =
-    entryIds.length === 0
-      ? 'No selection'
-      : `Selected: ${entryIds.join(', ')} · ${segmentCount} segment${segmentCount === 1 ? '' : 's'}`;
+  selectionReadout.textContent = entryIds.length === 0 ? 'No selection' : `Selected: ${entryIds.join(', ')}`;
 }
 
 function syncSelectionUi(): void {
@@ -210,7 +214,7 @@ function applyGrouping(grouped: boolean): void {
   filterTeam = null;
   const next: RowSource = grouped
     ? { source: 'group', groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned') }
-    : { source: 'entries', tree: true };
+    : { source: 'entries', tree: true, childrenAsSegments: drawsChildrenAsSegments };
   gantt.rowSource = next;
   refreshRowSourceUi();
 }
@@ -219,9 +223,15 @@ function refreshRowSourceUi(): void {
   const current = gantt.rowSource;
   const grouped = current.source === 'group';
   const sorted = current.source !== 'custom' && current.sort !== undefined;
+  const drawsSegments = current.source === 'entries' && current.childrenAsSegments !== undefined;
   rowsSourceBtn.textContent = grouped ? 'Show tree' : 'Group by team';
   filterTeamBtn.disabled = grouped;
   sortNameBtn.disabled = grouped;
+  // A group source has no `childrenAsSegments` key to spread, so the rule has nowhere to live.
+  segmentRowBtn.disabled = grouped;
+  segmentRowBtn.textContent = drawsSegments
+    ? "Open entry-16's legs into rows"
+    : "Draw entry-16's legs as segments";
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
   sortNameBtn.textContent = sorted ? 'Sort by name: on' : 'Sort by name: off';
 }
@@ -238,6 +248,18 @@ filterTeamBtn.addEventListener('click', () => {
   gantt.rowSource = {
     ...current,
     filter: team === null ? undefined : (entry: Entry) => entry.read('team') === team,
+  };
+  refreshRowSourceUi();
+});
+
+// #421: the same three Entries, drawn two ways. Drawn as segments, they are three bars on one row; released,
+// they are three ordinary rows. One config key moves between the two, live, with no reload.
+segmentRowBtn.addEventListener('click', () => {
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  gantt.rowSource = {
+    ...current,
+    childrenAsSegments: current.childrenAsSegments === undefined ? drawsChildrenAsSegments : undefined,
   };
   refreshRowSourceUi();
 });
@@ -485,13 +507,11 @@ timeShadingToggle.addEventListener('change', () => {
 //
 // Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
 // 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
-// `ctx.target.segmentIds` for a bar and removes only that Segment, keeping the Entry dateless
-// rather than gone (ADR 0012); every other target reads `ctx.target.entryIds` and removes the whole
-// record (`src/view/core-commands.ts` states the dispatch rule).
+// `ctx.target.entryIds` and removes every one of those records (`src/view/core-commands.ts` states
+// the dispatch rule).
 //
 // What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
-// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record, so
-// picking one Segment of a multi-bar Entry still locks the Entry it belongs to.
+// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
 function entryContextActions() {

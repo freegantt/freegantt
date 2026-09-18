@@ -8,7 +8,6 @@ import {
   FreeGanttError,
   IllegalCoreFieldOverrideError,
   ReservedFieldKeyError,
-  segmentId,
   UnknownAggregatorError,
   UnknownFieldError,
   UnknownFieldTypeError,
@@ -58,10 +57,8 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     const entry = {
       id: 't1' as never,
       name: 't1',
-      kind: 'span' as const,
       start: 0 as never,
       end: 1 as never,
-      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
       props: { cost: 500 },
     };
     expect(readFieldByKey(entry, 'cost', ctx(registry))).toBe(500);
@@ -113,10 +110,8 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     const entry = {
       id: 't1' as never,
       name: 't1',
-      kind: 'span' as const,
       start: 0 as never,
       end: 1 as never,
-      segments: [{ id: segmentId('t1-seg'), start: 0 as never, end: 1 as never }],
       props: {},
     };
     const cost = registry.get('cost')!;
@@ -357,6 +352,26 @@ describe('shipped Field types resolve by name with no local fieldTypes', () => {
     expect(field.formatValue!(twelveDays, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('12 d');
   });
 
+  it("{ key: 'showDaysOnRow', type: 'boolean' } ingests, formats, and opens a checkbox with no parseValue (Q22)", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'showDaysOnRow', type: 'boolean' }] });
+    const field = registry.get('showDaysOnRow')!;
+    expect(field.type).toBe('boolean');
+    expect(field.inputType).toBe('checkbox');
+    expect(field.formatValue!(true, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('true');
+    expect(field.formatValue!(false, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe('false');
+    expect(field).not.toHaveProperty('parseValue');
+    expect(field.rollUp).toBeUndefined();
+  });
+
+  it('type: boolean sorts false before true, and an absent reading sorts last either way', () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'showDaysOnRow', type: 'boolean' }] });
+    const field = registry.get('showDaysOnRow')!;
+    expect(field.compare!(false, true)).toBeLessThan(0);
+    expect(field.compare!(true, false)).toBeGreaterThan(0);
+    expect(field.compare!(true, undefined)).toBeLessThan(0);
+    expect(field.compare!(undefined, true)).toBeGreaterThan(0);
+  });
+
   it('{ type: currency({ code: EUR }) } resolves, formats, parses, and does not keep an object on type', () => {
     const registry = new FieldRegistry({
       fields: [{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }],
@@ -401,7 +416,6 @@ describe('core Fields consume the shipped type table', () => {
     expect(registry.get('end')?.type).toBe('date');
     expect(registry.get('duration')?.type).toBe('duration');
     expect(registry.get('parentId')).not.toHaveProperty('type');
-    expect(registry.get('segments')).not.toHaveProperty('type');
     expect(registry.get('hierarchyParentId')).not.toHaveProperty('type');
   });
 

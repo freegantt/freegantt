@@ -16,20 +16,20 @@ const PLUGIN: PluginId = 'demo.plugin';
 
 interface Harness {
   registrations: PluginRegistrations;
-  counts: { frames: number; items: number; capabilities: number; variantStyles: number };
+  counts: { frames: number; bars: number; capabilities: number; variantStyles: number };
   /** Every Grid column `ColumnChrome` was asked for, in order — that seam is a delegation. */
   columns: GridColumnInput[];
 }
 
 function harness(): Harness {
-  const counts = { frames: 0, items: 0, capabilities: 0, variantStyles: 0 };
+  const counts = { frames: 0, bars: 0, capabilities: 0, variantStyles: 0 };
   const columns: GridColumnInput[] = [];
   const ports: PluginRegistrationPorts = {
     requestFrame: () => {
       counts.frames += 1;
     },
-    invalidateItems: () => {
-      counts.items += 1;
+    invalidateBars: () => {
+      counts.bars += 1;
     },
     refreshCapabilities: () => {
       counts.capabilities += 1;
@@ -57,7 +57,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
     const { registrations, counts } = harness();
 
     const dispose = registrations.registerRenderer('gridCell', () => ({ text: '' }), PLUGIN);
-    expect(counts).toMatchObject({ frames: 1, items: 0, capabilities: 0 });
+    expect(counts).toMatchObject({ frames: 1, bars: 0, capabilities: 0 });
 
     dispose();
     expect(counts.frames).toBe(2);
@@ -67,23 +67,23 @@ describe('PluginRegistrations — what each seam invalidates', () => {
     const { registrations, counts } = harness();
 
     const dispose = registrations.registerDecoration('underBars', () => []);
-    expect(counts).toMatchObject({ frames: 1, items: 0, capabilities: 0 });
+    expect(counts).toMatchObject({ frames: 1, bars: 0, capabilities: 0 });
 
     dispose();
     expect(counts.frames).toBe(2);
   });
 
   // ADR 0018 and ADR 0022 §5: one variant answers five questions, so one registration invalidates
-  // all three passes — the Items every row produces, every capability, and the frame — and rewrites
+  // all three passes — the Bars every row produces, every capability, and the frame — and rewrites
   // its own `css`, which reaches the document on this same edge.
   it('a variant re-produces every row, re-resolves every capability, rewrites its own css and repaints, on both edges', () => {
     const { registrations, counts } = harness();
 
     const dispose = registrations.registerVariant({ name: 'buffer', when: () => true }, PLUGIN);
-    expect(counts).toMatchObject({ items: 1, frames: 1, capabilities: 1, variantStyles: 1 });
+    expect(counts).toMatchObject({ bars: 1, frames: 1, capabilities: 1, variantStyles: 1 });
 
     dispose();
-    expect(counts).toMatchObject({ items: 2, frames: 2, capabilities: 2, variantStyles: 2 });
+    expect(counts).toMatchObject({ bars: 2, frames: 2, capabilities: 2, variantStyles: 2 });
   });
 
   it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {
@@ -91,7 +91,7 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 
     const dispose = registrations.registerGridColumn('cost', 'acme/costs');
     expect(columns).toEqual(['cost']);
-    expect(counts).toMatchObject({ frames: 0, items: 0, capabilities: 0 });
+    expect(counts).toMatchObject({ frames: 0, bars: 0, capabilities: 0 });
 
     dispose();
     expect(columns).toEqual([]);
@@ -99,16 +99,18 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 });
 
 describe('PluginRegistrations — the tables it reads back', () => {
-  it('answers a variant’s own `capabilities`, and undefined for a row no rule claimed', () => {
+  it('answers a variant’s own `capabilities`, and undefined for a row no rule matched', () => {
     const { registrations } = harness();
     const capabilities = { move: false };
 
     registrations.registerVariant(
-      { name: 'buffer', when: (entry) => entry.id === 'claimed', capabilities },
+      { name: 'buffer', when: (entry) => entry.id === 'segmented', capabilities },
       PLUGIN,
     );
 
-    expect(registrations.variants.resolveFor(entryDouble({ id: 'claimed' })).capabilities).toBe(capabilities);
+    expect(registrations.variants.resolveFor(entryDouble({ id: 'segmented' })).capabilities).toBe(
+      capabilities,
+    );
     expect(registrations.variants.resolveFor(entryDouble({ id: 'other' })).capabilities).toBeUndefined();
   });
 

@@ -1,6 +1,6 @@
 // layout/ — decoration provider types (D-S5-15). A provider is a pure function of the window,
 // registered from the DOM side (`ctx.view.registerDecoration`) and invoked from here — the same
-// shape `ItemProducer` already has (ADR 0002's precedent). It never touches the DOM and never
+// shape `BarProducer` already has (ADR 0002's precedent). It never touches the DOM and never
 // mutates its input.
 //
 // These types live in layout/, not model/ (the spec's own files table names `model/decoration.ts` —

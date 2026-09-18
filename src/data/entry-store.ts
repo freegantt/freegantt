@@ -23,27 +23,22 @@ import type {
   HierarchySource,
   HierarchySourceWrapper,
   RaiseError,
-  Segment,
-  SegmentId,
 } from '../model/index.js';
 import {
   entryId,
-  segmentId,
   ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
-  DuplicateSegmentIdError,
   EntryNotFoundError,
   FieldNotEditableError,
   ParentCycleError,
-  SegmentNotFoundError,
   UnknownFieldError,
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { authoredEnvelopeKeysOf, toEditReading, toEntry } from './entry-reader.js';
+import { toEditReading, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
@@ -87,24 +82,11 @@ interface WriteSet {
   added: Map<EntryId, StoredEntry>;
   removed: Set<EntryId>;
   edits: Map<EntryId, ProposedEdit>;
-  /** Which of `start`/`end`/`segments` the body itself named on each entry in `edits`, before
-   *  `reconcileEnvelope` paired or back-derived the rest (#232) — `pendingAuthoredEnvelopeKeys()`
-   *  hands this to `buildCommitChangeSet`, which needs it to tell the body's own envelope write from
-   *  one an `EditExtender` cascade adds later. Keyed the same as `edits`, and only entries with a
-   *  pending edit ever get an entry here. */
-  authoredEnvelopeKeys: Map<EntryId, ReadonlySet<string>>;
-  /** `SegmentId → EntryId`, `null` when this transaction dropped the id (finding S1, #212). Kept
-   *  current by `stageAdd`/`stageUpdate`/`stageRemove`, in call order, so `entryIdOfSegment` inside
-   *  an open transaction is one map lookup — never a rebuild of an overlay Entry per Segment id, and
-   *  never a scan of the write set. An id absent from this map was never touched this transaction,
-   *  so `#segmentOwnerInWriteSet` falls through to the committed index for it. */
-  segmentOwner: Map<SegmentId, EntryId | null>;
   /** Every id the hierarchy source named as a parent of a staged add or update, in this transaction.
    *  A filter, not an index: it over-answers (an id whose child was later reparented away stays in
    *  it), and a miss is the only answer it is trusted for. `#hasChildren` runs on every consumer
    *  write, and without this it would walk the staged edits each time — the O(n²) shape finding S1
-   *  (#212) already killed once for Segment ids. Kept current by `stageAdd`/`stageUpdate`, the same
-   *  way `segmentOwner` is.
+   *  (#212) already killed once. Kept current by `stageAdd`/`stageUpdate`.
    *
    *  It reads the **source**, never `edit.parentId` (ADR 0020). A plugin source may answer out of a
    *  `props` key, so an edit that moves a row names no `parentId` at all — a filter built from the
@@ -116,27 +98,6 @@ interface WriteSet {
    *  5,000 of them in one commit. It stays off the hot path — one transaction per gesture, at
    *  commit, never once per frame (I5). */
   stagedParents: Set<EntryId>;
-}
-
-/** Records a Segment ownership change into `writeSet.segmentOwner` (finding S1, #212) — called by
- *  `stageAdd`/`stageUpdate`/`stageRemove` right after each stages, so the map always reflects real
- *  call order (last write wins, the same order a committed transaction body actually ran in). `before`
- *  is `ownerId`'s Segments as staging saw them before this call; `after` is what they become —
- *  `undefined` for a removed entity. A dropped id is recorded as `null`; a kept or newly authored one
- *  points at `ownerId`. */
-function recordSegmentOwnership(
-  writeSet: WriteSet,
-  ownerId: EntryId,
-  before: readonly Segment[] | undefined,
-  after: readonly Segment[] | undefined,
-): void {
-  const keptIds = new Set((after ?? []).map((segment) => segment.id));
-  for (const segment of before ?? []) {
-    if (!keptIds.has(segment.id)) writeSet.segmentOwner.set(segment.id, null);
-  }
-  for (const segment of after ?? []) {
-    writeSet.segmentOwner.set(segment.id, ownerId);
-  }
 }
 
 export class EntryStore implements EntryStoreContract {
@@ -160,17 +121,16 @@ export class EntryStore implements EntryStoreContract {
    *  again inside the same revision, so the same bad answer must not be raised twice for it. */
   #reportedRefusals = { revision: -1, messages: new Set<string>() };
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
+  /** `#byParent`, ids only and with the root key (`undefined`) dropped — the same shape
+   *  `childIdsByParent` derives on demand, memoized here instead so a caller with nothing to prove
+   *  wrong (a commit that touched no row) can read it rather than re-derive it (#421 C4). */
+  #childIds: () => ReadonlyMap<EntryId, readonly EntryId[]>;
   /** Ancestor count per committed row, cached beside `#byParent` for the same reason `hasChildren`
    *  is: `entry.depth` is a property, and a walk inside a getter breaks ADR 0017's rule 4. */
   #depthById: () => ReadonlyMap<EntryId, number>;
   /** One `Entry` per id, for the store's lifetime (ADR 0017, rule 2). */
   #live: LiveEntries;
   #access: FieldAccess;
-  /** `SegmentId → EntryId` (finding 6, #212): the answer `entryIdOfSegment`/`entryIdsOfSegments`
-   *  publish, and the one place that answer is computed. Maintained alongside `#byId` on every
-   *  commit — `#reindexSegments`, `#rememberSegmentsOf`, `#forgetSegmentsOf` are the only writers —
-   *  so a reader never rebuilds it and never scans `all` for it. */
-  #entryIdBySegmentId = new Map<SegmentId, EntryId>();
   #writeSet: WriteSet | null = null;
   /** Insertion index of an Entry object at the moment it was removed, so an undo/redo that adds it
    *  back can put it in the same place in `all` (D-S2-3). Keyed by object identity, not `EntryId`:
@@ -215,11 +175,10 @@ export class EntryStore implements EntryStoreContract {
         if (field === undefined) throw unknownFieldError(key);
         return readField(entry, field, this.#access);
       },
-      durationOf: (entry) => measureEntryDuration(entry, this.#access.measureDuration),
+      durationOf: (entry) => measureEntryDuration(entry, this.#access),
     });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
-    for (const entry of entries) this.#rememberSegmentsOf(entry);
     // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
     // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
     this.#all = computed(() => {
@@ -244,6 +203,17 @@ export class EntryStore implements EntryStoreContract {
       }
       return byParent;
     });
+    this.#childIds = computed(() => {
+      const childIds = new Map<EntryId, readonly EntryId[]>();
+      for (const [parentId, children] of this.#byParent()) {
+        if (parentId === undefined) continue;
+        childIds.set(
+          parentId,
+          children.map((child) => child.id),
+        );
+      }
+      return childIds;
+    });
     this.#depthById = computed(() => {
       const byParent = this.#byParent();
       const depthById = new Map<EntryId, number>();
@@ -265,6 +235,13 @@ export class EntryStore implements EntryStoreContract {
    *  and every live row read one index rather than three walks that happen to agree (`F6`). */
   committedParents(): ParentIndex {
     return this.#hierarchy().parents;
+  }
+
+  /** Each committed parent's children, by id, in dataset order. Memoized per revision beside
+   *  `committedParents` — the Rollup reads this instead of re-deriving `childIdsByParent` when a
+   *  commit moves no row (#421 C4). An id with no children of its own has no key here. */
+  committedChildIds(): ReadonlyMap<EntryId, readonly EntryId[]> {
+    return this.#childIds();
   }
 
   /** Raises every answer core refused, once (ADR 0020, `F5`).
@@ -456,104 +433,6 @@ export class EntryStore implements EntryStoreContract {
     return false;
   }
 
-  /** Call: `dataset.entries.entryIdOfSegment(segmentId)`. The Entry that draws `id`, or `undefined`
-   *  when no Entry does (ADR 0010, #212, finding 6) — one map lookup against `#entryIdBySegmentId`,
-   *  never a walk of `all`. Read through the write set inside an open transaction, the same
-   *  read-your-own-writes posture `get`/`has` and every live row already take. */
-  entryIdOfSegment(id: SegmentId | string): EntryId | undefined {
-    const key = segmentId(id);
-    if (!this.#writeSet) return this.#entryIdBySegmentId.get(key);
-    return this.#segmentOwnerInWriteSet(key);
-  }
-
-  /** Call: `dataset.entries.entryIdsOfSegments(selection)`. Every Entry named by at least one of
-   *  `ids`, deduped, in the order first named (ADR 0010, #212, finding 6) — what `selectedEntryIds`
-   *  and a Selection prune both need, one call each instead of a scan of `all`. An id no Entry
-   *  currently draws contributes nothing, the same "skip a Segment the store dropped" rule a reader
-   *  already takes. */
-  entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[] {
-    const seen = new Set<EntryId>();
-    const result: EntryId[] = [];
-    for (const id of ids) {
-      const ownerId = this.entryIdOfSegment(id);
-      if (ownerId !== undefined && !seen.has(ownerId)) {
-        seen.add(ownerId);
-        result.push(ownerId);
-      }
-    }
-    return result;
-  }
-
-  /** Call: `dataset.entries.segmentIdsOfEntries(ids)`. Every Segment id these Entries draw, deduped,
-   *  each Entry named once in the order first named, and each Entry's own Segments in Entry order
-   *  (ADR 0010, #212, finding 10; deduped per the #212 R2 fix-plan review, finding E) — the pair to
-   *  `entryIdsOfSegments`, which dedupes the same way, and what a row click, a shift-range, a keyboard
-   *  select, and the published way to select an Entry all read. An id no Entry currently draws, or an
-   *  Entry already named, contributes nothing. */
-  segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[] {
-    const seen = new Set<EntryId>();
-    const result: SegmentId[] = [];
-    for (const id of ids) {
-      const entry = this.storedEntry(id);
-      if (entry === undefined || seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      for (const segment of entry.segments) result.push(segment.id);
-    }
-    return result;
-  }
-
-  /** `entryIdOfSegment` inside an open transaction: one lookup at the write set's own
-   *  `segmentOwner` map (finding S1, #212), the pair to `#childrenOfWriteSet`'s overlay for
-   *  `storedChildrenOf` — never a rebuild of an overlay Entry per Segment id, and never a pass over the
-   *  write set. `stageAdd`/`stageUpdate`/`stageRemove` keep the map current as each stages, so a
-   *  Segment id this transaction touched already carries the right answer, `null` included for one
-   *  it dropped. An id this transaction never touched is absent from the map, so the committed
-   *  index still answers for it. */
-  #segmentOwnerInWriteSet(id: SegmentId): EntryId | undefined {
-    const writeSet = this.#writeSet;
-    if (!writeSet) return this.#entryIdBySegmentId.get(id);
-    if (writeSet.segmentOwner.has(id)) return writeSet.segmentOwner.get(id) ?? undefined;
-    return this.#entryIdBySegmentId.get(id);
-  }
-
-  /** Adds every Segment `entity` draws to `#entryIdBySegmentId`, pointing each at `entity.id`.
-   *  Construction's initial seeding and a committed add both call this — the one place a Segment
-   *  starts being findable through the index. */
-  #rememberSegmentsOf(entity: StoredEntry): void {
-    for (const segment of entity.segments) this.#entryIdBySegmentId.set(segment.id, entity.id);
-  }
-
-  /** Removes every Segment `entity` draws from `#entryIdBySegmentId` — the mirror of
-   *  `#rememberSegmentsOf`, called on a committed remove so a dropped Entry's Segments stop
-   *  answering `entryIdOfSegment` with an id nothing owns any more. Guarded on current ownership
-   *  (finding B3, #212): a Segment id `entity` once drew but the index now credits to a different
-   *  Entry — handed off in the same commit — is that Entry's, not `entity`'s, to delete. Without the
-   *  guard, processing `entity`'s row after the new owner's row deletes the new owner's live entry. */
-  #forgetSegmentsOf(entity: StoredEntry): void {
-    for (const segment of entity.segments) {
-      if (this.#entryIdBySegmentId.get(segment.id) === entity.id) this.#entryIdBySegmentId.delete(segment.id);
-    }
-  }
-
-  /** A committed `segments` field write, `before` → `after`, on `ownerId` (finding 6, #212): drops
-   *  the index entries for Segments `before` drew that `after` no longer does, then points every
-   *  Segment `after` draws at `ownerId` — a moved Segment keeps its id, so this also covers the
-   *  common case where nothing actually changed which ids are in play. The drop is guarded on
-   *  current ownership (finding B3, #212): `#applyUpdatedRows` walks a changeset's rows in the
-   *  edits map's insertion order, which is not necessarily the order the transaction body wrote
-   *  them in, so a Segment id handed from one Entry to another in one commit can already carry its
-   *  new owner by the time the old owner's row runs here. The guard makes this order-independent —
-   *  a property row order alone cannot guarantee. */
-  #reindexSegments(before: readonly Segment[], after: readonly Segment[], ownerId: EntryId): void {
-    const keptIds = new Set(after.map((segment) => segment.id));
-    for (const segment of before) {
-      if (!keptIds.has(segment.id) && this.#entryIdBySegmentId.get(segment.id) === ownerId) {
-        this.#entryIdBySegmentId.delete(segment.id);
-      }
-    }
-    for (const segment of after) this.#entryIdBySegmentId.set(segment.id, ownerId);
-  }
-
   /** The committed by-id map a transaction diffs against — never the write set (D-S2-6, D-S2-7).
    *  Distinct from Snapshot (`entries.all`), which is the cached array. */
   committedById(): ReadonlyMap<EntryId, StoredEntry> {
@@ -571,7 +450,6 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
       const entry = toEntry(input, this.#context, this.#registry, 'entries.add');
-      this.#assertSegmentIdsUnique(entry.segments, id, 'entries.add');
       this.stageAdd(token, entry);
       return this.get(id)!;
     });
@@ -582,8 +460,8 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** The body every door that edits one Entry shares. `operation` is the call the consumer actually
-   *  wrote, so a refusal names a door they can act on: `entries.removeSegments` removes a Segment
-   *  through this same body, and a caller who never wrote `update` must not be told about it. */
+   *  wrote, so a refusal names a door they can act on — a caller who never wrote `update` must not be
+   *  told about it. */
   #updateFrom(operation: string, id: EntryId | string, edit: EntryEdit): Entry {
     return this.#mutate((token) => {
       const key = entryId(id);
@@ -596,11 +474,7 @@ export class EntryStore implements EntryStoreContract {
       const current = this.storedEntry(key)!;
       if (Object.keys(own).length > 0) {
         const reading = toEditReading(own, this.#context, current, this.#registry, operation);
-        const stored = reading.stored;
-        if (stored.segments !== undefined) {
-          this.#assertSegmentIdsUnique(stored.segments, key, operation);
-        }
-        this.stageUpdate(token, key, stored, reading.authoredEnvelopeKeys);
+        this.stageUpdate(token, key, reading.stored);
       }
       // Each distributed edit lands through the door it would have come in by, so a child that is
       // itself a rolling-up parent distributes again, or refuses. The walk ends at the leaves.
@@ -679,57 +553,6 @@ export class EntryStore implements EntryStoreContract {
     });
   }
 
-  /** Removes Segments in one transaction, across several Entries when `ids` names several (#212,
-   *  ADR 0010). Reads through `update`/`remove` for each Entry it touches, so the changeset reports
-   *  the same `{from, to}` rows either call reports on its own — no second write path. */
-  removeSegments(ids: readonly (SegmentId | string)[]): void {
-    this.#mutate(() => {
-      const requested = new Set(ids.map((id) => segmentId(id)));
-      if (requested.size === 0) return;
-      for (const [ownerId, removedIds] of this.#groupSegmentsByOwner(requested)) {
-        this.#removeSegmentsFrom(ownerId, removedIds);
-      }
-    });
-  }
-
-  /** Finds which Entry draws each requested Segment, and groups the ids by that Entry, from
-   *  `entryIdOfSegment` (finding 6, #212) — one lookup per requested id, never a scan of `all`. An
-   *  id no Entry draws throws `SegmentNotFoundError` before any Entry is touched — the same posture
-   *  `remove` takes on an unknown `EntryId` (S2.3 §1.3): fail before staging anything. */
-  #groupSegmentsByOwner(requested: ReadonlySet<SegmentId>): ReadonlyMap<EntryId, ReadonlySet<SegmentId>> {
-    const grouped = new Map<EntryId, Set<SegmentId>>();
-    for (const id of requested) {
-      const ownerId = this.entryIdOfSegment(id);
-      if (ownerId === undefined) throw new SegmentNotFoundError(id, 'entries.removeSegments');
-      const group = grouped.get(ownerId) ?? new Set<SegmentId>();
-      group.add(id);
-      grouped.set(ownerId, group);
-    }
-    return grouped;
-  }
-
-  /** Removes `removedIds` from one Entry's Segments. Removing the last one clears both dates instead
-   *  of removing the Entry (ADR 0012: a dateless Entry is legal, so a bar's own last Segment going away
-   *  no longer has to take the row with it). The Entry, its id, and its descendants all stay untouched
-   *  — only `entries.remove(id)` deletes a row. Otherwise the remaining Segments go through `update`,
-   *  the normal edit path, which recomputes the envelope around them itself (#212, finding 4:
-   *  `toEditReading` is the one owner) — this call names no `start` or `end` of its own, so there is
-   *  nothing here that could disagree with them. */
-  #removeSegmentsFrom(id: EntryId, removedIds: ReadonlySet<SegmentId>): void {
-    const entry = this.storedEntry(id)!;
-    const remaining = entry.segments.filter((segment) => !removedIds.has(segment.id));
-    if (remaining.length === 0) {
-      // Only an Entry that owns its own dates has dates to clear. On one with children the dates are
-      // the Rollup's (ADR 0013), and clearing them did real damage: the clear is a proposal in the
-      // transaction body, so the Rollup yielded to it (decision 5) and a parent with a dated child
-      // committed with no dates at all (N8, BUILD-LOG). The library obeys the rule it publishes.
-      if (this.#hasChildren(id)) return;
-      this.#updateFrom('entries.removeSegments', id, { start: undefined, end: undefined });
-      return;
-    }
-    this.#updateFrom('entries.removeSegments', id, { segments: remaining });
-  }
-
   #mutate<T>(body: (token: TxToken) => T): T {
     if (!this.#runner) {
       throw new Error(
@@ -779,24 +602,6 @@ export class EntryStore implements EntryStoreContract {
     }
   }
 
-  /** No two Segments in the store share one `SegmentId` (#212, ADR 0010): not within `segments`
-   *  itself, and not against any other Entry's Segments — including one this same transaction has
-   *  already staged, from `#segmentOwnerInWriteSet` (finding 6, S1) rather than a second walk of every Entry.
-   *  Checked before `stageAdd`/`stageUpdate`, so a duplicate stages nothing. */
-  #assertSegmentIdsUnique(segments: readonly Segment[], ownerId: EntryId, operation: string): void {
-    const ownIds = new Set<SegmentId>();
-    for (const segment of segments) {
-      if (ownIds.has(segment.id)) throw new DuplicateSegmentIdError(segment.id, operation);
-      ownIds.add(segment.id);
-    }
-    for (const id of ownIds) {
-      const existingOwner = this.#segmentOwnerInWriteSet(id);
-      if (existingOwner !== undefined && existingOwner !== ownerId) {
-        throw new DuplicateSegmentIdError(id, operation);
-      }
-    }
-  }
-
   // ---- TxToken-gated: only data/transaction.ts holds a token (docs/02 §3.6) ----
 
   beginTransaction(_token: TxToken): void {
@@ -804,18 +609,10 @@ export class EntryStore implements EntryStoreContract {
       added: new Map(),
       removed: new Set(),
       edits: new Map(),
-      authoredEnvelopeKeys: new Map(),
-      segmentOwner: new Map(),
       stagedParents: new Set(),
     };
   }
 
-  /** A re-add of an id this same transaction already staged for removal replaces it outright — the
-   *  reverse of `stageRemove`'s own clearing below — so the net effect is one clean entity, not a
-   *  cancelled add/remove pair the fold treats as neither happening. Reads `entry.id`'s Segments as
-   *  staging saw them a moment ago (read-your-own-writes, `get`) before overwriting the maps, so a
-   *  Segment the replaced object drew and `entry` does not is released, not left pointing stale
-   *  (finding B4, #212) — `recordSegmentOwnership` does that release-then-claim in one call. */
   /** Files the parent the source names for a row this transaction just staged — one source call per
    *  stage, which is what keeps `#hasChildren` honest under a source that reads anything but
    *  `parentId` (ADR 0020). */
@@ -824,57 +621,36 @@ export class EntryStore implements EntryStoreContract {
     if (parentId !== undefined) writeSet.stagedParents.add(parentId);
   }
 
+  /** A re-add of an id this same transaction already staged for removal replaces it outright — the
+   *  reverse of `stageRemove`'s own clearing below — so the net effect is one clean entity, not a
+   *  cancelled add/remove pair the fold treats as neither happening. */
   stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
-    const replaced = this.storedEntry(entry.id);
     writeSet.added.set(entry.id, entry);
     writeSet.removed.delete(entry.id);
     writeSet.edits.delete(entry.id);
     this.#recordStagedParent(writeSet, entry);
-    recordSegmentOwnership(writeSet, entry.id, replaced?.segments, entry.segments);
   }
 
-  /** `authoredEnvelopeKeys` names which of `start`/`end`/`segments` the caller itself wrote into
-   *  `edit`, before any envelope reconciliation ran (#232) — `update()` below passes the fact
-   *  `toEditReading` already computed. A caller that stages a raw `ProposedEdit` directly (a
-   *  same-transaction reparent, a test fixture) has done no such reconciliation, so the default —
-   *  the triad-intersection of `edit`'s own keys — is exactly that edit's authored keys too. */
-  stageUpdate(
-    _token: TxToken,
-    id: EntryId,
-    edit: ProposedEdit,
-    authoredEnvelopeKeys: ReadonlySet<string> = authoredEnvelopeKeysOf(edit),
-  ): void {
+  stageUpdate(_token: TxToken, id: EntryId, edit: ProposedEdit): void {
     const writeSet = this.#openWriteSet();
-    const before = edit.segments !== undefined ? this.storedEntry(id)?.segments : undefined;
     const staged = writeSet.added.get(id);
     if (staged) {
       const merged = entryAfterEdit(staged, edit);
       writeSet.added.set(id, merged);
       this.#recordStagedParent(writeSet, merged);
-      if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, merged.segments);
       return;
     }
     writeSet.edits.set(id, mergeProposedEdits(writeSet.edits.get(id), edit));
     const edited = this.storedEntry(id);
     if (edited !== undefined) this.#recordStagedParent(writeSet, edited);
-    if (authoredEnvelopeKeys.size > 0) {
-      const existing = writeSet.authoredEnvelopeKeys.get(id);
-      writeSet.authoredEnvelopeKeys.set(
-        id,
-        existing === undefined ? authoredEnvelopeKeys : new Set([...existing, ...authoredEnvelopeKeys]),
-      );
-    }
-    if (edit.segments !== undefined) recordSegmentOwnership(writeSet, id, before, edit.segments);
   }
 
   stageRemove(_token: TxToken, id: EntryId): void {
     const writeSet = this.#openWriteSet();
-    const before = this.storedEntry(id)?.segments;
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);
-    recordSegmentOwnership(writeSet, id, before, undefined);
   }
 
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[] {
@@ -896,14 +672,6 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
-  /** The body's own authored envelope keys, by entry (#232) — `buildCommitChangeSet`'s I4 guard and
-   *  its merge with the extender's cascade both need this, and neither can recover it from
-   *  `pendingEdits()` alone: `reconcileEnvelope` folds its own added keys into the very same
-   *  `proposedKeys` the body's own keys sit in. */
-  pendingAuthoredEnvelopeKeys(): ReadonlyMap<EntryId, ReadonlySet<string>> {
-    return this.#writeSet?.authoredEnvelopeKeys ?? new Map();
-  }
-
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
@@ -920,7 +688,6 @@ export class EntryStore implements EntryStoreContract {
       this.#rememberRemovedIndexes(changeSet);
       for (const { entity } of changeSet.removed) {
         this.#byId.delete(entity.id);
-        this.#forgetSegmentsOf(entity);
       }
       this.#restoreAdded(changeSet);
       this.#applyUpdatedRows(changeSet.updated);
@@ -931,9 +698,7 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
-   *  applies those against its own maps, from the same `endTransaction` call. A `segments` row
-   *  reindexes `#entryIdBySegmentId` (finding 6, #212) from the Entry's Segments before and after,
-   *  the only place a committed edit can move a Segment between ids or off the Entry entirely. */
+   *  applies those against its own maps, from the same `endTransaction` call. */
   #applyUpdatedRows(updated: readonly UpdatedRow[]): void {
     for (const row of updated) {
       if (row.store !== 'entries') continue;
@@ -941,7 +706,6 @@ export class EntryStore implements EntryStoreContract {
       if (!current) continue;
       const next = applyFieldRow(current, row.field, row.to, this.#registry);
       this.#byId.set(row.id, next);
-      if (row.field === 'segments') this.#reindexSegments(current.segments, next.segments, row.id);
     }
   }
 
@@ -963,24 +727,12 @@ export class EntryStore implements EntryStoreContract {
 
   /** Adding `entity` back — a `'user'` re-add of an id the same transaction also removed, or an
    *  undo/redo restoring a removed one — replaces whatever object currently sits at `entity.id` in
-   *  `#byId`, if any. That replaced object's own Segments must be forgotten first (finding B2,
-   *  #212): `endTransaction`'s removed-row loop already forgot the object this changeset's
-   *  `removed` row named, but a net-zero remove-then-add of one id never produces a `removed` row —
-   *  `stageAdd` clears it — so without this the old object's Segments stay indexed forever, findable
-   *  under an id nothing draws any more. `#forgetSegmentsOf`'s own ownership guard makes the order
-   *  against other rows in this same commit safe. */
-  #forgetReplacedEntity(entity: StoredEntry): void {
-    const replaced = this.#byId.get(entity.id);
-    if (replaced !== undefined && replaced !== entity) this.#forgetSegmentsOf(replaced);
-  }
-
+   *  `#byId`, if any. */
   #restoreAdded(changeSet: ChangeSet): void {
     if (changeSet.added.length === 0) return;
     if (changeSet.origin === 'user') {
       for (const { entity } of changeSet.added) {
-        this.#forgetReplacedEntity(entity);
         this.#byId.set(entity.id, entity);
-        this.#rememberSegmentsOf(entity);
       }
       return;
     }
@@ -991,14 +743,12 @@ export class EntryStore implements EntryStoreContract {
       return aIndex - bIndex;
     });
     for (const { entity } of restored) {
-      this.#forgetReplacedEntity(entity);
       const index = this.#removedAtIndex.get(entity);
       if (index === undefined) entries.push(entity);
       else {
         entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entity);
         this.#removedAtIndex.delete(entity);
       }
-      this.#rememberSegmentsOf(entity);
     }
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
   }

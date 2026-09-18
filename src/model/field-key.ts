@@ -24,7 +24,7 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
   /** This row's duration under the Dataset's `measureDuration`, computed on read (`CORE_FIELDS`) —
    *  the one core Field with no `Entry` key. `measureEntryDuration` (`data/fields/field-access.ts`)
    *  is the one computation all three doors reach: `'span'` measures `end - start`, and
-   *  `'segments'` sums the Segments and counts no gap (ADR 0017). */
+   *  `'children'` sums the direct children's own spans and counts no gap (ADR 0017, ADR 0026). */
   duration: Duration;
   /** The tree's answer to "who is this row's parent", by key (ADR 0024) — the same answer
    *  `parent()?.id` gives, computed on read, never stored. `parentId` stays the authored value; a

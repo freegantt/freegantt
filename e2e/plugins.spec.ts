@@ -81,13 +81,13 @@ test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plug
   // tab stop per pane instead, so focus lands on the timeline pane's own bar, the honest tab stop
   // whose bubbled keydown the shell's listener sees (same pattern e2e/hierarchy.spec.ts uses). Plain
   // `ArrowRight` moved off panning too (D-S5-26): `Alt+ArrowRight` is the pan chord now.
-  // Keyed on `data-item-id`, not a bare `.first()`: virtualization can still mount more bars ahead
+  // Keyed on `data-bar-id`, not a bare `.first()`: virtualization can still mount more bars ahead
   // of this one in DOM order right after the page settles (#256's own settle race, widened). A
   // `.first()` locator re-resolves on every retry, so it would then quietly point at a new,
   // unfocused bar instead of reporting that this one lost focus.
-  const firstBarId = await page.locator('#gantt .fg-bar').first().getAttribute('data-item-id');
+  const firstBarId = await page.locator('#gantt .fg-bar').first().getAttribute('data-bar-id');
   expect(firstBarId).toBeTruthy();
-  const firstBar = page.locator(`#gantt .fg-bar[data-item-id="${firstBarId}"]`);
+  const firstBar = page.locator(`#gantt .fg-bar[data-bar-id="${firstBarId}"]`);
   await firstBar.focus();
   await expect(firstBar).toBeFocused();
 
@@ -137,12 +137,11 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
 // alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
 // extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
 //
-// #241: the locked Entry draws several Segments there, so this covers the cascade shape the library
-// refuses for an envelope-only write (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). Every bar
-// the Entry draws has to ghost, and by the same distance — that is what `moveEntryTo`'s rigid
-// translate promises and what a `{ start, end }` cascade cannot say. The count is read off the page,
-// never asserted as a number, so a fixture edit cannot make this test quietly weaker.
-test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the drop is refused', async ({
+// #241, ADR 0026: the locked row draws several bars there, and each one is a child Entry the row
+// draws as a segment (`childrenAsSegments`). Every bar on that row has to ghost, and by the same distance — that
+// is what `moveEntryTo`'s rigid translate promises, applied once per dated child. The count is read
+// off the page, never asserted as a number, so a fixture edit cannot make this test quietly weaker.
+test('every bar of a locked row ghosts alongside a dragged neighbour, and the drop is refused', async ({
   page,
 }) => {
   await page.goto('/editing.html');
@@ -150,11 +149,11 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
 
   await page.locator('#lock-entry').check();
 
-  const dragged = page.locator('#gantt .fg-bar[data-item-id^="entry-14:"]').first();
-  const lockedBars = page.locator('#gantt .fg-bar[data-item-id^="entry-15:"]');
+  const dragged = page.locator('#gantt .fg-bar[data-bar-id^="entry-14:"]').first();
+  const lockedBars = page.locator('#gantt .fg-bar[data-bar-id^="entry-15-"]');
   await expect(dragged).toBeVisible();
-  // More than one bar from one Entry is the whole point of the case; one bar would pass with the
-  // envelope-only cascade this test exists to rule out.
+  // More than one bar on one row is the whole point of the case: one bar would pass even if the
+  // cascade moved a single envelope, which is what this test exists to rule out.
   expect(await lockedBars.count()).toBeGreaterThan(1);
 
   const leftEdges = async (): Promise<number[]> => {
@@ -173,11 +172,14 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
   });
 
   // The preview is rAF-coalesced, so poll rather than read once: every locked bar moves, because the
-  // plugin's extender wrote the whole Entry's Segments into the same draft. The 8px floor clears
-  // sub-pixel rounding on a bar that has not moved at all; the drag itself is 120px.
+  // plugin's extender cascades a `moveEntryTo` edit for every locked child Entry (ADR 0026 — this row
+  // draws several bars because it has several children, not because one Entry draws several
+  // Segments) into the same draft. The 8px floor clears sub-pixel rounding on a bar that has not
+  // moved at all; the drag itself is 120px.
   await expect.poll(async () => (await leftEdges()).every((x, i) => x > lockedBefore[i]! + 8)).toBe(true);
-  // Rigid, not stretched: one shared offset for every Segment, so the gaps between the bars survive
-  // the ghost. `moveEntryTo` promises this; an envelope write could not even name the Segments.
+  // Rigid, not stretched: one shared offset for every locked child Entry, so the gaps between the
+  // bars survive the ghost. `moveEntryTo` promises this per Entry; a single envelope write over the
+  // parent could not even name which child moved.
   const offsets = (await leftEdges()).map((x, i) => Math.round(x - lockedBefore[i]!));
   expect(new Set(offsets).size).toBe(1);
 
@@ -185,10 +187,12 @@ test('every bar of a locked Entry ghosts alongside a dragged neighbour, and the 
 
   // The drop is refused, so every bar lands back where it started and the page logs the refusal.
   // A store-only commit repaints on the next frame (#161), so every post-commit read polls.
-  await expect(page.locator('#toast')).toContainText('entry-15 is locked');
+  // The plugin names the locked Entry it found in the changeset, and each bar on this row is its own
+  // Entry now (ADR 0026) — so the refusal names a leg, not the row's parent.
+  await expect(page.locator('#toast')).toContainText('entry-15-a is locked');
   await expect.poll(leftEdges).toEqual(lockedBefore);
   await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
-  await expect(page.locator('#log')).toContainText('entry-15 is locked');
+  await expect(page.locator('#log')).toContainText('entry-15-a is locked');
 });
 
 // #280: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
@@ -205,7 +209,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();
   await bar.scrollIntoViewIfNeeded();
   await expect(bar).toBeVisible();
   await bar.click({ button: 'right' });
@@ -265,7 +269,7 @@ test('#280: scrolling inside the open menu does not dismiss it', async ({ page }
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();
   await bar.scrollIntoViewIfNeeded();
   await expect(bar).toBeVisible();
   await bar.click({ button: 'right' });

@@ -8,7 +8,7 @@
 // writing against `Gantt` names the bound `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding`;
 // code that parameterizes over its own Gantt type names the `*Of` forms declared here.
 
-import type { Disposer, Entry, EntryId, FieldKey, KeyChord, SegmentId, TargetKind } from '../model/index.js';
+import type { Disposer, Entry, EntryId, FieldKey, KeyChord, TargetKind } from '../model/index.js';
 import type { Dataset } from './dataset.js';
 
 /** Every command id the library itself registers (#236). One place names them, so
@@ -43,8 +43,8 @@ export type BuiltInCommandId =
   | 'freegantt.pageUp'
   | 'freegantt.selectAll'
   | 'freegantt.clearSelection'
-  | 'freegantt.selectNextSegment'
-  | 'freegantt.selectPreviousSegment'
+  | 'freegantt.selectNextEntry'
+  | 'freegantt.selectPreviousEntry'
   | 'freegantt.deleteSelection'
   | 'freegantt.discardCellEdit'
   | 'freegantt.undo'
@@ -59,13 +59,10 @@ export type BuiltInCommandId =
  *  `FieldKey` keeps over `CoreFieldKey`. */
 export type CommandId = BuiltInCommandId | (string & {});
 
-/** What one invocation acts on (ADR 0010, issue #212) — the two readings of one set. `entryIds` is a
- *  projection of `segmentIds`: the Entries those Segments belong to, deduped, in row order. Both are
- *  always present, so a command reads whichever one it needs and the two can never disagree. No
- *  command declares its reach: Delete reads `segmentIds`, and Lock reads `entryIds`, because a lock
- *  is a property of the record and not of one drawing of it. */
+/** What one invocation acts on (ADR 0010, ADR 0025, issue #212) — one set of Entry ids. A former
+ *  Segment is an ordinary child Entry now, so there is no second reading to keep in step with this
+ *  one. */
 export interface ActedOn {
-  segmentIds: readonly SegmentId[];
   entryIds: readonly EntryId[];
 }
 
@@ -79,11 +76,11 @@ export interface ActedOn {
  *  resolved from the Selection by `resolveActedOn` below — the Selection when the thing you clicked
  *  shares it (either one holds the other), and the thing you clicked when it does not. So a
  *  right-click on one of three selected bars names three, a right-click on an unselected row names
- *  every Segment that row owns, and a right-click on a row that owns a lone selected bar plus others
+ *  every Entry that row owns, and a right-click on a row that owns a lone selected bar plus others
  *  names only that one bar — the narrower thing the user already picked, left alone (#212).
  *
- *  Both id sets are empty for a `'header'` or `'splitter'` target, and for a grouping header row.
- *  Neither is ever `undefined`, so a `when` counts them with no fallback. */
+ *  The id set is empty for a `'header'` or `'splitter'` target, and for a grouping header row. It
+ *  is never `undefined`, so a `when` counts it with no fallback. */
 export interface CommandTarget extends ActedOn {
   kind: TargetKind;
   /** Which Grid column this landed on, for a `'header'` or `'gridCell'` target. `field` names a column
@@ -97,24 +94,20 @@ export interface CommandTarget extends ActedOn {
  *  node stand for"; this is the one place its answer meets the Selection.
  *  `extensions/features/context-menu.ts` is the only caller: a keyboard chord has no separate
  *  "clicked" thing to reconcile with the Selection, so `view/gantt-shell.ts`'s
- *  `#buildCommandContext` fills both id sets straight from the Selection, and a consumer's command
- *  `run` reads `ctx.target?.segmentIds` or `ctx.target?.entryIds` either way (S5.2's contract) —
- *  never re-deriving either one.
- *
- *  Each side arrives with both readings already paired, so this never turns a Segment into an Entry
- *  itself: a `DomTarget` carries the clicked pair, and the `Gantt` carries the selected pair.
+ *  `#buildCommandContext` fills the id set straight from the Selection, and a consumer's command
+ *  `run` reads `ctx.target?.entryIds` (S5.2's contract) — never re-deriving it.
  *
  *  `clicked` either holds the Selection or is held by it — a bar inside a multi-bar Selection, or a
  *  row that owns a lone selected bar plus others — the command acts on the Selection, unchanged
  *  (#212: a right-click never silently widens what the user picked). Anywhere else — nothing
  *  selected, or `clicked` shares no such relation with the Selection — the command acts on
- *  `clicked` itself, so a right-click on an unselected row still acts on every Segment that row
+ *  `clicked` itself, so a right-click on an unselected row still acts on every Entry that row
  *  owns. */
 export function resolveActedOn(clicked: ActedOn, selected: ActedOn): ActedOn {
-  if (clicked.segmentIds.length === 0) return clicked;
-  const clickedIsInSelection = clicked.segmentIds.every((id) => selected.segmentIds.includes(id));
+  if (clicked.entryIds.length === 0) return clicked;
+  const clickedIsInSelection = clicked.entryIds.every((id) => selected.entryIds.includes(id));
   const selectionIsInClicked =
-    selected.segmentIds.length > 0 && selected.segmentIds.every((id) => clicked.segmentIds.includes(id));
+    selected.entryIds.length > 0 && selected.entryIds.every((id) => clicked.entryIds.includes(id));
   return clickedIsInSelection || selectionIsInClicked ? selected : clicked;
 }
 
@@ -130,10 +123,13 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
   dataset: TDataset;
   /** The public Gantt, for reading live config and calling public methods. */
   gantt: TGantt;
-  /** The one Entry the invocation is *about*: the right-clicked bar, or the subject of the row the
-   *  right-click landed in — the Entry whose Fields that row's cells show. A row that owns several
-   *  names them all in `target.entryIds`; this stays the one. `undefined` when the invocation
-   *  landed on no Entry at all. */
+  /** The Selection's first Entry — the subject a command acts on, not necessarily the node the user
+   *  clicked or focused (`target` is that; see below). On a right-click outside the Selection, the
+   *  click replaces the Selection first (`plans/02` §4.6), so `entry` reads as "the clicked bar" on
+   *  that one path — but a right-click *inside* a multi-bar Selection, and every keyboard path
+   *  (`Shift+F10`, the Menu key, `Mod+Arrow`), never click at all: `entry` is whichever Entry the
+   *  Selection puts first, which can differ from what carries DOM focus on a segmented row.
+   *  `undefined` when the Selection is empty. */
   entry?: Entry | undefined;
   /** The variant this Gantt resolved for `entry` (ADR 0018). `undefined` when the invocation names
    *  no Entry at all.
@@ -145,6 +141,10 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  This is not `entry.variant` under another name. A variant is per Gantt, so a row cannot answer
    *  it (I2). A command context **is** one Gantt's, and it runs off the hot path. */
   variant?: string | undefined;
+  /** The node the user acted on — DOM focus, not the Selection. A command that means "the row
+   *  under the pointer/focus", rather than "the Selection's subject", reads this instead of
+   *  `entry`; the two can name different Entries on a segmented row. `CommandTarget.entryIds` names
+   *  every Entry the target row owns, focused one first. */
   target?: CommandTarget;
 }
 

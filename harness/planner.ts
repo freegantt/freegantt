@@ -194,7 +194,7 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
 // one — this page states which rows wear it and, through `paint`, how a done one differs from one
 // that is not (`checkpointDiamond`, above). Its box still holds its own size at every zoom.
 //
-// A phase needs no entry at all. Core's own `summary` variant already claims a row with children and
+// A phase needs no entry at all. Core's own `summary` variant already matches a row with children and
 // paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
 const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
   diamond({ when: { checkpoint: true }, paint: checkpointDiamond }),
@@ -210,7 +210,7 @@ const gantt = new Gantt({
   // option — and the design's own 36px is the library's default now, so this page states nothing.
   range: plannerSpan,
   preset: 'weekAndMonth',
-  // Every bar this page paints that no variant above claims.
+  // Every bar this page paints that no variant above matches.
   barRenderer: phaseBar,
   variants: PLANNER_VARIANTS,
 });

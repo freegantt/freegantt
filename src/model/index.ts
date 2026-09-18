@@ -1,16 +1,13 @@
-export type { EntryId, SegmentId, RowId, ItemId, ChangeSetId } from './ids.js';
+export type { EntryId, RowId, BarId, ChangeSetId } from './ids.js';
 export {
   entryId,
-  segmentId,
-  mintedSegmentId,
   rowId,
-  itemId,
-  itemIdFromDataset,
+  barId,
+  barIdFromDataset,
   rowIdFromDataset,
   entryIdFromDataset,
-  segmentIdFromDataset,
-  entryIdOfItem,
-  segmentIndexOfItem,
+  entryIdOfBar,
+  partIndexOfBar,
   changeSetId,
 } from './ids.js';
 export type { Instant, TimeUnit, TimeSpan, Duration, DurationMeasure, PlainParts } from './time.js';
@@ -18,8 +15,6 @@ export type { InstantInput, TimeSpanInput, DateOnlyEndRule, PlainTimeInput } fro
 export type { Entry } from './entry.js';
 export type {
   StoredEntry,
-  Segment,
-  SegmentInput,
   EntryInput,
   EntryEdit,
   PropsEdit,
@@ -91,13 +86,9 @@ export {
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
-  SegmentNotFoundError,
   RevealTargetNotFoundError,
   DuplicateEntryIdError,
-  DuplicateSegmentIdError,
   ParentCycleError,
-  SegmentsOutOfSyncError,
-  EmptySegmentsError,
   InvertedSpanError,
   UnknownFieldError,
   UnknownGridColumnError,

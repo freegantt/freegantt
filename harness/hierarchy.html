@@ -85,6 +85,13 @@
         edit in place (S5.8, D-S5-19) — Enter or blur commits one transaction, Escape reverts. End stays
         read-only on purpose: a column is editable only when you say so.
       </p>
+      <p>
+        "Framing crew" draws its three children as segments (#421): each one is an ordinary child Entry with
+        its own name, its own <code>hours</code>, and its own look — Cy's day is locked and cannot resize.
+        Their <code>hours</code> roll up onto the segmented row's own cell. The button below opens the same
+        row into three sub-rows instead, in one undo step. "Site hold" nearby carries no name at all — a bar
+        with no name still draws.
+      </p>
       <div id="page-brief"></div>
       <div id="controls">
         <label>
@@ -122,6 +129,10 @@
         <button id="cost-btn" type="button">Set cost 500</button>
         <button id="undo-btn" type="button">Undo</button>
         <button id="redo-btn" type="button">Redo</button>
+        <!-- #421 C7: "Framing crew" draws three day children as segments — Ali, Ben, Cy — as bars on its own
+             row. This button writes the same `showDaysOnRow` Field `childrenAsSegments` reads, so
+             segmenting and opening are one write, undoable like any other (`hierarchy.ts`). -->
+        <button id="crew-days-btn" type="button">Draw Framing crew days as segments</button>
       </div>
       <div id="toolbar"></div>
       <div id="gantt"></div>

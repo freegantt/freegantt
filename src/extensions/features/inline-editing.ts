@@ -65,36 +65,25 @@ function isDateField(field: Field): boolean {
   return field.type === 'date';
 }
 
-/** Would an edit of this cell write the `start`/`end` envelope of an Entry that stores `segments`?
- *
- *  Those two values span the segments; they are not authored on their own. `data/` refuses the write
- *  and throws `SegmentsOutOfSyncError` (`data/entry-reader.ts`), so an editor over this cell can only
- *  fail on commit. The cell says why instead, the same way a rolled-up parent cell does.
- *
- *  It asks about *several* Segments only. Every Entry stores at least one since #212. The one a plain
- *  Entry stores is its envelope's own drawing. `data/` moves that one with the envelope, so this cell
- *  opens as it always did. Several Segments still have no answer to "which stretch did you mean?".
- *  The cell keeps refusing, because an editor over it can only fail on commit.
- *
- *  This names `start` and `end` by key. That is the segment envelope door, not the date editor:
- *  `isDateField` above routes on `type === 'date'` only. This repeats a rule `data/` also holds.
- *
- *  #256 added the library's own write question, `ctx.interaction.canWrite`. This rule stays out of
- *  it, on purpose. A drag on a segmented bar writes `segments` and a recomputed envelope, so it
- *  writes these two keys legally. Only a *direct* envelope write is refused.
- *
- *  So this is a rule about which door, not about whether the value may change. Folding it into
- *  `canWrite` would take the handles off every segmented bar. */
-function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
-  if (entry.segments.length <= 1) return false;
-  return field.key === 'start' || field.key === 'end';
-}
-
 /** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
  *  Field with no `type` at all reads and writes it too — a plain `props`-addressed Field like the
- *  harness's `team`. Any other named `type` refuses to open rather than guess a parse. */
+ *  harness's `team`. `type: 'boolean'` (Q31) is the other named exception — it needs no
+ *  `parseValue`, because its editor reads `.checked` and never `.value` (`isCheckboxField` below).
+ *  Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
-  return field.parseValue !== undefined || field.type === undefined || field.type === 'text';
+  return (
+    field.parseValue !== undefined ||
+    field.type === undefined ||
+    field.type === 'text' ||
+    field.type === 'boolean'
+  );
+}
+
+/** S5.8+, Q31: a `boolean` Field's generic editor is a checkbox, keyed off `inputType` — the same
+ *  attribute that already decides the native `<input>` shape (`Field.inputType`). A checkbox reads
+ *  and writes `.checked`; every other generic editor reads and writes `.value`. */
+function isCheckboxField(field: Field): boolean {
+  return field.inputType === 'checkbox';
 }
 
 /** The four classes this plugin writes, and `view/styles.ts` styles. The session dresses the
@@ -120,12 +109,11 @@ const NOTICE_CLASS = 'fg-cell-notice';
 // test is what keeps `model/error-report.ts`'s `BuiltInReportCode` honest against these two tables,
 // because `model/` may not import `extensions/` to check the other way (I11).
 export const REFUSAL_TEXT = {
-  'derived-value': 'this value comes from the rows below it; edit a child row instead',
+  'derived-value': 'this value comes from its children; edit a child instead',
   'no-parse-value': 'this field has no parseValue; the default editor cannot read the text back',
   'no-date-value': 'this field holds no date yet; the default date editor needs one',
   'time-of-day': 'this field carries a time of day; the default date editor cannot show it',
   'unsaved-value': 'another cell still holds a value that did not save; fix it or press Escape',
-  'segmented-entry': 'these dates span the segments below; move a segment instead',
 } as const;
 
 /** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
@@ -711,13 +699,18 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
 
       function openGeneric(pending: PendingOpen, entry: Entry, field: Field, cell: HTMLElement): void {
         const fieldValue = entry.read(field.key);
+        const checkbox = isCheckboxField(field);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
-        input.value = seedText(field, fieldValue, cell);
+        // Q31: a checkbox is a `.checked` control, not a `.value` one. Seeding and reading it
+        // through `seedText`/`.value` would write the string `'on'` back as the field's value.
+        if (checkbox) input.checked = fieldValue === true;
+        else input.value = seedText(field, fieldValue, cell);
 
         pending.mount({
           element: input,
           read: (): CellEditorValue => {
+            if (checkbox) return { ok: true, value: input.checked };
             if (field.parseValue !== undefined) {
               const value = field.parseValue(input.value, { timeZone: ctx.dataset.timeZone }, entry);
               return value === undefined ? { ok: false, text: input.value } : { ok: true, value };
@@ -786,10 +779,6 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         const write = ctx.interaction.canWrite(entry, field.key);
         if (!write.ok) {
           if (write.reason !== undefined) editing.refuse(edited, cell, write.reason);
-          return;
-        }
-        if (writesSegmentEnvelope(entry, field)) {
-          editing.refuse(edited, cell, 'segmented-entry');
           return;
         }
         const date = isDateField(field);

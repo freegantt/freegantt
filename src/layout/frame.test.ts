@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame, placeFrame, resolveLayoutRows, barSpan, DEFAULT_MIN_BAR_WIDTH_PX } from './frame.js';
+import { mergeBarLabels } from './renderer.js';
 import { FrameMemory } from './frame-memory.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
-import { createVariantRegistry } from './items/variants.js';
+import { createVariantRegistry } from './bars/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
@@ -14,14 +15,16 @@ import {
   formatDate,
   formatEndInclusive,
   weekAndMonthPreset,
+  weekPreset,
+  yearPreset,
 } from '../time/index.js';
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
-import { entryId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
 import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
-import { wholeEntryItem } from './items/item.js';
-import type { FixedBarBox, Item } from './items/item.js';
+import { entryBar, wholeEntryBar } from './bars/bar.js';
+import type { FixedBarBox, Bar } from './bars/bar.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
@@ -29,12 +32,12 @@ function spanOf(entry: Entry): TimeSpan {
   return { start: entry.start as Instant, end: entry.end as Instant };
 }
 
-/** A full `Item` for `barSpan`, built the same way `computeFrame` builds one (`wholeEntryItem`) —
- *  `barSpan` takes the whole `Item`, box included (#295), so a test hands it a real one instead of
+/** A full `Bar` for `barSpan`, built the same way `computeFrame` builds one (`wholeEntryBar`) —
+ *  `barSpan` takes the whole `Bar`, box included (#295), so a test hands it a real one instead of
  *  a literal missing `box`. Pass `box` to build the fixed-box case `diamond()` ships. */
-function itemOf(entry: Entry, box?: FixedBarBox): Item {
-  const item = wholeEntryItem(entry, 'bar');
-  return box === undefined ? item : { ...item, box };
+function barOf(entry: Entry, box?: FixedBarBox): Bar {
+  const bar = wholeEntryBar(entry, 'bar');
+  return box === undefined ? bar : { ...bar, box };
 }
 
 const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
@@ -125,6 +128,8 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      // No producer sets `Bar.label`; this stands in for `view/`'s default `barLabels` (#421 C5).
+      barLabelFor: (entry) => entry.name,
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
@@ -133,7 +138,7 @@ describe('computeFrame', () => {
     );
   });
 
-  it('produces deterministic Item.id across repeated passes (I8)', () => {
+  it('produces deterministic Bar.id across repeated passes (I8)', () => {
     const first = computeFrame({
       entries: sampleEntries,
       scale,
@@ -168,10 +173,64 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      barLabelFor: (entry) => entry.name,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
     expect(frame.rows[0]?.gridCells).toEqual([]);
     expect(frame.columns).toEqual([]);
+  });
+
+  it('lays out a bar with no label the same as a labelled one (#421 C5)', () => {
+    // `barLabelFor: () => ''` is `view/`'s own answer once a merged policy names `'none'` or the
+    // Entry has no name — layout never treats an empty label as a special case, so geometry alone
+    // proves it: same x/y/width/height as the labelled frame just built above, label empty.
+    const named = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: (entry) => entry.name,
+    });
+    const unlabelled = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: () => '',
+    });
+    expect(unlabelled.bars[0]?.label).toBe('');
+    expect(unlabelled.bars.map((b) => ({ x: b.x, y: b.y, width: b.width, height: b.height }))).toEqual(
+      named.bars.map((b) => ({ x: b.x, y: b.y, width: b.width, height: b.height })),
+    );
+    // No leading ", " when the label is empty (`barA11yLabel`, #421 C5) — dates announce alone.
+    expect(unlabelled.bars[0]?.a11yLabel.startsWith(',')).toBe(false);
+    expect(unlabelled.bars[0]?.a11yLabel).not.toContain('undefined');
+  });
+
+  it('labels bars the same way across zoom levels — day, week, year (#421 C5)', () => {
+    for (const preset of [dayPreset, weekPreset, yearPreset]) {
+      const frame = computeFrame({
+        entries: sampleEntries,
+        scale,
+        preset,
+        visible,
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        variants: variantRegistry,
+        barLabelFor: (entry) => entry.name,
+      });
+      expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
+      expect(frame.bars[0]?.a11yLabel).not.toContain('undefined');
+    }
   });
 
   it('fills each cell from the Field formatValue bound on the column (S4.3 §3)', () => {
@@ -406,7 +465,34 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      barLabelFor: (entry) => entry.name,
     });
+    expect(frame.bars).toMatchSnapshot();
+  });
+
+  it('matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md)', () => {
+    const [parent, child] = entryDoubles([
+      entryValuesOf(sampleEntries[0]!),
+      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
+    ]) as readonly [Entry, Entry];
+    const frame = computeFrame({
+      entries: [parent, child],
+      scale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: (entry) => entry.name,
+      rows: { source: 'entries', childrenAsSegments: true },
+    });
+    // One row for both — the segment child's id rides `entryIds[1]`, not a row of its own.
+    expect(frame.rows).toHaveLength(1);
+    expect(frame.rows[0]?.entryIds).toEqual([parent.id, child.id]);
+    expect(
+      frame.rows.map((row) => ({ id: row.id, depth: row.depth, entryIds: row.entryIds })),
+    ).toMatchSnapshot();
     expect(frame.bars).toMatchSnapshot();
   });
 
@@ -442,7 +528,7 @@ describe('computeFrame', () => {
     expect(idsInOverlap(before)).toHaveLength(1);
   });
 
-  it('I8: item ids stay stable across a row-source switch', () => {
+  it('I8: bar ids stay stable across a row-source switch', () => {
     const [parent, child] = entryDoubles([
       entryValuesOf(sampleEntries[0]!),
       entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
@@ -473,11 +559,15 @@ describe('computeFrame', () => {
     expect(new Set(grouped.bars.map((bar) => bar.id)).size).toBe(grouped.bars.length);
   });
 
-  it("names a segmented bar as 'part N of M'", () => {
-    const entry = entryDoubleLike(sampleEntries[0]!, {
-      segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
+  it("names a bar with several parts as 'part N of M' — only a plugin variant draws several now (#421, ADR 0026)", () => {
+    const entry = entryDoubleLike(sampleEntries[0]!, {});
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addPluginVariant({
+      name: 'phased',
+      when: () => true,
+      bars: (e, variant) => [
+        entryBar(e, 0, sampleEntries[0]!.start!, sampleEntries[1]!.end!, variant),
+        entryBar(e, 1, sampleEntries[1]!.end!, sampleEntries[2]!.end!, variant),
       ],
     });
     const frame = computeFrame({
@@ -488,44 +578,48 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      variants: variantRegistry,
+      variants: own,
+      barLabelFor: (e) => e.name,
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
   });
 
-  it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
-    const [entry, grouped, groupedChild] = entryDoubles([
-      entryValuesOf(sampleEntries[0]!, {
-        segments: [
-          { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-          { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
-        ],
-      }),
-      // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
-      // marker, to draw the parent's own summary bar instead of a Segment bar.
-      entryValuesOf(sampleEntries[1]!),
-      entryValuesOf(sampleEntries[2]!, {
-        id: 'grouped-child',
-        parentId: String(sampleEntries[1]!.id),
-      }),
-    ]) as readonly [Entry, Entry, Entry];
+  it('a variant naming only policy never drops the Gantt field, through a real registry and a real merge (#421 C5)', () => {
+    const entry = entryDouble({
+      id: 'crew-day',
+      start: sampleEntries[0]!.start!,
+      end: sampleEntries[0]!.end!,
+      props: { hours: 6 },
+    });
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addConsumerVariant({ name: 'outside-only', when: () => true, barLabels: { policy: 'outside' } });
+
+    // `view/bar-labels.ts` runs this same call — `registry.resolveFor(entry).barLabels` merged over
+    // the Gantt's own `barLabels` — before it ever reaches `formatValue`; asserting it here proves
+    // the merge a real variant produces, not a literal `BarLabels` object.
+    const merged = mergeBarLabels({ field: 'hours' }, own.resolveFor(entry).barLabels);
+    expect(merged).toEqual({ field: 'hours', policy: 'outside' });
+
     const frame = computeFrame({
-      entries: [entry, grouped, groupedChild],
+      entries: [entry],
       scale,
       preset,
       visible,
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      variants: variantRegistry,
+      variants: own,
+      barLabelFor: (e) => String(e.read(merged.field)),
     });
-    const segmentedBars = frame.bars.filter((bar) => bar.entryId === entry.id);
-    expect(segmentedBars.map((bar) => bar.segmentId)).toEqual(entry.segments.map((segment) => segment.id));
-    const groupBar = frame.bars.find((bar) => bar.entryId === grouped.id);
-    expect(groupBar?.segmentId).toBeUndefined();
+    expect(frame.bars[0]?.label).toBe('6');
   });
+
+  // Retired (ADR 0026, #421): 'carries the segmentId its Bar had, for a Segment bar, and none for a
+  // whole-Entry bar' pinned `FrameBar.segmentId`, which no longer exists — a Bar's own id
+  // (`${entryId}:${partIndex}`, `partIndexOfBar`) already answers which part it draws, so there is
+  // no second id left to carry alongside it.
 });
 
 describe('computeFrame — horizontal culling', () => {
@@ -649,13 +743,6 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       id: 'grid-1',
       start: instant('2026-08-24T00:00:00Z'),
       end: instant('2026-08-25T00:00:00Z'),
-      segments: [
-        {
-          id: segmentId('grid-1-1'),
-          start: instant('2026-08-24T00:00:00Z'),
-          end: instant('2026-08-25T00:00:00Z'),
-        },
-      ],
     }),
   ];
   const dayAndWeekHeaders = {
@@ -920,7 +1007,7 @@ describe(
     const large: readonly Entry[] = entryDoubles(
       seededEntryInputs({ count: 5000 }).map((input) => ({
         id: input.id,
-        name: input.name,
+        ...(input.name !== undefined ? { name: input.name } : {}),
         start: instant(input.start as Date),
         end: instant(input.end as Date),
       })),
@@ -991,7 +1078,7 @@ describe('computeFrame row sources (S4.6)', () => {
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps span: minimum', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width, span } = barSpan(itemOf(zeroWidthSpan), scale);
+    const { x, width, span } = barSpan(barOf(zeroWidthSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
     expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
@@ -999,7 +1086,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('honours a custom minBarWidthPx', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { width } = barSpan(itemOf(zeroWidthSpan), scale, 40);
+    const { width } = barSpan(barOf(zeroWidthSpan), scale, 40);
     expect(width).toBe(40);
   });
 
@@ -1008,7 +1095,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
     // slide the bar 2.5px left of where it belongs.
     const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
     const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
-    const { x, width, span } = barSpan(itemOf(narrowSpan), scale);
+    const { x, width, span } = barSpan(barOf(narrowSpan), scale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
     expect(x + width / 2).toBe(startX + 2.5);
@@ -1016,7 +1103,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 
   it('leaves an ordinary bar wide enough already unfloored, with span: exact', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, span } = barSpan(itemOf(wideSpan), scale);
+    const { x, width, span } = barSpan(barOf(wideSpan), scale);
     expect(width).toBe(
       scale.xForInstant(wideSpan.end as Instant) - scale.xForInstant(wideSpan.start as Instant),
     );
@@ -1029,7 +1116,7 @@ describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width 
 describe('barSpan — a fixed painted box the time scale does not size (ADR 0022)', () => {
   it('keeps its own width regardless of the entry span, and stamps span: fixed', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { width, span } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
+    const { width, span } = barSpan(barOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
     expect(width).toBe(13);
     expect(span).toBe('fixed');
   });
@@ -1041,33 +1128,33 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
       range: spanOf(sampleEntries[0]!),
       pxPerMs: 1 / 5000,
     });
-    const atDefaultZoom = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
-    const atOtherZoom = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'center' }), zoomedOut);
+    const atDefaultZoom = barSpan(barOf(wideSpan, { widthPx: 13, anchor: 'center' }), scale);
+    const atOtherZoom = barSpan(barOf(wideSpan, { widthPx: 13, anchor: 'center' }), zoomedOut);
     expect(atDefaultZoom.width).toBe(13);
     expect(atOtherZoom.width).toBe(13);
   });
 
   it('centres on the span’s own midpoint for anchor: center — the same midpoint a floored bar centres on', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width } = barSpan(itemOf(zeroWidthSpan, { widthPx: 13, anchor: 'center' }), scale);
+    const { x, width } = barSpan(barOf(zeroWidthSpan, { widthPx: 13, anchor: 'center' }), scale);
     expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
   it('aligns its left edge to the span’s start for anchor: start', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'start' }), scale);
+    const { x } = barSpan(barOf(wideSpan, { widthPx: 13, anchor: 'start' }), scale);
     expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
   });
 
   it('aligns its right edge to the span’s end for anchor: end', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: 13, anchor: 'end' }), scale);
+    const { x, width } = barSpan(barOf(wideSpan, { widthPx: 13, anchor: 'end' }), scale);
     expect(x + width).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
 
   it('clamps a negative widthPx to 0, so a fixed box never paints a negative width (#212 follow-up, F6)', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width, span } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'center' }), scale);
+    const { x, width, span } = barSpan(barOf(wideSpan, { widthPx: -4, anchor: 'center' }), scale);
     expect(width).toBe(0);
     expect(span).toBe('fixed');
     // The clamped width, not the raw -4, positions the box — a collapsed box sits where a 0px box
@@ -1079,14 +1166,14 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
 
   it('clamps a negative widthPx before positioning for anchor: end, not after (#296)', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'end' }), scale);
+    const { x, width } = barSpan(barOf(wideSpan, { widthPx: -4, anchor: 'end' }), scale);
     expect(width).toBe(0);
     expect(x).toBe(scale.xForInstant(wideSpan.end as Instant));
   });
 
   it('clamps a negative widthPx before positioning for anchor: start, not after (#296)', () => {
     const wideSpan: Entry = sampleEntries[0]!;
-    const { x, width } = barSpan(itemOf(wideSpan, { widthPx: -4, anchor: 'start' }), scale);
+    const { x, width } = barSpan(barOf(wideSpan, { widthPx: -4, anchor: 'start' }), scale);
     expect(width).toBe(0);
     expect(x).toBe(scale.xForInstant(wideSpan.start as Instant));
   });
@@ -1095,7 +1182,7 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
     'clamps a non-finite widthPx (%s) to 0 rather than propagating it (#297)',
     (widthPx) => {
       const wideSpan: Entry = sampleEntries[0]!;
-      const { x, width, span } = barSpan(itemOf(wideSpan, { widthPx, anchor: 'center' }), scale);
+      const { x, width, span } = barSpan(barOf(wideSpan, { widthPx, anchor: 'center' }), scale);
       expect(width).toBe(0);
       expect(span).toBe('fixed');
       const end = scale.xForInstant(wideSpan.end as Instant);

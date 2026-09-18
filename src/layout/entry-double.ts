@@ -12,21 +12,12 @@
 //
 // **`duration()` here states the `'span'` measure, and only that one** (`F25`). The real answer is
 // `measureEntryDuration`, which lives in `data/` and reads the Dataset's own `measureDuration`, so
-// this double cannot call it. A green layout test therefore says nothing about a `'segments'`
+// this double cannot call it. A green layout test therefore says nothing about a `'children'`
 // Dataset: a rule like `when: (entry) => entry.duration()?.value === 0` is exercised under one
 // policy of the two.
 
-import { entryId, segmentId } from '../model/index.js';
-import type {
-  Duration,
-  Entry,
-  EntryId,
-  EntryInput,
-  FieldKey,
-  FieldValue,
-  Instant,
-  Segment,
-} from '../model/index.js';
+import { entryId } from '../model/index.js';
+import type { Duration, Entry, EntryId, EntryInput, FieldKey, FieldValue, Instant } from '../model/index.js';
 import { diffMs } from '../time/index.js';
 
 /**
@@ -39,8 +30,6 @@ export interface EntryDoubleValues {
   parentId?: string;
   start?: number;
   end?: number;
-  /** Defaults to one Segment covering `start`–`end`, which is what a stored row holds (#212). */
-  segments?: readonly Segment[];
   props?: Readonly<Record<string, unknown>>;
 }
 
@@ -63,7 +52,6 @@ class EntryDouble implements Entry {
   readonly name: string;
   readonly start: Instant | undefined;
   readonly end: Instant | undefined;
-  readonly segments: readonly Segment[];
 
   constructor(values: EntryDoubleValues, tree: DoubleTree) {
     this.#tree = tree;
@@ -72,7 +60,6 @@ class EntryDouble implements Entry {
     this.name = values.name ?? values.id;
     this.start = values.start as Instant | undefined;
     this.end = values.end as Instant | undefined;
-    this.segments = values.segments ?? defaultSegments(values);
   }
 
   get hasChildren(): boolean {
@@ -106,7 +93,6 @@ class EntryDouble implements Entry {
     if (field === 'name') return this.name;
     if (field === 'start') return this.start;
     if (field === 'end') return this.end;
-    if (field === 'segments') return this.segments;
     return this.#values.props?.[String(field)];
   }
 
@@ -149,21 +135,9 @@ class EntryDouble implements Entry {
       ...(values.parentId !== undefined ? { parentId: entryId(values.parentId) } : {}),
       ...(this.start !== undefined ? { start: this.start } : {}),
       ...(this.end !== undefined ? { end: this.end } : {}),
-      segments: this.segments,
       props: { ...values.props },
     };
   }
-}
-
-function defaultSegments(values: EntryDoubleValues): readonly Segment[] {
-  if (values.start === undefined || values.end === undefined) return [];
-  return [
-    {
-      id: segmentId(`${values.id}-1`),
-      start: values.start as Instant,
-      end: values.end as Instant,
-    },
-  ];
 }
 
 /**
@@ -207,11 +181,10 @@ export function entryValuesOf(base: Entry, overrides: Partial<EntryDoubleValues>
   const above = base.parent();
   return {
     id: String(base.id),
-    name: base.name,
+    ...(base.name !== undefined ? { name: base.name } : {}),
     ...(base.start !== undefined ? { start: base.start } : {}),
     ...(base.end !== undefined ? { end: base.end } : {}),
     ...(above !== undefined ? { parentId: String(above.id) } : {}),
-    segments: base.segments,
     props: { ...base.toInput().props },
     ...overrides,
   };

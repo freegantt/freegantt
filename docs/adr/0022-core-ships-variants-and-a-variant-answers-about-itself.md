@@ -4,6 +4,8 @@ decided: core exports its looks as `EntryVariant` factories — `bar()`, `summar
 open: nothing this record answers. A fourth shipped look (a chevron, a flag, a hatched buffer, a hollow bar) is deliberately not here.
 ---
 
+> **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item`/`ItemProducer` below as `Bar`/`BarProducer`. **Do not rewrite the body.**
+
 # Core ships variants, and a variant answers about itself
 
 [ADR 0021](0021-the-consumers-stylesheet-wins.md) is its pair: that one lets a consumer's CSS win, this one gives them something worth writing CSS against. Neither is sufficient alone — the checkpoint defect needed both.
@@ -164,7 +166,7 @@ ADR 0013's body stays as it was written (`docs/adr/README.md:5`). Its `status:` 
 
 ## Rejected
 
-**A priority number per plugin.** Ordering already has two mechanisms: `requires` resolves setup order, and rank resolves paint (`CORE_RANK` < `PLUGIN_RANK` < `CONSUMER_RANK`). A number would be a third competing with both, and numeric priority has a known end state — everybody picks a bigger number. The unordered case already has a stated answer: `'variant-claimed-twice'` names both rules when two of the same rank claim one row, because the library does not arbitrate between plugins the consumer chose to install. A plugin that must paint over another's says `requires`.
+**A priority number per plugin.** Ordering already has two mechanisms: `requires` resolves setup order, and rank resolves paint (`CORE_RANK` < `PLUGIN_RANK` < `CONSUMER_RANK`). A number would be a third competing with both, and numeric priority has a known end state — everybody picks a bigger number. The unordered case already has a stated answer: `'variant-matched-twice'` names both rules when two of the same rank claim one row, because the library does not arbitrate between plugins the consumer chose to install. A plugin that must paint over another's says `requires`.
 
 **A `variantTypes` registry.** Drafted, then dropped. The usual argument for a registered name over a function is that a name serializes into a document — and [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the save format, so there is no document. What remained was a name registry, a collision rule, a resolution-order question, and a lookup on the hover path, all buying what an exported factory does for free.
 

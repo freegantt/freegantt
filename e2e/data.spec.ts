@@ -14,9 +14,9 @@ function logLines(page: import('@playwright/test').Page) {
 
 /** Item.id is `${entryId}:${segmentIndex}` (plans/01 §2.4). Segment index is the suffix after the
  *  last colon; the entry id is everything before it. */
-function entryIdFromItemId(itemId: string): string {
-  const colon = itemId.lastIndexOf(':');
-  return colon === -1 ? itemId : itemId.slice(0, colon);
+function entryIdFromItemId(barId: string): string {
+  const colon = barId.lastIndexOf(':');
+  return colon === -1 ? barId : barId.slice(0, colon);
 }
 
 /** The first bar on the page, summary bar included: ADR 0013's Rollup mints a Segment for a parent
@@ -43,10 +43,10 @@ async function selectBar(
   await expect(bar).toBeVisible();
   await bar.click();
   await expect(page.locator('#rename-btn')).toBeEnabled();
-  const itemId = await bar.getAttribute('data-item-id');
-  expect(itemId).toBeTruthy();
+  const barId = await bar.getAttribute('data-bar-id');
+  expect(barId).toBeTruthy();
   return {
-    entryId: entryIdFromItemId(itemId!),
+    entryId: entryIdFromItemId(barId!),
     name: (await page.locator('#rename-input').inputValue()).trim(),
   };
 }

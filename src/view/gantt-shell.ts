@@ -25,9 +25,9 @@ import type {
   ViewPreset,
   EntryVariant,
   ResolvedVariant,
-  VariantClaimant,
+  RegisteredVariant,
   VariantRegistry,
-  ReportDoubleClaim,
+  ReportDoubleMatch,
   ReportUnknownFieldMatch,
   ResolvedRenderer,
   BarLabels,
@@ -36,9 +36,10 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   FrameBar,
-  Item,
+  Bar,
   TimeScale,
 } from '../layout/index.js';
+import type { EntryRulePorts } from '../layout/entry-rule.js';
 
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
@@ -86,9 +87,9 @@ import {
   PluginNotInstalledError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
-  entryIdOfItem,
-  itemId,
-  segmentId,
+  entryIdOfBar,
+  entryId,
+  barId,
   spansTime,
 } from '../model/index.js';
 import type {
@@ -98,12 +99,11 @@ import type {
   EntryId,
   FieldKey,
   GridColumnInput,
-  ItemId,
+  BarId,
   Instant,
   PluginId,
   RaiseError,
   RowId,
-  SegmentId,
   Size,
   ProposedEdits,
   TimeSpan,
@@ -124,13 +124,16 @@ import type { EntryGestureContext } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
+import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
+import type { ResolveBarLabelPorts } from './bar-labels.js';
+
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
-import { SegmentSelection } from './segment-selection.js';
-import type { SegmentSelectionPorts } from './segment-selection.js';
+import { EntrySelection } from './entry-selection.js';
+import type { EntrySelectionPorts } from './entry-selection.js';
 
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
@@ -239,20 +242,15 @@ export interface GanttShellWiring {
      *  resolution the layout pass uses. */
     variant?: string;
     target?:
-      | {
-          kind: 'header';
-          field: FieldKey;
-          entryIds: readonly EntryId[];
-          segmentIds: readonly SegmentId[];
-        }
-      | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      | { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] }
+      | { kind: 'bar'; entryIds: readonly EntryId[] }
       // S5.11, D-S5-26/D-S5-39: the roving-focus grid pane fills two `CommandTarget` kinds a
       // right-click never reaches on its own. `'row'` names a focused Row. `'gridCell'` names a
       // focused Grid cell, and `field` names its column. The splitter also gains its own kind,
       // for parity with the panes either side of it.
-      | { kind: 'row'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
-      | { kind: 'gridCell'; field?: FieldKey; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
-      | { kind: 'splitter'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
+      | { kind: 'row'; entryIds: readonly EntryId[] }
+      | { kind: 'gridCell'; field?: FieldKey; entryIds: readonly EntryId[] }
+      | { kind: 'splitter'; entryIds: readonly EntryId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
@@ -314,7 +312,7 @@ export interface GanttShellOptions {
   viewportGestures?: ViewportGestures;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: false }`. */
+  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
   /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
@@ -368,8 +366,8 @@ export interface GanttShellOptions {
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
   zoomPresets?: readonly PresetRef[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
-   *  (`SegmentId | string`), same asymmetry the live `selection` setter already has. */
-  selectedSegmentIds?: readonly (SegmentId | string)[];
+   *  (`EntryId | string`), same asymmetry the live `selection` setter already has. */
+  selectedEntryIds?: readonly (EntryId | string)[];
   /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
   wiring: GanttShellWiring;
 }
@@ -392,32 +390,31 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
   return el;
 }
 
-/** The union `[min x, max(x + width))` of every Item's own `barSpan` (#295). It is
- *  `GanttShell.reveal`'s target when an entry draws several Items — one bar per Segment. Revealing
- *  the entry then shows every one of them, not only the first bar. Takes at least one
- *  Item: `#revealEntrySpan`, its one caller, checks `items.length > 0` first. A Segment names one
- *  bar, so `#revealSegmentSpan` never unions — it would pan to a sibling. */
+/** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295). It is
+ *  `GanttShell.reveal`'s target when an entry draws several Bars. Revealing the entry then shows
+ *  every one of them, not only the first bar. Takes at least one Bar: `#revealEntrySpan`, its one
+ *  caller, checks `bars.length > 0` first. */
 function unionSpan(
-  items: readonly Item[],
+  bars: readonly Bar[],
   scale: TimeScale,
   minBarWidthPx: number,
 ): { x: number; width: number } {
   let minX = Number.POSITIVE_INFINITY;
   let maxEnd = Number.NEGATIVE_INFINITY;
-  for (const item of items) {
-    const { x, width } = barSpan(item, scale, minBarWidthPx);
+  for (const bar of bars) {
+    const { x, width } = barSpan(bar, scale, minBarWidthPx);
     minX = Math.min(minX, x);
     maxEnd = Math.max(maxEnd, x + width);
   }
   return { x: minX, width: maxEnd - minX };
 }
 
-/** A stand-in Item for `barSpan`, for the case where nothing paints the target (#295). A variant
- *  produced no Item, or no Item draws the named Segment. The dates it is handed become the target, so
- *  reveal never becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers
- *  the geometry, and it carries no box, so it takes the ordinary span-and-floor path. */
-function fallbackSpanItem(ownerId: EntryId, start: Instant, end: Instant): Item {
-  return { id: itemId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
+/** A stand-in Bar for `barSpan`, for the case where nothing paints the target (#295). A variant
+ *  produced no Bar for the named Entry. The dates it is handed become the target, so reveal never
+ *  becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers the geometry,
+ *  and it carries no box, so it takes the ordinary span-and-floor path. */
+function fallbackSpanBar(ownerId: EntryId, start: Instant, end: Instant): Bar {
+  return { id: barId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
 }
 
 export class GanttShell {
@@ -454,9 +451,9 @@ export class GanttShell {
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
-  /** The Selection (#212, ADR 0010, #230 R4): what is selected, and what a pointer hit would select.
-   *  Built once, right after `#capabilities` in the constructor below. */
-  #segmentSelection!: SegmentSelection;
+  /** The Selection (#212, ADR 0010, ADR 0025, #230 R4): what is selected, and what a pointer hit
+   *  would select. Built once, right after `#capabilities` in the constructor below. */
+  #entrySelection!: EntrySelection;
   /** S3.2, D-S3-9: resolved once, re-resolved only when `capabilities` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #capabilityRules: Capabilities = {};
@@ -476,23 +473,32 @@ export class GanttShell {
   #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
-  #hoveredItemId: ItemId | undefined;
+  #hoveredBarId: BarId | undefined;
   /** The grid row under the pointer, reported by `EntryGestureContext.setHoveredRow` — undefined
    *  once the pointer leaves the grid pane. `#hoveredRow()` falls back to the hovered bar's own row,
    *  so this holds only the half the timeline pane cannot answer. */
   #hoveredRowId: RowId | undefined;
   /** S5.5 (API gap, `s5.5-tooltips-and-context-menu.md` §5): the last-rendered frame's bars, indexed
-   *  by item id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
+   *  by bar id. `resolveTooltip` is its only reader. So a hover plugin working from the DOM after
    *  the fact can still build a real `TooltipRendererContext`. A bar's `x`/`y`/`width`/`height`/
    *  `flags` are not reachable from a DOM element alone. Rebuilt once per `render()`, not on the hover path
    *  itself — same cost `#backend.sync(frame)` already pays iterating `frame.bars`. */
-  #lastBarById = new Map<ItemId, FrameBar>();
+  #lastBarById = new Map<BarId, FrameBar>();
   /** D-GH-2: owns draft math, preview rAF coalescing and the commit pipeline for a move/resize
    *  gesture. Built once, from this shell's own primitives, right after `#capabilities` below. */
   #gesturePipeline!: GesturePipeline;
   /** #170: the five seams a plugin registers into, each carrying the refresh it owes. Renderers,
-   *  decorations, Item producers, per-kind capability defaults and Grid columns. */
+   *  decorations, Bar producers, per-kind capability defaults and Grid columns. */
   #registrations!: PluginRegistrations;
+  /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
+   *  paired with this Gantt's own unknown-key report (#421 C1). Built once, right beside
+   *  `#registrations`'s own `fieldFor`. It is handed to `computeFrame` on every `render()` — the
+   *  same "built once, read every frame" shape `variants` already takes. */
+  #entryRulePorts!: EntryRulePorts;
+  /** What `resolveBarLabelText` reads outside itself (#421 F2) — the Field registry, paired with
+   *  this Gantt's own unknown-field report. Built once, right beside `#entryRulePorts`, and handed
+   *  to `#labelFor` on every `render()`, the same "built once, read every frame" shape. */
+  #barLabelPorts!: ResolveBarLabelPorts;
   /** ADR 0022 §5: the second stylesheet a Gantt writes, one node for its own installed variants'
    *  `css`. Built right after `#registrations`, and refreshed on every edge that changes what a
    *  variant registers — construction, `gantt.variants = […]`, a plugin install or dispose. */
@@ -580,7 +586,7 @@ export class GanttShell {
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
-   *  once `#treeCollapse`/`#segmentSelection`/`#columnChrome` exist, since its ports read all three. */
+   *  once `#treeCollapse`/`#entrySelection`/`#columnChrome` exist, since its ports read all three. */
   #rovingFocus!: RovingFocus;
   /** S5.11, D-S5-26: the one polite live region for this Gantt (`view/live-region.ts`'s own file
    *  header). Constructed and attached alongside `#rovingFocus`, once `#container` exists. */
@@ -680,10 +686,18 @@ export class GanttShell {
       options.variantRegistry ??
         createVariantRegistry({
           fieldFor: (key) => this.#options.dataset.field(key),
-          reportDoubleClaim: this.#reportDoubleClaim(),
+          reportDoubleMatch: this.#reportDoubleMatch(),
           reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
         }),
     );
+    this.#entryRulePorts = {
+      fieldFor: (key) => this.#options.dataset.field(key),
+      reportUnknownKey: this.#reportUnknownRowSourceField(),
+    };
+    this.#barLabelPorts = {
+      lookup: { get: (key) => this.#options.dataset.field(key) },
+      reportUnknownField: this.#reportUnknownBarLabelField(),
+    };
     // ADR 0022 §5: right after the registry it reads, and after `ensureBaseStyles` (above). A
     // variant's own rule must land after the base sheet. Only then can it cancel `.fg-bar`'s
     // background and state ring at equal specificity. Starts empty; `#installConsumerVariants` fills it.
@@ -703,7 +717,10 @@ export class GanttShell {
       createDomBackend({
         entryById: (id) => this.#options.dataset.entries.get(id),
         raiseError: this.#raiseError,
-        readBarLabels: () => this.#frameSettings.barLabels,
+        // #421 C5: per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
+        // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
+        resolveBarLabelPolicy: (entry) =>
+          resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
         readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
         // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
         // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
@@ -711,7 +728,7 @@ export class GanttShell {
         // `barRenderer` beats a plugin's whole-point `bar` renderer.
         //
         // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**
-        // (`J61`). A consumer who wants to paint a summary row writes a variant that claims it.
+        // (`J61`). A consumer who wants to paint a summary row writes a variant that matches it.
         // Their rule then beats core's by rank, which is what D-S5-11 asks for.
         resolveBarRenderer: (entry) => this.#paintFor(entry),
         // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
@@ -831,7 +848,7 @@ export class GanttShell {
     // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
-      this.#segmentSelection.forgetSegmentsTheDatasetDropped(changeSet);
+      this.#entrySelection.forgetEntriesTheDatasetDropped(changeSet);
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -867,15 +884,14 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = this.#resolveCapabilities();
-    this.#segmentSelection = new SegmentSelection(this.#segmentSelectionPorts());
+    this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
     this.#treeCollapse = new TreeCollapse({
       plannedRows: () => this.#layout.plannedRows(),
       entries: () => this.#options.dataset.entries.all,
       entry: (id) => this.#options.dataset.entries.get(id),
       canSelect: (id) => this.#canGesture('select', id),
       selected: () => this.selectedEntryIds[0],
-      proposeSelection: (ids) =>
-        this.#segmentSelection.propose(this.#options.dataset.entries.segmentIdsOfEntries(ids)),
+      proposeSelection: (ids) => this.#entrySelection.propose(ids),
       confirm: (change) =>
         this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
           this.#layout.invalidateFrom(0);
@@ -894,7 +910,6 @@ export class GanttShell {
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
       snap: () => this.snap,
-      selectedSegmentIds: () => this.#segmentSelection.segmentIds,
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
@@ -905,9 +920,9 @@ export class GanttShell {
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.locale,
-      applyGestureState: (preview, pendingItemIds, cursor) => {
+      applyGestureState: (preview, pendingBarIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
-        setOptional(this.#interactionState, 'pendingItemIds', pendingItemIds);
+        setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         this.#backend.applyState(this.#interactionState);
@@ -917,21 +932,17 @@ export class GanttShell {
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
-      entryFor: (item) => this.#entryFor(item),
+      entryFor: (barId) => this.#entryFor(barId),
       can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
-      // #230 R4: `interaction/` asks one collaborator, not eight. `SegmentSelection` answers all of
-      // it but the two projections that are not its own — the Dataset's and the frame's.
+      // #230 R4: `interaction/` asks one collaborator, not four. `EntrySelection` answers all of it
+      // (ADR 0025: a former Segment is an ordinary Entry, so there is no second projection to ask).
       selection: {
-        segmentIds: () => this.#segmentSelection.segmentIds,
-        entryIds: () => this.#segmentSelection.entryIds,
-        propose: (next) => this.#segmentSelection.propose(next),
-        selectableEntriesInRowOrder: () => this.#segmentSelection.selectableEntriesInRowOrder(),
-        selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
-        selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
-        segmentIdsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
-        segmentIdsForItem: (item) => this.#layout.segmentIdsForItem(item),
+        entryIds: () => this.#entrySelection.entryIds,
+        propose: (next) => this.#entrySelection.propose(next),
+        selectableEntriesInRowOrder: () => this.#entrySelection.selectableEntriesInRowOrder(),
+        selectableEntriesOf: (hit) => this.#entrySelection.selectableEntriesOf(hit),
       },
-      setHovered: (item) => this.#setHovered(item),
+      setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
@@ -1036,7 +1047,7 @@ export class GanttShell {
     // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
     // plugin's variant, keybinding or command now reaches frame 1, and so does a zoom or a selection.
     // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
-    // `#segmentSelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
+    // `#entrySelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
     // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
     // live at render time, never a cached snapshot. So applying them a few lines earlier changes
     // only which frame the result first appears in.
@@ -1046,7 +1057,7 @@ export class GanttShell {
     this.#datasetPlugins = options.datasetPlugins ?? [];
     this.plugins = options.plugins ?? [];
     if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
-    if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
+    if (options.selectedEntryIds !== undefined) this.selection = options.selectedEntryIds;
     this.#phase = 'live';
     this.#frames.flush();
 
@@ -1284,22 +1295,22 @@ export class GanttShell {
     this.#frameSettings.set({ todayLineMarginTicks: ticks });
   }
 
-  /** The Selection itself (#212, ADR 0010) — Segment ids. */
-  get selection(): readonly SegmentId[] {
-    return this.#segmentSelection.segmentIds;
+  /** The Selection itself (#212, ADR 0010, ADR 0025) — Entry ids. */
+  get selection(): readonly EntryId[] {
+    return this.#entrySelection.entryIds;
   }
 
-  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`SegmentId | string`),
+  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
    *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
-  set selection(ids: readonly (SegmentId | string)[]) {
-    this.#segmentSelection.propose(ids.map((id) => segmentId(id)));
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#entrySelection.propose(ids.map((id) => entryId(id)));
   }
 
-  /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). It is
-   *  one projection. The public getter, the affordance ids, the gesture pipeline and every command
-   *  context read it. So no two of them can disagree about what is selected. */
+  /** The Entries the Selection holds, in row order (#212, ADR 0010, ADR 0025). It is one projection.
+   *  The public getter, the affordance ids, the gesture pipeline and every command context read it.
+   *  So no two of them can disagree about what is selected. */
   get selectedEntryIds(): readonly EntryId[] {
-    return this.#segmentSelection.entryIds;
+    return this.#entrySelection.entryIds;
   }
 
   get variants(): readonly EntryVariant[] {
@@ -1307,7 +1318,7 @@ export class GanttShell {
   }
 
   /** Live (ADR 0018): replaces the consumer's own variant list. Every row resolves its variant again,
-   *  every row produces its Items again, and every capability re-resolves — one registration changes
+   *  every row produces its Bars again, and every capability re-resolves — one registration changes
    *  all three. A plugin's variants are untouched, and they still lose to these. */
   set variants(next: readonly EntryVariant[]) {
     this.#installConsumerVariants(next);
@@ -1317,7 +1328,7 @@ export class GanttShell {
   }
 
   /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3). One door answers
-   *  `items`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
+   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
    *  `plans/row-redesign/BUILD-LOG.md`). `render/` and `interaction/` read the same answer.
    *  `CommandContext.variant` and the two callers that want the name alone read `.name`.
    *
@@ -1346,13 +1357,25 @@ export class GanttShell {
    *  has none. One ladder, and `resolveBarRenderer` is its only caller.
    *
    *  It reads the row, never the variant's name. Two registrations may share one name. A lookup by
-   *  name can then answer with the paint of a rule that did not claim this row (`F3`). No
-   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-claim
+   *  name can then answer with the paint of a rule that did not match this row (`F3`). No
+   *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-match
    *  diagnostic is what names a plugin. */
   #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
     const paint = this.#registrations.variants.resolveFor(entry).paint;
     if (paint !== undefined) return { renderer: paint };
     return this.#registrations.renderers.resolve('bar', this.#frameSettings.barRenderer);
+  }
+
+  /** What one bar's label prints (#421 C5): the merged Field's own `formatValue`, read through the
+   *  same door a Grid cell reads through. `LayoutInput.barLabelFor`'s only caller. */
+  #labelFor(entry: Entry): string {
+    return resolveBarLabelText(
+      entry,
+      this.#frameSettings.barLabels,
+      this.variantFor(entry).barLabels,
+      this.#barLabelPorts,
+      this.#columnBind(),
+    );
   }
 
   get capabilities(): Capabilities {
@@ -1384,23 +1407,21 @@ export class GanttShell {
     this.#refreshCapabilities();
   }
 
-  /** `SegmentSelection`'s one ports object (#230 R4) — the shell's own state, behind the closures
-   *  `SegmentSelectionPorts` names. `confirm`/`announce` reuse the shell's own `#proposeChange`/
-   *  `#events`, so a Selection change is one more line in `ProposableChange`, not a second veto path.
-   *  `paint` writes the backend's own state and re-derives hover/gesture affordances from it — the
-   *  same pair every direct `#selection` write used to make by hand. */
-  #segmentSelectionPorts(): SegmentSelectionPorts {
+  /** `EntrySelection`'s one ports object (#230 R4, ADR 0025) — the shell's own state, behind the
+   *  closures `EntrySelectionPorts` names. `confirm`/`announce` reuse the shell's own
+   *  `#proposeChange`/`#events`, so a Selection change is one more line in `ProposableChange`, not a
+   *  second veto path. `paint` writes the backend's own state and re-derives hover/gesture
+   *  affordances from it — the same pair every direct `#selection` write used to make by hand. */
+  #entrySelectionPorts(): EntrySelectionPorts {
     return {
-      entries: () => this.#options.dataset.entries,
       plannedRows: () => this.#layout.plannedRows(),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      segmentIdsForItem: (id) => this.#layout.segmentIdsForItem(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
       confirm: (change, apply) =>
         this.#proposeChange('beforeSelectionChange', 'selectionChange', change, apply),
       announce: (change) => this.#emit('selectionChange', change),
-      paint: (segmentIds) => {
-        this.#interactionState.selectedSegmentIds = segmentIds;
+      paint: (entryIds) => {
+        this.#interactionState.selectedEntryIds = entryIds;
         this.#refreshAffordances();
       },
     };
@@ -1465,9 +1486,9 @@ export class GanttShell {
    *  what real keyboard focus sits on right now (S5.11, D-S5-39), one of the five `TargetKind`s.
    *
    *  A keyboard chord has no right-clicked node to reconcile against the Selection. So `target`'s
-   *  `entryIds`/`segmentIds` name the Selection directly, for every kind but `'header'` and
-   *  `'splitter'` (#212). `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation
-   *  does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
+   *  `entryIds` names the Selection directly, for every kind but `'header'` and `'splitter'` (#212).
+   *  `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation does.
+   *  `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
    *  name either type (D-S5-5's mirror).
    *
    *  A `wiring` with no `buildCommandContext` makes every command's context an empty object, for a
@@ -1475,8 +1496,7 @@ export class GanttShell {
    *  without first checking `ctx.entry`/`ctx.target`, and no such test runs a command that needs
    *  them. */
   #buildCommandContext(): CommandContext<unknown> {
-    const segmentIds = this.#segmentSelection.segmentIds;
-    const entryIds = this.#segmentSelection.entryIds;
+    const entryIds = this.#entrySelection.entryIds;
     const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     // S5.11, D-S5-39: real DOM focus is the single source of truth for "what is the target of
@@ -1487,10 +1507,10 @@ export class GanttShell {
     // #199/#212: no node holds focus (an empty pane) — fall back to the Selection alone.
     const target =
       domTarget === undefined
-        ? segmentIds.length > 0
-          ? { kind: 'bar' as const, entryIds, segmentIds }
+        ? entryIds.length > 0
+          ? { kind: 'bar' as const, entryIds }
           : undefined
-        : this.#targetFromDom(domTarget, entryIds, segmentIds);
+        : this.#targetFromDom(domTarget, entryIds);
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
@@ -1501,10 +1521,10 @@ export class GanttShell {
   }
 
   /** The `CommandTarget` a resolved `DomTarget` names (S5.11, D-S5-39). `'header'` and `'splitter'`
-   *  stand for no Entry and no Segment, so both name empty sets, matching `DomTarget`'s own contract.
-   *  Every other kind names the current Selection. A keyboard chord has no separate "clicked" thing
-   *  to reconcile the Selection against (this file's own doc comment above). */
-  #targetFromDom(domTarget: DomTarget, entryIds: readonly EntryId[], segmentIds: readonly SegmentId[]) {
+   *  stand for no Entry, so both name empty sets, matching `DomTarget`'s own contract. Every other
+   *  kind names the current Selection. A keyboard chord has no separate "clicked" thing to reconcile
+   *  the Selection against (this file's own doc comment above). */
+  #targetFromDom(domTarget: DomTarget, entryIds: readonly EntryId[]) {
     // Each arm returns an object literal with its own `kind` literal, never `domTarget.kind` read
     // straight through. That keeps the inferred return type the exact union `CommandTarget` names.
     // Widening `kind` to plain `TargetKind` would lose that precision.
@@ -1512,19 +1532,19 @@ export class GanttShell {
       case 'header': {
         const field = domTarget.field;
         return field !== undefined
-          ? { kind: 'header' as const, field, entryIds: [], segmentIds: [] }
-          : { kind: 'bar' as const, entryIds, segmentIds };
+          ? { kind: 'header' as const, field, entryIds: [] }
+          : { kind: 'bar' as const, entryIds };
       }
       case 'splitter':
-        return { kind: 'splitter' as const, entryIds: [], segmentIds: [] };
+        return { kind: 'splitter' as const, entryIds: [] };
       case 'row':
-        return { kind: 'row' as const, entryIds, segmentIds };
+        return { kind: 'row' as const, entryIds };
       case 'gridCell':
         return domTarget.field !== undefined
-          ? { kind: 'gridCell' as const, field: domTarget.field, entryIds, segmentIds }
-          : { kind: 'gridCell' as const, entryIds, segmentIds };
+          ? { kind: 'gridCell' as const, field: domTarget.field, entryIds }
+          : { kind: 'gridCell' as const, entryIds };
       case 'bar':
-        return { kind: 'bar' as const, entryIds, segmentIds };
+        return { kind: 'bar' as const, entryIds };
     }
   }
 
@@ -1545,13 +1565,17 @@ export class GanttShell {
         const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
-      selectAll: () => this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsInRowOrder()),
-      clearSelection: () => this.#segmentSelection.propose([]),
-      hasSelection: () => this.#segmentSelection.segmentIds.length > 0,
+      selectAll: () => this.#entrySelection.propose(this.#entrySelection.selectableEntriesInRowOrder()),
+      clearSelection: () => this.#entrySelection.propose([]),
+      hasSelection: () => this.#entrySelection.entryIds.length > 0,
       keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
-      nothingSelected: () => this.#segmentSelection.segmentIds.length === 0,
-      selectNextSegment: () => this.#segmentSelection.step(1),
-      selectPreviousSegment: () => this.#segmentSelection.step(-1),
+      nothingSelected: () => this.#entrySelection.entryIds.length === 0,
+      selectNextEntry: () => this.#entrySelection.step(1),
+      selectPreviousEntry: () => this.#entrySelection.step(-1),
+      canClearDates: (id) => this.#canClearDates(id),
+      clearDates: (id) => {
+        this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
+      },
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.x.panTo(0),
@@ -1581,8 +1605,7 @@ export class GanttShell {
         Math.max(1, Math.floor(this.#viewport.visible.height / this.#frameSettings.rowHeight)),
       collapseRow: (id) => this.#treeCollapse.collapse(id),
       expandRow: (id) => this.#treeCollapse.expand(id),
-      selectOnFocus: (hit) =>
-        this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsOf(hit)),
+      selectOnFocus: (hit) => this.#entrySelection.propose(this.#entrySelection.selectableEntriesOf(hit)),
       setFocusedColumn: (field) => this.#columnChrome.setFocusedColumn(field),
       revealRow: (index) => {
         const y = this.#layout.rowTop(index);
@@ -1633,7 +1656,7 @@ export class GanttShell {
     return {
       requestFrame: () => this.#frames.request(),
       rebindFields: () => this.#bindColumns(),
-      invalidateItems: () => this.#layout.invalidateFrom(0),
+      invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
     };
   }
@@ -1678,7 +1701,7 @@ export class GanttShell {
       registrations: this.#registrations,
       resolveTooltipRenderer: () =>
         this.#registrations.renderers.resolve('tooltip', this.#frameSettings.tooltipRenderer),
-      lastPaintedBar: (id) => this.#lastBarById.get(itemId(id)),
+      lastPaintedBar: (id) => this.#lastBarById.get(barId(id)),
       entry: (id) => this.#options.dataset.entries.get(id),
       resolvedColumns: () => this.#columnChrome.resolvedColumns,
       resolvedColumn: (field) => this.#columnChrome.resolvedColumn(field),
@@ -1712,14 +1735,14 @@ export class GanttShell {
   #pluginRegistrationPorts(): PluginRegistrationPorts {
     return {
       requestFrame: () => this.#frames.request(),
-      invalidateItems: () => this.#layout.invalidateFrom(0),
+      invalidateBars: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
       refreshVariantStyles: () => this.#variantStyles.refresh(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
     };
   }
 
-  /** Where a `DoubleVariantClaim` is reported (Q10, ADR 0018). Two plugins' rules both claimed one
+  /** Where a `DoubleVariantMatch` is reported (Q10, ADR 0018). Two plugins' rules both matched one
    *  Entry. The newest paints and the older draws nothing. This names both, so the consumer sees
    *  which two plugins overlap. The library never arbitrates — the consumer chose the plugins.
    *
@@ -1730,28 +1753,28 @@ export class GanttShell {
    *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
    *  line from every consumer's build, and the warning would never fire for anybody. The
    *  `console.warn` fallback runs only when nothing is subscribed to `error`. */
-  #reportDoubleClaim(): ReportDoubleClaim {
+  #reportDoubleMatch(): ReportDoubleMatch {
     const reported = new Set<string>();
     return ({ entryId, painted, ignored }) => {
       const pair = `${painted.variant}|${ignored.variant}`;
       if (reported.has(pair)) return;
       reported.add(pair);
-      const by = (claimant: VariantClaimant): string =>
-        claimant.pluginId === undefined
-          ? `'${claimant.variant}'`
-          : `'${claimant.variant}' (${claimant.pluginId})`;
+      const by = (registration: RegisteredVariant): string =>
+        registration.pluginId === undefined
+          ? `'${registration.variant}'`
+          : `'${registration.variant}' (${registration.pluginId})`;
       const message =
         `Two variant rules both cover entry '${entryId}': ${by(painted)} and ${by(ignored)}. ` +
         `The newest registered rule paints; ${by(ignored)} draws nothing on the entries they share.`;
       this.#raiseError(
-        { code: 'variant-claimed-twice', message, severity: 'warning', by: 'core', entryId },
+        { code: 'variant-matched-twice', message, severity: 'warning', by: 'core', entryId },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };
   }
 
   /** Where an `UnknownFieldMatch` is reported (`J59`). A `when` names a key no Field declares, so
-   *  the rule claims no row — a typo, or a plugin key the Dataset never declared. The frame keeps
+   *  the rule matches no row — a typo, or a plugin key the Dataset never declared. The frame keeps
    *  drawing; this says what stopped matching.
    *
    *  One report per rule and key, not one per row. A rule that names a missing key names it on
@@ -1762,9 +1785,54 @@ export class GanttShell {
       const owner = rule.pluginId === undefined ? '' : ` (${rule.pluginId})`;
       const message =
         `The variant rule '${rule.variant}'${owner} matches on field '${key}', and no Field declares it. ` +
-        `It claims no row. Declare the field on the Dataset, or correct the key.`;
+        `It matches no row. Declare the field on the Dataset, or correct the key.`;
       this.#raiseError(
         { code: 'unknown-variant-field', message, severity: 'warning', by: 'core', field: key },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
+  /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
+   *  `childrenAsSegments` rule names a key no Field declares, so it matches no row — a typo, or a
+   *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
+   *  several named rules, so it has no rule name to print. The message names the config key instead.
+   *
+   *  `compileEntryRule`'s own dedupe holds for one row pass; this Set holds across every frame this
+   *  Gantt renders. `resolveEntriesSource` recompiles the rule on every `render()`, and row-source
+   *  config rarely changes, but a stale key must not spam a report per frame. */
+  #reportUnknownRowSourceField(): (key: FieldKey) => void {
+    const reported = new Set<FieldKey>();
+    return (key) => {
+      if (reported.has(key)) return;
+      reported.add(key);
+      const message =
+        `'childrenAsSegments' matches on field '${key}', and no Field declares it. ` +
+        `It matches no row. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-row-source-field', message, severity: 'warning', by: 'core', field: key },
+        () => console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
+  /** Where an unknown bar-label Field is reported (#421 F2). `barLabels.field` — the Gantt's own,
+   *  or an `EntryVariant`'s — names a key no Field declares, once merged (`mergeBarLabels`). Both
+   *  are live. `resolveBarLabelText` runs inside `render()`'s own rAF callback. A throw there
+   *  reaches no consumer, so it reports and carries on; the bar prints no label.
+   *
+   *  One report per field key, not one per bar per frame: this Set holds across every frame this
+   *  Gantt renders. `#reportUnknownRowSourceField` already holds the same shape for its own key. */
+  #reportUnknownBarLabelField(): (field: FieldKey) => void {
+    const reported = new Set<FieldKey>();
+    return (field) => {
+      if (reported.has(field)) return;
+      reported.add(field);
+      const message =
+        `'barLabels' names field '${field}', and no Field declares it. ` +
+        `No label prints for the bars it covers. Declare the field on the Dataset, or correct the key.`;
+      this.#raiseError(
+        { code: 'unknown-bar-label-field', message, severity: 'warning', by: 'core', field },
         () => console.warn(`FreeGantt: ${message}`),
       );
     };
@@ -1774,6 +1842,20 @@ export class GanttShell {
    *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
    *  this shell no longer calls it. */
+  /** ADR 0012: a Delete on a bar un-dates the Entry that bar draws, so this asks whether those dates
+   *  are the Entry's own to clear. A rolling-up parent's are not — the Rollup writes them (ADR 0013)
+   *  — and an Entry holding no date has nothing to clear. Both answer `false`, and the Delete passes
+   *  over the bar instead of throwing out of a keypress. Only the dates the Entry actually holds are
+   *  asked about: a half-dated descendant clears the one it has. */
+  #canClearDates(id: EntryId): boolean {
+    const entry = this.#options.dataset.entries.get(id);
+    if (entry === undefined) return false;
+    if (entry.start === undefined && entry.end === undefined) return false;
+    const writable = (field: 'start' | 'end'): boolean =>
+      entry[field] === undefined || this.#capabilities.canWrite(entry, field).ok;
+    return writable('start') && writable('end');
+  }
+
   #registerCoreCommands(): void {
     registerCoreCommands(this.#commandRegistry, this.#coreCommandPorts());
 
@@ -1812,11 +1894,12 @@ export class GanttShell {
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
     bind('Alt+ArrowLeft', 'freegantt.moveColumnLeft');
-    // #212, ADR 0010: the Selection holds Segments. So a keyboard user needs a way to move it from
-    // one bar of a row to the next. `interaction/keyboard-editing.ts` leaves a modified arrow alone,
-    // so this chord never also nudges the entry it just reselected.
-    bind('Mod+ArrowRight', 'freegantt.selectNextSegment');
-    bind('Mod+ArrowLeft', 'freegantt.selectPreviousSegment');
+    // #212, ADR 0010, ADR 0025: a row can draw several bars, one Entry each. So a keyboard user
+    // needs a way to move the Selection from one bar of a row to the next. `interaction/
+    // keyboard-editing.ts` leaves a modified arrow alone, so this chord never also nudges the entry
+    // it just reselected.
+    bind('Mod+ArrowRight', 'freegantt.selectNextEntry');
+    bind('Mod+ArrowLeft', 'freegantt.selectPreviousEntry');
     // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
@@ -1840,9 +1923,9 @@ export class GanttShell {
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
 
-  #setHovered(next: ItemId | undefined): void {
-    if (this.#hoveredItemId === next) return;
-    this.#hoveredItemId = next;
+  #setHovered(next: BarId | undefined): void {
+    if (this.#hoveredBarId === next) return;
+    this.#hoveredBarId = next;
     this.#refreshAffordances();
   }
 
@@ -1857,33 +1940,32 @@ export class GanttShell {
    *  refresh, never per pointer move beyond that (I5). */
   #hoveredRow(): RowId | undefined {
     if (this.#hoveredRowId !== undefined) return this.#hoveredRowId;
-    if (this.#hoveredItemId === undefined) return undefined;
-    return this.#layout.rowIdForEntry(entryIdOfItem(this.#hoveredItemId));
+    if (this.#hoveredBarId === undefined) return undefined;
+    return this.#layout.rowIdForEntry(entryIdOfBar(this.#hoveredBarId));
   }
 
-  /** D-S3-6: resolves `hoveredItemId`/`movableItemId`/`resizableEntryId` from the current hover and
+  /** D-S3-6: resolves `hoveredBarId`/`movableBarId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
   #refreshAffordances(): void {
-    const sole = this.#segmentSelection.soleEntry();
+    const sole = this.#entrySelection.soleEntry();
     const ids = projectAffordances({
-      hoveredItemId: this.#hoveredItemId,
-      soleSelectedEntryId: sole?.id,
-      selectedSegmentCountOfSoleEntry: sole?.segmentCount ?? 0,
-      itemIdsForEntry: (id) => this.#layout.itemIdsForEntry(id),
+      hoveredBarId: this.#hoveredBarId,
+      soleSelectedEntryId: sole,
+      barIdsForEntry: (id) => this.#layout.barIdsForEntry(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
-    setOptional(this.#interactionState, 'hoveredItemId', ids.hoveredItemId);
+    setOptional(this.#interactionState, 'hoveredBarId', ids.hoveredBarId);
     setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
-    setOptional(this.#interactionState, 'movableItemId', ids.movableItemId);
+    setOptional(this.#interactionState, 'movableBarId', ids.movableBarId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);
   }
 
-  #entryFor(item: ItemId): Entry | undefined {
-    return this.#options.dataset.entries.get(entryIdOfItem(item));
+  #entryFor(barId: BarId): Entry | undefined {
+    return this.#options.dataset.entries.get(entryIdOfBar(barId));
   }
 
   /** Review H3: `GridCellRendererContext.fieldValue`. `entry.read(key)` is the one read that answers a
@@ -2072,37 +2154,29 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
-  /** An id that names an Entry reveals the union of every Item that Entry draws. An id that instead
-   *  names one of its Segments reveals the one Item that draws that Segment. When an id could be
-   *  read either way, the Entry reading wins (ADR 0010, #212).
-   *  Both readings share one geometry path. It asks `FrameLayout` for the row's Items, and
-   *  `barSpan` for each Item's own x/width off the bound `TimeScale`. The box is included (#295),
-   *  so a `diamond()` row reveals its true glyph width. That is the same formula `computeFrame`
-   *  paints bars from, so the two can never drift apart. It then hands the resulting `Rect` to
-   *  `Viewport.reveal` (S1.9, D-S1.9-6). When nothing paints the named target, its own dates are
-   *  the target instead (`fallbackSpanItem`), so reveal never becomes a no-op.
-   *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
-   *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
-   *  says which one the caller meant. A collapsed ancestor expands before any Item is read.
-   *  `FrameLayout` answers Items from the post-collapse plan, so a row collapse hid answers empty.
-   *  A still-hidden row (filter) keeps the current y — it does not jump to 0.
-   *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
-   *  reading the brand. */
-  reveal(id: EntryId | SegmentId | string): void {
+  /** An id that names an Entry reveals the union of every Bar that Entry draws (ADR 0010, ADR 0025,
+   *  #212).
+   *  It asks `FrameLayout` for the row's Bars, and `barSpan` for each Bar's own x/width off the
+   *  bound `TimeScale`. The box is included (#295), so a `diamond()` row reveals its true glyph
+   *  width. That is the same formula `computeFrame` paints bars from, so the two can never drift
+   *  apart. It then hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6). When nothing
+   *  paints the named target, its own dates are the target instead (`fallbackSpanBar`), so reveal
+   *  never becomes a no-op.
+   *  Throws `RevealTargetNotFoundError` for an id the dataset does not hold (#227). A collapsed
+   *  ancestor expands before any Bar is read. `FrameLayout` answers Bars from the post-collapse
+   *  plan, so a row collapse hid answers empty. A still-hidden row (filter) keeps the current y —
+   *  it does not jump to 0.
+   *  A plain `string` is a legal id here — it resolves by asking the store, never by reading the
+   *  brand. */
+  reveal(id: EntryId | string): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
-    if (entry !== undefined) {
-      // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
-      // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
-      // covered it).
-      if (!spansTime(entry)) return this.#revealRow(entry.id);
-      return this.#revealEntrySpan(entry.id, entry.start, entry.end);
-    }
-    const ownerId = entries.entryIdOfSegment(id);
-    const owner = ownerId === undefined ? undefined : entries.get(ownerId);
-    const segment = owner?.segments.find((candidate) => candidate.id === id);
-    if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
-    return this.#revealSegmentSpan(owner.id, segment.id, segment.start, segment.end);
+    if (entry === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
+    // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
+    // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
+    // covered it).
+    if (!spansTime(entry)) return this.#revealRow(entry.id);
+    return this.#revealEntrySpan(entry.id, entry.start, entry.end);
   }
 
   /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
@@ -2116,39 +2190,24 @@ export class GanttShell {
     this.#viewport.reveal({ x, y, width: 0, height: this.#frameSettings.rowHeight });
   }
 
-  /** Reveals the whole Entry: the union of the painted extents of every Item it draws (#295). An
-   *  ordinary bar draws one Item over the entry's own span, so this reduces to today's behaviour.
-   *  A `diamond()` row's fixed box is read the same way, box included. An entry that draws no Item
+  /** Reveals the whole Entry: the union of the painted extents of every Bar it draws (#295). An
+   *  ordinary bar draws one Bar over the entry's own span, so this reduces to today's behaviour.
+   *  A `diamond()` row's fixed box is read the same way, box included. An entry that draws no Bar
    *  at all falls back to the entry's own span, so reveal never becomes a no-op. */
   #revealEntrySpan(ownerId: EntryId, start: Instant, end: Instant): void {
     const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.itemsForEntry(ownerId);
+    const bars = this.#layout.barsForEntry(ownerId);
     const scale = this.#viewport.timeScale;
     const minBarWidthPx = this.#frameSettings.minBarWidthPx;
     const { x, width } =
-      items.length > 0
-        ? unionSpan(items, scale, minBarWidthPx)
-        : barSpan(fallbackSpanItem(ownerId, start, end), scale, minBarWidthPx);
-    this.#revealRect(rowIndex, x, width);
-  }
-
-  /** Reveals one Segment: the Item that draws it, box included (#295). A summary draws one bar over
-   *  the whole span, and that one bar stands for every Segment — so it is the target here too.
-   *  When no Item draws this Segment at all, the Segment's own dates are the target. A sibling bar
-   *  never is: the caller named this Segment, and panning to another one would show the wrong
-   *  Segment. That is the rule `RovingFocus` relies on — a split Entry's other Segments must not
-   *  widen the pan past the bar that has focus. */
-  #revealSegmentSpan(ownerId: EntryId, targetSegmentId: SegmentId, start: Instant, end: Instant): void {
-    const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.itemsForEntry(ownerId);
-    const target = items.find((item) => this.#layout.segmentIdsForItem(item.id).includes(targetSegmentId));
-    const drawn = target ?? fallbackSpanItem(ownerId, start, end);
-    const { x, width } = barSpan(drawn, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
+      bars.length > 0
+        ? unionSpan(bars, scale, minBarWidthPx)
+        : barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 
   /** Expands this entry's collapsed ancestors, and flushes the pending frame. Every caller does
-   *  this before it reads `FrameLayout` about the entry (#295). `itemsForEntry` answers from the
+   *  this before it reads `FrameLayout` about the entry (#295). `barsForEntry` answers from the
    *  post-collapse plan, so a row collapse hid answers empty until the frame catches up. Returns
    *  the row's index, or `-1` for a still-hidden row (a filter, not a collapse). */
   #expandAndFindRow(ownerId: EntryId): number {
@@ -2328,6 +2387,10 @@ export class GanttShell {
         variants: this.#registrations.variants,
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
+        entryRulePorts: this.#entryRulePorts,
+        // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
+        // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
+        barLabelFor: (entry) => this.#labelFor(entry),
       }),
     );
     // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are

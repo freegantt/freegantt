@@ -1,5 +1,37 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`computeFrame > matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 1`] = `
+[
+  {
+    "depth": 0,
+    "entryIds": [
+      "entry-1",
+      "entry-2",
+    ],
+    "id": "entry-1",
+  },
+]
+`;
+
+exports[`computeFrame > matches the golden snapshot for a segmented row — the child draws no row of its own (#421 F4, plans/segment-is-a-bar/README.md) 2`] = `
+[
+  {
+    "a11yLabel": "Stakeholder interviews, Sep 1, 2026 – Sep 3, 2026",
+    "entryId": "entry-2",
+    "flags": {},
+    "height": 18,
+    "id": "entry-2:0",
+    "label": "Stakeholder interviews",
+    "rowId": "entry-1",
+    "span": "exact",
+    "variant": "leaf",
+    "width": 259200,
+    "x": 0,
+    "y": 7,
+  },
+]
+`;
+
 exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] = `
 [
   {
@@ -10,10 +42,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "id": "entry-1:0",
     "label": "Discovery",
     "rowId": "entry-1",
-    "segmentId": "sg1",
-    "segmentIds": [
-      "sg1",
-    ],
     "span": "exact",
     "variant": "leaf",
     "width": 432000,
@@ -28,10 +56,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "id": "entry-2:0",
     "label": "Stakeholder interviews",
     "rowId": "entry-2",
-    "segmentId": "sg2",
-    "segmentIds": [
-      "sg2",
-    ],
     "span": "exact",
     "variant": "leaf",
     "width": 259200,
@@ -46,10 +70,6 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "id": "entry-3:0",
     "label": "Requirements draft",
     "rowId": "entry-3",
-    "segmentId": "sg3",
-    "segmentIds": [
-      "sg3",
-    ],
     "span": "exact",
     "variant": "leaf",
     "width": 345600,

@@ -2,19 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { ensureBaseStyles } from './styles.js';
 import { GanttShell } from './gantt-shell.js';
 import type { GanttShellOptions } from './gantt-shell.js';
-import { entryId, mintedSegmentId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { Instant, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 
 function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset'] {
-  let mintedSegmentCounter = 0;
   const context = {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
-    referenceDate: 0 as Instant,
-    rollUpKinds: new Set(['group']),
-    mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
   };
   return {
     entries: new EntryStore(list, context),
@@ -46,9 +42,6 @@ const entries: StoredEntry[] = [
     name: 'Entry 1',
     start: instant('2026-09-01T00:00:00Z'),
     end: instant('2026-09-03T00:00:00Z'),
-    segments: [
-      { id: segmentId('t1-1'), start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-03T00:00:00Z') },
-    ],
     props: {},
   },
 ];

@@ -15,8 +15,8 @@ import {
   ENTRY_ID_KEY,
   FIELD_ATTRIBUTE,
   FIELD_KEY,
-  ITEM_ID_ATTRIBUTE,
-  ITEM_ID_KEY,
+  BAR_ID_ATTRIBUTE,
+  BAR_ID_KEY,
   ROW_TESTID,
   TESTID_KEY,
 } from './dom-contract.js';
@@ -62,7 +62,7 @@ describe('the e2e test-id contract', () => {
 describe('the selector spelling of each dataset key', () => {
   const pairs: ReadonlyArray<readonly [string, string]> = [
     [ENTRY_ID_KEY, ENTRY_ID_ATTRIBUTE],
-    [ITEM_ID_KEY, ITEM_ID_ATTRIBUTE],
+    [BAR_ID_KEY, BAR_ID_ATTRIBUTE],
     [FIELD_KEY, FIELD_ATTRIBUTE],
   ];
 

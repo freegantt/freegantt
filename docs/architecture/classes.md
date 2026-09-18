@@ -111,16 +111,16 @@ emits header ticks and date-line decorations.
 - **overflowCount** — Counts rows already emitted past the window bottom and stops after
   `verticalRows` of them.
 
-#### produceItemsForRow() — function
+#### produceBarsForRow() — function
 
-*`layout/items/produce-items.ts`*
+*`layout/bars/produce-bars.ts`*
 
-Per-row item production. An Entry carries no stored classification, so nothing dispatches on a type
+Per-row bar production. An Entry carries no stored classification, so nothing dispatches on a type
 tag: the variant registry resolves one variant per Entry, and that variant's own producer builds the
-Items (ADR 0018). Header rows produce none.
+Bars (ADR 0018). Header rows produce none.
 
-- **resolveItems(entry, registry)** — One resolution, one producer call, so no losing candidate's
-  Items are ever built and thrown away. A variant with no producer of its own draws one Item over
+- **resolveBars(entry, registry)** — One resolution, one producer call, so no losing candidate's
+  Bars are ever built and thrown away. A variant with no producer of its own draws one Bar over
   the Entry's whole span, so this never answers "nothing" for a variant the registry knows.
 - **VariantRegistry.resolveFor(entry)** — Walks newest-first: the consumer's rules, then a
   plugin's, then core's two. It stops at the first `when` that answers yes. Core's `leaf` carries
@@ -435,8 +435,8 @@ without depending on each other.
 | --- | --- | --- |
 | `Instant` | `number & {__brand}` | Epoch ms. Branded so a naked number cannot be passed as a date by accident. |
 | `TimeSpan` | `{ start, end }` | Half-open `[start, end)` in storage. Display is inclusive, via one formatting helper — never an inline `end - 1`. |
-| `EntryId` / `SegmentId` / `RowId` / `ItemId` / `ChangeSetId` | `string & {__brand}` | Five distinct brands over `string`, so a row id cannot be used where an item id belongs. |
-| `Entry` | `{ id, name, start?, end?, segments, read(), duration(), hasChildren, children(), parent(), descendants(), depth, toInput() }` | The authored record, and it answers questions about itself (ADR 0017). No stored classification: an Entry derives when it has children. `start`/`end` are absent together when it does not span (ADR 0012). `read(key)` is the one by-key value door — a core key, a `props` key, or a `compute` Field. |
+| `EntryId` / `RowId` / `BarId` / `ChangeSetId` | `string & {__brand}` | Four distinct brands over `string`, so a row id cannot be used where a bar id belongs. |
+| `Entry` | `{ id, name?, start?, end?, read(), duration(), hasChildren, children(), parent(), descendants(), depth, toInput() }` | The authored record, and it answers questions about itself (ADR 0017). No stored classification: an Entry derives when it has children. `start`/`end` are absent together when it does not span (ADR 0012); a spanning Entry draws one Bar, on the row its `parentId` names (ADR 0027). `read(key)` is the one by-key value door — a core key, a `props` key, or a `compute` Field. |
 | `Field` | `{ key, type?, rollUp?, editable?, column?, … }` **or** `{ key, compute, … }` | What a value *is* (ADR 0005). A core field and a consumer field share one declaration shape, so one code path serves both. The union is exclusive (ADR 0011): a stored Field may roll up and may be edited; a `compute` Field may do neither and has no home, so its aggregate is computed on read. `'compute' in field` is the one test that separates them. `Field.column` is optional defaults for the bare-key shorthand. |
 | `ChangeSet` | `{ added, removed, updated }` | The *one write shape* emitted on `change`, with `updated` carrying `{ entryId, field, from, to }` per field. What undo and redo replay. |
 | `Dataset` | `{ entries, timeZone }` | The structural contract. `api/dataset.ts`'s class `implements` it, which is what lets `layout/` bind against a dataset without an illegal import. |
@@ -582,7 +582,7 @@ container.fg-container <span class="c">role=group; not the scroller</span>
 │   │   └─ div.fg-band <span class="c">keyed by index</span>
 │   │       └─ div.fg-tick <span class="c">keyed by index within the band</span>
 │   ├─ div.fg-bars
-│   │   └─ div.fg-bar <span class="c">keyed by ItemId</span>
+│   │   └─ div.fg-bar <span class="c">keyed by BarId</span>
 │   ├─ div.fg-content-sizer <span class="c">1×1px, translated to content extent − 1px</span>
 │   └─ div.fg-date-line <span class="c">today + authored lines, keyed by date-line id</span>
 </div>
@@ -609,7 +609,7 @@ Implements `RenderBackend<HTMLElement>`.
 - **applyState(state)** — Hot-path class toggles and transforms only — hover/selection/drag
   preview, zero allocation, never a frame rebuild (I13).
 - **hitTest(x, y)** — `document.elementFromPoint` → `closest('.fg-bar')` →
-  `dataset.itemId`. No materialized hit-region array; the bars array *is* the hit index.
+  `dataset.barId`. No materialized hit-region array; the bars array *is* the hit index.
 
 #### syncKeyed() — function
 

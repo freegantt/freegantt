@@ -41,6 +41,12 @@ export const demoEntryInputs: EntryInput[] = sampleEntryInputs.map((entry) => ({
 
 export type DemoEntryProps = { cost?: number; team?: string; milestone?: boolean };
 
+/** The generic demo's segmented row (#421). Before ADR 0026 this Entry stored three Segments; the
+ *  `Segment` type no longer exists, so the same picture now comes from three child Entries and one
+ *  `childrenAsSegments` rule. `main.ts` names this id, and its bench button turns the rule off to
+ *  show the other half — the same three Entries as three ordinary rows. */
+export const SEGMENTED_PARENT_ID = 'entry-16';
+
 /** Nested work tree for the generic demo: Program → workstream → work → a few grandchildren. */
 const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
   program: ['entry-1', 'entry-5', 'entry-10', 'entry-14', 'entry-26', 'entry-33'],
@@ -62,6 +68,10 @@ const DEMO_CHILDREN: Readonly<Record<string, readonly string[]>> = {
     'entry-24',
     'entry-25',
   ],
+  // #421: `entry-16` is the generic demo's segmented row. Its three children draw as bars on its own
+  // row, so it names them here like any other parent — drawing children as segments is a row-source rule, not a shape
+  // the tree stores (`main.ts` sets `childrenAsSegments`).
+  'entry-16': [`${SEGMENTED_PARENT_ID}-a`, `${SEGMENTED_PARENT_ID}-b`, `${SEGMENTED_PARENT_ID}-c`],
   'entry-26': ['entry-27', 'entry-28', 'entry-29', 'entry-30', 'entry-31', 'entry-32'],
   'entry-33': [
     'entry-34',
@@ -110,19 +120,44 @@ function workstreamOf(id: string): string | undefined {
   return undefined;
 }
 
-/** Three separate Segments across ten days from `start` — one Entry that draws three bars (ADR 0010,
- *  #212). They do not overlap, so the pointer can land on every one of them. A Segment drawn under
- *  another cannot be picked (#215). Exported because two demos need a several-Segment Entry: the
- *  tree page draws one, and `editing.ts` locks one, which is the case an envelope-only cascade
- *  refuses (#241). */
-export function separateSegments(start: InstantInput) {
+/** Where each leg sits, as whole days from the parent's start. Legs never overlap, so the pointer
+ *  can land on every one of them — a bar drawn under another cannot be picked (#215). */
+const SPREAD_LEGS: readonly (readonly [from: number, to: number])[] = [
+  [0, 2],
+  [3, 5],
+  [6, 9],
+];
+
+/** Three legs packed into six days, for a page whose first screenful must show all three. The
+ *  timeline culls a bar outside the visible window, so a ten-day spread puts the second and third
+ *  leg off-screen on a page that opens near today (#421: the generic demo drew one leg of three
+ *  until these dates tightened). */
+export const COMPACT_LEGS: readonly (readonly [from: number, to: number])[] = [
+  [0, 1],
+  [2, 3],
+  [4, 5],
+];
+
+/** Three child Entries from `start`, for a parent whose row draws them as segments — one row that draws three
+ *  bars (ADR 0026: a bar is a child Entry, and `childrenAsSegments` is what puts a parent's children
+ *  on the parent's own row).
+ *
+ *  The parent keeps no dates of its own: three dated children roll its span up (ADR 0013). */
+export function segmentChildrenOf(
+  parentId: string,
+  start: InstantInput,
+  legs: readonly (readonly [from: number, to: number])[] = SPREAD_LEGS,
+): EntryInput[] {
   const startMs = instant(start);
   const day = (count: number) => addMs(startMs, count * MS.DAY);
-  return [
-    { start: day(0), end: day(2) },
-    { start: day(3), end: day(5) },
-    { start: day(6), end: day(9) },
-  ];
+  const names = ['Leg A', 'Leg B', 'Leg C'];
+  return legs.map(([from, to], i) => ({
+    id: `${parentId}-${'abc'[i]}`,
+    name: names[i] ?? `Leg ${i + 1}`,
+    parentId,
+    start: day(from),
+    end: day(to),
+  }));
 }
 
 export const demoFieldOptions = {
@@ -182,14 +217,25 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     };
     if (id === MILESTONE_ENTRY_ID) props.milestone = true;
     const next: EntryInput<DemoEntryProps> = { id, name: entry.name };
-    if (entry.start !== undefined) next.start = entry.start;
-    if (entry.end !== undefined) next.end = entry.end;
+    // The segmented parent stores no dates — its three legs roll its span up (ADR 0013), the same way
+    // every other derived Entry in this tree gets its span.
+    const drawsChildrenAsSegments = id === SEGMENTED_PARENT_ID;
+    if (entry.start !== undefined && !drawsChildrenAsSegments) next.start = entry.start;
+    if (entry.end !== undefined && !drawsChildrenAsSegments) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
-    // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
-    // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
-    // hand to cover a Segment that runs past it.
-    if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
     if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),
+  ...segmentLegs(),
 ];
+
+/** The three child Entries that `SEGMENTED_PARENT_ID`'s row claims (ADR 0026, #421).
+ *
+ *  The parent stores no dates: `demoTreeEntryInputs` drops them above, and the Rollup gives it the
+ *  span of these three (ADR 0013). Each leg carries its own cost and team, because the parent is
+ *  derived now and nothing but the Rollup may write a rolling-up parent's cell. */
+function segmentLegs(): EntryInput<DemoEntryProps>[] {
+  const parent = demoEntryInputs.find((entry) => entry.id === SEGMENTED_PARENT_ID);
+  const legs = segmentChildrenOf(SEGMENTED_PARENT_ID, parent!.start!, COMPACT_LEGS);
+  return legs.map((leg, i) => ({ ...leg, props: { cost: (i + 1) * 250, team: 'edge' } }));
+}

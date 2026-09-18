@@ -42,9 +42,8 @@ const variantAllows =
     markedVariant(entry) === variant ? capabilities : undefined;
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
- *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId`/`segments`
- *  ship `'api'`. One `override` re-declares a single key, the way `DatasetOptions.fields` does
- *  (#142). */
+ *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId` ships `'api'`.
+ *  One `override` re-declares a single key, the way `DatasetOptions.fields` does (#142). */
 function fieldsWith(...overrides: readonly Partial<Field>[]): (key: FieldKey) => Field | undefined {
   const byKey = new Map<FieldKey, Field>(CORE_FIELDS.map((field) => [field.key, field]));
   for (const override of overrides) {
@@ -152,11 +151,10 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(entry(), 'owner').ok).toBe(true);
   });
 
-  // `parentId` and `segments` ship `'api'`: a column object may show them, and the cell stays dead.
-  it('refuses the grid for parentId and segments — the app writes them, the user never types them', () => {
+  // `parentId` ships `'api'`: a column object may show it, and the cell stays dead.
+  it('refuses the grid for parentId — the app writes it, the user never types it', () => {
     const caps = capabilities();
     expect(caps.canWrite(entry(), 'parentId')).toEqual({ ok: false });
-    expect(caps.canWrite(entry(), 'segments')).toEqual({ ok: false });
   });
 
   // The middle state: the app writes it through `entries.update()`, the user never types it.
@@ -396,7 +394,7 @@ describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", ()
   });
 
   it("moves a child that holds only a start — the author's own case", () => {
-    // One date and no Segment (ADR 0012): the row shows in the grid and draws no bar.
+    // One date, no span (ADR 0012): the row shows in the grid and draws no bar.
     const [parent, child] = family({ name: 'c1', start: 0 }) as readonly [Entry, Entry];
     const caps = capabilities();
     expect(caps.entriesMovedBy(parent)).toEqual([child]);

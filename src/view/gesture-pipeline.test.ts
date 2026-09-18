@@ -1,21 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { EntryNotFoundError, entryId, itemId, segmentId } from '../model/index.js';
+import { EntryNotFoundError, InvertedSpanError, entryId, barId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
   ErrorReportInput,
   Instant,
   ProposedEdits,
-  Segment,
   StoredEntry,
 } from '../model/index.js';
 import { entryDouble } from '../layout/entry-double.js';
 import type { TimeScale, ViewPreset } from '../layout/index.js';
 import type { EntryMove } from './event-bus.js';
-import { reconcileExtenderEdits } from '../data/entry-reader.js';
-import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
  *  paired with `snap: () => 'none'` (the default dep below) this is exactly what
@@ -52,15 +49,12 @@ function entry(id: string, start: number, end: number): Entry {
 
 /** The same row as stored values. `EditRequest.entries` is the pre-transaction snapshot and is
  *  committed-only by contract (D-S5-45, ADR 0017), so it never carries a live row. */
-function storedRow(id: string, start: number, end: number, segments?: readonly Segment[]): StoredEntry {
-  const startInstant = start as Instant;
-  const endInstant = end as Instant;
+function storedRow(id: string, start: number, end: number): StoredEntry {
   return {
     id: entryId(id),
     name: id,
-    start: startInstant,
-    end: endInstant,
-    segments: segments ?? [{ id: segmentId(`${id}-1`), start: startInstant, end: endInstant }],
+    start: start as Instant,
+    end: end as Instant,
     props: {},
   };
 }
@@ -84,7 +78,6 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     timeScale: () => linearScale,
     preset: () => barePreset,
     snap: () => 'none',
-    selectedSegmentIds: () => [],
     selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
     canGesture: () => true,
@@ -195,7 +188,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
     session.preview(40);
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
     expect(preview).toHaveLength(2);
     expect(preview.map((p) => p.dx)).toEqual([40, 40]);
 
@@ -218,152 +211,26 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(preview[0]?.dWidth).toBe(50);
   });
 
-  it('moves every bar of a segmented entry with no pick (#211, D-S4-30)', async () => {
-    const segmented: Entry = {
-      ...entry('seg', 0, 300),
-      segments: [
-        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
-        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
-      ],
-    };
-    const committed: ProposedEdits[] = [];
-    const { deps, applied } = withRoster([segmented], {
-      commitEntryEdits: (edits) => {
-        committed.push(edits);
-        return true;
-      },
-    });
-    const pipeline = new GesturePipeline(deps);
-    // A row click named the Entry with no pick — every Segment steps (#211).
-    const session = pipeline.session(segmented.id, { kind: 'move' })!;
-
-    session.preview(40);
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
-    expect(preview.map((p) => p.dx)).toEqual([40, 40]);
-
-    await session.commit(40);
-    expect(committed[0]?.get(segmented.id)).toEqual({
-      __brand: 'ProposedEdit',
-      props: {},
-      proposedKeys: new Set(['segments', 'start', 'end']),
-      segments: [
-        { ...segmented.segments[0], start: 40, end: 140 },
-        { ...segmented.segments[1], start: 240, end: 340 },
-      ],
-      start: 40,
-      end: 340,
-    });
-  });
-
-  it('moves only the selected bar of a segmented entry, envelope follows (#211, #212)', async () => {
-    const segmented: Entry = {
-      ...entry('seg', 0, 300),
-      segments: [
-        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
-        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
-      ],
-    };
-    const committed: ProposedEdits[] = [];
-    const { deps, applied } = withRoster([segmented], {
-      selectedSegmentIds: () => [segmentId('seg-b')],
-      commitEntryEdits: (edits) => {
-        committed.push(edits);
-        return true;
-      },
-    });
-    const pipeline = new GesturePipeline(deps);
-    const session = pipeline.session(segmented.id, { kind: 'move' })!;
-
-    session.preview(40);
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    // Both bars preview — but only the selected one (Segment 1) carries a dx; Segment 0 stays put.
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number }[];
-    expect(preview).toEqual([
-      { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
-      { itemId: itemId(segmented.id, 1), dx: 40, dWidth: 0, extra: false },
-    ]);
-
-    await session.commit(40);
-    expect(committed[0]?.get(segmented.id)).toEqual({
-      __brand: 'ProposedEdit',
-      props: {},
-      proposedKeys: new Set(['segments', 'start', 'end']),
-      segments: [segmented.segments[0], { ...segmented.segments[1], start: 240, end: 340 }],
-      start: 0,
-      end: 340,
-    });
-  });
-
-  it('a multi-Entry drag moves each Entry’s own selected Segment, or whole when none is (#211)', async () => {
-    const picked: Entry = {
-      ...entry('picked', 0, 200),
-      segments: [
-        { id: segmentId('picked-a'), start: 0 as Instant, end: 100 as Instant },
-        { id: segmentId('picked-b'), start: 100 as Instant, end: 200 as Instant },
-      ],
-    };
-    const unpicked: Entry = {
-      ...entry('unpicked', 300, 500),
-      segments: [
-        { id: segmentId('unpicked-a'), start: 300 as Instant, end: 400 as Instant },
-        { id: segmentId('unpicked-b'), start: 400 as Instant, end: 500 as Instant },
-      ],
-    };
-    const committed: ProposedEdits[] = [];
-    const { deps } = withRoster([picked, unpicked], {
-      selectedEntryIds: () => [picked.id, unpicked.id],
-      selectedSegmentIds: () => [segmentId('picked-b')],
-      commitEntryEdits: (edits) => {
-        committed.push(edits);
-        return true;
-      },
-    });
-    const pipeline = new GesturePipeline(deps);
-    const session = pipeline.session(picked.id, { kind: 'move' })!;
-
-    await session.commit(40);
-    expect(committed[0]?.get(picked.id)?.segments).toEqual([
-      picked.segments[0],
-      { ...picked.segments[1], start: 140, end: 240 },
-    ]);
-    // No Segment of `unpicked` is selected, so both move by the same rigid-group delta (D-S3-19).
-    expect(committed[0]?.get(unpicked.id)?.segments).toEqual([
-      { ...unpicked.segments[0], start: 340, end: 440 },
-      { ...unpicked.segments[1], start: 440, end: 540 },
-    ]);
-  });
-
-  it('a resize on a selected Segment writes only that Segment’s edge (#211, #212)', async () => {
-    const segmented: Entry = {
-      ...entry('seg', 0, 300),
-      segments: [
-        { id: segmentId('seg-a'), start: 0 as Instant, end: 100 as Instant },
-        { id: segmentId('seg-b'), start: 200 as Instant, end: 300 as Instant },
-      ],
-    };
-    const committed: ProposedEdits[] = [];
-    const { deps } = withRoster([segmented], {
-      selectedSegmentIds: () => [segmentId('seg-a')],
-      commitEntryEdits: (edits) => {
-        committed.push(edits);
-        return true;
-      },
-    });
-    const pipeline = new GesturePipeline(deps);
-    const session = pipeline.session(segmented.id, { kind: 'resize', edge: 'end' })!;
-
-    await session.commit(40);
-    // The selected Segment (0) grows; the envelope-latest Segment (1) never moves.
-    expect(committed[0]?.get(segmented.id)).toEqual({
-      __brand: 'ProposedEdit',
-      props: {},
-      proposedKeys: new Set(['segments', 'start', 'end']),
-      segments: [{ ...segmented.segments[0], start: 0, end: 140 }, segmented.segments[1]],
-      start: 0,
-      end: 300,
-    });
-  });
+  // The four tests this comment replaces pinned a segmented Entry's own gesture behaviour: moving
+  // every bar with no pick, moving only a selected bar while the envelope widened around it, a
+  // multi-Entry drag resolving pick per Entry, and a resize touching only one Segment's edge.
+  // ADR 0026 retired `Segment`: a Bar is one child Entry by default now, so none of those scenarios
+  // exists at this layer any more. Each one maps onto coverage that already exists elsewhere:
+  //   - "moves every bar ... with no pick" is `entriesMovedBy` writing every descendant of a grabbed
+  //     parent bar — pinned by `'writes the descendants, leaves the parent unwritten, and names the
+  //     parent in the event'` below (ADR 0013, Q9).
+  //   - "moves only the selected bar, envelope follows" is now just grabbing that child Entry
+  //     directly — an ordinary single-entry move (`'preview() moves a single entry by raw px delta
+  //     when snap is none'` below). The envelope no longer "follows": `start`/`end` are ordinary
+  //     rolling-up Fields the Rollup recomputes from children on commit (ADR 0013, decision 5),
+  //     pinned in `data/rollup.test.ts`, not here — the gesture pipeline never computed an envelope.
+  //   - "multi-Entry drag, pick per Entry" is the existing multi-selection test (`'preview() and
+  //     commit() move every armed entry of a multi-selection by the same delta'` above) composed
+  //     with `entriesMovedBy`: each selected Entry resolves its own write independently, whether it
+  //     is an ordinary bar or itself a parent.
+  //   - "resize on a selected Segment" is now grabbing that child Entry directly and resizing it —
+  //     an ordinary resize gesture (`'resizes the start edge, clamped so it never crosses the end'`
+  //     below). There is no sibling Segment left to leave untouched.
 
   it('a milestone grab is refused through canGesture, not a kind check in the pipeline', () => {
     const milestone: Entry = entry('m', 50, 50);
@@ -382,7 +249,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(applied).toEqual([]); // rAF-coalesced, not applied synchronously
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const preview = applied.at(-1) as readonly { itemId: string; dx: number; dWidth: number }[];
+    const preview = applied.at(-1) as readonly { barId: string; dx: number; dWidth: number }[];
     expect(preview).toHaveLength(1);
     expect(preview[0]?.dx).toBe(50);
     expect(preview[0]?.dWidth).toBe(0);
@@ -651,8 +518,8 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       const paints: { preview: unknown; pending: unknown }[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
         emit: ((name: string) => (name === 'beforeEntryMove' ? veto : true)) as GesturePipelineDeps['emit'],
-        applyGestureState: (preview, pendingItemIds) => {
-          paints.push({ preview, pending: pendingItemIds });
+        applyGestureState: (preview, pendingBarIds) => {
+          paints.push({ preview, pending: pendingBarIds });
         },
       });
       const pipeline = new GesturePipeline(deps);
@@ -660,7 +527,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
 
       const commitPromise = session.commit(50);
       expect(paints).toHaveLength(1);
-      expect(paints[0]?.pending).toEqual([itemId(entryId('a'))]);
+      expect(paints[0]?.pending).toEqual([barId(entryId('a'))]);
       const preview = paints[0]?.preview as readonly { dx: number }[];
       expect(preview[0]?.dx).toBe(50);
 
@@ -959,80 +826,23 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       expect(requests).toHaveLength(1);
-      const preview = applied.at(-1) as readonly { itemId: string; dx: number; extra: boolean }[];
+      const preview = applied.at(-1) as readonly { barId: string; dx: number; extra: boolean }[];
       expect(preview).toHaveLength(2);
-      const dragging = preview.find((p) => p.itemId === itemId(a.id))!;
-      const ghost = preview.find((p) => p.itemId === itemId(x.id))!;
+      const dragging = preview.find((p) => p.barId === barId(a.id))!;
+      const ghost = preview.find((p) => p.barId === barId(x.id))!;
       expect(dragging.extra).toBe(false);
       expect(ghost.extra).toBe(true);
       expect(ghost.dx).toBe(50); // x0 300 -> x1 350
     });
 
-    // #212 R2 fix-plan review, unified to one refusal at D-S5-44: a `start`-alone cascade against a
-    // several-Segment Entry is refused (`SegmentsOutOfSyncError`, `'ambiguous'`) exactly as it is from
-    // `entries.update()`. This reconciliation runs inside the pipeline's own rAF callback, with
-    // nothing to catch a throw, so the preview must not let it through: `#extraFor` calls
-    // `reconcileExtenderEditsForPreview`, which drops the refused edit instead of throwing — that
-    // Entry paints no ghost for this frame, and the frame still paints the entry the caller drags.
-    // The commit path calls `reconcileExtenderEdits` (no drop) against the same effective state, and
-    // it refuses for real — #341 turned that refusal from a synchronous throw out of `commit()`
-    // into one report and a `false`, because the throw reached a native `pointerup` listener and no
-    // caller could catch it. Both paths now tell one story about one edit: the preview drops that
-    // Entry's ghost, and the commit drops the gesture.
-    it('[S3-A4] a several-Segment envelope-only cascade paints no ghost for it, and the commit path refuses', async () => {
-      const a = entry('a', 100, 200);
-      const twoSegments: readonly Segment[] = [
-        { id: segmentId('x-1'), start: 300 as Instant, end: 400 as Instant },
-        { id: segmentId('x-2'), start: 400 as Instant, end: 500 as Instant },
-      ];
-      const x = entryDouble({ id: 'x', start: 300, end: 500, segments: twoSegments });
-      const committedEntriesById = (): ReadonlyMap<EntryId, StoredEntry> =>
-        storedMap(storedRow('a', 100, 200), storedRow('x', 300, 500, twoSegments));
-      const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => new Map([[x.id, pe({ start: 350 })]]);
-      const commitEntryEdits = vi.fn((draft: ProposedEdits) => {
-        // Mirrors what `data/build-commit-change-set.ts` runs for real, at commit, against the real
-        // Dataset: the extraEditsFor hook's cascade goes through `reconcileExtenderEdits` — the same function
-        // the preview above calls a skip-on-refusal wrapper of — and this one does not skip.
-        const entries = committedEntriesById();
-        reconcileExtenderEdits(
-          entries,
-          extraEditsFor({
-            entries,
-            proposed: draft,
-            entryAfterEdits: (id) => entries.get(entryId(id)),
-            addedEntryIds: EMPTY_ENTRY_IDS,
-            removedEntryIds: EMPTY_ENTRY_IDS,
-          }),
-        );
-        return true;
-      });
-      const { deps, applied, reported } = withRoster([a, x], {
-        extraEditsFor,
-        committedEntriesById,
-        commitEntryEdits,
-      });
-      const pipeline = new GesturePipeline(deps);
-      const session = pipeline.session(a.id, { kind: 'move' })!;
-
-      session.preview(50);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-
-      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
-      expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the refused cascade
-      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the frame still paints the drag
-
-      await expect(session.commit(50)).resolves.toBe(false);
-      expect(commitEntryEdits).toHaveBeenCalledTimes(1);
-      expect(reported).toHaveLength(1);
-      expect(reported[0]).toMatchObject({
-        code: 'entry-move-dropped',
-        severity: 'warning',
-        by: 'core',
-        entryId: a.id,
-        droppedReason: 'write-refused',
-      });
-      expect(reported[0]?.message).toContain('the store refused the write it asked for');
-    });
+    // [S3-A4] used to pin a several-Segment envelope-only cascade refusal (D-S5-44). ADR 0026/Q39
+    // retired that scenario along with `Segment` itself: a Bar is one child Entry by default now, so
+    // there is no several-Segment Entry left to refuse, and `'write-refused'` no longer exists on
+    // `GestureDroppedReason` (`model/error-report.ts`) — an extender cascade on a rolling-up parent
+    // meets the Rollup's silent overwrite-and-report instead (ADR 0013, decision 5; pinned for `data/`
+    // itself in `data/rollup.test.ts`, not here — `gesture-pipeline.ts` never sees a throw for it, so
+    // it has nothing left to pin). No replacement test lands here: there is no longer a scenario at
+    // this layer for a gesture commit to refuse this way.
 
     // #332: an extender bug (not a typed refusal `isEnvelopeRefusal` names) still runs inside the
     // pipeline's own rAF callback with nothing to catch it. `#extraFor` must recover the same way
@@ -1054,9 +864,9 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       session.preview(50);
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      const preview = applied.at(-1) as readonly { itemId: string; extra: boolean }[];
+      const preview = applied.at(-1) as readonly { barId: string; extra: boolean }[];
       expect(preview.some((p) => p.extra)).toBe(false); // no ghost painted for the fault
-      expect(preview.some((p) => p.itemId === itemId(a.id))).toBe(true); // the drag itself still paints
+      expect(preview.some((p) => p.barId === barId(a.id))).toBe(true); // the drag itself still paints
 
       expect(reported).toHaveLength(1);
       expect(reported[0]).toMatchObject({
@@ -1103,7 +913,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     it('a sync true result commits without painting pending', async () => {
       const paints: unknown[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
-        applyGestureState: (_preview, pendingItemIds) => paints.push(pendingItemIds),
+        applyGestureState: (_preview, pendingBarIds) => paints.push(pendingBarIds),
       });
       const pipeline = new GesturePipeline(deps);
       const session = pipeline.session(entryId('a'), { kind: 'move' })!;
@@ -1171,6 +981,60 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]?.message).toContain('was removed before the write');
     });
 
+    // Branch review F9. An extender that cascades an end before its start proposed something core
+    // defines as impossible, and core declines it (#143). That is a refusal, not a fault: the
+    // gesture drops, the entry keeps its stored dates, and nothing broke. So it reports at
+    // `'warning'` beside `'data-changed'`, never at `'error'` beside a plugin falling over.
+    //
+    // `by` still names the plugin, because the plugin is who asked. Two fields, two questions —
+    // `severity` says what it cost, `by` says whose proposal it was.
+    it('[F9] an InvertedSpanError from an extender cascade drops the gesture, and does not fault', async () => {
+      const refused = new InvertedSpanError(
+        entryId('a'),
+        { start: 200 as Instant, end: 100 as Instant },
+        'extender',
+      );
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw refused;
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toMatchObject({
+        code: 'entry-move-dropped',
+        severity: 'warning',
+        by: 'plugin',
+        droppedReason: 'inverted-span',
+        entryId: entryId('a'),
+        cause: refused,
+      });
+      expect(reported[0]?.message).toContain('an end before its start');
+    });
+
+    // The other half of the line F9 drew, and the reason this pair sits together: an extender that
+    // *throws* is a bug nobody proposed, and it keeps the fault code and `'error'`. Loosening the
+    // branch above to catch every error would delete this distinction, and #258 and #332 both
+    // ruled that calling a plugin's bug a refusal is a misreport.
+    it('[F9] a bare Error from the same hook is still a fault, not a refusal', async () => {
+      const { deps, reported } = withRoster([entry('a', 100, 200)], {
+        commitEntryEdits: () => {
+          throw new Error('the extender itself fell over');
+        },
+      });
+      const pipeline = new GesturePipeline(deps);
+      const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+      await expect(session.commit(50)).resolves.toBe(false);
+
+      expect(reported[0]).toMatchObject({ code: 'gesture-commit-failed', severity: 'error' });
+      expect(reported[0]?.droppedReason).toBeUndefined();
+    });
+
     // #341: a resize reads as a resize. The noun comes from the event, through the one table
     // `data/error-reporting.ts` already keeps for every refusal sentence.
     it('[#341] a fault on a resize commit names the resize', async () => {
@@ -1214,8 +1078,8 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     // The Selection cannot change mid-drag (the arming grab is its last write before commit/cancel
     // ends the gesture), so `session()` must read it exactly once — never once per `preview()`, which
     // a rAF-coalesced drag calls on every pointermove.
-    const selectedSegmentIds = vi.fn(() => [segmentId('a-1')]);
-    const { deps } = withRoster([entry('a', 0, 100)], { selectedSegmentIds });
+    const selectedEntryIds = vi.fn(() => []);
+    const { deps } = withRoster([entry('a', 0, 100)], { selectedEntryIds });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;
 
@@ -1224,7 +1088,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     session.preview(30);
     await session.commit(40);
 
-    expect(selectedSegmentIds).toHaveBeenCalledTimes(1);
+    expect(selectedEntryIds).toHaveBeenCalledTimes(1);
   });
 
   it('never copies the dataset on a preview frame when no extension hook is installed', async () => {
@@ -1282,7 +1146,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 });
 
 describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
-  /** A row that holds one date and no Segment (ADR 0012): it shows in the grid and draws no bar. */
+  /** A row that holds one date, no span (ADR 0012): it shows in the grid and draws no bar. */
   function startOnly(id: string, start: number): Entry {
     return entryDouble({ id, start });
   }
@@ -1353,11 +1217,11 @@ describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
     pipeline.session(entryId('phase'), { kind: 'move' })!.preview(50);
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    const preview = applied[0] as readonly { itemId: string; dx: number; extra: boolean }[];
+    const preview = applied[0] as readonly { barId: string; dx: number; extra: boolean }[];
     // The parent's own bar is the caller's gesture, not an extender's ghost, so `extra` stays false.
-    expect(preview.map((item) => [item.itemId, item.dx, item.extra])).toEqual([
-      [itemId(entryId('phase')), 50, false],
-      [itemId(entryId('child')), 50, false],
+    expect(preview.map((bar) => [bar.barId, bar.dx, bar.extra])).toEqual([
+      [barId(entryId('phase')), 50, false],
+      [barId(entryId('child')), 50, false],
     ]);
   });
 });

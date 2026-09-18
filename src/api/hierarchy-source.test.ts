@@ -203,7 +203,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('the source makes "b" its own ancestor');
 
-    // `a` claims `b`, `b` claims `a`. The chain walks from `a`, so `b`'s answer closes it.
+    // `a` answers `b`, `b` answers `a`. The chain walks from `a`, so `b`'s answer closes it.
     expect(dataset.entries.get('b')?.parent()).toBeUndefined();
     expect(dataset.entries.get('a')?.parent()?.id).toBe('b');
 

@@ -40,6 +40,9 @@ The filter survives, because you never touched it. The getter returns the source
 `filterPolicy` and `tree` come back filled in even when you never set them. That resolved value
 assigns straight back into the setter.
 
+The same pattern carries `childrenAsSegments` unchanged: `ResolvedEntriesRowSource` extends
+`EntriesRowSource`, so a spread that changes `sort` or `filter` leaves it exactly as it was.
+
 ## Turn one setting off
 
 Pass `undefined` for the key. The other settings stay:
@@ -137,7 +140,11 @@ holds `team` to label its own button.
 - [`harness/main.ts`](../harness/main.ts) — the three
   handlers. Two spread one key. The grouping button switches `source`, so it builds a new source.
 - [`harness/hierarchy.ts`](../harness/hierarchy.ts) —
-  the same settings driven from `<select>` controls.
+  the same settings driven from `<select>` controls. **It does not use the pattern above**: its
+  `buildRowSource()` rebuilds the whole source from the controls on every change, so the page keeps a
+  second copy of the row-source state. That is the shape "Do not keep a second copy" warns against,
+  and it works there only because the `<select>` elements are the page's own single source of truth.
+  Read it as a demo of the keys, not of how to update them ([#429](https://github.com/Pawel-IT/FreeGantt/issues/429)).
 
 ## Related
 

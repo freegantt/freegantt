@@ -18,8 +18,8 @@ export type {
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
-// D-S5-44: the rigid move a plugin's cascade writes honestly, instead of a several-Segment
-// envelope-only write `data/` refuses.
+// D-S5-44 (ADR 0026 retired the several-Segment case it names): the rigid move a plugin's cascade
+// writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
 // composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
@@ -237,13 +237,9 @@ export {
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
-  SegmentNotFoundError,
   RevealTargetNotFoundError,
   DuplicateEntryIdError,
-  DuplicateSegmentIdError,
   ParentCycleError,
-  SegmentsOutOfSyncError,
-  EmptySegmentsError,
   EmptyCoversError,
   InvertedSpanError,
   UnknownFieldError,
@@ -278,11 +274,11 @@ export {
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
 export {
   entryId,
-  itemId,
-  itemIdFromDataset,
+  barId,
+  barIdFromDataset,
   entryIdFromDataset,
-  entryIdOfItem,
-  segmentIndexOfItem,
+  entryIdOfBar,
+  partIndexOfBar,
   changeSetId,
 } from '../model/index.js';
 export type { PluginId, Disposer, KeyChord } from '../model/index.js';
@@ -292,10 +288,8 @@ export type {
   Entry,
   StoredEntry,
   EntryId,
-  Segment,
-  SegmentId,
   RowId,
-  ItemId,
+  BarId,
   Instant,
   TimeUnit,
   TimeSpan,
@@ -308,7 +302,6 @@ export type {
 // Public because a consumer that types its own entry builder needs to name them.
 export type {
   EntryInput,
-  SegmentInput,
   InstantInput,
   TimeSpanInput,
   DateOnlyEndRule,
@@ -335,7 +328,7 @@ export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
 export type { ElementDescription, TooltipColumn } from '../model/index.js';
 // S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
 // `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
-// `ResolvedColumn` ride along because the context types name them (`BarRendererContext.item`,
+// `ResolvedColumn` ride along because the context types name them (`BarRendererContext.bar`,
 // `GridCellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
 // importable, not just structurally inferred.
 export type {
@@ -344,6 +337,8 @@ export type {
   BarRenderer,
   BarRendererContext,
   BarLabels,
+  BarLabelPolicy,
+  BarLabelSpec,
   BarLabelPlacement,
   ResolvedBarLabel,
   GridCellRenderer,
@@ -371,32 +366,34 @@ export type {
   RangeBand,
   RowStripe,
 } from '../layout/index.js';
-// ADR 0018: `EntryVariant.items`'s own vocabulary — a plugin author naming `ItemProducer`
+// ADR 0018: `EntryVariant.bars`'s own vocabulary — a plugin author naming `BarProducer`
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
 // to structural inference.
-export type { Item, ItemProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
+export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
-// it. `VariantRule` is published beside it because an author cannot guess what `when` matches (J6);
-// `VariantPredicate` names its predicate arm alone.
-export type { EntryVariant, VariantRule, VariantPredicate, FieldMatch } from '../layout/index.js';
+// it. `EntryRule` is published beside it because an author cannot guess what `when` matches (J6);
+// `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
+// for one of the two keys that take them: `EntriesRowSource.childrenAsSegments` takes the same shape
+// (#421 Q30).
+export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
 // looks up again (F3, `plans/row-redesign/BUILD-LOG.md`).
 export type { ResolvedVariant } from '../layout/index.js';
-// Review P3: the common producer, so `(entry) => [wholeEntryItem(entry)]` replaces eight hand-written
-// lines — and the Item id convention has one owner instead of one copy per plugin.
-export { wholeEntryItem } from '../layout/index.js';
+// Review P3: the common producer, so `(entry) => [wholeEntryBar(entry)]` replaces eight hand-written
+// lines — and the Bar id convention has one owner instead of one copy per plugin.
+export { wholeEntryBar } from '../layout/index.js';
 // ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
-// the shipped case. `barSpan` honours the Item's `box` ahead of the span-and-floor path.
-export { fixedWidthItem } from '../layout/index.js';
-// ADR 0023: the symmetric pair behind `EntryVariant.items` — a variant with no `items` key gets
-// `followSegments`, and `summary()` states `ignoreSegments` explicitly. An author who wants either
-// shape on a variant of their own names it the same way: `items: ignoreSegments`.
-export { ignoreSegments, followSegments } from '../layout/index.js';
+// the shipped case. `barSpan` honours the Bar's `box` ahead of the span-and-floor path.
+export { fixedWidthBar } from '../layout/index.js';
+// ADR 0023, ADR 0026: `EntryVariant.bars`'s own default — a variant with no `bars` key gets this one
+// Bar producer, and `summary()` states it explicitly too, for the same reason `BarProducer` itself is
+// exported above (an author naming it directly on a variant of their own).
+export { wholeSpanUnlessSegments } from '../layout/index.js';
 // ADR 0022 §1: core's three shipped looks, as factories over `EntryVariant` rather than private
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it
 // until an author installs it. `bar` and `summary` keep their plain names on purpose — the three read
-// as one family at a call site — see `bar()`'s own note in `layout/items/variants.ts` (F13).
+// as one family at a call site — see `bar()`'s own note in `layout/bars/variants.ts` (F13).
 export { bar, summary, diamond } from '../layout/index.js';
 // #265: shipped Grid-column cell renderers. `meter()` paints a percent as a
 // track. `image()` paints a stored URL as an img. Both take `()`, the

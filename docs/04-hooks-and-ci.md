@@ -188,8 +188,8 @@ Two agents hit this on #142. Both reported green, both told the truth, and `e2e/
 Documenting the capture rule is not enough on its own: it is exactly the instruction a tired reader skips. So `verify:full` states its own result **inside the output stream**, where no plumbing strips it. Every run prints exactly one verdict line:
 
 ```
-verify:full PASS — all 13 checks green, test:e2e included (58s).
-verify:full FAILED at check 7 of 13: pnpm test:dom (exit code 1). 6 later checks did not run. (21s)
+verify:full PASS — all 16 checks green, test:e2e included (58s).
+verify:full FAILED at check 7 of 16: pnpm test:dom (exit code 1). 9 later checks did not run. (21s)
 ```
 
 It is the last line the gate itself prints. `pnpm` adds one `[ELIFECYCLE]` line after it on a failure, which is why the capture above reads three lines, not one.
@@ -238,7 +238,7 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 | `extensions/ -> view/` | `extensions-public-only` — D-S5-5's dogfood gate: a built-in feature may see only `api/` and `model/` |
 | `render/ -> data/transaction.js` | the `data/dev-mode.ts` leaf widening stays scoped to that one file, not `data/` generally |
 | `extensions/ -> data/transaction.js` | same, from the `extensions/` side |
-| `harness/ -> src/` (an internal, `import '../src/layout/items/variants.js'`) | `harness-public-api-only` (#287) — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
+| `harness/ -> src/` (an internal, `import '../src/layout/bars/variants.js'`) | `harness-public-api-only` (#287) — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
 | `harness/ -> src/api/index.ts` by a relative path, and the same by a type-position inline `import(...)` | `eslint.config.js`'s `harness/`/`e2e/`/`fixtures/` block (#287, review finding F7) — dependency-cruiser matches *resolved* paths, so its one exception (`pathNot: '^src/api/index\.ts$'`, for the `freegantt` alias) can't tell that alias from a relative path naming the same file; this ESLint rule reads the specifier text instead, which is the only place that distinction is visible. `e2e/variant-styles.spec.ts` shipped the type-position case uncaught — belt and braces with the cruiser rule, not a replacement |
 
 ### 4.2 Violation fixtures

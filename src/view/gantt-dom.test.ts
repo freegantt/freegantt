@@ -14,8 +14,6 @@ import { ContainerDom } from './gantt-dom.js';
 import { PaneLayout } from './pane-layout.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import type { Entry, EntryId } from '../model/index.js';
-import { entryDoubleLike, entryDoubles, entryValuesOf } from '../layout/entry-double.js';
-import { segmentId } from '../model/index.js';
 
 // Load-bearing non-null assertion (ADR 0012): every fixture entry this file reads is authored
 // with both dates.
@@ -64,8 +62,6 @@ function paintOneGantt(
   const paneLayout = new PaneLayout({ container });
   let current = painted;
   const entryById = (id: EntryId): Entry | undefined => current.find((entry) => entry.id === id);
-  // The backend needs its own Entry lookup: a bar that draws a whole Entry names no single Segment,
-  // so the paint asks which Segments that Entry owns (#212).
   const backend = createDomBackend({
     entryById,
     resolveBarRenderer: () => undefined,
@@ -77,7 +73,7 @@ function paintOneGantt(
     gridHeader: paneLayout.panes.gridHeader,
     timeline: paneLayout.panes.timeline,
   });
-  // The real `FrameLayout`, because `barFor` asks it which Items an entry draws (#185).
+  // The real `FrameLayout`, because `barFor` asks it which Bars an entry draws (#185).
   const layout = new FrameLayout();
   const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
   const paint = (): void => {
@@ -124,7 +120,7 @@ function paintOneGantt(
 describe('ContainerDom — what render/dom emits is what targetUnder reads', () => {
   it('resolves a painted bar to a bar target carrying its own entry', () => {
     const gantt = paintOneGantt();
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const target = gantt.dom.targetUnder(bar);
 
@@ -217,7 +213,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
 
   it('a bar of a row that owns three names only the Entry it draws (#199)', () => {
     const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const target = gantt.dom.targetUnder(bar);
 
@@ -239,7 +235,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
   it('answers nothing for a node this Gantt does not own', () => {
     const gantt = paintOneGantt();
     const other = paintOneGantt();
-    const otherBar = other.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const otherBar = other.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     expect(gantt.dom.owns(otherBar)).toBe(false);
     expect(gantt.dom.targetUnder(otherBar)).toBeUndefined();
@@ -262,28 +258,9 @@ describe('ContainerDom — finding an element from an id', () => {
 
     const bar = gantt.dom.barFor(entries[1]!.id);
 
-    expect(bar).toBe(gantt.container.querySelectorAll('[data-item-id]')[1]);
+    expect(bar).toBe(gantt.container.querySelectorAll('[data-bar-id]')[1]);
     // F19: a plain string, not `as EntryId` — `barFor` is loose on this scalar id (#305).
     expect(gantt.dom.barFor('no-such-entry')).toBeUndefined();
-    gantt.destroy();
-  });
-
-  it('barFor anchors on the first bar the frame mounted, not on segment 0 (#185)', () => {
-    const segmented: Entry = entryDoubleLike(entries[0]!, {
-      segments: [
-        { id: segmentId(`${entries[0]!.id}-0`), start: entries[0]!.start!, end: entries[0]!.end! },
-        { id: segmentId(`${entries[0]!.id}-1`), start: entries[0]!.start!, end: entries[0]!.end! },
-      ],
-    });
-    const gantt = paintOneGantt([segmented]);
-
-    // Virtualization culled the entry's first Segment; the second one is still on screen.
-    const first = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
-    first.remove();
-
-    const bar = gantt.dom.barFor(segmented.id);
-    expect(bar).toBe(gantt.container.querySelector('[data-item-id]'));
-    expect(bar?.dataset['itemId']).not.toBe(first.dataset['itemId']);
     gantt.destroy();
   });
 
@@ -313,109 +290,16 @@ describe('ContainerDom — finding an element from an id', () => {
   });
 });
 
-describe('ContainerDom — the pane picks the unit (#212, ADR 0010)', () => {
-  /** Two Segments with ids a test can name, so it can say which one the pane picked. */
-  const twoSegments: Entry = entryDoubleLike(entries[0]!, {
-    segments: [
-      { id: segmentId('seg-a'), start: entries[0]!.start!, end: entries[0]!.end! },
-      { id: segmentId('seg-b'), start: entries[0]!.start!, end: entries[0]!.end! },
-    ],
-  });
-
-  it('a bar on the timeline stands for the one Segment it draws', () => {
-    const gantt = paintOneGantt([twoSegments]);
-    const bars = gantt.container.querySelectorAll<HTMLElement>('[data-item-id]');
-
-    expect(gantt.dom.targetUnder(bars[0]!)?.segmentIds).toEqual([segmentId('seg-a')]);
-    expect(gantt.dom.targetUnder(bars[1]!)?.segmentIds).toEqual([segmentId('seg-b')]);
-    gantt.destroy();
-  });
-
-  it('a whole-Entry bar names every Segment of its Entry, because it draws no single one', () => {
-    // A structural parent (ADR 0013: has children, not a stored kind) draws one Item over the
-    // whole Entry, so the bar carries no `data-segment-id`. The node still stands for the Entry,
-    // and the Entry is its Segments.
-    const [parent, child] = entryDoubles([
-      entryValuesOf(twoSegments),
-      entryValuesOf(entries[1]!, { parentId: String(twoSegments.id) }),
-    ]) as readonly [Entry, Entry];
-    const gantt = paintOneGantt([parent, child]);
-    const bar = gantt.container.querySelector<HTMLElement>(`[data-item-id="${twoSegments.id}:0"]`)!;
-
-    expect(bar.dataset['segmentId']).toBeUndefined();
-    expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a'), segmentId('seg-b')]);
-    gantt.destroy();
-  });
-
-  it('a grid row stands for every Segment of every Entry it owns, in row order', () => {
-    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
-    const row = gantt.container.querySelector<HTMLElement>('.fg-row')!;
-
-    const target = gantt.dom.targetUnder(row);
-    const owned = threeOnOneRow.flatMap((entry) => entry.segments.map((segment) => segment.id));
-    expect(target?.segmentIds).toEqual(owned);
-    expect(target?.entryIds).toEqual(threeOnOneRow.map((entry) => entry.id));
-    gantt.destroy();
-  });
-
-  it('a grid cell stands for the same Segments its row does', () => {
-    const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
-    const cell = gantt.container.querySelector<HTMLElement>('.fg-row [data-field="cost"]')!;
-    const row = gantt.container.querySelector<HTMLElement>('.fg-row')!;
-
-    expect(gantt.dom.targetUnder(cell)?.segmentIds).toEqual(gantt.dom.targetUnder(row)?.segmentIds);
-    gantt.destroy();
-  });
-
-  it('a bar names the Segment it draws now, not the one it drew before a Segment was removed (#212)', () => {
-    const threeSegments: Entry = entryDoubleLike(entries[0]!, {
-      segments: [
-        { id: segmentId('sg1'), start: entries[0]!.start!, end: entries[0]!.end! },
-        { id: segmentId('sg2'), start: entries[0]!.start!, end: entries[0]!.end! },
-        { id: segmentId('sg3'), start: entries[0]!.start!, end: entries[0]!.end! },
-      ],
-    });
-    const gantt = paintOneGantt([threeSegments]);
-    const first = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
-    expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg1')]);
-
-    // The consumer removes the first Segment. Bar keys are `${entryId}:${segmentIndex}`, so the node
-    // survives and now draws `sg2`. Naming `sg1` here is naming a Segment the Dataset dropped, and
-    // the Delete command that reads this target would throw on it.
-    gantt.repaint([entryDoubleLike(threeSegments, { segments: threeSegments.segments.slice(1) })]);
-
-    expect(gantt.container.querySelector<HTMLElement>('[data-item-id]')).toBe(first);
-    expect(gantt.dom.targetUnder(first)?.segmentIds).toEqual([segmentId('sg2')]);
-    gantt.destroy();
-  });
-
-  it('targetUnder ignores a data-segment-id a caller wrote by hand (#212)', () => {
-    const gantt = paintOneGantt([twoSegments]);
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
-
-    // The stamp says what the bar draws. It is not the source for what the bar stands for, so
-    // rewriting it moves nothing. One layer owns the question, and the DOM is not it.
-    bar.dataset['segmentId'] = 'seg-of-another-entry';
-
-    expect(gantt.dom.targetUnder(bar)?.segmentIds).toEqual([segmentId('seg-a')]);
-    gantt.destroy();
-  });
-
-  it('a header and the splitter stand for no Segment at all', () => {
-    const gantt = paintOneGantt();
-    const header = gantt.container.querySelector<HTMLElement>('[data-field="cost"]')!;
-    const splitter = gantt.container.querySelector<HTMLElement>('.fg-splitter')!;
-
-    expect(gantt.dom.targetUnder(header)?.segmentIds).toEqual([]);
-    expect(gantt.dom.targetUnder(splitter)?.segmentIds).toEqual([]);
-    gantt.destroy();
-  });
-});
+// Retired (ADR 0026, #421): 'ContainerDom — the pane picks the unit (#212, ADR 0010)' used to prove
+// a bar/row/cell target named the Segment(s) it stood for, not the Entry. A core Entry now always
+// draws exactly one Bar over its own span, so `DomTarget` carries only `entryIds` — and the earlier
+// describe block above ('what render/dom emits is what targetUnder reads') already proves every one
+// of bar/row/cell/header/splitter resolves the right `entryIds`, so nothing here was left to add.
 
 describe('ContainerDom — the pointer path allocates nothing while it rests', () => {
   it('answers with the same frozen target for repeated reads of one node', () => {
     const gantt = paintOneGantt();
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const first = gantt.dom.targetUnder(bar);
     const second = gantt.dom.targetUnder(bar);

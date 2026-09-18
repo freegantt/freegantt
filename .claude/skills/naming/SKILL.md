@@ -9,6 +9,10 @@ A good name tells the reader what the thing is. Do the five checks before you wr
 
 Select a name that describes the thing. A name that no other code uses can still be the wrong name.
 
+## Before the checks: find the mechanism
+
+Split senses first, describe the mechanism in plain English before naming it, then borrow vocabulary from whatever real-world domain the mechanism resembles (dispatch/matching vs. structural absorption vs. plain ownership vs. genuinely contested claiming) — and specifically watch for a name implying contest or reversibility that isn't really there.
+
 ## 1. Find the term in the glossary
 
 Read the project glossary. In this project the glossary is `CONTEXT.md`.
@@ -33,11 +37,17 @@ Search the code for that word. Keep the name if the results show the concept. Ma
 
 A search for `size` gives hundreds of results. A search for `paneSize` gives the concept.
 
-## 4. Give each word one meaning
+## 4. Give each domain term one meaning
 
 Search the code and the specifications for the name. Find each other concept that uses the same word.
 
-Select a different word if the word has more than one meaning in the project. Two concepts with one word cost more than a long name.
+Select a different word if both concepts meet the reader in one place. That place can be one glossary, one module, one API surface, or one call site. `chart` named the public instance and an internal class. That stalled a review.
+
+Keep the shared word if the two uses are different functions in different scopes. No reader meets both together. `matches` can filter entries in one module and pick a variant in another. Each call site reads true.
+
+A forced synonym costs more than the collision. A strange name sends the reader to look up what it means.
+
+Test: read the two call sites one after the other. If a reader can confuse them, change one name. If not, keep both.
 
 ## 5. Put the category word at the end
 

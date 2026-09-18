@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Branch review — #421, the Segment retires</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .seam {
+        stroke-dasharray: 4 4;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-3">
+        <h1 class="text-3xl font-bold">Branch review — #421, the Segment retires</h1>
+        <p class="text-sm text-slate-600 mono">
+          Pawel-IT/a-bar-is-a-child-entry-its-own-name-values-varia · HEAD <span class="font-bold">5d145ba</span> ·
+          merge-base <span class="font-bold">2c150be</span> · 2026-09-18
+        </p>
+        <p class="text-sm text-slate-600">
+          200 files, +6076 / −9012. Reviewed on six axes in one pass: naming, simplicity and reuse,
+          standards and spec, architecture, API surface, and test coverage.
+          <span class="font-semibold">Pass 2 complete:</span> a cold sub-agent answered every id against the code.
+          10 Confirmed, 1 Confirmed with an overstated title (F4), 1 Mis-described and rewritten (F7), 0 Wrong.
+          Three were <em>under</em>-stated — F1, F2 and F9 are all worse than pass 1 filed them.
+        </p>
+        <div class="rounded border-l-4 border-emerald-600 bg-emerald-50 p-4 text-sm">
+          <span class="font-bold">Pass 2 result.</span> Nothing here is withdrawn. The two corrections that change
+          what to do: <span class="font-semibold">F1 needs no ruling</span> — J-plan-I
+          (<span class="mono">plans/segment-is-a-bar/README.md:234</span>) already decided it, so it is a plain defect;
+          and <span class="font-semibold">F9 is not a question</span> — a cascade failure that used to be a
+          <span class="mono">warning</span> dropped gesture is now an <span class="mono">error</span> fault, reproduced
+          by running it.
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-semibold">Verified by running code</span>
+          <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold">Verified by reading</span>
+          <span class="px-2 py-1 rounded bg-slate-200 text-slate-700 font-semibold">Judgement call</span>
+        </div>
+      </header>
+
+      <section class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+        <h2 class="text-xl font-semibold">What this branch got right</h2>
+        <ul class="list-disc pl-6 space-y-1 text-sm">
+          <li>
+            The retirement <em>deletes</em> rather than replaces. <span class="mono">reconcileEnvelope</span>,
+            <span class="mono">fitSegmentsToEnvelope</span>, <span class="mono">widenSegmentsToEnvelope</span>, the
+            segment-owner write-set index and four error classes are gone, and nothing stands in for them. That is
+            ~2,900 lines of <span class="mono">data/</span> machinery that existed only because a second id space
+            existed.
+          </li>
+          <li>
+            <span class="mono">layout/entry-rule.ts</span> is the right seam: one match syntax, compiled once, shared
+            by a variant's <span class="mono">when</span> and the row source's
+            <span class="mono">childrenAsSegments</span>, with no import ring between them.
+          </li>
+          <li>
+            The unset-rule path costs what it costs today — <span class="mono">resolveEntriesSource</span> returns
+            before it builds a tree index when no rule is set.
+          </li>
+          <li>
+            <span class="mono">harness/main.ts</span> reviewed against the stop rule: no cast, no side map, no
+            re-derivation. The one thing it now does by hand is F8 below.
+          </li>
+        </ul>
+      </section>
+
+      <section id="findings" class="space-y-8">
+        <h2 class="text-2xl font-bold">Findings</h2>
+
+        <!-- F1 -->
+        <article class="rounded-lg border-2 border-rose-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F1 — A claimed parent's grandchildren keep their rows in flat mode</h3>
+            <span class="px-2 py-1 rounded bg-rose-100 text-rose-800 text-xs font-semibold">Verified by running code</span>
+            <span class="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Correctness</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/layout/rows/entries-source.ts:108–111 (flat), :140–152 (tree)</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded border border-slate-300 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">tree: true</p>
+              <pre class="mono text-sm mt-2">root      ← claimed
+ └ child  → bar on root's row
+    └ grand (no row)
+
+rows = ['root']            ✔ J-plan-I</pre>
+            </div>
+            <div class="rounded border-2 border-rose-400 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-rose-600">tree: false</p>
+              <pre class="mono text-sm mt-2">root      ← claimed
+ └ child  → bar on root's row
+    └ grand → <span class="bg-rose-100">its own row</span>
+
+rows = ['root', 'grand']   ✘</pre>
+            </div>
+          </div>
+
+          <p>
+            <span class="font-semibold">Problem.</span> The tree branch drops the whole subtree by not pushing a
+            claimed parent's children onto the walk stack. The flat branch skips one level only —
+            <span class="mono">if (parentId !== undefined &amp;&amp; claimedChildrenOf.has(parentId)) continue;</span>
+            — so a grandchild of a claimed parent still gets a row. The child's own bar already rolls up over that
+            grandchild's span (README <span class="mono">J-plan-I</span>: "a direct child that has children of its own
+            draws one bar whose span rolls up over them"), so the same work is drawn twice: once as a bar on the
+            claimed row, once as a row of its own.
+          </p>
+          <p>
+            <span class="font-semibold">Why no test caught it.</span> Every fixture that exercises a three-level claim
+            uses <span class="mono">childrenAsSegments: true</span>, which claims <em>every</em> parent with children —
+            so the middle Entry is claimed too and the grandchild is skipped as a direct child. The divergence only
+            shows with a rule that claims one parent and not its child.
+          </p>
+          <div class="rounded bg-slate-900 text-slate-100 p-4 mono text-xs overflow-x-auto">
+<pre>// throwaway probe, run at 5d145ba, then deleted
+const entries = entryDoubles([
+  { id: 'root' },
+  { id: 'child', parentId: 'root', start: 1, end: 2 },
+  { id: 'grand', parentId: 'child', start: 1, end: 2 },
+]);
+const claimRootOnly = (entry) =&gt; String(entry.id) === 'root';
+
+resolveEntriesSource(entries, { source: 'entries', tree: true,  childrenAsSegments: claimRootOnly })
+  → ['root']            ✔
+resolveEntriesSource(entries, { source: 'entries', tree: false, childrenAsSegments: claimRootOnly })
+  → ['root', 'grand']   ✘  AssertionError: expected [ 'root', 'grand' ] to deeply equal [ 'root' ]</pre>
+          </div>
+          <p class="text-sm">
+            <span class="font-semibold">Ruling owed:</span> is flat mode meant to collapse the whole subtree (matching
+            tree mode and <span class="mono">J-plan-I</span>), or is a claim in flat mode deliberately one level deep?
+            Either answer needs a test; only one needs a code change.
+          </p>
+
+          <div class="rounded border-l-4 border-rose-500 bg-rose-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-rose-700">Pass 2 — Confirmed — and understated</p>
+            <p class="text-sm font-semibold">The divergence reproduces. The ruling it asks for was already made.</p>
+            <p class="text-sm">The verifier reproduced both modes at <span class="mono">entries-source.ts:111</span> (flat, direct parent only) against <span class="mono">:153–155</span> (tree, never pushes a claimed parent's children): <span class="mono">TREE ROWS [root]</span> vs <span class="mono">FLAT ROWS [root, grand]</span>. The "why no test caught it" account also holds — <span class="mono">entries-source.test.ts:60</span> is the only three-level claim test and it uses <span class="mono">tree: true</span> with <span class="mono">childrenAsSegments: true</span>. <span class="font-semibold">What does not hold is this finding's own proposal.</span> No ruling is owed: <span class="mono">plans/segment-is-a-bar/README.md:234</span> (J-plan-I) already says "the whole subtree below the claimed parent loses its rows", and <span class="mono">entries-source.ts:2–3</span> claims the fold happens "in both modes". This is a plain defect against the spec and against the file's own header — patch it, do not ask.</p>
+          </div>
+        </article>
+
+        <!-- F2 -->
+        <article class="rounded-lg border-2 border-rose-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F2 — A typo in <span class="mono">barLabels.field</span> takes the Gantt down</h3>
+            <span class="px-2 py-1 rounded bg-rose-100 text-rose-800 text-xs font-semibold">Verified by running code</span>
+            <span class="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Correctness / API</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/view/bar-labels.ts:30 · src/layout/frame.ts:507–513 · src/view/gantt-shell.ts:1361–1368
+          </p>
+
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded border border-emerald-300 bg-emerald-50 p-4">
+              <p class="font-semibold text-emerald-800">Every other unknown Field key</p>
+              <p class="mt-2 mono text-xs">entry-rule.ts:44–49</p>
+              <p class="mt-1">
+                "a typo claims nothing rather than taking the layout pass down" — reports once per rule and key,
+                matches no row, frame survives. <span class="mono">when</span> and
+                <span class="mono">childrenAsSegments</span> both take this path.
+              </p>
+            </div>
+            <div class="rounded border-2 border-rose-400 bg-rose-50 p-4">
+              <p class="font-semibold text-rose-800">barLabels.field</p>
+              <p class="mt-2 mono text-xs">bar-labels.ts:30</p>
+              <p class="mt-1">
+                <span class="mono">throw new UnknownFieldError(…, 'barLabels')</span> — raised per bar, from inside
+                <span class="mono">placeFrame</span>.
+              </p>
+            </div>
+          </div>
+
+          <p>
+            <span class="font-semibold">Observed.</span>
+            <span class="mono">new Gantt({ container, dataset, barLabels: { field: 'nope' } })</span> throws
+            <span class="mono">UnknownFieldError</span> out of the constructor. A live
+            <span class="mono">gantt.barLabels = { field: 'nope' }</span> does <em>not</em> throw synchronously — the
+            repaint is deferred — so the same typo surfaces as a constructor throw or as a deferred paint failure
+            depending only on when it is written. <span class="mono">plans/02</span>'s "every config key is
+            live-reconfigurable" makes the second path the one an app author is most likely to hit.
+          </p>
+          <p class="text-sm">
+            <span class="font-semibold">Ruling owed:</span> either <span class="mono">barLabels.field</span> joins the
+            report-and-carry-on posture (label reads <span class="mono">''</span>, one
+            <span class="mono">unknown-*-field</span> report), or the throw moves to the config boundary where an app
+            author can catch it, and the layout pass never raises it.
+          </p>
+
+          <div class="rounded border-l-4 border-rose-500 bg-rose-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-rose-700">Pass 2 — Confirmed — and understated</p>
+            <p class="text-sm font-semibold">Worse than a deferred paint failure: the live path is uncatchable and unreported.</p>
+            <p class="text-sm">Constructor path reproduced: <span class="mono">CTOR THREW: UnknownFieldError: barLabels: there is no field called "nope"</span>. The live-reassignment path threw nothing synchronously, then raised an <span class="font-semibold">uncaught exception</span> on the next frame through <span class="mono">FrameScheduler.#frames (gantt-shell.ts:502) → frame-scheduler.ts:25</span>, with <span class="font-semibold">nothing on the error-report channel</span>. Consumer code cannot catch it and nothing tells the app it happened — the class #332/#341 were opened to close. One correction to the fix options: "throw at the config boundary" is bigger than this finding implies, because <span class="mono">EntryVariant.barLabels</span> can also name a field and variants are live (<span class="mono">gantt-shell.ts:1353</span>), so it needs three gates, not one. Report-and-carry-on follows cleanly.</p>
+          </div>
+        </article>
+
+        <!-- F3 -->
+        <article class="rounded-lg border-2 border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F3 — The I14 e2e test cannot fail for the reason it states</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Test coverage</span>
+          </div>
+          <p class="mono text-sm text-slate-600">e2e/hierarchy.spec.ts:211–228</p>
+          <div class="rounded bg-slate-900 text-slate-100 p-4 mono text-xs overflow-x-auto">
+<pre>// Cy's day is locked: dragging its right edge refuses, while Ali's neighbour resizes freely.
+const mondayBox = await monday.boundingBox();      // ← computed…
+expect(mondayBox).not.toBeNull();                  // ← …asserted non-null…
+                                                   // ← …and never used again.
+const wedHoursBefore = … .read('hours');           // ← a resize never writes `hours`
+… drag Cy's right edge …
+const wedHoursAfter  = … .read('hours');
+expect(wedHoursAfter).toBe(wedHoursBefore);        // ← passes whether or not the resize was refused</pre>
+          </div>
+          <ul class="list-disc pl-6 space-y-1 text-sm">
+            <li>
+              A resize writes <span class="mono">end</span>. Asserting <span class="mono">hours</span> is unchanged
+              holds whether the refusal worked or not, so this assertion has no failure mode.
+            </li>
+            <li>
+              The second half of the sentence — "while Ali's neighbour resizes freely" — is asserted nowhere;
+              <span class="mono">mondayBox</span> is dead after its null check. Without it, a capability rule that
+              refused <em>every</em> resize would still pass.
+            </li>
+            <li>
+              The plan's own invariant table names a different home for this proof:
+              "<span class="mono">e2e/write-refusal.spec.ts</span> gains a locked child beside a free one". That file
+              gained nothing (±1 line on the branch).
+            </li>
+          </ul>
+          <p class="text-sm">
+            <span class="font-semibold">Fix:</span> read <span class="mono">end</span> before and after for both bars —
+            Cy's unchanged, Ali's moved.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Both halves check out, and the proposed fix follows.</p>
+            <p class="text-sm"><span class="mono">mondayBox</span> is computed at :211, null-checked at :213, never read again; only <span class="mono">wednesdayBox</span> drives the drag. <span class="mono">hours</span> is a stored props Field with <span class="mono">rollUp: 'sum'</span> (<span class="mono">fixtures/hierarchy-dataset.ts:129</span>) that no resize writes, so <span class="mono">expect(wedHoursAfter).toBe(wedHoursBefore)</span> has no failure mode. Reading <span class="mono">end</span> for both bars is the right repair.</p>
+          </div>
+        </article>
+
+        <!-- F4 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F4 — I8's own proof never landed</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Spec vs code</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/layout/__snapshots__/frame.test.ts.snap · plans/segment-is-a-bar/README.md § Invariants this work
+            touches
+          </p>
+          <p>
+            The plan pins I8 with one sentence: "every bar's Bar id becomes
+            <span class="mono">barId(entryId, 0)</span> — an authored id, stable across sessions · <span
+              class="font-semibold"
+              >layout snapshot test gains a claimed row</span
+            >". The golden snapshot still holds the same three plain leaf rows it held before the branch (48 lines,
+            three <span class="mono">variant: "leaf"</span> bars, no claimed row). The branch proved hard rule 6 —
+            today's snapshots did not move — and skipped the other half.
+          </p>
+
+          <div class="rounded border-l-4 border-amber-500 bg-amber-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Pass 2 — Confirmed — title overstated</p>
+            <p class="text-sm font-semibold">The plan artifact is missing. The invariant itself is pinned elsewhere.</p>
+            <p class="text-sm"><span class="mono">git diff … -- src/layout/__snapshots__/</span> shows 12 deletions and 0 insertions — only <span class="mono">segmentId</span>/<span class="mono">segmentIds</span> left, and three <span class="mono">variant: "leaf"</span> bars remain. So the named proof at README:148 did not land, as stated. But I8's substance <em>is</em> pinned: <span class="mono">produce-items.test.ts:101,111</span> assert <span class="mono">barId(t1.id, 0)</span>. The title "I8's own proof never landed" is true of the artifact, not of the invariant. Smaller than it reads.</p>
+          </div>
+        </article>
+
+        <!-- F5 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F5 — "placement" names two public types</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-slate-700 text-white text-xs font-semibold">Naming</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/layout/renderer.ts:19, :92, :101 · src/api/index.ts:340–342</p>
+          <div class="rounded bg-slate-900 text-slate-100 p-4 mono text-xs overflow-x-auto">
+<pre>export type BarLabelPlacement = 'inside' | 'outside';                       // renderer.ts:19  (public)
+export type BarLabelPolicy    = 'fitBar' | 'inside' | 'outside' | 'none';   // renderer.ts:92  (public)
+
+export interface BarLabelSpec {
+  placement?: BarLabelPolicy;   // ← the field called `placement` is NOT a `BarLabelPlacement`
+}</pre>
+          </div>
+          <p>
+            Both are exported from <span class="mono">api/index.ts</span>. An author who writes
+            <span class="mono">{ placement: … }</span> and goes looking for its type finds
+            <span class="mono">BarLabelPlacement</span> first, and it is the wrong one. This is the fault class #7
+            named for "chart" — one word covering two concepts, with nothing saying which is meant — and the ADR the
+            branch wrote cites that same issue as its reason for retiring <span class="mono">Item</span>.
+          </p>
+          <p class="text-sm">
+            <span class="font-semibold">Name the job:</span> <span class="mono">BarLabelPolicy</span> is what the
+            author writes (<span class="mono">'fitBar'</span> is a fit rule, not a side), so
+            <span class="mono">placement</span> is the field that is misnamed, or
+            <span class="mono">BarLabelPlacement</span> (the resolved side) needs the narrower name —
+            <span class="mono">ResolvedBarLabel.side</span> reads true.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Both types are public; two line numbers were off by a few.</p>
+            <p class="text-sm"><span class="mono">renderer.ts:19</span> <span class="mono">BarLabelPlacement</span>, <span class="mono">:97</span> <span class="mono">BarLabelPolicy</span>, <span class="mono">:108</span> <span class="mono">placement?: BarLabelPolicy</span> — this report cited :92 and :101. Both are exported at <span class="mono">src/api/index.ts:339,342</span>, so both are on the public surface, which is the #7 fault class as described. One site to add to any rename: <span class="mono">ResolvedBarLabel.placement</span> (<span class="mono">renderer.ts:26</span>).</p>
+          </div>
+        </article>
+
+        <!-- F6 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F6 — ADR 0026 claims the <span class="mono">Item</span> vocabulary is gone; it is not</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-slate-700 text-white text-xs font-semibold">Naming / docs</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/layout/items/ (dir) · items/item.ts · items/produce-items.ts · frame-memory.ts:16,34,91 ·
+            frame-layout.ts:108–112 · frame.ts:342–344,479,497 · gantt-shell.ts:1321,2167–2172
+          </p>
+          <p>
+            ADR 0026 § Consequences states: "<span class="italic"
+              >No <span class="mono">Item</span> symbol remains in <span class="mono">layout/</span>,
+              <span class="mono">view/</span>, <span class="mono">render/</span> or
+              <span class="mono">interaction/</span> once the rename lands</span
+            >". What remains:
+          </p>
+          <ul class="list-disc pl-6 space-y-1 text-sm">
+            <li>
+              the module path itself — <span class="mono">layout/items/item.ts</span> defines
+              <span class="mono">Bar</span>, and <span class="mono">layout/items/produce-items.ts</span> exports
+              <span class="mono">produceBarsForRow</span>. Eight files import "<span class="mono">./items/item.js</span>".
+            </li>
+            <li>
+              <span class="mono">RowMemory.items: readonly Bar[]</span> — a named property, not a local.
+            </li>
+            <li>
+              <span class="mono">gantt-shell.ts:1321</span> still documents the variant's keys as
+              "<span class="mono">items</span>/<span class="mono">paint</span>/<span class="mono">can</span>/<span
+                class="mono"
+                >css</span
+              >". The key is <span class="mono">bars</span>. This is a false statement about shipped behaviour — the
+              exact class C9a was opened to clear.
+            </li>
+          </ul>
+          <p class="text-sm">
+            <span class="mono">test/guards/retired-words.test.ts</span> guards the id spellings
+            (<span class="mono">itemId</span>, <span class="mono">ItemProducer</span>,
+            <span class="mono">data-item-id</span>…) and cannot see any of these. Either the ADR's consequence is
+            narrowed to "no <span class="mono">Item</span> <em>type or id</em> symbol", or the rename finishes.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Every listed survivor is there, and the guard test does not cover any of them.</p>
+            <p class="text-sm"><span class="mono">items/item.ts</span> defines <span class="mono">Bar</span>; <span class="mono">produce-items.ts</span> exports <span class="mono">produceBarsForRow</span>; <span class="mono">frame-memory.ts:16,34,91</span> carries <span class="mono">RowMemory.items</span>; <span class="mono">gantt-shell.ts:1320–1321</span> documents the key as <span class="mono">items</span> while <span class="mono">variants.ts:44</span> ships <span class="mono">bars</span>. <span class="mono">test/guards/retired-words.test.ts:158</span> matches <span class="mono">ItemId|itemId|ItemProducer|VariantItems|produceItemsForRow|wholeEntryItem|fixedWidthItem|data-item-id</span> — none of the survivors. ADR 0026:174 states the consequence as quoted.</p>
+          </div>
+        </article>
+
+        <!-- F7 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F7 — Two new modules ship with no test of their own</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Test coverage</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/view/bar-labels.ts · src/layout/entry-rule.ts</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-left">
+                  <th class="p-2 border border-slate-300">New module</th>
+                  <th class="p-2 border border-slate-300">Co-located test</th>
+                  <th class="p-2 border border-slate-300">What is unpinned</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="p-2 border border-slate-300 mono">view/bar-labels.ts</td>
+                  <td class="p-2 border border-slate-300 text-rose-700 font-semibold">none</td>
+                  <td class="p-2 border border-slate-300">
+                    <span class="line-through text-slate-400">resolveBarLabelText is called by no test at all.</span>
+                    <span class="font-semibold">Struck by pass 2:</span> it is covered through the public API
+                    (<span class="mono">api/gantt.test.ts:4140–4156, :2621</span>,
+                    <span class="mono">e2e/hierarchy.spec.ts:232–234</span>). Two branches stay unpinned: the
+                    unknown-Field throw (F2) and the <span class="mono">'none'</span> →
+                    <span class="mono">''</span> early return at <span class="mono">bar-labels.ts:28</span>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="p-2 border border-slate-300 mono">layout/entry-rule.ts</td>
+                  <td class="p-2 border border-slate-300 text-rose-700 font-semibold">none</td>
+                  <td class="p-2 border border-slate-300">
+                    The seam's own contract: report-once-per-rule-and-key dedupe, per-read Field lookup,
+                    <span class="mono">field.equals</span> called on the Field rather than detached. Exercised only
+                    through its two callers, each of which pins its own half.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-sm">
+            <span class="mono">src/layout/renderer.test.ts</span> (new, C9c) covers
+            <span class="mono">mergeBarLabels</span> — the pure half. The bound half, where a Field lookup and a
+            <span class="mono">formatValue</span> meet, is the half with the failure mode.
+          </p>
+
+          <div class="rounded border-l-4 border-amber-500 bg-amber-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Pass 2 — Mis-described — account replaced</p>
+            <p class="text-sm font-semibold">Neither module has a co-located test — but resolveBarLabelText is well covered. The real hole is two branches.</p>
+            <p class="text-sm">Corrected in the table above. <span class="mono">src/api/gantt.test.ts:4140–4156</span> drives <span class="mono">resolveBarLabelText</span> through a real Gantt with <span class="mono">barLabels: { field: 'hours' }</span> and asserts the bar prints <span class="mono">'8'</span> at three zooms; <span class="mono">:2621</span> pins the Q36 fallback; <span class="mono">e2e/hierarchy.spec.ts:232–234</span> pins the no-value → <span class="mono">''</span> promise on <span class="mono">site-hold</span>. What is genuinely unpinned is narrow: the <span class="mono">UnknownFieldError</span> throw and the <span class="mono">'none'</span> → <span class="mono">''</span> early return at <span class="mono">bar-labels.ts:28</span>. The <span class="mono">entry-rule.ts</span> half stands as written.</p>
+          </div>
+        </article>
+
+        <!-- F8 -->
+        <article class="rounded-lg border border-amber-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F8 — Four harness sites now write <span class="mono">entry.name ?? ''</span></h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">API gap</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            harness/main.ts:120–121 · harness/data.ts:150–151 · harness/planner.ts:330 · harness/hierarchy.ts:228–230
+          </p>
+          <p>
+            <span class="mono">Entry.name</span> became optional (C5), and every consumer that shows a name now
+            supplies the empty-string default by hand — including twice inside one comparison
+            (<span class="mono">entries.every((entry) =&gt; (entry.name ?? '') === firstName)</span>). Core computes
+            this exact answer already: <span class="mono">resolveBarLabelText</span> formats a missing value to
+            <span class="mono">''</span> through the Field's own <span class="mono">formatValue</span>, and the Grid's
+            name cell does the same. Neither is reachable from a consumer, and
+            <span class="mono">stringifyPrimitive</span> is internal.
+          </p>
+          <p class="text-sm">
+            Per the stop rule this is reported, not patched: a consumer writing
+            <span class="mono">?? ''</span> four times is the harness compensating for a missing door. The question
+            for the author is whether one belongs on the surface (a display-text read), or whether
+            <span class="mono">?? ''</span> is simply what an optional field costs.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">All seven occurrences are new on this branch, and no export closes the gap.</p>
+            <p class="text-sm"><span class="mono">git diff 2c150be…HEAD -- harness/</span> confirms every <span class="mono">?? ''</span> at the four cited sites is new, the double-<span class="mono">??</span> comparison at <span class="mono">main.ts:121</span> and <span class="mono">data.ts:151</span> included. <span class="mono">stringifyPrimitive</span> is not exported from <span class="mono">src/api/index.ts</span>. Correctly raised as a stop-rule question rather than patched in the harness.</p>
+          </div>
+        </article>
+
+        <!-- F9 -->
+        <article class="rounded-lg border border-slate-300 bg-white p-6 space-y-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-xl font-semibold">F9 — <span class="mono">'write-refused'</span> retired on a premise that still holds</h3>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700 text-xs font-semibold">Judgement call</span>
+            <span class="px-2 py-1 rounded bg-slate-700 text-white text-xs font-semibold">API surface</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/model/error-report.ts:432–436 · src/view/gesture-pipeline.ts:489–503 ·
+            src/data/entry-reader.ts:217–221
+          </p>
+          <p>
+            <span class="mono">GestureDroppedReason</span> lost <span class="mono">'write-refused'</span>, with the
+            stated reason: "the store refusing a commit was always an envelope-only cascade against a several-Segment
+            Entry (D-S5-44) … so nothing raises that refusal any more."
+            <span class="mono">toEditReading</span> still throws <span class="mono">InvertedSpanError</span> when an
+            edit leaves <span class="mono">end &lt; start</span>, and an <span class="mono">EditExtender</span>
+            cascade reaches it at commit through <span class="mono">extraEditsReadingFor</span>. That throw now lands
+            in <span class="mono">#finishCommit</span>'s <span class="mono">else</span> arm and is reported as a
+            <span class="font-semibold">fault</span> (<span class="mono">severity: 'error'</span>, "a plugin's bug"),
+            where it used to be a dropped gesture (<span class="mono">severity: 'warning'</span>, with a
+            <span class="mono">droppedReason</span> a consumer could branch on).
+          </p>
+          <p class="text-sm">
+            The narrowing may still be right — a cascade proposing an inverted span <em>is</em> a plugin bug. But the
+            premise written into the type's doc ("nothing raises that refusal any more") is not the premise that
+            supports it, and no test pins which report a cascade-proposed inverted span produces at commit.
+            <span class="font-semibold">Verify by running it</span> before acting on either half.
+          </p>
+
+          <div class="rounded border-l-4 border-rose-500 bg-rose-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-rose-700">Pass 2 — Confirmed — and understated</p>
+            <p class="text-sm font-semibold">Not a judgement call — a behaviour regression, reproduced.</p>
+            <p class="text-sm">A probe installed a <span class="mono">DataPlugin</span> whose <span class="mono">EditExtender</span> cascades <span class="mono">{start: 09-09, end: 09-08}</span> onto <span class="mono">x</span> during a pointer drag of <span class="mono">a</span>. Observed today: <span class="mono">{code: 'extender-preview-failed', severity: 'warning'}</span> then <span class="mono">{code: 'gesture-commit-failed', severity: 'error', cause: InvertedSpanError}</span>. Before the branch, <span class="mono">isEnvelopeRefusal</span> (<span class="mono">2c150be:src/data/entry-reader.ts:489</span>) named <span class="mono">InvertedSpanError</span> explicitly, so the same input produced a <span class="mono">'write-refused'</span> dropped gesture at <span class="mono">severity: 'warning'</span>. The premise in the doc-comment is false and the severity change is real, with no test pinning either side. (Citation fix: that comment is at <span class="mono">src/model/error-report.ts:161–163</span>; this report cited :432–436, and the file is 232 lines.)</p>
+          </div>
+        </article>
+
+        <!-- F10 -->
+        <article class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-lg font-semibold">F10 — A comment claims an index that is never built</h3>
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-semibold">Verified by reading</span>
+            <span class="px-2 py-1 rounded bg-slate-500 text-white text-xs font-semibold">Minor</span>
+          </div>
+          <p class="mono text-sm text-slate-600">src/layout/rows/entries-source.ts:108–110 vs :12–29</p>
+          <p class="text-sm">
+            "The flat branch's own skip: is <em>my</em> parent claimed? Off the structure
+            <span class="mono">entryTreeIndex</span> already built, so no second walk." —
+            <span class="mono">entryTreeIndex</span> returns
+            <span class="mono">{ roots, childRowsOf }</span> and builds no parent index at all; the next line calls
+            <span class="mono">entry.parent()</span> per row. The claim is about the wrong structure, and F1 lives two
+            lines below it.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Half the comment is true, which is the half this finding did not claim.</p>
+            <p class="text-sm">The <span class="mono">.has</span> does read <span class="mono">claimedChildrenOf</span>, built at <span class="mono">:95–103</span> from <span class="mono">entryTreeIndex</span>'s <span class="mono">childRowsOf</span>, so "no second walk" holds. But the parent id comes from <span class="mono">entry.parent()</span> at <span class="mono">:110</span>, and <span class="mono">entryTreeIndex</span> (<span class="mono">:12–29</span>) returns <span class="mono">{roots, childRowsOf}</span> with no parent index — as stated. Minor.</p>
+          </div>
+        </article>
+
+        <!-- F11 -->
+        <article class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-lg font-semibold">F11 — <span class="mono">measureEntryDuration</span> takes three parameters where one would do</h3>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700 text-xs font-semibold">Judgement call</span>
+            <span class="px-2 py-1 rounded bg-slate-500 text-white text-xs font-semibold">Simplify</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/data/fields/field-access.ts:211–214, :246, :285–287 · src/data/entry-store.ts:178–179
+          </p>
+          <div class="rounded bg-slate-900 text-slate-100 p-4 mono text-xs overflow-x-auto">
+<pre>measureEntryDuration(entry, access.measureDuration, (id) =&gt; access.storedChildrenOf(id))  // ×3, verbatim
+measureEntryDuration(entry, this.#access.measureDuration, (id) =&gt; this.#access.storedChildrenOf(id))</pre>
+          </div>
+          <p class="text-sm">
+            Both arguments come off one <span class="mono">FieldAccess</span>, and every call site re-wraps the same
+            method in the same arrow. <span class="mono">measureEntryDuration(entry, access)</span> reads as the job
+            and removes four allocations per read on a hot path
+            (<span class="mono">createRollUpContext.durations()</span> builds one per child).
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Three call sites, and the collapse is available.</p>
+            <p class="text-sm"><span class="mono">field-access.ts:246</span>, <span class="mono">:286</span>, <span class="mono">entry-store.ts:179</span> — two read <span class="mono">access</span>, one <span class="mono">this.#access</span>, so not literally verbatim ×3. Both arguments come off <span class="mono">FieldAccess</span> (<span class="mono">:129–138</span>), so <span class="mono">measureEntryDuration(entry, access)</span> is available, and the per-child closure in <span class="mono">durations()</span> (<span class="mono">:284–288</span>) is a real per-read allocation.</p>
+          </div>
+        </article>
+
+        <!-- F12 -->
+        <article class="rounded-lg border border-slate-300 bg-white p-6 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="text-lg font-semibold">F12 — <span class="mono">entryIdsDroppedBy</span> is a Middle Man now</h3>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700 text-xs font-semibold">Judgement call</span>
+            <span class="px-2 py-1 rounded bg-slate-500 text-white text-xs font-semibold">Simplify</span>
+          </div>
+          <p class="mono text-sm text-slate-600">
+            src/data/change-set.ts:120–131 · one caller: src/view/entry-selection.ts:100
+          </p>
+          <p class="text-sm">
+            The function is now
+            <span class="mono">new Set(changeSet.removed.map(({ entity }) =&gt; entity.id))</span> behind a
+            nine-line docblock, in <span class="mono">data/</span>, read by one line in
+            <span class="mono">view/</span>. It earned its home when it had to fold a
+            <span class="mono">segments</span> field row in beside the removals. It no longer does. Keeping it is
+            defensible (it names the question); the docblock outweighing the body is the signal worth a second look.
+          </p>
+
+          <div class="rounded border-l-4 border-emerald-500 bg-emerald-50 p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Pass 2 — Confirmed</p>
+            <p class="text-sm font-semibold">Substance stands; the docblock is six lines, not nine.</p>
+            <p class="text-sm"><span class="mono">src/data/change-set.ts:125–127</span> is a one-line body under a six-line docblock (<span class="mono">:119–124</span>), with one caller at <span class="mono">src/view/entry-selection.ts:105</span>.</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="verdict" class="rounded-lg border-2 border-slate-800 bg-white p-6 space-y-3">
+        <h2 class="text-xl font-bold">What to fix first, after pass 2</h2>
+        <ol class="list-decimal pl-6 space-y-2 text-sm">
+          <li>
+            <span class="font-semibold">F1</span> — a behaviour divergence between the two modes of one config key,
+            reproduced twice. Pass 2 removed the question this finding asked: J-plan-I already rules that the whole
+            subtree folds, so flat mode is simply wrong. Patch it and pin it with a claim-one-parent fixture.
+          </li>
+          <li>
+            <span class="font-semibold">F2</span> — the live path raises an uncaught exception out of the rAF callback
+            and reports nothing. Report-and-carry-on, matching <span class="mono">entry-rule.ts:44–49</span>. A
+            config-boundary throw needs three gates, because <span class="mono">EntryVariant.barLabels</span> also
+            names a field.
+          </li>
+          <li>
+            <span class="font-semibold">F9</span> — promoted by pass 2 from a question to a regression. A cascade that
+            produced a <span class="mono">warning</span>-severity dropped gesture before the branch now produces an
+            <span class="mono">error</span> fault, and no test pins either side.
+          </li>
+          <li>
+            <span class="font-semibold">F3</span> — the only proof the branch has that a per-bar capability gate works
+            in a browser, and it cannot fail. Ten minutes.
+          </li>
+        </ol>
+        <p class="text-sm text-slate-600">
+          F5, F6 and F10 are one-commit cleanups. F11 and F12 are judgement calls pass 2 upheld. F4 shrank — the plan
+          artifact is missing, but <span class="mono">produce-items.test.ts:101,111</span> pins I8's substance. F7
+          shrank to two unpinned branches. F8 stays a stop-rule question for the author.
+        </p>
+      </section>
+
+      <footer class="text-xs text-slate-500 border-t border-slate-300 pt-6">
+        Pass 1 of <span class="mono">.claude/skills/pk-branch-review</span>, plus a test-coverage axis the reviewer
+        was asked to add. Probes for F1 and F2 were written, run at
+        <span class="mono">5d145ba</span>, and deleted. Pass 2 answers each id with
+        <span class="mono">Confirmed</span> / <span class="mono">Mis-described</span> /
+        <span class="mono">Wrong</span> / <span class="mono">Unproven</span>, ran its own probes for F1, F2
+        and F9, and deleted them.
+      </footer>
+    </main>
+  </body>
+</html>

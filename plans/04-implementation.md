@@ -76,7 +76,7 @@ Guardrails land **before** the code they guard — each step is a reviewable com
 
 ### 3.4 Test rig
 
-5. Vitest config: `pure` projects run in Node (no DOM env at all — proving D4/pure-layer claims by construction), `dom` project runs happy-dom. The I2 two-Gantt-instances isolation test and the I8 item-identity test are written in this step against stubs, red-first.
+5. Vitest config: `pure` projects run in Node (no DOM env at all — proving D4/pure-layer claims by construction), `dom` project runs happy-dom. The I2 two-Gantt-instances isolation test and the I8 bar-identity test are written in this step against stubs, red-first.
 
 ### 3.5 First vertical
 

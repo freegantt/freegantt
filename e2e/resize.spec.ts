@@ -127,8 +127,8 @@ async function committedSpan(
 
 // #240: dragging one edge past the opposite one must never commit `end < start` —
 // `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge to zero length (D-S5-46 keeps
-// that legal), never past it. `data-item-id` is `${entryId}:${segmentIndex}` (`model/ids.ts`'s
-// `itemId`), so the bar's own attribute is the DOM→Entry trust boundary — no re-derivation of that
+// that legal), never past it. `data-bar-id` is `${entryId}:${segmentIndex}` (`model/ids.ts`'s
+// `barId`), so the bar's own attribute is the DOM→Entry trust boundary — no re-derivation of that
 // mapping here.
 test('dragging the end handle past start commits a zero-length span, never an inverted one (#240)', async ({
   page,
@@ -136,7 +136,7 @@ test('dragging the end handle past start commits a zero-length span, never an in
   await page.goto('/');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
-  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+  const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
 
   // Past the bar's own start, and well past — this must clamp, not overshoot into an inversion.
   await dragBarEndEdgeBy(page, bar, -(box.width + 400));
@@ -151,7 +151,7 @@ test('dragging the start handle past end commits a zero-length span, never an in
   await page.goto('/');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
-  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+  const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
 
   await dragBarStartEdgeBy(page, bar, box.width + 400);
 
@@ -164,7 +164,7 @@ test('a second end-handle drag after the first clamps to zero length still refus
 }) => {
   await page.goto('/');
   const bar = await visibleResizableBar(page);
-  const entryId = (await bar.getAttribute('data-item-id'))!.split(':')[0]!;
+  const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
   const box = (await bar.boundingBox())!;
 
   await dragBarEndEdgeBy(page, bar, -(box.width + 400)); // clamps to zero length

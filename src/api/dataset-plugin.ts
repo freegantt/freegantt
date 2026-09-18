@@ -36,13 +36,12 @@ export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js'
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
 // takes (#209), so the only type a plugin author names to write a cascade is one they already know.
 export { mergeEntryEdits } from '../data/edit-extension.js';
-// The move a plugin's cascade is honest about (D-S5-44): every Segment of an Entry, translated
-// rigidly to a new `start`, each keeping its own `SegmentId`. An envelope-only cascade against a
-// several-Segment Entry is refused (`SegmentsOutOfSyncError`), so this is how a plugin author writes
-// `segments` instead, rather than hand-rolling the same rigid translate `layout/gesture-draft.ts`'s
-// own `moveEdit` computes for a drag — beside `mergeEntryEdits`, for the same reason: an app author
-// never meets it, because it builds one value of the `EntryEdits` map only an extender returns. It
-// names `segments` alone and lets core derive the envelope (D-S5-50, #239).
+// The move a plugin's cascade is honest about (D-S5-44): a spanning Entry translated rigidly to a
+// new `start`, `end` shifted by the same delta so the Entry's own duration never changes. This is
+// how a plugin author writes a cascade move, rather than hand-rolling the same rigid translate
+// `layout/gesture-draft.ts`'s own `moveEdit` computes for a drag — beside `mergeEntryEdits`, for the
+// same reason: an app author never meets it, because it builds one value of the `EntryEdits` map
+// only an extender returns (D-S5-50, #239).
 export { moveEntryTo } from '../data/entry-reader.js';
 
 /** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a
