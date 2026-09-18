@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { attachKeyboardEditing } from './keyboard-editing.js';
 import type { EntryGesture, EntryGestureContext, EntryGestureSession } from '../view/index.js';
-import { entryId, entryIdOfBar, segmentId } from '../model/index.js';
-import type { Entry, EntryId, Instant, BarId, SegmentId } from '../model/index.js';
+import { entryId, entryIdOfBar } from '../model/index.js';
+import type { Entry, EntryId, Instant, BarId } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 
 const A = entryId('a');
@@ -10,28 +10,21 @@ const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
 
-/** The fake's own Segment naming (#212): Entry `a` draws one Segment, `a-0`. */
-function segmentOf(id: EntryId): SegmentId {
-  return segmentId(`${id}-0`);
-}
-
 function toInstant(ms: number): Instant {
   return ms as unknown as Instant;
 }
 
 /** The rows a gesture reads, built through the real store. `interaction/` may reach `data/`, and the
  *  store is the one place a live `Entry` is built (ADR 0017). */
-let minted = 0;
 const rows = new EntryStore(
   ORDER.map((id) => ({
     id,
     name: id,
     start: toInstant(0),
     end: toInstant(1),
-    segments: [{ id: segmentOf(id), start: toInstant(0), end: toInstant(1) }],
     props: {},
   })),
-  { timeZone: 'UTC', dateOnlyEnd: 'inclusive', mintSegmentId: () => segmentId(`minted-${++minted}`) },
+  { timeZone: 'UTC', dateOnlyEnd: 'inclusive' },
 );
 
 function entryFor(id: EntryId): Entry {
@@ -54,13 +47,13 @@ function makeContext(
   options: ContextOptions = {},
 ): {
   ctx: EntryGestureContext;
-  proposals: (readonly SegmentId[])[];
+  proposals: (readonly EntryId[])[];
   sessions: [EntryId, EntryGesture][];
   nudges: [1 | -1, boolean | undefined][];
 } {
   const { incapableRows = [], refuseSession = [] } = options;
-  let selection: readonly SegmentId[] = selectionInit.map(segmentOf);
-  const proposals: (readonly SegmentId[])[] = [];
+  let selection: readonly EntryId[] = selectionInit;
+  const proposals: (readonly EntryId[])[] = [];
   const sessions: [EntryId, EntryGesture][] = [];
   const nudges: [1 | -1, boolean | undefined][] = [];
 
@@ -77,14 +70,10 @@ function makeContext(
     contentXAtPaneOffset: (offsetX) => offsetX,
     selection: {
       selectableEntriesInRowOrder: () => ORDER,
-      selectableSegmentsInRowOrder: () => ORDER.flatMap((id) => ctx.selection.segmentIdsOfEntries([id])),
       // `hitTest` always misses in this fake (this file drives keyboard chords, never a pointer
-      // hit), so `selectableSegmentsOf` never runs — it exists only to satisfy the interface.
-      selectableSegmentsOf: () => [],
-      segmentIdsOfEntries: (ids) => ids.map(segmentOf),
-      segmentIdsForBar: (item) => [segmentOf(entryIdOfBar(item))],
-      segmentIds: () => selection,
-      entryIds: () => ORDER.filter((id) => selection.includes(segmentOf(id))),
+      // hit), so `selectableEntriesOf` never runs — it exists only to satisfy the interface.
+      selectableEntriesOf: () => [],
+      entryIds: () => selection,
       propose: (next) => {
         selection = next;
         proposals.push(next);
