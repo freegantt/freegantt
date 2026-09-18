@@ -3,8 +3,8 @@
 // different question: what the row pass draws once a variant has been resolved.
 
 import { describe, expect, it } from 'vitest';
-import { barId, segmentId } from '../../model/index.js';
-import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';
+import { barId } from '../../model/index.js';
+import type { Entry, Field, FieldKey } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import { bar, createVariantRegistry, diamond, summary } from './variants.js';
 import type { DoubleVariantClaim, UnknownFieldMatch } from './variants.js';
@@ -325,15 +325,14 @@ describe('what a variant answers about itself', () => {
 });
 
 describe('core’s three shipped factories (ADR 0022 §1)', () => {
-  it('bar() answers the floor: no `when`, and `followSegments` as its `items`', () => {
+  it('bar() answers the floor: no `when`, and draws one Bar over the entry’s whole span (ADR 0026)', () => {
     const variant = bar();
     expect(variant.name).toBe('leaf');
     expect(variant.when).toBeUndefined();
     expect(variant.css).toBeUndefined();
-    // followSegments, not the whole-entry default: a Segment on the row draws its own Bar.
-    const [item] = variant.bars!(spanEntry('t1'), 'leaf');
-    expect(item!.variant).toBe('leaf');
-    expect(item!.segmentId).toBeDefined();
+    const items = variant.bars!(spanEntry('t1'), 'leaf');
+    expect(items).toHaveLength(1);
+    expect(items[0]!.variant).toBe('leaf');
   });
 
   it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Bar explicitly (ADR 0023)', () => {
@@ -347,22 +346,12 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-summary': true } });
     expect(variant.css).toContain('.fg-bar-summary');
 
-    // A parent may author several Segments of its own (`src/data/rollup.ts`). `summary()` still
-    // draws one rail, because it states `ignoreSegments` explicitly rather than trusting the
-    // registry's data-following default to agree.
-    const busyParent = entryDouble({
-      id: 'p2',
-      start: 0,
-      end: 10,
-      segments: [
-        { id: segmentId('p2-0'), start: 0 as Instant, end: 4 as Instant },
-        { id: segmentId('p2-1'), start: 6 as Instant, end: 10 as Instant },
-      ],
-    });
-    expect(variant.bars!(busyParent, 'summary')).toHaveLength(1);
+    // `summary()` states its own `bars` explicitly rather than trusting the registry's default to
+    // agree — one rail over the parent's own span, whatever its children draw (ADR 0023, ADR 0026).
+    expect(variant.bars!(parent!, 'summary')).toHaveLength(1);
   });
 
-  it('summary()’s `ignoreSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
+  it('summary()’s `childrenAsSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
     const variant = summary();
     const claimedParent = entryDouble({ id: 'p3', start: 0, end: 10 });
     expect(variant.bars!(claimedParent, 'summary', true)).toEqual([]);
@@ -371,7 +360,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.bars!(claimedParent, 'summary')).toHaveLength(1);
   });
 
-  it('bar()’s `followSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
+  it('bar()’s `childrenAsSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
     const variant = bar();
     const claimedParent = spanEntry('p4');
     expect(variant.bars!(claimedParent, 'leaf', true)).toEqual([]);
