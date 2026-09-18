@@ -708,7 +708,7 @@ export interface Entry<TProps = Record<string, unknown>> {
     readonly hasChildren: boolean;
     // (undocumented)
     readonly id: EntryId;
-    readonly name?: string | undefined;
+    readonly name: string;
     // (undocumented)
     parent(): Entry<TProps> | undefined;
     read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;

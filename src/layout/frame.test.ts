@@ -129,7 +129,7 @@ describe('computeFrame', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       // No producer sets `Bar.label`; this stands in for `view/`'s default `barLabels` (#421 C5).
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
@@ -173,7 +173,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
     });
     expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
     expect(frame.rows[0]?.gridCells).toEqual([]);
@@ -193,7 +193,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
     });
     const unlabelled = computeFrame({
       entries: sampleEntries,
@@ -226,7 +226,7 @@ describe('computeFrame', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
-        barLabelFor: (entry) => entry.name ?? '',
+        barLabelFor: (entry) => entry.name,
       });
       expect(frame.bars[0]?.label).toBe(sampleEntries[0]?.name);
       expect(frame.bars[0]?.a11yLabel).not.toContain('undefined');
@@ -281,7 +281,7 @@ describe('computeFrame', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name ?? '' },
+        { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
         { field: 'id', header: 'Id', align: 'start', format: (entry) => entry.id },
       ],
     });
@@ -465,7 +465,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
     });
     expect(frame.bars).toMatchSnapshot();
   });
@@ -484,7 +484,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      barLabelFor: (entry) => entry.name ?? '',
+      barLabelFor: (entry) => entry.name,
       rows: { source: 'entries', childrenAsSegments: true },
     });
     // One row for both — the claimed child's id rides `entryIds[1]`, not a row of its own.
@@ -579,7 +579,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: own,
-      barLabelFor: (e) => e.name ?? '',
+      barLabelFor: (e) => e.name,
     });
     expect(frame.bars).toHaveLength(2);
     expect(frame.bars[0]?.a11yLabel).toMatch(/, part 1 of 2, /);

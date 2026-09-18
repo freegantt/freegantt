@@ -17,6 +17,7 @@ import { compileEntryRule } from './entry-rule.js';
 function fakeEntry(id: string, props: Record<string, unknown> = {}): Entry {
   return {
     id: entryId(id),
+    name: '',
     read: ((key: FieldKey) => props[key]) as Entry['read'],
     duration: () => undefined,
     hasChildren: false,

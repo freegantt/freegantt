@@ -495,6 +495,8 @@ describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#30
         { id: 'c', name: 'Child A', parentId: 'p' },
       ],
       fields: [
+        // A `compute` Field reads the *stored* record, and storage stays sparse (#421 F8) — only the
+        // live `Entry.name` normalizes to `''`.
         { key: 'nameLen', compute: (entry) => (entry.name ?? '').length },
         { key: 'tally', rollUp: 'sumNameLens' },
       ],

@@ -89,7 +89,7 @@ function paintOneGantt(
         datasetRevision: 0,
         variants: variantRegistry,
         columns: [
-          { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name ?? '' },
+          { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
           { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
         ],
       }),
