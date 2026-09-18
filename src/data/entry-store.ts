@@ -175,8 +175,7 @@ export class EntryStore implements EntryStoreContract {
         if (field === undefined) throw unknownFieldError(key);
         return readField(entry, field, this.#access);
       },
-      durationOf: (entry) =>
-        measureEntryDuration(entry, this.#access.measureDuration, (id) => this.#access.storedChildrenOf(id)),
+      durationOf: (entry) => measureEntryDuration(entry, this.#access),
     });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
