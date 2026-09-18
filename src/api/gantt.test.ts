@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import {
+  DerivedFieldNotWritableError,
   DuplicatePluginIdError,
   RevealTargetNotFoundError,
   PluginNotInstalledError,
@@ -3891,6 +3892,260 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       gantt.commands.run('freegantt.selectNextEntry');
       // One bar on the row: nowhere to step, nothing moves.
       expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
+
+      gantt.destroy();
+      container.remove();
+    });
+  });
+
+  // #421 C7 (`959f8e6`, `plans/segment-is-a-bar/SPIKE-FINDINGS.md`): five acceptance boxes C1–C6
+  // never pinned. Each `it` below names the box it closes.
+  describe('the five acceptance boxes C1–C6 left uncovered (#421 C7, 959f8e6)', () => {
+    /** `req-1` claims `d1`/`d2` while `showDaysOnRow` reads `true` — the spike's own example
+     *  (`plans/segment-is-a-bar/README.md` "The rule, in one line"). */
+    function crewRoster() {
+      return [
+        { id: 'req-1', name: 'Framing crew', props: { showDaysOnRow: true } },
+        {
+          id: 'd1',
+          name: 'Day 1',
+          parentId: 'req-1',
+          start: '2026-01-01',
+          end: '2026-01-02',
+          props: { hours: 8 },
+        },
+        {
+          id: 'd2',
+          name: 'Day 2',
+          parentId: 'req-1',
+          start: '2026-01-02',
+          end: '2026-01-03',
+          props: { hours: 4 },
+        },
+      ];
+    }
+
+    function crewDataset() {
+      return new Dataset({
+        timeZone: 'UTC',
+        fields: [
+          { key: 'showDaysOnRow', type: 'boolean' },
+          { key: 'hours', type: 'number', rollUp: 'sum' },
+        ],
+        entries: crewRoster(),
+      });
+    }
+
+    // Box: "dataset.entries.update('req-1', { showDaysOnRow: false }) opens one row into sub-rows
+    // in one undo step, leaves every other row alone, and undoes back with the Selection intact."
+    // Spike Q10 — the live per-Entry switch through a data write, not through `gantt.rowSource`.
+    it('a write to the Field the rule matches on opens the row into sub-rows, in one undo step, and undoes back (Q10)', async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = crewDataset();
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+      });
+      const rowIdsNow = (): (string | null)[] =>
+        Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+          row.getAttribute('data-entry-id'),
+        );
+      const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(rowIdsNow()).toEqual(['req-1']);
+      gantt.selectedEntryIds = [entryId('d1')];
+
+      const changes: ChangeSet[] = [];
+      dataset.on('change', ({ changeSet }) => changes.push(changeSet));
+
+      dataset.entries.update('req-1', { showDaysOnRow: false });
+      await paint();
+
+      expect(rowIdsNow()).toEqual(['req-1', 'd1', 'd2']);
+      // One transaction, one ChangeSet row for the write, one undo step.
+      expect(changes).toHaveLength(1);
+      expect(dataset.canUndo).toBe(true);
+      // The Selection survives the re-fold: d1 was selected before, and it is still a valid
+      // Entry id after the row opens — the write never touched the Selection.
+      expect(gantt.selectedEntryIds).toEqual([entryId('d1')]);
+
+      dataset.undo();
+      await paint();
+
+      expect(rowIdsNow()).toEqual(['req-1']);
+      expect(gantt.selectedEntryIds).toEqual([entryId('d1')]);
+      expect(dataset.entries.get('req-1')?.read('showDaysOnRow')).toBe(true);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    // Box: "A claimed row's cells roll up over its children, start/end included, on today's code
+    // path. rollUp: 'sum' on hours totals the day bars onto the row."
+    it("rollUp: 'sum' totals the day bars onto a claimed row's grid cell", () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = crewDataset();
+      const gantt = new Gantt({
+        container,
+        dataset,
+        gridColumns: ['name', { field: 'hours' }],
+        rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+      });
+
+      const cell = container.querySelector<HTMLElement>(
+        '.fg-row[data-entry-id="req-1"] [data-field="hours"]',
+      )!;
+      // 8 + 4 = 12, read off the claimed row's own grid cell — the Rollup's answer, not a bar's.
+      expect(cell.textContent).toBe('12');
+      expect(dataset.entries.get('req-1')?.read('hours')).toBe(12);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    // Box: "A write to a claimed row's start/end throws DerivedFieldNotWritableError. A row drag
+    // moves every bar." A claimed row is an ordinary rolling-up parent to the write door — data/
+    // carries no notion of "claimed" at all, so the refusal is proven the same way any rolling-up
+    // parent's is (`entry-store.mutation.test.ts`); this pins it against the exact shape a claimed
+    // row uses. The drag half needs a bar to grab: `req-1` draws none of its own (Q26), so a
+    // consumer variant supplies the rail the way `harness/hierarchy.ts`'s own `summary()` case does
+    // — the same shape the "consumer producer... still draws a band" test above already installs.
+    it("a write to a claimed row's start/end is refused, and dragging its rail bar moves every child (ADR 0013)", () => {
+      expect(() => crewDataset().entries.update('req-1', { start: '2026-01-05' })).toThrow(
+        DerivedFieldNotWritableError,
+      );
+
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = crewDataset();
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+        variants: [
+          {
+            name: 'rail',
+            when: (entry) => entry.hasChildren,
+            bars: (entry, variant) => [
+              {
+                id: barId(entry.id, 99),
+                entryId: entry.id,
+                variant,
+                label: entry.name ?? '',
+                start: entry.start!,
+                end: entry.end!,
+              },
+            ],
+          },
+        ],
+      });
+
+      const railBar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-item-id="${barId(entryId('req-1'), 99)}"]`,
+      )!;
+      const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+      timeline.setPointerCapture = vi.fn();
+      timeline.releasePointerCapture = vi.fn();
+      const original = document.elementFromPoint.bind(document);
+      document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? railBar : original(x, y));
+
+      const before = [entryId('d1'), entryId('d2')].map((id) => datesOf(dataset.entries.get(id)!));
+
+      timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+      timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+      timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+      const after = [entryId('d1'), entryId('d2')].map((id) => datesOf(dataset.entries.get(id)!));
+      // Every child moved, and by one shared delta — the same translation ADR 0013 gives any
+      // rolling-up parent's drag; nothing about being a claimed row changes the mechanism.
+      const deltas = after.map((d, i) => Number(d.start) - Number(before[i]!.start));
+      expect(deltas.every((delta) => delta > 0)).toBe(true);
+      expect(new Set(deltas).size).toBe(1);
+
+      document.elementFromPoint = original;
+      gantt.destroy();
+      container.remove();
+    });
+
+    // Box: "dataset.entries.update('d1', { parentId: 'req-2' }) moves a bar to another row, keeping
+    // its id, its data and its Selection place, in one undo step."
+    it("moving a bar to another row's parentId keeps its id, its data and its Selection place (one undo step)", async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = crewDataset();
+      dataset.entries.add({ id: 'req-2', name: 'Roofing crew', props: { showDaysOnRow: true } });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        gridColumns: ['name', { field: 'hours' }],
+        rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+      });
+      const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+      await paint();
+
+      gantt.selectedEntryIds = [entryId('d1')];
+
+      const changes: ChangeSet[] = [];
+      dataset.on('change', ({ changeSet }) => changes.push(changeSet));
+
+      dataset.entries.update('d1', { parentId: 'req-2' });
+      await paint();
+
+      expect(changes).toHaveLength(1);
+      const d1 = dataset.entries.get('d1')!;
+      expect(d1.id).toBe(entryId('d1'));
+      expect(d1.read('hours')).toBe(8);
+      expect(d1.parent()?.id).toBe(entryId('req-2'));
+      // The write never touched the Selection: the id it named is still selected under its new row.
+      expect(gantt.selectedEntryIds).toEqual([entryId('d1')]);
+
+      const req1Cell = container.querySelector<HTMLElement>(
+        '.fg-row[data-entry-id="req-1"] [data-field="hours"]',
+      )!;
+      const req2Cell = container.querySelector<HTMLElement>(
+        '.fg-row[data-entry-id="req-2"] [data-field="hours"]',
+      )!;
+      // Both row totals moved in the same undo step: req-1 lost d1's 8h, req-2 gained it.
+      expect(req1Cell.textContent).toBe('4');
+      expect(req2Cell.textContent).toBe('8');
+
+      expect(dataset.canUndo).toBe(true);
+      dataset.undo();
+      await paint();
+      expect(dataset.entries.get('d1')?.parent()?.id).toBe(entryId('req-1'));
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    // Box: "A test pins that a bar's printed value and its row total are the same at day, week and
+    // year zoom." C5 pinned bar labels across zoom (`layout/frame.test.ts`); the row total was not.
+    it("a bar's printed value and its row total read the same at day, week and year zoom", () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = crewDataset();
+      const gantt = new Gantt({
+        container,
+        dataset,
+        gridColumns: ['name', { field: 'hours' }],
+        rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
+        barLabels: { field: 'hours' },
+      });
+
+      for (const preset of ['day', 'week', 'year'] as const) {
+        gantt.preset = preset;
+        const d1Bar = container.querySelector<HTMLElement>(
+          `.fg-bar[data-item-id="${barId(entryId('d1'), 0)}"] .fg-bar-label`,
+        )!;
+        const totalCell = container.querySelector<HTMLElement>(
+          '.fg-row[data-entry-id="req-1"] [data-field="hours"]',
+        )!;
+        expect(d1Bar.textContent).toBe('8');
+        expect(totalCell.textContent).toBe('12');
+      }
 
       gantt.destroy();
       container.remove();
