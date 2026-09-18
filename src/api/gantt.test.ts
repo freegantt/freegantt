@@ -3581,6 +3581,164 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
   });
 
+  describe('a claimed row draws its children’s bars, not core’s own rail (#421 C2, Q26/Q27/Q33)', () => {
+    it('a claimed row draws exactly its children’s bars, summary() resolved for the parent included', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        entries: [
+          { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+          { id: 'c1', name: 'C1', parentId: 'p1', start: '2026-01-01', end: '2026-01-05' },
+          { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-01-05', end: '2026-01-10' },
+        ],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+      });
+
+      const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+      const itemIds = bars.map((bar) => bar.dataset['itemId']);
+      // p1 draws no bar of its own — `summary()` resolved for it and `ignoreSegments` answered `[]`
+      // (Q27). c1 and c2 draw their own bars, on p1's row.
+      expect(itemIds).toEqual([itemId(entryId('c1'), 0), itemId(entryId('c2'), 0)]);
+      expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a consumer producer that ignores the parameter still draws a band behind the children (Q26)', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        entries: [
+          { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+          { id: 'c1', name: 'C1', parentId: 'p1', start: '2026-01-01', end: '2026-01-05' },
+          { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-01-05', end: '2026-01-10' },
+        ],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+        // A plugin's own rule, ranked ahead of core's `summary()` (ADR 0018). Its `items` producer
+        // names two parameters, not three, and never asks about `childrenAsSegments` — Q26 says it
+        // still wins and still draws.
+        variants: [
+          {
+            name: 'band',
+            when: (entry) => entry.hasChildren,
+            items: (entry, variant) => [
+              {
+                id: itemId(entry.id, 99),
+                entryId: entry.id,
+                variant,
+                label: entry.name,
+                start: entry.start!,
+                end: entry.end!,
+              },
+            ],
+          },
+        ],
+      });
+
+      const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+      const itemIds = bars.map((bar) => bar.dataset['itemId']);
+      // p1's own band bar draws, plus c1's and c2's own bars — the band producer ignoring the new
+      // parameter still ran and still won for p1 (Q26).
+      expect(itemIds).toEqual([
+        itemId(entryId('p1'), 99),
+        itemId(entryId('c1'), 0),
+        itemId(entryId('c2'), 0),
+      ]);
+      expect(bars[0]?.dataset['variant']).toBe('band');
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('an empty claimed parent draws a blank row (J-plan-D: the row is dateless, not suppressed)', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        entries: [
+          // p1 has one child, so the rule claims it (Q34) — but neither carries a date, so p1's own
+          // rollup start/end stays undefined too. `spansTime` already skips every dateless entry
+          // (ADR 0012), so this needs no new mechanism.
+          { id: 'p1', name: 'P1' },
+          { id: 'c1', name: 'C1', parentId: 'p1' },
+        ],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+      });
+
+      const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+        row.getAttribute('data-entry-id'),
+      );
+      expect(rowIds).toEqual(['p1']);
+      expect(container.querySelectorAll('.fg-bar')).toHaveLength(0);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('an unclaimed parent still wears summary()’s rail over its children’s own rows, in the same frame', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        fields: [{ key: 'phase' }],
+        entries: [
+          { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10', props: { phase: 'build' } },
+          { id: 'c1', name: 'C1', parentId: 'p1', start: '2026-01-01', end: '2026-01-05' },
+          { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-01-05', end: '2026-01-10' },
+          { id: 'p2', name: 'P2', start: '2026-02-01', end: '2026-02-10', props: { phase: 'plan' } },
+          { id: 'c3', name: 'C3', parentId: 'p2', start: '2026-02-01', end: '2026-02-10' },
+        ],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: { phase: 'build' } },
+      });
+
+      const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+        row.getAttribute('data-entry-id'),
+      );
+      // p1 is claimed and folds c1/c2 onto its own row; p2 does not match, so it and c3 keep the
+      // rows a Gantt with no rule at all would give them.
+      expect(rowIds).toEqual(['p1', 'p2', 'c3']);
+
+      const p2Bar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-item-id="${itemId(entryId('p2'), 0)}"]`,
+      )!;
+      const c3Bar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-item-id="${itemId(entryId('c3'), 0)}"]`,
+      )!;
+      // p2 is unclaimed and still wears the rail (`summary()`, resolved on `entry.hasChildren`), in
+      // the same Gantt, in the same frame, as p1's claimed row drawing c1's and c2's own bars.
+      expect(p2Bar.dataset['variant']).toBe('summary');
+      expect(c3Bar.dataset['variant']).toBe('leaf');
+      const p1Bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).map(
+        (bar) => bar.dataset['itemId'],
+      );
+      expect(p1Bars).toContain(itemId(entryId('c1'), 0));
+      expect(p1Bars).toContain(itemId(entryId('c2'), 0));
+      expect(p1Bars).not.toContain(itemId(entryId('p1'), 0));
+
+      gantt.destroy();
+      container.remove();
+    });
+  });
+
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
   // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
   // write, and the rule reads it back.

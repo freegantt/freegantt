@@ -364,6 +364,22 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.items!(busyParent, 'summary')).toHaveLength(1);
   });
 
+  it('summary()’s `ignoreSegments` draws no Item for a claimed row’s subject (#421 C2, Q27)', () => {
+    const variant = summary();
+    const claimedParent = entryDouble({ id: 'p3', start: 0, end: 10 });
+    expect(variant.items!(claimedParent, 'summary', true)).toEqual([]);
+    // The parameter is optional (a two-argument producer an author already wrote keeps compiling,
+    // ADR 0018): omitted, it still draws the rail.
+    expect(variant.items!(claimedParent, 'summary')).toHaveLength(1);
+  });
+
+  it('bar()’s `followSegments` draws no Item for a claimed row’s subject (#421 C2, Q27)', () => {
+    const variant = bar();
+    const claimedParent = spanEntry('p4');
+    expect(variant.items!(claimedParent, 'leaf', true)).toEqual([]);
+    expect(variant.items!(claimedParent, 'leaf')).toHaveLength(1);
+  });
+
   it('diamond() claims a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
     const variant = diamond();
     const point = entryDouble({ id: 'm', start: 5, end: 5 });

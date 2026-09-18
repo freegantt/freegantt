@@ -982,7 +982,7 @@ export interface FixedBarBox {
 export function fixedWidthItem(px: number, anchor?: BarAnchor): ItemProducer;
 
 // @public
-export function followSegments(entry: Entry, variant: string): readonly Item[];
+export function followSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Item[];
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1395,7 +1395,7 @@ export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: Hi
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover;
 
 // @public
-export function ignoreSegments(entry: Entry, variant: string): readonly Item[];
+export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Item[];
 
 // @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
@@ -1524,7 +1524,7 @@ export function itemId(entry: EntryId, segmentIndex?: number): ItemId;
 export function itemIdFromDataset(value: string | undefined): ItemId | undefined;
 
 // @public
-export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
+export type ItemProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Item[];
 
 // @public (undocumented)
 export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;

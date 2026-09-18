@@ -58,8 +58,13 @@ export interface Item {
  *  passes its own registration's name here instead of a producer inventing or hardcoding one — the
  *  Item then carries that name straight to `data-variant`. A one-argument producer an author already
  *  wrote keeps compiling: TypeScript accepts a function that takes fewer parameters than its
- *  declared type. */
-export type ItemProducer = (entry: Entry, variant: string) => readonly Item[];
+ *  declared type.
+ *
+ *  **Takes whether `childrenAsSegments` claims this Entry as a row's subject** (`true` for a claimed
+ *  parent's own bar, `false` otherwise; `EntriesRowSource.childrenAsSegments`, #421 C2). Core's own
+ *  `ignoreSegments` and `followSegments` return no Item for it, so `summary()` paints no rail over
+ *  the bars it stands for. A producer that ignores this parameter still draws — nothing skips it. */
+export type ItemProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Item[];
 
 /** One row's variant, as the item pass reads it: which one won, and what it draws. `variants.ts`
  *  widens it with how it looks and what you can do to it — those two name `BarRenderer`, and this
@@ -157,8 +162,13 @@ export function fixedWidthItem(px: number, anchor: BarAnchor = 'center'): ItemPr
  *  as a plain assignment, the same shape `followSegments` takes.
  *
  *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, items: ignoreSegments }]` —
- *  "the summary variant's items: always one item." */
-export function ignoreSegments(entry: Entry, variant: string): readonly Item[] {
+ *  "the summary variant's items: always one item."
+ *
+ *  Draws nothing for a claimed parent's own row (#421 C2, Q26/Q27/Q33): `childrenAsSegments`
+ *  already carries the row's bars, so `summary()`'s rail would paint over the very bars it stands
+ *  for. A consumer producer that ignores the parameter still draws — nothing else skips it. */
+export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments = false): readonly Item[] {
+  if (childrenAsSegments) return [];
   return [wholeEntryItem(entry, variant)];
 }
 
@@ -175,8 +185,12 @@ export function ignoreSegments(entry: Entry, variant: string): readonly Item[] {
  *
  *  Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
  *  start/end case). Same load-bearing cast as `wholeEntryItem` — `produceItemsForRow` never calls
- *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2). */
-export function followSegments(entry: Entry, variant: string): readonly Item[] {
+ *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2).
+ *
+ *  Draws nothing for a claimed parent's own row (#421 C2, Q26/Q27/Q33): the row's children carry
+ *  its bars, so a leaf variant's default shape would double them. */
+export function followSegments(entry: Entry, variant: string, childrenAsSegments = false): readonly Item[] {
+  if (childrenAsSegments) return [];
   const segments = entry.segments;
   if (segments !== undefined && segments.length > 0) {
     return segments.map((segment, index) =>
