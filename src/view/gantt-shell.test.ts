@@ -8,16 +8,8 @@ import {
   TimeScaleModel,
   fixedWidthBar,
 } from '../layout/index.js';
-import {
-  entryId,
-  rowId,
-  barId,
-  mintedSegmentId,
-  segmentId,
-  RevealTargetNotFoundError,
-  ContainerNotFoundError,
-} from '../model/index.js';
-import type { EntryId, Field, Instant, BarId, SegmentId, StoredEntry } from '../model/index.js';
+import { entryId, rowId, barId, RevealTargetNotFoundError, ContainerNotFoundError } from '../model/index.js';
+import type { EntryId, Field, Instant, BarId, StoredEntry } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
 import { FieldRegistry } from '../data/fields/field-registry.js';
 import { createDomBackend } from '../render/dom/index.js';
@@ -55,12 +47,9 @@ function fakeDataset(
   // `entry.read` is the one value door, and it refuses a key no Field declares (ADR 0017). So a test
   // that reads a passenger key declares it, exactly as a consumer does.
   const registry = new FieldRegistry({ fields });
-  let mintedSegmentCounter = 0;
   const context = {
     timeZone,
     dateOnlyEnd: 'inclusive' as const,
-    referenceDate: 0 as Instant,
-    mintSegmentId: () => mintedSegmentId(++mintedSegmentCounter),
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.
@@ -119,11 +108,6 @@ function translateX(node: HTMLElement): number {
   return Number(/translate\((-?[\d.]+)px/u.exec(node.style.transform)?.[1] ?? NaN);
 }
 
-/** The `data-state` tokens one bar carries right now — `''` when it carries none. */
-function stateOf(container: HTMLElement, item: BarId): string {
-  return container.querySelector(`[data-item-id="${item}"]`)?.getAttribute('data-state') ?? '';
-}
-
 function pxWidth(node: HTMLElement): number {
   return Number(node.style.width.replace('px', ''));
 }
@@ -142,7 +126,6 @@ const entries: StoredEntry[] = [
     name: 'Entry 1',
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
-    segments: [{ id: segmentId('t1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
     props: {},
   },
 ];
@@ -156,7 +139,6 @@ function tallEntries(count: number): StoredEntry[] {
       name: `Entry ${i}`,
       start,
       end,
-      segments: [{ id: segmentId(`e${i}-1`), start, end }],
       props: {},
     };
   });
@@ -197,7 +179,6 @@ describe('GanttShell header band', () => {
         name: 'W1',
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
-        segments: [{ id: segmentId('w1-1'), start: rangeStart, end: instant('2026-09-20T00:00:00Z') }],
         props: {},
       },
     ];
@@ -533,7 +514,6 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           name: `Entry ${i}`,
           start,
           end,
-          segments: [{ id: segmentId(`e${i}-1`), start, end }],
           props: {},
         };
       });
@@ -683,7 +663,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'p',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const child: StoredEntry = {
@@ -692,7 +671,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('c-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const shell = new GanttShell({
@@ -727,7 +705,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'a',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('a-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: { team: 'red' },
       };
       const shell = new GanttShell({
@@ -771,7 +748,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'marker',
         start: at,
         end: at,
-        segments: [{ id: segmentId('marker-1'), start: at, end: at }],
         props: {},
       };
       const shell = new GanttShell({
@@ -799,55 +775,11 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(entryId) unions every Segment Bar’s own painted extent, not the entry’s raw envelope (#295)', () => {
-    // Two zero-width Segments, each floored to `DEFAULT_MIN_BAR_WIDTH_PX` and centred on its own
-    // instant (`barSpan`) — the union of those two painted boxes reaches `minBarWidthPx / 2` past
-    // each Segment's own instant, which the entry's raw `start`/`end` alone would not reach.
-    FakeResizeObserver.instances = [];
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-
-    try {
-      const container = document.createElement('div');
-      const scrollX = new ScrollAxis();
-      const pxPerMs = 0.01;
-      // t1 sits far enough into the range that its own floored Bar never goes negative — this test
-      // means to exercise the right-edge reveal branch alone, not the left-edge one.
-      const t1 = instant('2026-09-01T00:02:00Z');
-      const t2 = instant('2026-09-01T00:10:00Z');
-      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: pxPerMs });
-      const spread: StoredEntry = {
-        id: entryId('spread'),
-        name: 'spread',
-        start: t1,
-        end: t2,
-        segments: [
-          { id: segmentId('spread-1'), start: t1, end: t1 },
-          { id: segmentId('spread-2'), start: t2, end: t2 },
-        ],
-        props: {},
-      };
-      const shell = new GanttShell({
-        wiring: {},
-        container,
-        dataset: fakeDataset([spread]),
-        scroll: { x: scrollX },
-        scale,
-      });
-      const viewportWidth = 50;
-      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
-
-      shell.reveal(entryId('spread'));
-
-      const unionRight = scale.scale.xForInstant(t2) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
-      const rawEnvelopeRight = scale.scale.xForInstant(t2); // the entry's own `end`, unfloored
-      expect(scrollX.state.position).toBe(unionRight - viewportWidth);
-      expect(scrollX.state.position).not.toBe(rawEnvelopeRight - viewportWidth);
-
-      shell.destroy();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
+  // Retired (ADR 0026, #421): `reveal(entryId)` used to union the painted boxes of every Segment
+  // Bar one Entry drew — a core Entry could draw several Bars from its own Segment array. A core
+  // Entry now always draws exactly one Bar over its own span, so there is no union left to read; a
+  // custom variant that still draws several Bars from one Entry (`barsForEntry`'s own doc) is a
+  // plugin-author scenario this shell-level test never covered.
 
   it('reveal(entryId) expands a collapsed ancestor before reading its Bars, so it targets the real box (#295)', () => {
     // `FrameLayout.itemsForEntry` answers from the post-collapse plan — a row collapse hid answers
@@ -868,7 +800,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'p',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const child: StoredEntry = {
@@ -877,7 +808,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         parentId: entryId('p'),
         start: at,
         end: at,
-        segments: [{ id: segmentId('c-1'), start: at, end: at }],
         props: {},
       };
       const shell = new GanttShell({
@@ -924,7 +854,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'marker',
         start: at,
         end: at,
-        segments: [{ id: segmentId('marker-1'), start: at, end: at }],
         props: {},
       };
       const shell = new GanttShell({
@@ -951,124 +880,10 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(segmentId) targets the one bar that stands for that Segment, at its painted box (#295)', () => {
-    // A `diamond()` row draws one boxed Bar over the whole span, and that one bar stands for every
-    // Segment of the Entry (`segmentIdsForBar`). So naming a Segment reveals that bar at its box
-    // width — not the Segment's own zero-width span floored to `minBarWidthPx`.
-    FakeResizeObserver.instances = [];
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  // Retired (ADR 0026, #421): `reveal(segmentId)` used to target one Segment's own painted box, and
+  // fall back to that Segment's own dates when no bar drew it. `reveal()` only ever takes an Entry id
+  // now, and `Bar` carries no per-Segment identity to target, so neither scenario exists to test.
 
-    try {
-      const container = document.createElement('div');
-      const scrollX = new ScrollAxis();
-      const first = instant('2026-09-01T00:02:00Z');
-      const last = instant('2026-09-01T00:10:00Z');
-      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
-      const boxWidthPx = 13;
-      const marker: StoredEntry = {
-        id: entryId('marker'),
-        name: 'marker',
-        start: first,
-        end: last,
-        segments: [
-          { id: segmentId('marker-1'), start: first, end: first },
-          { id: segmentId('marker-2'), start: last, end: last },
-        ],
-        props: {},
-      };
-      const shell = new GanttShell({
-        wiring: {},
-        container,
-        dataset: fakeDataset([marker]),
-        scroll: { x: scrollX },
-        scale,
-        variants: [{ name: 'diamond', when: () => true, bars: fixedWidthBar(boxWidthPx) }],
-      });
-      const viewportWidth = 50;
-      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
-
-      shell.reveal(segmentId('marker-2'));
-
-      const boxRight = (scale.scale.xForInstant(first) + scale.scale.xForInstant(last)) / 2 + boxWidthPx / 2;
-      const segmentSpanRight = scale.scale.xForInstant(last) + DEFAULT_MIN_BAR_WIDTH_PX / 2;
-      expect(scrollX.state.position).toBe(boxRight - viewportWidth);
-      expect(scrollX.state.position).not.toBe(segmentSpanRight - viewportWidth);
-
-      shell.destroy();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it('reveal(segmentId) uses that Segment’s own dates when no bar draws it, never a sibling bar (#295)', () => {
-    // A variant may draw fewer Bars than the Entry has Segments. `RovingFocus` names a Segment to
-    // hold the pan on the bar that has focus, so widening to a sibling would show the wrong bar.
-    // Here only the first Segment draws, and the second one's own dates are the target.
-    FakeResizeObserver.instances = [];
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-
-    try {
-      const container = document.createElement('div');
-      const scrollX = new ScrollAxis();
-      const drawnStart = instant('2026-09-01T00:02:00Z');
-      const drawnEnd = instant('2026-09-01T00:03:00Z');
-      const undrawnStart = instant('2026-09-01T00:10:00Z');
-      const undrawnEnd = instant('2026-09-01T00:11:00Z');
-      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
-      const split: StoredEntry = {
-        id: entryId('split'),
-        name: 'split',
-        start: drawnStart,
-        end: undrawnEnd,
-        segments: [
-          { id: segmentId('split-1'), start: drawnStart, end: drawnEnd },
-          { id: segmentId('split-2'), start: undrawnStart, end: undrawnEnd },
-        ],
-        props: {},
-      };
-      const shell = new GanttShell({
-        wiring: {},
-        container,
-        dataset: fakeDataset([split]),
-        scroll: { x: scrollX },
-        scale,
-        variants: [
-          {
-            name: 'first-piece-only',
-            when: () => true,
-            bars: (entry, variant) => {
-              const drawn = entry.segments?.[0];
-              if (drawn === undefined) return [];
-              return [
-                {
-                  id: barId(entry.id),
-                  entryId: entry.id,
-                  variant,
-                  label: entry.name ?? '',
-                  start: drawn.start,
-                  end: drawn.end,
-                  segmentId: drawn.id,
-                },
-              ];
-            },
-          },
-        ],
-      });
-      const viewportWidth = 50;
-      FakeResizeObserver.instances[0]!.fire({ width: viewportWidth, height: 100 });
-
-      shell.reveal(segmentId('split-2'));
-
-      const ownDatesRight = scale.scale.xForInstant(undrawnEnd);
-      const siblingBarRight = scale.scale.xForInstant(drawnEnd);
-      expect(scrollX.state.position).toBe(ownDatesRight - viewportWidth);
-      expect(scrollX.state.position).not.toBe(siblingBarRight - viewportWidth);
-
-      shell.destroy();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
   it('[R6-F13] selectedEntryIds keeps Dataset order for two Entries a collapsed ancestor hides, instead of NaN-sorting them', () => {
     // Finding 13: `#rowRankByEntryId` gives an unplanned Entry no rank, and the old comparator read
     // that as `Infinity`. Two unplanned Entries then subtracted `Infinity - Infinity`, which is `NaN`
@@ -1084,7 +899,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         name: 'p',
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('p-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const first: StoredEntry = {
@@ -1093,7 +907,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('c1-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const second: StoredEntry = {
@@ -1102,7 +915,6 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         parentId: entryId('p'),
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
-        segments: [{ id: segmentId('c2-1'), start: rangeStart, end: instant('2026-09-03T00:00:00Z') }],
         props: {},
       };
       const shell = new GanttShell({
@@ -1115,9 +927,9 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
 
       // Neither Entry has a row rank, so the comparator calls them equal and the stable sort leaves
-      // them in the order `entryIdsOfSegments` names them — the Selection's own order, `c2` then `c1`
-      // — rather than throwing or silently reordering them, which a `NaN` comparator result invites.
-      shell.selection = [segmentId('c2-1'), segmentId('c1-1')];
+      // them in the order the caller named them — the Selection's own order, `c2` then `c1` —
+      // rather than throwing or silently reordering them, which a `NaN` comparator result invites.
+      shell.selection = [second.id, first.id];
 
       expect(shell.selectedEntryIds).toEqual([second.id, first.id]);
 
@@ -1588,7 +1400,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 320 }); // 10 visible rows @ 32px
       shell.render();
-      shell.selection = [segmentId('e0-1')];
+      shell.selection = [entryId('e0')];
 
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
       expect(bars.length).toBeGreaterThanOrEqual(200);
@@ -1607,29 +1419,9 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     }
   });
 
-  it('[R5-F8] a commit unrelated to Segments prunes nothing and never asks the Segment→Entry index', () => {
-    // Review finding 8: `#forgetSegmentsTheDatasetDropped` used to check the whole Selection against
-    // `entries.entryIdOfSegment` on every commit, whatever the commit touched. It now reads the
-    // ChangeSet first — an edit with no removed Entry and no `segments` row asks the index nothing.
-    const dataset = new DatasetState({ entries: tallEntries(500), timeZone });
-    const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset });
-    shell.selection = Array.from({ length: 500 }, (_, i) => segmentId(`e${i}-1`));
-
-    const entryIdOfSegmentSpy = vi.spyOn(EntryStore.prototype, 'entryIdOfSegment');
-    dataset.entries.update(entryId('e0'), { name: 'renamed' });
-    dataset.transaction(() => {
-      for (const entry of dataset.entries.all) {
-        dataset.entries.update(entry.id, { name: `${entry.name} (2)` });
-      }
-    });
-
-    expect(entryIdOfSegmentSpy).not.toHaveBeenCalled();
-    expect(shell.selection).toHaveLength(500);
-
-    entryIdOfSegmentSpy.mockRestore();
-    shell.destroy();
-  });
+  // Retired (ADR 0026, #421): `#forgetSegmentsTheDatasetDropped` and its `entries.entryIdOfSegment`
+  // pruning index are both gone. Selection holds Entry ids now, so a commit needs no Segment→Entry
+  // lookup to prune a stale id — there is no such index left to spy on.
 
   it('movableBarId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
     const container = document.createElement('div');
@@ -1664,90 +1456,20 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const container = document.createElement('div');
     const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
-    shell.selection = [segmentId('t1-1')];
+    shell.selection = [entryId('t1')];
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
 
     shell.destroy();
   });
 
-  it('clicking one segment paints that bar alone; the handle pair follows it (#185, #211, #212)', () => {
-    const segmented: StoredEntry = {
-      id: entryId('seg'),
-      name: 'segmented',
-      start: rangeStart,
-      end: instant('2026-09-05T00:00:00Z'),
-      segments: [
-        { id: segmentId('seg-1'), start: rangeStart, end: instant('2026-09-02T00:00:00Z') },
-        {
-          id: segmentId('seg-2'),
-          start: instant('2026-09-03T00:00:00Z'),
-          end: instant('2026-09-04T00:00:00Z'),
-        },
-      ],
-      props: {},
-    };
-    const container = document.createElement('div');
-    let propose: ((next: readonly SegmentId[]) => void) | undefined;
-    const shell = new GanttShell({
-      container,
-      dataset: fakeDataset([segmented]),
-      wiring: {
-        entryGestures: (_pane, _rowLayer, _host, ctx) => {
-          propose = (next) => ctx.selection.propose(next);
-          return { detach() {} };
-        },
-      },
-    });
-
-    const first = barId(segmented.id, 0);
-    const second = barId(segmented.id, 1);
-    propose?.([segmentId('seg-2')]);
-
-    // The pointer named one bar, so the Selection holds that one Segment and the paint runs that far
-    // and no further (#212). `selectedEntryIds` still reads the record behind it.
-    expect(stateOf(container, second)).toContain('selected');
-    expect(stateOf(container, first)).not.toContain('selected');
-    expect(shell.selection).toEqual([segmentId('seg-2')]);
-    expect(shell.selectedEntryIds).toEqual([segmented.id]);
-
-    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
-    const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
-    const firstBar = container.querySelector<HTMLElement>(`[data-item-id="${first}"]`)!;
-    const secondBar = container.querySelector<HTMLElement>(`[data-item-id="${second}"]`)!;
-
-    // #211/#212: one selected Segment narrows the handle pair to that one bar — a resize on it
-    // writes only that Segment's edge.
-    expect(start.hidden).toBe(false);
-    expect(start.style.transform).toBe(secondBar.style.transform);
-    expect(translateX(end)).toBeCloseTo(translateX(secondBar) + pxWidth(secondBar), 5);
-
-    // A grid-row click, or `gantt.selectedSegmentIds = [...]`, selects every Segment of the Entry, so
-    // the paint widens back to every bar it drew. `resizableEntryId` still needs a hover once a
-    // multi-bar Entry has no single selected Segment (D-S3-6's own resize-fallback rule, S3.2), so
-    // the handle pair itself is not exercised there — see `render/dom/index.test.ts`.
-    propose?.([segmentId('seg-1'), segmentId('seg-2')]);
-    expect(stateOf(container, first)).toContain('selected');
-    expect(stateOf(container, second)).toContain('selected');
-
-    // And selecting one bar again narrows both the paint and the handle pair back to it.
-    propose?.([segmentId('seg-1')]);
-    expect(stateOf(container, first)).toContain('selected');
-    expect(stateOf(container, second)).not.toContain('selected');
-    expect(start.style.transform).toBe(firstBar.style.transform);
-    expect(translateX(end)).toBeCloseTo(translateX(firstBar) + pxWidth(firstBar), 5);
-
-    shell.destroy();
-  });
-
-  it('selectableSegmentsOf answers every selectable Entry a packed row owns (#185)', () => {
+  it('selectableEntriesOf answers every selectable Entry a packed row owns (#185)', () => {
     const owned: StoredEntry[] = [
       {
         id: entryId('one'),
         name: 'one',
         start: rangeStart,
         end: rangeEnd,
-        segments: [{ id: segmentId('one-1'), start: rangeStart, end: rangeEnd }],
         props: {},
       },
       {
@@ -1755,7 +1477,6 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         name: 'two',
         start: rangeStart,
         end: rangeEnd,
-        segments: [{ id: segmentId('two-1'), start: rangeStart, end: rangeEnd }],
         props: {},
       },
       {
@@ -1763,7 +1484,6 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         name: 'three',
         start: rangeStart,
         end: rangeEnd,
-        segments: [{ id: segmentId('three-1'), start: rangeStart, end: rangeEnd }],
         props: {},
       },
     ];
@@ -1787,11 +1507,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     });
 
     const row = container.querySelector<HTMLElement>('.fg-row')!;
-    expect(ctx!.selection.selectableSegmentsOf({ kind: 'row', rowId: rowId(row.dataset['rowId']!) })).toEqual(
-      [owned[0]!.segments[0]!.id, owned[2]!.segments[0]!.id],
-    );
+    expect(ctx!.selection.selectableEntriesOf({ kind: 'row', rowId: rowId(row.dataset['rowId']!) })).toEqual([
+      owned[0]!.id,
+      owned[2]!.id,
+    ]);
     // A row id no frame carries answers nothing, rather than throwing.
-    expect(ctx!.selection.selectableSegmentsOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
+    expect(ctx!.selection.selectableEntriesOf({ kind: 'row', rowId: rowId('absent') })).toEqual([]);
 
     shell.destroy();
   });
