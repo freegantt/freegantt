@@ -228,6 +228,41 @@ describe('SegmentSelection.step (#212)', () => {
     selection.step(1); // one bar, nowhere to go
     expect(selection.segmentIds).toEqual([segmentId('e1-1')]);
   });
+
+  it('steps every selected Segment on a shared row, not only the first (#421 C3, spike Q9)', () => {
+    // A claimed row draws three child Entries as its own bars. Selecting the first and the last and
+    // stepping forward used to read `entryIds[0]` alone, move that one Segment, and drop the rest of
+    // the Selection — the spike's own finding.
+    const e1 = entry('e1', ['e1-1']);
+    const e2 = entry('e2', ['e2-1']);
+    const e3 = entry('e3', ['e3-1']);
+    const store = entryStoreOf([e1, e2, e3]);
+    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry', entryIds: [e1.id, e2.id, e3.id] }];
+    const { ports } = buildPorts(store, { rows, rowIdForEntry: () => rowId('r1') });
+    const selection = new SegmentSelection(ports);
+    selection.propose([segmentId('e1-1'), segmentId('e3-1')]);
+
+    selection.step(1);
+
+    // e1-1 steps forward to e2-1. e3-1 already sits at the row's end and stays — neither drops out.
+    expect(selection.segmentIds).toEqual([segmentId('e2-1'), segmentId('e3-1')]);
+  });
+
+  it('writes nothing when every selected Segment is already at its row end', () => {
+    const e1 = entry('e1', ['e1-1']);
+    const e2 = entry('e2', ['e2-1']);
+    const store = entryStoreOf([e1, e2]);
+    const rows: SegmentSelectionRow[] = [{ id: rowId('r1'), kind: 'entry', entryIds: [e1.id, e2.id] }];
+    const { ports, painted } = buildPorts(store, { rows, rowIdForEntry: () => rowId('r1') });
+    const selection = new SegmentSelection(ports);
+    selection.propose([segmentId('e2-1')]); // already the row's last Segment
+    painted.length = 0;
+
+    selection.step(1);
+
+    expect(selection.segmentIds).toEqual([segmentId('e2-1')]);
+    expect(painted).toEqual([]);
+  });
 });
 
 describe('SegmentSelection.forgetSegmentsTheDatasetDropped (#212, finding 8)', () => {
