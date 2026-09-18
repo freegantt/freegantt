@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { SegmentsOutOfSyncError, entryId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { ChangeSet, DatasetEventMap } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdit, EntryEdits } from './edit-extension.js';
 
-// data/build-commit-change-set.ts, reconcileSharedEnvelope (#232, D-S5-49): a body author and an
-// extender author each name their own envelope key on the same Entry, and the two disagree. Neither
-// side's write is a mistake on its own — `entries.update()`'s `segments` and the extender's `start`
-// each pass `reconcileEnvelope` alone. Only merging them exposes the conflict, so this refusal fires
-// once, on the merged patch, not on either side's edit read in isolation.
+// data/build-commit-change-set.ts, guardExtensionHookDoesNotOverwriteBody (#232, I4): the extension
+// hook may not propose a Field the transaction body already proposed on the same Entry. `start`/`end`
+// are ordinary Fields (ADR 0026 retired the Segment that used to make them a derived pair), so a body
+// write and an extender write to the same field on the same Entry is refused outright — there is no
+// merge to reconcile any more.
 
-describe('a body-authored segments write and an extender-authored start write that disagree (D-S5-49)', () => {
-  it('refuses the commit with SegmentsOutOfSyncError, and leaves no trace behind', () => {
+describe('the extension hook may not propose a field the body already proposed on the same entry (I4)', () => {
+  it('refuses the commit, and leaves no trace behind', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: '2026-01-01', end: '2026-01-10' }],
       timeZone: 'UTC',
-      // The extender always answers with a start the body's segments write cannot agree with.
+      // The extender always answers with its own start, on the same entry the body's write targets.
       editExtender: (): EntryEdits =>
         new Map<ReturnType<typeof entryId>, EntryEdit>([
           [entryId('t1'), { start: toInstant('UTC', '2026-01-05') }],
@@ -29,13 +29,9 @@ describe('a body-authored segments write and an extender-authored start write th
     });
     const revisionBefore = state.datasetRevision;
 
-    expect(() =>
-      state.entries.update('t1', {
-        segments: [
-          { start: toInstant('UTC', '2026-01-01'), end: toEndInstant('UTC', '2026-01-08', 'inclusive') },
-        ],
-      }),
-    ).toThrow(SegmentsOutOfSyncError);
+    expect(() => state.entries.update('t1', { start: toInstant('UTC', '2026-01-01') })).toThrow(
+      /extension hook proposed field "start" on entry "t1", which the transaction body already proposed/,
+    );
 
     expect(committed).toHaveLength(0);
     expect(state.datasetRevision).toBe(revisionBefore);
