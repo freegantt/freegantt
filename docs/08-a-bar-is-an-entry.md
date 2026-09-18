@@ -358,7 +358,7 @@ own children.
 **A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
 children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
 suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
-stands for. A consumer variant may still paint a rail behind them.
+stands for. A consumer variant may still paint a rail behind them. **How a variant asks for that rail is not ruled yet** — build C2 owns the seam and question Q26 in [`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) holds the recommendation: the claim changes the default producer to "no Items", and an explicit `items` on a variant still wins.
 
 :::note Why the key says "segments"
 Read the call site aloud: "row source: entries, children as segments, where show-days-on-row is
@@ -597,7 +597,7 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C7, the call sites, and the nine calls the plan makes |
 | [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The ruled design, and what each former open point was ruled to be |
 | [`plans/segment-is-a-bar/SPIKE-FINDINGS.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/SPIKE-FINDINGS.md) | Spike S4 — the numbers, the two shapes written for the subject seam, and the limits on both |
-| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q23 — every ruling, and why Q17 voided Q1–Q16 |
+| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q24 — every ruling, and why Q17 voided Q1–Q16. Read the table at the top, not the older bodies below it |
 | [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
 | [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
 | [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |

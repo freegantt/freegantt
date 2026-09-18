@@ -199,7 +199,7 @@ Three rows: `site-a` (rail, collapses through the chevron), `req-1` and `req-2` 
 ## What it adds
 
 - **A bar moves to another row with one write**, and keeps its id, its data and its place in the Selection. This is the main gesture of a shift roster.
-- ~~**A row filter can hide one bar.**~~ **Withdrawn 2026-09-17: this does not follow, and no code does it.** `RowFilter` is a predicate on an Entry, but `filter.ts:8-10` reads one Entry per row (`entryIds[0]`) and `applyFilter` keeps or drops **whole rows** (`:69-76`). Items are produced only after a row survives, so nothing filters an Entry off a shared row today. Hiding one bar needs a new item-level knob. **Q20, ruled below: refused, and its own issue if a consumer asks.**
+- ~~**A row filter can hide one bar.**~~ **Withdrawn 2026-09-17: this does not follow, and no code does it.** `RowFilter` is a predicate on an Entry, but `filter.ts:8-10` reads one Entry per row (`entryIds[0]`) and `applyFilter` keeps or drops **whole rows** (`:69-76`). Items are produced only after a row survives, so nothing filters an Entry off a shared row today. Hiding one bar needs a new item-level knob, and no such knob ships. **Q20, ruled by the author 2026-09-17: it does not need to.** A filter hides a parent, and its segments go with it, because they sit on the parent's row. That is what `applyFilter` already does, so nothing ships. See J-plan-F in the table below.
 - **Bar data gets an editor.** A second Gantt, or the same Gantt with the rule off, shows the days as sub-rows with editable grid cells. Option C gives a Segment's values no editor.
 - **An id is stable across sessions.** Every bar id is an authored `EntryId`. Option C's plain bar id is a counter (`data/dataset-state.ts:274`).
 
@@ -245,6 +245,18 @@ All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 1. **The Field-registry gap — RULED: thread it.** `childrenAsSegments`'s field match cannot reuse `layout/items/variants.ts`'s `compileRule` without a `fieldContext`, which `row-source.ts` says the entries source does not take (D-S4-19, D-S4-21). C1 threads it, so the match uses each Field's own `equals` and a key no Field declares reports once through `reportUnknownFieldMatch`. **Why it won:** a misspelt key would otherwise claim nothing and draw a blank screen, in silence — the fault class #197 closed. `RowPassInput` already carries `fieldContext` for `sort`, so the wire exists; what changes is what `row-source.ts` says about itself, and C1 rewrites that comment.
 2. **The `boolean` Field type — RULED: core ships it.** `FieldTypeName` (`model/field.ts:14`) ships `text`, `number`, `percent`, `date` and `duration` today, so `{ key: 'showDaysOnRow', type: 'boolean' }` throws `UnknownFieldTypeError` at `data/fields/field-registry.ts:70`. It lands in C1, with ingest, `formatValue`, `parseValue`, `compare` and `equals`, because the rule's own examples are the first consumer of it.
 3. **Does a hierarchy source declare the keys it reads? — still open (Q23).** C4's fast path applies only to core's own `storedParentSource`, because a plugin source is a function that may read any field. A source that named its keys would let every source skip the re-check. Wider than #421, and it blocks nothing here.
+
+### Everything still open, in one list
+
+Three questions are open on 2026-09-17. None of them blocks C1.
+
+| # | Question | Who waits on it |
+| --- | --- | --- |
+| **Q23** | does a hierarchy source declare the Field keys it reads? | Nobody. C4's fast path ships without it |
+| **Q25** | what is `measureDuration: 'segments'` called now, and what do two overlapping children count as? | **C6.** It has a recommendation in `BUILD-LOG.md` and no ruling. C6 stops and asks |
+| **Q26** | how does a claimed parent ask for a rail instead of a bar? | **C2.** Same: a recommendation, no ruling. C2 stops and asks |
+
+**No build invents an answer to an open question.** It stops and asks the author. That rule is why C1 can start today.
 
 ---
 
